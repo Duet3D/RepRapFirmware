@@ -66,7 +66,7 @@ constexpr size_t NetworkStackWords = 600;				// needs to be enough to support rr
 static Task<NetworkStackWords> networkTask;
 
 #else
-const char * const notSupportedText = "Networking is not supported on this hardware";
+const char *_ecv_array const notSupportedText = "Networking is not supported on this hardware";
 #endif
 
 // MacAddress members
@@ -126,9 +126,9 @@ constexpr ObjectModelArrayTableEntry Network::objectModelArrayTable[] =
 	// 0. Interfaces
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((Network*)self)->GetNumNetworkInterfaces(); },
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const Network*)self)->GetNumNetworkInterfaces(); },
 #if HAS_NETWORKING
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((Network*)self)->interfaces[context.GetLastIndex()]); }
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Network*)self)->interfaces[context.GetLastIndex()]); }
 #endif
 	}
 };
@@ -235,7 +235,7 @@ void Network::CreateAdditionalInterface() noexcept
 // Terminate all responders that handle a specified protocol (unless AnyProtocol is passed) on a specified interface
 void Network::TerminateResponders(const NetworkInterface *iface, NetworkProtocol protocol) noexcept
 {
-	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+	for (NetworkResponder *_ecv_from _ecv_null r = responders; r != nullptr; r = r->GetNext())
 	{
 		r->Terminate(protocol, iface);
 	}
@@ -396,10 +396,10 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 #endif // HAS_NETWORKING
 }
 
-WiFiInterface *Network::FindWiFiInterface() const noexcept
+WiFiInterface *_ecv_null Network::FindWiFiInterface() const noexcept
 {
 #if HAS_WIFI_NETWORKING
-	for (NetworkInterface *iface : interfaces)
+	for (NetworkInterface *_ecv_from _ecv_null iface : interfaces)
 	{
 		if (iface != nullptr && iface->IsWiFiInterface())
 		{
@@ -411,10 +411,10 @@ WiFiInterface *Network::FindWiFiInterface() const noexcept
 	return nullptr;
 }
 
-GCodeResult Network::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply)
+GCodeResult Network::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer *_ecv_null & longReply)
 {
 #if HAS_WIFI_NETWORKING
-	WiFiInterface * const wifiInterface = FindWiFiInterface();
+	WiFiInterface *_ecv_null const wifiInterface = FindWiFiInterface();
 	if (wifiInterface != nullptr)
 	{
 		return wifiInterface->HandleWiFiCode(mcode, gb, reply, longReply);
@@ -425,10 +425,10 @@ GCodeResult Network::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef&
 	return GCodeResult::error;
 }
 
-const char* Network::GetWiFiServerVersion() const noexcept
+const char *_ecv_array Network::GetWiFiServerVersion() const noexcept
 {
 #if HAS_WIFI_NETWORKING
-	WiFiInterface * const wifiInterface = FindWiFiInterface();
+	WiFiInterface *_ecv_null const wifiInterface = FindWiFiInterface();
 	if (wifiInterface != nullptr)
 	{
 		return wifiInterface->GetWiFiServerVersion();
@@ -438,10 +438,10 @@ const char* Network::GetWiFiServerVersion() const noexcept
 	return "no WiFi interface";
 }
 
-WifiFirmwareUploader *Network::GetWifiUploader() const noexcept
+WifiFirmwareUploader *_ecv_null Network::GetWifiUploader() const noexcept
 {
 #if HAS_WIFI_NETWORKING
-	WiFiInterface * const wifiInterface = FindWiFiInterface();
+	WiFiInterface *_ecv_null const wifiInterface = FindWiFiInterface();
 	if (wifiInterface != nullptr)
 	{
 		return wifiInterface->GetWifiUploader();
@@ -454,7 +454,7 @@ WifiFirmwareUploader *Network::GetWifiUploader() const noexcept
 void Network::ResetWiFiForUpload(bool external) noexcept
 {
 #if HAS_WIFI_NETWORKING
-	WiFiInterface * const wifiInterface = FindWiFiInterface();
+	WiFiInterface *_ecv_null const wifiInterface = FindWiFiInterface();
 	if (wifiInterface != nullptr)
 	{
 		wifiInterface->ResetWiFiForUpload(external);
@@ -478,7 +478,7 @@ void Network::Activate() noexcept
 	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
 
 	// Activate the interfaces
-	for (NetworkInterface *iface : interfaces)
+	for (NetworkInterface *_ecv_from _ecv_null iface : interfaces)
 	{
 		if (iface != nullptr)
 		{
@@ -524,7 +524,7 @@ void Network::Activate() noexcept
 void Network::Exit() noexcept
 {
 #if HAS_NETWORKING
-	for (NetworkInterface *iface : interfaces)
+	for (NetworkInterface *_ecv_from _ecv_null iface : interfaces)
 	{
 		if (iface != nullptr)
 		{
@@ -566,9 +566,9 @@ GCodeResult Network::ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& 
 # if SUPPORT_HTTP
 				if (gb.Seen('C'))
 				{
-					String<StringLength20> corsSite;
-					gb.GetQuotedString(corsSite.GetRef(), true);
-					SetCorsSite(corsSite.c_str());
+					String<StringLength20> newCorsSite;
+					gb.GetQuotedString(newCorsSite.GetRef(), true);
+					SetCorsSite(newCorsSite.c_str());
 					seen = true;
 				}
 # endif
@@ -704,7 +704,7 @@ void Network::Spin() noexcept
 		const uint32_t lastTime = StepTimer::GetTimerTicks();
 
 		// Keep the network modules running
-		for (NetworkInterface *iface : interfaces)
+		for (NetworkInterface *_ecv_from _ecv_null iface : interfaces)
 		{
 			if (iface != nullptr)
 			{
@@ -714,7 +714,7 @@ void Network::Spin() noexcept
 
 #if HAS_RESPONDERS
 		// Poll the responders
-		NetworkResponder *nr = nextResponderToPoll;
+		NetworkResponder *_ecv_from _ecv_null nr = nextResponderToPoll;
 		bool doneSomething = false;
 		do
 		{
@@ -767,7 +767,7 @@ void Network::Diagnostics(MessageType mtype) noexcept
 
 #if HAS_RESPONDERS
 	platform.Message(mtype, "Responder states:");
-	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+	for (NetworkResponder *_ecv_from _ecv_null r = responders; r != nullptr; r = r->GetNext())
 	{
 		r->Diagnostics(mtype);
 	}
@@ -778,7 +778,7 @@ void Network::Diagnostics(MessageType mtype) noexcept
 	HttpResponder::CommonDiagnostics(mtype);
 #endif
 
-	for (NetworkInterface *iface : interfaces)
+	for (NetworkInterface *_ecv_from _ecv_null iface : interfaces)
 	{
 		if (iface != nullptr)
 		{
@@ -814,7 +814,7 @@ int Network::EnableState(unsigned int interface) const noexcept
 
 void Network::SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept
 {
-	for (NetworkInterface *iface : interfaces)
+	for (NetworkInterface *_ecv_from _ecv_null iface : interfaces)
 	{
 		if (iface != nullptr && !iface->IsWiFiInterface())
 		{
@@ -842,17 +842,12 @@ bool Network::UsingDhcp(unsigned int interface) const noexcept
 	return interface < GetNumNetworkInterfaces() && interfaces[interface]->UsingDhcp();
 }
 
-void Network::SetHostname(const char *name) noexcept
+void Network::SetHostname(const char *_ecv_array name) noexcept
 {
 	size_t i = 0;
-	while (*name && i < ARRAY_UPB(hostname))
+	while (*name != 0 && i < ARRAY_UPB(hostname))
 	{
-		char c = *name++;
-		if (c >= 'A' && c <= 'Z')
-		{
-			c += 'a' - 'A';
-		}
-
+		const char c = (char)tolower(*name++);
 		if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c == '-') || (c == '_'))
 		{
 			hostname[i++] = c;
@@ -868,7 +863,7 @@ void Network::SetHostname(const char *name) noexcept
 		strcpy(hostname, DEFAULT_HOSTNAME);
 	}
 
-	for (NetworkInterface *iface : interfaces)
+	for (NetworkInterface *_ecv_from _ecv_null iface : interfaces)
 	{
 		if (iface != nullptr)
 		{
@@ -903,7 +898,7 @@ const MacAddress& Network::GetMacAddress(unsigned int interface) const noexcept
 bool Network::FindResponder(Socket *skt, NetworkProtocol protocol) noexcept
 {
 #if HAS_RESPONDERS
-	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+	for (NetworkResponder *_ecv_from _ecv_null r = responders; r != nullptr; r = r->GetNext())
 	{
 		if (r->Accept(skt, protocol))
 		{
@@ -936,7 +931,7 @@ void Network::StopClient(NetworkInterface *interface, NetworkProtocol protocol) 
 }
 #endif
 
-void Network::HandleHttpGCodeReply(const char *msg) noexcept
+void Network::HandleHttpGCodeReply(const char *_ecv_array msg) noexcept
 {
 #if SUPPORT_HTTP
 	MutexLocker lock(httpMutex);
@@ -944,7 +939,7 @@ void Network::HandleHttpGCodeReply(const char *msg) noexcept
 #endif
 }
 
-void Network::HandleTelnetGCodeReply(const char *msg) noexcept
+void Network::HandleTelnetGCodeReply(const char *_ecv_array msg) noexcept
 {
 #if SUPPORT_TELNET
 	MutexLocker lock(telnetMutex);
@@ -953,7 +948,7 @@ void Network::HandleTelnetGCodeReply(const char *msg) noexcept
 }
 
 #if SUPPORT_MQTT
-void Network::MqttPublish(const char *msg, const char *topic, int qos, bool retain, bool dup) noexcept
+void Network::MqttPublish(const char *_ecv_array msg, const char *_ecv_array topic, int qos, bool retain, bool dup) noexcept
 {
 	MqttClient::Publish(msg, topic, qos, retain, dup);
 }

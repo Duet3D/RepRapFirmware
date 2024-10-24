@@ -128,7 +128,7 @@ ReadLockedPointer<ZProbe> GCodes::SetZProbeNumber(GCodeBuffer& gb, char probeLet
 }
 
 // Decide which device to display a message box on
-MessageType GCodes::GetMessageBoxDevice(GCodeBuffer& gb) const
+MessageType GCodes::GetMessageBoxDevice(GCodeBuffer& gb) const noexcept
 {
 	MessageType mt = gb.GetResponseMessageType();
 	if (mt == GenericMessage)
@@ -139,7 +139,7 @@ MessageType GCodes::GetMessageBoxDevice(GCodeBuffer& gb) const
 	return mt;
 }
 
-void GCodes::DoManualProbe(GCodeBuffer& gb, const char *message, const char *title, const AxesBitmap axes)
+void GCodes::DoManualProbe(GCodeBuffer& gb, const char *_ecv_array message, const char *_ecv_array title, const AxesBitmap axes) noexcept
 {
 	if (Push(gb, true))													// stack the machine state including the file position and set the state to GCodeState::normal
 	{
@@ -150,7 +150,7 @@ void GCodes::DoManualProbe(GCodeBuffer& gb, const char *message, const char *tit
 }
 
 // Do a manual bed probe. On entry the state variable is the state we want to return to when the user has finished adjusting the height.
-void GCodes::DoManualBedProbe(GCodeBuffer& gb)
+void GCodes::DoManualBedProbe(GCodeBuffer& gb) noexcept
 {
 	DoManualProbe(gb, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", AxesBitmap::MakeFromBits(Z_AXIS));
 }
@@ -287,11 +287,11 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 		{
 			// In the following, we multiply the spacing by 0.9999 to ensure that when we divide the axis range by the spacing, we get the correct number of points
 			// Otherwise, for some values we occasionally get one less point
-			if (spacings[0] >= 2 && axis0Values[1] > axis0Values[0])
+			if (spacings[0] >= 2.0 && axis0Values[1] > axis0Values[0])
 			{
 				spacings[0] = (axis0Values[1] - axis0Values[0])/(numPoints[0] - 1) * 0.9999;
 			}
-			if (spacings[1] >= 2 && axis1Values[1] > axis1Values[0])
+			if (spacings[1] >= 2.0 && axis1Values[1] > axis1Values[0])
 			{
 				spacings[1] = (axis1Values[1] - axis1Values[0])/(numPoints[1] - 1) * 0.9999;
 			}
@@ -403,7 +403,7 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
-GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	ClearBedMapping();
 
@@ -417,7 +417,7 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 
 	String<MaxFilenameLength> fullName;
 	platform.MakeSysFileName(fullName.GetRef(), heightMapFileName.c_str());
-	FileStore * const f = MassStorage::OpenFile(fullName.c_str(), OpenMode::read, 0);
+	FileStore *_ecv_null const f = MassStorage::OpenFile(fullName.c_str(), OpenMode::read, 0);
 	if (f == nullptr)
 	{
 		reply.printf("Height map file %s not found", fullName.c_str());
@@ -445,11 +445,11 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Save the height map and append the success or error message to 'reply', returning true if an error occurred
-bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept
+bool GCodes::TrySaveHeightMap(const char *_ecv_array filename, const StringRef& reply) const noexcept
 {
 	String<MaxFilenameLength> fullName;
 	platform.MakeSysFileName(fullName.GetRef(), filename);
-	FileStore * const f = MassStorage::OpenFile(fullName.c_str(), OpenMode::write, 0);
+	FileStore *_ecv_null const f = MassStorage::OpenFile(fullName.c_str(), OpenMode::write, 0);
 	bool err;
 	if (f == nullptr)
 	{
@@ -658,6 +658,12 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 		return GCodeResult::error;
 	}
 	straightProbeSettings.SetZProbeToUse(probeToUse);
+
+	// Check if feed rate has been specified
+	if (gb.Seen('F'))
+	{
+		straightProbeSettings.SetFeedRateOverride(gb.GetSpeedFromMm(false));
+	}
 
 	gb.SetState(GCodeState::straightProbe0);
 	return GCodeResult::ok;

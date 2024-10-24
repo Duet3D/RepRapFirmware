@@ -13,8 +13,10 @@
 #include <General/NamedEnum.h>
 #include <General/NumericConverter.h>
 #include <Hardware/ExceptionHandlers.h>
+#include <PrintMonitor/PrintMonitor.h>
 
 #include <climits>
+#include <limits>
 
 #ifdef exists
 # undef exists
@@ -75,7 +77,7 @@ NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, ceil, cos, datet
 const char *const InvalidExistsMessage = "invalid 'exists' expression";
 const char *const ExpectedNonNegativeIntMessage = "expected non-negative integer";
 
-ExpressionParser::ExpressionParser(const GCodeBuffer& p_gb, const char *text, const char *textLimit, int p_column) noexcept
+ExpressionParser::ExpressionParser(const GCodeBuffer *_ecv_null p_gb, const char *text, const char *textLimit, int p_column) noexcept
 	: currentp(text), startp(text), endp(textLimit), gb(p_gb), column(p_column)
 {
 }
@@ -128,7 +130,7 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 				{
 					if (evaluate)
 					{
-						throw GCodeException(&gb, indexCol, "array index out of range");
+						throw GCodeException(gb, indexCol, "array index out of range");
 					}
 					else
 					{
@@ -141,7 +143,7 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 		default:
 			if (evaluate)
 			{
-				throw GCodeException(&gb, indexCol, "left operand of [ ] is not an array");
+				throw GCodeException(gb, indexCol, "left operand of [ ] is not an array");
 			}
 			rslt.SetNull(nullptr);
 			break;
@@ -168,7 +170,7 @@ void ExpressionParser::ApplyObjectModelArrayIndex(ExpressionValue& rslt, int ind
 	}
 	else if (evaluate)
 	{
-		throw GCodeException(&gb, indexCol, "array index out of range");
+		throw GCodeException(gb, indexCol, "array index out of range");
 	}
 	else
 	{
@@ -256,7 +258,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 
 	case '#':
 		AdvancePointer();
-		if (isalpha(SkipWhiteSpace()))
+		if (isAlpha(SkipWhiteSpace()))
 		{
 			// Probably applying # to an object model array, so optimise by asking the OM for just the length
 			CheckStack(StackUsage::ParseIdentifierExpression);
@@ -289,11 +291,11 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 		break;
 
 	default:
-		if (isdigit(c))						// looks like a number
+		if (isDigit(c))						// looks like a number
 		{
 			ParseNumber(val);
 		}
-		else if (isalpha(c))				// looks like a variable name
+		else if (isAlpha(c))				// looks like a variable name
 		{
 			CheckStack(StackUsage::ParseIdentifierExpression);
 			ParseIdentifierExpression(val, evaluate, false, false);
@@ -1005,7 +1007,7 @@ void ExpressionParser::ReadArrayElementFromFile(ExpressionValue& rslt, LineReade
 				rslt.SetStringHandle(StringHandle(element.c_str()));
 			}
 		}
-		else if (reader.CurrentCharacter() == '+' || reader.CurrentCharacter() == '-' || isdigit(reader.CurrentCharacter()))
+		else if (reader.CurrentCharacter() == '+' || reader.CurrentCharacter() == '-' || isDigit(reader.CurrentCharacter()))
 		{
 			NumericConverter conv;
 			err = !conv.Accumulate(reader.CurrentCharacter(), NumericConverter::AcceptSignedFloat | NumericConverter::AcceptHex,
@@ -1362,13 +1364,13 @@ void ExpressionParser::ParseNumber(ExpressionValue& rslt) noexcept
 void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool evaluate, bool applyLengthOperator, bool applyExists) THROWS(GCodeException)
 {
 	char c = CurrentCharacter();
-	if (!isalpha(c))
+	if (!isAlpha(c))
 	{
 		ThrowParseException("expected an identifier");
 	}
 
 	String<MaxVariableNameLength> id;
-	ObjectExplorationContext context(&gb, applyLengthOperator, applyExists, gb.GetLineNumber(), GetColumn());
+	ObjectExplorationContext context(gb, applyLengthOperator, applyExists, (gb != nullptr) ? gb->GetLineNumber() : 0, GetColumn());
 
 	// Loop parsing identifiers and index expressions
 	// When we come across an index expression, evaluate it, add it to the context, and place a marker in the identifier string.
@@ -1415,7 +1417,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 			hadIdentifierSpace = isIdentifierCharacter;
 			AdvancePointer();
 		}
-		isIdentifierCharacter = (isalpha(c) || isdigit(c) || c == '_');
+		isIdentifierCharacter = (isAlnum(c) || c == '_');
 		if (isIdentifierCharacter && hadIdentifierSpace)
 		{
 			break;													// don't allow spaces inside identifiers
@@ -1451,8 +1453,8 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 		case NamedConstant::iterations:
 			{
-				const int32_t v = gb.CurrentFileMachineState().GetIterations();
-				if (v < 0)
+				int32_t v;
+				if (gb == nullptr || (v = gb->CurrentFileMachineState().GetIterations()) < 0)
 				{
 					ThrowParseException("'iterations' used when not inside a loop");
 				}
@@ -1462,36 +1464,50 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 		case NamedConstant::_result:
 			{
-				int32_t res;
-				switch (gb.GetLastResult())
+				if (gb == nullptr)
 				{
-				case GCodeResult::ok:
-					res = 0;
-					break;
-
-				case GCodeResult::warning:
-				case GCodeResult::warningNotSupported:
-					res = 1;
-					break;
-
-				case GCodeResult::m291Cancelled:
-					res = -1;
-					break;
-
-				default:
-					res = 2;
-					break;
+					rslt.SetNull(nullptr);
 				}
-				rslt.SetInt(res);
+				else
+				{
+					int32_t res;
+					switch (gb->GetLastResult())
+					{
+					case GCodeResult::ok:
+						res = 0;
+						break;
+
+					case GCodeResult::warning:
+					case GCodeResult::warningNotSupported:
+						res = 1;
+						break;
+
+					case GCodeResult::m291Cancelled:
+						res = -1;
+						break;
+
+					default:
+						res = 2;
+						break;
+					}
+					rslt.SetInt(res);
+				}
 			}
 			return;
 
 		case NamedConstant::line:
-			rslt.SetInt((int32_t)gb.GetLineNumber());
+			rslt.SetInt(gb != nullptr ? (int32_t)gb->GetLineNumber() : 0);
 			return;
 
 		case NamedConstant::input:
-			rslt = gb.GetM291Result();
+			if (gb != nullptr)
+			{
+				rslt = gb->GetM291Result();
+			}
+			else
+			{
+				rslt.SetNull(nullptr);
+			}
 			return;
 
 		default:
@@ -1891,7 +1907,14 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 		// Check for a parameter, local or global variable
 		if (StringStartsWith(id.c_str(), "param."))
 		{
-			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("param."), context, true, applyLengthOperator, applyExists);
+			if (gb == nullptr)
+			{
+				rslt.SetNull(nullptr);
+			}
+			else
+			{
+				GetVariableValue(rslt, &gb->GetVariables(), id.c_str() + strlen("param."), context, true, applyLengthOperator, applyExists);
+			}
 			return;
 		}
 
@@ -1904,7 +1927,21 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 		if (StringStartsWith(id.c_str(), "var."))
 		{
-			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("var."), context, false, applyLengthOperator, applyExists);
+			if (gb == nullptr)
+			{
+				rslt.SetNull(nullptr);
+			}
+			else
+			{
+				GetVariableValue(rslt, &gb->GetVariables(), id.c_str() + strlen("var."), context, false, applyLengthOperator, applyExists);
+			}
+			return;
+		}
+
+		if (StringStartsWith(id.c_str(), "job.file.customInfo."))
+		{
+			auto vars = reprap.GetPrintMonitor().GetCustomInfoForReading();
+			GetVariableValue(rslt, vars.Ptr(), id.c_str() + strlen("job.file.customInfo."), context, false, applyLengthOperator, applyExists);
 			return;
 		}
 
@@ -2057,7 +2094,7 @@ void ExpressionParser::ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeExce
 		}
 		else if (c == '\'')
 		{
-			if (isalpha(CurrentCharacter()))
+			if (isAlpha(CurrentCharacter()))
 			{
 				// Single quote before an alphabetic character forces that character to lower case
 				c = tolower(CurrentCharacter());
@@ -2120,17 +2157,17 @@ int ExpressionParser::GetColumn() const noexcept
 
 void ExpressionParser::ThrowParseException(const char *str) const THROWS(GCodeException)
 {
-	throw GCodeException(&gb, GetColumn(), str);
+	throw GCodeException(gb, GetColumn(), str);
 }
 
 void ExpressionParser::ThrowParseException(const char *str, const char *param) const THROWS(GCodeException)
 {
-	throw GCodeException(&gb, GetColumn(), str, param);
+	throw GCodeException(gb, GetColumn(), str, param);
 }
 
 void ExpressionParser::ThrowParseException(const char *str, uint32_t param) const THROWS(GCodeException)
 {
-	throw GCodeException(&gb, GetColumn(), str, param);
+	throw GCodeException(gb, GetColumn(), str, param);
 }
 
 // Call this before making a recursive call, or before calling a function that needs a lot of stack from a recursive function
@@ -2148,7 +2185,7 @@ void ExpressionParser::CheckStack(uint32_t calledFunctionStackUsage) const THROW
 	// The stack is in danger of overflowing. Throw an exception if we have enough stack to do so (ideally, this should always be the case)
 	if (stackLimit + StackUsage::Throw <= stackPtr)
 	{
-		throw GCodeException(&gb, GetColumn(), "Expression nesting too deep");
+		throw GCodeException(gb, GetColumn(), "Expression nesting too deep");
 	}
 
 	// Not enough stack left to throw an exception

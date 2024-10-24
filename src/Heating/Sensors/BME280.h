@@ -20,7 +20,7 @@ class BME280TemperatureSensor : public SpiTemperatureSensor
 public:
 	BME280TemperatureSensor(unsigned int sensorNum) noexcept;
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException) override;
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
 #endif
@@ -28,13 +28,16 @@ public:
 	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 2; }
 	TemperatureError GetAdditionalOutput(float& t, uint8_t outputNumber) noexcept override;
 	void Poll() noexcept override;
-	const char *GetShortSensorType() const noexcept override { return TypeName; }
+	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName; }
 
-	static constexpr const char *TypeName = "bme280";
+	static constexpr const char *_ecv_array TypeName = "bme280";
 
 private:
+	static SensorTypeDescriptor typeDescriptor;
+
 	TemperatureError bme280_init() noexcept;
-	TemperatureError bme280_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint16_t len) const noexcept;
+	TemperatureError bme280_get_regs(uint8_t reg_addr, uint8_t *_ecv_array reg_data, uint16_t len) const noexcept
+		pre(len <= MaxRegistersToRead; reg_data.lim >= len);
 	TemperatureError bme280_set_reg(uint8_t reg_addr, uint8_t reg_data) const noexcept;
 	TemperatureError bme280_set_sensor_settings(uint8_t desired_settings) const noexcept;
 	TemperatureError bme280_set_sensor_mode(uint8_t sensor_mode) const noexcept;
@@ -53,9 +56,12 @@ private:
 	float compensate_pressure(const struct bme280_uncomp_data *uncomp_data) const noexcept;
 	float compensate_humidity(const struct bme280_uncomp_data *uncomp_data) const noexcept;
 	void bme280_compensate_data(const bme280_uncomp_data *uncomp_data) noexcept;
-	void parse_temp_press_calib_data(const uint8_t *reg_data) noexcept;
-	void parse_humidity_calib_data(const uint8_t *reg_data) noexcept;
-	void bme280_parse_sensor_data(const uint8_t *reg_data, struct bme280_uncomp_data *uncomp_data) noexcept;
+	void parse_temp_press_calib_data(const uint8_t *_ecv_array reg_data) noexcept
+		pre(regData.lim >= 26);
+	void parse_humidity_calib_data(const uint8_t *_ecv_array reg_data) noexcept
+		pre(reg_data.lim >= 7);
+	void bme280_parse_sensor_data(const uint8_t *_ecv_array reg_data, struct bme280_uncomp_data *uncomp_data) noexcept
+		pre(reg_data.lim >= 8);
 	static bool are_settings_changed(uint8_t sub_settings, uint8_t desired_settings) noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
 
@@ -72,9 +78,12 @@ public:
 	BME280PressureSensor(unsigned int sensorNum) noexcept;
 	~BME280PressureSensor() noexcept;
 
-	const char *GetShortSensorType() const noexcept override { return TypeName; }
+	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName; }
 
 	static constexpr const char *TypeName = "bmepressure";
+
+private:
+	static SensorTypeDescriptor typeDescriptor;
 };
 
 // This class represents a DHT humidity sensor
@@ -84,9 +93,12 @@ public:
 	BME280HumiditySensor(unsigned int sensorNum) noexcept;
 	~BME280HumiditySensor() noexcept;
 
-	const char *GetShortSensorType() const noexcept override { return TypeName; }
+	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName; }
 
 	static constexpr const char *TypeName = "bmehumidity";
+
+private:
+	static SensorTypeDescriptor typeDescriptor;
 };
 
 #endif	// SUPPORT_BME280

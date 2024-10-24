@@ -123,7 +123,7 @@ void BufferedStreamGCodeInput::Reset() noexcept
 
 bool BufferedStreamGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept
 {
-	if (device.available())
+	if (device.available() != 0)
 	{
 		const size_t spaceLeft = BufferSpaceLeft();
 		if (spaceLeft >= GCodeInputUSBReadThreshold)
@@ -220,7 +220,7 @@ void NetworkGCodeInput::Put(MessageType mtype, char c) noexcept
 	}
 }
 
-bool NetworkGCodeInput::Put(MessageType mtype, const char *buf) noexcept
+bool NetworkGCodeInput::Put(MessageType mtype, const char *_ecv_array buf) noexcept
 {
 	const size_t len = strlen(buf) + 1;
 	MutexLocker lock(bufMutex, 200);

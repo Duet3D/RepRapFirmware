@@ -110,10 +110,10 @@ private:
 
 	// Parameters common to Cartesian, delta and extruder moves
 
-	DriveMovement *nextDM ;								// link to next DM that needs a step
-	MoveSegment *volatile segments;						// pointer to the segment list for this driver
+	DriveMovement *_ecv_null nextDM ;					// link to next DM that needs a step
+	MoveSegment *volatile _ecv_null segments;			// pointer to the segment list for this driver
 
-	DDA *homingDda;										// if we are checking endstops then this is the DDA that represents the move
+	DDA *_ecv_null homingDda;							// if we are checking endstops then this is the DDA that represents the move
 	ExtruderShaper extruderShaper;						// pressure advance control
 
 	DMState state;										// whether this is active or not
@@ -253,7 +253,7 @@ inline void DriveMovement::ClearMovementPending() noexcept
 // Get the current full step interval for this axis or extruder, or zero if no motion in progress
 inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const noexcept
 {
-	return (segments == nullptr || (nextStep >> microstepShift) == 0) ? 0
+	return (segments == nullptr || ((uint32_t)nextStep >> microstepShift) == 0) ? 0
 			: stepInterval << microstepShift;									// return the interval between steps converted to full steps
 }
 

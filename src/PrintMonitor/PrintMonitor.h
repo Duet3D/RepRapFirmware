@@ -23,6 +23,7 @@ Licence: GPL
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeFileInfo.h>
 #include <ObjectModel/ObjectModel.h>
+#include <ObjectModel/GlobalVariables.h>
 
 enum PrintEstimationMethod
 {
@@ -39,7 +40,7 @@ public:
 	void Init() noexcept;
 
 	bool IsPrinting() const noexcept;						// Is a file being printed?
-	void StartingPrint(const char *filename) noexcept;		// Called to indicate a file will be printed (see M23)
+	void StartingPrint(const char *_ecv_array filename) noexcept;	// Called to indicate a file will be printed (see M23)
 	void StartedPrint() noexcept;							// Called whenever a new live print starts (see M24)
 	void StoppedPrint() noexcept;							// Called whenever a file print has stopped
 	void SetLayerNumber(uint32_t layerNumber) noexcept;		// Set the current layer number
@@ -57,12 +58,14 @@ public:
 	float GetWarmUpDuration() const noexcept;
 	float GetPauseDuration() const noexcept;
 
-	const char *GetPrintingFilename() const noexcept { return (isPrinting) ? filenameBeingPrinted.c_str() : nullptr; }
+	const char *_ecv_array _ecv_null GetPrintingFilename() const noexcept { return (isPrinting) ? filenameBeingPrinted.c_str() : nullptr; }
 	bool GetPrintingFileInfo(GCodeFileInfo& info) noexcept;
-	void SetPrintingFileInfo(const char *filename, GCodeFileInfo& info) noexcept;
+	void SetPrintingFileInfo(const char *_ecv_array filename, GCodeFileInfo& info) noexcept;
 
 	GCodeResult ProcessM73(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void SetSlicerTimeLeft(float seconds) noexcept;
+
+	ReadLockedPointer<const VariableSet> GetCustomInfoForReading() noexcept { return customInfo.GetForReading(); }
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
@@ -84,6 +87,7 @@ private:
 	Platform& platform;
 	GCodes& gCodes;
 
+	GlobalVariables customInfo;
 	uint64_t printStartTime;
 	uint64_t heatingStartedTime;
 	uint64_t warmUpDuration, printDuration;

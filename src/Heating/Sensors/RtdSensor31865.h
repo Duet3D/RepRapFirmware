@@ -17,7 +17,7 @@ class RtdSensor31865 : public SpiTemperatureSensor
 public:
 	explicit RtdSensor31865(unsigned int sensorNum) noexcept;
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException) override;
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override; // configure the sensor from M308 parameters
@@ -32,6 +32,8 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
+	static SensorTypeDescriptor typeDescriptor;
+
 	TemperatureError TryInitRtd() const noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
 

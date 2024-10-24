@@ -555,7 +555,7 @@ void SbcInterface::ExchangeData() noexcept
 					MutexLocker lock(gb->mutex, SbcYieldTimeout);
 					if (lock.IsAcquired())
 					{
-						ExpressionParser parser(*gb, expression.c_str(), expression.c_str() + expression.strlen());
+						ExpressionParser parser(gb, expression.c_str(), expression.c_str() + expression.strlen());
 						const ExpressionValue val = parser.Parse();
 						if (val.GetType() == TypeCode::HeapArray)
 						{
@@ -763,7 +763,7 @@ void SbcInterface::ExchangeData() noexcept
 
 						try
 						{
-							ExpressionParser indexParser(*gb, indexStart + 1, shortVarName.c_str() + shortVarName.strlen());
+							ExpressionParser indexParser(gb, indexStart + 1, shortVarName.c_str() + shortVarName.strlen());
 							const uint32_t indexExpr = indexParser.ParseUnsigned();
 							indexStart = indexParser.GetEndptr();
 							if (*indexStart != ']')
@@ -815,7 +815,7 @@ void SbcInterface::ExchangeData() noexcept
 			// Evaluate the expression and assign it
 			try
 			{
-				ExpressionParser parser(*gb, expression.c_str(), expression.c_str() + expression.strlen());
+				ExpressionParser parser(gb, expression.c_str(), expression.c_str() + expression.strlen());
 				ExpressionValue ev = parser.Parse();
 				if (v == nullptr)
 				{

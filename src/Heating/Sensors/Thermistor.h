@@ -23,7 +23,7 @@ class Thermistor : public SensorWithPort
 public:
 	Thermistor(unsigned int sensorNum, bool p_isPT1000) noexcept;					// create an instance with default values
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException); // configure the sensor from M308 parameters
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException) override; // configure the sensor from M308 parameters
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override; // configure the sensor from M308 parameters
@@ -39,6 +39,8 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
+	static SensorTypeDescriptor thermistorDescriptor, pt100descriptor;
+
 	void CalcDerivedParameters() noexcept;											// calculate shA and shB
 	int32_t GetRawReading(bool& valid) const noexcept;								// get the ADC reading
 	bool ConfigureHParam(int hVal, const StringRef& reply) noexcept;				// configure the H parameter returning true if successful, false if error

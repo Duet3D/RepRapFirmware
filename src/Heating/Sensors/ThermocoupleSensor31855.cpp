@@ -68,6 +68,9 @@ const SpiMode MAX31855_SpiMode = SPI_MODE_0;
 // Define the minimum interval between readings
 const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in milliseconds
 
+// Sensor type descriptors
+TemperatureSensor::SensorTypeDescriptor ThermocoupleSensor31855::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new ThermocoupleSensor31855(sensorNum); } );
+
 ThermocoupleSensor31855::ThermocoupleSensor31855(unsigned int sensorNum) noexcept
 	: SpiTemperatureSensor(sensorNum, "Thermocouple (MAX31855)", MAX31855_SpiMode, MAX31855_Frequency)
 {
@@ -144,17 +147,17 @@ void ThermocoupleSensor31855::Poll() noexcept
 			{
 				// At this point we are assured that bit 16 (fault indicator) is set and that at least one of the fault reason bits (0:2) are set.
 				// We now need to ensure that only one fault reason bit is set.
-				if (rawVal & 0x01)
+				if ((rawVal & 0x01) != 0)
 				{
 					// Open Circuit
 					SetResult(TemperatureError::openCircuit);
 				}
-				else if (rawVal & 0x02)
+				else if ((rawVal & 0x02) != 0)
 				{
 					// Short to ground;
 					SetResult(TemperatureError::shortToGround);
 				}
-				else if (rawVal && 0x04)
+				else if ((rawVal & 0x04) != 0)
 				{
 					// Short to Vcc
 					SetResult(TemperatureError::shortToVcc);

@@ -32,7 +32,7 @@ public:
 	// Create a message box, returning the sequence number
 	static uint32_t Create(const char *_ecv_array msg, const char *_ecv_array p_title, int p_mode, float p_timeout, AxesBitmap p_controls, MessageBoxLimits *_ecv_null p_limits) noexcept;
 	static bool HaveCurrent() noexcept { return mboxList != nullptr; }
-	static MessageBox *GetCurrent() noexcept { return mboxList; }
+	static MessageBox *_ecv_null GetCurrent() noexcept { return mboxList; }
 	static ReadLockedPointer<const MessageBox> GetLockedCurrent() noexcept;
 	static bool Acknowledge(uint32_t ackSeq, bool& wasBlocking) noexcept;
 	static bool CheckTimeout() noexcept;

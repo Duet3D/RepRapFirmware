@@ -94,6 +94,10 @@
 # define SUPPORT_BME280			0
 #endif
 
+#ifndef SUPPORT_ADS131A02
+# define SUPPORT_ADS131A02		0
+#endif
+
 #define HAS_AUX_DEVICES			(defined(SERIAL_AUX_DEVICE))		// if SERIAL_AUX_DEVICE is defined then we have one or more aux devices
 
 #ifndef SUPPORT_PANELDUE_FLASH

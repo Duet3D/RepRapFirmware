@@ -26,11 +26,12 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ///////////////////////////////////////////////////////////////////////////////
+
 #include "Applet.h"
 
 Applet::Applet(Samba& samba,
                uint32_t addr,
-               const uint8_t* code,
+               const uint8_t *_ecv_array code,
                uint32_t size,
                uint32_t start,
                uint32_t stack,
@@ -62,3 +63,6 @@ Applet::runv() THROWS(GCodeException)
     // The stack is the first reset vector
     _samba.go(_stack);
 }
+
+// End
+

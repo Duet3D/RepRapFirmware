@@ -22,7 +22,7 @@ class Logger
 public:
 	explicit Logger(LogLevel logLvl) noexcept;
 
-	GCodeResult Start(time_t time, const StringRef& file, const StringRef& reply) noexcept;
+	GCodeResult Start(time_t currentTime, const StringRef& file, const StringRef& reply) noexcept;
 	void Stop(time_t currentTime) noexcept;
 	void LogMessage(time_t currentTime, const char *_ecv_array message, MessageType type) noexcept;
 	void LogMessage(time_t currentTime, OutputBuffer *buf, MessageType type) noexcept;

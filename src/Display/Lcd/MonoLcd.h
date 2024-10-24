@@ -16,7 +16,7 @@ class MonoLcd : public Lcd
 {
 public:
 	MonoLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode) noexcept;
-	virtual ~MonoLcd();
+	virtual ~MonoLcd() override;
 
 	// Get the number of colour bits
 	uint32_t GetColourBits() const noexcept override final { return 1; }
@@ -26,9 +26,6 @@ public:
 
 	// Initialize the display
 	void Init(Pin p_csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uint8_t p_contrastRatio, uint8_t p_resistorRatio) noexcept override final;
-
-	// Clear part of the display
-	void ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, bool foreground) noexcept override final;
 
 	// Set, clear or invert a pixel
 	//  x = x-coordinate of the pixel, measured from left hand edge of the display
@@ -59,6 +56,9 @@ public:
 
 protected:
 	virtual void HardwareInit() noexcept = 0;
+
+	// Clear part of the display
+	void ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, bool foreground) noexcept override final;
 
 	// Start a character at the current row and column, clearing the specified number of space columns
 	void StartCharacter(PixelNumber ySize, PixelNumber numSpaceColumns, PixelNumber numFontColumns) noexcept override final;

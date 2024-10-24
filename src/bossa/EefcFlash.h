@@ -37,7 +37,7 @@ class EefcFlash : public BossaFlash
 {
 public:
     EefcFlash(Samba& samba,
-    		  const char* name,
+    		  const char *_ecv_array name,
               uint32_t addr,
               uint32_t pages,
               uint32_t size,
@@ -47,7 +47,7 @@ public:
               uint32_t stack,
               uint32_t regs,
               bool canBrownout) THROWS(GCodeException);
-    virtual ~EefcFlash();
+    virtual ~EefcFlash() override;
 
     void eraseAll(uint32_t offset) THROWS(GCodeException) override;
     void eraseAuto(bool enable) noexcept override;
@@ -68,7 +68,7 @@ public:
     void writeOptions() THROWS(GCodeException) override;
 
     void writePage(uint32_t page) THROWS(GCodeException) override;
-    void readPage(uint32_t page, uint8_t* data) THROWS(GCodeException) override;
+    void readPage(uint32_t page, uint8_t *_ecv_array data) THROWS(GCodeException) override;
 
     static const uint32_t PagesPerErase;
 

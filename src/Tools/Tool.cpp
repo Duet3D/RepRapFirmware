@@ -47,50 +47,50 @@ constexpr ObjectModelArrayTableEntry Tool::objectModelArrayTable[] =
 	// 0. Active temperatures
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->activeTemperatures[context.GetLastIndex()], 1); }
+		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
+		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->activeTemperatures[context.GetLastIndex()], 1); }
 	},
 	// 1. Axes
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(((const Tool*)self)->axisMapping); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->axisMapping[context.GetLastIndex()]); }
+		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(((const Tool*)self)->axisMapping); },
+		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->axisMapping[context.GetLastIndex()]); }
 	},
 	// 2 Extruders
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->driveCount; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Tool*)self)->drives[context.GetLastIndex()]); }
+		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->driveCount; },
+		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Tool*)self)->drives[context.GetLastIndex()]); }
 	},
 	// 3. Feedforward
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->heaterFeedForward[context.GetLastIndex()], 3); }
+		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
+		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->heaterFeedForward[context.GetLastIndex()], 3); }
 	},
 	// 4. Heaters
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Tool*)self)->heaters[context.GetLastIndex()]); }
+		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
+		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Tool*)self)->heaters[context.GetLastIndex()]); }
 	},
 	// 5. Mix
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->driveCount; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->mix[context.GetLastIndex()], 2); }
+		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->driveCount; },
+		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->mix[context.GetLastIndex()], 2); }
 	},
 	// 6. Offsets
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->offset[context.GetLastIndex()], 3); }
+		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
+		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->offset[context.GetLastIndex()], 3); }
 	},
 	// 7. Standby temperatures
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->standbyTemperatures[context.GetLastIndex()], 1); }
+		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
+		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->standbyTemperatures[context.GetLastIndex()], 1); }
 	}
 };
 
@@ -134,14 +134,14 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 #endif
 
 ReadWriteLock Tool::toolListLock;
-Tool *Tool::toolList = nullptr;
+Tool *_ecv_null Tool::toolList = nullptr;
 ToolNumbersBitmap Tool::prohibitedExtrusionTools;
 uint16_t Tool::activeExtruders = 0;
 uint16_t Tool::activeToolHeaters = 0;
 uint16_t Tool::numToolsToReport = 0;
 
 // Create a new tool and return a pointer to it. If an error occurs, put an error message in 'reply' and return nullptr.
-/*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *toolName, int32_t d[], size_t dCount, int32_t h[], size_t hCount,
+/*static*/ Tool *_ecv_null Tool::Create(unsigned int toolNumber, const char *_ecv_array toolName, int32_t d[], size_t dCount, int32_t h[], size_t hCount,
 								AxesBitmap xMap, AxesBitmap yMap, AxesBitmap zMap, FansBitmap fanMap, int filamentDrive, size_t sCount, int8_t spindleNo, const StringRef& reply) noexcept
 {
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
@@ -195,7 +195,7 @@ uint16_t Tool::numToolsToReport = 0;
 	if (filamentDrive >= 0 && filamentDrive < (int)MaxExtruders)
 	{
 		// Use exactly only one Filament instance per extruder drive
-		Filament * const filament = Filament::GetFilamentByExtruder(filamentDrive);
+		Filament *_ecv_null const filament = Filament::GetFilamentByExtruder(filamentDrive);
 		t->filament = (filament == nullptr) ? new Filament(filamentDrive) : filament;
 		t->filamentExtruder = filamentDrive;
 	}
@@ -209,7 +209,7 @@ uint16_t Tool::numToolsToReport = 0;
 	const size_t nameLength = strlen(toolName);
 	if (nameLength != 0)
 	{
-		char *tName = new char[nameLength + 1];
+		char *_ecv_array tName = new char[nameLength + 1];
 		SafeStrncpy(tName, toolName, nameLength + 1);
 		t->name = tName;
 	}
@@ -272,7 +272,7 @@ uint16_t Tool::numToolsToReport = 0;
 /*static*/ void Tool::AddTool(Tool* tool) noexcept
 {
 	WriteLocker lock(toolListLock);
-	Tool** t = &toolList;
+	Tool*_ecv_null * t = &toolList;
 	while(*t != nullptr && (*t)->Number() < tool->Number())
 	{
 		t = &((*t)->next);
@@ -289,8 +289,8 @@ uint16_t Tool::numToolsToReport = 0;
 	WriteLocker lock(toolListLock);
 
 	// Purge any references to this tool
-	Tool * tool = nullptr;
-	for (Tool **t = &toolList; *t != nullptr; t = &((*t)->next))
+	Tool *_ecv_null tool = nullptr;
+	for (Tool *_ecv_null *t = &toolList; *t != nullptr; t = &((*t)->next))
 	{
 		if ((*t)->Number() == toolNumber)
 		{
@@ -312,7 +312,7 @@ uint16_t Tool::numToolsToReport = 0;
 
 	// Update the number of active heaters and extruder drives
 	activeExtruders = activeToolHeaters = numToolsToReport = 0;
-	for (Tool *t = toolList; t != nullptr; t = t->Next())
+	for (Tool *_ecv_null t = toolList; t != nullptr; t = t->Next())
 	{
 		t->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters);
 	}
@@ -323,7 +323,7 @@ uint16_t Tool::numToolsToReport = 0;
 {
 	unsigned int numTools = 0;
 	ReadLocker lock(Tool::toolListLock);
-	for (const Tool *t = Tool::GetToolList(); t != nullptr && t->Number() == (int)numTools; t = t->Next())
+	for (const Tool *_ecv_null t = Tool::GetToolList(); t != nullptr && t->Number() == (int)numTools; t = t->Next())
 	{
 		++numTools;
 	}
@@ -334,38 +334,38 @@ uint16_t Tool::numToolsToReport = 0;
 /*static*/ ReadLockedPointer<Tool> Tool::GetLockedTool(int toolNumber) noexcept
 {
 	ReadLocker lock(toolListLock);
-	Tool* tool;
+	Tool *_ecv_null tool;
 	for (tool = toolList; tool != nullptr && tool->Number() != toolNumber; tool = tool->Next()) { }
 	return ReadLockedPointer<Tool>(lock, tool);
 }
 
-/*static*/ AxesBitmap Tool::GetXAxes(const Tool *tool) noexcept
+/*static*/ AxesBitmap Tool::GetXAxes(const Tool *_ecv_null tool) noexcept
 {
 	return (tool == nullptr) ? DefaultXAxisMapping : tool->axisMapping[0];
 }
 
-/*static*/ AxesBitmap Tool::GetYAxes(const Tool *tool) noexcept
+/*static*/ AxesBitmap Tool::GetYAxes(const Tool *_ecv_null tool) noexcept
 {
 	return (tool == nullptr) ? DefaultYAxisMapping : tool->axisMapping[1];
 }
 
-/*static*/ AxesBitmap Tool::GetZAxes(const Tool *tool) noexcept
+/*static*/ AxesBitmap Tool::GetZAxes(const Tool *_ecv_null tool) noexcept
 {
 	return (tool == nullptr) ? DefaultZAxisMapping : tool->axisMapping[2];
 }
 
-/*static*/ AxesBitmap Tool::GetAxisMapping(const Tool *tool, unsigned int axis) noexcept
+/*static*/ AxesBitmap Tool::GetAxisMapping(const Tool *_ecv_null tool, unsigned int axis) noexcept
 {
 	return (tool != nullptr && axis < ARRAY_SIZE(tool->axisMapping)) ? tool->axisMapping[axis] : AxesBitmap::MakeFromBits(axis);
 }
 
-/*static*/ float Tool::GetOffset(const Tool *tool, size_t axis) noexcept
+/*static*/ float Tool::GetOffset(const Tool *_ecv_null tool, size_t axis) noexcept
 {
 	return (tool == nullptr) ? 0.0 : tool->offset[axis];
 }
 
 // Check whether extruder movement is allowed. As a side effect, if it isn't then set the appropriate bit in prohibitedExtrusionTools.
-/*static*/ bool Tool::ExtruderMovementAllowed(const Tool *tool, bool forwards, unsigned int extruder) noexcept
+/*static*/ bool Tool::ExtruderMovementAllowed(const Tool *_ecv_null tool, bool forwards, unsigned int extruder) noexcept
 {
 	if (reprap.GetHeat().ColdExtrude())
 	{
@@ -411,7 +411,7 @@ uint16_t Tool::numToolsToReport = 0;
 /*static*/ bool Tool::IsHeaterAssignedToTool(int8_t heater) noexcept
 {
 	ReadLocker lock(toolListLock);
-	for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
+	for (Tool *_ecv_null tool = toolList; tool != nullptr; tool = tool->Next())
 	{
 		for (size_t i = 0; i < tool->HeaterCount(); i++)
 		{
@@ -426,11 +426,11 @@ uint16_t Tool::numToolsToReport = 0;
 	return false;
 }
 
-/*static*/ GCodeResult Tool::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException)
+/*static*/ GCodeResult Tool::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & outBuf) THROWS(GCodeException)
 {
 	GCodeResult rslt = GCodeResult::ok;
 	ReadLocker lock(toolListLock);
-	for (Tool *tool = toolList; tool != nullptr && rslt == GCodeResult::ok; tool = tool->Next())
+	for (Tool *_ecv_null tool = toolList; tool != nullptr && rslt == GCodeResult::ok; tool = tool->Next())
 	{
 		rslt = tool->SetFirmwareRetraction(gb, reply, outBuf);
 	}
@@ -441,7 +441,7 @@ uint16_t Tool::numToolsToReport = 0;
 {
 	const AxesBitmap axesNotHomed = ~axesHomed;
 	ReadLocker lock(toolListLock);
-	for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
+	for (Tool *_ecv_null tool = toolList; tool != nullptr; tool = tool->Next())
 	{
 		if (tool->GetZAxisMap().Intersects(axesNotHomed))
 		{
@@ -465,11 +465,11 @@ void Tool::PrintTool(const StringRef& reply) const noexcept
 	else
 	{
 		reply.cat("drives:");
-		char sep = ' ';
+		char sep1 = ' ';
 		for (size_t drive = 0; drive < driveCount; drive++)
 		{
-			reply.catf("%c%d", sep, drives[drive]);
-			sep = ',';
+			reply.catf("%c%d", sep1, drives[drive]);
+			sep1 = ',';
 		}
 	}
 
@@ -480,11 +480,11 @@ void Tool::PrintTool(const StringRef& reply) const noexcept
 	else
 	{
 		reply.cat("; heaters (active/standby temps):");
-		char sep = ' ';
+		char sep1 = ' ';
 		for (size_t heater = 0; heater < heaterCount; heater++)
 		{
-			reply.catf("%c%d (%.1f/%.1f)", sep, heaters[heater], (double)activeTemperatures[heater], (double)standbyTemperatures[heater]);
-			sep = ',';
+			reply.catf("%c%d (%.1f/%.1f)", sep1, heaters[heater], (double)activeTemperatures[heater], (double)standbyTemperatures[heater]);
+			sep1 = ',';
 		}
 	}
 
@@ -547,7 +547,7 @@ void Tool::PrintTool(const StringRef& reply) const noexcept
 /*static*/ void Tool::FlagTemperatureFault(int8_t dudHeater) noexcept
 {
 	ReadLocker lock(toolListLock);
-	for (Tool *t = toolList; t != nullptr; t = t->Next())
+	for (Tool *_ecv_null t = toolList; t != nullptr; t = t->Next())
 	{
 		t->SetTemperatureFault(dudHeater);
 	}
@@ -557,7 +557,7 @@ void Tool::PrintTool(const StringRef& reply) const noexcept
 {
 	const GCodeResult rslt = reprap.GetHeat().ResetFault(wasDudHeater, reply);
 	ReadLocker lock(toolListLock);
-	for (Tool *t = toolList; t != nullptr; t = t->Next())
+	for (Tool *_ecv_null t = toolList; t != nullptr; t = t->Next())
 	{
 		t->ResetTemperatureFault(wasDudHeater);
 	}
@@ -702,7 +702,7 @@ void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHea
 	for (size_t heaterIndex = 0; heaterIndex < heaterCount; heaterIndex++)
 	{
 		const int heaterNumber = heaters[heaterIndex];
-		if (!reprap.GetHeat().IsBedOrChamberHeater(heaterNumber) && heaterNumber >= numHeaters)
+		if (!reprap.GetHeat().IsBedOrChamberHeater(heaterNumber) && heaterNumber >= (int)numHeaters)
 		{
 			numHeaters = (uint16_t)heaterNumber + 1;
 		}
@@ -797,12 +797,12 @@ void Tool::SetToolHeaterActiveOrStandbyTemperature(size_t heaterNumber, float te
 		// If we are setting the active temperature, only set the heater active temperature if this is a current tool otr no other current tool uses this heater
 		// We set the temperature if this tool is current, or there is no current tool that uses this heater
 		// or we are setting the standby temperature and the heater was either last switched to standby when this tool went to standby or it not in standby.
-		const Tool * lastStandbyTool;
+		const Tool *_ecv_null lastStandbyTool;
 		const bool setHeater = !reprap.GetGCodes().IsHeaterUsedByDifferentCurrentTool(heater, this)
 								|| (!active && ((lastStandbyTool = reprap.GetHeat().GetLastStandbyTool(heater)) == nullptr || lastStandbyTool == this));
 		if (temp <= NEARLY_ABS_ZERO)								// temperatures close to ABS_ZERO turn off the heater
 		{
-			relevantTemperature = 0;
+			relevantTemperature = 0.0;
 			if (setHeater)
 			{
 				reprap.GetHeat().SwitchOff(heater);
@@ -888,12 +888,12 @@ bool Tool::UsesHeater(int8_t heater) const noexcept
 	return false;
 }
 
-const char *Tool::GetFilamentName() const noexcept
+const char *_ecv_array Tool::GetFilamentName() const noexcept
 {
 	return (filament == nullptr) ? "" : filament->GetName();
 }
 
-GCodeResult Tool::SetFirmwareRetraction(GCodeBuffer &gb, const StringRef &reply, OutputBuffer*& outBuf) THROWS(GCodeException)
+GCodeResult Tool::SetFirmwareRetraction(GCodeBuffer &gb, const StringRef &reply, OutputBuffer *_ecv_null & outBuf) THROWS(GCodeException)
 {
 	bool seen = false;
 	if (gb.Seen('S'))

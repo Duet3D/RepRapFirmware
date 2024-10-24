@@ -16,7 +16,7 @@ class ThermocoupleSensor31856 : public SpiTemperatureSensor
 {
 public:
 	explicit ThermocoupleSensor31856(unsigned int sensorNum) noexcept;
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException) override;
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override; // configure the sensor from M308 parameters
@@ -28,6 +28,8 @@ public:
 	static constexpr const char *_ecv_array TypeName = "thermocouplemax31856";
 
 private:
+	static SensorTypeDescriptor typeDescriptor;
+
 	TemperatureError TryInitThermocouple() const noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
 

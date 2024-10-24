@@ -1110,7 +1110,7 @@ pre(driver.IsRemote())
 			// If a port name if provided, it must match the board ID
 			String<StringLength20> portName;
 			gb.GetQuotedString(portName.GetRef(), false);
-			if (isdigit(portName[0]) && IoPort::RemoveBoardAddress(portName.GetRef()) != driver.boardAddress)
+			if (isDigit(portName[0]) && IoPort::RemoveBoardAddress(portName.GetRef()) != driver.boardAddress)
 			{
 				reply.copy("Brake port must be on same board as driver");
 				return GCodeResult::error;

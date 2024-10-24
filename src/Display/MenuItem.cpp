@@ -21,7 +21,7 @@ MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, Fon
 {
 }
 
-/*static*/ void MenuItem::AppendToList(MenuItem **root, MenuItem *item) noexcept
+/*static*/ void MenuItem::AppendToList(MenuItem *_ecv_from _ecv_null *root, MenuItem *_ecv_from item) noexcept
 {
 	while (*root != nullptr)
 	{
@@ -32,7 +32,7 @@ MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, Fon
 }
 
 // Print the item at the correct place with the correct alignment
-void MenuItem::PrintAligned(Lcd& lcd, PixelNumber rightMargin) noexcept
+void MenuItem::PrintAligned(Lcd &_ecv_from lcd, PixelNumber rightMargin) noexcept
 {
 	PixelNumber colsToSkip = 0;
 	lcd.SetFont(fontNumber);
@@ -121,7 +121,7 @@ bool MenuItem::IsVisible() const noexcept
 }
 
 // Erase this item if it is drawn but should not be visible
-void MenuItem::EraseIfInvisible(Lcd& lcd) noexcept
+void MenuItem::EraseIfInvisible(Lcd &_ecv_from lcd) noexcept
 {
 	if (drawn && !IsVisible())
 	{

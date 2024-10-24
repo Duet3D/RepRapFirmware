@@ -10,8 +10,8 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 // Members of class Variable
-Variable::Variable(const char *_ecv_array str, ExpressionValue& pVal, int16_t pScope) THROWS(GCodeException)
-	: name(str), val(), scope(pScope)
+Variable::Variable(const char *_ecv_array str, size_t strLen, ExpressionValue& pVal, int16_t pScope) THROWS(GCodeException)
+	: name(str, strLen), val(), scope(pScope)
 {
 	Assign(pVal);				// this may throw
 }
@@ -30,14 +30,14 @@ bool Variable::IsValidVariableName(const char *_ecv_array str) noexcept
 		return false;
 	}
 
-	if (!isalpha(str[0]))
+	if (!isAlpha(str[0]))
 	{
 		return false;
 	}
 
 	for (size_t i = 1; i < len; i++)
 	{
-		if (!isalnum(str[i]) && str[i] != '_')
+		if (!isAlnum(str[i]) && str[i] != '_')
 		{
 			return false;
 		}
@@ -148,7 +148,12 @@ const Variable *_ecv_null VariableSet::Lookup(const char *_ecv_array str, size_t
 
 Variable *VariableSet::InsertNew(const char *_ecv_array str, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException)
 {
-	LinkedVariable * const toInsert = new LinkedVariable(str, pVal, pScope, root);
+	return InsertNew(str, strlen(str), pVal, pScope);
+}
+
+Variable *VariableSet::InsertNew(const char *_ecv_array str, size_t strLen, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException)
+{
+	LinkedVariable * const toInsert = new LinkedVariable(str, strLen, pVal, pScope, root);
 	root = toInsert;
 	return &(toInsert->v);
 }

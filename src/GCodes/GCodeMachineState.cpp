@@ -57,7 +57,7 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 #endif
 	  compatibility(prev.compatibility),
 	  previous(&prev), currentBlockState(new BlockState(nullptr)), errorMessage(nullptr),
-	  blockNesting((withinSameFile) ? prev.blockNesting : 0),
+	  blockNesting((withinSameFile) ? prev.blockNesting : 0u),
 	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
 #if SUPPORT_ASYNC_MOVES
 	  , commandedQueueNumber(prev.commandedQueueNumber), ownQueueNumber(prev.ownQueueNumber), executeAllCommands(prev.executeAllCommands)
@@ -71,11 +71,11 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 		for (;;)
 		{
 			*dst = *src;
-			src = src->GetPrevious();
-			if (src == nullptr)
+			if (src->GetPrevious() == nullptr)
 			{
 				break;
 			}
+			src = _ecv_not_null(src->GetPrevious());
 			BlockState *const newDst = new BlockState(nullptr);
 			dst->SetPrevious(newDst);
 			dst = newDst;
@@ -168,7 +168,7 @@ GCodeMachineState::~GCodeMachineState() noexcept
 // Return true if all nested macros we are running are restartable
 bool GCodeMachineState::CanRestartMacro() const noexcept
 {
-	const GCodeMachineState *p = this;
+	const GCodeMachineState *_ecv_null p = this;
 	do
 	{
 		if (p->doingFileMacro && !p->macroRestartable)
@@ -271,11 +271,11 @@ void GCodeMachineState::CopyStateFrom(const GCodeMachineState& other) noexcept
 }
 
 // Set the error message and associated state
-void GCodeMachineState::SetError(const char *msg) noexcept
+void GCodeMachineState::SetError(const char *_ecv_array msg, int parameter) noexcept
 {
 	if (stateMachineResult != GCodeResult::error)
 	{
-		errorMessage = GCodeException(msg);
+		errorMessage = GCodeException(msg, parameter);
 		stateMachineResult = GCodeResult::error;
 	}
 }
@@ -289,7 +289,7 @@ void GCodeMachineState::SetError(const GCodeException& exc) noexcept
 	}
 }
 
-void GCodeMachineState::SetWarning(const char *msg) noexcept
+void GCodeMachineState::SetWarning(const char *_ecv_array msg) noexcept
 {
 	if (stateMachineResult == GCodeResult::ok)
 	{
@@ -335,7 +335,7 @@ void GCodeMachineState::SetState(GCodeState newState) noexcept
 // Get the number of iterations of the closest enclosing loop in the current file, or -1 if there is on enclosing loop
 int32_t GCodeMachineState::GetIterations() const noexcept
 {
-	for (const BlockState *bs = currentBlockState; bs != nullptr; bs = bs->GetPrevious())
+	for (const BlockState *_ecv_null bs = currentBlockState; bs != nullptr; bs = bs->GetPrevious())
 	{
 		if (bs->GetType() == BlockType::loop)
 		{

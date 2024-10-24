@@ -823,7 +823,7 @@ float Heat::GetTargetTemperature(int heater) const noexcept
 				: 0.0;
 }
 
-GCodeResult Heat::SetActiveOrStandby(int heater, const Tool *tool, bool active, const StringRef& reply) noexcept
+GCodeResult Heat::SetActiveOrStandby(int heater, const Tool *_ecv_null tool, bool active, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())

@@ -245,7 +245,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 906))),								ObjectModelEntryFlags::none },
 	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(3),																						ObjectModelEntryFlags::none },
 	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),								ObjectModelEntryFlags::none },
-	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetInstantDv(context.GetLastIndex())), 1),				ObjectModelEntryFlags::none },
+	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetMaxInstantDv(context.GetLastIndex())), 1),				ObjectModelEntryFlags::none },
 	{ "letter",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetLastIndex()]),							ObjectModelEntryFlags::none },
 	{ "machinePosition",	OBJECT_MODEL_FUNC(self->LiveMachineCoordinate(context.GetLastIndex()), 3),										ObjectModelEntryFlags::live },
 	{ "max",				OBJECT_MODEL_FUNC(self->AxisMaximum(context.GetLastIndex()), 2),												ObjectModelEntryFlags::none },
@@ -257,6 +257,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 #ifndef DUET_NG
 	{ "percentStstCurrent",	OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 917))),								ObjectModelEntryFlags::none },
 #endif
+	{ "printingJerk",		OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetPrintingInstantDv(context.GetLastIndex())), 1),		ObjectModelEntryFlags::none },
 	{ "reducedAcceleration", OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(context.GetLastIndex(), true)), 1),			ObjectModelEntryFlags::none },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->DriveStepsPerMm(context.GetLastIndex()), 2),											ObjectModelEntryFlags::none },
@@ -265,24 +266,25 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "workplaceOffsets",	OBJECT_MODEL_FUNC_ARRAY(4),																						ObjectModelEntryFlags::none },
 
 	// 10. move.extruders[] members
-	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
-	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(ExtruderToLogicalDrive(context.GetLastIndex()), 906))),								ObjectModelEntryFlags::none },
-	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),																		ObjectModelEntryFlags::none },
-	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 3),												ObjectModelEntryFlags::none },
-	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(GetFilamentName(context.GetLastIndex())),																		ObjectModelEntryFlags::none },
-	{ "filamentDiameter",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetFilamentDiameter(context.GetLastIndex()), 3),											ObjectModelEntryFlags::none },
-	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetInstantDv(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
-	{ "microstepping",		OBJECT_MODEL_FUNC(self, 13),																											ObjectModelEntryFlags::none },
-	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 11),																											ObjectModelEntryFlags::none },
-	{ "percentCurrent",		OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 913))),														ObjectModelEntryFlags::none },
+	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),			ObjectModelEntryFlags::none },
+	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(ExtruderToLogicalDrive(context.GetLastIndex()), 906))),							ObjectModelEntryFlags::none },
+	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),																	ObjectModelEntryFlags::none },
+	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 3),											ObjectModelEntryFlags::none },
+	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(GetFilamentName(context.GetLastIndex())),																	ObjectModelEntryFlags::none },
+	{ "filamentDiameter",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetFilamentDiameter(context.GetLastIndex()), 3),										ObjectModelEntryFlags::none },
+	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetMaxInstantDv(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),			ObjectModelEntryFlags::none },
+	{ "microstepping",		OBJECT_MODEL_FUNC(self, 13),																										ObjectModelEntryFlags::none },
+	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 11),																										ObjectModelEntryFlags::none },
+	{ "percentCurrent",		OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 913))),													ObjectModelEntryFlags::none },
 #ifndef DUET_NG
-	{ "percentStstCurrent",	OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 917))),														ObjectModelEntryFlags::none },
+	{ "percentStstCurrent",	OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 917))),													ObjectModelEntryFlags::none },
 #endif
-	{ "position",			OBJECT_MODEL_FUNC(self->LiveMachineCoordinate(ExtruderToLogicalDrive(context.GetLastIndex())), 1),						ObjectModelEntryFlags::live },
-	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetPressureAdvanceClocksForExtruder(context.GetLastIndex())/StepClockRate, 3),					ObjectModelEntryFlags::none },
-	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1), 					ObjectModelEntryFlags::live },
-	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),	ObjectModelEntryFlags::none },
-	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->DriveStepsPerMm(ExtruderToLogicalDrive(context.GetLastIndex())), 2),							ObjectModelEntryFlags::none },
+	{ "position",			OBJECT_MODEL_FUNC(self->LiveMachineCoordinate(ExtruderToLogicalDrive(context.GetLastIndex())), 1),									ObjectModelEntryFlags::live },
+	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetPressureAdvanceClocksForExtruder(context.GetLastIndex())/StepClockRate, 3),								ObjectModelEntryFlags::none },
+	{ "printingJerk",		OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetPrintingInstantDv(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),	ObjectModelEntryFlags::none },
+	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1), 								ObjectModelEntryFlags::live },
+	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
+	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->DriveStepsPerMm(ExtruderToLogicalDrive(context.GetLastIndex())), 2),										ObjectModelEntryFlags::none },
 
 	// 11. move.extruders[].nonlinear members
 	{ "a",					OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].A, 3),									ObjectModelEntryFlags::none },
@@ -320,11 +322,11 @@ constexpr uint8_t Move::objectModelTableDescriptor[] =
 	2,
 	4,
 #ifdef DUET_NG	// Duet WiFi/Ethernet doesn't have settable standstill current
-	21,																		// section 9: move.axes[]
-	15,																		// section 10: move.extruders[]
-#else
 	22,																		// section 9: move.axes[]
 	16,																		// section 10: move.extruders[]
+#else
+	23,																		// section 9: move.axes[]
+	17,																		// section 10: move.extruders[]
 #endif
 	3,																		// section 11: move.extruders[].nonlinear
 	2,																		// section 12: move.axes[].microstepping
@@ -355,7 +357,6 @@ Move::Move() noexcept
 	  heightController(nullptr),
 #endif
 	  jerkPolicy(0),
-	  stepErrorState(StepErrorState::noError),
 	  numCalibratedFactors(0)
 {
 #if VARIABLE_NUM_DRIVERS
@@ -380,7 +381,7 @@ void Move::Init() noexcept
 
 		maxFeedrates[axis] = ConvertSpeedFromMmPerSec(DefaultAxisMaxFeedrate);
 		reducedAccelerations[axis] = normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
-		instantDvs[axis] = ConvertSpeedFromMmPerSec(DefaultAxisInstantDv);
+		printingInstantDvs[axis] = maxInstantDvs[axis] = ConvertSpeedFromMmPerSec(DefaultAxisInstantDv);
 
 		backlashMm[axis] = 0.0;
 		backlashSteps[axis] = 0;
@@ -392,14 +393,14 @@ void Move::Init() noexcept
 	// We use different defaults for the Z axis
 	maxFeedrates[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZMaxFeedrate);
 	reducedAccelerations[Z_AXIS] = normalAccelerations[Z_AXIS] = ConvertAcceleration(DefaultZAcceleration);
-	instantDvs[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZInstantDv);
+	printingInstantDvs[Z_AXIS] = maxInstantDvs[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZInstantDv);
 
 	// Extruders
 	for (size_t drive = MaxAxes; drive < MaxAxesPlusExtruders; ++drive)
 	{
 		maxFeedrates[drive] = ConvertSpeedFromMmPerSec(DefaultEMaxFeedrate);
 		normalAccelerations[drive] = reducedAccelerations[drive] = ConvertAcceleration(DefaultEAcceleration);
-		instantDvs[drive] = ConvertSpeedFromMmPerSec(DefaultEInstantDv);
+		printingInstantDvs[drive] = maxInstantDvs[drive] = ConvertSpeedFromMmPerSec(DefaultEInstantDv);
 	}
 
 	minimumMovementSpeed = ConvertSpeedFromMmPerSec(DefaultMinFeedrate);
@@ -676,6 +677,19 @@ void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t reque
 	value = max<float>(value, MinimumStepsPerMm);					// don't allow zero or negative
 	driveStepsPerMm[axisOrExtruder] = value;
 	reprap.MoveUpdated();
+}
+
+void Move::SetInstantDv(size_t drive, float value, bool includingMax) noexcept
+{
+	const float val = max<float>(value, ConvertSpeedFromMmPerSec(MinimumJerk));			// don't allow zero or negative values, they causes Move to loop indefinitely
+	if (includingMax)
+	{
+		printingInstantDvs[drive] = maxInstantDvs[drive] = val;
+	}
+	else
+	{
+		printingInstantDvs[drive] = min<float>(val, maxInstantDvs[drive]);
+	}
 }
 
 [[noreturn]] void Move::MoveLoop() noexcept
@@ -2324,12 +2338,18 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			{
 				if (tail->GetFlags().executing)
 				{
-					const uint32_t now = StepTimer::GetMovementTimerTicks();
-					const int32_t overlap = endTime - startTime;
+#if 1	// temp for debugging
+					stepErrorDetails.executingStartTime = segStartTime;
+					stepErrorDetails.executingDuration = tail->GetDuration();
+					stepErrorDetails.newSegmentStartTime = startTime;
+					stepErrorDetails.timeNow = StepTimer::GetMovementTimerTicks();
+#endif
 					LogStepError(3);
 					RestoreBasePriority(oldPrio);
 					if (reprap.Debug(Module::Move))
 					{
+						const uint32_t now = StepTimer::GetMovementTimerTicks();
+						const int32_t overlap = endTime - startTime;
 						debugPrintf("overlaps executing seg by %" PRIi32 " while trying to add segment(s) starting at %" PRIu32 ", time now %" PRIu32 "\n",
 										overlap, startTime, now);
 						MoveSegment::DebugPrintList(tail);
@@ -2509,6 +2529,26 @@ bool Move::AreDrivesStopped(AxesBitmap drives) const noexcept
 								}
 							  );
 }
+
+#if HAS_STALL_DETECT
+
+EndstopValidationResult Move::CheckStallDetectionEnabled(uint8_t axisOrExtruder, float speed, uint8_t& failingDriver) noexcept
+{
+	EndstopValidationResult rslt = EndstopValidationResult::ok;
+	IterateLocalDrivers(axisOrExtruder,
+							[speed, &rslt, &failingDriver](uint8_t driver)
+							{
+								if (rslt == EndstopValidationResult::ok)
+								{
+									rslt = SmartDrivers::CheckStallDetectionEnabled(driver, speed);
+									failingDriver = driver;
+								}
+							}
+						);
+	return rslt;
+}
+
+#endif
 
 #if SUPPORT_CLOSED_LOOP
 

@@ -14,7 +14,7 @@
 #include "NetworkInterface.h"
 #include <Platform/Platform.h>
 
-FtpResponder::FtpResponder(NetworkResponder *n) noexcept
+FtpResponder::FtpResponder(NetworkResponder *_ecv_from _ecv_null n) noexcept
 	: UploadingNetworkResponder(n), dataSocket(nullptr), passivePort(0), passivePortOpenTime(0), dataBuf(nullptr), haveFileToMove(false)
 {
 }
@@ -55,7 +55,7 @@ bool FtpResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
 }
 
 // This is called to force termination if we implement the specified protocol
-void FtpResponder::Terminate(NetworkProtocol protocol, const NetworkInterface *interface) noexcept
+void FtpResponder::Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept
 {
 	if (responderState != ResponderState::free && (protocol == FtpProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{
@@ -189,7 +189,7 @@ void FtpResponder::SendData() noexcept
 		}
 		else
 		{
-			const size_t sent = skt->Send(reinterpret_cast<const uint8_t *>(outBuf->UnreadData()), bytesLeft);
+			const size_t sent = skt->Send(reinterpret_cast<const uint8_t *_ecv_array>(outBuf->UnreadData()), bytesLeft);
 			if (sent == 0)
 			{
 				// Check whether the connection has been closed
@@ -240,7 +240,7 @@ void FtpResponder::SendPassiveData() noexcept
 		}
 		else
 		{
-			const size_t sent = dataSocket->Send(reinterpret_cast<const uint8_t *>(dataBuf->UnreadData()), bytesLeft);
+			const size_t sent = dataSocket->Send(reinterpret_cast<const uint8_t *_ecv_array>(dataBuf->UnreadData()), bytesLeft);
 			if (sent == 0)
 			{
 				// Check whether the connection has been closed
@@ -354,7 +354,7 @@ void FtpResponder::SendPassiveData() noexcept
 void FtpResponder::DoUpload() noexcept
 {
 	// Write incoming data to the file
-	const uint8_t *buffer;
+	const uint8_t *_ecv_array buffer;
 	size_t len;
 	if (dataSocket->ReadBuffer(buffer, len))
 	{
@@ -468,7 +468,7 @@ void FtpResponder::ProcessLine() noexcept
 		// but check the password (if set)
 		else if (StringStartsWith(clientMessage, "PASS"))
 		{
-			const char *const password = GetParameter("PASS");
+			const char *_ecv_array const password = GetParameter("PASS");
 			if (reprap.NoPasswordSet() || reprap.CheckPassword(password))
 			{
 				currentDirectory.copy("/");
@@ -521,7 +521,7 @@ void FtpResponder::ProcessLine() noexcept
 		// set current dir
 		else if (StringStartsWith(clientMessage, "CWD"))
 		{
-			const char *const directory = GetParameter("CWD");
+			const char *_ecv_array const directory = GetParameter("CWD");
 			ChangeDirectory(directory);
 		}
 		// change to parent of current directory
@@ -532,7 +532,7 @@ void FtpResponder::ProcessLine() noexcept
 		// switch transfer mode (sends response, but doesn't have any effects)
 		else if (StringStartsWith(clientMessage, "TYPE"))
 		{
-			const char *const type = GetParameter("TYPE");
+			const char *_ecv_array const type = GetParameter("TYPE");
 			if (StringEqualsIgnoreCase(type, "I"))
 			{
 				outBuf->copy("200 Switching to Binary mode.\r\n");
@@ -579,7 +579,7 @@ void FtpResponder::ProcessLine() noexcept
 		// delete file
 		else if (StringStartsWith(clientMessage, "DELE"))
 		{
-			const char *const filename = GetParameter("DELE");
+			const char *_ecv_array const filename = GetParameter("DELE");
 			if (GetPlatform().Delete(currentDirectory.c_str(), filename))
 			{
 				outBuf->copy("250 Delete operation successful.\r\n");
@@ -593,7 +593,7 @@ void FtpResponder::ProcessLine() noexcept
 		// delete directory
 		else if (StringStartsWith(clientMessage, "RMD"))
 		{
-			const char *const filename = GetParameter("RMD");
+			const char *_ecv_array const filename = GetParameter("RMD");
 			if (GetPlatform().Delete(currentDirectory.c_str(), filename))
 			{
 				outBuf->copy("250 Remove directory operation successful.\r\n");
@@ -607,7 +607,7 @@ void FtpResponder::ProcessLine() noexcept
 		// make new directory
 		else if (StringStartsWith(clientMessage, "MKD"))
 		{
-			const char *const filename = GetParameter("MKD");
+			const char *_ecv_array const filename = GetParameter("MKD");
 			String<MaxFilenameLength> location;
 			if (MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename)
 				&& MassStorage::MakeDirectory(location.c_str(), false))
@@ -623,7 +623,7 @@ void FtpResponder::ProcessLine() noexcept
 		// rename file or directory
 		else if (StringStartsWith(clientMessage, "RNFR"))
 		{
-			const char *const filename = GetParameter("RNFR");
+			const char *_ecv_array const filename = GetParameter("RNFR");
 			if (MassStorage::CombineName(filenameBeingProcessed.GetRef(), currentDirectory.c_str(), filename)
 				&& MassStorage::FileExists(filenameBeingProcessed.c_str()))
 			{
@@ -638,7 +638,7 @@ void FtpResponder::ProcessLine() noexcept
 		}
 		else if (StringStartsWith(clientMessage, "RNTO"))
 		{
-			const char *const filename = GetParameter("RNTO");
+			const char *_ecv_array const filename = GetParameter("RNTO");
 			String<MaxFilenameLength> location;
 			if (haveFileToMove
 				&& MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename)
@@ -679,7 +679,7 @@ void FtpResponder::ProcessLine() noexcept
 		// list directory entries
 		if (StringStartsWith(clientMessage, "LIST"))
 		{
-			const char *const pathname = GetParameter("LIST");
+			const char *_ecv_array const pathname = GetParameter("LIST");
 			String<MaxFilenameLength> location;
 			MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), pathname);
 			if (MassStorage::DirectoryExists(location.c_str()))
@@ -713,7 +713,7 @@ void FtpResponder::ProcessLine() noexcept
 		// switch transfer mode (sends response, but doesn't have any effects)
 		else if (StringStartsWith(clientMessage, "TYPE"))
 		{
-			const char *const type = GetParameter("TYPE");
+			const char *_ecv_array const type = GetParameter("TYPE");
 			if (StringEqualsIgnoreCase(type, "I"))
 			{
 				outBuf->copy("200 Switching to Binary mode.\r\n");
@@ -735,7 +735,7 @@ void FtpResponder::ProcessLine() noexcept
 			haveFileToMove = false;
 			filenameBeingProcessed.Clear();
 
-			const char *const filename = GetParameter("STOR");
+			const char *_ecv_array const filename = GetParameter("STOR");
 			if (StartUpload(currentDirectory.c_str(), filename, OpenMode::write))
 			{
 				outBuf->copy("150 OK to send data.\r\n");
@@ -750,7 +750,7 @@ void FtpResponder::ProcessLine() noexcept
 		// download a file
 		else if (StringStartsWith(clientMessage, "RETR"))
 		{
-			const char *const filename = GetParameter("RETR");
+			const char *_ecv_array const filename = GetParameter("RETR");
 			fileBeingSent = GetPlatform().OpenFile(currentDirectory.c_str(), filename, OpenMode::read);
 			if (fileBeingSent != nullptr)
 			{
@@ -813,7 +813,7 @@ void FtpResponder::ProcessLine() noexcept
 	}
 }
 
-const char *FtpResponder::GetParameter(const char *after) const noexcept
+const char *_ecv_array FtpResponder::GetParameter(const char *_ecv_array after) const noexcept
 {
 	const size_t commandLength = strlen(after);
 	if (commandLength >= ftpMessageLength)
@@ -821,7 +821,7 @@ const char *FtpResponder::GetParameter(const char *after) const noexcept
 		return "";
 	}
 
-	const char *result = clientMessage + strlen(after);
+	const char *_ecv_array result = clientMessage + strlen(after);
 	if (*result != 0)
 	{
 		++result;
@@ -833,7 +833,7 @@ const char *FtpResponder::GetParameter(const char *after) const noexcept
 	return result;
 }
 
-void FtpResponder::ChangeDirectory(const char *newDirectory) noexcept
+void FtpResponder::ChangeDirectory(const char *_ecv_array newDirectory) noexcept
 {
 	String<MaxFilenameLength> combinedPath;
 	if (newDirectory[0] != 0)

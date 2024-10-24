@@ -17,15 +17,15 @@ class ButtonMenuItem final : public MenuItem
 public:
 	DECLARE_FREELIST_NEW_DELETE(ButtonMenuItem)
 
-	ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char *t, const char *cmd, const char *acFile) noexcept;
-	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept override;
-	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
+	ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char *_ecv_array t, const char *_ecv_array cmd, const char *_ecv_array acFile) noexcept;
+	void Draw(Lcd &_ecv_from lcd, PixelNumber maxWidth, bool highlight) noexcept override;
+	void UpdateWidthAndHeight(Lcd &_ecv_from lcd) noexcept override;
 	bool Select(const StringRef& cmd) noexcept override;
 
 	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept override;
 
 protected:
-	void CorePrint(Lcd& lcd) noexcept override;
+	void CorePrint(Lcd &_ecv_from lcd) noexcept override;
 
 private:
 	const char *text;

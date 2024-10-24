@@ -40,9 +40,9 @@ NamedEnum(HeaterStatus, uint8_t, off, standby, active, fault, tuning, offline);
 class Heater INHERIT_OBJECT_MODEL
 {
 public:
-	Heater(unsigned int num) noexcept;
-	virtual ~Heater() noexcept;
-	Heater(const Heater&) = delete;
+	explicit Heater(unsigned int num) noexcept;
+	virtual ~Heater() noexcept override;
+	Heater(const Heater &_ecv_from) = delete;
 
 	// Configuration methods
 	virtual GCodeResult ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) = 0;

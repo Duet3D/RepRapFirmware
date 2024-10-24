@@ -25,16 +25,19 @@ class CanMessageBuffer;
 class EndstopOrZProbe INHERIT_OBJECT_MODEL
 {
 public:
-	EndstopOrZProbe() noexcept : next(nullptr) {}
-	EndstopOrZProbe(const EndstopOrZProbe&) = delete;
-	virtual ~EndstopOrZProbe() noexcept {}
+	explicit EndstopOrZProbe(uint8_t p_axis) noexcept : next(nullptr), axis(p_axis) {}
+	EndstopOrZProbe(const EndstopOrZProbe &_ecv_from) = delete;
+	virtual ~EndstopOrZProbe() noexcept override {}
 
 	virtual bool Stopped() const noexcept = 0;
 	virtual EndstopHitDetails CheckTriggered() noexcept = 0;
 	virtual bool Acknowledge(EndstopHitDetails what) noexcept = 0;
+	virtual EndstopValidationResult Validate(const DDA& dda, uint8_t& failingDriver) const noexcept { return EndstopValidationResult::ok; }		// overridden for stall endstops
 
-	EndstopOrZProbe *GetNext() const noexcept { return next; }
-	void SetNext(EndstopOrZProbe *e) noexcept { next = e; }
+	EndstopOrZProbe *_ecv_from _ecv_null GetNext() const noexcept { return next; }
+	void SetNext(EndstopOrZProbe *_ecv_from _ecv_null e) noexcept { next = e; }
+
+	unsigned int GetAxis() const noexcept { return axis; }
 
 #if HAS_STALL_DETECT && (SUPPORT_TMC2660 || SUPPORT_TMC51xx)
 	static void SetDriversStalled(DriversBitmap drivers) noexcept;
@@ -48,7 +51,8 @@ protected:
 #endif
 
 private:
-	EndstopOrZProbe *next;								// next endstop in linked list
+	EndstopOrZProbe *_ecv_from _ecv_null next;			// next endstop in linked list
+	uint8_t axis;										// which axis this endstop is on
 
 #if HAS_STALL_DETECT && (SUPPORT_TMC2660 || SUPPORT_TMC51xx)
 	static DriversBitmap stalledDrivers;				// used to track which drivers are reported as stalled, for stall detect endstops and stall detect Z probes
@@ -94,7 +98,7 @@ public:
 	virtual EndStopType GetEndstopType() const noexcept = 0;
 	virtual bool IsZProbe() const noexcept { return false; }
 	virtual int GetZProbeNumber() const noexcept { return -1; }
-	virtual bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept = 0;
+	virtual bool Prime(const Kinematics &_ecv_from kin, const AxisDriversConfig& axisDrivers) noexcept = 0;
 	virtual void AppendDetails(const StringRef& str) noexcept = 0;
 	virtual bool ShouldReduceAcceleration() const noexcept { return false; }
 
@@ -103,7 +107,6 @@ public:
 	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state) noexcept { }
 #endif
 
-	unsigned int GetAxis() const noexcept { return axis; }
 	bool GetAtHighEnd() const noexcept { return atHighEnd; }
 	void SetAtHighEnd(bool b) noexcept { atHighEnd = b; }
 
@@ -113,7 +116,6 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	uint8_t axis;										// which axis this endstop is on
 	bool atHighEnd;										// whether this endstop is at the max (true) or the min (false)
 };
 

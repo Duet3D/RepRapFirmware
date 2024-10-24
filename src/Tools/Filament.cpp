@@ -14,10 +14,10 @@
 
 #include <ctime>
 
-const char * const Filament::FilamentAssignmentFile = "filaments.csv";
-const char * const Filament::FilamentAssignmentFileComment = "RepRapFirmware filament assignment file v1";
+const char *_ecv_array const Filament::FilamentAssignmentFile = "filaments.csv";
+const char *_ecv_array const Filament::FilamentAssignmentFileComment = "RepRapFirmware filament assignment file v1";
 
-Filament *Filament::filamentList = nullptr;
+Filament *_ecv_null Filament::filamentList = nullptr;
 
 
 Filament::Filament(int extr) noexcept : extruder(extr)
@@ -27,7 +27,7 @@ Filament::Filament(int extr) noexcept : extruder(extr)
 	filamentList = this;
 }
 
-void Filament::Load(const char *filamentName) noexcept
+void Filament::Load(const char *_ecv_array filamentName) noexcept
 {
 	name.copy(filamentName);
 	Filament::SaveAssignments();
@@ -42,7 +42,7 @@ void Filament::Unload() noexcept
 void Filament::LoadAssignment() noexcept
 {
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	FileStore * const file = reprap.GetPlatform().OpenSysFile(FilamentAssignmentFile, OpenMode::read);
+	FileStore *_ecv_null const file = reprap.GetPlatform().OpenSysFile(FilamentAssignmentFile, OpenMode::read);
 	if (file == nullptr)
 	{
 		// May happen, but not critical
@@ -57,9 +57,9 @@ void Filament::LoadAssignment() noexcept
 		{
 			while (file->ReadLine(buffer, sizeof(buffer)) > 0)
 			{
-				if (isdigit(buffer[0]) && StrToI32(buffer) == extruder)
+				if (isDigit(buffer[0]) && StrToI32(buffer) == extruder)
 				{
-					const char *filament = buffer;
+					const char *_ecv_array filament = buffer;
 					while (*filament != 0)
 					{
 						if (*filament++ == ',')
@@ -92,7 +92,7 @@ void Filament::LoadAssignment() noexcept
 	reprap.MoveUpdated();
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	FileStore * const file = reprap.GetPlatform().OpenSysFile(FilamentAssignmentFile, OpenMode::write);
+	FileStore *_ecv_null const file = reprap.GetPlatform().OpenSysFile(FilamentAssignmentFile, OpenMode::write);
 	if (file == nullptr)
 	{
 		// Should never happen
@@ -115,7 +115,7 @@ void Filament::LoadAssignment() noexcept
 
 	// Write column headers and one row for each loaded filament
 	file->Write("extruder,filament\n");
-	for (Filament *f = filamentList; f != nullptr; f = f->next)
+	for (Filament *_ecv_null f = filamentList; f != nullptr; f = f->next)
 	{
 		if (f->IsLoaded())
 		{
@@ -128,9 +128,9 @@ void Filament::LoadAssignment() noexcept
 #endif
 }
 
-/*static*/ Filament *Filament::GetFilamentByExtruder(const int extr) noexcept
+/*static*/ Filament *_ecv_null Filament::GetFilamentByExtruder(const int extr) noexcept
 {
-	for (Filament *f = filamentList; f != nullptr; f = f->next)
+	for (Filament *_ecv_null f = filamentList; f != nullptr; f = f->next)
 	{
 		if (f->GetExtruder() == extr)
 		{

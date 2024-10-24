@@ -30,9 +30,9 @@ Licence: GPL
 #include <climits>		// for CHAR_BIT
 
 #include <ctime>
-[[deprecated("use gmtime_r instead for thread-safety")]] tm *_ecv_null gmtime(const time_t* t);
-[[deprecated("use SafeStrptime instead")]] char *_ecv_array strptime (const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr);
-const char *_ecv_array SafeStrptime(const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept;
+[[deprecated("use gmtime_r instead for thread-safety")]] tm *_ecv_null gmtime(const time_t* t) noexcept;
+[[deprecated("use SafeStrptime instead")]] char *_ecv_array strptime (const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept;
+const char *_ecv_array _ecv_null SafeStrptime(const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept;
 
 #include <Core.h>
 
@@ -144,7 +144,11 @@ namespace CanInterface
 #include <General/SafeVsnprintf.h>
 #include <RRF3Common.h>
 
-#define THROWS(...)				// expands to nothing, for providing exception specifications
+#ifdef __ECV__
+#define THROWS(...)		_ecv_throws(__VA_ARGS__)
+#else
+#define THROWS(...)		noexcept(false)			// best we can do is say that it throws something
+#endif
 
 // Error reporting for functions that are allowed to throw
 #define THROW_INTERNAL_ERROR	ThrowGCodeException("internal error at file " __FILE__ "(%d)", (int32_t)__LINE__)
@@ -153,8 +157,12 @@ namespace CanInterface
 #define REPORT_INTERNAL_ERROR do { reprap.ReportInternalError((__FILE__), (__func__), (__LINE__)); } while(0)
 
 // Assertion mechanism
-extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute__((naked));
+extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *_ecv_array file) noexcept __attribute__((naked));
 #define RRF_ASSERT(_expr) do { if (!(_expr)) { vAssertCalled(__LINE__, __FILE__); } } while (false)
+
+// Debugging support
+extern "C" void debugPrintf(const char* fmt, ...) noexcept __attribute__ ((format (printf, 1, 2)));
+#define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
 
 #ifdef __ECV__			// eCv doesn't understand the gcc asm syntax in these functions
 
@@ -180,24 +188,38 @@ inline volatile uint32_t *GetStackOffset(uint32_t dwordOffset) noexcept
 #endif
 
 // Functions to set and clear data watchpoints
-inline void SetWatchpoint(unsigned int number, const void* addr, unsigned int addrBits = 2) noexcept
+inline void SetWatchpoint(uint8_t number, const void* addr, unsigned int addrBits = 2) noexcept
 {
 #ifndef __ECV__		// this uses messy pointer arithmetic on a non-array, so eCv understandable doesn't like it
 	CoreDebug->DEMCR = CoreDebug_DEMCR_TRCENA_Msk | CoreDebug_DEMCR_MON_EN_Msk;		// enable tracing and debug interrupt
 	volatile uint32_t *const _ecv_array watchpointRegs = &(DWT->COMP0);				// 4 groups of (COMP, MASK, FUNCTION, reserved)
 	watchpointRegs[4 * number] = reinterpret_cast<uint32_t>(addr);					// set COMP register
-	watchpointRegs[4 * number + 1] = addrBits;										// ignore the least significant N bits of the address
-	watchpointRegs[4 * number + 2] = 0x06;
+	watchpointRegs[4 * number + 1] = addrBits;										// set MASK register to ignore the least significant N bits of the address
+	watchpointRegs[4 * number + 2] = 0x06;											// set FUNCTION register
 #endif
 }
 
-inline void ClearWatchpoint(unsigned int number) noexcept
+inline void ClearWatchpoint(uint8_t number) noexcept
 {
 #ifndef __ECV__		// this uses messy pointer arithmetic on a non-array, so eCv understandable doesn't like it
 	volatile uint32_t *const _ecv_array watchpointRegs = &(DWT->COMP0);						// 4 groups of (COMP, MASK, FUNCTION, reserved)
 	watchpointRegs[4 * number + 2] = 0;
 #endif
 }
+
+// Class to set a watchpoint and clear it when it goes out of scope
+class AutoClearingWatchpoint
+{
+public:
+	AutoClearingWatchpoint(uint8_t p_number, const void* addr, unsigned int addrBits = 2) noexcept
+		: number(p_number)
+	{ SetWatchpoint(p_number, addr, addrBits); }
+
+	~AutoClearingWatchpoint() noexcept { ClearWatchpoint(number); }
+
+private:
+	uint8_t number;
+};
 
 // Type of a driver identifier
 struct DriverId
@@ -303,16 +325,17 @@ struct DriverId
 #endif
 
 // Module numbers and names, used for diagnostics and debug
-// All of these including noModule must be <= 31 because we 'or' the module number into the software reset code
+// All of these including 'none' must be <= 31 because we 'or' the module number into the software reset code
 NamedEnum(Module, uint8_t,
-			Platform, Network, Webserver, Gcodes, Move, Heat, Kinematics /* was DDA */, InputShaping /* was Roland */,
-			unused /* was Scanner*/, PrintMonitor, Storage, PortControl, DuetExpansion, FilamentSensors, WiFi, Display,
+			Platform, Network, Webserver, Gcodes, Move, Heat, Kinematics, InputShaping,
+			Debug, PrintMonitor, Storage, PortControl, DuetExpansion, FilamentSensors, WiFi, Display,
 			SbcInterface,
 			CAN,					// uppercase to avoid eCv clash with type Can in Microchip driver file
 			Expansion,
 			none					// make this one last so that it is the number of real modules, one greater than the last real module number
 		 );
 
+static_assert(Module::NumValues < 32);
 constexpr size_t NumRealModules = Module::NumValues - 1;
 
 // Warn of what's to come, so we can use pointers and references to classes without including the entire header files
@@ -337,6 +360,7 @@ class FilamentMonitor;
 class RandomProbePointSet;
 class Logger;
 class FansManager;
+class GCodeException;
 
 #if SUPPORT_IOBITS
 class PortControl;
@@ -390,6 +414,7 @@ typedef float floatc_t;								// type of matrix element used for calibration
 typedef Bitmap<uint32_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
 typedef Bitmap<uint64_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
 #else
+static_assert(MaxAxesPlusExtruders <= 16);			// Make sure we can use a 16-bit bitmap to represent a set of axes/extruders
 typedef Bitmap<uint16_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
 typedef Bitmap<uint32_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
 #endif
@@ -505,7 +530,7 @@ inline constexpr ParameterLettersBitmap ParameterLettersToBitmap(const char *_ec
 }
 
 // Debugging support
-extern "C" void debugPrintf(const char* fmt, ...) noexcept __attribute__ ((format (printf, 1, 2)));
+extern "C" void debugPrintf(const char *_ecv_array fmt, ...) noexcept __attribute__ ((format (printf, 1, 2)));
 #define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
 
 // Functions and globals not part of any class

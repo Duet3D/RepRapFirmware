@@ -84,7 +84,7 @@ LaserFilamentMonitor::LaserFilamentMonitor(unsigned int drv, unsigned int monito
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
 	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), checkNonPrintingMoves(false)
 {
-	switchOpenMask = (monitorType == 6) ? TypeLaserSwitchOpenBitMask : 0;
+	switchOpenMask = (monitorType == 6) ? TypeLaserSwitchOpenBitMask : 0u;
 	Init();
 }
 
@@ -228,13 +228,13 @@ GCodeResult LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& re
 // Return the current position
 float LaserFilamentMonitor::GetCurrentPosition() const noexcept
 {
-	const uint16_t positionRange = (sensorValue & TypeLaserLargeDataRangeBitMask) ? TypeLaserLargeRange : TypeLaserDefaultRange;
+	const uint16_t positionRange = ((sensorValue & TypeLaserLargeDataRangeBitMask) != 0) ? TypeLaserLargeRange : TypeLaserDefaultRange;
 	int32_t pos = (int32_t)lastKnownPosition;
 	if (pos > positionRange/2)
 	{
-		pos -= positionRange;
+		pos -= (int32_t)positionRange;
 	}
-	return (float)pos * ((sensorValue & TypeLaserLargeDataRangeBitMask) ? 0.01 : 0.02);		// each count is nominally 0.01 or 0.02mm of filament motion
+	return (float)pos * (((sensorValue & TypeLaserLargeDataRangeBitMask) != 0) ? 0.01 : 0.02);		// each count is nominally 0.01 or 0.02mm of filament motion
 }
 
 // Deal with any received data
@@ -308,10 +308,10 @@ void LaserFilamentMonitor::HandleIncomingData() noexcept
 		if (receivedPositionReport)
 		{
 			// We have a completed a position report
-			const uint16_t positionRange = (val & TypeLaserLargeDataRangeBitMask) ? TypeLaserLargeRange : TypeLaserDefaultRange;
+			const uint16_t positionRange = ((val & TypeLaserLargeDataRangeBitMask) != 0) ? TypeLaserLargeRange : TypeLaserDefaultRange;
 			const uint16_t positionChange = (val - sensorValue) & (positionRange - 1);			// 10- or 11-bit position change
-			const int32_t movement = (positionChange <= positionRange/2) ? (int32_t)positionChange : (int32_t)positionChange - positionRange;
-			movementMeasuredSinceLastSync += (float)movement * ((val & TypeLaserLargeDataRangeBitMask) ? 0.01 : 0.02);
+			const int32_t movement = (positionChange <= positionRange/2u) ? (int32_t)positionChange : (int32_t)positionChange - (int32_t)positionRange;
+			movementMeasuredSinceLastSync += (float)movement * (((val & TypeLaserLargeDataRangeBitMask) != 0) ? 0.01 : 0.02);
 			sensorValue = val;
 			lastKnownPosition = val & positionRange;
 			lastMeasurementTime = millis();

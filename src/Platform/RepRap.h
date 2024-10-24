@@ -62,11 +62,11 @@ public:
 	void PrintDebug(MessageType mt) noexcept;
 	Module GetSpinningModule() const noexcept;
 
-	const char *GetName() const noexcept;
-	void SetName(const char* nm) noexcept;
+	const char *_ecv_array GetName() const noexcept;
+	void SetName(const char *_ecv_array nm) noexcept;
 	bool NoPasswordSet() const noexcept;
-	bool CheckPassword(const char* pw) const noexcept;
-	void SetPassword(const char* pw) noexcept;
+	bool CheckPassword(const char *_ecv_array pw) const noexcept;
+	void SetPassword(const char *_ecv_array pw) noexcept;
 
 	Platform& GetPlatform() const noexcept { return *platform; }
 	Move& GetMove() const noexcept { return *move; }
@@ -80,12 +80,14 @@ public:
 	uint32_t SendAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits = nullptr) noexcept;
 	void SendSimpleAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title) noexcept;
 
+	void LogDebugMessage(const char *_ecv_array msg, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3) noexcept;
+
 #if SUPPORT_IOBITS
  	PortControl& GetPortControl() const noexcept { return *portControl; }
 #endif
 #if SUPPORT_DIRECT_LCD
  	Display& GetDisplay() const noexcept { return *display; }
- 	const char *GetLatestMessage(uint16_t& sequence) const noexcept;
+ 	const char *_ecv_array GetLatestMessage(uint16_t& sequence) const noexcept;
 #endif
 #if HAS_SBC_INTERFACE
  	bool UsingSbcInterface() const noexcept { return usingSbcInterface; }
@@ -109,29 +111,29 @@ public:
 	OutputBuffer *GetLegacyStatusResponse(uint8_t type, int seq) const noexcept;
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	OutputBuffer *GetFilesResponse(const char* dir, unsigned int startAt, int maxItems, bool flagsDirs) noexcept;
-	OutputBuffer *GetFilelistResponse(const char* dir, unsigned int startAt, int maxItems) noexcept;
-	OutputBuffer *GetThumbnailResponse(const char *filename, FilePosition offset, bool forM31point1) noexcept;
+	OutputBuffer *GetFilesResponse(const char *_ecv_array dir, unsigned int startAt, bool flagsDirs) noexcept;
+	OutputBuffer *GetFilelistResponse(const char *_ecv_array dir, unsigned int startAt) noexcept;
+	OutputBuffer *GetThumbnailResponse(const char *_ecv_array filename, FilePosition offset, bool forM31point1) noexcept;
 #endif
 
-	GCodeResult GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept;
-	OutputBuffer *GetModelResponse(const GCodeBuffer *_ecv_null gb, const char *key, const char *flags) const THROWS(GCodeException);
+	GCodeResult GetFileInfoResponse(const char *_ecv_array filename, OutputBuffer *_ecv_null &response, bool quitEarly) noexcept;
+	OutputBuffer *GetModelResponse(const GCodeBuffer *_ecv_null gb, const char *_ecv_array key, const char *_ecv_array flags) const THROWS(GCodeException);
 	Mutex& GetObjectModelReportMutex() noexcept { return objectModelReportMutex; }
 
 	void Beep(unsigned int freq, unsigned int ms) noexcept;
-	void SetMessage(const char *msg) noexcept;
+	void SetMessage(const char *_ecv_array msg) noexcept;
 
 	bool IsProcessingConfig() const noexcept { return processingConfig; }
 
 	// Firmware update operations
 	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply, const StringRef& filenameRef) noexcept;
 #if HAS_MASS_STORAGE
-	void UpdateFirmware(const char *iapFilename, const char *iapParam) noexcept;
+	void UpdateFirmware(const char *_ecv_array iapFilename, const char *_ecv_array iapParam) noexcept;
 #endif
 	void PrepareToLoadIap() noexcept;
-	[[noreturn]] void StartIap(const char *filename) noexcept;
+	[[noreturn]] void StartIap(const char *_ecv_array filename) noexcept;
 
-	void ReportInternalError(const char *file, const char *func, int line) const noexcept;	// report an internal error
+	void ReportInternalError(const char *_ecv_array file, const char *_ecv_array func, int line) const noexcept;	// report an internal error
 
 	static uint32_t DoDivide(uint32_t a, uint32_t b) noexcept;			// helper function for diagnostic tests
 	static void GenerateBusFault() noexcept;							// helper function for diagnostic tests
@@ -140,7 +142,7 @@ public:
 
 	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
 
-	void SaveConfigError(const char *filename, unsigned int lineNumber, const char *errorMessage) noexcept;
+	void SaveConfigError(const char *_ecv_array filename, unsigned int lineNumber, const char *_ecv_array errorMessage) noexcept;
 
 	void BoardsUpdated() noexcept { ++boardsSeq; }
 	void DirectoriesUpdated() noexcept { ++directoriesSeq; }
@@ -168,15 +170,28 @@ protected:
 	ReadWriteLock *_ecv_null GetObjectLock(unsigned int tableNumber) const noexcept override;
 
 private:
-	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
-	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<float(size_t) noexcept> func, unsigned int numDecimalDigits) noexcept;
-	static void AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<int(size_t) noexcept> func) noexcept;
-	static void AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<const char *(size_t) noexcept> func) noexcept;
+
+#ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
+	struct DebugLogRecord
+	{
+		const char *_ecv_array _ecv_null msg;
+		uint32_t data[4];
+
+		DebugLogRecord() noexcept : msg(nullptr) { }
+	};
+#endif
+
+	static constexpr size_t NumDebugRecords = 4;
+
+	static void EncodeString(StringRef& response, const char *_ecv_array src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
+	static void AppendFloatArray(OutputBuffer *buf, const char *_ecv_array name, size_t numValues, function_ref_noexcept<float(size_t) noexcept> func, unsigned int numDecimalDigits) noexcept;
+	static void AppendIntArray(OutputBuffer *buf, const char *_ecv_array name, size_t numValues, function_ref_noexcept<int(size_t) noexcept> func) noexcept;
+	static void AppendStringArray(OutputBuffer *buf, const char *_ecv_array name, size_t numValues, function_ref_noexcept<const char *(size_t) noexcept> func) noexcept;
 
 	size_t GetStatusIndex() const noexcept;
 	char GetStatusCharacter() const noexcept;
-	const char* GetStatusString() const noexcept;
-	bool RunStartupFile(const char *filename, bool isMainConfigFile) noexcept;
+	const char *_ecv_array GetStatusString() const noexcept;
+	bool RunStartupFile(const char *_ecv_array filename, bool isMainConfigFile) noexcept;
 
 	static constexpr uint32_t MaxHeatTaskTicksInSpinState = 4000;	// timeout before we reset the processor if the heat task doesn't run
 	static constexpr uint32_t MaxMainTaskTicksInSpinState = 20000;	// timeout before we reset the processor if the main task doesn't run
@@ -224,13 +239,17 @@ private:
 	uint16_t heatTaskIdleTicks;
 	uint32_t fastLoop, slowLoop;
 
+	DebugFlags debugMaps[NumRealModules];
+
+#ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
+	DebugLogRecord debugRecords[NumDebugRecords];
+#endif
+
 #if SUPPORT_REMOTE_COMMANDS
 	enum class DeferredCommand : uint8_t { none, reboot, updateFirmware };
 	volatile uint32_t whenDeferredCommandScheduled;
 	volatile DeferredCommand deferredCommand;
 #endif
-
-	DebugFlags debugMaps[NumRealModules];
 
 	String<RepRapPasswordLength> password;
 	String<MachineNameLength> myName;
@@ -261,6 +280,96 @@ extern RepRap reprap;
 
 inline Module RepRap::GetSpinningModule() const noexcept { return spinningModule; }
 inline bool RepRap::IsStopped() const noexcept { return stopped; }
+
+#ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
+
+// Class to watch an area of memory to detect corruption and (if possible) correct it
+// Used in class WiFiInterface on the SAME5x
+template <size_t NumWords> class MemoryWatcher
+{
+public:
+	__attribute__((noinline)) MemoryWatcher(uint32_t *p_address) noexcept;
+	__attribute__((noinline)) MemoryWatcher() noexcept;
+	~MemoryWatcher() noexcept;
+	__attribute__((noinline)) bool Check(unsigned int tag) noexcept;
+
+private:
+	void Init() noexcept;
+
+	volatile uint32_t* checkedData;
+	uint32_t checkSum;
+	volatile uint32_t dataCopy[NumWords];
+};
+
+// Constructor to watch memory at a specified start address
+template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher(uint32_t *p_address) noexcept
+	: checkedData(p_address)
+{
+	Init();
+}
+
+// Constructor to watch memory immediately after the memory occupied by this memory watcher object
+template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher() noexcept
+{
+	checkedData = reinterpret_cast<uint32_t*>(this) + (sizeof(*this) / sizeof(uint32_t));
+	Init();
+}
+
+template <size_t NumWords> void MemoryWatcher<NumWords>::Init() noexcept
+{
+	// Copy the checked data across to our own storage, also compute and store a check word
+	uint32_t csum = 0;
+	for (size_t i = 0; i < NumWords; ++i)
+	{
+		const uint32_t val = checkedData[i];			// read volatile data just once
+		dataCopy[i] = val;
+		csum ^= val;
+	}
+	checkSum = csum;
+}
+
+template <size_t NumWords> MemoryWatcher<NumWords>::~MemoryWatcher() noexcept
+{
+	// Nothing to do here unless we set debug breakpoints on the checked memory in the constructor, or we want to check automatically on exit
+}
+
+// Check whether the memory concerned still equals the reference copy, print a debug message and return true if it has changed, else return false
+template <size_t NumWords> bool MemoryWatcher<NumWords>::Check(unsigned int tag) noexcept
+{
+	uint32_t csumProtected = 0;
+	uint32_t csumCopy = 0;
+	int badOffset = -1;;
+	for (size_t i = 0; i < NumWords; ++i)
+	{
+		const uint32_t valProtected = checkedData[i];	// read volatile data just once
+		const uint32_t valCopy = dataCopy[i];			// read volatile data just once
+		csumProtected ^= valProtected;					// update new checksum of checked memory
+		csumCopy ^= valCopy;							// update new checksum of the copy of the checked memory
+		if (valProtected != valCopy)					// if the protected word and its copy are no longer the same
+		{
+			badOffset = (int)i;
+		}
+	}
+
+	// If we found a difference, test whether the protected memory or the copy got changed. If t was the protected memory, restore it from the copy.
+	if (badOffset >= 0 || csumProtected != checkSum || csumCopy != checkSum)
+	{
+		const bool fix = (csumProtected != checkSum && csumCopy == checkSum);
+		constexpr const char *_ecv_array msg = "Mem diff: offset %u, original %08" PRIx32 ", copy %08" PRIx32 ", flags %08" PRIx32 "\n";
+		const uint32_t flags = ((csumProtected == checkSum) ? 0 : 1) | ((csumCopy == checkSum) ? 0 : 0x10) | ((fix) ? 0x0100 : 0) | (tag << 16);
+		reprap.LogDebugMessage(msg, (unsigned int)badOffset * 4, checkedData[badOffset], dataCopy[badOffset], flags);
+
+		if (fix)
+		{
+			// Try to mend the memory corruption
+			memcpyu32(const_cast<uint32_t *_ecv_array>(checkedData), const_cast<const uint32_t *_ecv_array>(dataCopy), NumWords);
+		}
+		return true;
+	}
+	return false;
+}
+
+#endif
 
 #endif
 

@@ -82,7 +82,7 @@ constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 16 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GCodeBuffer)
 
-const char *GCodeBuffer::GetStateText() const noexcept
+const char *_ecv_array GCodeBuffer::GetStateText() const noexcept
 {
 	if (machineState->waitingForAcknowledgement)
 	{
@@ -101,7 +101,7 @@ const char *GCodeBuffer::GetStateText() const noexcept
 #endif
 
 // Create a default GCodeBuffer
-GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c) noexcept
+GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *_ecv_null fileIn, MessageType mt, Compatibility::RawType c) noexcept
 	:
 	  printFilePositionAtMacroStart(0),
 	  normalInput(normalIn),
@@ -245,10 +245,11 @@ void GCodeBuffer::Diagnostics(MessageType mtype) noexcept
 
 	default:
 		scratchString.cat("is assembling a command");
+		break;
 	}
 
 	scratchString.cat(" in state(s)");
-	const GCodeMachineState *ms = machineState;
+	const GCodeMachineState *_ecv_null ms = machineState;
 	do
 	{
 		scratchString.catf(" %d", (int)ms->GetState());
@@ -285,7 +286,7 @@ void GCodeBuffer::DecodeCommand() noexcept
 }
 
 // Check whether the current command is a meta command, or we are skipping a block. Return true if we are and the current line no longer needs to be processed.
-bool GCodeBuffer::CheckMetaCommand(const StringRef& reply)
+bool GCodeBuffer::CheckMetaCommand(const StringRef& reply) THROWS(GCodeException)
 {
 	return NOT_BINARY_AND(stringParser.CheckMetaCommand(reply));
 }
@@ -305,7 +306,7 @@ void GCodeBuffer::PutBinary(const uint32_t *data, size_t len) noexcept
 #endif
 
 // Add an entire G-Code, overwriting any existing content
-void GCodeBuffer::PutAndDecode(const char *str, size_t len) noexcept
+void GCodeBuffer::PutAndDecode(const char *_ecv_array str, size_t len) noexcept
 {
 #if HAS_SBC_INTERFACE
 	machineState->lastCodeFromSbc = false;
@@ -315,7 +316,7 @@ void GCodeBuffer::PutAndDecode(const char *str, size_t len) noexcept
 }
 
 // Add a null-terminated string, overwriting any existing content
-void GCodeBuffer::PutAndDecode(const char *str) noexcept
+void GCodeBuffer::PutAndDecode(const char *_ecv_array str) noexcept
 {
 #if HAS_SBC_INTERFACE
 	machineState->lastCodeFromSbc = false;
@@ -625,14 +626,14 @@ void GCodeBuffer::GetReducedString(const StringRef& str) THROWS(GCodeException)
 {
 	// In order to handle string expressions here we first get a quoted string, then we reduce it
 	PARSER_OPERATION(GetQuotedString(str, false));
-	char *q = str.Pointer();
-	const char *p = q;
+	char *_ecv_array q = str.Pointer();
+	const char *_ecv_array p = q;
 	while (*p != 0)
 	{
 		const char c = *p++;
 		if (c != '-' && c != '_' && c != ' ')
 		{
-			*q++ = tolower(c);
+			*q++ = (char)tolower(c);
 		}
 	}
 	*q = 0;
@@ -690,7 +691,7 @@ ExpressionValue GCodeBuffer::GetExpression() THROWS(GCodeException)
 }
 
 // Get a :-separated list of drivers after a key letter
-void GCodeBuffer::GetDriverIdArray(DriverId arr[], size_t& length)
+void GCodeBuffer::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException)
 {
 	PARSER_OPERATION(GetDriverIdArray(arr, length));
 }
@@ -792,7 +793,7 @@ bool GCodeBuffer::TryGetBValue(char c, bool& val, bool& seen) THROWS(GCodeExcept
 // Try to get an int array exactly 'numVals' long after parameter letter 'c'.
 // If the wrong number of values is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.
-void GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& seen, bool doPad) THROWS(GCodeException)
+bool GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& seen, bool doPad) THROWS(GCodeException)
 {
 	if (Seen(c))
 	{
@@ -801,18 +802,18 @@ void GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& s
 		if (count == numVals)
 		{
 			seen = true;
+			return true;
 		}
-		else
-		{
-			ThrowGCodeException("Wrong number of values in array, expected %u", (uint32_t)numVals);
-		}
+
+		ThrowGCodeException("Wrong number of values in array, expected %u", (uint32_t)numVals);
 	}
+	return false;
 }
 
 // Try to get a float array exactly 'numVals' long after parameter letter 'c'.
 // If the wrong number of values is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.
-void GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], bool& seen, bool doPad) THROWS(GCodeException)
+bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], bool& seen, bool doPad) THROWS(GCodeException)
 {
 	if (Seen(c))
 	{
@@ -821,12 +822,11 @@ void GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], bool& s
 		if (count == numVals)
 		{
 			seen = true;
+			return true;
 		}
-		else
-		{
-			ThrowGCodeException("Wrong number of values in array, expected %u", (uint32_t)numVals);
-		}
+		ThrowGCodeException("Wrong number of values in array, expected %u", (uint32_t)numVals);
 	}
+	return false;
 }
 
 // Try to get a quoted string after parameter letter.
@@ -921,7 +921,7 @@ GCodeMachineState& GCodeBuffer::OriginalMachineState() const noexcept
 	GCodeMachineState *ms = machineState;
 	while (ms->GetPrevious() != nullptr)
 	{
-		ms = ms->GetPrevious();
+		ms = _ecv_not_null(ms->GetPrevious());
 	}
 	return *ms;
 }
@@ -931,7 +931,7 @@ GCodeMachineState& GCodeBuffer::CurrentFileMachineState() const noexcept
 	GCodeMachineState *ms = machineState;
 	while (ms->localPush && ms->GetPrevious() != nullptr)
 	{
-		ms = ms->GetPrevious();
+		ms = _ecv_not_null(ms->GetPrevious());
 	}
 	return *ms;
 }
@@ -939,7 +939,7 @@ GCodeMachineState& GCodeBuffer::CurrentFileMachineState() const noexcept
 // Return true if all GCodes machine states on the stack are 'normal'
 bool GCodeBuffer::AllStatesNormal() const noexcept
 {
-	for (const GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+	for (const GCodeMachineState *_ecv_null ms = machineState; ms != nullptr; ms = ms->GetPrevious())
 	{
 		if (ms->GetState() != GCodeState::normal)
 		{
@@ -973,7 +973,7 @@ float GCodeBuffer::InverseConvertSpeed(float speed) const noexcept
 	return speed * ((UsingInches()) ? (StepClockRate * iMinutesToSeconds)/InchToMm : (float)(StepClockRate * iMinutesToSeconds));
 }
 
-const char *GCodeBuffer::GetDistanceUnits() const noexcept
+const char *_ecv_array GCodeBuffer::GetDistanceUnits() const noexcept
 {
 	return (UsingInches()) ? "in" : "mm";
 }
@@ -982,7 +982,7 @@ const char *GCodeBuffer::GetDistanceUnits() const noexcept
 unsigned int GCodeBuffer::GetStackDepth() const noexcept
 {
 	unsigned int depth = 0;
-	for (const GCodeMachineState *m1 = machineState; m1->GetPrevious() != nullptr; m1 = m1->GetPrevious())
+	for (const GCodeMachineState *_ecv_null m1 = machineState; m1->GetPrevious() != nullptr; m1 = m1->GetPrevious())
 	{
 		++depth;
 	}
@@ -1210,7 +1210,7 @@ void GCodeBuffer::MacroFileClosed() noexcept
 // Allow for the possibility that the source may have started running a macro since it started waiting
 void GCodeBuffer::MessageAcknowledged(bool cancelled, uint32_t seq, ExpressionValue rslt) noexcept
 {
-	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+	for (GCodeMachineState *_ecv_null ms = machineState; ms != nullptr; ms = ms->GetPrevious())
 	{
 		if (ms->waitingForAcknowledgement && (seq == ms->msgBoxSeq || seq == 0 || ms->msgBoxSeq == 0))
 		{
@@ -1291,7 +1291,7 @@ void GCodeBuffer::WaitForAcknowledgement(uint32_t seq) noexcept
 
 #if HAS_MASS_STORAGE
 
-bool GCodeBuffer::OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept
+bool GCodeBuffer::OpenFileToWrite(const char *_ecv_array directory, const char *_ecv_array fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept
 {
 	return NOT_BINARY_AND(stringParser.OpenFileToWrite(directory, fileName, size, binaryWrite, fileCRC32));
 }
@@ -1335,7 +1335,7 @@ void GCodeBuffer::RestartFrom(FilePosition pos) noexcept
 	Init();											// clear the next move
 }
 
-const char* GCodeBuffer::DataStart() const noexcept
+const char *_ecv_array GCodeBuffer::DataStart() const noexcept
 {
 	return PARSER_OPERATION(DataStart());
 }
@@ -1367,12 +1367,12 @@ VariableSet& GCodeBuffer::GetVariables() const noexcept
 	GCodeMachineState *mc = machineState;
 	while (mc->localPush && mc->GetPrevious() != nullptr)
 	{
-		mc = mc->GetPrevious();
+		mc = _ecv_not_null(mc->GetPrevious());
 	}
 	return mc->variables;
 }
 
-void GCodeBuffer::ThrowGCodeException(const char *msg) const THROWS(GCodeException)
+void GCodeBuffer::ThrowGCodeException(const char *_ecv_array msg) const THROWS(GCodeException)
 {
 	const int column =
 #if HAS_SBC_INTERFACE
@@ -1382,7 +1382,7 @@ void GCodeBuffer::ThrowGCodeException(const char *msg) const THROWS(GCodeExcepti
 	throw GCodeException(this, column, msg);
 }
 
-void GCodeBuffer::ThrowGCodeException(const char *msg, uint32_t param) const THROWS(GCodeException)
+void GCodeBuffer::ThrowGCodeException(const char *_ecv_array msg, uint32_t param) const THROWS(GCodeException)
 {
 	const int column =
 #if HAS_SBC_INTERFACE

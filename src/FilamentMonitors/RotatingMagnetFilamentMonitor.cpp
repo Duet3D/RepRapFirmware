@@ -45,7 +45,6 @@ constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 #ifdef DUET3_ATE
 	{ "mag",				OBJECT_MODEL_FUNC((int32_t)self->magnitude),															ObjectModelEntryFlags::live },
-	{ "position",			OBJECT_MODEL_FUNC((int32_t)self->lastKnownPosition),													ObjectModelEntryFlags::live },
 #endif
 
 	// 1. RotatingMagnetFilamentMonitor.calibrated members
@@ -66,7 +65,7 @@ constexpr uint8_t RotatingMagnetFilamentMonitor::objectModelTableDescriptor[] =
 {
 	3,
 #ifdef DUET3_ATE
-	5,
+	4,
 #else
 	2,
 #endif

@@ -236,9 +236,12 @@ public:
 	void SetCurrent(float current) noexcept;
 	void Enable(bool en) noexcept;
 	void UpdateChopConfRegister() noexcept;
+
 	void SetStallDetectThreshold(int sgThreshold) noexcept;
 	void SetStallDetectFilter(bool sgFilter) noexcept;
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept;
+	EndstopValidationResult CheckStallDetectionEnabled(float speed) noexcept;
+
 	void AppendStallConfig(const StringRef& reply) const noexcept;
 	void AppendDriverStatus(const StringRef& reply) noexcept;
 	StandardDriverStatus GetStatus(bool accumulated, bool clearAccumulated) noexcept;
@@ -280,7 +283,7 @@ private:
 	DriversBitmap driverBit;								// bitmap of just this driver number
 	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
-	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection
+	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection, in step clocks
 	uint32_t mstepPosition;									// the current microstep position, or 0xFFFFFFFF if unknown
 
 	volatile uint32_t lastReadStatus;						// the status word that we read most recently, updated by the ISR
@@ -707,7 +710,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 	const uint32_t fullstepsPerSecond = StepClockRate/maxStallStepInterval;
 	const float stepsPerMm = reprap.GetMove().DriveStepsPerMm(axisNumber);
 	const float speed = (float)(fullstepsPerSecond << microstepShiftFactor)/stepsPerMm;
-	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 " (%.1f mm/sec), coolstep %" PRIx32,
+	reply.catf("stall threshold %d, filter %s, full steps/sec %" PRIu32 " (%.1f mm/sec), coolstep %" PRIx32,
 				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed, registers[SmartEnable] & 0xFFFF);
 }
 
@@ -730,6 +733,16 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const noexcep
 {
 	interpolation = (registers[DriveControl] & TMC_DRVCTRL_INTPOL) != 0;
 	return 1u << microstepShiftFactor;
+}
+
+// Check that stall detection can occur at the specified speed
+EndstopValidationResult TmcDriverState::CheckStallDetectionEnabled(float speed) noexcept
+{
+	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor) * 1.2)
+	{
+		return EndstopValidationResult::moveTooSlow;
+	}
+	return EndstopValidationResult::ok;
 }
 
 // This is called by the ISR when the SPI transfer has completed
@@ -1234,10 +1247,11 @@ StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bo
 	return rslt;
 }
 
+EndstopValidationResult SmartDrivers::CheckStallDetectionEnabled(size_t driver, float speed) noexcept
+{
+	return (driver < numTmc2660Drivers) ? driverStates[driver].CheckStallDetectionEnabled(speed) : EndstopValidationResult::stallDetectionNotSupported;
+}
+
 #endif
 
 // End
-
-
-
-

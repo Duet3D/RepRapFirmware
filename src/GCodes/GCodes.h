@@ -101,7 +101,7 @@ public:
 	bool ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 		pre(queueNumber < ARRAY_SIZE(moveStates));								// Called by the Move class to get a movement set by the last G Code
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	bool QueueFileToPrint(const char* fileName, const StringRef& reply) noexcept;	// Open a file of G Codes to run
+	bool QueueFileToPrint(const char *_ecv_array fileName, const StringRef& reply) noexcept;	// Open a file of G Codes to run
 #endif
 	void AbortPrint(GCodeBuffer& gb) noexcept;									// Cancel any print in progress
 	void HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept;		// Write where we are into a string
@@ -112,7 +112,7 @@ public:
 	FilePosition GetPrintingFilePosition() const noexcept;						// Return the current position of the file being printed in bytes. May return noFilePosition if allowNoFilePos is true
 	void Diagnostics(MessageType mtype) noexcept;								// Send helpful information out
 
-	bool RunConfigFile(const char* fileName, bool isMainConfigFile) noexcept;	// Start running a configuration file
+	bool RunConfigFile(const char *_ecv_array fileName, bool isMainConfigFile) noexcept;	// Start running a configuration file
 	bool IsTriggerBusy() const noexcept;										// Return true if the trigger G-code buffer is busy running config.g or a trigger file
 
 	bool IsAxisHomed(unsigned int axis) const noexcept							// Has the axis been homed?
@@ -170,7 +170,7 @@ public:
 	size_t GetVisibleAxes() const noexcept { return numVisibleAxes; }
 	size_t GetNumExtruders() const noexcept { return numExtruders; }
 
-	const char* GetMachineModeString() const noexcept;							// Get the name of the current machine mode
+	const char *_ecv_array GetMachineModeString() const noexcept;				// Get the name of the current machine mode
 
 	void HandleHeaterFault() noexcept;											// Respond to a heater fault
 
@@ -192,7 +192,7 @@ public:
 	void SetPrimarySpeedFactor(float factor) noexcept;							// Set the speed factor
 	void SetExtrusionFactor(size_t extruder, float factor) noexcept;			// Set an extrusion factor for the specified extruder
 	void SelectPrimaryTool(int toolNumber, bool simulating) noexcept { moveStates[0].SelectTool(toolNumber, simulating); }
-	bool ProcessCommandFromLcd(const char *cmd) noexcept;						// Process a GCode command from the 12864 LCD returning true if the command was accepted
+	bool ProcessCommandFromLcd(const char *_ecv_array cmd) noexcept;			// Process a GCode command from the 12864 LCD returning true if the command was accepted
 	float GetItemCurrentTemperature(unsigned int itemNumber) const noexcept;
 	float GetItemActiveTemperature(unsigned int itemNumber) const noexcept;
 	float GetItemStandbyTemperature(unsigned int itemNumber) const noexcept;
@@ -219,10 +219,10 @@ public:
 
 	// These next two are public because they are used by class SbcInterface
 	void UnlockAll(const GCodeBuffer& gb) noexcept;									// Release all locks
-	GCodeBuffer *GetGCodeBuffer(GCodeChannel channel) const noexcept { return gcodeSources[channel.ToBaseType()]; }
+	GCodeBuffer *_ecv_null GetGCodeBuffer(GCodeChannel channel) const noexcept { return gcodeSources[channel.ToBaseType()]; }
 
 #if HAS_MASS_STORAGE
-	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Start timing SD card file writing
+	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Start timing SD card file writing
 #endif
 
 	void SavePosition(const GCodeBuffer& gb, unsigned int restorePointNumber) noexcept
@@ -261,9 +261,9 @@ public:
 # endif
 
 	size_t GetNumInputs() const noexcept { return NumGCodeChannels; }
-	const GCodeBuffer* GetInput(size_t n) const noexcept { return gcodeSources[n]; }
-	const GCodeBuffer* GetInput(GCodeChannel n) const noexcept { return gcodeSources[n.RawValue()]; }
-	GCodeBuffer *GetSerialGCodeBuffer(size_t serialPortNumber) const noexcept;
+	const GCodeBuffer *_ecv_null GetInput(size_t n) const noexcept { return gcodeSources[n]; }
+	const GCodeBuffer *_ecv_null GetInput(GCodeChannel n) const noexcept { return gcodeSources[n.RawValue()]; }
+	GCodeBuffer *_ecv_null GetSerialGCodeBuffer(size_t serialPortNumber) const noexcept;
 
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
 
@@ -327,7 +327,7 @@ public:
 	static constexpr const char *_ecv_array DAEMON_G = "daemon.g";
 	static constexpr const char *_ecv_array RUNONCE_G = "runonce.g";
 #if SUPPORT_PROBE_POINTS_FILE
-	static constexpr const char* DefaultProbeProbePointsFile = "probePoints.csv";
+	static constexpr const char *_ecv_array DefaultProbeProbePointsFile = "probePoints.csv";
 #endif
 
 private:
@@ -364,15 +364,15 @@ private:
 	bool SpinGCodeBuffer(GCodeBuffer& gb) noexcept;								// Do some work on an input channel
 	bool StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Fetch a new or old GCode and process it
 	void RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Execute a step of the state machine
-	void DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps);
+	void DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps) noexcept;
 
 	void StartPrinting(bool fromStart) noexcept;								// Start printing the file already selected
-	void StopPrint(GCodeBuffer *gbp, StopPrintReason reason) noexcept;			// Stop the current print
+	void StopPrint(GCodeBuffer *_ecv_null gbp, StopPrintReason reason) noexcept;	// Stop the current print
 
 	bool DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;					// Get G Codes from a file and print them
-	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning, VariableSet& initialVariables) noexcept;
-	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) noexcept;	// Run a GCode macro file, optionally report error if not found
-	bool DoFileMacroWithParameters(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) THROWS(GCodeException);
+	bool DoFileMacro(GCodeBuffer& gb, const char *_ecv_array fileName, bool reportMissing, int codeRunning, VariableSet& initialVariables) noexcept;
+	bool DoFileMacro(GCodeBuffer& gb, const char *_ecv_array fileName, bool reportMissing, int codeRunning) noexcept;	// Run a GCode macro file, optionally report error if not found
+	bool DoFileMacroWithParameters(GCodeBuffer& gb, const char *_ecv_array fileName, bool reportMissing, int codeRunning) THROWS(GCodeException);
 
 	void FileMacroCyclesReturn(GCodeBuffer& gb) noexcept;								// End a macro
 
@@ -384,8 +384,8 @@ private:
 	bool HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply, OutputBuffer *_ecv_null outBuf) noexcept
 		pre(outBuf == nullptr || rslt == GCodeResult::ok);
 
-	void HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept;
-	void HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept;	// Handle G-Code replies
+	void HandleReply(GCodeBuffer& gb, OutputBuffer *_ecv_null reply) noexcept;
+	void HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const char *_ecv_array reply) noexcept;	// Handle G-Code replies
 
 	GCodeResult TryMacroFile(GCodeBuffer& gb) THROWS(GCodeException);								// Try to find a macro file that implements a G or M command
 
@@ -450,11 +450,11 @@ private:
 
 	ReadLockedPointer<Tool> GetSpecifiedOrCurrentTool(GCodeBuffer& gb) THROWS(GCodeException);
 	GCodeResult ManageTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Create a new tool definition
-	void SetToolHeaters(const GCodeBuffer& gb, Tool *tool, float temperature) THROWS(GCodeException);	// Set all a tool's heaters active and standby temperatures, for M104/M109
-	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance, bool waitOnFault) const noexcept;
+	void SetToolHeaters(const GCodeBuffer& gb, Tool *_ecv_null tool, float temperature) THROWS(GCodeException);	// Set all a tool's heaters active and standby temperatures, for M104/M109
+	bool ToolHeatersAtSetTemperatures(const Tool *_ecv_null tool, bool waitWhenCooling, float tolerance, bool waitOnFault) const noexcept;
 																							// Wait for the heaters associated with the specified tool to reach their set temperatures
 	void GenerateTemperatureReport(const GCodeBuffer& gb, const StringRef& reply) const noexcept;	// Store a standard-format temperature report in reply
-	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
+	OutputBuffer *_ecv_null GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
 	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexcept;			// Check whether we need to report temperatures or status
 
 	void RestorePosition(MovementState& ms, const RestorePoint& rp) noexcept;				// Restore user position from a restore point
@@ -469,7 +469,7 @@ private:
 	void ToolOffsetInverseTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const noexcept;
 																							// Convert head reference point coordinates to user coordinates
 	// Tool management
-	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept;
+	void ReportToolTemperatures(const StringRef& reply, const Tool *_ecv_null tool, bool includeNumber) const noexcept;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteToolSettings(FileStore *f, const StringRef& buf) const noexcept;				// save some information for the resume file
@@ -496,7 +496,7 @@ private:
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);	// Define the probing grid, returning true if error
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Load the height map from file
-	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept;				// Save the height map to the specified file
+	bool TrySaveHeightMap(const char *_ecv_array filename, const StringRef& reply) const noexcept;				// Save the height map to the specified file
 	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const THROWS(GCodeException);	// Save the height map to the file specified by P parameter
 # if SUPPORT_PROBE_POINTS_FILE
 	GCodeResult LoadProbePointsMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load map of reachable probe points from file
@@ -516,7 +516,7 @@ private:
 	GCodeResult RaiseEvent(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M957
 
 	// Object cancellation support
-	GCodeResult HandleM486(GCodeBuffer& gb, const StringRef &reply, OutputBuffer*& buf) THROWS(GCodeException);
+	GCodeResult HandleM486(GCodeBuffer& gb, const StringRef &reply, OutputBuffer *_ecv_null & buf) THROWS(GCodeException);
 	void StartObject(GCodeBuffer& gb, const char *_ecv_array label) noexcept;
 	void StopObject(GCodeBuffer& gb) noexcept;
 	void ChangeToObject(GCodeBuffer& gb, int i) noexcept;
@@ -531,17 +531,17 @@ private:
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const noexcept; // Write the config-override file
+	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const  THROWS(GCodeException); // Write the config-override file
 	bool WriteConfigOverrideHeader(FileStore *f) const noexcept;				// Write the config-override header
 #endif
 
 	void CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept;				// Copy the feed rate etc. from the daemon to the input channels
 
-	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;						// Decide which device to display a message box on
+	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const noexcept;			// Decide which device to display a message box on
 
 	// Z probe
-	void DoManualProbe(GCodeBuffer&, const char *message, const char *title, const AxesBitmap); // Do manual probe in arbitrary direction
-	void DoManualBedProbe(GCodeBuffer& gb);										// Do a manual bed probe
+	void DoManualProbe(GCodeBuffer&, const char *_ecv_array message, const char *_ecv_array title, const AxesBitmap) noexcept; // Do manual probe in arbitrary direction
+	void DoManualBedProbe(GCodeBuffer& gb) noexcept;							// Do a manual bed probe
 	void DeployZProbe(GCodeBuffer& gb) noexcept;
 	void RetractZProbe(GCodeBuffer& gb) noexcept;
 	void CheckIfMoreTapsNeeded(GCodeBuffer& gb, const ZProbe& zp) noexcept;		// Decide whether we have probed the current point sufficient times
@@ -552,7 +552,7 @@ private:
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	void SaveResumeInfo(bool wasPowerFailure) noexcept;
-	bool SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const f, const char *printingFilename, const StringRef& buf) noexcept;
+	bool SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const f, const char *_ecv_array printingFilename, const StringRef& buf) noexcept;
 #endif
 
 	void NewSingleSegmentMoveAvailable(MovementState& ms) noexcept;				// Flag that a new move that should be executed in a single segment is available
@@ -611,31 +611,31 @@ private:
 	NetworkGCodeInput* telnetInput;										// ...
 #endif
 
-	GCodeBuffer* gcodeSources[NumGCodeChannels];						// The various sources of gcodes
+	GCodeBuffer *_ecv_null gcodeSources[NumGCodeChannels];						// The various sources of gcodes
 
-	GCodeBuffer* HttpGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)]; }
-	GCodeBuffer* TelnetGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)]; }
-	GCodeBuffer* FileGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File)]; }
-	GCodeBuffer* UsbGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)]; }
-	GCodeBuffer* AuxGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux)]; }					// This one is for the PanelDue on the async serial interface
-	GCodeBuffer* TriggerGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Trigger)]; }			// Used for executing config.g and trigger macro files
-	GCodeBuffer* QueuedGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue)]; }
-	GCodeBuffer* LcdGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::LCD)]; }					// This one for the 12864 LCD
-	GCodeBuffer* SpiGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::SBC)]; }
-	GCodeBuffer* DaemonGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Daemon)]; }
-	GCodeBuffer* Aux2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)]; }					// This one is reserved for the second async serial interface
-	GCodeBuffer* AutoPauseGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Autopause)]; }		// GCode state machine used to run macros on power fail, heater faults and filament out
+	GCodeBuffer *_ecv_null  HttpGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)]; }
+	GCodeBuffer *_ecv_null  TelnetGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)]; }
+	GCodeBuffer *_ecv_null  FileGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File)]; }
+	GCodeBuffer *_ecv_null  UsbGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)]; }
+	GCodeBuffer *_ecv_null  AuxGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux)]; }					// This one is for the PanelDue on the async serial interface
+	GCodeBuffer *_ecv_null  TriggerGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Trigger)]; }			// Used for executing config.g and trigger macro files
+	GCodeBuffer *_ecv_null  QueuedGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue)]; }
+	GCodeBuffer *_ecv_null  LcdGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::LCD)]; }					// This one for the 12864 LCD
+	GCodeBuffer *_ecv_null  SpiGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::SBC)]; }
+	GCodeBuffer *_ecv_null  DaemonGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Daemon)]; }
+	GCodeBuffer *_ecv_null  Aux2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)]; }					// This one is reserved for the second async serial interface
+	GCodeBuffer *_ecv_null  AutoPauseGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Autopause)]; }		// GCode state machine used to run macros on power fail, heater faults and filament out
 #if SUPPORT_ASYNC_MOVES
-	GCodeBuffer* File2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)]; }
-	GCodeBuffer* Queue2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]; }
-	GCodeBuffer* GetFileGCode(unsigned int msNumber) const noexcept;
+	GCodeBuffer *_ecv_null  File2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)]; }
+	GCodeBuffer *_ecv_null  Queue2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]; }
+	GCodeBuffer *_ecv_null  GetFileGCode(unsigned int msNumber) const noexcept;
 #else
-	GCodeBuffer* GetFileGCode(unsigned int msNumber) const noexcept { return FileGCode(); }
+	GCodeBuffer *_ecv_null GetFileGCode(unsigned int msNumber) const noexcept { return FileGCode(); }
 #endif
 
 	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling
 
-	const GCodeBuffer* resourceOwners[NumResources];					// Which gcode buffer owns each resource
+	const GCodeBuffer *_ecv_null resourceOwners[NumResources];			// Which gcode buffer owns each resource
 
 	StraightProbeSettings straightProbeSettings;						// G38 straight probe settings
 	union
@@ -764,7 +764,7 @@ private:
 #if HAS_MASS_STORAGE
 	static constexpr uint32_t SdTimingByteIncrement = 8 * 1024;	// how many timing bytes we write at a time
 	static constexpr const char *_ecv_array TimingFileName = "test.tst";	// the name of the file we write
-	FileStore *sdTimingFile;					// file handle being used for SD card write timing
+	FileStore *_ecv_null sdTimingFile;			// file handle being used for SD card write timing
 	uint32_t timingBytesRequested;				// how many bytes we were asked to write
 	uint32_t timingBytesWritten;				// how many timing bytes we have written so far
 	uint32_t timingStartMillis;

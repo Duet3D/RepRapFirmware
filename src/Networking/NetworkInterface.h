@@ -15,7 +15,7 @@ class NetworkInterface INHERIT_OBJECT_MODEL
 {
 public:
 	NetworkInterface() noexcept;
-	NetworkInterface(const NetworkInterface&) = delete;
+	NetworkInterface(const NetworkInterface &_ecv_from) = delete;
 
 	virtual void Init() noexcept = 0;
 	virtual void Activate() noexcept = 0;
@@ -36,7 +36,7 @@ public:
 	virtual GCodeResult SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept = 0;
 	virtual const MacAddress& GetMacAddress() const noexcept = 0;
 
-	virtual void UpdateHostname(const char *hostname) noexcept = 0;
+	virtual void UpdateHostname(const char *_ecv_array hostname) noexcept = 0;
 
 	virtual void OpenDataPort(TcpPort port) noexcept = 0;
 	virtual void TerminateDataPort() noexcept = 0;
@@ -60,7 +60,7 @@ protected:
 
 	NetworkState::RawType GetState() const noexcept { return state.RawValue(); }
 	void SetState(NetworkState::RawType newState) noexcept;
-	const char *GetStateName() const noexcept { return state.ToString(); }
+	const char *_ecv_array GetStateName() const noexcept { return state.ToString(); }
 	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
 		pre(protocol < NumSelectableProtocols);
 

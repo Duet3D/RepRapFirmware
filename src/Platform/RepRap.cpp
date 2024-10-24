@@ -891,10 +891,6 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 #endif
 	);
 
-	// DEBUG print the module addresses
-	//	platform->MessageF(mtype, "platform %" PRIx32 ", network %" PRIx32 ", move %" PRIx32 ", heat %" PRIx32 ", gcodes %" PRIx32 ", scanner %"  PRIx32 ", pm %" PRIx32 ", portc %" PRIx32 "\n",
-	//						(uint32_t)platform, (uint32_t)network, (uint32_t)move, (uint32_t)heat, (uint32_t)gCodes, (uint32_t)scanner, (uint32_t)printMonitor, (uint32_t)portControl);
-
 #if MCU_HAS_UNIQUE_ID
 	{
 		String<StringLength50> idChars;
@@ -916,7 +912,20 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 
 	// Now print diagnostics for other modules
 	Tasks::Diagnostics(mtype);
-	platform->Diagnostics(mtype);				// this includes a call to our Timing() function
+	platform->Diagnostics(mtype);				// this includes a call to our Timing() function and the software reset data
+
+#ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
+	// Print and clear any disgnostic messages we have accumulated
+	for (DebugLogRecord& r : debugRecords)
+	{
+		if (r.msg != nullptr)
+		{
+			platform->MessageF(mtype, r.msg, r.data[0], r.data[1], r.data[2], r.data[3]);
+			r.msg = nullptr;
+		}
+	}
+#endif
+
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	MassStorage::Diagnostics(mtype);
 #endif
@@ -1075,8 +1084,13 @@ void RepRap::Tick() noexcept
 				const TaskHandle relevantTask = (heatTaskStuck) ? Heat::GetHeatTask() : Tasks::GetMainTask();
 				if (relevantTask == RTOSIface::GetCurrentTask())
 				{
+#ifdef __ECV__
+					// eCv doesn't understand the gcc "register const... asm" line
+					const uint32_t *_ecv_array stackPtr = _ecv_undefined(const uint32_t *_ecv_array);
+#else
 					__asm volatile("mrs r2, psp");
 					register const uint32_t * stackPtr asm ("r2");				// we want the PSP not the MSP
+#endif
 					relevantStackPtr = stackPtr + 5;							// discard uninteresting registers, keep LR PC PSR
 				}
 				else
@@ -1664,8 +1678,8 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 	response->catf(",\"idleCurrentFactor\":%.1f", (double)(move->GetIdleCurrentFactor() * 100.0));
 	response->catf(",\"idleTimeout\":%.1f,", (double)(move->IdleTimeout()));
 
-	// Minimum feedrates
-	AppendFloatArray(response, "minFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertSpeedToMmPerSec(move->GetInstantDv(drive)); }, 2);
+	// Maximum jerk
+	AppendFloatArray(response, "minFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertSpeedToMmPerSec(move->GetMaxInstantDv(drive)); }, 2);
 
 	// Maximum feedrates
 	response->cat(',');
@@ -2130,7 +2144,7 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 
 // Get information for the specified file, or the currently printing file (if 'filename' is null or empty), in JSON format
 // Return GCodeResult::Warning if the file doesn't exist, else GCodeResult::ok or GCodeResult::notFinished
-GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept
+GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *_ecv_null &response, bool quitEarly) noexcept
 {
 	const bool specificFile = (filename != nullptr && filename[0] != 0);
 	GCodeFileInfo info;
@@ -2143,7 +2157,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 		{
 			info.isValid = false;
 		}
-		else if (MassStorage::GetFileInfo(filePath.c_str(), info, quitEarly) == GCodeResult::notFinished)
+		else if (MassStorage::GetFileInfo(filePath.c_str(), info, quitEarly, nullptr) == GCodeResult::notFinished)
 		{
 			// This may take a few runs...
 			return GCodeResult::notFinished;
@@ -2792,6 +2806,34 @@ void RepRap::SaveConfigError(const char *filename, unsigned int lineNumber, cons
 		StateUpdated();
 	}
 }
+
+#ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
+
+void RepRap::LogDebugMessage(const char *_ecv_array msg, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3) noexcept
+{
+	// Log the debug event if we have space
+	for (DebugLogRecord& r : debugRecords)
+	{
+		if (r.msg == nullptr)
+		{
+			r.data[0] = data0;
+			r.data[1] = data1;
+			r.data[2] = data2;
+			r.data[3] = data3;
+			r.msg = msg;
+			break;
+		}
+	}
+
+	// Print it to debug if enabled
+	if (Debug(Module::Debug))
+	{
+		debugPrintf(msg, data0, data1, data2, data3);
+		delay(50);									// make sure the message has a chance to get printed, assuming this isn't called from the task that does the printing
+	}
+}
+
+#endif
 
 #if SUPPORT_DIRECT_LCD
 

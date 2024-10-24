@@ -251,7 +251,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					return false;
 				}
-			} catch (GCodeException& exc)
+			} catch (const GCodeException& exc)
 			{
 				gb.SetState(GCodeState::abortWhenMovementFinished);		// empty the queue before ending simulation, and force the user position to be restored
 				gb.LatestMachineState().SetError(exc);					// must do this *after* calling SetState
@@ -291,9 +291,12 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					BREAK_IF_NOT_EXECUTING
 					bool modifyingTool = gb.Seen('P') || gb.Seen('R') || gb.Seen('S');
-					for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+					for (size_t axis = 0; axis < numVisibleAxes && !modifyingTool; ++axis)
 					{
-						modifyingTool |= gb.Seen(axisLetters[axis]);
+						if (gb.Seen(axisLetters[axis]))
+						{
+							modifyingTool = true;
+						}
 					}
 
 					if (modifyingTool)
@@ -675,7 +678,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	if (   reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected() && !gb.IsBinary()
 		&& (   (code >=  0 && code <= 2)
 			|| (code >= 20 && code <= 24) || (code >= 26 && code <= 30)
-			||  code == 32 || code == 36 || code == 37 || code == 38 || code == 39
+			||  code == 32 || (code >= 36 && code <= 39)
 			|| (code == 98 && gb.Seen('R'))
 			||  code == 112
 			||  code == 121
@@ -693,7 +696,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	}
 #endif
 
-	OutputBuffer *outBuf = nullptr;
+	OutputBuffer *_ecv_null outBuf = nullptr;
 
 	try
 	{
@@ -860,15 +863,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 						else
 						{
-							// Turn off every spindle if no 'P' parameter is present and the current tool does not have a spindle
+							// Turn off every configured spindle if no 'P' parameter is present and the current tool does not have a spindle
 							for (size_t i = 0; i < MaxSpindles; i++)
 							{
-								platform.AccessSpindle(i).SetState(SpindleState::stopped);
+								if (platform.AccessSpindle(i).GetState() != SpindleState::unconfigured)
+								{
+									platform.AccessSpindle(i).SetState(SpindleState::stopped);
+								}
 							}
 							break;
 						}
 
-						platform.AccessSpindle(slot).SetState(SpindleState::stopped);
+						if (platform.AccessSpindle(slot).GetState() != SpindleState::unconfigured)
+						{
+							platform.AccessSpindle(slot).SetState(SpindleState::stopped);
+						}
 					}
 				}
 				break;
@@ -1903,7 +1912,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						flags = gb.GetUIValue();
 						if (flags != 0)
 						{
-							flags = 0xFFFFFFFF;
+							flags = 0xFFFFFFFFu;
 						}
 						seen = true;
 					}
@@ -1968,12 +1977,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s", FIRMWARE_NAME, VERSION, platform.GetElectronicsString());
 #if defined(DUET_NG)
 				{
-					const char* const expansionName = DuetExpansion::GetExpansionBoardName();
+					const char *_ecv_array _ecv_null const expansionName = DuetExpansion::GetExpansionBoardName();
 					if (expansionName != nullptr)
 					{
 						reply.catf(" + %s", expansionName);
 					}
-					const char* const additionalExpansionName = DuetExpansion::GetAdditionalExpansionBoardName();
+					const char *_ecv_array _ecv_null const additionalExpansionName = DuetExpansion::GetAdditionalExpansionBoardName();
 					if (additionalExpansionName != nullptr)
 					{
 						reply.catf(" + %s", additionalExpansionName);
@@ -2284,7 +2293,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 
 					const int8_t currentHeater = (code == 141) ? heat.GetChamberHeater(index) : heat.GetBedHeater(index);
-					const char* const heaterName = (code == 141) ? "chamber" : "bed";
+					const char *_ecv_array const heaterName = (code == 141) ? "chamber" : "bed";
 
 					// Active temperature
 					if (gb.Seen('S'))
@@ -2692,7 +2701,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						extruder = gb.GetLimitedUIValue('D', numExtruders);
 					}
 
-					const Tool * const ct = GetMovementState(gb).currentTool;
+					const Tool *_ecv_null const ct = GetMovementState(gb).currentTool;
 					if (!seenD && ct == nullptr)
 					{
 						reply.copy("No tool selected");
@@ -2709,7 +2718,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							}
 							else
 							{
-								ct->IterateExtruders([this, extrusionFactor](unsigned int extruder) { ChangeExtrusionFactor(extruder, extrusionFactor); });
+								ct->IterateExtruders([this, extrusionFactor](unsigned int extr) { ChangeExtrusionFactor(extr, extrusionFactor); });
 							}
 						}
 					}
@@ -2720,7 +2729,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					else
 					{
 						reply.copy("Extrusion factor(s) for current tool:");
-						ct->IterateExtruders([reply, this](unsigned int extruder) { reply.catf(" %.1f%%", (double)(extrusionFactors[extruder] * 100.0)); });
+						ct->IterateExtruders([reply, this](unsigned int extr) { reply.catf(" %.1f%%", (double)(extrusionFactors[extr] * 100.0)); });
 					}
 				}
 				break;
@@ -3395,7 +3404,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 
 					// Read the entire file
-					FileStore * const f = platform.OpenSysFile(CONFIG_FILE, OpenMode::read);
+					FileStore *_ecv_null const f = platform.OpenSysFile(CONFIG_FILE, OpenMode::read);
 					if (f == nullptr)
 					{
 						reply.copy("Configuration file not found");
@@ -3723,13 +3732,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 566: // Set/print maximum jerk speeds in mm/min
 				{
 					const bool useMmPerSec = (code == 205);
+					const bool setMax = (code == 566);
 					bool seenAxis = false, seenExtruder = false;
 					Move& move = reprap.GetMove();
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
-							move.SetInstantDv(axis, gb.GetSpeedFromMm(useMmPerSec));
+							move.SetInstantDv(axis, gb.GetSpeedFromMm(useMmPerSec), setMax);
 							seenAxis = true;
 						}
 					}
@@ -3742,7 +3752,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetFloatArray(eVals, eCount, true);
 						for (size_t e = 0; e < eCount; e++)
 						{
-							move.SetInstantDv(ExtruderToLogicalDrive(e), ConvertSpeedFromMm(eVals[e], useMmPerSec));
+							move.SetInstantDv(ExtruderToLogicalDrive(e), ConvertSpeedFromMm(eVals[e], useMmPerSec), setMax);
 						}
 					}
 
@@ -3758,16 +3768,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else if (!seenExtruder)
 					{
-						reply.printf("Maximum jerk rates (%s): ", (useMmPerSec) ? "mm/sec" : "mm/min");
+						reply.printf("%s jerk rates (%s): ", (setMax) ? "Maximum" : "Current", (useMmPerSec) ? "mm/sec" : "mm/min");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertSpeedToMm(move.GetInstantDv(axis), useMmPerSec));
+							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertSpeedToMm((setMax) ? move.GetMaxInstantDv(axis) : move.GetPrintingInstantDv(axis), useMmPerSec));
 						}
 						reply.cat("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.1f", sep, (double)InverseConvertSpeedToMm(move.GetInstantDv(ExtruderToLogicalDrive(extruder)), useMmPerSec));
+							const size_t drive = ExtruderToLogicalDrive(extruder);
+							reply.catf("%c%.1f", sep, (double)InverseConvertSpeedToMm((setMax) ? move.GetMaxInstantDv(drive) : move.GetPrintingInstantDv(drive), useMmPerSec));
 							sep = ':';
 						}
 						if (code == 566)
@@ -4301,10 +4312,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 703: // Configure Filament
 				{
-					const Tool * const currentTool = GetMovementState(gb).currentTool;
+					const Tool *_ecv_null const currentTool = GetMovementState(gb).currentTool;
 					if (currentTool != nullptr)
 					{
-						const Filament *filament = currentTool->GetFilament();
+						const Filament *_ecv_null filament = currentTool->GetFilament();
 						if (filament != nullptr && filament->IsLoaded())
 						{
 							String<StringLength256> scratchString;
@@ -4460,7 +4471,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						if (seenCommandString)
 						{
 							// Replace the power fail script atomically
-							char *newPowerFailScript = new char[powerFailString.strlen() + 1];
+							char *_ecv_array newPowerFailScript = new char[powerFailString.strlen() + 1];
 							strcpy(newPowerFailScript, powerFailString.c_str());
 							ReplaceObject(powerFailScript, newPowerFailScript);
 							reprap.StateUpdated();
@@ -4826,14 +4837,14 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	else
 	{
 		// Report the tool number in use if no parameter is passed
-		const int toolNum = ms.GetCurrentToolNumber();
-		if (toolNum < 0)
+		const int reportedToolNum = ms.GetCurrentToolNumber();
+		if (reportedToolNum < 0)
 		{
 			reply.copy("No tool is selected");
 		}
 		else
 		{
-			reply.printf("Tool %d is selected", toolNum);
+			reply.printf("Tool %d is selected", reportedToolNum);
 		}
 	}
 
@@ -4865,7 +4876,7 @@ bool GCodes::HandleQcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 }
 
 // This is called to deal with the result of processing a G- or M-code
-bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply, OutputBuffer *outBuf) noexcept
+bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply, OutputBuffer *_ecv_null outBuf) noexcept
 {
 	gb.LatestMachineState().commandRepeated = (rslt == GCodeResult::notFinished);
 

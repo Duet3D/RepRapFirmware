@@ -11,7 +11,7 @@
 
 // NetworkResponder members
 
-NetworkResponder::NetworkResponder(NetworkResponder *n) noexcept
+NetworkResponder::NetworkResponder(NetworkResponder *_ecv_from _ecv_null n) noexcept
 	: next(n), responderState(ResponderState::free), skt(nullptr),
 	  outBuf(nullptr),
 #if HAS_MASS_STORAGE
@@ -58,7 +58,7 @@ void NetworkResponder::SendData() noexcept
 		}
 		else
 		{
-			const size_t sent = skt->Send(reinterpret_cast<const uint8_t *>(outBuf->UnreadData()), bytesLeft);
+			const size_t sent = skt->Send(reinterpret_cast<const uint8_t *_ecv_array>(outBuf->UnreadData()), bytesLeft);
 			if (sent == 0)
 			{
 				// Check whether the connection has been closed
@@ -192,7 +192,7 @@ IPAddress NetworkResponder::GetRemoteIP() const noexcept
 	return (skt == nullptr) ? IPAddress() : skt->GetRemoteIP();
 }
 
-void NetworkResponder::ReportOutputBufferExhaustion(const char *sourceFile, int line) noexcept
+void NetworkResponder::ReportOutputBufferExhaustion(const char *_ecv_array sourceFile, int line) noexcept
 {
 	if (reprap.Debug(Module::Webserver))
 	{

@@ -13,14 +13,14 @@
 # include "LwipEthernet/AllocateFromPbufPool.h"
 #endif
 
-NetworkBuffer *NetworkBuffer::freelist = nullptr;
+NetworkBuffer *_ecv_null NetworkBuffer::freelist = nullptr;
 
-NetworkBuffer::NetworkBuffer(NetworkBuffer *n) noexcept : next(n), dataLength(0), readPointer(0)
+NetworkBuffer::NetworkBuffer(NetworkBuffer *_ecv_null n) noexcept : next(n), dataLength(0), readPointer(0)
 {
 }
 
 // Release this buffer and return the next one in the chain
-NetworkBuffer *NetworkBuffer::Release() noexcept
+NetworkBuffer *_ecv_null NetworkBuffer::Release() noexcept
 {
 	NetworkBuffer *ret = next;
 	next = freelist;
@@ -33,7 +33,7 @@ bool NetworkBuffer::ReadChar(char& b) noexcept
 {
 	if (readPointer < dataLength)
 	{
-		b = Data()[readPointer++];
+		b = (char)data[readPointer++];
 		return true;
 	}
 
@@ -44,7 +44,7 @@ bool NetworkBuffer::ReadChar(char& b) noexcept
 // Return the amount of data available, including continuation buffers
 size_t NetworkBuffer::TotalRemaining() const noexcept
 {
-	const NetworkBuffer *b = this;
+	const NetworkBuffer *_ecv_null b = this;
 	size_t ret = 0;
 	while (b != nullptr)
 	{
@@ -55,13 +55,13 @@ size_t NetworkBuffer::TotalRemaining() const noexcept
 }
 
 // Append some data, returning the amount appended
-size_t NetworkBuffer::AppendData(const uint8_t *source, size_t length) noexcept
+size_t NetworkBuffer::AppendData(const uint8_t *_ecv_array source, size_t length) noexcept
 {
 	if (length > SpaceLeft())
 	{
 		length = SpaceLeft();
 	}
-	memcpy(Data() + dataLength, source, length);
+	memcpy(data + dataLength, source, length);
 	dataLength += length;
 	return length;
 }
@@ -71,7 +71,7 @@ size_t NetworkBuffer::AppendData(const uint8_t *source, size_t length) noexcept
 // Read into the buffer from a file returning the number of bytes read
 int NetworkBuffer::ReadFromFile(FileStore *f) noexcept
 {
-	const int ret = f->Read(reinterpret_cast<char*>(data32), bufferSize);
+	const int ret = f->Read(reinterpret_cast<char *_ecv_array>(data), bufferSize);
 	dataLength = (ret > 0) ? (size_t)ret : 0;
 	readPointer = 0;
 	return ret;
@@ -89,8 +89,9 @@ void NetworkBuffer::Empty() noexcept
 	}
 }
 
-/*static*/ void NetworkBuffer::AppendToList(NetworkBuffer **list, NetworkBuffer *b) noexcept
+/*static*/ void NetworkBuffer::AppendToList(NetworkBuffer *_ecv_null &r_list, NetworkBuffer *b) noexcept
 {
+	NetworkBuffer *_ecv_null *list = &r_list;
 	b->next = nullptr;
 	while (*list != nullptr)
 	{
@@ -100,7 +101,7 @@ void NetworkBuffer::Empty() noexcept
 }
 
 // Find the last buffer in a list
-/*static*/ NetworkBuffer *NetworkBuffer::FindLast(NetworkBuffer *list) noexcept
+/*static*/ NetworkBuffer *_ecv_null NetworkBuffer::FindLast(NetworkBuffer *_ecv_null list) noexcept
 {
 	if (list != nullptr)
 	{
@@ -114,7 +115,7 @@ void NetworkBuffer::Empty() noexcept
 
 /*static*/ NetworkBuffer *NetworkBuffer::Allocate() noexcept
 {
-	NetworkBuffer *ret = freelist;
+	NetworkBuffer *_ecv_null ret = freelist;
 	if (ret != nullptr)
 	{
 		freelist = ret->next;
@@ -139,10 +140,10 @@ void NetworkBuffer::Empty() noexcept
 }
 
 // Count how many buffers there are in a chain
-/*static*/ unsigned int NetworkBuffer::Count(NetworkBuffer*& ptr) noexcept
+/*static*/ unsigned int NetworkBuffer::Count(NetworkBuffer *_ecv_null & ptr) noexcept
 {
 	unsigned int ret = 0;
-	for (NetworkBuffer *n = ptr; n != nullptr; n = n->next)
+	for (const NetworkBuffer *_ecv_null n = ptr; n != nullptr; n = n->next)
 	{
 		++ret;
 	}

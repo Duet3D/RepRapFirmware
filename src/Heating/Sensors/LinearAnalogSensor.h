@@ -15,7 +15,7 @@ class LinearAnalogSensor : public SensorWithPort
 public:
 	explicit LinearAnalogSensor(unsigned int sensorNum) noexcept;
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException) override;
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
 #endif
@@ -26,6 +26,8 @@ public:
 	static constexpr const char *_ecv_array TypeName = "linearanalog";
 
 private:
+	static SensorTypeDescriptor typeDescriptor;
+
 	void CalcDerivedParameters() noexcept;
 
 	// Configurable parameters

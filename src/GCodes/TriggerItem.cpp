@@ -106,7 +106,7 @@ bool TriggerItem::Check() noexcept
 }
 
 // Handle M581 for this trigger
-GCodeResult TriggerItem::Configure(unsigned int number, GCodeBuffer &gb, const StringRef &reply)
+GCodeResult TriggerItem::Configure(unsigned int number, GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
 	bool seen = false;
 	if (gb.Seen('R'))
@@ -233,7 +233,7 @@ void TriggerItem::AppendInputNames(AxesBitmap endstops, InputPortsBitmap inputs,
 	}
 	else
 	{
-		const char* const axisLetters = reprap.GetGCodes().GetAxisLetters();
+		const char *_ecv_array const axisLetters = reprap.GetGCodes().GetAxisLetters();
 		endstops.Iterate([axisLetters, &reply](unsigned int axis, unsigned int) noexcept { reply.catf(" %c", axisLetters[axis]); } );
 		inputs.Iterate([&reply](unsigned int port, unsigned int) noexcept { reply.catf(" %d", port); } );
 	}

@@ -28,7 +28,7 @@ public:
 
 	void Reset() noexcept;
 
-	void SetCoordsToTarget(float[MaxAxes]) const noexcept;
+	void SetCoordsToTarget(float coords[MaxAxes]) const noexcept;
 	float *_ecv_array GetTarget() noexcept { return target; };
 
 	const StraightProbeType GetType() const noexcept { return type; }
@@ -40,12 +40,16 @@ public:
 	const size_t GetZProbeToUse() const noexcept { return probeToUse; }
 	void SetZProbeToUse(const size_t probeNumber) noexcept { probeToUse = probeNumber; }
 
+	const float GetFeedRateOverride() const noexcept { return feedRateOverride; }
+	void SetFeedRateOverride(const float feedRate) noexcept { feedRateOverride = feedRate; }
+
 	const bool ProbingAway() const noexcept;
 	const bool SignalError() const noexcept;
 
 private:
 	AxesBitmap movingAxes;                 // Axes supposed to move - this is only used for manual probing
 	size_t probeToUse;                     // Use this ZProbe
+	float feedRateOverride;                // Feed rate for the probing move
 	float target[MaxAxes];                 // G38 target coordinates for straight probe moves
 	StraightProbeType type;                // Type of move
 };

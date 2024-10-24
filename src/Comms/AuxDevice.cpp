@@ -95,7 +95,7 @@ void AuxDevice::AppendAuxReply(const char *_ecv_array msg, bool rawMessage) noex
 	}
 }
 
-void AuxDevice::AppendAuxReply(OutputBuffer *_ecv_array reply, bool rawMessage) noexcept
+void AuxDevice::AppendAuxReply(OutputBuffer *_ecv_null reply, bool rawMessage) noexcept
 {
 	// Discard this response if either no aux device is attached or if the response is empty
 	if (reply == nullptr || reply->Length() == 0 || !IsEnabledForGCodeIo())

@@ -9,6 +9,7 @@
 
 #if HAS_STALL_DETECT
 
+#include <Platform/RepRap.h>
 #include <Movement/Move.h>
 #include <Movement/Kinematics/Kinematics.h>
 
@@ -30,7 +31,7 @@ bool StallDetectionEndstop::Stopped() const noexcept
 }
 
 // This is called to prime axis endstops
-bool StallDetectionEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept
+bool StallDetectionEndstop::Prime(const Kinematics &_ecv_from kin, const AxisDriversConfig& axisDrivers) noexcept
 {
 	// Find which drivers are relevant, and decide whether we stop just the driver, just the axis, or everything
 	stopAll = kin.GetControllingDrives(GetAxis(), true).Intersects(~AxesBitmap::MakeFromBits(GetAxis()));
@@ -123,6 +124,12 @@ void StallDetectionEndstop::SetDrivers(DriversBitmap extruderDrivers) noexcept
 {
 	driversMonitored = extruderDrivers;
 	stopAll = true;
+}
+
+EndstopValidationResult StallDetectionEndstop::Validate(const DDA& dda, uint8_t& failingDriver) const noexcept
+{
+	const float speed = fabsf(dda.GetMotorTopSpeed(GetAxis()));
+	return reprap.GetMove().CheckStallDetectionEnabled(GetAxis(), speed, failingDriver);
 }
 
 #endif

@@ -36,6 +36,12 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 	// Don't queue anything if no moves are being performed
 	if (reprap.GetMove().GetScheduledMoves() != reprap.GetMove().GetCompletedMoves())
 	{
+		// None of the M codes we queue has a fractional command number
+		if (gb.GetCommandFraction() > 0)
+		{
+			return false;
+		}
+
 		bool shouldQueue;
 		switch (gb.GetCommandNumber())
 		{
@@ -106,7 +112,7 @@ bool GCodeQueue::QueueCode(const GCodeBuffer &gb) noexcept
 	}
 
 	// Unlink a free element and assign gb's code to it
-	QueuedCode * const code = freeItems;
+	QueuedCode * const code = _ecv_not_null(freeItems);
 	freeItems = code->next;
 	code->AssignFrom(gb);
 	code->executeAtMove = reprap.GetMove().GetScheduledMoves();
@@ -119,10 +125,10 @@ bool GCodeQueue::QueueCode(const GCodeBuffer &gb) noexcept
 	}
 	else
 	{
-		QueuedCode *last = queuedItems;
+		QueuedCode * last = _ecv_not_null(queuedItems);
 		while (last->Next() != nullptr)
 		{
-			last = last->Next();
+			last = _ecv_not_null(last->Next());
 		}
 		last->next = code;
 	}
@@ -140,7 +146,7 @@ bool GCodeQueue::FillBuffer(GCodeBuffer *gb) noexcept
 	}
 
 	// Yes - load it into the passed GCodeBuffer instance
-	QueuedCode *code = queuedItems;
+	QueuedCode * code = _ecv_not_null(queuedItems);
 	code->AssignTo(gb);
 
 	// Release this item again
@@ -171,13 +177,13 @@ bool GCodeQueue::IsIdle() const noexcept
 // remove all the entries that will not be executed after the print has finally paused
 void GCodeQueue::PurgeEntries() noexcept
 {
-	QueuedCode *item = queuedItems, *lastItem = nullptr;
+	QueuedCode *_ecv_null item = queuedItems, *_ecv_null lastItem = nullptr;
 	while (item != nullptr)
 	{
 		if (item->executeAtMove > reprap.GetMove().GetScheduledMoves())
 		{
 			// Release this item
-			QueuedCode *nextItem = item->Next();
+			QueuedCode *_ecv_null nextItem = item->Next();
 			item->next = freeItems;
 			freeItems = item;
 
@@ -204,7 +210,7 @@ void GCodeQueue::Clear() noexcept
 {
 	while (queuedItems != nullptr)
 	{
-		QueuedCode * const item = queuedItems;
+		QueuedCode * const item = _ecv_not_null(queuedItems);
 		queuedItems = item->Next();
 		item->next = freeItems;
 		freeItems = item;
@@ -219,7 +225,7 @@ void GCodeQueue::Diagnostics(MessageType mtype, unsigned int queueNumber) noexce
 	}
 	else
 	{
-		const QueuedCode *item = queuedItems;
+		const QueuedCode *_ecv_null item = queuedItems;
 		do
 		{
 #if HAS_SBC_INTERFACE

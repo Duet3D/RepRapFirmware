@@ -23,9 +23,9 @@ ImageMenuItem::ImageMenuItem(PixelNumber r, PixelNumber c, const char *_ecv_arra
 	fileName.copy(pFileName);
 }
 
-void ImageMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
+void ImageMenuItem::Draw(Lcd &_ecv_from lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
-	if (IsVisible() && (!drawn || itemChanged || highlight != highlighted))
+	if (IsVisible() && (!drawn || itemChanged || highlight != (bool)highlighted))
 	{
 		FileStore *_ecv_null const fs = reprap.GetPlatform().OpenFile(MENU_DIR, fileName.c_str(), OpenMode::read);
 		if (fs != nullptr)
@@ -57,11 +57,11 @@ void ImageMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noex
 	}
 }
 
-void ImageMenuItem::UpdateWidthAndHeight(Lcd& lcd) noexcept
+void ImageMenuItem::UpdateWidthAndHeight(Lcd &_ecv_from lcd) noexcept
 {
 	if (width == 0 || height == 0)
 	{
-		FileStore * const fs = reprap.GetPlatform().OpenFile(MENU_DIR, fileName.c_str(), OpenMode::read);
+		FileStore *_ecv_null const fs = reprap.GetPlatform().OpenFile(MENU_DIR, fileName.c_str(), OpenMode::read);
 		if (fs != nullptr)
 		{
 			uint8_t w[2];

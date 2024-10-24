@@ -9,7 +9,7 @@
 
 #if SUPPORT_DIRECT_LCD
 
-ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char* t, const char* cmd, char const* acFile) noexcept
+ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char *_ecv_array t, const char *_ecv_array cmd, char const *_ecv_array acFile) noexcept
 	: MenuItem(r, c, w, CentreAlign, fn), text(t), command(cmd), m_acFile(acFile)
 {
 }

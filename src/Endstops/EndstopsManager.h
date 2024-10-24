@@ -45,7 +45,7 @@ public:
 	EndstopHitDetails CheckEndstops() noexcept;
 
 	// Configure the endstops in response to M574
-	GCodeResult HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf) THROWS(GCodeException);
+	GCodeResult HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & outbuf) THROWS(GCodeException);
 
 	EndStopPosition GetEndStopPosition(size_t axis) const noexcept pre(axis < MaxAxes);
 	bool HomingZWithProbe() const noexcept;
@@ -57,14 +57,20 @@ public:
 
 	void GetM119report(const StringRef& reply) noexcept;
 
+	// Validate any enabled stall endstops, returning true if all OK, else store the error details and return false
+	bool ValidateEndstops(const DDA& dda) noexcept;
+
+	// Get and clear the validation result
+	EndstopValidationResult GetEndstopValidationResult(uint8_t& driver) noexcept;
+
 	// Z probe
 	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// M558
 	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// G31
 
 	ReadLockedPointer<ZProbe> GetZProbe(size_t index) const noexcept;
 	ReadLockedPointer<ZProbe> GetZProbeOrDefault(size_t index) const noexcept;
-	ZProbe *_ecv_null GetZProbeFromISR(size_t index) const noexcept;
-	ZProbe& GetDefaultZProbeFromISR() const noexcept;
+	ZProbe *_ecv_from _ecv_null GetZProbeFromISR(size_t index) const noexcept;
+	ZProbe &_ecv_from GetDefaultZProbeFromISR() const noexcept;
 
 	void SetZProbeDefaults() noexcept;
 	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
@@ -84,31 +90,42 @@ protected:
 
 private:
 	// Add an endstop to the active list
-	void AddToActive(EndstopOrZProbe& e) noexcept;
+	void AddToActive(EndstopOrZProbe &_ecv_from e) noexcept;
 
 #if SUPPORT_OBJECT_MODEL
 	size_t GetNumProbesToReport() const noexcept;
 #endif
 
 	// Translate end stop result to text
-	static const char *TranslateEndStopResult(bool hit, bool atHighEnd) noexcept;
+	static const char *_ecv_array TranslateEndStopResult(bool hit, bool atHighEnd) noexcept;
 
 	// Return a pointer to an endstop. Caller must already own a read lock on endstopsLock.
-	const Endstop *FindEndstopWhenLockOwned(size_t axis) const noexcept;
+	const Endstop *_ecv_from _ecv_null FindEndstopWhenLockOwned(size_t axis) const noexcept;
 
 	static ReadWriteLock endstopsLock;
 	static ReadWriteLock zProbesLock;
 
-	EndstopOrZProbe *_ecv_null volatile activeEndstops;	// linked list of endstops and Z probes that are active for the current move
+	EndstopOrZProbe *_ecv_from _ecv_null volatile activeEndstops;	// linked list of endstops and Z probes that are active for the current move
 
-	Endstop *_ecv_null axisEndstops[MaxAxes];			// the endstops assigned to each axis (each one may have several switches), each may be null
+	Endstop *_ecv_from _ecv_null axisEndstops[MaxAxes];				// the endstops assigned to each axis (each one may have several switches), each may be null
 #if HAS_STALL_DETECT
-	StallDetectionEndstop *extrudersEndstop;			// the endstop used for extruder stall detection, one will do for all extruders
+	StallDetectionEndstop *_ecv_null extrudersEndstop;				// the endstop used for extruder stall detection, one will do for all extruders
 #endif
-	ZProbe *_ecv_null zProbes[MaxZProbes];				// the Z probes used. The first one is always non-null.
-	ZProbe *defaultZProbe;
+	ZProbe *_ecv_from _ecv_null zProbes[MaxZProbes];				// the Z probes used. The first one is always non-null.
+	ZProbe *_ecv_from _ecv_null defaultZProbe;
 
+	EndstopValidationResult validationResult;			// the error coder we got from validating endstops
+	uint8_t failingDriverNumber;						// the number of the local driver that failed validation
 	bool isHomingMove;									// true if calls to CheckEndstops are for the purpose of homing
 };
+
+// Get and clear the validation result
+inline EndstopValidationResult EndstopsManager::GetEndstopValidationResult(uint8_t& driver) noexcept
+{
+	driver = failingDriverNumber;
+	const EndstopValidationResult ret = validationResult;
+	validationResult = EndstopValidationResult::ok;
+	return ret;
+}
 
 #endif /* SRC_ENDSTOPS_ENDSTOPMANAGER_H_ */

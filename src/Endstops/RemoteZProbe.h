@@ -28,7 +28,7 @@ public:
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) override;
 	GCodeResult Create(const StringRef& pinNames, const StringRef& reply) noexcept;
 	void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState, uint32_t reading) noexcept override;
-	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) override THROWS(GCodeException);
+	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
 
 	// Process a remote reading that relates to this Z probe
 	void UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint32_t reading) noexcept override;

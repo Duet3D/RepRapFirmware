@@ -17,19 +17,19 @@
 # include <CanMessageGenericParser.h>
 #endif
 
-const uint32_t MAX31856_Frequency = 4000000;	// maximum for MAX31865 is 5MHz
+constexpr uint32_t MAX31856_Frequency = 4000000;	// maximum for MAX31865 is 5MHz
 
-static const char * const TypeLetters = "BEJKNRST";		// MAX31856 mapping of AVGSEWL bits to thermocouple types
-const uint8_t TypeK = 3;
+constexpr const char *_ecv_array TypeLetters = "BEJKNRST";		// MAX31856 mapping of AVGSEWL bits to thermocouple types
+constexpr uint8_t TypeK = 3;
 
 // SPI modes:
 // If the inactive state of SCL is LOW (CPOL = 0): (in the case of the MAX31865, this is sampled on the falling edge of CS):
 // The MAX31856 changes data after the rising edge of CLK, and samples input data on the falling edge.
 // This requires NCPHA = 0.
-const SpiMode MAX31856_SpiMode = SpiMode::mode1;
+constexpr SpiMode MAX31856_SpiMode = SpiMode::mode1;
 
 // Define the minimum interval between readings
-const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in milliseconds
+constexpr uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in milliseconds
 
 // Default configuration registers.
 // CR0:
@@ -59,6 +59,9 @@ const uint8_t Cr1ReadMask = 0b01111111;			// ignore the reserved bits
 //	OV/UV=0		assert fault on under/over voltage
 //  Openfault=0	assert fault on open circuit condition
 const uint8_t DefaultFaultMask = 0b00111100;
+
+// Sensor type descriptors
+TemperatureSensor::SensorTypeDescriptor ThermocoupleSensor31856::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new ThermocoupleSensor31856(sensorNum); } );
 
 ThermocoupleSensor31856::ThermocoupleSensor31856(unsigned int sensorNum) noexcept
 	: SpiTemperatureSensor(sensorNum, "Thermocouple (MAX31856)", MAX31856_SpiMode, MAX31856_Frequency),
@@ -90,7 +93,7 @@ GCodeResult ThermocoupleSensor31856::Configure(GCodeBuffer& gb, const StringRef&
 	String<2> buf;
 	if (gb.TryGetQuotedString('K', buf.GetRef(), changed))
 	{
-		const char *p;
+		const char *_ecv_array _ecv_null p;
 		if (buf.strlen() == 1 && (p = strchr(TypeLetters, toupper(buf.c_str()[0]))) != nullptr)
 		{
 			thermocoupleType = p - TypeLetters;
@@ -178,7 +181,7 @@ GCodeResult ThermocoupleSensor31856::FinishConfiguring(bool changed, const Strin
 	else
 	{
 		CopyBasicDetails(reply);
-		reply.catf(", thermocouple type %c, reject %dHz", TypeLetters[thermocoupleType], (cr0 & 0x01) ? 50 : 60);
+		reply.catf(", thermocouple type %c, reject %dHz", TypeLetters[thermocoupleType], ((cr0 & 0x01) != 0) ? 50 : 60);
 	}
 	return GCodeResult::ok;
 }
@@ -198,9 +201,9 @@ TemperatureError ThermocoupleSensor31856::TryInitThermocouple() const noexcept
 	//debugPrintf("Status %d data %04x\n", (int)sts, rawVal);
 	if (sts == TemperatureError::ok)
 	{
-		const uint32_t expectedResponseMask = (0b10111101 << 16)	// bits 1 and 5 of CR0 auto-clear
-											| (0b01111111 << 8)		// ignore the reserved bit
-											| (0b00111111);			// ignore the reserved bits
+		const uint32_t expectedResponseMask = (0b10111101u << 16)	// bits 1 and 5 of CR0 auto-clear
+											| (0b01111111u << 8)		// ignore the reserved bit
+											| (0b00111111u);			// ignore the reserved bits
 		if ((rawVal & expectedResponseMask) != (((modeData[1] << 16) | (modeData[2] << 8) | modeData[3]) & expectedResponseMask))
 		{
 //			debugPrintf("expected %08x got %08x\n", rawVal & expectedResponseMask, ((modeData[1] << 16) | (modeData[2] << 8) | modeData[3]) & expectedResponseMask);
@@ -226,8 +229,8 @@ void ThermocoupleSensor31856::Poll() noexcept
 		if ((rawVal & 0x00FF) != 0)
 		{
 			// One or more fault bits is set
-			SetResult( (rawVal & 0x02) ? TemperatureError::overOrUnderVoltage
-						: (rawVal & 0x01) ? TemperatureError::openCircuit
+			SetResult( ((rawVal & 0x02) != 0) ? TemperatureError::overOrUnderVoltage
+						: ((rawVal & 0x01) != 0) ? TemperatureError::openCircuit
 							: TemperatureError::hardwareError
 					 );
 			delayMicroseconds(1);										// MAX31856 requires CS to be high for 400ns minimum

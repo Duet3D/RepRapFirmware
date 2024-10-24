@@ -44,7 +44,7 @@ public:
 
 	void SendPanelDueMessage(const char *_ecv_array msg) noexcept;
 	void AppendAuxReply(const char *_ecv_array msg, bool rawMessage) noexcept;
-	void AppendAuxReply(OutputBuffer *_ecv_array reply, bool rawMessage) noexcept;
+	void AppendAuxReply(OutputBuffer *_ecv_null reply, bool rawMessage) noexcept;
 	bool Flush() noexcept;
 
 	void Diagnostics(MessageType mt, unsigned int index) noexcept;

@@ -111,11 +111,11 @@ public:
 
 	FileGCodeInput() noexcept : RegularGCodeInput() { }
 
-	void Reset() noexcept override;								// Clears the buffer. Should be called when the associated file is being closed
-	void Reset(const FileData &file) noexcept;					// Clears the buffer of a specific file. Should be called when it is closed or re-opened outside the reading context
+	void Reset() noexcept override;									// Clears the buffer. Should be called when the associated file is being closed
+	void Reset(const FileData &file) noexcept;						// Clears the buffer of a specific file. Should be called when it is closed or re-opened outside the reading context
 	size_t FileBytesCached(const FileData &file) const noexcept;	// How many bytes have been cached for the given file?
 
-	GCodeInputReadResult ReadFromFile(FileData &file) noexcept;	// Read another chunk of G-codes from the file and return true if more data is available
+	GCodeInputReadResult ReadFromFile(FileData &file) noexcept;		// Read another chunk of G-codes from the file and return true if more data is available
 
 private:
 	FileData lastFileRead;
@@ -129,11 +129,11 @@ class NetworkGCodeInput : public RegularGCodeInput
 public:
 	NetworkGCodeInput() noexcept;
 
-	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
-	bool Put(MessageType mtype, const char *buf) noexcept;		// Append a null-terminated string to the buffer returning true if success
+	bool FillBuffer(GCodeBuffer *gb) noexcept override;					// Fill a GCodeBuffer with the last available G-code
+	bool Put(MessageType mtype, const char *_ecv_array buf) noexcept;	// Append a null-terminated string to the buffer returning true if success
 
 private:
-	void Put(MessageType mtype, char c) noexcept;				// Append a single character. This does NOT lock the mutex!
+	void Put(MessageType mtype, char c) noexcept;						// Append a single character. This does NOT lock the mutex!
 
 	Mutex bufMutex;
 };

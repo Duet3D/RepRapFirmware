@@ -54,7 +54,7 @@ public:
 	float GetStartingHeight(bool firstTap, float previousHeightError = 0.0) const noexcept;
 	float GetProbingSpeed(int tapsDone) const noexcept { return probeSpeeds[(tapsDone < 0) ? 0 : 1]; }
 	float GetScanningSpeed() const noexcept { return probeSpeeds[2]; }
-	float FastThenSlowProbing() const noexcept { return probeSpeeds[1] < probeSpeeds[0]; }
+	bool FastThenSlowProbing() const noexcept { return probeSpeeds[1] < probeSpeeds[0]; }
 	float GetTravelSpeed() const noexcept { return travelSpeed; }
 	float GetRecoveryTime() const noexcept { return recoveryTime; }
 	float GetTolerance() const noexcept { return tolerance; }
@@ -62,7 +62,7 @@ public:
 	bool GetTurnHeatersOff() const noexcept { return misc.parts.turnHeatersOff; }
 	bool GetSaveToConfigOverride() const noexcept { return misc.parts.saveToConfigOverride; }
 	int32_t GetTargetAdcValue() const noexcept { return targetAdcValue; }
-	unsigned int GetMaxTaps() const { return misc.parts.maxTaps; }
+	unsigned int GetMaxTaps() const noexcept { return misc.parts.maxTaps; }
 	int32_t GetReading() const noexcept;
 	int32_t GetSecondaryValues(int32_t& v1) const noexcept;
 	bool IsDeployedByUser() const noexcept { return isDeployedByUser; }
@@ -135,7 +135,7 @@ class MotorStallZProbe final : public ZProbe
 public:
 	DECLARE_FREELIST_NEW_DELETE(MotorStallZProbe)
 
-	MotorStallZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::zMotorStall) { }
+	explicit MotorStallZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::zMotorStall) { }
 	~MotorStallZProbe() override { }
 
 	void SetIREmitter(bool on) const noexcept override { }
@@ -152,7 +152,7 @@ class DummyZProbe final : public ZProbe
 public:
 	DECLARE_FREELIST_NEW_DELETE(DummyZProbe)
 
-	DummyZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::none) { }
+	explicit DummyZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::none) { }
 	~DummyZProbe() noexcept override { }
 
 	void SetIREmitter(bool on) const noexcept override { }

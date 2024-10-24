@@ -21,7 +21,7 @@ public:
 
 	EndStopType GetEndstopType() const noexcept override;
 	bool Stopped() const noexcept override;
-	bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept override;
+	bool Prime(const Kinematics &_ecv_from kin, const AxisDriversConfig& axisDrivers) noexcept override;
 	EndstopHitDetails CheckTriggered() noexcept override;
 	bool Acknowledge(EndstopHitDetails what) noexcept override;
 	void AppendDetails(const StringRef& str) noexcept override;
@@ -32,7 +32,7 @@ public:
 #endif
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-	GCodeResult Configure(const char *pinNames, const StringRef& reply) noexcept;
+	GCodeResult Configure(const char *_ecv_array pinNames, const StringRef& reply) noexcept;
 
 private:
 	typedef Bitmap<uint16_t> PortsBitmap;

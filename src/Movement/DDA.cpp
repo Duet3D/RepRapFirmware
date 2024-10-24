@@ -315,7 +315,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 					if (compensationClocks > 0.0)
 					{
 						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
-						accelerations[drive] = min<float>(accelerations[drive], reprap.GetMove().GetInstantDv(drive)/compensationClocks);
+						accelerations[drive] = min<float>(accelerations[drive], reprap.GetMove().GetMaxInstantDv(drive)/compensationClocks);
 					}
 				}
 			}
@@ -476,6 +476,16 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	}
 
 	RecalculateMove(ring);
+
+	// 8. If we are checking endstops, validate any stall endstops.
+	if (flags.checkEndstops)
+	{
+		if (!reprap.GetPlatform().GetEndstops().ValidateEndstops(*this))
+		{
+			return false;
+		}
+	}
+
 	state = provisional;
 	return true;
 }
@@ -895,7 +905,7 @@ float DDA::AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcep
 		{
 			// Limit the babystepping Z speed to the lower of 0.1 times the original XYZ speed and 0.5 times the Z jerk
 			Move& move = reprap.GetMove();
-			const float maxBabySteppingAmount = cdda->totalDistance * min<float>(0.1, 0.5 * move.GetInstantDv(Z_AXIS)/cdda->topSpeed);
+			const float maxBabySteppingAmount = cdda->totalDistance * min<float>(0.1, 0.5 * move.GetMaxInstantDv(Z_AXIS)/cdda->topSpeed);
 			babySteppingToDo = constrain<float>(amount, -maxBabySteppingAmount, maxBabySteppingAmount);
 			cdda->directionVector[Z_AXIS] += babySteppingToDo/cdda->totalDistance;
 			cdda->totalDistance *= cdda->NormaliseLinearMotion(move.GetLinearAxes());
@@ -1015,7 +1025,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 		const Move& m = reprap.GetMove();
 		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 		{
-			if (endSpeed * fabsf(directionVector[drive]) > m.GetInstantDv(drive))
+			if (endSpeed * fabsf(directionVector[drive]) > m.GetMaxInstantDv(drive))
 			{
 				flags.canPauseAfter = false;
 				break;
@@ -1041,7 +1051,7 @@ void DDA::MatchSpeeds() noexcept
 		{
 			const float totalFraction = fabsf(directionVector[drive] - next->directionVector[drive]);
 			const float jerk = totalFraction * beforePrepare.targetNextSpeed;
-			const float allowedJerk = reprap.GetMove().GetInstantDv(drive);
+			const float allowedJerk = reprap.GetMove().GetPrintingInstantDv(drive);
 			if (jerk > allowedJerk)
 			{
 				beforePrepare.targetNextSpeed = allowedJerk/totalFraction;
@@ -1158,7 +1168,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		{
 			if (flags.isLeadscrewAdjustmentMove)
 			{
-				afterPrepare.drivesMoving.SetBit(Z_AXIS);
+				// We don't set any bits in drivesMoving because setting the Z bit would be misleading, and setting individual driver bits isn't useful because it doesn't take account of CAN-connected drivers.
 				// For a leadscrew adjustment move, the first N elements of the direction vector are the adjustments to the N Z motors
 				const AxisDriversConfig& config = move.GetAxisDriversConfig(Z_AXIS);
 				if (drive < config.numDrivers)
@@ -1344,7 +1354,8 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 // Check whether a committed move has finished
 bool DDA::HasExpired() const noexcept
 {
-	return (flags.isolatedMove)
+	// Note, for Z leadscrew adjustment moves (and any other individual motor moves that we may support in future), we must not use drivesMoving, because it doesn't describe the drivers that are moving.
+	return (flags.checkEndstops)
 			? reprap.GetMove().AreDrivesStopped(afterPrepare.drivesMoving)
 				: (int32_t)(StepTimer::GetMovementTimerTicks() - GetMoveFinishTime()) >= 0;
 }
@@ -1520,6 +1531,12 @@ float DDA::GetTotalExtrusionRate() const noexcept
 		fraction += directionVector[i];
 	}
 	return fraction * InverseConvertSpeedToMmPerSec(topSpeed);
+}
+
+// Return the top speed in microsteps/step clock for the specified motor
+float DDA::GetMotorTopSpeed(uint8_t axis) const noexcept
+{
+	return topSpeed * directionVector[axis] * reprap.GetMove().DriveStepsPerMm(axis);
 }
 
 #if SUPPORT_LASER

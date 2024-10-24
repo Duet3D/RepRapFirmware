@@ -27,9 +27,9 @@ class DhtTemperatureSensor : public SensorWithPort
 {
 public:
 	DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType t) noexcept;
-	~DhtTemperatureSensor() noexcept;
+	~DhtTemperatureSensor() noexcept override;
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException) override;
 #if 0 //SUPPORT_REMOTE_COMMANDS
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
 #endif
@@ -53,6 +53,9 @@ protected:
 #endif
 
 private:
+	static SensorTypeDescriptor dht21Descriptor;
+	static SensorTypeDescriptor dht22Descriptor;
+
 	static constexpr uint32_t MinimumReadInterval = 2100;			// ms - datasheet https://www.sparkfun.com/datasheets/Sensors/Temperature/DHT22.pdf says "Collecting period should be : >2 second"
 
 #if SAME5x
@@ -76,11 +79,14 @@ class DhtHumiditySensor : public AdditionalOutputSensor
 {
 public:
 	explicit DhtHumiditySensor(unsigned int sensorNum) noexcept;
-	~DhtHumiditySensor() noexcept;
+	~DhtHumiditySensor() noexcept override;
 
 	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName; }
 
 	static constexpr const char *_ecv_array TypeName = "dhthumidity";
+
+private:
+	static SensorTypeDescriptor dhtHumidityDescriptor;
 };
 
 #endif
