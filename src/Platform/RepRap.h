@@ -111,8 +111,8 @@ public:
 	OutputBuffer *GetLegacyStatusResponse(uint8_t type, int seq) const noexcept;
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	OutputBuffer *GetFilesResponse(const char *_ecv_array dir, unsigned int startAt, bool flagsDirs) noexcept;
-	OutputBuffer *GetFilelistResponse(const char *_ecv_array dir, unsigned int startAt) noexcept;
+	OutputBuffer *GetFilesResponse(const char *_ecv_array dir, unsigned int startAt, int maxItems, bool flagsDirs) noexcept;
+	OutputBuffer *GetFilelistResponse(const char *_ecv_array dir, unsigned int startAt, int maxItems) noexcept;
 	OutputBuffer *GetThumbnailResponse(const char *_ecv_array filename, FilePosition offset, bool forM31point1) noexcept;
 #endif
 
