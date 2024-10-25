@@ -2234,7 +2234,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		__DMB();							// just in case this might help
 	}
 
-	watcher.Check(reinterpret_cast<uint32_t>(&bufferIn->data[bufferIn->hdr.response]));		// check whether the watched memory has been corrupted. This is where we observe corruption.
+	watcher.Check(reinterpret_cast<uint32_t>(&bufferIn->data[(bufferIn->hdr.response) * 4]));	// check whether the watched memory has been corrupted. This is where we observe corruption.
 #else
 	while (!spi_dma_check_rx_complete()) { }	// Wait for DMA to complete
 #endif
