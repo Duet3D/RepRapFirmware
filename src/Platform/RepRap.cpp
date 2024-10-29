@@ -2825,7 +2825,7 @@ void RepRap::LogDebugMessage(const char *_ecv_array msg, uint32_t data0, uint32_
 	// Print it to debug if enabled
 	if (Debug(Module::Debug))
 	{
-		debugPrintf(msg, data0, data1, data2, data3);
+		debugPrintf(msg, data0, data1, data2, data3, data4, data5);
 		delay(50);									// make sure the message has a chance to get printed, assuming this isn't called from the task that does the printing
 	}
 }

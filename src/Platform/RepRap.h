@@ -344,7 +344,7 @@ template <size_t NumWords> bool MemoryWatcher<NumWords>::Check(uint32_t tag) noe
 		}
 	}
 
-	// If we found a difference, test whether the protected memory or the copy got changed. If t was the protected memory, restore it from the copy.
+	// If we found a difference, test whether the protected memory or the copy got changed. If it was the protected memory, restore it from the copy.
 	if (badOffset >= 0 || csumProtected != checkSum || csumCopy != checkSum)
 	{
 		const bool fix = (csumProtected != checkSum && csumCopy == checkSum);
