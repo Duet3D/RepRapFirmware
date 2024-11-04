@@ -502,7 +502,7 @@ constexpr DmaPriority DmacPrioTmcTx = 0;
 constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 100kbps so this is not very critical
 constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
-constexpr DmaPriority DmacPrioLed = 1;				// QSPI in master mode
+constexpr DmaPriority DmacPrioLed = 1;					// QSPI in master mode
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers
