@@ -119,7 +119,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(ZProbe)
 
 #endif
 
-ZProbe::ZProbe(unsigned int num, ZProbeType p_type) noexcept : EndstopOrZProbe(), lastStopHeight(0.0), number(num), isDeployedByUser(false)
+ZProbe::ZProbe(unsigned int num, ZProbeType p_type) noexcept : EndstopOrZProbe(Z_AXIS), lastStopHeight(0.0), number(num), isDeployedByUser(false)
 {
 	SetDefaults();
 	type = p_type;

@@ -54,6 +54,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_BME280			1
+#define SUPPORT_ADS131A02		1
 #define SUPPORT_OBJECT_MODEL	1
 
 #ifdef USE_EMBEDDED_FILES
@@ -386,9 +387,6 @@ constexpr PinDescription PinTable[] =
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 static_assert(NumNamedPins == 32+32+32+32+6);
-
-// Function to look up a pin name pass back the corresponding index into the pin table
-bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
 
 // Serial Interfaces
 constexpr Pin APIN_Serial0_RXD = PortDPin(25);

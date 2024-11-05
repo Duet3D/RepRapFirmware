@@ -13,11 +13,34 @@ struct CanSensorReport;
 class TemperatureSensor INHERIT_OBJECT_MODEL
 {
 public:
+	// Machinery for automatically linking new sensors into the sensor types list
+	struct SensorTypeDescriptor
+	{
+	public:
+		typedef TemperatureSensor *_ecv_from (*CreationFunction)(unsigned int sensorNum) noexcept;
+
+		SensorTypeDescriptor(const char *_ecv_array p_typeName, CreationFunction p_creationFunction) noexcept;
+
+		const char *_ecv_array GetName() const noexcept { return sensorTypeName; }
+		const SensorTypeDescriptor *_ecv_null GetNext() const noexcept { return next; }
+		TemperatureSensor *Create(unsigned int sensorNum) const noexcept { return createFunction(sensorNum); }
+
+		static const SensorTypeDescriptor *_ecv_null GetRoot() noexcept { return sensorTypeListRoot; }
+
+	private:
+		// Root of the sensor types list
+		static SensorTypeDescriptor *_ecv_null sensorTypeListRoot;
+
+		SensorTypeDescriptor *_ecv_null next;
+		const char *_ecv_array sensorTypeName;
+		CreationFunction createFunction;
+	};
+
 	TemperatureSensor(unsigned int sensorNum, const char *_ecv_array type) noexcept;
 	TemperatureSensor(const TemperatureSensor &_ecv_from) = delete;
 
 	// Virtual destructor
-	virtual ~TemperatureSensor() noexcept;
+	virtual ~TemperatureSensor() noexcept override;
 
 	// Configure the sensor from M308 parameters.
 	// If we find any parameters, process them, if successful then initialise the sensor and return GCodeResult::ok.
@@ -85,9 +108,9 @@ public:
 
 	// Factory method
 #if SUPPORT_CAN_EXPANSION
-	static TemperatureSensor *_ecv_from Create(unsigned int sensorNum, CanAddress boardAddress, const char *_ecv_array typeName, const StringRef& reply) noexcept;
+	static TemperatureSensor *_ecv_from _ecv_null Create(unsigned int sensorNum, CanAddress boardAddress, const char *_ecv_array typeName, const StringRef& reply) noexcept;
 #else
-	static TemperatureSensor *_ecv_from Create(unsigned int sensorNum, const char *_ecv_array typeName, const StringRef& reply) noexcept;
+	static TemperatureSensor *_ecv_from _ecv_null Create(unsigned int sensorNum, const char *_ecv_array typeName, const StringRef& reply) noexcept;
 #endif
 
 	static TemperatureError GetPT100Temperature(float& t, uint16_t ohmsx100) noexcept;		// shared function used by two derived classes and the ATE

@@ -19,16 +19,16 @@ public:
 	unsigned int GetNumBedCompensationPoints() const noexcept { return numBedCompensationPoints; }
 
 	float GetZHeight(size_t index) const noexcept
-	pre(index < numPoints) { return zBedProbePoints[index]; }
+	pre(index < NumberOfProbePoints()) { return zBedProbePoints[index]; }
 
 	float GetXCoord(size_t index) const noexcept
-	pre(index < numPoints) { return xBedProbePoints[index]; }
+	pre(index < NumberOfProbePoints()) { return xBedProbePoints[index]; }
 
 	float GetYCoord(size_t index) const noexcept
-	pre(index < numPoints) { return yBedProbePoints[index]; }
+	pre(index < NumberOfProbePoints()) { return yBedProbePoints[index]; }
 
 	bool PointWasCorrected(size_t index) const noexcept
-	pre(index < numPoints) { return (probePointSet[index] & xyCorrected) != 0; }
+	pre(index < NumberOfProbePoints()) { return (probePointSet[index] & (uint8_t)xyCorrected) != 0; }
 
 	size_t NumberOfProbePoints() const noexcept;								// Return the number of points probed
 
@@ -47,7 +47,7 @@ protected:
 
 private:
 	// Enumeration to record what has been set
-	enum PointCoordinateSet
+	enum PointCoordinateSet : uint8_t
 	{
 		unset = 0,
 		xySet = 1,

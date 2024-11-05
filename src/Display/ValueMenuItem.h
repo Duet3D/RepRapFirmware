@@ -20,18 +20,18 @@ public:
 	DECLARE_FREELIST_NEW_DELETE(ValueMenuItem)
 
 	ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, bool adj, const char *_ecv_array _ecv_null om, unsigned int v, unsigned int d) noexcept;
-	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept override;
+	void Draw(Lcd &_ecv_from lcd, PixelNumber maxWidth, bool highlight) noexcept override;
 	bool Select(const StringRef& cmd) noexcept override;
 	bool CanAdjust() const noexcept override { return true; }
 	bool Adjust(int clicks) noexcept override;
-	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
+	void UpdateWidthAndHeight(Lcd &_ecv_from lcd) noexcept override;
 
 	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept override;
 
 	unsigned int GetReferencedToolNumber() const noexcept;
 
 protected:
-	void CorePrint(Lcd& lcd) noexcept override;
+	void CorePrint(Lcd &_ecv_from lcd) noexcept override;
 
 private:
 	enum class AdjustMode : uint8_t { displaying, adjusting, liveAdjusting };

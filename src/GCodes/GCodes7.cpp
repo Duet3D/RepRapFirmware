@@ -152,7 +152,7 @@ void GCodes::MessageBoxClosed(bool cancelled, bool m292, uint32_t seq, Expressio
 						"%s: cancelled=%s",
 							(m292) ? "M292" : "Message box timed out",
 								(cancelled ? "true" : "false"));
-	for (GCodeBuffer* targetGb : gcodeSources)
+	for (GCodeBuffer *_ecv_null targetGb : gcodeSources)
 	{
 		if (targetGb != nullptr)
 		{

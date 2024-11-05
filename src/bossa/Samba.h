@@ -31,9 +31,7 @@
 #define _SAMBA_H
 
 #include "General/StringRef.h"
-
 #include "SerialPort.h"
-
 #include "GCodes/GCodeException.h"
 
 typedef GCodeException SambaError;
@@ -43,8 +41,8 @@ typedef GCodeException SambaError;
 class Samba
 {
 public:
-    Samba() noexcept;
-    virtual ~Samba();
+    Samba() noexcept { }
+    ~Samba() { }
 
     bool connect(SerialPort *_ecv_from port, int bps = 115200) noexcept;
     void disconnect() noexcept;
@@ -52,8 +50,8 @@ public:
     void writeWord(uint32_t addr, uint32_t value) THROWS(GCodeException);
     uint32_t readWord(uint32_t addr) THROWS(GCodeException);
 
-    void write(uint32_t addr, const uint8_t *_ecv_array buffer, int size) THROWS(GCodeException);
-    void read(uint32_t addr, uint8_t *_ecv_array buffer, int size) THROWS(GCodeException);
+    void write(uint32_t addr, const uint8_t *_ecv_array buffer, size_t size) THROWS(GCodeException);
+    void read(uint32_t addr, uint8_t *_ecv_array buffer, size_t size) THROWS(GCodeException);
 
     void go(uint32_t addr) THROWS(GCodeException);
 
@@ -61,23 +59,9 @@ public:
     void setDebug(bool debug) noexcept { _debug = debug; }
 #endif
 
-    const SerialPort &_ecv_from getSerialPort() noexcept { return *_port; }
-
-    // Extended SAM-BA functions
-    bool canChipErase() noexcept { return _canChipErase; }
-
-    bool canWriteBuffer() noexcept { return _canWriteBuffer; }
-    uint32_t writeBufferSize() noexcept { return 4096; }
-
-    bool canChecksumBuffer() noexcept { return _canChecksumBuffer; }
-    uint32_t checksumBufferSize() noexcept { return 4096; }
-    uint16_t crc16Calc(const uint8_t *_ecv_array data, int len) noexcept;
+    const SerialPort &_ecv_from getSerialPort() const noexcept { return *_port; }
 
 private:
-    bool _canChipErase;
-    bool _canWriteBuffer;
-    bool _canChecksumBuffer;
-    int _readBufferSize;
 #if DEBUG_BOSSA
     bool _debug;
 #endif
@@ -85,8 +69,8 @@ private:
 
     bool init() noexcept;
 
-    void writeXmodem(const uint8_t *_ecv_array buffer, int size) THROWS(GCodeException);
-    void readXmodem(uint8_t *_ecv_array buffer, int size) THROWS(GCodeException);
+    void writeXmodem(const uint8_t *_ecv_array buffer, size_t size) THROWS(GCodeException);
+    void readXmodem(uint8_t *_ecv_array buffer, size_t size) THROWS(GCodeException);
 
 };
 

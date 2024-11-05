@@ -26,7 +26,7 @@ public:
 	HangprinterKinematics() noexcept;
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
-	const char *GetName(bool forStatusReport) const noexcept override;
+	const char *_ecv_array GetName(bool forStatusReport) const noexcept override;
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException) override;
 	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
@@ -36,7 +36,7 @@ public:
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteCalibrationParameters(FileStore *f) const noexcept override;
 #endif
-	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept override;
+	LimitPositionResult LimitPosition(float finalCoords[], const float *_ecv_array _ecv_null initialCoords, size_t numAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const noexcept override;
 	HomingMode GetHomingMode() const noexcept override { return HomingMode::homeIndividualMotors; }
 	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const noexcept override;
@@ -48,14 +48,14 @@ public:
 #endif
 #if DUAL_CAN
 	GCodeResult ReadODrive3AxisForce(DriverId driver, const StringRef& reply,
-																					float setTorqueConstants[] = nullptr, uint32_t setMechanicalAdvantage[] = nullptr,
-																					uint32_t setSpoolGearTeeth[] = nullptr, uint32_t setMotorGearTeeth[] = nullptr,
-																					float setSpoolRadii[] = nullptr) THROWS(GCodeException);
+																					float setTorqueConstants[] _ecv_null = nullptr, uint32_t setMechanicalAdvantage[] _ecv_null = nullptr,
+																					uint32_t setSpoolGearTeeth[] _ecv_null = nullptr, uint32_t setMotorGearTeeth[] _ecv_null = nullptr,
+																					float setSpoolRadii[] _ecv_null = nullptr) THROWS(GCodeException);
 	GCodeResult ReadODrive3Encoder(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult SetODrive3TorqueMode(DriverId driver, float force_Newton, const StringRef& reply,
-																					uint32_t setMechanicalAdvantage[] = nullptr,
-																					uint32_t setSpoolGearTeeth[] = nullptr, uint32_t setMotorGearTeeth[] = nullptr,
-																					float setSpoolRadii[] = nullptr) noexcept;
+																					uint32_t setMechanicalAdvantage[] _ecv_null = nullptr,
+																					uint32_t setSpoolGearTeeth[] _ecv_null = nullptr, uint32_t setMotorGearTeeth[] _ecv_null = nullptr,
+																					float setSpoolRadii[] _ecv_null = nullptr) noexcept;
 #endif
 
 protected:
@@ -66,7 +66,7 @@ protected:
 
 private:
 	// Basic facts about movement system
-	static constexpr const char* ANCHOR_CHARS = "ABCDIJKLO";
+	static constexpr const char*_ecv_array ANCHOR_CHARS = "ABCDIJKLO";
 	static constexpr size_t HANGPRINTER_MAX_ANCHORS = 5;
 	static constexpr size_t DefaultNumAnchors = 4;
 
@@ -87,8 +87,7 @@ private:
 
 	// Line buildup compensation configurables
 
-	/* The real defaults are in the Init() function, since we sometimes need to reset
-	 * defaults during runtime */
+	/* The real defaults are in the Init() function, since we sometimes need to reset defaults during runtime */
 	float spoolBuildupFactor = 0.0F;
 	float spoolRadii[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	uint32_t mechanicalAdvantage[HANGPRINTER_MAX_ANCHORS] = { 0 };

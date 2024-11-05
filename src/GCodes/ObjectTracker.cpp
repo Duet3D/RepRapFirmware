@@ -205,7 +205,7 @@ bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
 #endif
 
 // Create a new entry in the object directory
-void ObjectDirectoryEntry::Init(const char *label) noexcept
+void ObjectDirectoryEntry::Init(const char *_ecv_array label) noexcept
 {
 	name.Assign(label);
 	x[0] = x[1] = y[0] = y[1] = std::numeric_limits<int16_t>::min();
@@ -258,7 +258,7 @@ bool ObjectDirectoryEntry::UpdateObjectCoordinates(const float coords[], AxesBit
 	return updated;
 }
 
-void ObjectDirectoryEntry::SetName(const char *label) noexcept
+void ObjectDirectoryEntry::SetName(const char *_ecv_array label) noexcept
 {
 	name.Assign(label);
 }
@@ -278,7 +278,7 @@ void ObjectTracker::UpdateObjectCoordinates(int objectNumber, const float coords
 }
 
 // This is called when we need to create a new named object
-void ObjectTracker::CreateObject(unsigned int number, const char *label) noexcept
+void ObjectTracker::CreateObject(unsigned int number, const char *_ecv_array label) noexcept
 {
 	if (number < MaxTrackedObjects)
 	{

@@ -16,7 +16,7 @@ class CurrentLoopTemperatureSensor : public SpiTemperatureSensor
 {
 public:
 	explicit CurrentLoopTemperatureSensor(unsigned int sensorNum) noexcept;
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException) override;
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override; // configure the sensor from M308 parameters
@@ -28,13 +28,16 @@ public:
 	static constexpr const char *_ecv_array TypeName = "currentloop";
 
 private:
+	static SensorTypeDescriptor typeDescriptor;
+
 	TemperatureError TryGetLinearAdcTemperature(float& t) noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
 	void CalcDerivedParameters() noexcept;
 
 	// Configurable parameters
 	float tempAt4mA, tempAt20mA;
-	uint32_t chipChannel, isDifferential;
+	uint32_t chipChannel;
+	bool isDifferential;
 
 	// Derived parameters
 	float minLinearAdcTemp, linearAdcDegCPerCount;

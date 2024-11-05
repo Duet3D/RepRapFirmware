@@ -42,13 +42,14 @@ constexpr ObjectModelTableEntry Duet3DFilamentMonitor::objectModelTable[] =
 	{ "lastPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->lastPercentage),		ObjectModelEntryFlags::live },
 	{ "maxPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->maxPercentage),		ObjectModelEntryFlags::live },
 	{ "minPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->minPercentage),		ObjectModelEntryFlags::live },
+	{ "position",			OBJECT_MODEL_FUNC((int32_t)self->lastKnownPosition),						ObjectModelEntryFlags::live },
 	{ "totalExtrusion",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1),						ObjectModelEntryFlags::live },
 };
 
 constexpr uint8_t Duet3DFilamentMonitor::objectModelTableDescriptor[] =
 {
 	1,
-	5
+	6
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(Duet3DFilamentMonitor, FilamentMonitor)
@@ -273,8 +274,10 @@ bool Duet3DFilamentMonitor::IsWaitingForStartBit() const noexcept
 
 #if SUPPORT_CAN_EXPANSION
 
-void Duet3DFilamentMonitor::UpdateLiveData(const FilamentMonitorDataNew& data) noexcept
+void Duet3DFilamentMonitor::UpdateLiveData(const FilamentMonitorDataNew2& data) noexcept
 {
+	hasLiveData = data.hasLiveData;
+	lastKnownPosition = data.position;
 	if (data.hasLiveData)
 	{
 		totalExtrusionCommanded = (float)data.calibrationLength;
@@ -283,7 +286,6 @@ void Duet3DFilamentMonitor::UpdateLiveData(const FilamentMonitorDataNew& data) n
 		maxPercentage = data.maxPercentage;
 		lastPercentage = data.lastPercentage;
 	}
-	hasLiveData = data.hasLiveData;
 }
 
 #endif
@@ -291,8 +293,10 @@ void Duet3DFilamentMonitor::UpdateLiveData(const FilamentMonitorDataNew& data) n
 #if SUPPORT_REMOTE_COMMANDS
 
 // Store collected data in a CAN message slot
-void Duet3DFilamentMonitor::GetLiveData(FilamentMonitorDataNew& data) const noexcept
+void Duet3DFilamentMonitor::GetLiveData(FilamentMonitorDataNew2& data) const noexcept
 {
+	data.ClearReservedFields();
+	data.position = lastKnownPosition;
 	if (hasLiveData)
 	{
 		data.calibrationLength = (uint32_t)lrintf(totalExtrusionCommanded);

@@ -11,6 +11,8 @@
 #include <RepRapFirmware.h>
 #include "NetworkResponder.h"
 
+#if HAS_CLIENTS
+
 // Forward declarations
 class NetworkClient;
 class NetworkInterface;
@@ -24,10 +26,10 @@ public:
 	NetworkClient(const NetworkClient&) = delete;
 	NetworkClient(NetworkResponder *n, NetworkClient *c) noexcept;
 
-	bool Start(NetworkProtocol protocol, NetworkInterface *interface) noexcept;
-	void Stop(NetworkProtocol protocol, NetworkInterface *interface) noexcept;
-	bool Accept(Socket *socket, NetworkProtocol protocol) noexcept override;
-	void Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept override;
+	bool Start(NetworkProtocol protocol, NetworkInterface *iface) noexcept;
+	void Stop(NetworkProtocol protocol, NetworkInterface *iface) noexcept;
+	bool Accept(Socket *s, NetworkProtocol protocol) noexcept override;
+	void Terminate(NetworkProtocol protocol, const NetworkInterface *iface) noexcept override;
 
 	NetworkClient *GetNext() const noexcept { return next; }
 
@@ -47,5 +49,7 @@ private:
 
 	static NetworkClient *clients;	// Head of the list of all network clients
 };
+
+#endif
 
 #endif /* SRC_NETWORKING_NETWORKCLIENT_H_ */

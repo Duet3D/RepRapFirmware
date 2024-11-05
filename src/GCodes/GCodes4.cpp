@@ -52,6 +52,28 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #endif
 		   )
 		{
+			// Check for move aborted due to incorrectly configured stall detection
+			uint8_t driver;
+			const EndstopValidationResult res = platform.GetEndstops().GetEndstopValidationResult(driver);
+			if (res != EndstopValidationResult::ok)
+			{
+				const char *_ecv_array errMsg;
+				switch (res)
+				{
+				//case EndstopValidationResult::stallDetectionNotEnabled:	errMsg = "driver does not have stall detection enabled"; break;		// this one is currently unused
+				case EndstopValidationResult::stallDetectionNotSupported:	errMsg = "Homing move abandoned because driver %d does not support stall detection"; break;
+				case EndstopValidationResult::moveTooSlow:					errMsg = "Homing move abandoned because driver %d is moving too slowly for stall detection"; break;
+				case EndstopValidationResult::driverNotInStealthChopMode:	errMsg = "Homing move abandoned because driver %d is not in stealthChop mode"; break;
+				case EndstopValidationResult::driverNotInSpreadCycleMode:	errMsg = "Homing move abandoned because driver %d is not in spreadCycle mode"; break;
+				case EndstopValidationResult::ok:
+				default:													errMsg = "Homing move abandoned, driver %d stall detection issue"; break;
+				}
+				gb.LatestMachineState().SetError(errMsg, (int)driver);
+				gb.AbortFile(true);
+				gb.SetState(GCodeState::normal);
+				break;
+			}
+
 			// Check whether we made any G1 S3 moves and need to set the axis limits
 			axesToSenseLength.Iterate([this, &ms](unsigned int axis, unsigned int)
 										{
@@ -677,14 +699,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
 			}
 			catch (const GCodeException&) { }
-			for (unsigned int module = 1; module < FirmwareUpdater::NumUpdateModules; ++module)
+			for (unsigned int module = 1; module < (unsigned int)FirmwareUpdater::NumUpdateModules; ++module)
 			{
 				if (firmwareUpdateModuleMap.IsBitSet(module))
 				{
 					firmwareUpdateModuleMap.ClearBit(module);
 # if SUPPORT_PANELDUE_FLASH
 					FirmwareUpdater::UpdateModule(module, serialChannelForPanelDueFlashing, filenameString.GetRef());
-					isFlashingPanelDue = (module == FirmwareUpdater::PanelDueFirmwareModule);
+					isFlashingPanelDue = (module == (unsigned int)FirmwareUpdater::PanelDueFirmwareModule);
 # else
 					FirmwareUpdater::UpdateModule(module, 0, filenameString.GetRef());
 # endif
@@ -703,7 +725,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 # if SUPPORT_PANELDUE_FLASH
 		else
 		{
-			PanelDueUpdater* const panelDueUpdater = platform.GetPanelDueUpdater();
+			PanelDueUpdater *_ecv_null const panelDueUpdater = platform.GetPanelDueUpdater();
 			if (panelDueUpdater != nullptr)
 			{
 				panelDueUpdater->Spin();
@@ -960,7 +982,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::gridProbing6:	// ready to compute the next probe point
 		{
 			const HeightMap& hm = reprap.GetMove().AccessHeightMap();
-			if (gridAxis1Index & 1u)
+			if ((gridAxis1Index & 1u) != 0)
 			{
 				// Odd row, so decreasing X
 				if (gridAxis0Index == 0)
@@ -1360,7 +1382,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					reprap.GetMove().SetZeroHeightError(tempCoords);
 					ToolOffsetInverseTransform(ms);
 
-					g30zHeightErrorSum = g30zHeightError = 0;					// there is no longer any height error from this probe
+					g30zHeightErrorSum = g30zHeightError = 0.0;					// there is no longer any height error from this probe
 					SetAxisIsHomed(Z_AXIS);										// this is only correct if the Z axis is Cartesian-like, but other architectures must be homed before probing anyway
 					zDatumSetByProbing = true;
 				}
@@ -1559,7 +1581,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						ms.checkEndstops = true;
 						ms.reduceAcceleration = true;
 						straightProbeSettings.SetCoordsToTarget(ms.coords);
-						ms.feedRate = zp->GetProbingSpeed(0);
+						ms.feedRate = (straightProbeSettings.GetFeedRateOverride() > 0.0) ? straightProbeSettings.GetFeedRateOverride() : zp->GetProbingSpeed(0);
 						ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;
 						NewSingleSegmentMoveAvailable(ms);
 						gb.AdvanceState();
@@ -1670,7 +1692,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just did the retraction part of a firmware retraction, now we need to do the Z hop
 		if (ms.segmentsLeft == 0)
 		{
-			Tool * const t = ms.currentTool;
+			Tool *_ecv_null const t = ms.currentTool;
 			if (t != nullptr)								// this should always be true
 			{
 #if SUPPORT_ASYNC_MOVES
@@ -1712,7 +1734,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just undid the Z-hop part of a firmware un-retraction, now we need to do the un-retract
 		if (ms.segmentsLeft == 0)
 		{
-			const Tool * const t = ms.currentTool;
+			const Tool *_ecv_null const t = ms.currentTool;
 			if (t != nullptr && t->DriveCount() != 0)
 			{
 				SetMoveBufferDefaults(ms);
@@ -1780,9 +1802,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			if (timingBytesWritten >= timingBytesRequested)
 			{
-				const uint32_t ms = millis() - timingStartMillis;
+				const uint32_t mis = millis() - timingStartMillis;
 				const float fileMbytes = (float)timingBytesWritten/(float)(1024 * 1024);
-				const float mbPerSec = (fileMbytes * 1000.0)/(float)ms;
+				const float mbPerSec = (fileMbytes * 1000.0)/(float)mis;
 				platform.MessageF(gb.GetResponseMessageType(), "SD write speed for %.1fMByte file was %.2fMBytes/sec\n", (double)fileMbytes, (double)mbPerSec);
 				sdTimingFile->Close();
 
@@ -1817,13 +1839,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::timingSDread:
-		for (uint32_t readThisTime = 0; readThisTime < 100 * 1024; )
+		for (uint32_t readThisTime = 0; readThisTime < 100u * 1024u; )
 		{
 			if (timingBytesWritten >= timingBytesRequested)
 			{
-				const uint32_t ms = millis() - timingStartMillis;
+				const uint32_t mis = millis() - timingStartMillis;
 				const float fileMbytes = (float)timingBytesWritten/(float)(1024 * 1024);
-				const float mbPerSec = (fileMbytes * 1000.0)/(float)ms;
+				const float mbPerSec = (fileMbytes * 1000.0)/(float)mis;
 				sdTimingFile->Close();
 				reply.printf("SD read speed for %.1fMByte file was %.2fMBytes/sec", (double)fileMbytes, (double)mbPerSec);
 				(void)platform.Delete(Platform::GetGCodeDir(), TimingFileName);
@@ -1907,7 +1929,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 }
 
 // Do a manual probe. This is in its own function to reduce the amount of stack space needed by RunStateMachine(). See the comment at the top of that function.
-void GCodes::DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps)
+void GCodes::DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps) noexcept
 {
 	String<StringLength256> message;
 	message.printf("Adjust position until the reference point just %s the target, then press OK", sps.ProbingAway() ? "loses contact with" : "touches");

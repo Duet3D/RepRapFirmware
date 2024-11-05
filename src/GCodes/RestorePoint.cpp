@@ -24,8 +24,8 @@ constexpr ObjectModelArrayTableEntry RestorePoint::objectModelArrayTable[] =
 	// 0. Coordinates
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
+		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 																				{ return ExpressionValue(((const RestorePoint*)self)->moveCoords[context.GetLastIndex()], 3); }
 	}
 };

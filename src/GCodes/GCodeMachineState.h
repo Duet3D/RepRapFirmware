@@ -166,7 +166,7 @@ constexpr FileId NoFileId = 0;
 #endif
 
 // Class to hold the state of gcode execution for some input source
-class GCodeMachineState
+class GCodeMachineState final
 {
 public:
 	typedef Bitmap<uint32_t> ResourceBitmap;
@@ -177,7 +177,7 @@ public:
 	public:
 		DECLARE_FREELIST_NEW_DELETE(GCodeMachineState::BlockState)
 
-		BlockState(BlockState *prev) noexcept : prev(prev) { }
+		explicit BlockState(BlockState *p_prev) noexcept : prev(p_prev) { }
 		BlockType GetType() const noexcept { return blockType; }
 		BlockState *GetPrevious() const noexcept { return prev; }
 		void SetPrevious(BlockState *p) noexcept { prev = p; }
@@ -219,7 +219,7 @@ public:
 	void SetState(GCodeState newState) noexcept;
 	inline void AdvanceState() noexcept { state = static_cast<GCodeState>(static_cast<uint8_t>(state) + 1); }
 
-	GCodeMachineState *GetPrevious() const noexcept { return previous; }
+	GCodeMachineState *_ecv_null GetPrevious() const noexcept { return previous; }
 
 	GCodeMachineState *Pop() const noexcept;
 	uint16_t GetBlockNesting() const noexcept { return blockNesting; }
@@ -296,9 +296,9 @@ public:
 	bool UsingMachineCoordinates() const noexcept { return g53Active || runningSystemMacro; }
 
 	// Set the error message and associated state
-	void SetError(const char *msg) noexcept;
+	void SetError(const char *_ecv_array msg, int parameter = 0) noexcept;
 	void SetError(const GCodeException& exc) noexcept;
-	void SetWarning(const char *msg) noexcept;
+	void SetWarning(const char *_ecv_array msg) noexcept;
 	void RetrieveStateMachineResult(const GCodeBuffer& gb, const StringRef& reply, GCodeResult& rslt) const noexcept;
 
 	// Copy values that may have been altered into this state record
@@ -314,7 +314,7 @@ public:
 	void ClearBlocks() noexcept;
 
 private:
-	GCodeMachineState *previous;
+	GCodeMachineState *_ecv_null previous;
 	BlockState *currentBlockState;
 	GCodeException errorMessage;				// we use a GCodeException to store a possible message and a parameter
 	uint16_t blockNesting;

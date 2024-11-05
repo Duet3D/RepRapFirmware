@@ -82,7 +82,7 @@ private:
 	volatile bool isBeingProcessed;			// true if this event is being processed, so it must remain at the head of the queue
 	String<50> text;						// additional info to display to the user
 
-	static Event * _ecv_null eventsPending;	// linked list of events waiting to be processed
+	static Event *_ecv_null eventsPending;	// linked list of events waiting to be processed
 	static unsigned int eventsQueued;
 	static unsigned int eventsProcessed;
 };

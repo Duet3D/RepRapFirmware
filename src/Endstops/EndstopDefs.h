@@ -24,6 +24,17 @@ enum class EndstopHitAction : uint8_t
 	stopAll = 3						// stop movement completely
 };
 
+// Result code from trying to validate an endstop
+enum class EndstopValidationResult
+{
+	ok = 0,
+	stallDetectionNotSupported,
+	//stallDetectionNotEnabled,		// this one is currently unused
+	driverNotInStealthChopMode,
+	driverNotInSpreadCycleMode,
+	moveTooSlow
+};
+
 // Struct to return info about what endstop has been triggered and what to do about it
 struct EndstopHitDetails
 {

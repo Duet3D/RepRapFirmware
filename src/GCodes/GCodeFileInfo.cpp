@@ -19,6 +19,7 @@ void GCodeFileInfo::Init() noexcept
 	lastModifiedTime = 0;
 	generatedBy.Clear();
 	fileSize = 0;
+	headerSize = 0;
 	for (float& f : filamentNeeded)
 	{
 		f = 0.0;

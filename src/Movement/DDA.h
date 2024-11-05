@@ -59,7 +59,7 @@ public:
 		committed			// has been converted into move segments already
 	};
 
-	DDA(DDA* n) noexcept;
+	explicit DDA(DDA *_ecv_null n) noexcept;
 
 	void* operator new(size_t count) { return Tasks::AllocPermanent(count); }
 	void* operator new(size_t count, std::align_val_t align) { return Tasks::AllocPermanent(count, align); }
@@ -77,7 +77,7 @@ public:
 	bool Free() noexcept;
 	void Prepare(DDARing& ring, SimulationMode simMode) noexcept SPEED_CRITICAL;					// Calculate all the values and freeze this DDA
 	bool CanPauseAfter() const noexcept;
-	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }			// Return true if this involves both XY movement and extrusion
+	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }							// Return true if this involves both XY movement and extrusion
 	bool UsingStandardFeedrate() const noexcept { return flags.usingStandardFeedrate; }
 	bool IsCheckingEndstops() const noexcept { return flags.checkEndstops; }
 	bool IsIsolatedMove() const noexcept { return flags.isolatedMove; }
@@ -96,8 +96,8 @@ public:
 	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
 #endif
 
-	const int32_t *DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates
-	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;						// Force an end point
+	const int32_t *_ecv_array DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates
+	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;									// Force an end point
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept;
 	float GetRawEndCoordinate(size_t drive) const noexcept { return endCoordinates[drive]; }
@@ -129,6 +129,8 @@ public:
 	void UpdateMovementAccumulators(volatile int32_t *accumulators) const noexcept;
 	uint32_t GetMoveStartTime() const noexcept { return afterPrepare.moveStartTime; }
 	uint32_t GetMoveFinishTime() const noexcept { return afterPrepare.moveStartTime + clocksNeeded; }
+
+	float GetMotorTopSpeed(uint8_t axis) const noexcept;							// Return the top speed in microsteps/sec for the specified motor
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }

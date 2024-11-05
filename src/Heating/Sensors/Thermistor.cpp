@@ -56,9 +56,13 @@ constexpr uint8_t Thermistor::objectModelTableDescriptor[] = { 1, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(Thermistor, SensorWithPort)
 
+// Sensor type descriptors
+TemperatureSensor::SensorTypeDescriptor Thermistor::thermistorDescriptor(TypeNameThermistor, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new Thermistor(sensorNum, false); } );
+TemperatureSensor::SensorTypeDescriptor Thermistor::pt100descriptor(TypeNamePT1000, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new Thermistor(sensorNum, true); } );
+
 // Create an instance with default values
 Thermistor::Thermistor(unsigned int sensorNum, bool p_isPT1000) noexcept
-	: SensorWithPort(sensorNum, (p_isPT1000) ? "PT1000" : "Thermistor"),
+	: SensorWithPort(sensorNum, (p_isPT1000) ? TypeNamePT1000 : TypeNameThermistor),
 	  r25(DefaultThermistorR25), beta(DefaultThermistorBeta), shC(DefaultThermistorC), seriesR(DefaultThermistorSeriesR), adcFilterChannel(-1),
 	  isPT1000(p_isPT1000), adcLowOffset(0), adcHighOffset(0)
 {

@@ -22,8 +22,6 @@
 
 #if SUPPORT_CAN_EXPANSION
 
-class CanExpansionBoardDetails;
-
 enum class ExpansionDetail : uint32_t
 {
 	shortName, firmwareVersion, firmwareFileNameBin, firmwareFileNameUf2, firmwareDate, longName
@@ -123,7 +121,7 @@ struct ExpressionValue
 	explicit ExpressionValue(const IoPort& p) noexcept : type((uint32_t)TypeCode::Port), param(0), iopVal(&p) { }
 	explicit ExpressionValue(const UniqueId& id) noexcept : type((uint32_t)TypeCode::UniqueId_tc), param(0), uniqueIdVal(&id) { }
 #if SUPPORT_CAN_EXPANSION
-	ExpressionValue(const char*s, ExpansionDetail p) noexcept : type((uint32_t)TypeCode::CanExpansionBoardDetails), param((uint32_t)p), sVal(s) { }
+	ExpressionValue(const char *_ecv_array s, ExpansionDetail p) noexcept : type((uint32_t)TypeCode::CanExpansionBoardDetails), param((uint32_t)p), sVal(s) { }
 #endif
 
 	bool operator==(const ExpressionValue& other) const noexcept;
@@ -157,7 +155,7 @@ struct ExpressionValue
 	void SetDuration(uint32_t u) noexcept { Release(); type = (uint32_t)TypeCode::Duration; uVal = u; }
 
 	// Store a 56-bit value
-	void Set56BitValue(uint64_t v) { param = (uint32_t)(v >> 32) & 0x00FFFFFFu; uVal = (uint32_t)v; }
+	void Set56BitValue(uint64_t v) noexcept { param = (uint32_t)(v >> 32) & 0x00FFFFFFu; uVal = (uint32_t)v; }
 
 	// Extract a 56-bit value that we have stored. Used to retrieve date/times and large bitmaps.
 	uint64_t Get56BitValue() const noexcept { return ((uint64_t)param << 32) | uVal; }
@@ -281,7 +279,7 @@ public:
 	virtual ~ObjectModel() { }
 
 	// Forwarding function so that we can make GetObjectModelArrayEntry() protected
-	const ObjectModelArrayTableEntry *FindObjectModelArrayEntry(unsigned int index) const noexcept { return GetObjectModelArrayEntry(index); }
+	const ObjectModelArrayTableEntry *_ecv_null FindObjectModelArrayEntry(unsigned int index) const noexcept { return GetObjectModelArrayEntry(index); }
 
 	// Construct a JSON representation of those parts of the object model requested by the user. This version is called only on the root of the tree.
 	void ReportAsJson(const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, const char *_ecv_array filter, const char *_ecv_array reportFlags, bool wantArrayLength) const THROWS(GCodeException);
@@ -290,11 +288,11 @@ public:
 	ExpressionValue GetObjectValueUsingTableNumber(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *_ecv_array idString, uint8_t tableNumber) const THROWS(GCodeException);
 
 	// Function to report a value or object as JSON. This does not need to handle 'var' or 'global' because those are checked for before this is called.
-	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
+	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor,
 							const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException);
 
 	// Skip the current element in the ID or filter string
-	static const char* GetNextElement(const char *id) noexcept;
+	static const char *_ecv_array GetNextElement(const char *_ecv_array id) noexcept;
 
 protected:
 	// Construct a JSON representation of those parts of the object model requested by the user
@@ -313,7 +311,7 @@ protected:
 	// Get the object model table entry for the current level object in the query
 	const ObjectModelTableEntry *FindObjectModelTableEntry(const ObjectModelClassDescriptor *classDescriptor, uint8_t tableNumber, const char *_ecv_array idString) const noexcept;
 
-	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept = 0;
+	virtual const ObjectModelClassDescriptor *_ecv_null GetObjectModelClassDescriptor() const noexcept = 0;
 
 	// Get the requested entry in the array table
 	virtual const ObjectModelArrayTableEntry *_ecv_null GetObjectModelArrayEntry(unsigned int index) const noexcept { return nullptr; }
@@ -346,7 +344,7 @@ private:
 // This function is recursive, so keep its stack usage low.
 // Most recursive calls are for non-array object values, so handle object values inline to reduce stack usage.
 // This saves about 240 bytes of stack space but costs 272 bytes of flash memory.
-inline void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
+inline void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor,
 											const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException)
 {
 	if (context.WantArrayLength() && *filter == 0)
@@ -367,7 +365,7 @@ inline void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationCo
 			{
 				++filter;
 			}
-			val.omVal->ReportAsJson(buf, context, (val.omVal == this) ? classDescriptor : nullptr, val.param, filter);
+			not_null(val.omVal)->ReportAsJson(buf, context, (val.omVal == this) ? classDescriptor : nullptr, val.param, filter);
 		}
 	}
 	else
@@ -406,7 +404,7 @@ public:
 	bool IsObsolete() const noexcept { return ((uint8_t)flags & (uint8_t)ObjectModelEntryFlags::obsolete) != 0; }
 
 	// See whether we should add the value of this element to the buffer, returning true if it matched the filter and we did add it
-	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *_ecv_from self, const char *_ecv_array filter, bool first) const THROWS(GCodeException);
+	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor, const ObjectModel *_ecv_from self, const char *_ecv_array filter, bool first) const THROWS(GCodeException);
 
 	// Return the name of this field
 	const char *_ecv_array  GetName() const noexcept { return name; }
@@ -435,8 +433,8 @@ public:
 
 struct ObjectModelClassDescriptor
 {
-	const ObjectModelTableEntry *omt;
-	const uint8_t *omd;
+	const ObjectModelTableEntry *_ecv_array omt;
+	const uint8_t *_ecv_array omd;
 	const ObjectModelClassDescriptor *_ecv_null parent;
 };
 
@@ -445,7 +443,7 @@ struct ObjectModelClassDescriptor
 
 // Use this macro in the 'protected' section of every class declaration that derived from ObjectModel
 #define DECLARE_OBJECT_MODEL \
-	const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept override; \
+	const ObjectModelClassDescriptor *_ecv_null GetObjectModelClassDescriptor() const noexcept override; \
 	static const ObjectModelTableEntry objectModelTable[]; \
 	static const uint8_t objectModelTableDescriptor[]; \
 	static const ObjectModelClassDescriptor objectModelClassDescriptor;
@@ -464,7 +462,7 @@ struct ObjectModelClassDescriptor
 
 #define DEFINE_GET_OBJECT_MODEL_TABLE(_class) \
 	const ObjectModelClassDescriptor _class::objectModelClassDescriptor = { _class::objectModelTable, _class::objectModelTableDescriptor, nullptr }; \
-	const ObjectModelClassDescriptor *_class::GetObjectModelClassDescriptor() const noexcept \
+	const ObjectModelClassDescriptor *_ecv_null _class::GetObjectModelClassDescriptor() const noexcept \
 	{ \
 		static_assert(DESCRIPTOR_OK(_class), "Bad descriptor length"); \
 		static_assert(!DESCRIPTOR_OK(_class) || OMT_SIZE_OK(_class), "Mismatched object model table and descriptor"); \
@@ -474,7 +472,7 @@ struct ObjectModelClassDescriptor
 
 #define DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(_class, _parent) \
 	const ObjectModelClassDescriptor _class::objectModelClassDescriptor = { _class::objectModelTable, _class::objectModelTableDescriptor, &_parent::objectModelClassDescriptor }; \
-	const ObjectModelClassDescriptor *_class::GetObjectModelClassDescriptor() const noexcept \
+	const ObjectModelClassDescriptor *_ecv_null _class::GetObjectModelClassDescriptor() const noexcept \
 	{ \
 		static_assert(DESCRIPTOR_OK(_class), "Bad descriptor length"); \
 		static_assert(!DESCRIPTOR_OK(_class) || OMT_SIZE_OK(_class), "Mismatched object model table and descriptor"); \
@@ -484,7 +482,7 @@ struct ObjectModelClassDescriptor
 
 #define DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(_class) \
 	constexpr unsigned int ArrayIndexOffset = 0; \
-	const ObjectModelArrayTableEntry *_class::GetObjectModelArrayEntry(unsigned int index) const noexcept \
+	const ObjectModelArrayTableEntry *_ecv_null _class::GetObjectModelArrayEntry(unsigned int index) const noexcept \
 	{ \
 		if (index < ARRAY_SIZE(_class::objectModelArrayTable)) \
 		{ \
@@ -495,7 +493,7 @@ struct ObjectModelClassDescriptor
 
 #define DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(_class,_parent,_offset) \
 	constexpr unsigned int ArrayIndexOffset = _offset; \
-	const ObjectModelArrayTableEntry *_class::GetObjectModelArrayEntry(unsigned int index) const noexcept \
+	const ObjectModelArrayTableEntry *_ecv_null _class::GetObjectModelArrayEntry(unsigned int index) const noexcept \
 	{ \
 		if (index >= _offset && index < _offset + ARRAY_SIZE(_class::objectModelArrayTable)) \
 		{ \
@@ -504,25 +502,25 @@ struct ObjectModelClassDescriptor
 		return _parent::GetObjectModelArrayEntry(index); \
 	}
 
-#define OBJECT_MODEL_FUNC_BODY(_class,...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept \
+#define OBJECT_MODEL_FUNC_BODY(_class,...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
 	{ const _class * const self = static_cast<const _class*>(arg); return ExpressionValue(__VA_ARGS__); }
-#define OBJECT_MODEL_FUNC_IF_BODY(_class,_condition,...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept \
+#define OBJECT_MODEL_FUNC_IF_BODY(_class,_condition,...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
 	{ const _class * const self = static_cast<const _class*>(arg); return (_condition) ? ExpressionValue(__VA_ARGS__) : ExpressionValue(nullptr); }
-#define OBJECT_MODEL_FUNC_ARRAY(_index) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept \
+#define OBJECT_MODEL_FUNC_ARRAY(_index) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
 	{ \
 		static_assert((unsigned int)_index >= ArrayIndexOffset); \
 		static_assert((unsigned int)_index < sizeof(objectModelArrayTable)/sizeof(ObjectModelArrayTableEntry) + ArrayIndexOffset); \
 		return ExpressionValue(arg, _index, true); \
 	}
-#define OBJECT_MODEL_FUNC_ARRAY_IF_BODY(_class,_condition,_index) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept \
+#define OBJECT_MODEL_FUNC_ARRAY_IF_BODY(_class,_condition,_index) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
 	{ \
 		static_assert((unsigned int)_index >= ArrayIndexOffset); \
 		static_assert((unsigned int)_index < sizeof(objectModelArrayTable)/sizeof(ObjectModelArrayTableEntry) + ArrayIndexOffset); \
 		const _class * const self = static_cast<const _class*>(arg); \
 		return (_condition) ? ExpressionValue(arg, _index, true) : ExpressionValue(nullptr); \
 	}
-#define OBJECT_MODEL_FUNC_NOSELF(...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept { return ExpressionValue(__VA_ARGS__); }
-#define OBJECT_MODEL_FUNC_IF_NOSELF(_condition,...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept \
+#define OBJECT_MODEL_FUNC_NOSELF(...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(__VA_ARGS__); }
+#define OBJECT_MODEL_FUNC_IF_NOSELF(_condition,...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
 	{ return (_condition) ? ExpressionValue(__VA_ARGS__) : ExpressionValue(nullptr); }
 
 #endif /* SRC_OBJECTMODEL_OBJECTMODEL_H_ */

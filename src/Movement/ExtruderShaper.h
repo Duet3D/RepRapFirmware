@@ -22,7 +22,7 @@ public:
 
 	// Temporary functions until we support more sophisticated pressure advance
 	float GetKclocks() const noexcept { return k; }								// get pressure advance in step clocks
-	float GetKseconds() const noexcept { return k * (1.0/StepClockRate); }
+	float GetKseconds() const noexcept { return k * (1.0/(float)StepClockRate); }
 	void SetKseconds(float val) noexcept { k = val * StepClockRate; }			// set pressure advance in seconds
 
 private:

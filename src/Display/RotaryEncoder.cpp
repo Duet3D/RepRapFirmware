@@ -1,4 +1,5 @@
 #include "RotaryEncoder.h"
+#include <cstdlib>			// for abs(int)
 
 #if SUPPORT_ROTARY_ENCODER
 

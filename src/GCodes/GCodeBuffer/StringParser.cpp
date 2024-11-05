@@ -91,7 +91,7 @@ bool StringParser::Put(char c) noexcept
 		return LineFinished();
 	}
 
-	if (c == 0x7F && gb.bufferState != GCodeBufferState::discarding)
+	if (c == (char)0x7Fu && gb.bufferState != GCodeBufferState::discarding)
 	{
 		// The UART receiver stores 0x7F in the buffer if an overrun or framing errors occurs. So discard the command and resync on the next newline.
 		gcodeLineEnd = 0;
@@ -142,7 +142,7 @@ bool StringParser::Put(char c) noexcept
 			if (isDigit(c))
 			{
 				AddToChecksum(c);
-				receivedLineNumber = (10 * receivedLineNumber) + (c - '0');
+				receivedLineNumber = (10 * receivedLineNumber) + (unsigned int)(c - '0');
 				break;
 			}
 			else
@@ -230,6 +230,7 @@ bool StringParser::Put(char c) noexcept
 
 			default:
 				StoreAndAddToChecksum(c);
+				break;
 			}
 			break;
 
@@ -258,7 +259,7 @@ bool StringParser::Put(char c) noexcept
 		case GCodeBufferState::parsingChecksum:				// parsing the checksum after '*'
 			if (isDigit(c))
 			{
-				declaredChecksum = (10 * declaredChecksum) + (c - '0');
+				declaredChecksum = (10 * declaredChecksum) + (unsigned int)(c - '0');
 				++checksumCharsReceived;
 			}
 			else
@@ -467,7 +468,7 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType ski
 	   )
 	{
 		readPointer = i;
-		const char * const command = gb.buffer;
+		const char *_ecv_array const command = gb.buffer;
 		switch (i)
 		{
 		case 2:
@@ -686,7 +687,7 @@ void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeExceptio
 
 	// Get the identifier
 	char c = gb.buffer[readPointer];
-	if (!isalpha(c))
+	if (!isAlpha(c))
 	{
 		throw ConstructParseException("expected a new variable name");
 	}
@@ -696,7 +697,7 @@ void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeExceptio
 		varName.cat(c);
 		++readPointer;
 		c = gb.buffer[readPointer];
-	} while (isalpha(c) || isdigit(c) || c == '_' );
+	} while (isAlnum(c) || c == '_' );
 
 	// Expect '='
 	SkipWhiteSpace();
@@ -710,7 +711,7 @@ void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeExceptio
 	WriteLockedPointer<VariableSet> vset = (isGlobal)
 											? reprap.GetGlobalVariablesForWriting()
 												: WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables());
-	Variable * const v = vset->Lookup(varName.c_str(), false);
+	Variable *_ecv_null const v = vset->Lookup(varName.c_str(), false);
 	if (v != nullptr)
 	{
 		// For now we don't allow an existing variable to be reassigned using a 'var' or 'global' statement. We may need to allow it for 'global' statements.
@@ -718,9 +719,9 @@ void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeExceptio
 	}
 
 	SkipWhiteSpace();
-	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+	ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 	ExpressionValue ev = parser.Parse();
-	vset->InsertNew(varName.c_str(), ev, (isGlobal) ? 0 : gb.CurrentFileMachineState().GetBlockNesting());
+	vset->InsertNew(varName.c_str(), ev, (isGlobal) ? 0 : (int)gb.CurrentFileMachineState().GetBlockNesting());
 	if (isGlobal)
 	{
 		reprap.GlobalUpdated();
@@ -738,14 +739,14 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 
 	// Skip the "var." or "global." prefix and get access to the appropriate variable set
 	WriteLockedPointer<VariableSet> vset = (isGlobal)
-											? (readPointer += strlen("global."), reprap.GetGlobalVariablesForWriting())
+											? (readPointer += (int)strlen("global."), reprap.GetGlobalVariablesForWriting())
 											: (StringStartsWith(gb.buffer + readPointer, "var."))
-											  	? (readPointer += strlen("var."), WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables()))
+											  	? (readPointer += (int)strlen("var."), WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables()))
 												: throw ConstructParseException("expected a global or local variable");
 
 	// Get the identifier
 	char c = gb.buffer[readPointer];
-	if (!isalpha(c))
+	if (!isAlpha(c))
 	{
 		throw ConstructParseException("expected a new variable name");
 	}
@@ -756,10 +757,10 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 		varName.cat(c);
 		++readPointer;
 		c = gb.buffer[readPointer];
-	} while (isalpha(c) || isdigit(c) || c == '_' );
+	} while (isAlnum(c) || c == '_' );
 
 	// Look up the identifier
-	Variable * const var = vset->Lookup(varName.c_str(), false);
+	Variable *_ecv_null const var = vset->Lookup(varName.c_str(), false);
 	if (var == nullptr)
 	{
 		throw ConstructParseException("unknown variable '%s'", varName.c_str());
@@ -783,7 +784,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 		}
 
 		++readPointer;
-		ExpressionParser indexParser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		ExpressionParser indexParser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		const uint32_t indexExpr = indexParser.ParseUnsigned();
 		readPointer = indexParser.GetEndptr() - gb.buffer;
 		if (gb.buffer[readPointer] != ']')
@@ -801,7 +802,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	}
 	++readPointer;
 
-	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+	ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 	ExpressionValue ev = parser.Parse();
 
 	if (numIndices == 0)
@@ -831,7 +832,7 @@ void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 		// If we fail to parse the expression, we want to abort anyway
 		try
 		{
-			ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+			ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 			const ExpressionValue val = parser.Parse();
 			readPointer = parser.GetEndptr() - gb.buffer;
 			val.AppendAsString(reply);
@@ -885,10 +886,10 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 		}
 		String<MaxFilenameLength> filename;
 		GetQuotedString(filename.GetRef(), false);
-		FileStore * const f = reprap.GetPlatform().OpenSysFile(filename.c_str(), openMode);
+		FileStore *_ecv_null const f = reprap.GetPlatform().OpenSysFile(filename.c_str(), openMode);
 		if (f == nullptr)
 		{
-			throw GCodeException(&gb, readPointer + commandIndent, "Failed to create or open file");
+			throw GCodeException(&gb, readPointer + (int)commandIndent, "Failed to create or open file");
 		}
 		outputFile.Set(f);
 #else
@@ -903,7 +904,7 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 		{
 			break;
 		}
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		const ExpressionValue val = parser.Parse();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		if (!reply.IsEmpty())
@@ -943,7 +944,7 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 // Evaluate the condition that should follow 'if' or 'while'
 bool StringParser::EvaluateCondition() THROWS(GCodeException)
 {
-	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+	ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 	const bool b = parser.ParseBoolean();
 	parser.CheckForExtraCharacters();
 	return b;
@@ -960,11 +961,11 @@ void StringParser::DecodeCommand() noexcept
 	if (cl == '\'')									// check for a lowercase axis letter in Fanuc mode
 	{
 		++commandStart;
-		cl = tolower(gb.buffer[commandStart]);
+		cl = (char)tolower(gb.buffer[commandStart]);
 	}
 	else
 	{
-		cl = toupper(cl);
+		cl = (char)toupper(cl);
 	}
 	commandFraction = -1;
 	if (cl == 'G' || cl == 'M' || cl == 'T')
@@ -985,7 +986,7 @@ void StringParser::DecodeCommand() noexcept
 			{
 				++parameterStart;
 			}
-			if (isdigit(gb.buffer[parameterStart]))
+			if (isDigit(gb.buffer[parameterStart]))
 			{
 				hasCommandNumber = true;
 				// Read the number after the command letter
@@ -995,7 +996,7 @@ void StringParser::DecodeCommand() noexcept
 					commandNumber = (10 * commandNumber) + (gb.buffer[parameterStart] - '0');
 					++parameterStart;
 				}
-				while (isdigit(gb.buffer[parameterStart]));
+				while (isDigit(gb.buffer[parameterStart]));
 				if (negative)
 				{
 					commandNumber = -commandNumber;
@@ -1005,7 +1006,7 @@ void StringParser::DecodeCommand() noexcept
 				if (gb.buffer[parameterStart] == '.')
 				{
 					++parameterStart;
-					if (isdigit(gb.buffer[parameterStart]))
+					if (isDigit(gb.buffer[parameterStart]))
 					{
 						commandFraction = gb.buffer[parameterStart] - '0';
 						++parameterStart;
@@ -1039,7 +1040,7 @@ void StringParser::DecodeCommand() noexcept
 			 && (   reprap.GetGCodes().GetMachineType() == MachineType::cnc			// Fanuc style CNC
 				 || reprap.GetGCodes().GetMachineType() == MachineType::laser		// LaserWeb style
 				)
-			 && !isalpha(gb.buffer[commandStart + 1])								// make sure it isn't an if-command or other meta command
+			 && !isAlpha(gb.buffer[commandStart + 1])								// make sure it isn't an if-command or other meta command
 			)
 	{
 		// Fanuc or LaserWeb-style GCode, repeat the existing G0/G1/G2/G3 command with the new parameters
@@ -1096,10 +1097,10 @@ void StringParser::FindParameters() noexcept
 				}
 				else
 				{
-					const char c2 = toupper(c);
+					const char c2 = (char)toupper(c);
 					if (escaped)
 					{
-						if (c2 >= 'A' && c2 <= toupper(HighestAxisLetter) && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
+						if (c2 >= 'A' && c2 <= (char)toupper(HighestAxisLetter) && (c2 != 'E' || commandEnd == parameterStart || !isDigit(gb.buffer[commandEnd - 1])))
 						{
 							parametersPresent.SetBit(c2 - ('A' - 26));
 						}
@@ -1108,7 +1109,7 @@ void StringParser::FindParameters() noexcept
 					{
 						break;
 					}
-					else if (c2 >= 'A' && c2 <= 'Z' && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
+					else if (c2 >= 'A' && c2 <= 'Z' && (c2 != 'E' || commandEnd == parameterStart || !isDigit(gb.buffer[commandEnd - 1])))
 					{
 						parametersPresent.SetBit(c2 - 'A');
 					}
@@ -1120,7 +1121,7 @@ void StringParser::FindParameters() noexcept
 }
 
 // Add an entire string, overwriting any existing content and adding '\n' at the end if necessary to make it a complete line
-void StringParser::PutAndDecode(const char *str, size_t len) noexcept
+void StringParser::PutAndDecode(const char *_ecv_array str, size_t len) noexcept
 {
 	Init();
 	for (size_t i = 0; i < len; i++)
@@ -1136,13 +1137,13 @@ void StringParser::PutAndDecode(const char *str, size_t len) noexcept
 	DecodeCommand();
 }
 
-void StringParser::PutAndDecode(const char *str) noexcept
+void StringParser::PutAndDecode(const char *_ecv_array str) noexcept
 {
 	PutAndDecode(str, strlen(str));
 }
 
 // Put a complete command but don't decode it
-void StringParser::PutCommand(const char *str) noexcept
+void StringParser::PutCommand(const char *_ecv_array str) noexcept
 {
 	char c;
 	do
@@ -1182,10 +1183,10 @@ void StringParser::SetFinished() noexcept
 FilePosition StringParser::GetFilePosition() const noexcept
 {
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	const GCodeMachineState* ms = gb.machineState;
+	const GCodeMachineState *ms = gb.machineState;
 	while (ms->waitingForAcknowledgement && ms->GetPrevious() != nullptr)
 	{
-		ms = ms->GetPrevious();
+		ms = _ecv_not_null(ms->GetPrevious());
 	}
 
 	if (ms->DoingFile()
@@ -1201,7 +1202,7 @@ FilePosition StringParser::GetFilePosition() const noexcept
 	return noFilePosition;
 }
 
-const char* StringParser::DataStart() const noexcept
+const char *_ecv_array StringParser::DataStart() const noexcept
 {
 	return gb.buffer + commandStart;
 }
@@ -1226,7 +1227,7 @@ bool StringParser::Seen(char c) noexcept
 	if (wantLowerCase)
 	{
 		bit = c - ('a' - 26);
-		c = toupper(c);
+		c = (char)toupper(c);
 	}
 	else
 	{
@@ -1256,9 +1257,9 @@ bool StringParser::Seen(char c) noexcept
 			else
 			{
 				if (   inBrackets == 0
-					&& toupper(b) == c
+					&& (char)toupper(b) == c
 					&& escaped == wantLowerCase
-					&& (c != 'E' || (unsigned int)readPointer == parameterStart || !isdigit(gb.buffer[readPointer - 1]))
+					&& (c != 'E' || (unsigned int)readPointer == parameterStart || !isDigit(gb.buffer[readPointer - 1]))
 				   )
 				{
 					++readPointer;
@@ -1305,7 +1306,7 @@ void StringParser::GetFloatArray(float arr[], size_t& returnedLength) THROWS(GCo
 
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		parser.ParseFloatArray(arr, returnedLength);
 	}
 	else
@@ -1338,7 +1339,7 @@ void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength) THROWS(GCo
 
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		parser.ParseIntArray(arr, returnedLength);
 	}
 	else
@@ -1372,7 +1373,7 @@ void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength) THRO
 
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		parser.ParseUnsignedArray(arr, returnedLength);
 	}
 	else
@@ -1406,7 +1407,7 @@ void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength) THRO
 
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		parser.ParseDriverIdArray(arr, returnedLength);
 	}
 	else
@@ -1435,7 +1436,7 @@ ExpressionValue StringParser::GetExpression() THROWS(GCodeException)
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		return parser.Parse();
 	}
 	throw ConstructParseException("expected an expression inside { }");
@@ -1466,7 +1467,7 @@ void StringParser::GetQuotedString(const StringRef& str, bool allowEmpty) THROWS
 
 	case '{':
 		{
-			ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+			ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 			const ExpressionValue val = parser.Parse();
 			readPointer = parser.GetEndptr() - gb.buffer;
 			val.AppendAsString(str);
@@ -1505,10 +1506,10 @@ void StringParser::InternalGetQuotedString(const StringRef& str) THROWS(GCodeExc
 		}
 		else if (c == '\'')
 		{
-			if (isalpha(gb.buffer[readPointer]))
+			if (isAlpha(gb.buffer[readPointer]))
 			{
 				// Single quote before an alphabetic character forces that character to lower case
-				c = tolower(gb.buffer[readPointer++]);
+				c = (char)tolower(gb.buffer[readPointer++]);
 			}
 			else if (gb.buffer[readPointer] == c)
 			{
@@ -1548,7 +1549,7 @@ void StringParser::InternalGetPossiblyQuotedString(const StringRef& str) THROWS(
 	}
 	else if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		const ExpressionValue val = parser.Parse();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		val.AppendAsString(str);
@@ -1635,12 +1636,12 @@ void StringParser::GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException)
 		THROW_INTERNAL_ERROR;
 	}
 
-	const char* p = gb.buffer + readPointer;
+	const char *_ecv_array p = gb.buffer + readPointer;
 	uint8_t ip[4];
 	unsigned int n = 0;
 	for (;;)
 	{
-		const char *pp;
+		const char *_ecv_array pp;
 		const uint32_t v = StrToU32(p, &pp);
 		if (pp == p || v > 255)
 		{
@@ -1677,11 +1678,11 @@ void StringParser::GetMacAddress(MacAddress& mac) THROWS(GCodeException)
 		THROW_INTERNAL_ERROR;
 	}
 
-	const char* p = gb.buffer + readPointer;
+	const char *_ecv_array p = gb.buffer + readPointer;
 	unsigned int n = 0;
 	for (;;)
 	{
-		const char *pp;
+		const char *_ecv_array pp;
 		const unsigned long v = StrHexToU32(p, &pp);
 		if (pp == p || v > 255)
 		{
@@ -1736,7 +1737,7 @@ void StringParser::AppendFullCommand(const StringRef &s) const noexcept
 	for (size_t i = commandStart; i < cmdEnd; ++i)
 	{
 		const char c = gb.buffer[i];
-		if (c < 0x20)
+		if (c < (char)0x20u)
 		{
 			s.catf("[0x%02x]", (unsigned int)c);
 		}
@@ -1756,7 +1757,7 @@ void StringParser::StartNewFile() noexcept
 #if HAS_MASS_STORAGE
 
 // Open a file to write to
-bool StringParser::OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept
+bool StringParser::OpenFileToWrite(const char *_ecv_array directory, const char *_ecv_array fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept
 {
 	fileBeingWritten = reprap.GetPlatform().OpenFile(directory, fileName, OpenMode::writeWithCrc);
 	eofStringCounter = 0;
@@ -1782,7 +1783,7 @@ void StringParser::WriteToFile() noexcept
 			fileBeingWritten->Close();
 			fileBeingWritten = nullptr;
 			Init();
-			const char* const r = (gb.LatestMachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
+			const char *_ecv_array const r = (gb.LatestMachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
 			reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 			return;
 		}
@@ -1851,7 +1852,7 @@ void StringParser::FinishWritingBinary() noexcept
 	binaryWriting = false;
 	if (crcOk)
 	{
-		const char* const r = (gb.LatestMachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
+		const char *_ecv_array const r = (gb.LatestMachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
 		reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 	}
 	else
@@ -1903,7 +1904,7 @@ bool StringParser::FileEnded() noexcept
 		fileBeingWritten->Close();
 		fileBeingWritten = nullptr;
 		SetFinished();
-		const char* const r = (gb.LatestMachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
+		const char *_ecv_array const r = (gb.LatestMachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
 		reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
 		return false;
 	}
@@ -1920,7 +1921,7 @@ bool StringParser::FileEnded() noexcept
 }
 
 // Check that a number was found. If it was, advance readPointer past it. Otherwise throw an exception.
-void StringParser::CheckNumberFound(const char *endptr) THROWS(GCodeException)
+void StringParser::CheckNumberFound(const char *_ecv_array endptr) THROWS(GCodeException)
 {
 	if (endptr == gb.buffer + readPointer)
 	{
@@ -1934,13 +1935,13 @@ float StringParser::ReadFloatValue() THROWS(GCodeException)
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		const float val = parser.ParseFloat();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		return val;
 	}
 
-	const char *endptr;
+	const char *_ecv_array endptr;
 	const float rslt = SafeStrtof(gb.buffer + readPointer, &endptr);
 	CheckNumberFound(endptr);
 	return rslt;
@@ -1950,14 +1951,14 @@ uint32_t StringParser::ReadUIValue() THROWS(GCodeException)
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		const uint32_t val = parser.ParseUnsigned();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		return val;
 	}
 
 	// Allow "0xNNNN" or "xNNNN" where NNNN are hex digits. We could stop supporting this because we already support {0xNNNN}.
-	const char *endptr;
+	const char *_ecv_array endptr;
 	const uint32_t rslt = StrToU32(gb.buffer + readPointer, &endptr);
 	CheckNumberFound(endptr);
 	return rslt;
@@ -1967,13 +1968,13 @@ int32_t StringParser::ReadIValue() THROWS(GCodeException)
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		const int32_t val = parser.ParseInteger();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		return val;
 	}
 
-	const char *endptr;
+	const char *_ecv_array endptr;
 	const int32_t rslt = StrToI32(gb.buffer + readPointer, &endptr);
 	CheckNumberFound(endptr);
 	return rslt;
@@ -1986,7 +1987,7 @@ DriverId StringParser::ReadDriverIdValue() THROWS(GCodeException)
 	{
 		// Allow a floating point expression to be converted to a driver ID
 		// We assume that a driver ID only ever has a single fractional digit. This means that e.g. 3.10 will be treated the same as 3.1.
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		const float val = 10.0 * parser.ParseFloat();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		const int32_t ival = lrintf(val);
@@ -2059,11 +2060,11 @@ void StringParser::AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeE
 									if ((letter != 'P' || codeRunning != 98) && Seen(letter))
 									{
 										const char c = gb.buffer[readPointer];
-										if (!isdigit(c) && c != '"' && c != '{' && c != '.' && c != '-' && c != '+')
+										if (!isDigit(c) && c != '"' && c != '{' && c != '.' && c != '-' && c != '+')
 										{
 											throw ConstructParseException("invalid value for parameter '%c'", (uint32_t)c);
 										}
-										ExpressionParser parser(gb, &gb.buffer[readPointer], &gb.buffer[commandEnd]);
+										ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + commandEnd);
 										ExpressionValue ev = parser.Parse();
 										char paramName[2] = { letter, 0 };
 										vs.InsertNewParameter(paramName, ev);
@@ -2072,17 +2073,17 @@ void StringParser::AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeE
 							  );
 }
 
-GCodeException StringParser::ConstructParseException(const char *str) const noexcept
+GCodeException StringParser::ConstructParseException(const char *_ecv_array str) const noexcept
 {
 	return GCodeException(&gb, GetColumn(), str);
 }
 
-GCodeException StringParser::ConstructParseException(const char *str, const char *param) const noexcept
+GCodeException StringParser::ConstructParseException(const char *_ecv_array str, const char *_ecv_array param) const noexcept
 {
 	return GCodeException(&gb, GetColumn(), str, param);
 }
 
-GCodeException StringParser::ConstructParseException(const char *str, uint32_t param) const noexcept
+GCodeException StringParser::ConstructParseException(const char *_ecv_array str, uint32_t param) const noexcept
 {
 	return GCodeException(&gb, GetColumn(), str, param);
 }
@@ -2090,7 +2091,7 @@ GCodeException StringParser::ConstructParseException(const char *str, uint32_t p
 // Get the current column if we can, else return -1
 int StringParser::GetColumn() const noexcept
 {
-	return (readPointer < 0) ? -1 : readPointer + commandIndent;
+	return (readPointer < 0) ? -1 : readPointer + (int)commandIndent;
 }
 
 // End

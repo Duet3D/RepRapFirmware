@@ -58,7 +58,7 @@ const uint32_t
 EefcFlash::PagesPerErase = 8;
 
 EefcFlash::EefcFlash(Samba& samba,
-					 const char* name,
+					 const char *_ecv_array name,
                      uint32_t addr,
                      uint32_t pages,
                      uint32_t size,
@@ -105,8 +105,10 @@ EefcFlash::eraseAll(uint32_t offset) THROWS(GCodeException)
     else
     {
         // Offset must be on an erase page boundary
-        if (offset % (_size * PagesPerErase))
+        if (offset % (_size * PagesPerErase) != 0)
+		{
             throw FlashEraseError("Flash erase error");
+		}
 
         // Erase each PagesPerErase set of pages
         for (uint32_t pageNum = offset / _size; pageNum < _pages; pageNum += PagesPerErase)
@@ -271,7 +273,9 @@ void EefcFlash::writeOptions() THROWS(GCodeException)
 void EefcFlash::writePage(uint32_t page) THROWS(GCodeException)
 {
     if (page >= _pages)
+	{
         throw FlashPageError("EefcFlash::writePage: FlashPageError");
+	}
 
     _wordCopy.setDstAddr(_addr + page * _size);
     _wordCopy.setSrcAddr(_onBufferA ? _pageBufferA : _pageBufferB);
@@ -288,10 +292,12 @@ void EefcFlash::writePage(uint32_t page) THROWS(GCodeException)
     }
 }
 
-void EefcFlash::readPage(uint32_t page, uint8_t* data) THROWS(GCodeException)
+void EefcFlash::readPage(uint32_t page, uint8_t *_ecv_array data) THROWS(GCodeException)
 {
     if (page >= _pages)
+	{
         throw FlashPageError("EefcFlash::readPage: FlashPageError");
+	}
 
     // The SAM3 firmware has a bug where it returns all zeros for reads
     // directly from the flash so instead, we copy the flash page to
@@ -311,25 +317,35 @@ void EefcFlash::waitFSR(int seconds) THROWS(GCodeException)
     while (tries-- > 0)
     {
     	uint32_t fsr0 = _samba.readWord(EEFC0_FSR);
-        if (fsr0 & 0x2)
+        if ((fsr0 & 0x2) != 0)
+		{
             throw FlashCmdError("EefcFlash::waitFSR: FlashCmdError 1");
-        if (fsr0 & 0x4)
+		}
+        if ((fsr0 & 0x4) != 0)
+		{
             throw FlashLockError("EefcFlash::waitFSR: FlashLockError 1");
+		}
 
         if (_planes == 2)
         {
             fsr1 = _samba.readWord(EEFC1_FSR);
-            if (fsr1 & 0x2)
+            if ((fsr1 & 0x2) != 0)
+			{
                 throw FlashCmdError("EefcFlash::waitFSR: FlashCmdError 2");
-            if (fsr1 & 0x4)
+			}
+            if ((fsr1 & 0x4) != 0)
+			{
                 throw FlashLockError("EefcFlash::waitFSR: FlashLockError 2");
+			}
         }
-        if (fsr0 & fsr1 & 0x1)
+        if ((fsr0 & fsr1 & 0x1) != 0)
             break;
         delay(2);
     }
     if (tries == 0)
+	{
         throw FlashTimeoutError("EefcFlash::waitFSR: FlashTimeoutError");
+	}
 }
 
 void EefcFlash::writeFCR0(uint8_t cmd, uint32_t arg) THROWS(GCodeException)

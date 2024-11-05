@@ -52,7 +52,7 @@ public:
 	Lcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts) noexcept;
 #endif
 
-	virtual ~Lcd();
+	virtual ~Lcd() override;
 
 	// Flush just some data, returning true if this needs to be called again
 	virtual bool FlushSome() noexcept = 0;

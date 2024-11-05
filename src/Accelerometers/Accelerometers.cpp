@@ -58,16 +58,16 @@ static unsigned int GetDecimalPlaces(uint8_t dataResolution) noexcept
 #include "LISAccelerometer.h"
 
 constexpr size_t AccelerometerTaskStackWords = 400;			// big enough to handle printf and file writes
-static Task<AccelerometerTaskStackWords> *accelerometerTask;
+static Task<AccelerometerTaskStackWords> *_ecv_null accelerometerTask;
 
-static LISAccelerometer *accelerometer = nullptr;
+static LISAccelerometer *_ecv_null accelerometer = nullptr;
 
 static uint16_t samplingRate = 0;							// 0 means use the default
 static volatile uint32_t numSamplesRequested;
 static uint8_t resolution = DefaultAccelerometerResolution;
 static uint8_t orientation = DefaultAccelerometerOrientation;
 static volatile uint8_t axesRequested;
-static FileStore* volatile accelerometerFile = nullptr;		// this is non-null when the accelerometer is running, null otherwise
+static FileStore *_ecv_null volatile accelerometerFile = nullptr;		// this is non-null when the accelerometer is running, null otherwise
 static unsigned int numLocalRunsCompleted = 0;
 static unsigned int lastRunNumSamplesReceived = 0;
 static uint8_t axisLookup[3];
@@ -91,7 +91,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 	uint8_t rslt = 0;
 	for (unsigned int i = 0; i < 3; ++i)
 	{
-		if (axes & (1u << i))
+		if ((axes & (1u << i)) != 0)
 		{
 			rslt |= 1u << axisLookup[i];
 		}
@@ -104,7 +104,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 	for (;;)
 	{
 		TaskBase::TakeIndexed(NotifyIndices::AccelerometerDataCollector);
-		FileStore * f = accelerometerFile;			// capture volatile variable
+		FileStore *_ecv_null f = accelerometerFile;			// capture volatile variable
 		if (f != nullptr)
 		{
 			// Collect and write the samples
@@ -115,22 +115,22 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 			const int decimalPlaces = GetDecimalPlaces(resolution);
 			bool recordFailedStart = false;
 
-			if (accelerometer->StartCollecting(TranslateAxes(axesRequested)))
+			if (not_null(accelerometer)->StartCollecting(TranslateAxes(axesRequested)))
 			{
 				successfulStart = true;
 				uint16_t dataRate = 0;
 				do
 				{
-					const uint16_t *data;
+					const uint16_t *_ecv_array data;
 					bool overflowed;
-					unsigned int samplesRead = accelerometer->CollectData(&data, dataRate, overflowed);
+					unsigned int samplesRead = not_null(accelerometer)->CollectData(&data, dataRate, overflowed);
 					if (samplesRead == 0)
 					{
 						// samplesRead == 0 indicates an error, e.g. no interrupt
 						samplesWanted = 0;
-						f->Write("Failed to collect data from accelerometer\n");
-						f->Truncate();				// truncate the file in case we didn't write all the preallocated space
-						f->Close();
+						not_null(f)->Write("Failed to collect data from accelerometer\n");
+						not_null(f)->Truncate();				// truncate the file in case we didn't write all the preallocated space
+						not_null(f)->Close();
 						f = nullptr;
 						AddLocalAccelerometerRun(0);
 					}
@@ -159,7 +159,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 
 							for (unsigned int axis = 0; axis < 3; ++axis)
 							{
-								if (axesRequested & (1u << axis))
+								if ((axesRequested & (1u << axis)) != 0)
 								{
 									uint16_t dataVal = data[axisLookup[axis]];
 									if (axisInverted[axis])
@@ -169,7 +169,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 									dataVal >>= (16u - resolution);					// data from LIS3DH is left justified
 
 									// Sign-extend it
-									if (dataVal & (1u << (resolution - 1)))
+									if ((dataVal & (1u << (resolution - 1))) != 0)
 									{
 										dataVal |= ~mask;
 									}
@@ -185,7 +185,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 							data += 3;
 
 							temp.cat('\n');
-							f->Write(temp.c_str());
+							not_null(f)->Write(temp.c_str());
 
 							--samplesRead;
 							--samplesWanted;
@@ -198,7 +198,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 				{
 					String<StringLength50> temp;
 					temp.printf("Rate %u, overflows %u\n", dataRate, numOverflows);
-					f->Write(temp.c_str());
+					not_null(f)->Write(temp.c_str());
 				}
 			}
 			else
@@ -206,18 +206,18 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 				recordFailedStart = true;
 				if (f != nullptr)
 				{
-					f->Write("Failed to start accelerometer\n");
+					not_null(f)->Write("Failed to start accelerometer\n");
 				}
 			}
 
 			if (f != nullptr)
 			{
-				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
-				f->Close();
+				not_null(f)->Truncate();				// truncate the file in case we didn't write all the preallocated space
+				not_null(f)->Close();
 				AddLocalAccelerometerRun(samplesWritten);
 			}
 
-			accelerometer->StopCollecting();
+			not_null(accelerometer)->StopCollecting();
 
 			// Wait for another command
 			accelerometerFile = nullptr;
@@ -247,7 +247,7 @@ static bool TranslateOrientation(uint32_t input) noexcept
 	const uint8_t yOrientation = 3u - xOrientation - zOrientation;
 
 	// The total number of inversions must be even if the cyclic order of the axes is 012, odd if it is 210 (can we prove this?)
-	if ((xOrientation + 1) % 3 != yOrientation)
+	if ((uint8_t)((xOrientation + 1u) % 3u) != yOrientation)
 	{
 		yInverted ^= 0x04;									// we need an odd number of axis inversions
 	}
@@ -322,7 +322,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 			if (accelerometerTask == nullptr)
 			{
 				accelerometerTask = new Task<AccelerometerTaskStackWords>;
-				accelerometerTask->Create(AccelerometerTaskCode, "ACCEL", nullptr, TaskPriority::Accelerometer);
+				not_null(accelerometerTask)->Create(AccelerometerTaskCode, "ACCEL", nullptr, TaskPriority::Accelerometer);
 			}
 		}
 		else
@@ -351,7 +351,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 
 	if (seen)
 	{
-		if (!accelerometer->Configure(samplingRate, resolution))
+		if (!not_null(accelerometer)->Configure(samplingRate, resolution))
 		{
 			reply.copy("Failed to configure accelerometer");
 			return GCodeResult::error;
@@ -381,7 +381,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 						CanInterface::GetCanAddress(), 0, accelerometer->GetTypeName(), orientation, samplingRate, resolution, accelerometer->GetFrequency());
 # else
 		reply.printf("Accelerometer %u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
-						0, accelerometer->GetTypeName(), orientation, samplingRate, resolution, accelerometer->GetFrequency());
+						0, not_null(accelerometer)->GetTypeName(), orientation, samplingRate, resolution, not_null(accelerometer)->GetFrequency());
 # endif
 	}
 	return GCodeResult::ok;
@@ -444,9 +444,9 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	}
 	else
 	{
-		const time_t time = reprap.GetPlatform().GetDateTime();
+		const time_t currentTime = reprap.GetPlatform().GetDateTime();
 		tm timeInfo;
-		gmtime_r(&time, &timeInfo);
+		gmtime_r(&currentTime, &timeInfo);
 		accelerometerFileName.printf("0:/sys/accelerometer/%u_%04u-%02u-%02u_%02u.%02u.%02u.csv",
 # if SUPPORT_CAN_EXPANSION
 										(unsigned int)device.boardAddress,
@@ -455,7 +455,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 # endif
 										timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
 	}
-	FileStore * const f = MassStorage::OpenFile(accelerometerFileName.c_str(), OpenMode::write, preallocSize);
+	FileStore *_ecv_null const f = MassStorage::OpenFile(accelerometerFileName.c_str(), OpenMode::write, preallocSize);
 	if (f == nullptr)
 	{
 		reply.copy("Failed to create accelerometer data file");
@@ -476,11 +476,11 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	{
 		String<StringLength50> temp;
 		temp.printf("Sample");
-		if (axes & 1u) { temp.cat(",X"); }
-		if (axes & 2u) { temp.cat(",Y"); }
-		if (axes & 4u) { temp.cat(",Z"); }
+		if ((axes & 1u) != 0) { temp.cat(",X"); }
+		if ((axes & 2u) != 0) { temp.cat(",Y"); }
+		if ((axes & 4u) != 0) { temp.cat(",Z"); }
 		temp.cat('\n');
-		f->Write(temp.c_str());
+		not_null(f)->Write(temp.c_str());
 	}
 
 # if SUPPORT_CAN_EXPANSION
@@ -507,7 +507,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	successfulStart = false;
 	failedStart = false;
 	accelerometerFile = f;
-	accelerometerTask->Give(NotifyIndices::AccelerometerDataCollector);
+	not_null(accelerometerTask)->Give(NotifyIndices::AccelerometerDataCollector);
 	const uint32_t startTime = millis();
 	do
 	{
@@ -519,13 +519,13 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	} while (!failedStart && millis() - startTime < 1000);
 
 	reply.copy("Failed to start accelerometer data collection");
-	if (accelerometer->HasInterruptError())
+	if (not_null(accelerometer)->HasInterruptError())
 	{
 		reply.cat(": INT1 error");
 	}
 	if (accelerometerFile != nullptr)
 	{
-		accelerometerFile->Close();
+		not_null(accelerometerFile)->Close();
 		accelerometerFile = nullptr;
 		(void)MassStorage::Delete(accelerometerFileName.GetRef(), ErrorMessageMode::messageAlways);
 	}
@@ -556,7 +556,7 @@ void Accelerometers::Exit() noexcept
 {
 	if (accelerometerTask != nullptr)
 	{
-		accelerometerTask->TerminateAndUnlink();
+		not_null(accelerometerTask)->TerminateAndUnlink();
 		accelerometerTask = nullptr;
 	}
 }

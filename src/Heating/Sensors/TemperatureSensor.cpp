@@ -1,28 +1,9 @@
 #include "TemperatureSensor.h"
-#include "Thermistor.h"
-#include "ThermocoupleSensor31855.h"
-#include "ThermocoupleSensor31856.h"
-#include "RtdSensor31865.h"
-#include "CurrentLoopTemperatureSensor.h"
-#include "LinearAnalogSensor.h"
 #include "RemoteSensor.h"
-#include "BME280.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 #if SUPPORT_REMOTE_COMMANDS
 # include <CanMessageGenericParser.h>
-#endif
-
-#if HAS_CPU_TEMP_SENSOR
-# include "CpuTemperatureSensor.h"
-#endif
-
-#if SUPPORT_DHT_SENSOR
-# include "DhtSensor.h"
-#endif
-
-#if HAS_SMART_DRIVERS
-# include "TmcDriverTemperatureSensor.h"
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -55,6 +36,17 @@ constexpr uint8_t TemperatureSensor::objectModelTableDescriptor[] = { 1, 6 };
 DEFINE_GET_OBJECT_MODEL_TABLE(TemperatureSensor)
 
 #endif
+
+// Root of the sensor types list
+TemperatureSensor::SensorTypeDescriptor *_ecv_null TemperatureSensor::SensorTypeDescriptor::sensorTypeListRoot;
+
+// Constructor for the type descriptor. This links the type descriptor into the sensor type list.
+TemperatureSensor::SensorTypeDescriptor::SensorTypeDescriptor(const char *_ecv_array p_typeName, CreationFunction p_creationFunction) noexcept
+	: sensorTypeName(p_typeName), createFunction(p_creationFunction)
+{
+	next = sensorTypeListRoot;
+	sensorTypeListRoot = this;
+}
 
 // Constructor
 TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *_ecv_array t) noexcept
@@ -215,12 +207,12 @@ void TemperatureSensor::UpdateRemoteTemperature(CanAddress src, const CanSensorR
 
 // Factory method
 #if SUPPORT_CAN_EXPANSION
-TemperatureSensor *_ecv_from TemperatureSensor::Create(unsigned int sensorNum, CanAddress boardAddress, const char *_ecv_array typeName, const StringRef& reply) noexcept
+TemperatureSensor *_ecv_from _ecv_null TemperatureSensor::Create(unsigned int sensorNum, CanAddress boardAddress, const char *_ecv_array typeName, const StringRef& reply) noexcept
 #else
-TemperatureSensor *_ecv_from TemperatureSensor::Create(unsigned int sensorNum, const char *_ecv_array typeName, const StringRef& reply) noexcept
+TemperatureSensor *_ecv_from _ecv_null TemperatureSensor::Create(unsigned int sensorNum, const char *_ecv_array typeName, const StringRef& reply) noexcept
 #endif
 {
-	TemperatureSensor *_ecv_from ts;
+	TemperatureSensor *_ecv_from _ecv_null ts;
 #if SUPPORT_CAN_EXPANSION
 	if (boardAddress != CanInterface::GetCanAddress())
 	{
@@ -228,86 +220,22 @@ TemperatureSensor *_ecv_from TemperatureSensor::Create(unsigned int sensorNum, c
 	}
 	else
 #endif
-	if (ReducedStringEquals(typeName, Thermistor::TypeNameThermistor))
-	{
-		ts = new Thermistor(sensorNum, false);
-	}
-	else if (ReducedStringEquals(typeName, Thermistor::TypeNamePT1000))
-	{
-		ts = new Thermistor(sensorNum, true);
-	}
-	else if (ReducedStringEquals(typeName, LinearAnalogSensor::TypeName))
-	{
-		ts = new LinearAnalogSensor(sensorNum);
-	}
-#if SUPPORT_SPI_SENSORS
-	else if (ReducedStringEquals(typeName, ThermocoupleSensor31855::TypeName))
-	{
-		ts = new ThermocoupleSensor31855(sensorNum);
-	}
-	else if (ReducedStringEquals(typeName, ThermocoupleSensor31856::TypeName))
-	{
-		ts = new ThermocoupleSensor31856(sensorNum);
-	}
-	else if (ReducedStringEquals(typeName, RtdSensor31865::TypeName))
-	{
-		ts = new RtdSensor31865(sensorNum);
-	}
-	else if (ReducedStringEquals(typeName, CurrentLoopTemperatureSensor::TypeName))
-	{
-		ts = new CurrentLoopTemperatureSensor(sensorNum);
-	}
-#endif
-#if SUPPORT_DHT_SENSOR
-	else if (ReducedStringEquals(typeName, DhtTemperatureSensor::TypeNameDht21))
-	{
-		ts = new DhtTemperatureSensor(sensorNum, DhtSensorType::Dht21);
-	}
-	else if (ReducedStringEquals(typeName, DhtTemperatureSensor::TypeNameDht22))
-	{
-		ts = new DhtTemperatureSensor(sensorNum, DhtSensorType::Dht22);
-	}
-	else if (ReducedStringEquals(typeName, DhtHumiditySensor::TypeName))
-	{
-		ts = new DhtHumiditySensor(sensorNum);
-	}
-#endif
-#if SUPPORT_BME280
-	else if (ReducedStringEquals(typeName, BME280TemperatureSensor::TypeName))
-	{
-		ts = new BME280TemperatureSensor(sensorNum);
-	}
-	else if (ReducedStringEquals(typeName, BME280PressureSensor::TypeName))
-	{
-		ts = new BME280PressureSensor(sensorNum);
-	}
-	else if (ReducedStringEquals(typeName, BME280HumiditySensor::TypeName))
-	{
-		ts = new BME280HumiditySensor(sensorNum);
-	}
-#endif
-#if HAS_CPU_TEMP_SENSOR
-	else if (ReducedStringEquals(typeName, CpuTemperatureSensor::TypeName))
-	{
-		ts = new CpuTemperatureSensor(sensorNum);
-	}
-#endif
-#if HAS_SMART_DRIVERS
-	else if (ReducedStringEquals(typeName, TmcDriverTemperatureSensor::PrimaryTypeName))
-	{
-		ts = new TmcDriverTemperatureSensor(sensorNum, 0);
-	}
-# if defined(DUET_NG) || defined(PCCB_10)
-	else if (ReducedStringEquals(typeName, TmcDriverTemperatureSensor::DuexTypeName))
-	{
-		ts = new TmcDriverTemperatureSensor(sensorNum, 1);
-	}
-# endif
-#endif
-	else
+
 	{
 		ts = nullptr;
-		reply.printf("Unknown sensor type name \"%s\"", typeName);
+		for (const SensorTypeDescriptor *desc = SensorTypeDescriptor::GetRoot(); desc != nullptr; desc = desc->GetNext())
+		{
+			if (ReducedStringEquals(typeName, desc->GetName()))
+			{
+				ts = desc->Create(sensorNum);
+				break;
+			}
+		}
+
+		if (ts == nullptr)
+		{
+			reply.printf("Unknown sensor type name \"%s\"", typeName);
+		}
 	}
 	return ts;
 }

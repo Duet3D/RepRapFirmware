@@ -288,7 +288,7 @@ bool W5500Socket::ReceiveData() noexcept
 				wiz_recv_data(socketNum, buf->Data(), len);
 				ExecCommand(socketNum, Sn_CR_RECV);
 				buf->dataLength = (size_t)len;
-				NetworkBuffer::AppendToList(&receivedData, buf);
+				NetworkBuffer::AppendToList(receivedData, buf);
 				if (reprap.Debug(Module::Network))
 				{
 					debugPrintf("Received %u bytes\n", (unsigned int)len);

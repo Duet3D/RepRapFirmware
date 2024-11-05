@@ -201,7 +201,7 @@ void WiFiSocket::Poll() noexcept
 			if (state != SocketState::waitingForResponder)
 			{
 				WiFiInterface *iface = static_cast<WiFiInterface *>(interface);
-				if (isdigit(iface->wiFiServerVersion[0]) && iface->wiFiServerVersion[0] >= '2')
+				if (isDigit(iface->wiFiServerVersion[0]) && iface->wiFiServerVersion[0] >= '2')
 				{
 					// On version 2 onwards, this is a valid field ConnStatusResponse.
 					protocol = resp.Value().protocol;
@@ -310,7 +310,7 @@ void WiFiSocket::ReceiveData(uint16_t bytesAvailable) noexcept
 				{
 					bytesAvailable -= ret;
 					buf->dataLength = (size_t)ret;
-					NetworkBuffer::AppendToList(&receivedData, buf);
+					NetworkBuffer::AppendToList(receivedData, buf);
 					if (reprap.Debug(Module::Network))
 					{
 						debugPrintf("Received %u bytes\n", (unsigned int)ret);

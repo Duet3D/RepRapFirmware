@@ -18,11 +18,11 @@ class StringHandle
 {
 public:
 	StringHandle() noexcept { slotPtr = nullptr; }
-	explicit StringHandle(const char *s) noexcept;
-	StringHandle(const char *s, size_t len) noexcept;
+	explicit StringHandle(const char *_ecv_array s) noexcept;
+	StringHandle(const char *_ecv_array s, size_t len) noexcept;
 
 #if 0	// unused
-	StringHandle(const char *s1, const char *s2) noexcept;
+	StringHandle(const char *_ecv_array s1, const char *_ecv_array s2) noexcept;
 #endif
 
 	ReadLockedPointer<const char> Get() const noexcept;
@@ -30,10 +30,10 @@ public:
 	void Delete() noexcept;
 	const StringHandle& IncreaseRefCount() const noexcept;
 	bool IsNull() const noexcept { return slotPtr == nullptr; }
-	void Assign(const char *s) noexcept;
+	void Assign(const char *_ecv_array s) noexcept;
 
 protected:
-	void InternalAssign(const char *s, size_t len) noexcept;
+	void InternalAssign(const char *_ecv_array s, size_t len) noexcept;
 
 	Heap::IndexSlot * null slotPtr;
 };
@@ -43,8 +43,8 @@ class AutoStringHandle : public StringHandle
 {
 public:
 	AutoStringHandle() noexcept : StringHandle() { }
-	explicit AutoStringHandle(const char *s) noexcept : StringHandle(s) { }
-	AutoStringHandle(const char *s, size_t len) noexcept : StringHandle(s, len) { }
+	explicit AutoStringHandle(const char *_ecv_array s) noexcept : StringHandle(s) { }
+	AutoStringHandle(const char *_ecv_array s, size_t len) noexcept : StringHandle(s, len) { }
 	AutoStringHandle(const AutoStringHandle& other) noexcept;
 	AutoStringHandle(AutoStringHandle&& other) noexcept;
 	AutoStringHandle& operator=(const AutoStringHandle& other) noexcept;

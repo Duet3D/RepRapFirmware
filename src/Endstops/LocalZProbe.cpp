@@ -106,7 +106,7 @@ uint32_t LocalZProbe::GetRawReading() const noexcept
 	case ZProbeType::digital:
 	case ZProbeType::unfilteredDigital:
 	case ZProbeType::blTouch:
-		return (inputPort.ReadDigital()) ? MaxReading : 0;
+		return (inputPort.ReadDigital()) ? MaxReading : 0u;
 
 	default:
 		return MaxReading;
@@ -140,7 +140,7 @@ GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) noexcept
 
 /*static*/ void LocalZProbe::TimerInterrupt(CallbackParameter param) noexcept
 {
-	static_cast<LocalZProbe*>(param.vp)->Interrupt();
+	static_cast<LocalZProbe *>(param.vp)->Interrupt();
 }
 
 #if SUPPORT_SCANNING_PROBES

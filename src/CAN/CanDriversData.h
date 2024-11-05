@@ -22,7 +22,7 @@ public:
 	void AddEntry(DriverId id, T val) noexcept;
 	size_t GetNumEntries() const noexcept { return numEntries; }
 	CanAddress GetNextBoardDriverBitmap(size_t& startFrom, CanDriversBitmap& driversBitmap) const noexcept;
-	T GetElement(size_t n) const pre(n < GetnumEntries()) noexcept { return data[n].val; }
+	T GetElement(size_t n) const noexcept pre(n < GetnumEntries()) { return data[n].val; }
 
 private:
 	struct DriverDescriptor

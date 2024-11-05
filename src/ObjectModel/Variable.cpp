@@ -10,8 +10,8 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 // Members of class Variable
-Variable::Variable(const char *str, ExpressionValue& pVal, int16_t pScope) THROWS(GCodeException)
-	: name(str), val(), scope(pScope)
+Variable::Variable(const char *_ecv_array str, size_t strLen, ExpressionValue& pVal, int16_t pScope) THROWS(GCodeException)
+	: name(str, strLen), val(), scope(pScope)
 {
 	Assign(pVal);				// this may throw
 }
@@ -22,7 +22,7 @@ Variable::~Variable()
 	val.Release();
 }
 
-bool Variable::IsValidVariableName(const char *str) noexcept
+bool Variable::IsValidVariableName(const char *_ecv_array str) noexcept
 {
 	size_t len = strlen(str);
 	if (len == 0)
@@ -30,14 +30,14 @@ bool Variable::IsValidVariableName(const char *str) noexcept
 		return false;
 	}
 
-	if (!isalpha(str[0]))
+	if (!isAlpha(str[0]))
 	{
 		return false;
 	}
 
 	for (size_t i = 1; i < len; i++)
 	{
-		if (!isalnum(str[i]) && str[i] != '_')
+		if (!isAlnum(str[i]) && str[i] != '_')
 		{
 			return false;
 		}
@@ -94,7 +94,7 @@ void Variable::Assign(ExpressionValue& ev) THROWS(GCodeException)
 }
 
 // Assign a new value to an indexed part of this variable. There is always at least one index.
-void Variable::AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException)
+void Variable::AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *_ecv_array indices) THROWS(GCodeException)
 {
 	if (val.GetType() != TypeCode::HeapArray)
 	{
@@ -118,7 +118,7 @@ void Variable::AssignArray(size_t numElements, function_ref<ExpressionValue(size
 }
 
 // Members of class VariableSet
-Variable *_ecv_null VariableSet::Lookup(const char *str, bool wantParameter) noexcept
+Variable *_ecv_null VariableSet::Lookup(const char *_ecv_array str, bool wantParameter) noexcept
 {
 	LinkedVariable *lv;
 	for (lv = root; lv != nullptr; lv = lv->next)
@@ -132,7 +132,7 @@ Variable *_ecv_null VariableSet::Lookup(const char *str, bool wantParameter) noe
 	return nullptr;
 }
 
-const Variable *_ecv_null VariableSet::Lookup(const char *str, size_t length, bool wantParameter) const noexcept
+const Variable *_ecv_null VariableSet::Lookup(const char *_ecv_array str, size_t length, bool wantParameter) const noexcept
 {
 	const LinkedVariable *lv;
 	for (lv = root; lv != nullptr; lv = lv->next)
@@ -146,9 +146,14 @@ const Variable *_ecv_null VariableSet::Lookup(const char *str, size_t length, bo
 	return nullptr;
 }
 
-Variable *VariableSet::InsertNew(const char *str, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException)
+Variable *VariableSet::InsertNew(const char *_ecv_array str, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException)
 {
-	LinkedVariable * const toInsert = new LinkedVariable(str, pVal, pScope, root);
+	return InsertNew(str, strlen(str), pVal, pScope);
+}
+
+Variable *VariableSet::InsertNew(const char *_ecv_array str, size_t strLen, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException)
+{
+	LinkedVariable * const toInsert = new LinkedVariable(str, strLen, pVal, pScope, root);
 	root = toInsert;
 	return &(toInsert->v);
 }
@@ -181,7 +186,7 @@ void VariableSet::EndScope(uint8_t blockNesting) noexcept
 	}
 }
 
-void VariableSet::Delete(const char *str) noexcept
+void VariableSet::Delete(const char *_ecv_array str) noexcept
 {
 	LinkedVariable *prev = nullptr;
 	for (LinkedVariable *lv = root; lv != nullptr; lv = lv->next)

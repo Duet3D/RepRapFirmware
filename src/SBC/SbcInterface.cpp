@@ -555,7 +555,7 @@ void SbcInterface::ExchangeData() noexcept
 					MutexLocker lock(gb->mutex, SbcYieldTimeout);
 					if (lock.IsAcquired())
 					{
-						ExpressionParser parser(*gb, expression.c_str(), expression.c_str() + expression.strlen());
+						ExpressionParser parser(gb, expression.c_str(), expression.c_str() + expression.strlen());
 						const ExpressionValue val = parser.Parse();
 						if (val.GetType() == TypeCode::HeapArray)
 						{
@@ -684,7 +684,8 @@ void SbcInterface::ExchangeData() noexcept
 				if (locker.IsAcquired())
 				{
 					// Note that we do not call StopPrint here or set any other variables; DSF already does that
-					gb->AbortFile(true, false);
+					gb->AbortFile(true);
+					gb->FileAbortSent();	// don't notify the SBC
 					InvalidateBufferedCodes(channel);
 				}
 				else
@@ -762,7 +763,7 @@ void SbcInterface::ExchangeData() noexcept
 
 						try
 						{
-							ExpressionParser indexParser(*gb, indexStart + 1, shortVarName.c_str() + shortVarName.strlen());
+							ExpressionParser indexParser(gb, indexStart + 1, shortVarName.c_str() + shortVarName.strlen());
 							const uint32_t indexExpr = indexParser.ParseUnsigned();
 							indexStart = indexParser.GetEndptr();
 							if (*indexStart != ']')
@@ -814,7 +815,7 @@ void SbcInterface::ExchangeData() noexcept
 			// Evaluate the expression and assign it
 			try
 			{
-				ExpressionParser parser(*gb, expression.c_str(), expression.c_str() + expression.strlen());
+				ExpressionParser parser(gb, expression.c_str(), expression.c_str() + expression.strlen());
 				ExpressionValue ev = parser.Parse();
 				if (v == nullptr)
 				{
@@ -1172,6 +1173,16 @@ void SbcInterface::ExchangeData() noexcept
 						}
 					}
 #endif
+					// Send back a final code reply for codes that started the last macros, else the corresponding code will never finish
+					if (!gb->IsAbortAllRequested() && gb->GetState() == GCodeState::normal && (!gb->LatestMachineState().lastCodeFromSbc || gb->LatestMachineState().macroStartedByCode))
+					{
+						OutputBuffer *dummy = nullptr;
+						if (!transfer.WriteCodeReply(gb->GetResponseMessageType(), dummy))
+						{
+							// Cannot send an empty code reply now, do it later
+							HandleGCodeReply(gb->GetResponseMessageType(), dummy);
+						}
+					}
 					gb->FileAbortSent();
 					gb->Invalidate();
 				}
@@ -1323,7 +1334,8 @@ void SbcInterface::InvalidateResources() noexcept
 		{
 			gb->MacroRequestSent();
 		}
-		gb->AbortFile(true, false);
+		gb->AbortFile(true);
+		gb->FileAbortSent();	// don't notify the SBC
 		gb->MessageAcknowledged(true, 0, ExpressionValue());
 	}
 

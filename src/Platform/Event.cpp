@@ -40,7 +40,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 	// An event is 'similar' if it has the same type, device number, CAN address and parameter even if the text is different.
 	TaskCriticalSectionLocker lock;
 
-	Event** pe = &eventsPending;
+	Event*_ecv_null * pe = &eventsPending;
 	while (*pe != nullptr && (et >= (*pe)->type || (*pe)->isBeingProcessed))		// while the next event in the list has same or higher priority than the new one
 	{
 		if (et == (*pe)->type && devNum == (*pe)->deviceNumber &&(*pe)->param == p_param
@@ -78,7 +78,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 {
 	TaskCriticalSectionLocker lock;
 
-	Event * const ev = eventsPending;
+	Event *_ecv_null const ev = eventsPending;
 	if (ev == nullptr)
 	{
 		return false;
@@ -90,7 +90,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 // Get the name of the macro that we run when this event occurs
 /*static*/ void Event::GetMacroFileName(const StringRef& fname) noexcept
 {
-	const Event * const ep = eventsPending;
+	const Event *_ecv_null const ep = eventsPending;
 	if (ep != nullptr && ep->isBeingProcessed)
 	{
 		fname.copy(ep->type.ToString());
@@ -102,7 +102,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 // Get the macro parameters for the current event, excluding the S parameter which the caller will add
 /*static*/ void Event::GetParameters(VariableSet& vars) noexcept
 {
-	const Event * const ep = eventsPending;
+	const Event *_ecv_null const ep = eventsPending;
 	if (ep != nullptr && ep->isBeingProcessed)
 	{
 		vars.InsertNewParameter("D", ExpressionValue((int32_t)(ep->deviceNumber)));
@@ -114,7 +114,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 // Get the default action for the current event
 /*static*/ PrintPausedReason Event::GetDefaultPauseReason() noexcept
 {
-	const Event * const ep = eventsPending;
+	const Event *_ecv_null const ep = eventsPending;
 	if (ep != nullptr && ep->isBeingProcessed)
 	{
 		switch (ep->type.RawValue())
@@ -140,7 +140,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 {
 	TaskCriticalSectionLocker lock;
 
-	const Event *ev = eventsPending;
+	const Event *_ecv_null ev = eventsPending;
 	if (ev != nullptr && ev->isBeingProcessed)
 	{
 		eventsPending = ev->next;
@@ -152,7 +152,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 // Get a description of the current event
 /*static*/ MessageType Event::GetTextDescription(const StringRef& str) noexcept
 {
-	const Event * const ep = eventsPending;
+	const Event *_ecv_null const ep = eventsPending;
 	if (ep != nullptr && ep->isBeingProcessed)
 	{
 		switch (ep->type.RawValue())
@@ -204,7 +204,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 #if SUPPORT_CAN_EXPANSION
 			str.printf("MCU temperature warning from board %u: temperature %.1fC", ep->boardAddress, (double)((float)ep->param/10));
 #else
-			str.printf("MCU temperature warning: temperature %.1fC", (double)((float)ep->param/10));
+			str.printf("MCU temperature warning: temperature %.1fC", (double)((float)ep->param/10.0));
 #endif
 			return WarningMessage;
 
@@ -212,7 +212,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 #if SUPPORT_CAN_EXPANSION
 			str.printf("overvoltage on board %u: voltage %.1fV", ep->boardAddress, (double)((float)ep->param/10));
 #else
-			str.printf("overvoltage: voltage %.1fV", (double)((float)ep->param/10));
+			str.printf("overvoltage: voltage %.1fV", (double)((float)ep->param/10.0));
 #endif
 			return WarningMessage;
 
@@ -220,7 +220,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 #if SUPPORT_CAN_EXPANSION
 			str.printf("undervoltage on board %u: voltage %.1fV", ep->boardAddress, (double)((float)ep->param/10));
 #else
-			str.printf("undervoltage: voltage %.1fV", (double)((float)ep->param/10));
+			str.printf("undervoltage: voltage %.1fV", (double)((float)ep->param/10.0));
 #endif
 			return WarningMessage;
 

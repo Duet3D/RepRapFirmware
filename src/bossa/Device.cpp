@@ -46,7 +46,7 @@ void Device::readChipId(uint32_t& chipId, uint32_t& extChipId)
 
 void Device::create() THROWS(GCodeException)
 {
-	BossaFlash* flashPtr;
+	BossaFlash *_ecv_from flashPtr;
 #if ORIGINAL_BOSSA_CODE
     uint32_t chipId = 0;
     uint32_t cpuId = 0;
@@ -652,27 +652,27 @@ void Device::reset() noexcept
         case FAMILY_SAMS70:
         case FAMILY_SAMV70:
         case FAMILY_SAMV71:
-            _samba.writeWord(0xE000ED0C, 0x05FA0004);
+            _samba.writeWord(0xE000ED0Cu, 0x05FA0004u);
             break;
 
         case FAMILY_SAM3X:
         case FAMILY_SAM3S:
         case FAMILY_SAM3A:
-            _samba.writeWord(0x400E1A00, 0xA500000D);
+            _samba.writeWord(0x400E1A00u, 0xA500000Du);
             break;
 
         case FAMILY_SAM3U:
-            _samba.writeWord(0x400E1200, 0xA500000D);
+            _samba.writeWord(0x400E1200u, 0xA500000Du);
             break;
 
         case FAMILY_SAM3N:
 #endif
         case FAMILY_SAM4S:
-            _samba.writeWord(0x400E1400, 0xA500000D);
+            _samba.writeWord(0x400E1400u, 0xA500000Du);
             break;
 #if ORIGINAL_BOSSA_CODE
         case FAMILY_SAM4E:
-            _samba.writeWord(0x400E1800, 0xA500000D);
+            _samba.writeWord(0x400E1800u, 0xA500000Du);
             break;
 
         case FAMILY_SAM7S:
@@ -681,7 +681,7 @@ void Device::reset() noexcept
         case FAMILY_SAM7XC:
         case FAMILY_SAM7L:
         case FAMILY_SAM9XE:
-            _samba.writeWord(0xFFFFFD00, 0xA500000D);
+            _samba.writeWord(0xFFFFFD00u, 0xA500000Du);
             break;
 #endif
 

@@ -27,7 +27,7 @@ bool GCodes::IsHeaterUsedByDifferentCurrentTool(int heaterNumber, const Tool *to
 }
 
 // Report the temperatures of one tool in M105 format
-void GCodes::ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept
+void GCodes::ReportToolTemperatures(const StringRef& reply, const Tool *_ecv_null tool, bool includeNumber) const noexcept
 {
 	if (tool != nullptr && tool->HeaterCount() != 0)
 	{
@@ -215,7 +215,7 @@ GCodeResult GCodes::DefineKeepoutZone(GCodeBuffer& gb, const StringRef& reply) T
 
 #endif
 
-GCodeResult GCodes::HandleM486(GCodeBuffer &gb, const StringRef &reply, OutputBuffer*& buf) THROWS(GCodeException)
+GCodeResult GCodes::HandleM486(GCodeBuffer &gb, const StringRef &reply, OutputBuffer *_ecv_null & buf) THROWS(GCodeException)
 {
 	bool seen = false;
 	if (gb.Seen('T'))
@@ -374,7 +374,7 @@ bool GCodes::WriteToolSettings(FileStore *f, const StringRef& buf) const noexcep
 	// First write the settings of all tools
 	bool ok = true;
 	ReadLocker lock(Tool::toolListLock);
-	for (const Tool *t = Tool::GetToolList(); t != nullptr && ok; t = t->Next())
+	for (const Tool *_ecv_null t = Tool::GetToolList(); t != nullptr && ok; t = t->Next())
 	{
 		ok = t->WriteSettings(f, buf);
 	}
@@ -386,7 +386,7 @@ bool GCodes::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) con
 {
 	bool ok = true, written = false;
 	ReadLocker lock(Tool::toolListLock);
-	for (const Tool *t = Tool::GetToolList(); ok && t != nullptr; t = t->Next())
+	for (const Tool *_ecv_null t = Tool::GetToolList(); ok && t != nullptr; t = t->Next())
 	{
 		const AxesBitmap axesProbed = t->GetAxisOffsetsProbed();
 		if (axesProbed.IsNonEmpty() || forceWriteOffsets)

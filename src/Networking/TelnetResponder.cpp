@@ -14,7 +14,7 @@
 #include <GCodes/GCodes.h>
 #include <Platform/Platform.h>
 
-TelnetResponder::TelnetResponder(NetworkResponder *n) noexcept : NetworkResponder(n)
+TelnetResponder::TelnetResponder(NetworkResponder *_ecv_from n) noexcept : NetworkResponder(n)
 {
 }
 
@@ -42,11 +42,12 @@ bool TelnetResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
 }
 
 // This is called to force termination if we implement the specified protocol
-void TelnetResponder::Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept
+void TelnetResponder::Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept
 {
 	if (responderState != ResponderState::free && (protocol == TelnetProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{
-		ConnectionLost();
+		// Don't call ConnectionLost here because that releases outbuf, which may be in use by the Network task, and this is called from the Main task
+		terminateResponder = true;					// tell the responder to terminate
 	}
 }
 
@@ -112,6 +113,12 @@ bool TelnetResponder::SendGCodeReply() noexcept
 // Do some work, returning true if we did anything significant
 bool TelnetResponder::Spin() noexcept
 {
+	if (terminateResponder)
+	{
+		ConnectionLost();
+		terminateResponder = false;
+	}
+
 	switch (responderState)
 	{
 	case ResponderState::free:
@@ -307,7 +314,7 @@ void TelnetResponder::ProcessLine() noexcept
 	OutputBuffer::ReleaseAll(gcodeReply);
 }
 
-/*static*/ void TelnetResponder::HandleGCodeReply(const char *reply) noexcept
+/*static*/ void TelnetResponder::HandleGCodeReply(const char *_ecv_array _ecv_null reply) noexcept
 {
 	if (reply != nullptr && numSessions > 0)
 	{
@@ -341,7 +348,7 @@ void TelnetResponder::ProcessLine() noexcept
 	}
 }
 
-/*static*/ void TelnetResponder::HandleGCodeReply(OutputBuffer *reply) noexcept
+/*static*/ void TelnetResponder::HandleGCodeReply(OutputBuffer *_ecv_null reply) noexcept
 {
 	if (reply != nullptr && numSessions > 0)
 	{
@@ -361,7 +368,7 @@ void TelnetResponder::ProcessLine() noexcept
 
 		// Write entire content to new output buffers, but this time with \r\n instead of \n
 		do {
-			const char *data = reply->Data();
+			const char *_ecv_array data = reply->Data();
 			for(size_t i = 0; i < reply->DataLength(); i++)
 			{
 				if (*data == '\n')
@@ -391,7 +398,7 @@ void TelnetResponder::Diagnostics(MessageType mt) const noexcept
 
 unsigned int TelnetResponder::numSessions = 0;
 unsigned int TelnetResponder::clientsServed = 0;
-OutputBuffer *TelnetResponder::gcodeReply = nullptr;
+OutputBuffer *_ecv_null TelnetResponder::gcodeReply = nullptr;
 Mutex TelnetResponder::gcodeReplyMutex;
 
 #endif

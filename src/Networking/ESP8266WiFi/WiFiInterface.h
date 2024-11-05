@@ -50,7 +50,7 @@ class WiFiInterface : public NetworkInterface
 public:
 	friend class WiFiSocket;
 
-	WiFiInterface(Platform& p) noexcept;
+	explicit WiFiInterface(Platform& p) noexcept;
 
 	void Init() noexcept override;
 	void Activate() noexcept override;
@@ -66,7 +66,7 @@ public:
 	int EnableState() const noexcept override;
 	bool IsWiFiInterface() const noexcept override { return true; }
 
-	void UpdateHostname(const char *hostname) noexcept override;
+	void UpdateHostname(const char *_ecv_array hostname) noexcept override;
 
 	IPAddress GetIPAddress() const noexcept override { return ipAddress; }
 	IPAddress GetNetmask() const noexcept override { return netmask; }
@@ -80,12 +80,12 @@ public:
 	void TerminateDataPort() noexcept override;
 
 	// The remaining functions are specific to the WiFi version
-	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply) THROWS(GCodeException);
-	WifiFirmwareUploader *GetWifiUploader() const noexcept { return uploader; }
+	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer *_ecv_null & longReply) THROWS(GCodeException);
+	WifiFirmwareUploader *_ecv_null GetWifiUploader() const noexcept { return uploader; }
 	void StartWiFi() noexcept;
 	void ResetWiFi() noexcept;
 	void ResetWiFiForUpload(bool external) noexcept;
-	const char *GetWiFiServerVersion() const noexcept { return wiFiServerVersion.c_str(); }
+	const char *_ecv_array GetWiFiServerVersion() const noexcept { return wiFiServerVersion.c_str(); }
 	static const char* TranslateWiFiState(WiFiState w) noexcept;
 	void SpiInterrupt() noexcept;
 	void EspRequestsTransfer() noexcept;

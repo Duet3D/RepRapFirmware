@@ -32,8 +32,8 @@
 #include "Storage/CRC16.h"
 
 // XMODEM definitions
-#define BLK_SIZE    128
-#define MAX_RETRIES 5
+constexpr size_t BLK_SIZE = 128;
+constexpr unsigned int MAX_RETRIES = 5;
 #define SOH         0x01
 #define EOT         0x04
 #define ACK         0x06
@@ -45,22 +45,7 @@
 #define TIMEOUT_NORMAL  1000
 #define TIMEOUT_LONG    5000
 
-#define min(a, b)   ((a) < (b) ? (a) : (b))
-
-Samba::Samba() noexcept :
-    _canChipErase(false),
-    _canWriteBuffer(false),
-    _canChecksumBuffer(false),
-    _readBufferSize(0)
-{
-}
-
-Samba::~Samba()
-{
-}
-
-bool
-Samba::init() noexcept
+bool Samba::init() noexcept
 {
     uint8_t cmd[3];
 
@@ -75,8 +60,8 @@ Samba::init() noexcept
 	debugPrintf("Set binary mode\n");
 #endif
 
-    cmd[0] = 'N';
-    cmd[1] = '#';
+    cmd[0] = (uint8_t)'N';
+    cmd[1] = (uint8_t)'#';
     _port->write(cmd, 2);
     _port->read(cmd, 2);
 
@@ -85,8 +70,7 @@ Samba::init() noexcept
     return true;
 }
 
-bool
-Samba::connect(SerialPort* port, int bps) noexcept
+bool Samba::connect(SerialPort *_ecv_from port, int bps) noexcept
 {
     _port = port;
 
@@ -103,15 +87,13 @@ Samba::connect(SerialPort* port, int bps) noexcept
     return false;
 }
 
-void
-Samba::disconnect() noexcept
+void Samba::disconnect() noexcept
 {
     _port->close();
 }
 
 
-void
-Samba::writeWord(uint32_t addr, uint32_t value) THROWS(GCodeException)
+void Samba::writeWord(uint32_t addr, uint32_t value) THROWS(GCodeException)
 {
     uint8_t cmd[20];
 
@@ -119,25 +101,23 @@ Samba::writeWord(uint32_t addr, uint32_t value) THROWS(GCodeException)
 	debugPrintf("%s(addr=%#" PRIx32 ",value=%#" PRIx32 ")\n", __FUNCTION__, addr, value);
 #endif
 
-    SafeSnprintf((char*) cmd, sizeof(cmd), "W%08" PRIX32 ",%08" PRIX32 "#", addr, value);
-    if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) - 1)
+    SafeSnprintf((char *_ecv_array) cmd, sizeof(cmd), "W%08" PRIX32 ",%08" PRIX32 "#", addr, value);
+    if (_port->write(cmd, sizeof(cmd) - 1) != (int)sizeof(cmd) - 1)
         throw SambaError("Samba::writeWord: _port->write failed");
 }
 
 
-uint32_t
-Samba::readWord(uint32_t addr) THROWS(GCodeException)
+uint32_t Samba::readWord(uint32_t addr) THROWS(GCodeException)
 {
     uint8_t cmd[13];
-    uint32_t value;
 
-    SafeSnprintf((char*) cmd, sizeof(cmd), "w%08" PRIX32 ",4#", addr);
-    if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) - 1)
+    SafeSnprintf((char *_ecv_array) cmd, sizeof(cmd), "w%08" PRIX32 ",4#", addr);
+    if (_port->write(cmd, sizeof(cmd) - 1) != (int)sizeof(cmd) - 1)
         throw SambaError("Samba::readWord: _port->write failed");
-    if (_port->read(cmd, sizeof(uint32_t)) != sizeof(uint32_t))
+    if (_port->read(cmd, sizeof(uint32_t)) != (int)sizeof(uint32_t))
         throw SambaError("Samba::readWord: _port->read failed");
 
-    value = (cmd[3] << 24 | cmd[2] << 16 | cmd[1] << 8 | cmd[0] << 0);
+    const uint32_t value = (cmd[3] << 24 | cmd[2] << 16 | cmd[1] << 8 | cmd[0] << 0);
 
 #if DEBUG_BOSSA
 	debugPrintf("%s(addr=%#" PRIx32 ")=%#" PRIx32 "\n", __FUNCTION__, addr, value);
@@ -146,43 +126,48 @@ Samba::readWord(uint32_t addr) THROWS(GCodeException)
     return value;
 }
 
-void
-Samba::readXmodem(uint8_t* buffer, int size) THROWS(GCodeException)
+void Samba::readXmodem(uint8_t *_ecv_array buffer, size_t size) THROWS(GCodeException)
 {
     uint8_t blk[BLK_SIZE + 5];
     uint32_t blkNum = 1;
-    int retries;
+    unsigned int retries;
     int bytes;
     CRC16 crc16;
 
-    while (size > 0)
+    while (size != 0)
     {
         for (retries = 0; retries < MAX_RETRIES; retries++)
         {
             if (blkNum == 1)
+            {
                 _port->put(START);
+            }
 
             bytes = _port->read(blk, sizeof(blk));
             crc16.Reset(0);
-            crc16.Update(&blk[3], BLK_SIZE);
-            uint16_t receivedCRC16 = blk[BLK_SIZE + 3] << 8 | blk[BLK_SIZE + 4];
-            if (bytes == sizeof(blk) &&
-                blk[0] == SOH &&
-                blk[1] == (blkNum & 0xff) &&
-				crc16.Get() == receivedCRC16)
+            crc16.Update(blk + 3, BLK_SIZE);
+            const uint16_t receivedCRC16 = blk[BLK_SIZE + 3] << 8 | blk[BLK_SIZE + 4];
+            if (   bytes == (int)sizeof(blk)
+            	&& blk[0] == SOH
+				&& blk[1] == (blkNum & 0xff)
+				&& crc16.Get() == receivedCRC16
+			   )
                 break;
 
             if (blkNum != 1)
+            {
                 _port->put(NAK);
+            }
         }
         if (retries == MAX_RETRIES)
             throw SambaError("Samba::readXmodem: max retries reached 1");
 
         _port->put(ACK);
 
-        memmove(buffer, &blk[3], min(size, BLK_SIZE));
+		const size_t sizeToMove = min<size_t>(size, BLK_SIZE);
+        memmove(buffer, blk + 3, sizeToMove);
         buffer += BLK_SIZE;
-        size -= BLK_SIZE;
+        size -= sizeToMove;
         blkNum++;
     }
 
@@ -199,42 +184,44 @@ Samba::readXmodem(uint8_t* buffer, int size) THROWS(GCodeException)
         throw SambaError("Samba::readXmodem: max retries reached 2");
 }
 
-void
-Samba::writeXmodem(const uint8_t* buffer, int size) THROWS(GCodeException)
+void Samba::writeXmodem(const uint8_t *_ecv_array buffer, size_t size) THROWS(GCodeException)
 {
     uint8_t blk[BLK_SIZE + 5];
     uint32_t blkNum = 1;
-    int retries;
+    unsigned int retries;
     int bytes;
 
     for (retries = 0; retries < MAX_RETRIES; retries++)
     {
-        if (_port->get() == START)
+        if (_port->get() == (int)START)
             break;
     }
     if (retries == MAX_RETRIES)
         throw SambaError("Samba::writeXmodem: max retries reached getting START signal");
 
     CRC16 crc16;
-    while (size > 0)
+    while (size != 0)
     {
         blk[0] = SOH;
         blk[1] = (blkNum & 0xff);
         blk[2] = ~(blkNum & 0xff);
-        memmove(&blk[3], buffer, min(size, BLK_SIZE));
+        const size_t sizeToMove = min<size_t>(size, BLK_SIZE);
+        memmove(blk + 3, buffer, sizeToMove);
         if (size < BLK_SIZE)
-            memset(&blk[3] + size, 0, BLK_SIZE - size);
+        {
+            memset(blk + 3 + size, 0, BLK_SIZE - size);
+        }
 
         crc16.Reset(0);
-    	crc16.Update(&blk[3], BLK_SIZE);
-        auto checksum = crc16.Get();
+    	crc16.Update(blk + 3, BLK_SIZE);
+        const uint16_t checksum = crc16.Get();
         blk[BLK_SIZE + 3] = (checksum >> 8) & 0xff;
         blk[BLK_SIZE + 4] = checksum & 0xff;
 
         for (retries = 0; retries < MAX_RETRIES; retries++)
         {
             bytes = _port->write(blk, sizeof(blk));
-            if (bytes != sizeof(blk))
+            if (bytes != (int)sizeof(blk))
                 throw SambaError("Samba::writeXmodem: _port->write failed");
 
             if (_port->get() == ACK)
@@ -245,7 +232,7 @@ Samba::writeXmodem(const uint8_t* buffer, int size) THROWS(GCodeException)
             throw SambaError("Samba::writeXmodem: max retries reached 2");
 
         buffer += BLK_SIZE;
-        size -= BLK_SIZE;
+        size -= sizeToMove;
         blkNum++;
     }
 
@@ -259,38 +246,22 @@ Samba::writeXmodem(const uint8_t* buffer, int size) THROWS(GCodeException)
         throw SambaError("Samba::writeXmodem: max retries reached 3");
 }
 
-void
-Samba::read(uint32_t addr, uint8_t* buffer, int size) THROWS(GCodeException)
+void Samba::read(uint32_t addr, uint8_t *_ecv_array buffer, size_t size) THROWS(GCodeException)
 {
     uint8_t cmd[20];
-    int chunk;
 
 #if DEBUG_BOSSA
 	debugPrintf("%s(addr=%#" PRIx32 ",size=%#x)\n", __FUNCTION__, addr, size);
 #endif
 
-    while (size > 0)
-    {
-        // Handle any limitations on the size of the read
-        if (_readBufferSize > 0 && size > _readBufferSize)
-            chunk = _readBufferSize;
-        else
-            chunk = size;
+	SafeSnprintf((char *_ecv_array) cmd, sizeof(cmd), "R%08" PRIX32 ",%08X#", addr, size);
+	if (_port->write(cmd, sizeof(cmd) - 1) != (int)sizeof(cmd) - 1)
+		throw SambaError("Samba::read: _port->write failed");
 
-        SafeSnprintf((char*) cmd, sizeof(cmd), "R%08" PRIX32 ",%08X#", addr, chunk);
-        if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) - 1)
-            throw SambaError("Samba::read: _port->write failed");
-
-		readXmodem(buffer, chunk);
-
-        size -= chunk;
-        addr += chunk;
-        buffer += chunk;
-    }
+	readXmodem(buffer, size);
 }
 
-void
-Samba::write(uint32_t addr, const uint8_t* buffer, int size) THROWS(GCodeException)
+void Samba::write(uint32_t addr, const uint8_t *_ecv_array buffer, size_t size) THROWS(GCodeException)
 {
     uint8_t cmd[20];
 
@@ -298,17 +269,14 @@ Samba::write(uint32_t addr, const uint8_t* buffer, int size) THROWS(GCodeExcepti
 	debugPrintf("%s(addr=%#" PRIx32 ",size=%#x)\n", __FUNCTION__, addr, size);
 #endif
 
-    SafeSnprintf((char*) cmd, sizeof(cmd), "S%08" PRIX32 ",%08X#", addr, size);
-    if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) - 1)
-    {
-        throw SambaError("Samba::write: _port->write failed");
-    }
+	SafeSnprintf((char *_ecv_array) cmd, sizeof(cmd), "S%08" PRIX32 ",%08X#", addr, size);
+	if (_port->write(cmd, sizeof(cmd) - 1) != (int)sizeof(cmd) - 1)
+		throw SambaError("Samba::write: _port->write failed");
 
 	writeXmodem(buffer, size);
 }
 
-void
-Samba::go(uint32_t addr) THROWS(GCodeException)
+void Samba::go(uint32_t addr) THROWS(GCodeException)
 {
     uint8_t cmd[11];
 
@@ -316,7 +284,9 @@ Samba::go(uint32_t addr) THROWS(GCodeException)
 	debugPrintf("%s(addr=%#" PRIx32 ")\n", __FUNCTION__, addr);
 #endif
 
-    SafeSnprintf((char*) cmd, sizeof(cmd), "G%08" PRIX32 "#", addr);
-    if (_port->write(cmd, sizeof(cmd) - 1) != sizeof(cmd) - 1)
+    SafeSnprintf((char *_ecv_array) cmd, sizeof(cmd), "G%08" PRIX32 "#", addr);
+    if (_port->write(cmd, sizeof(cmd) - 1) != (int)sizeof(cmd) - 1)
         throw SambaError("Samba::go: _port->write failed");
 }
+
+// End

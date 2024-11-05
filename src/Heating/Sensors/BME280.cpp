@@ -47,6 +47,11 @@ constexpr uint32_t BME280_Frequency = 4000000;			// maximum for BME280 is 10MHz
 constexpr SpiMode BME280_SpiMode = SPI_MODE_0;			// BME280 does mode 0 or mode 3 depending on value of CLK at falling edge of CS
 constexpr size_t MaxRegistersToRead = 26;
 
+// Sensor type descriptors
+TemperatureSensor::SensorTypeDescriptor BME280TemperatureSensor::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new BME280TemperatureSensor(sensorNum); } );
+TemperatureSensor::SensorTypeDescriptor BME280PressureSensor::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new BME280PressureSensor(sensorNum); } );
+TemperatureSensor::SensorTypeDescriptor BME280HumiditySensor::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new BME280HumiditySensor(sensorNum); } );
+
 // BME280 support functions, derived from code at https://github.com/BoschSensortec/BME280_driver
 
 /**\name Internal macros */
@@ -100,7 +105,7 @@ TemperatureError BME280TemperatureSensor::bme280_init() noexcept
 /*!
  * @brief This API reads the data from the given register address of the sensor.
  */
-TemperatureError BME280TemperatureSensor::bme280_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint16_t len) const noexcept
+TemperatureError BME280TemperatureSensor::bme280_get_regs(uint8_t reg_addr, uint8_t *_ecv_array reg_data, uint16_t len) const noexcept
 {
 	uint8_t addrBuff[MaxRegistersToRead + 1];				// only the first byte is used but the remainder need to be value addresses
 	uint8_t dataBuff[MaxRegistersToRead + 1];
@@ -466,7 +471,7 @@ float BME280TemperatureSensor::compensate_humidity(const bme280_uncomp_data *unc
 /*!
  *  @brief This API is used to parse the pressure, temperature and humidity data and store it in the bme280_uncomp_data structure instance.
  */
-void BME280TemperatureSensor::bme280_parse_sensor_data(const uint8_t *reg_data, bme280_uncomp_data *uncomp_data) noexcept
+void BME280TemperatureSensor::bme280_parse_sensor_data(const uint8_t *_ecv_array reg_data, bme280_uncomp_data *uncomp_data) noexcept
 {
 	/* Variables to store the sensor data */
 	uint32_t data_xlsb;
@@ -578,7 +583,7 @@ TemperatureError BME280TemperatureSensor::set_osr_press_temp_settings(uint8_t de
 /*!
  *  @brief This internal API is used to parse the temperature and pressure calibration data and store it in device structure.
  */
-void BME280TemperatureSensor::parse_temp_press_calib_data(const uint8_t *reg_data) noexcept
+void BME280TemperatureSensor::parse_temp_press_calib_data(const uint8_t *_ecv_array reg_data) noexcept
 {
     dev.calib_data.dig_t1 = BME280_CONCAT_BYTES(reg_data[1], reg_data[0]);
     dev.calib_data.dig_t2 = (int16_t)BME280_CONCAT_BYTES(reg_data[3], reg_data[2]);
@@ -598,7 +603,7 @@ void BME280TemperatureSensor::parse_temp_press_calib_data(const uint8_t *reg_dat
 /*!
  *  @brief This internal API is used to parse the humidity calibration data and store it in device structure.
  */
-void BME280TemperatureSensor::parse_humidity_calib_data(const uint8_t *reg_data) noexcept
+void BME280TemperatureSensor::parse_humidity_calib_data(const uint8_t *_ecv_array reg_data) noexcept
 {
     dev.calib_data.dig_h2 = (int16_t)BME280_CONCAT_BYTES(reg_data[1], reg_data[0]);
     dev.calib_data.dig_h3 = reg_data[2];
@@ -728,7 +733,8 @@ GCodeResult BME280TemperatureSensor::FinishConfiguring(bool changed, const Strin
 
 TemperatureError BME280TemperatureSensor::GetAdditionalOutput(float &t, uint8_t outputNumber) noexcept
 {
-	const auto result = TemperatureSensor::GetLatestTemperature(t);
+	float dummy;
+	const auto result = TemperatureSensor::GetLatestTemperature(dummy);
 	switch (outputNumber)
 	{
 	case 1:

@@ -104,7 +104,7 @@ bool Lcd7567::FlushSome() noexcept
 			// Gather the bits for 8 vertical lines of 8 pixels (LSB is the top pixel)
 			// Use two 32-bit accumulators instead of eight 8-bit accumulators so that all the work can be done in registers
 			uint32_t data0 = 0, data1 = 0;
-			const uint8_t * p = image + (x/8u) + (nextFlushRow * (numCols/8u));
+			const uint8_t *_ecv_array p = image + (x/8u) + (nextFlushRow * (numCols/8u));
 
 			for (unsigned int i = 0; i < 8; i++)
 			{
@@ -117,7 +117,7 @@ bool Lcd7567::FlushSome() noexcept
 			}
 
 			const uint32_t buffer[2] = { data0, data1 };
-			device.TransceivePacket((const uint8_t*)buffer, nullptr, 8);
+			device.TransceivePacket((const uint8_t *_ecv_array)buffer, nullptr, 8);
 		}
 
 		EndDataTransaction();

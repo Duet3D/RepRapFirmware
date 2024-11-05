@@ -33,9 +33,10 @@ constexpr ObjectModelTableEntry Spindle::objectModelTable[] =
 	{ "min",			OBJECT_MODEL_FUNC((int32_t)self->minRpm),					ObjectModelEntryFlags::verbose },
 	{ "minPwm",			OBJECT_MODEL_FUNC(self->minPwm, 2),							ObjectModelEntryFlags::verbose },
 	{ "state",			OBJECT_MODEL_FUNC(self->state.ToString()),					ObjectModelEntryFlags::live },
+	{ "type", 			OBJECT_MODEL_FUNC(self->type.ToString()),					ObjectModelEntryFlags::verbose },
 };
 
-constexpr uint8_t Spindle::objectModelTableDescriptor[] = { 1, 10 };
+constexpr uint8_t Spindle::objectModelTableDescriptor[] = { 1, 11 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Spindle)
 
@@ -44,17 +45,17 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Spindle)
 Spindle::Spindle() noexcept
 	: minPwm(DefaultMinSpindlePwm), maxPwm(DefaultMaxSpindlePwm), idlePwm(DefaultIdleSpindlePwm),
 	  currentRpm(0), configuredRpm(0), minRpm(DefaultMinSpindleRpm), maxRpm(DefaultMaxSpindleRpm),
-	  frequency(0), state(SpindleState::unconfigured)
+	  frequency(0), type(DefaultSpindleType), state(SpindleState::unconfigured)
 {
 }
 
-GCodeResult Spindle::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+GCodeResult Spindle::Configure(uint32_t spindleNumber, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	bool seen = false;
 	if (gb.Seen('C'))
 	{
 		seen = true;
-		IoPort * const ports[] = { &pwmPort, &onOffPort, &reverseNotForwardPort };
+		IoPort *_ecv_from const ports[] = { &pwmPort, &onOffPort, &reverseNotForwardPort };
 		const PinAccess access[] = { PinAccess::pwm, PinAccess::write0, PinAccess::write0 };
 		if (IoPort::AssignPorts(gb, reply, PinUsedBy::spindle, 3, ports, access) == 0)
 		{
@@ -106,15 +107,64 @@ GCodeResult Spindle::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 		}
 	}
 
+	if (gb.Seen('T'))
+	{
+		seen = true;
+		type = (SpindleType)gb.GetLimitedUIValue('T', 2);
+	}
+
 	if (seen)
 	{
 		state = SpindleState::stopped;
 		reprap.SpindlesUpdated();
+		return GCodeResult::ok;
+	}
+
+	// If we get here then we are reporting on a spindle
+	reply.printf("Spindle %" PRIu32, spindleNumber);
+	if (state == SpindleState::unconfigured)
+	{
+		reply.cat(" is not configured");
+	}
+	else
+	{
+		reply.cat(": ");
+
+		if (state == SpindleState::forward || state == SpindleState::reverse)
+		{
+			reply.catf("running %s at %" PRIu32 " rpm, ", state.ToString(), GetCurrentRpm());
+		}
+
+		reply.catf("type %s", type.ToString());
+
+		const bool isEnaDir = (type == SpindleType::enaDir);
+
+		if (onOffPort.IsValid())
+		{
+			reply.cat(", ");
+			reply.catf(isEnaDir ? "enable" : "forward");
+			onOffPort.AppendBasicDetails(reply);
+		}
+
+		if (reverseNotForwardPort.IsValid())
+		{
+			reply.cat(", ");
+			reply.catf(isEnaDir? "direction" : "reverse");
+			reverseNotForwardPort.AppendBasicDetails(reply);
+		}
+
+		if (pwmPort.IsValid())
+		{
+			reply.cat(", rpm");
+			pwmPort.AppendFullDetails(reply);
+		}
+
+		reply.catf(", rpm min %" PRIu32 ", max %" PRIu32, minRpm, maxRpm);
 	}
 	return GCodeResult::ok;
 }
 
-void Spindle::SetConfiguredRpm(const uint32_t rpm, bool updateCurrentRpm) noexcept
+void Spindle::SetConfiguredRpm(uint32_t rpm, bool updateCurrentRpm) noexcept
 {
 	configuredRpm = rpm;
 	if (updateCurrentRpm)
@@ -126,15 +176,26 @@ void Spindle::SetConfiguredRpm(const uint32_t rpm, bool updateCurrentRpm) noexce
 
 void Spindle::SetRpm(uint32_t rpm) noexcept
 {
+	// Normal mode:
+	//   Forward: onOffPort=1, reverseNotForwardPort=0
+	//   Reverse: onOffPort=1, reverseNotForwardPort=1
+	//   Stopped: onOffPort=0, reverseNotForwardPort=0
+	// Alternate mode:
+	//   Forward: onOffPort=1, reverseNotForwardPort=0
+	//   Reverse: onOffPort=0, reverseNotForwardPort=1
+	//   Stopped: onOffPort=0, reverseNotForwardPort=0
+
 	if (state == SpindleState::stopped || rpm == 0)
 	{
 		onOffPort.WriteDigital(false);
+		// Make sure reverse port is set correctly in stopped state.
+		reverseNotForwardPort.WriteDigital(false);
 		pwmPort.WriteAnalog(idlePwm);
 		currentRpm = 0;						// current rpm is flagged live, so no need to change seqs.spindles
 	}
 	else if (state == SpindleState::forward)
 	{
-		rpm = constrain<int>(rpm, minRpm, maxRpm);
+		rpm = constrain<uint32_t>(rpm, minRpm, maxRpm);
 		reverseNotForwardPort.WriteDigital(false);
 		pwmPort.WriteAnalog(((float)(rpm - minRpm) / (float)(maxRpm - minRpm)) * (maxPwm - minPwm) + minPwm);
 		onOffPort.WriteDigital(true);
@@ -142,15 +203,15 @@ void Spindle::SetRpm(uint32_t rpm) noexcept
 	}
 	else if (state == SpindleState::reverse)
 	{
-		rpm = constrain<int>(-rpm, -maxRpm, -minRpm);
+		rpm = constrain<uint32_t>(rpm, minRpm, maxRpm);
 		reverseNotForwardPort.WriteDigital(true);
-		pwmPort.WriteAnalog(((float)(-rpm - minRpm) / (float)(maxRpm - minRpm)) * (maxPwm - minPwm) + minPwm);
-		onOffPort.WriteDigital(true);
-		currentRpm = -rpm;					// current rpm is flagged live, so no need to change seqs.spindles
+		pwmPort.WriteAnalog(((float)(rpm - minRpm) / (float)(maxRpm - minRpm)) * (maxPwm - minPwm) + minPwm);
+		onOffPort.WriteDigital(type != SpindleType::fwdRev);
+		currentRpm = rpm;					// current rpm is flagged live, so no need to change seqs.spindles
 	}
 }
 
-void Spindle::SetState(const SpindleState newState) noexcept
+void Spindle::SetState(SpindleState newState) noexcept
 {
 	state = newState;
 	SetRpm(configuredRpm);					// depending on the configured SpindleState this might actually stop the spindle

@@ -21,10 +21,10 @@ class MessageBox;
 class Menu
 {
 public:
-	Menu(Lcd& refLcd) noexcept;
+	explicit Menu(Lcd &_ecv_from refLcd) noexcept;
 	~Menu();
 
-	void Load(const char* filename) noexcept;							// load a menu file
+	void Load(const char *_ecv_array filename) noexcept;							// load a menu file
 	void Pop() noexcept;
 	void EncoderAction(int action) noexcept;
 	void Refresh() noexcept;
@@ -41,21 +41,21 @@ private:
 	void ResetCache() noexcept;
 	void Reload() noexcept;
 	void DrawAll() noexcept;
-	const char *ParseMenuLine(char * s) noexcept;
-	void LoadError(const char *msg, unsigned int line) noexcept;
-	void AddItem(MenuItem *item, bool isSelectable) noexcept;
-	const char *AppendString(const char *s) noexcept;
+	const char *_ecv_array _ecv_null ParseMenuLine(char *_ecv_array const s) noexcept;
+	void LoadError(const char *_ecv_array msg, unsigned int line) noexcept;
+	void AddItem(MenuItem *_ecv_from item, bool isSelectable) noexcept;
+	const char *_ecv_array AppendString(const char *_ecv_array s) noexcept;
 
 	void EncoderActionEnterItemHelper() noexcept;
 	void EncoderActionScrollItemHelper(int action) noexcept;
-	void EncoderAction_ExecuteHelper(const char *const cmd) noexcept;
+	void EncoderAction_ExecuteHelper(const char *_ecv_array const cmd) noexcept;
 
 	void AdvanceHighlightedItem(int n) noexcept;
-	MenuItem *FindNextSelectableItem(MenuItem *p) const noexcept;
-	MenuItem *FindPrevSelectableItem(MenuItem *p) const noexcept;
+	MenuItem *_ecv_from _ecv_null FindNextSelectableItem(MenuItem *_ecv_from _ecv_null p) const noexcept;
+	MenuItem *_ecv_from _ecv_null FindPrevSelectableItem(MenuItem *_ecv_from _ecv_null p) const noexcept;
 
-	static const char *SkipWhitespace(const char *s) noexcept;
-	static char *SkipWhitespace(char *s) noexcept;
+	static const char *_ecv_array SkipWhitespace(const char *_ecv_array s) noexcept;
+	static char *_ecv_array SkipWhitespace(char *_ecv_array s) noexcept;
 	static bool CheckVisibility(MenuItem::Visibility vis) noexcept;
 
 #if SUPPORT_RESISTIVE_TOUCH
@@ -73,14 +73,14 @@ private:
 	static const PixelNumber InnerMargin = 2;					// how many pixels we keep clear inside the border
 	static const PixelNumber OuterMargin = 8 + InnerMargin;		// how many pixels of the previous menu we leave on each side
 
-	Lcd& lcd;
+	Lcd &_ecv_from lcd;
 
 	uint32_t timeoutValue;										// how long to time out after 0 = no timeout
 	uint32_t lastActionTime;
 
-	MenuItem *selectableItems;									// selectable items at the innermost level
-	MenuItem *unSelectableItems;								// unselectable items at the innermost level
-	MenuItem *highlightedItem;									// which item is selected, or nullptr if nothing selected
+	MenuItem *_ecv_from _ecv_null selectableItems;				// selectable items at the innermost level
+	MenuItem *_ecv_from _ecv_null unSelectableItems;			// unselectable items at the innermost level
+	MenuItem *_ecv_from _ecv_null highlightedItem;				// which item is selected, or nullptr if nothing selected
 	String<MaxMenuFilenameLength> filenames[MaxMenuNesting];
 	size_t numNestedMenus;
 	bool itemIsSelected;

@@ -8,6 +8,7 @@
 #include "Tasks.h"
 #include "RepRap.h"
 #include "Platform.h"
+#include <Devices.h>
 #include <Cache.h>
 #include <Platform/TaskPriorities.h>
 #include <Hardware/SoftwareReset.h>

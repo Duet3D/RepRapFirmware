@@ -6,6 +6,9 @@
  */
 
 #include "NetworkClient.h"
+
+#if HAS_CLIENTS
+
 #include "Socket.h"
 #include <Platform/Platform.h>
 
@@ -61,7 +64,7 @@ bool NetworkClient::Accept(Socket *socket, NetworkProtocol protocol) noexcept
 	return false;
 }
 
-void NetworkClient::Terminate(NetworkProtocol protocol, NetworkInterface *iface) noexcept
+void NetworkClient::Terminate(NetworkProtocol protocol, const NetworkInterface *iface) noexcept
 {
 	if ((HandlesProtocol(protocol) || protocol == AnyProtocol) && (skt && skt->GetInterface() == iface))
 	{
@@ -83,3 +86,7 @@ void NetworkClient::ConnectionLost() noexcept
 }
 
 NetworkClient *NetworkClient::clients = nullptr;
+
+#endif
+
+// End

@@ -33,6 +33,11 @@
 
 #if SUPPORT_PHASE_STEPPING
 
+# include <Platform/RepRap.h>
+# include <General/NamedEnum.h>
+# include <Movement/StepTimer.h>
+# include <Movement/Trigonometry.h>
+
 using std::atomic;
 using std::numeric_limits;
 

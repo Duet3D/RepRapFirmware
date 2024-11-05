@@ -563,7 +563,7 @@ bool DriveMovement::StopDriver(int32_t& netStepsTaken) noexcept
 	{
 		state = DMState::idle;
 		reprap.GetMove().DeactivateDM(this);
-		netStepsTaken = GetNetStepsTaken();
+		netStepsTaken = GetNetStepsTakenThisMove();
 		MoveSegment *seg = nullptr;
 		std::swap(seg, const_cast<MoveSegment*&>(segments));
 		MoveSegment::ReleaseAll(seg);
@@ -626,6 +626,27 @@ bool DriveMovement::SetStepMode(StepMode mode) noexcept
 	}
 	stepMode = mode;
 	return true;
+}
+
+motioncalc_t DriveMovement::GetPhaseStepsTakenThisSegment() const noexcept
+{
+	const MoveSegment *const seg = segments;
+	if (seg == nullptr)
+	{
+		return 0;
+	}
+	int32_t timeSinceStart = (int32_t)(StepTimer::GetMovementTimerTicks() - seg->GetStartTime());
+	if (timeSinceStart < 0)
+	{
+		return 0;
+	}
+
+	if ((uint32_t)timeSinceStart >= seg->GetDuration())
+	{
+		timeSinceStart = seg->GetDuration();
+	}
+
+	return (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart;
 }
 
 #endif

@@ -282,7 +282,7 @@ void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDire
 	}
 }
 
-/*static*/ void Kinematics::PrintMatrix(const char* s, const MathMatrix<float>& m, size_t maxRows, size_t maxCols) noexcept
+/*static*/ void Kinematics::PrintMatrix(const char *_ecv_array s, const MathMatrix<float>& m, size_t maxRows, size_t maxCols) noexcept
 {
 	debugPrintf("%s\n", s);
 	if (maxRows == 0)
@@ -303,7 +303,7 @@ void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDire
 	}
 }
 
-/*static*/ void Kinematics::PrintMatrix(const char* s, const MathMatrix<double>& m, size_t maxRows, size_t maxCols) noexcept
+/*static*/ void Kinematics::PrintMatrix(const char *_ecv_array s, const MathMatrix<double>& m, size_t maxRows, size_t maxCols) noexcept
 {
 	debugPrintf("%s\n", s);
 	if (maxRows == 0)
@@ -324,7 +324,7 @@ void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDire
 	}
 }
 
-/*static*/ void Kinematics::PrintVector(const char *s, const float *v, size_t numElems) noexcept
+/*static*/ void Kinematics::PrintVector(const char *_ecv_array s, const float *_ecv_array v, size_t numElems) noexcept
 {
 	debugPrintf("%s:", s);
 	for (size_t i = 0; i < numElems; ++i)
@@ -334,7 +334,7 @@ void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDire
 	debugPrintf("\n");
 }
 
-/*static*/ void Kinematics::PrintVector(const char *s, const double *v, size_t numElems) noexcept
+/*static*/ void Kinematics::PrintVector(const char *_ecv_array s, const double *_ecv_array v, size_t numElems) noexcept
 {
 	debugPrintf("%s:", s);
 	for (size_t i = 0; i < numElems; ++i)

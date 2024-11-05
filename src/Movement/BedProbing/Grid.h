@@ -79,18 +79,20 @@ public:
 	float GetInterpolatedHeightError(float axis0, float axis1) const noexcept;			// Compute the interpolated height error at the specified point
 	void ClearGridHeights() noexcept;													// Clear all grid height corrections
 	void SetGridHeight(size_t axis0Index, size_t axis1Index, float height) noexcept;	// Set the height of a grid point
+	
+	bool IsValid() const noexcept { return def.IsValid(); }
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	bool SaveToFile(FileStore *f, const char *fname, float zOffset) noexcept			// Save the grid to file returning true if an error occurred
+	bool SaveToFile(FileStore *f, const char *_ecv_array fname, float zOffset) noexcept			// Save the grid to file returning true if an error occurred
 		pre(IsValid());
 
-	bool LoadFromFile(FileStore *f, const char *fname, const StringRef& r
+	bool LoadFromFile(FileStore *f, const char *_ecv_array fname, const StringRef& r
 # if SUPPORT_PROBE_POINTS_FILE
 						, bool isPointsFile
 # endif
 						) noexcept;	// Load the grid from file returning true if an error occurred
 
-	const char *GetFileName() const noexcept { return fileName.c_str(); }
+	const char *_ecv_array GetFileName() const noexcept { return fileName.c_str(); }
 #endif
 
 	unsigned int GetMinimumSegments(float deltaAxis0, float deltaAxis1) const noexcept;	// Return the minimum number of segments for a move by this X or Y amount
@@ -110,9 +112,9 @@ private:
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	// Increase the version number in the following string whenever we change the format of the height map file significantly.
 	// Adding more fields to the header row can be handled in GridDefinition::ReadParameters() though.
-	static constexpr const char* HeightMapComment = "RepRapFirmware height map file v2";	// The start of the comment we write at the start of the height map file
+	static constexpr const char *_ecv_array HeightMapComment = "RepRapFirmware height map file v2";	// The start of the comment we write at the start of the height map file
 # if SUPPORT_PROBE_POINTS_FILE
-	static constexpr const char* PointsFileComment = "RepRapFirmware probe points file v2";	// The start of the comment we write at the start of the points map file
+	static constexpr const char *_ecv_array PointsFileComment = "RepRapFirmware probe points file v2";	// The start of the comment we write at the start of the points map file
 # endif
 #endif
 

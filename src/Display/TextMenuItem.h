@@ -18,11 +18,11 @@ public:
 	DECLARE_FREELIST_NEW_DELETE(TextMenuItem)
 
 	TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, const char *_ecv_array t) noexcept;
-	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept override;
-	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
+	void Draw(Lcd &_ecv_from lcd, PixelNumber maxWidth, bool highlight) noexcept override;
+	void UpdateWidthAndHeight(Lcd &_ecv_from lcd) noexcept override;
 
 protected:
-	void CorePrint(Lcd& lcd) noexcept override;
+	void CorePrint(Lcd &_ecv_from lcd) noexcept override;
 
 private:
 	const char *_ecv_array text;

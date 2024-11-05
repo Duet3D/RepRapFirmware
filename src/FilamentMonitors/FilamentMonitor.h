@@ -13,10 +13,11 @@
 #include <ObjectModel/ObjectModel.h>
 #include <RTOSIface/RTOSIface.h>
 #include <RRF3Common.h>
+#include <GCodes/GCodes.h>
 
 #if SUPPORT_CAN_EXPANSION
-struct CanMessageFilamentMonitorsStatusNew;
-struct FilamentMonitorDataNew;
+struct CanMessageFilamentMonitorsStatusNew2;
+struct FilamentMonitorDataNew2;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -30,10 +31,10 @@ class FilamentMonitor INHERIT_OBJECT_MODEL
 {
 public:
 	// Override the virtual destructor if your derived class allocates any dynamic memory
-	virtual ~FilamentMonitor() noexcept;
+	virtual ~FilamentMonitor() noexcept override;
 
 	// We don't want to copy filament monitors
-	FilamentMonitor(const FilamentMonitor&) = delete;
+	FilamentMonitor(const FilamentMonitor &_ecv_from) = delete;
 
 	// Static initialisation
 	static void InitStatic() noexcept;
@@ -59,11 +60,11 @@ public:
 	static size_t GetNumMonitorsToReport() noexcept;
 
 	// Get access to a filament monitor when we already have a read lock
-	static FilamentMonitor *GetMonitorAlreadyLocked(size_t extruder) noexcept { return filamentSensors[extruder]; }
+	static FilamentMonitor *_ecv_from _ecv_null GetMonitorAlreadyLocked(size_t extruder) noexcept { return filamentSensors[extruder]; }
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	static void UpdateRemoteFilamentStatus(CanAddress src, CanMessageFilamentMonitorsStatusNew& msg) noexcept;
+	static void UpdateRemoteFilamentStatus(CanAddress src, CanMessageFilamentMonitorsStatusNew2& msg) noexcept;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -119,7 +120,7 @@ protected:
 	uint8_t GetDriver() const noexcept { return driveNumber; }
 
 	// Get the status of the filament monitor as a string
-	const char *GetStatusText() const noexcept { return lastStatus.ToString(); }
+	const char *_ecv_array GetStatusText() const noexcept { return lastStatus.ToString(); }
 
 	// Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 	// 'filamentConsumed' is the net amount of extrusion since the last call to this function.
@@ -133,7 +134,7 @@ protected:
 	virtual GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept = 0;
 
 	// Store collected data in a CAN message slot returning true if there was data worth sending
-	virtual void GetLiveData(FilamentMonitorDataNew& data) const noexcept = 0;
+	virtual void GetLiveData(FilamentMonitorDataNew2& data) const noexcept = 0;
 
 	// Print diagnostic info for this sensor
 	virtual void Diagnostics(const StringRef& reply) noexcept = 0;
@@ -141,7 +142,7 @@ protected:
 
 #if SUPPORT_CAN_EXPANSION
 	// Update live filament monitor data received from a remote filament monitor
-	virtual void UpdateLiveData(const FilamentMonitorDataNew& data) noexcept = 0;
+	virtual void UpdateLiveData(const FilamentMonitorDataNew2& data) noexcept = 0;
 #endif
 
 	GCodeResult CommonConfigure(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen) THROWS(GCodeException);
@@ -163,7 +164,7 @@ protected:
 
 private:
 	// Create a filament sensor returning null if not a valid sensor type
-	static FilamentMonitor *Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	static FilamentMonitor *_ecv_from Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	static void InterruptEntry(CallbackParameter param) noexcept;
 
 	static constexpr size_t NumFilamentMonitors =
@@ -174,7 +175,7 @@ private:
 								MaxExtruders;
 #endif
 
-	static FilamentMonitor *filamentSensors[NumFilamentMonitors];
+	static FilamentMonitor *_ecv_from _ecv_null filamentSensors[NumFilamentMonitors];
 
 #if SUPPORT_REMOTE_COMMANDS
 	static constexpr uint32_t StatusUpdateInterval = 2000;				// how often we send status reports when there isn't a change

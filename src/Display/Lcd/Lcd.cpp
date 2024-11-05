@@ -154,7 +154,7 @@ size_t Lcd::write(uint8_t c) noexcept
 
 size_t Lcd::writeNative(uint16_t ch) noexcept
 {
-	if (ch == '\n')
+	if (ch == (uint16_t)'\n')
 	{
 		SetCursor(row + GetFontHeight() + 1, leftMargin);
 	}
@@ -178,10 +178,10 @@ size_t Lcd::writeNative(uint16_t ch) noexcept
 			const PixelNumber fontHeight = currentFont->height;
 			const PixelNumber fontBytesPerColumn = (fontHeight + 7)/8;
 			const PixelNumber fontBytesPerChar = (fontBytesPerColumn * currentFont->width) + 1;
-			const uint8_t *fontPtr = currentFont->ptr + (fontBytesPerChar * (ch - startChar));
+			const uint8_t *_ecv_array fontPtr = currentFont->ptr + (fontBytesPerChar * (ch - startChar));
 			PixelNumber numFontColumns = *fontPtr++;
 #endif
-			const uint32_t cmask = (fontHeight < 32) ? (1u << fontHeight) - 1 : 0xFFFFFFFF;
+			const uint32_t cmask = (fontHeight < 32) ? (1u << fontHeight) - 1 : 0xFFFFFFFFu;
 			PixelNumber columnsLeft = rightMargin - column;
 			PixelNumber numSpaces;
 			if (lastCharColData != 0)		// if we have written anything other than spaces
@@ -308,7 +308,7 @@ void Lcd::WriteSpaces(PixelNumber numPixels) noexcept
 }
 
 // printf to LCD
-int Lcd::printf(const char* fmt, ...) noexcept
+int Lcd::printf(const char *_ecv_array fmt, ...) noexcept
 {
 	va_list vargs;
 	va_start(vargs, fmt);

@@ -10,14 +10,14 @@
 #include "RepRap.h"
 #include <cstdarg>
 
-/*static*/ OutputBuffer * volatile OutputBuffer::freeOutputBuffers = nullptr;		// Messages may also be sent by ISRs,
+/*static*/ OutputBuffer *_ecv_null volatile OutputBuffer::freeOutputBuffers = nullptr;		// Messages may also be sent by ISRs,
 /*static*/ volatile size_t OutputBuffer::usedOutputBuffers = 0;						// so make these volatile.
 /*static*/ volatile size_t OutputBuffer::maxUsedOutputBuffers = 0;
 
 //*************************************************************************************************
 // OutputBuffer class implementation
 
-void OutputBuffer::Append(OutputBuffer *other) noexcept
+void OutputBuffer::Append(OutputBuffer *_ecv_null other) noexcept
 {
 	if (other != nullptr)
 	{
@@ -76,7 +76,7 @@ char OutputBuffer::operator[](size_t index) const noexcept
 	return itemToIndex->data[index];
 }
 
-const char *OutputBuffer::Read(size_t len) noexcept
+const char *_ecv_array OutputBuffer::Read(size_t len) noexcept
 {
 	const size_t offset = bytesRead;
 	bytesRead += len;
@@ -301,7 +301,7 @@ size_t OutputBuffer::EncodeChar(char c) noexcept
 	return cat(c);
 }
 
-size_t OutputBuffer::EncodeReply(OutputBuffer *src) noexcept
+size_t OutputBuffer::EncodeReply(OutputBuffer *_ecv_null src) noexcept
 {
 	size_t bytesWritten = cat('"');
 
@@ -359,7 +359,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const noexcept
 }
 
 // Allocates an output buffer instance which can be used for (large) string outputs. This must be thread safe. Not safe to call from interrupts!
-/*static*/ bool OutputBuffer::Allocate(OutputBuffer *&buf) noexcept
+/*static*/ bool OutputBuffer::Allocate(OutputBuffer *_ecv_null &buf) noexcept
 {
 	{
 		TaskCriticalSectionLocker lock;
@@ -408,7 +408,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const noexcept
 
 // Truncate an output buffer to free up more memory. Returns the number of released bytes.
 // This never releases the first buffer in the chain, so call it with a large value of bytesNeeded to release all buffers except the first.
-/*static */ size_t OutputBuffer::Truncate(OutputBuffer *buffer, size_t bytesNeeded) noexcept
+/*static */ size_t OutputBuffer::Truncate(OutputBuffer *_ecv_null buffer, size_t bytesNeeded) noexcept
 {
 	// Can we free up space from this chain? Don't break it up if it's referenced anywhere else
 	if (buffer == nullptr || buffer->Next() == nullptr || buffer->IsReferenced())
@@ -436,7 +436,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const noexcept
 	} while (previousItem != buffer && releasedBytes < bytesNeeded);
 
 	// Update all the references to the last item
-	for (OutputBuffer *item = buffer; item != nullptr; item = item->Next())
+	for (OutputBuffer *_ecv_null item = buffer; item != nullptr; item = item->Next())
 	{
 		item->last = previousItem;
 	}
@@ -465,7 +465,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const noexcept
 	return nextBuffer;
 }
 
-/*static */ void OutputBuffer::ReleaseAll(OutputBuffer * volatile &buf) noexcept
+/*static */ void OutputBuffer::ReleaseAll(OutputBuffer *_ecv_null volatile &buf) noexcept
 {
 	while (buf != nullptr)
 	{
@@ -483,7 +483,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const noexcept
 // OutputStack class implementation
 
 // Push an OutputBuffer chain. Return true if successful, else release the buffer and return false.
-bool OutputStack::Push(OutputBuffer *buffer, MessageType type) volatile noexcept
+bool OutputStack::Push(OutputBuffer *_ecv_null buffer, MessageType type) volatile noexcept
 {
 	{
 		TaskCriticalSectionLocker lock;
@@ -541,7 +541,7 @@ MessageType OutputStack::GetFirstItemType() const volatile noexcept
 #if HAS_SBC_INTERFACE
 
 // Update the first item of the stack
-void OutputStack::SetFirstItem(OutputBuffer *buffer) volatile noexcept
+void OutputStack::SetFirstItem(OutputBuffer *_ecv_null buffer) volatile noexcept
 {
 	if (count != 0)
 	{
@@ -598,7 +598,7 @@ bool OutputStack::ApplyTimeout(uint32_t ticks) volatile noexcept
 }
 
 // Returns the last item from the stack or nullptr if none is available
-OutputBuffer *OutputStack::GetLastItem() const volatile noexcept
+OutputBuffer *_ecv_null OutputStack::GetLastItem() const volatile noexcept
 {
 	return (count == 0) ? nullptr : items[count - 1];
 }

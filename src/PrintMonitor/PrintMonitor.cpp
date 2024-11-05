@@ -85,7 +85,8 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "timesLeft",			OBJECT_MODEL_FUNC(self, 3),							 																ObjectModelEntryFlags::live },
 	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetWarmUpDuration())),										ObjectModelEntryFlags::live },
 
-	// 1. ParsedFileInfo members
+	// 1. 'file' members
+	{ "customInfo",			OBJECT_MODEL_FUNC(&self->customInfo, 0),						 													ObjectModelEntryFlags::none },
 	{ "filament",			OBJECT_MODEL_FUNC_ARRAY(0),							 																ObjectModelEntryFlags::none },
 	{ "fileName",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->filenameBeingPrinted.c_str()),										ObjectModelEntryFlags::none },
 	{ "generatedBy",		OBJECT_MODEL_FUNC_IF(!self->printingFileInfo.generatedBy.IsEmpty(), self->printingFileInfo.generatedBy.c_str()),	ObjectModelEntryFlags::none },
@@ -98,7 +99,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "size",				OBJECT_MODEL_FUNC(self->printingFileInfo.fileSize),																	ObjectModelEntryFlags::none },
 	{ "thumbnails",			OBJECT_MODEL_FUNC_ARRAY(1),																							ObjectModelEntryFlags::none },
 
-	// 2. ParsedFileInfo.thumbnails[] members
+	// 2. 'file' thumbnails[] members
 	{ "format",				OBJECT_MODEL_FUNC(self->printingFileInfo.thumbnails[context.GetLastIndex()].format.ToString()),						ObjectModelEntryFlags::none },
 	{ "height",				OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.thumbnails[context.GetLastIndex()].height),						ObjectModelEntryFlags::none },
 	{ "offset",				OBJECT_MODEL_FUNC(self->printingFileInfo.thumbnails[context.GetLastIndex()].offset),								ObjectModelEntryFlags::none },
@@ -111,7 +112,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "slicer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(slicerBased)),													ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 13, 11, 5, 3 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 13, 12, 5, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 
@@ -155,7 +156,7 @@ void PrintMonitor::PrintingFileInfoUpdated() noexcept
 	{
 		totalFilamentNeeded += printingFileInfo.filamentNeeded[extruder];
 	}
-	slicerTimeLeft = printingFileInfo.printTime;
+	slicerTimeLeft = (float)printingFileInfo.printTime;
 	printingFileParsed = true;
 	reprap.JobUpdated();
 }
@@ -177,7 +178,7 @@ bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info) noexcept
 	return true;
 }
 
-void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info) noexcept
+void PrintMonitor::SetPrintingFileInfo(const char *_ecv_array filename, GCodeFileInfo &info) noexcept
 {
 	WriteLocker locker(printMonitorLock);
 	filenameBeingPrinted.copy(filename);
@@ -219,7 +220,7 @@ void PrintMonitor::Spin() noexcept
 		if (!filenameBeingPrinted.IsEmpty() && !printingFileParsed)
 		{
 			WriteLocker locker(printMonitorLock);
-			printingFileParsed = (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false) != GCodeResult::notFinished);
+			printingFileParsed = (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false, &customInfo) != GCodeResult::notFinished);
 			if (!printingFileParsed)
 			{
 				return;
@@ -307,7 +308,7 @@ float PrintMonitor::GetPauseDuration() const noexcept
 }
 
 // Notifies this class that a file has been set for printing
-void PrintMonitor::StartingPrint(const char* filename) noexcept
+void PrintMonitor::StartingPrint(const char *_ecv_array filename) noexcept
 {
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	WriteLocker locker(printMonitorLock);
@@ -316,8 +317,9 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 	if (!reprap.UsingSbcInterface())
 # endif
 	{
+		customInfo.GetForWriting()->Clear();
 		printingFileParsed = false;
-		if (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false) != GCodeResult::notFinished)
+		if (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false, &customInfo) != GCodeResult::notFinished)
 		{
 			PrintingFileInfoUpdated();
 		}
@@ -341,10 +343,10 @@ void PrintMonitor::StartedPrint() noexcept
 
 void PrintMonitor::StoppedPrint() noexcept
 {
-	lastWarmUpDuration = lrintf(GetWarmUpDuration());
+	lastWarmUpDuration = (uint32_t)GetWarmUpDuration();
 	isPrinting = printingFileParsed = false;
+	customInfo.GetForWriting()->Clear();
 	Reset();
-
 }
 
 // Set the current layer number as given in a comment
@@ -355,7 +357,7 @@ void PrintMonitor::SetLayerNumber(uint32_t layerNumber) noexcept
 	{
 		currentLayer = layerNumber;
 		lastLayerChangeTime = millis64();
-		lastLayerChangeNonPrintingTime = GetWarmUpDuration() + GetPauseDuration();
+		lastLayerChangeNonPrintingTime = (uint64_t)(GetWarmUpDuration() + GetPauseDuration());
 	}
 }
 
@@ -371,7 +373,7 @@ void PrintMonitor::LayerChange() noexcept
 {
 	++currentLayer;
 	lastLayerChangeTime = millis64();
-	lastLayerChangeNonPrintingTime = GetWarmUpDuration() + GetPauseDuration();
+	lastLayerChangeNonPrintingTime = (uint64_t)(GetWarmUpDuration() + GetPauseDuration());
 }
 
 float PrintMonitor::FractionOfFilePrinted() const noexcept
@@ -429,7 +431,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 		case slicerBased:
 			if (slicerTimeLeft > 0.0 && !gCodes.IsSimulating())				// don't report slicer time if we are simulating
 			{
-				const int64_t now = millis64();
+				const uint64_t now = millis64();
 				int64_t adjustment = (int64_t)(now - whenSlicerTimeLeftSet);			// add the time since we stored the slicer time left
 				if (heatingUp)
 				{
@@ -452,8 +454,8 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 // Return the estimated time remaining if we have it, else null
 ExpressionValue PrintMonitor::EstimateTimeLeftAsExpression(PrintEstimationMethod method) const noexcept
 {
-	const float time = EstimateTimeLeft(method);
-	return (time > 0.0) ? ExpressionValue(lrintf(time)) : ExpressionValue(nullptr);
+	const float timeLeft = EstimateTimeLeft(method);
+	return (timeLeft > 0.0) ? ExpressionValue(lrintf(timeLeft)) : ExpressionValue(nullptr);
 }
 
 #endif

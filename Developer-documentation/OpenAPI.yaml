@@ -1,6 +1,6 @@
 openapi: 3.0.0
 info:
-    version: '3.4.1'
+    version: '3.6.0'
     title: 'RepRapFirmware'
     license:
         name: GPL-3.0
@@ -253,6 +253,13 @@ paths:
                   schema:
                       type: number
                       minimum: 0
+                - name: 'max'
+                  in: query
+                  description: 'Maximum number of items to return (defaults to `-1`)'
+                  required: false
+                  schema:
+                      type: number
+                      minimum: -1
             responses:
                 '200':
                     description: 'File list result'
@@ -324,6 +331,13 @@ paths:
                   schema:
                       type: number
                       minimum: 0
+                - name: 'max'
+                  in: query
+                  description: 'Maximum number of items to return (defaults to `-1`)'
+                  required: false
+                  schema:
+                      type: number
+                      minimum: -1
                 - name: 'flagDirs'
                   in: query
                   description: 'Prefix directories with a `*`'

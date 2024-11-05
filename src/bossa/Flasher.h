@@ -44,8 +44,8 @@ public:
     FlasherObserver() noexcept {}
     virtual ~FlasherObserver() {}
 
-    virtual void onStatus(const char *message, ...) noexcept = 0;
-    virtual void onProgress(int num, int div) noexcept = 0;
+    virtual void onStatus(const char *_ecv_array message, ...) noexcept = 0;
+    virtual void onProgress(int num, int pdiv) noexcept = 0;
     virtual void Reset() noexcept = 0;
 };
 
@@ -64,7 +64,7 @@ public:
 
 private:
     Samba& _samba;
-    BossaFlash *_ecv_from _flash;
+    BossaFlash *_ecv_from _ecv_null _flash;
     FlasherObserver &_ecv_from _observer;
 
     uint32_t pageNum;

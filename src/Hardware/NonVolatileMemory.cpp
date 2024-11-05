@@ -81,7 +81,7 @@ void NonVolatileMemory::EnsureWritten() noexcept
 #endif
 }
 
-SoftwareResetData* NonVolatileMemory::GetLastWrittenResetData(unsigned int &slot) noexcept
+SoftwareResetData *_ecv_null NonVolatileMemory::GetLastWrittenResetData(unsigned int &slot) noexcept
 {
 	EnsureRead();
 	for (unsigned int i = NumberOfResetDataSlots; i != 0; )
@@ -140,13 +140,13 @@ void NonVolatileMemory::SetThermistorHighCalibration(unsigned int inputNumber, i
 	SetThermistorCalibration(inputNumber, val, buffer.thermistorHighCalibration);
 }
 
-int8_t NonVolatileMemory::GetThermistorCalibration(unsigned int inputNumber, uint8_t *calibArray) noexcept
+int8_t NonVolatileMemory::GetThermistorCalibration(unsigned int inputNumber, uint8_t *_ecv_array calibArray) noexcept
 {
 	EnsureRead();
 	return (inputNumber >= MaxCalibratedThermistors || calibArray[inputNumber] == 0xFF) ? 0 : (int)calibArray[inputNumber] - (int)0x7F;
 }
 
-void NonVolatileMemory::SetThermistorCalibration(unsigned int inputNumber, int8_t val, uint8_t *calibArray) noexcept
+void NonVolatileMemory::SetThermistorCalibration(unsigned int inputNumber, int8_t val, uint8_t *_ecv_array calibArray) noexcept
 {
 	if (inputNumber < MaxCalibratedThermistors)
 	{

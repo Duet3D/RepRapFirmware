@@ -31,7 +31,7 @@ class Platform;
 class W5500Interface : public NetworkInterface
 {
 public:
-	W5500Interface(Platform& p) noexcept;
+	explicit W5500Interface(Platform& p) noexcept;
 
 	void Init() noexcept override;
 	void Activate() noexcept override;
@@ -45,7 +45,7 @@ public:
 	int EnableState() const noexcept override;
 	bool IsWiFiInterface() const noexcept override { return false; }
 
-	void UpdateHostname(const char *name) noexcept override;
+	void UpdateHostname(const char *_ecv_array name) noexcept override;
 
 	IPAddress GetIPAddress() const noexcept override { return ipAddress; }
 	IPAddress GetNetmask() const noexcept override { return netmask; }

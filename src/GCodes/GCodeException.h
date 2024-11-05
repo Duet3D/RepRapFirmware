@@ -30,7 +30,7 @@ class GCodeException
 {
 public:
 	GCodeException() noexcept : line(-1), column(-1), message(nullptr), source(GCodeExceptionSource::other) { }
-	explicit GCodeException(const char *_ecv_array msg) noexcept: line(-1), column(-1), message(msg), source(GCodeExceptionSource::other) { }
+	explicit GCodeException(const char *_ecv_array msg, int32_t iparam = 0) noexcept: line(-1), column(-1), message(msg), source(GCodeExceptionSource::other) { param.i = iparam; }
 
 	GCodeException(int lin, int col, const char *_ecv_array msg) noexcept : line(lin), column(col), message(msg), source(GCodeExceptionSource::other)  { }
 
@@ -57,6 +57,8 @@ public:
 
 	void GetMessage(const StringRef& reply, const GCodeBuffer *null gb) const noexcept;
 
+	void DebugPrint() const noexcept;
+
 	bool IsNull() const noexcept { return message == nullptr; }
 
 private:
@@ -72,8 +74,8 @@ private:
 	String<StringLength50> stringParam;
 };
 
-// Functions tro create and throw an exception. Using these avoids allocating the GCodeException object on the local stack when it is not going to be used.
-[[noreturn]] void __attribute__((noinline)) ThrowGCodeException(const char *errMsg) THROWS(GCodeException);
-[[noreturn]] void __attribute__((noinline)) ThrowGCodeException(const char *errMsg, uint32_t param) THROWS(GCodeException);
+// Functions to create and throw an exception. Using these avoids allocating the GCodeException object on the local stack when it is not going to be used.
+[[noreturn]] void __attribute__((noinline)) ThrowGCodeException(const char *_ecv_array errMsg) THROWS(GCodeException);
+[[noreturn]] void __attribute__((noinline)) ThrowGCodeException(const char *_ecv_array errMsg, uint32_t param) THROWS(GCodeException);
 
 #endif /* SRC_GCODES_GCODEEXCEPTION_H_ */

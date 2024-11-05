@@ -431,8 +431,10 @@ constexpr uint32_t DefaultPwmConfReg = 0xC10D0024;		// this is the reset default
 constexpr uint8_t REGNUM_PWM_SCALE = 0x71;
 constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
 
+#if HAS_STALL_DETECT
 static constexpr uint32_t MaxValidSgLoadRegister = 1023;
 static constexpr uint32_t InvalidSgLoadRegister = 1024;
+#endif
 
 // Send/receive data and CRC stuff
 
@@ -558,6 +560,7 @@ public:
 	void SetStallDetectThreshold(int sgThreshold) noexcept;
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept;
 	void AppendStallConfig(const StringRef& reply) const noexcept;
+	EndstopValidationResult CheckStallDetectionEnabled(float speed) noexcept;
 #endif
 	void AppendDriverStatus(const StringRef& reply) noexcept;
 	StandardDriverStatus GetStatus(bool accumulated, bool clearAccumulated) noexcept;
@@ -743,10 +746,10 @@ private:
 
 	// To write a register, we send one 8-byte packet to write it, then a 4-byte packet to ask for the IFCOUNT register, then we receive an 8-byte packet containing IFCOUNT.
 	// This is the message we send - volatile because we care about when it is written
-	alignas(4) static volatile uint8_t sendData[12];
+	alignas(4) __attribute__((section(".DmaBuffers"))) static volatile uint8_t sendData[12];
 
 	// Buffer for the message we receive when reading data. The first 4 or 12 bytes bytes are our own transmitted data.
-	alignas(4) static volatile uint8_t receiveData[20];
+	alignas(4) __attribute__((section(".DmaBuffers"))) static volatile uint8_t receiveData[20];
 
 	uint16_t readErrors;									// how many read errors we had
 	uint16_t writeErrors;									// how many write errors we had
@@ -1231,8 +1234,22 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 {
 	// Map stall sensitivity value 0..255 to 128..-128
 	const int threshold = 127 - (int)writeRegisters[WriteSgthrs];
-	reply.catf("stall threshold %d, steps/sec %" PRIu32 ", coolstep %" PRIx32,
-				threshold, 12000000 / (256 * writeRegisters[WriteTcoolthrs]), writeRegisters[WriteCoolconf] & 0xFFFF);
+	const uint32_t fullstepsPerSecond = (12500000/256) / writeRegisters[WriteTcoolthrs];
+	reply.catf("stall threshold %d, full steps/sec %" PRIu32 ", coolstep %" PRIx32, threshold, fullstepsPerSecond, writeRegisters[WriteCoolconf] & 0xFFFF);
+}
+
+// Check that stall detection can occur at the specified speed
+EndstopValidationResult TmcDriverState::CheckStallDetectionEnabled(float speed) noexcept
+{
+	if (!IsStealthChop())
+	{
+		return EndstopValidationResult::driverNotInStealthChopMode;
+	}
+	if (speed * (float)StepClockRate < ((12500000/256) << microstepShiftFactor) / writeRegisters[WriteTcoolthrs])
+	{
+		return EndstopValidationResult::moveTooSlow;
+	}
+	return EndstopValidationResult::ok;
 }
 
 #endif
@@ -2583,6 +2600,11 @@ DriversBitmap SmartDrivers::GetStalledDrivers(DriversBitmap driversOfInterest) n
 								}
 							 );
 	return rslt;
+}
+
+EndstopValidationResult SmartDrivers::CheckStallDetectionEnabled(size_t driver, float speed) noexcept
+{
+	return (driver < GetNumTmcDrivers()) ? driverStates[driver].CheckStallDetectionEnabled(speed) : EndstopValidationResult::stallDetectionNotSupported;
 }
 
 #endif

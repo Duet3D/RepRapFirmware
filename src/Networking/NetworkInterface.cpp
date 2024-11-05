@@ -51,7 +51,7 @@ GCodeResult NetworkInterface::EnableProtocol(NetworkProtocol protocol, int port,
 #endif
 			)
 		{
-			const TcpPort portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
+			const TcpPort portToUse = (port < 0) ? DefaultPortNumbers[protocol] : (TcpPort)port;
 			MutexLocker lock(interfaceMutex);
 
 			if (GetState() == NetworkState::active && (portToUse != portNumbers[protocol] || ip != ipAddresses[protocol]))

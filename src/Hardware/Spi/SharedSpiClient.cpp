@@ -50,7 +50,7 @@ void SharedSpiClient::Deselect() const noexcept
 	device.Release();
 }
 
-bool SharedSpiClient::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data, size_t len) const noexcept
+bool SharedSpiClient::TransceivePacket(const uint8_t *_ecv_array _ecv_null tx_data, uint8_t *_ecv_array _ecv_null rx_data, size_t len) const noexcept
 {
 	return device.TransceivePacket(tx_data, rx_data, len);
 }

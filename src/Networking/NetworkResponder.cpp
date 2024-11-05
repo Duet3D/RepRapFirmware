@@ -11,13 +11,13 @@
 
 // NetworkResponder members
 
-NetworkResponder::NetworkResponder(NetworkResponder *n) noexcept
+NetworkResponder::NetworkResponder(NetworkResponder *_ecv_from _ecv_null n) noexcept
 	: next(n), responderState(ResponderState::free), skt(nullptr),
 	  outBuf(nullptr),
 #if HAS_MASS_STORAGE
 	  fileBeingSent(nullptr),
 #endif
-	  fileBuffer(nullptr)
+	  fileBuffer(nullptr), terminateResponder(false)
 {
 }
 
@@ -41,7 +41,7 @@ void NetworkResponder::Commit(ResponderState nextState, bool report) noexcept
 void NetworkResponder::SendData() noexcept
 {
 	// Send our output buffer and output stack
-	for(;;)
+	while (!terminateResponder)
 	{
 		if (outBuf == nullptr)
 		{
@@ -58,7 +58,7 @@ void NetworkResponder::SendData() noexcept
 		}
 		else
 		{
-			const size_t sent = skt->Send(reinterpret_cast<const uint8_t *>(outBuf->UnreadData()), bytesLeft);
+			const size_t sent = skt->Send(reinterpret_cast<const uint8_t *_ecv_array>(outBuf->UnreadData()), bytesLeft);
 			if (sent == 0)
 			{
 				// Check whether the connection has been closed
@@ -97,7 +97,7 @@ void NetworkResponder::SendData() noexcept
 	}
 
 	// If we have a file buffer here, we must be in the process of sending a file
-	while (fileBuffer != nullptr)
+	while (fileBuffer != nullptr && !terminateResponder)
 	{
 		if (fileBuffer->IsEmpty() && fileBeingSent != nullptr)
 		{
@@ -147,7 +147,7 @@ void NetworkResponder::SendData() noexcept
 #endif
 
 	// If we get here then there is nothing left to send
-	skt->Send();						// tell the socket there is no more data
+	skt->Send();								// tell the socket there is no more data
 
 	// If we are going to free up this responder after sending, then we must close the connection
 	if (stateAfterSending == ResponderState::free)
@@ -192,7 +192,7 @@ IPAddress NetworkResponder::GetRemoteIP() const noexcept
 	return (skt == nullptr) ? IPAddress() : skt->GetRemoteIP();
 }
 
-void NetworkResponder::ReportOutputBufferExhaustion(const char *sourceFile, int line) noexcept
+void NetworkResponder::ReportOutputBufferExhaustion(const char *_ecv_array sourceFile, int line) noexcept
 {
 	if (reprap.Debug(Module::Webserver))
 	{

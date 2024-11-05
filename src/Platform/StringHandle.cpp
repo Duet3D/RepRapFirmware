@@ -9,10 +9,10 @@
 
 // StringHandle members
 // Build a handle from a single null-terminated string
-StringHandle::StringHandle(const char *s) noexcept : StringHandle(s, strlen(s)) { }
+StringHandle::StringHandle(const char *_ecv_array s) noexcept : StringHandle(s, strlen(s)) { }
 
 // Build a handle from a character array and a length
-StringHandle::StringHandle(const char *s, size_t len) noexcept
+StringHandle::StringHandle(const char *_ecv_array s, size_t len) noexcept
 {
 	if (len == 0)
 	{
@@ -27,7 +27,7 @@ StringHandle::StringHandle(const char *s, size_t len) noexcept
 
 #if 0	// This constructor is currently unused, but may be useful in future
 // Build a handle by concatenating two strings
-StringHandle::StringHandle(const char *s1, const char *s2) noexcept
+StringHandle::StringHandle(const char *_ecv_array s1, const char *_ecv_array s2) noexcept
 {
 	const size_t len = strlen(s1) + strlen(s2);
 	if (len == 0)
@@ -48,7 +48,7 @@ StringHandle::StringHandle(const char *s1, const char *s2) noexcept
 }
 #endif
 
-void StringHandle::Assign(const char *s) noexcept
+void StringHandle::Assign(const char *_ecv_array s) noexcept
 {
 	Delete();
 	const size_t len = strlen(s);
@@ -60,7 +60,7 @@ void StringHandle::Assign(const char *s) noexcept
 }
 
 // Assign the string. Caller must hold a write lock on the heap.
-void StringHandle::InternalAssign(const char *s, size_t len) noexcept
+void StringHandle::InternalAssign(const char *_ecv_array s, size_t len) noexcept
 {
 	Heap::IndexSlot * const slot = Heap::AllocateHandle();
 	Heap::StorageSpace * const space = Heap::AllocateSpace(sizeof(Heap::StorageSpace) + len + 1);

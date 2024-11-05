@@ -19,8 +19,8 @@ public:
 
 	ImageMenuItem(PixelNumber r, PixelNumber c, const char *_ecv_array pFileName) noexcept;
 
-	void Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept override;
-	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
+	void Draw(Lcd &_ecv_from lcd, PixelNumber rightMargin, bool highlight) noexcept override;
+	void UpdateWidthAndHeight(Lcd &_ecv_from lcd) noexcept override;
 
 private:
 	String<MaxFilenameLength> fileName;

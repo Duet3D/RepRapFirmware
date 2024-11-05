@@ -38,7 +38,8 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Endstop)
 
 #endif
 
-Endstop::Endstop(uint8_t p_axis, EndStopPosition pos) noexcept : axis(p_axis), atHighEnd(pos == EndStopPosition::highEndStop)
+Endstop::Endstop(uint8_t p_axis, EndStopPosition pos) noexcept
+	: EndstopOrZProbe(p_axis), atHighEnd(pos == EndStopPosition::highEndStop)
 {
 }
 

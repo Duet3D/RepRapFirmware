@@ -21,6 +21,9 @@ public:
 	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName; }
 
 	static constexpr const char *_ecv_array TypeName = "mcutemp";
+
+private:
+	static SensorTypeDescriptor typeDescriptor;
 };
 
 #endif

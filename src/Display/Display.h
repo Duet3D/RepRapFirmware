@@ -46,11 +46,11 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	void InitDisplay(GCodeBuffer& gb, Lcd *newLcd, Pin csPin, Pin a0Pin, bool defaultCsPolarity) THROWS(GCodeException);
+	void InitDisplay(GCodeBuffer& gb, Lcd *_ecv_from newLcd, Pin csPin, Pin a0Pin, bool defaultCsPolarity) THROWS(GCodeException);
 	void StopBeep() noexcept;
 
-	Lcd *null lcd;
-	Menu *menu;
+	Lcd *_ecv_from _ecv_null lcd;
+	Menu *_ecv_null menu;
 #if SUPPORT_ROTARY_ENCODER
 	RotaryEncoder *null encoder;
 #endif

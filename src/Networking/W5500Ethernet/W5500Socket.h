@@ -16,7 +16,7 @@
 class W5500Socket : public Socket
 {
 public:
-	W5500Socket(NetworkInterface *iface) noexcept;
+	explicit W5500Socket(NetworkInterface *_ecv_from iface) noexcept;
 	void Init(SocketNumber s, TcpPort serverPort, NetworkProtocol p) noexcept;
 
 	void Poll() noexcept override;
@@ -24,11 +24,11 @@ public:
 	void Terminate() noexcept override;
 	void TerminateAndDisable() noexcept override;
 	bool ReadChar(char& c) noexcept override;
-	bool ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept override;
+	bool ReadBuffer(const uint8_t *_ecv_array &buffer, size_t &len) noexcept override;
 	void Taken(size_t len) noexcept override;
 	bool CanRead() const noexcept override;
 	bool CanSend() const noexcept override;
-	size_t Send(const uint8_t *data, size_t length) noexcept override;
+	size_t Send(const uint8_t *_ecv_array data, size_t length) noexcept override;
 	void Send() noexcept override;
 
 private:

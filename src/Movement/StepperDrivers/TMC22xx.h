@@ -26,6 +26,10 @@
 
 #include "DriverMode.h"
 
+#if HAS_STALL_DETECT
+# include <Endstops/EndstopDefs.h>
+#endif
+
 namespace SmartDrivers
 {
 #if TMC22xx_VARIABLE_NUM_DRIVERS
@@ -61,6 +65,7 @@ namespace SmartDrivers
 	GCodeResult SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
 	StandardDriverStatus GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept;
 #if HAS_STALL_DETECT
+	EndstopValidationResult CheckStallDetectionEnabled(size_t driver, float speed) noexcept;
 	DriversBitmap GetStalledDrivers(DriversBitmap driversOfInterest) noexcept;
 #endif
 #if SUPPORT_TMC2240 && !(SUPPORT_TMC2208 || SUPPORT_TMC2209)

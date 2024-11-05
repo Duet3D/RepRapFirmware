@@ -15,7 +15,7 @@
 # include <CanMessageGenericParser.h>
 #endif
 
-AdditionalOutputSensor::AdditionalOutputSensor(unsigned int sensorNum, const char *type, bool pEnforcePollOrder) noexcept
+AdditionalOutputSensor::AdditionalOutputSensor(unsigned int sensorNum, const char *_ecv_array type, bool pEnforcePollOrder) noexcept
 	: TemperatureSensor(sensorNum, type), parentSensor(0), outputNumber(0), enforcePollOrder(pEnforcePollOrder)
 {
 }
@@ -24,7 +24,7 @@ AdditionalOutputSensor::~AdditionalOutputSensor() noexcept
 {
 }
 
-GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
+GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
 	GCodeResult rslt = GCodeResult::ok;
 	if (gb.Seen('P'))
@@ -81,9 +81,9 @@ GCodeResult AdditionalOutputSensor::Configure(const CanMessageGenericParser& par
 
 #endif
 
-GCodeResult AdditionalOutputSensor::ConfigurePort(const char* portName, const StringRef& reply) noexcept
+GCodeResult AdditionalOutputSensor::ConfigurePort(const char *_ecv_array portName, const StringRef& reply) noexcept
 {
-	if (toupper(*portName) != 'S')
+	if ((char)toupper(*portName) != 'S')
 	{
 		reply.copy("Parent sensor needs to start with S");
 		return GCodeResult::error;
@@ -126,7 +126,12 @@ GCodeResult AdditionalOutputSensor::ConfigurePort(const char* portName, const St
 		// Parse output number
 		outputNumber = StrToU32(portName, &portName);
 
-		if (outputNumber > parent->GetNumAdditionalOutputs())
+		if (outputNumber == 0)
+		{
+			reply.copy("Additional output numbers start at 1");
+			return GCodeResult::error;
+		}
+		else if (outputNumber > parent->GetNumAdditionalOutputs())
 		{
 			reply.printf("Parent sensor only has %d additional outputs", parent->GetNumAdditionalOutputs());
 			return GCodeResult::error;
@@ -161,5 +166,6 @@ void AdditionalOutputSensor::Poll() noexcept
 	{
 		SetResult(err);
 	}
-
 }
+
+// End

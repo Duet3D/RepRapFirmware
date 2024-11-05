@@ -123,6 +123,7 @@ GCodeResult LedStripManager::CreateStrip(GCodeBuffer &gb, const StringRef &reply
 	{
 		delete newStrip;
 	}
+	reprap.LedStripsUpdated();
 	return rslt;
 }
 
@@ -237,7 +238,6 @@ GCodeResult LedStripManager::HandleM950Led(const CanMessageGeneric &msg, const S
 
 		default:
 			reply.copy("Unsupported LED strip type");
-			reprap.LedStripsUpdated();
 			return GCodeResult::error;
 		}
 

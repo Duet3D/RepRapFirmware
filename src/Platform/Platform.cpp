@@ -21,6 +21,7 @@
 
 #include "Platform.h"
 
+#include <Devices.h>
 #include <Heating/Heat.h>
 #include <Movement/DDA.h>
 #include <Movement/Move.h>
@@ -710,6 +711,8 @@ void Platform::Exit() noexcept
 #endif
 }
 
+#if HAS_NETWORKING
+
 void Platform::SetIPAddress(IPAddress ip) noexcept
 {
 	ipAddress = ip;
@@ -727,6 +730,8 @@ void Platform::SetNetMask(IPAddress nm) noexcept
 	netMask = nm;
 	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, netMask, gateWay);
 }
+
+#endif
 
 // Flush messages to USB and aux, returning true if there is more to send
 bool Platform::FlushMessages() noexcept
@@ -819,7 +824,15 @@ void Platform::Spin() noexcept
 	Move& move = reprap.GetMove();
 	if (move.HasMovementError())
 	{
-		MessageF(AddError(MessageType::GenericMessage), "Movement halted because a step timing error occurred (code %u). Please reset the controller.\n", move.GetStepErrorType());
+		const StepErrorDetails details = move.GetStepErrorDetails();
+		MessageF(AddError(MessageType::GenericMessage), "Movement halted because a step timing error occurred (code %u). Please reset the controller.\n", details.stepErrorType);
+		if (details.stepErrorType == 3)
+		{
+			MessageF(AddError(MessageType::GenericMessage), "Existing: start=%" PRIu32 " length=%" PRIu32 ", new: start=%" PRIu32 ", overlap=%" PRIu32 " time now=%" PRIu32 "\n",
+						details.executingStartTime, details.executingDuration, details.newSegmentStartTime,
+						details.executingStartTime + details.executingDuration - details.newSegmentStartTime,
+						details.timeNow);
+		}
 		move.GenerateMovementErrorDebug();
 		move.ResetAfterError();
 	}
@@ -1284,7 +1297,7 @@ void Platform::InitialiseInterrupts() noexcept
 //extern "C" uint32_t longestWriteWaitTime, shortestWriteWaitTime, longestReadWaitTime, shortestReadWaitTime;
 //extern uint32_t maxRead, maxWrite;
 
-/*static*/ const char *Platform::GetResetReasonText() noexcept
+/*static*/ const char *_ecv_array Platform::GetResetReasonText() noexcept
 {
 #if SAME5x
 	const uint8_t resetReason = RSTC->RCAUSE.reg;
@@ -1467,7 +1480,7 @@ static uint32_t TimedSqrt(uint64_t arg, uint32_t& timeAcc) noexcept
 	return ret;
 }
 
-GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& buf, unsigned int d) THROWS(GCodeException)
+GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf, unsigned int d) THROWS(GCodeException)
 {
 	switch (d)
 	{
@@ -2047,20 +2060,20 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 	if (gb.Seen('S'))
 	{
 		// Translation of M575 S parameter to AuxMode
-		static constexpr AuxDevice::AuxMode modes[] =
+		static constexpr AuxMode modes[] =
 		{
-			AuxDevice::AuxMode::panelDue,			// basic PanelDue mode,
-			AuxDevice::AuxMode::panelDue,			// PanelDue mode with CRC or checksum required (default)
-			AuxDevice::AuxMode::raw,				// basic raw mode
-			AuxDevice::AuxMode::raw,				// raw mode with CRC or checksum required
-			AuxDevice::AuxMode::panelDue,			// PanelDue mode with CRC required
-			AuxDevice::AuxMode::disabled,			// was unused, now treated as disabled
-			AuxDevice::AuxMode::raw,				// raw mode with CRC required
-			AuxDevice::AuxMode::device,				// Modbus/Uart mode
+			AuxMode::panelDue,			// basic PanelDue mode,
+			AuxMode::panelDue,			// PanelDue mode with CRC or checksum required (default)
+			AuxMode::raw,				// basic raw mode
+			AuxMode::raw,				// raw mode with CRC or checksum required
+			AuxMode::panelDue,			// PanelDue mode with CRC required
+			AuxMode::disabled,			// was unused, now treated as disabled
+			AuxMode::raw,				// raw mode with CRC required
+			AuxMode::device,			// Modbus/Uart mode
 		};
 
 		const uint32_t val = gb.GetLimitedUIValue('S', ARRAY_SIZE(modes));
-		AuxDevice::AuxMode newMode = modes[val];
+		AuxMode newMode = modes[val];
 		if (gbp != nullptr)
 		{
 			gbp->Disable();							// disable I/O for this buffer
@@ -2072,7 +2085,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 		if (chan != 0)
 		{
 			AuxDevice& dev = auxDevices[chan - 1];
-			if (newMode == AuxDevice::AuxMode::device)
+			if (newMode == AuxMode::device)
 			{
 # if SUPPORT_MODBUS_RTU
 				if (gb.Seen('C'))
@@ -2104,8 +2117,8 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 #endif
 
 		if (   gbp != nullptr
-			&& newMode != AuxDevice::AuxMode::disabled
-			&& newMode != AuxDevice::AuxMode::device
+			&& newMode != AuxMode::disabled
+			&& newMode != AuxMode::device
 		   )
 		{
 			gbp->Enable(val);						// enable I/O and set the CRC and checksum requirements, also sets Marlin or PanelDue compatibility
@@ -2132,7 +2145,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 		if (chan != 0)
 		{
 			if (!IsAuxEnabled(chan - 1)
-				&& (chan >= NumSerialChannels || auxDevices[chan - 1].GetMode() != AuxDevice::AuxMode::device)
+				&& (chan >= NumSerialChannels || auxDevices[chan - 1].GetMode() != AuxMode::device)
 			   )
 			{
 				reply.printf("Channel %u is disabled", chan);
@@ -2140,11 +2153,11 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			else
 			{
 				const AuxDevice& dev = auxDevices[chan - 1];
-				const char *modeString = (dev.GetMode() == AuxDevice::AuxMode::device) ? "Device / modbus RTU" :
+				const char *modeString = (dev.GetMode() == AuxMode::device) ? "Device / modbus RTU" :
 											(IsAuxRaw(chan - 1)) ? "raw"
 												: "PanelDue";
 				reply.printf("Channel %d: baud rate %" PRIu32 ", %s mode, ", chan, GetBaudRate(chan), modeString);
-				if (dev.GetMode() == AuxDevice::AuxMode::device)
+				if (dev.GetMode() == AuxMode::device)
 				{
 # if SUPPORT_MODBUS_RTU
 					reply.cat("Modbus Tx/!Rx port ");
@@ -2204,7 +2217,9 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 {
 	// Get the slave address and bytes or words to send
 
+# if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
 	const uint32_t address = GetAddress(gb);
+#endif
 
 	int32_t values[MaxI2cOrModbusValues] = {0};
 	size_t numToSend = 0;
@@ -2288,7 +2303,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 	case 1:		// Modbus
 		{
 			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-			if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::device)
+			if (auxDevices[auxChannel].GetMode() != AuxMode::device)
 			{
 				reply.copy("Port has not been set to device mode");
 				return GCodeResult::error;
@@ -2360,10 +2375,12 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 			return rslt;
 		}
 # endif
+
+# if HAS_AUX_DEVICES
 	case 2:
 	{
 		const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-		if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::device)
+		if (auxDevices[auxChannel].GetMode() != AuxMode::device)
 		{
 			reply.copy("Port has not been set to device mode");
 			return GCodeResult::error;
@@ -2383,10 +2400,11 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 		}
 		return rslt;
 	}
+
 	case 3: // Nordson Ultimus V https://www.manualslib.com/manual/2917329/Nordson-Ultimus-V.html?page=46#manual
 	{
 		const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-		if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::device)
+		if (auxDevices[auxChannel].GetMode() != AuxMode::device)
 		{
 			reply.copy("Port has not been set to device mode");
 			return GCodeResult::error;
@@ -2486,6 +2504,8 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 
 		return rslt;
 	}
+#endif
+
 	default:
 		return GCodeResult::errorNotSupported;
 	}
@@ -2494,19 +2514,22 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 // Handle M261 and M261.1
 GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
+# if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
 	const uint32_t address = GetAddress(gb);
+#endif
+
 	const uint32_t numValues = gb.GetLimitedUIValue('B', 0, MaxI2cOrModbusValues + 1);
 	String<MaxVariableNameLength> varName;
 	bool seenV = false;
 	gb.TryGetQuotedString('V', varName.GetRef(), seenV, false);
-	if (!Variable::IsValidVariableName(varName.c_str()))
-	{
-		reply.printf("variable '%s' is not a valid name", varName.c_str());
-		return GCodeResult::error;
-	}
 	Variable *_ecv_null resultVar = nullptr;
 	if (seenV)
 	{
+		if (!Variable::IsValidVariableName(varName.c_str()))
+		{
+			reply.printf("variable '%s' is not a valid name", varName.c_str());
+			return GCodeResult::error;
+		}
 		auto vset = WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables());
 		Variable *_ecv_null const v = vset->Lookup(varName.c_str(), false);
 		if (v != nullptr)
@@ -2562,7 +2585,7 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 	case 1:		// Modbus
 		{
 			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-			if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::device)
+			if (auxDevices[auxChannel].GetMode() != AuxMode::device)
 			{
 				reply.copy("Port has not been set to device mode");
 				return GCodeResult::error;
@@ -2638,10 +2661,12 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 			return rslt;
 		}
 #endif
+
+#if HAS_AUX_DEVICES
 	case 2:		// Uart
 		{
 			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-			if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::device)
+			if (auxDevices[auxChannel].GetMode() != AuxMode::device)
 			{
 				reply.copy("Port has not been set to device mode");
 				return GCodeResult::error;
@@ -2675,6 +2700,8 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 			}
 			return rslt;
 		}
+#endif
+
 	default:
 		return GCodeResult::errorNotSupported;
 	}
@@ -2709,7 +2736,7 @@ bool Platform::SendUartData(size_t auxChannel, const uint8_t *data, size_t len) 
 void Platform::EnablePanelDuePort() noexcept
 {
 	auxDevices[0].SetBaudRate(57600);
-	auxDevices[0].SetMode(AuxDevice::AuxMode::panelDue);
+	auxDevices[0].SetMode(AuxMode::panelDue);
 	SetCommsProperties(1, 1);
 	reprap.GetGCodes().GetSerialGCodeBuffer(1)->Enable(1);
 }
@@ -3198,15 +3225,21 @@ void Platform::AtxPowerOff() noexcept
 
 void Platform::SetBaudRate(size_t chan, uint32_t br) noexcept
 {
+#if HAS_AUX_DEVICES
 	if (chan != 0 && chan < NumSerialChannels)
 	{
 		auxDevices[chan - 1].SetBaudRate(br);
 	}
+#endif
 }
 
 uint32_t Platform::GetBaudRate(size_t chan) const noexcept
 {
-	return (chan != 0 && chan < NumSerialChannels) ? auxDevices[chan - 1].GetBaudRate() : 0;
+	return
+#if HAS_AUX_DEVICES
+		(chan != 0 && chan < NumSerialChannels) ? auxDevices[chan - 1].GetBaudRate() :
+#endif
+		0;
 }
 
 void Platform::SetCommsProperties(size_t chan, uint32_t cp) noexcept
@@ -3238,7 +3271,7 @@ void Platform::ResetChannel(size_t chan) noexcept
 	else if (chan < NumSerialChannels)
 	{
 		AuxDevice& device = auxDevices[chan - 1];
-		AuxDevice::AuxMode mode = device.GetMode();
+		AuxMode mode = device.GetMode();
 		device.Disable();
 		device.SetMode(mode);
 	}
@@ -3740,8 +3773,8 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 		}
 	case 32:	// R
 		{
-			const uint32_t slot = gb.GetLimitedUIValue('R', MaxSpindles);
-			return spindles[slot].Configure(gb, reply);
+			const uint32_t spindleNumber = gb.GetLimitedUIValue('R', MaxSpindles);
+			return spindles[spindleNumber].Configure(spindleNumber, gb, reply);
 		}
 
 #if SUPPORT_LED_STRIPS

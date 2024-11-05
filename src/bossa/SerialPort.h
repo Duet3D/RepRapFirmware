@@ -51,18 +51,18 @@ public:
         StopBitTwo,
     };
 
-    virtual bool open(int baud = 115200,
-                      int data = 8,
+    virtual bool open(unsigned int baud = 115200,
+                      unsigned int data = 8,
                       Parity parity = ParityNone,
                       StopBit stop = StopBitOne) noexcept = 0;
     virtual void close() noexcept = 0;
 
-    virtual int read(uint8_t* data, int size) noexcept = 0;
-    virtual int write(const uint8_t* data, int size) noexcept = 0;
+    virtual int read(uint8_t *_ecv_array data, size_t size) noexcept = 0;
+    virtual int write(const uint8_t *_ecv_array data, size_t size) noexcept = 0;
     virtual int get() noexcept = 0;
     virtual int put(int c) noexcept = 0;
 
-    virtual bool timeout(int millisecs) noexcept = 0;
+    virtual bool timeout(uint32_t millisecs) noexcept = 0;
     virtual void flush() noexcept = 0;
 };
 

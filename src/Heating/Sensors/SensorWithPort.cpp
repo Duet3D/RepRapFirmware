@@ -25,7 +25,7 @@ constexpr uint8_t SensorWithPort::objectModelTableDescriptor[] = { 1, 1 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(SensorWithPort, TemperatureSensor)
 
-SensorWithPort::SensorWithPort(unsigned int sensorNum, const char *type) noexcept
+SensorWithPort::SensorWithPort(unsigned int sensorNum, const char *_ecv_array type) noexcept
 	: TemperatureSensor(sensorNum, type)
 {
 }

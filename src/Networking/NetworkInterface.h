@@ -15,7 +15,7 @@ class NetworkInterface INHERIT_OBJECT_MODEL
 {
 public:
 	NetworkInterface() noexcept;
-	NetworkInterface(const NetworkInterface&) = delete;
+	NetworkInterface(const NetworkInterface &_ecv_from) = delete;
 
 	virtual void Init() noexcept = 0;
 	virtual void Activate() noexcept = 0;
@@ -36,7 +36,7 @@ public:
 	virtual GCodeResult SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept = 0;
 	virtual const MacAddress& GetMacAddress() const noexcept = 0;
 
-	virtual void UpdateHostname(const char *hostname) noexcept = 0;
+	virtual void UpdateHostname(const char *_ecv_array hostname) noexcept = 0;
 
 	virtual void OpenDataPort(TcpPort port) noexcept = 0;
 	virtual void TerminateDataPort() noexcept = 0;
@@ -49,16 +49,18 @@ public:
 
 protected:
 	// Disable a network protocol that is enabled. If 'permanent' is true we will leave this protocol disables, otherwise we are about to re-enable it with different parameters.
-	virtual void IfaceShutdownProtocol(NetworkProtocol protocol, bool permanent) noexcept = 0
-		pre(protocol < NumSelectableProtocols; GetState() == NetworkState::active);
+	virtual void IfaceShutdownProtocol(NetworkProtocol protocol, bool permanent) noexcept
+		pre(protocol < NumSelectableProtocols; GetState() == NetworkState::active)
+		 = 0;
 
 	// Enable a network protocol that is currently disabled
-	virtual void IfaceStartProtocol(NetworkProtocol protocol) noexcept = 0
-		pre(protocol < NumSelectableProtocols; GetState() == NetworkState::active);
+	virtual void IfaceStartProtocol(NetworkProtocol protocol) noexcept
+		pre(protocol < NumSelectableProtocols; GetState() == NetworkState::active)
+		 = 0;
 
 	NetworkState::RawType GetState() const noexcept { return state.RawValue(); }
 	void SetState(NetworkState::RawType newState) noexcept;
-	const char *GetStateName() const noexcept { return state.ToString(); }
+	const char *_ecv_array GetStateName() const noexcept { return state.ToString(); }
 	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
 		pre(protocol < NumSelectableProtocols);
 

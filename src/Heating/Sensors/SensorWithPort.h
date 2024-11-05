@@ -17,8 +17,8 @@ class SensorWithPort : public TemperatureSensor
 protected:
 	DECLARE_OBJECT_MODEL
 
-	SensorWithPort(unsigned int sensorNum, const char *type) noexcept;
-	~SensorWithPort() noexcept;
+	SensorWithPort(unsigned int sensorNum, const char *_ecv_array type) noexcept;
+	~SensorWithPort() noexcept override;
 
 	// Try to configure the port
 	bool ConfigurePort(GCodeBuffer& gb, const StringRef& reply, PinAccess access, bool& seen) THROWS(GCodeException);

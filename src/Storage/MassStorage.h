@@ -35,6 +35,7 @@ namespace EmbeddedFiles
 #endif
 
 class ObjectModel;
+class GlobalVariables;
 
 // Enum used to report whether we want a message of a file delete fails
 enum class ErrorMessageMode : uint8_t
@@ -46,13 +47,13 @@ enum class ErrorMessageMode : uint8_t
 
 namespace MassStorage
 {
-	bool CombineName(const StringRef& outbuf, const char* directory, const char* fileName) noexcept;	// returns false if error i.e. filename too long
-	const char* GetMonthName(const uint8_t month) noexcept;
+	bool CombineName(const StringRef& outbuf, const char *_ecv_array _ecv_null directory, const char *_ecv_array fileName) noexcept;	// returns false if error i.e. filename too long
+	const char *_ecv_array GetMonthName(const uint8_t month) noexcept;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	void Init() noexcept;
-	FileStore* OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept;
-	bool FileExists(const char *filePath) noexcept;
+	FileStore *_ecv_null OpenFile(const char *_ecv_array filePath, OpenMode mode, uint32_t preAllocSize) noexcept;
+	bool FileExists(const char *_ecv_array filePath) noexcept;
 	void CloseAllFiles() noexcept;
 	void Spin() noexcept;
 
@@ -64,7 +65,7 @@ namespace MassStorage
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	FileWriteBuffer *AllocateWriteBuffer() noexcept;
+	FileWriteBuffer *_ecv_null AllocateWriteBuffer() noexcept;
 	size_t GetFileWriteBufferLength() noexcept;
 	void ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept;
 	bool Delete(const StringRef& filePath, ErrorMessageMode errorMessageMode, bool recursive = false) noexcept;
@@ -83,13 +84,13 @@ namespace MassStorage
 	bool FindFirst(const char *_ecv_array directory, FileInfo &file_info) noexcept;
 	bool FindNext(FileInfo &file_info) noexcept;
 	void AbandonFindNext() noexcept;
-	GCodeResult GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
+	GCodeResult GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& info, bool quitEarly, GlobalVariables *_ecv_null customVars) noexcept;
 	GCodeResult Mount(size_t card, const StringRef& reply, bool reportSuccess) noexcept;
 	GCodeResult Unmount(size_t card, const StringRef& reply) noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 
 # if SUPPORT_ASYNC_MOVES
-	FileStore *DuplicateOpenHandle(const FileStore *f) noexcept;	// Duplicate a file handle, with the duplicate having its own position in the file. Use only when files opened in read-only mode.
+	FileStore *_ecv_null DuplicateOpenHandle(const FileStore *f) noexcept;	// Duplicate a file handle, with the duplicate having its own position in the file. Use only when files opened in read-only mode.
 # endif
 #endif
 
@@ -99,7 +100,7 @@ namespace MassStorage
 	bool Rename(const char *_ecv_array oldFilePath, const char *_ecv_array newFilePath, bool deleteExisting, bool messageIfFailed) noexcept;
 	time_t GetLastModifiedTime(const char *_ecv_array filePath) noexcept;
 	bool SetLastModifiedTime(const char *_ecv_array file, time_t t) noexcept;
-	bool CheckDriveMounted(const char* path) noexcept;
+	bool CheckDriveMounted(const char *_ecv_array path) noexcept;
 	bool IsCardDetected(size_t card) noexcept;
 	unsigned int InvalidateFiles(const FATFS *fs) noexcept;									// Invalidate all open files on the specified file system, returning the number of files invalidated
 	bool AnyFileOpen(const FATFS *fs) noexcept;												// Return true if any files are open on the file system

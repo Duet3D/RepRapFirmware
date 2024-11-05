@@ -80,13 +80,13 @@ bool Flasher::write(FileStore *infile, uint32_t& foffset) THROWS(GCodeException)
 	uint8_t buffer[pageSize];
 	uint32_t pageOffset = foffset / pageSize;
 
-	if ((fbytes = infile->Read((char*)buffer, pageSize)) > 0)
+	if ((fbytes = infile->Read((char *_ecv_array)buffer, pageSize)) > 0)
 	{
 		_observer.onProgress(pageNum, numPages);
 
 		_flash->loadBuffer(buffer, fbytes);
 		_flash->writePage(pageOffset /* + pageNum */);
-		foffset += fbytes;
+		foffset += (unsigned int)fbytes;
 
 		pageNum++;
 		if (!(pageNum == numPages || fbytes != (int)pageSize))
@@ -124,15 +124,17 @@ bool Flasher::verify(FileStore *infile, uint32_t& pageErrors, uint32_t& totalErr
 	if (foffset == 0)
 	{
 		if (numPages > _flash->numPages())
+		{
 			throw FileSizeError("Flasher::verify: FileSizeError");
+		}
 
 		_observer.onStatus("Verifying %ld bytes of PanelDue flash memory\n", infile->Length());
 	}
 
-	if ((fbytes = infile->Read((char*)bufferA, pageSize)) > 0)
+	if ((fbytes = infile->Read((char *_ecv_array)bufferA, pageSize)) > 0)
 	{
 		byteErrors = 0;
-		foffset += fbytes;
+		foffset += (unsigned int)fbytes;
 
 		_observer.onProgress(pageNum, numPages);
 
@@ -142,7 +144,9 @@ bool Flasher::verify(FileStore *infile, uint32_t& pageErrors, uint32_t& totalErr
 			for (uint32_t i = 0; i < (uint32_t) fbytes; i++)
 			{
 				if (bufferA[i] != bufferB[i])
+				{
 					byteErrors++;
+				}
 			}
 		}
 
