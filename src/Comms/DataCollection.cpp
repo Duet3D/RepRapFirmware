@@ -216,6 +216,7 @@ namespace DataCollection
 			const auto sensor = reprap.GetHeat().FindSensor(sensorInfo.number);
 			if (sensor.IsNotNull())
 			{
+				sensor->Poll();
 				float fReading;
 				size_t len = 7;				// max linearAnalog reading is 5 digits, temperature to 1 d.p. can be 6 digits.
 				uint8_t asciiReading[len+1] = {0};

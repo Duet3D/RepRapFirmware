@@ -2716,7 +2716,7 @@ bool Platform::SendUartData(size_t auxChannel, const uint8_t *data, size_t len) 
 	}
 
 	AuxDevice& dev = auxDevices[auxChannel];
-	if (dev.GetMode() != AuxDevice::AuxMode::device)
+	if (dev.GetMode() != AuxMode::device)
 	{
 		debugPrintf("auxDevice[%u] not in device mode\n", auxChannel);
 		return false;

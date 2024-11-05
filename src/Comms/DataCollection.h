@@ -24,8 +24,8 @@ namespace DataCollection
 	constexpr uint32_t SendInterval = 2;	// interval in ms between sending data
 	constexpr size_t DefaultAuxChannel = 0;
 	constexpr AnalogSensorInfo AnalogSensors[] = {
-			{.number=2, .decimals=0},
-			{.number=1, .decimals=1}
+			{.number=20, .decimals=0},
+			{.number=21, .decimals=1}
 	};		// analog sensor numbers to log
 
 	bool SendDataToUart();
