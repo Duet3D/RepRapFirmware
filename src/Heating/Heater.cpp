@@ -160,7 +160,6 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 		fanCoolingRate = (numValues == 2) ? coolingRates[1] : 0.0;
 		if (gb.Seen('R'))
 		{
-			seen = true;
 			heatingRate = gb.GetPositiveFValue();
 		}
 		gb.TryGetFValue('E', coolingRateExponent, seen);

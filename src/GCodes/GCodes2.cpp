@@ -1721,15 +1721,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						const float f = gb.GetPwmValue();
 						if (seenFanNum)
 						{
-							result = reprap.GetFansManager().SetFanValue(fanNum, f, reply);
 							// If this is a print cooling fan for an active tool, set the virtual fan speed in the corresponding MovementState
 							for (MovementState& ms : moveStates)
 							{
 								if (ms.currentTool != nullptr && ms.currentTool->GetFanMapping().IsBitSet(fanNum))
 								{
 									ms.virtualFanSpeed = f;
+									if (ms.currentTool->GetFanMapping().IsOnlyBitSet(fanNum))
+									{
+										ms.currentTool->SetFansPwm(f);
+									}
 								}
 							}
+
+							// Set the fan value here to ensure that the tool heaters' heating rates are correctly updated first
+							result = reprap.GetFansManager().SetFanValue(fanNum, f, reply);
 						}
 						else
 						{
