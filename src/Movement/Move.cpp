@@ -1555,7 +1555,7 @@ void Move::LaserTaskRun() noexcept
 		else
 #endif
 
-# if SUPPORT_LASER
+#if SUPPORT_LASER
 			if (gcodes.GetMachineType() == MachineType::laser)
 		{
 			// Manage the laser power
@@ -1566,16 +1566,14 @@ void Move::LaserTaskRun() noexcept
 			}
 		}
 		else
-# endif
+#endif
 		{
-# if SUPPORT_IOBITS
-			// Manage the IOBits
+			// Manage the feedforward and IOBits
 			uint32_t ticks;
 			while ((ticks = rings[0].ManageIOBitsAndFeedForward()) != 0)
 			{
 				(void)TaskBase::TakeIndexed(NotifyIndices::Laser, ticks);
 			}
-# endif
 		}
 	}
 }
