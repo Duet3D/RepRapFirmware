@@ -118,7 +118,7 @@ void DDA::LogProbePosition() noexcept
 
 #endif
 
-// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
+// Set up the parameters from the DDA
 void PrepParams::SetFromDDA(const DDA& dda) noexcept
 {
 	totalDistance = dda.totalDistance;
@@ -128,10 +128,27 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
 	const float steadyDistance = decelStartDistance - accelDistance;
 	steadyClocks = (steadyDistance <= 0.0) ? 0.0 : lrintf(steadyDistance/dda.topSpeed);
+#if SUPPORT_S_CURVE
+	initialAcceleration = dda.initialAcceleration;
+	peakAcceleration = dda.peakAcceleration;
+	finalAcceleration = dda.finalAcceleration;
+	initialDeceleration = dda.initialDeceleration;
+	peakDeceleration = dda.peakDeceleration;
+	finalDeceleration = dda.finalDeceleration;
+
+	accelStartClocks = qq;
+	accelConstantClocks = qq;
+	accelEndClocks = qq;
+	decelStartClocks = qq;
+	decelConstantClocks = qq;
+	decelEndClocks = qq;
+#else
 	acceleration = dda.acceleration;
 	deceleration = dda.deceleration;
+
 	accelClocks = lrintf((dda.topSpeed - dda.startSpeed)/dda.acceleration);
 	decelClocks = lrintf((dda.topSpeed - dda.endSpeed)/dda.deceleration);
+#endif
 	useInputShaping = dda.flags.xyMoving
 					&& !(dda.flags.isolatedMove || dda.flags.isLeadscrewAdjustmentMove
 #if SUPPORT_SCANNING_PROBES
@@ -680,7 +697,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			if (extrusionRequested != 0.0)
 			{
 				move.EnableDrivers(drive, false);
-				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, extrusionRequested, segFlags);
+				move.AddLinearSegments(drive, msg.whenToExecute, params, extrusionRequested, segFlags);
 			}
 		}
 		else
@@ -690,7 +707,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			if (delta != 0.0)
 			{
 				move.EnableDrivers(drive, false);
-				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, delta, segFlags);
+				move.AddLinearSegments(drive, msg.whenToExecute, params, delta, segFlags);
 				afterPrepare.drivesMoving.SetBit(drive);
 			}
 		}
@@ -1203,7 +1220,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						else		// we don't generate segments for leadscrew adjustment moves to remote drivers
 #endif
 						{
-							move.AddLinearSegments(*this, driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
+							move.AddLinearSegments(driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
 						}
 					}
 				}
@@ -1236,7 +1253,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 					}
 
 					// We generate segments even for nonlocal drivers so that the final position is correct and to track the position in near real time
-					move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
+					move.AddLinearSegments(drive, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
 					afterPrepare.drivesMoving.SetBit(drive);
 
 #if SUPPORT_CAN_EXPANSION
@@ -1288,7 +1305,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						const motioncalc_t delta = totalDistance * directionVector[drive] * move.DriveStepsPerMm(drive);
 
 						// We generate segments even for nonlocal extruders in order to track extruder position
-						move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, segFlags);
+						move.AddLinearSegments(drive, afterPrepare.moveStartTime, params, delta, segFlags);
 
 #if SUPPORT_CAN_EXPANSION
 						const DriverId driver = move.GetExtruderDriver(extruder);

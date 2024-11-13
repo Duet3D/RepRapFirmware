@@ -25,18 +25,37 @@ class CanMessageMovementLinearShaped;
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
 struct PrepParams
 {
-	float totalDistance;
-	float accelDistance;
-	float decelStartDistance;
+#if SUPPORT_S_CURVE
+	uint32_t accelStartClocks, accelConstantClocks, accelEndClocks, steadyClocks, decelStartClocks, decelConstantClocks, decelEndClocks;
+    float initialAcceleration, peakAcceleration, finalAcceleration;
+    float initialDeceleration, peakDeceleration, finalDeceleration;
+    float accelInitialDistance, accelPeakDistance, accelEndDistance;
+    float decelInitialDistance, decelPeakDistance, decelEndDistance;
+	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive
+#else
 	uint32_t accelClocks, steadyClocks, decelClocks;
+	float accelDistance;
 	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
+#endif
+	float totalDistance;
+	float decelStartDistance;
 	float topSpeed;									// the top speed, may be modified by the input shaper
 	bool useInputShaping;
 
-	// Get the total clocks needed
-	uint32_t TotalClocks() const noexcept { return accelClocks + steadyClocks + decelClocks; }
+#if SUPPORT_S_CURVE
+	uint32_t TotalAccelClocks() const noexcept { return accelStartClocks + accelConstantClocks + accelEndClocks; }
+	uint32_t TotalDecelClocks() const noexcept { return decelStartClocks + decelConstantClocks + decelEndClocks; }
+	float TotalAccelDistance() const noexcept { return accelInitialDistance + accelPeakDistance + accelEndDistance; }
+#else
+	uint32_t TotalAccelClocks() const noexcept { return accelClocks; }
+	uint32_t TotalDecelClocks() const noexcept { return decelClocks; }
+	float TotalAccelDistance() const noexcept { return accelDistance; }
+#endif
 
-	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
+	// Get the total clocks needed
+	uint32_t TotalClocks() const noexcept { return TotalAccelClocks() + steadyClocks + TotalDecelClocks(); }
+
+	// Set up the parameters from the DDA
 	void SetFromDDA(const DDA& dda) noexcept;
 
 	void DebugPrint() const noexcept;
@@ -244,12 +263,8 @@ private:
 	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;							// How long is the move in hypercuboid space
 #if SUPPORT_S_CURVE
-    float initialAcceleration;
-    float peakAcceleration;
-    float finalAcceleration;
-    float initialDeceleration;
-    float peakDeceleration;
-    float finalDeceleration;
+    float initialAcceleration, peakAcceleration, finalAcceleration;
+    float initialDeceleration, peakDeceleration, finalDeceleration;
 	float jerk;										// The magnitude of the rate of change of acceleration or deceleration, always positive
 #else
 	float acceleration;								// The acceleration to use, always positive
