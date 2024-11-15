@@ -159,8 +159,23 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 
 void PrepParams::DebugPrint() const noexcept
 {
-	debugPrintf("pp: td=%.3e ad=%.3e dsd=%.3e a=%.3e d=%.3e ac=%" PRIu32 " sc=%" PRIu32 " dc=%" PRIu32 "\n",
-					(double)totalDistance, (double)accelDistance, (double)decelStartDistance, (double)acceleration, (double)deceleration, accelClocks, steadyClocks, decelClocks);
+	debugPrintf("pp: td=%.3e ad=%.3e dsd=%.3e"
+#if SUPPORT_S_CURVE
+				"a=[%.3e %.3e %.3e] d=[%.3e %.3e %.3e] ac=[%" PRIu32 " %" PRIu32 " %" PRIu32 "] sc=%" PRIu32 " dc=[%" PRIu32 " %" PRIu32 " %" PRIu32 "]"
+#else
+				"a=%.3e d=%.3e ac=%" PRIu32 " sc=%" PRIu32 " dc=%" PRIu32
+#endif
+				"\n",
+					(double)totalDistance, (double)accelDistance, (double)decelStartDistance,
+#if SUPPORT_S_CURVE
+					(double)initialAcceleration, (double)peakAcceleration, (double)finalAcceleration,
+					(double)initialDeceleration, (double)peakDeceleration, (double)finalDeceleration,
+					accelStartClocks, accelConstantClocks, accelEndClocks, steadyClocks, decelStartClocks, decelConstantClocks, decelEndClocks
+#else
+					(double)acceleration, (double)deceleration,
+					accelClocks, steadyClocks, decelClocks
+#endif
+				);
 }
 
 DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
@@ -231,8 +246,19 @@ void DDA::DebugPrint(const char *tag) const noexcept
 
 	debugPrintf(" s=%.4e", (double)totalDistance);
 	DebugPrintVector(" vec", directionVector, MaxAxesPlusExtruders);
-	debugPrintf("\n" "a=%.4e d=%.4e reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=%04x\n",
-				(double)acceleration, (double)deceleration, (double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded, (uint32_t)filePos, flags.all);
+	debugPrintf("\n"
+#if SUPPORT_S_CURVE
+				"a=[%.4e, %.4e, %.4e] d=[%.4e, %.4e, %.4e] j=%.4e"
+#else
+				"a=%.4e d=%.4e"
+#endif
+				" reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=%04x\n",
+#if SUPPORT_S_CURVE
+				(double)initialAcceleration, (double)peakAcceleration, (double)finalAcceleration, (double)initialDeceleration, (double)peakDeceleration, (double)finalDeceleration, (double)jerk,
+#else
+				(double)acceleration, (double)deceleration,
+#endif
+				(double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded, (uint32_t)filePos, flags.all);
 }
 
 // Set up a real move. Return true if it represents real movement, else false.
@@ -427,12 +453,12 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	float normalisedDirectionVector[MaxAxesPlusExtruders];			// used to hold a unit-length vector in the direction of motion
 	memcpyf(normalisedDirectionVector, directionVector, ARRAY_SIZE(normalisedDirectionVector));
 	Absolute(normalisedDirectionVector, MaxAxesPlusExtruders);
-	acceleration = VectorBoxIntersection(normalisedDirectionVector, accelerations);
+	peakAcceleration = VectorBoxIntersection(normalisedDirectionVector, accelerations);
 	if (flags.xyMoving)												// apply M204 acceleration limits to XY moves
 	{
-		acceleration = min<float>(acceleration, (flags.isPrintingMove) ? nextMove.maxPrintingAcceleration : nextMove.maxTravelAcceleration);
+		peakAcceleration = min<float>(peakAcceleration, (flags.isPrintingMove) ? nextMove.maxPrintingAcceleration : nextMove.maxTravelAcceleration);
 	}
-	deceleration = acceleration;
+	peakDeceleration = peakAcceleration;
 
 	// 6. Set the speed to the smaller of the requested and maximum speed.
 	// Also enforce a minimum speed of 0.5mm/sec. We need a minimum speed to avoid overflow in the movement calculations.
@@ -545,7 +571,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	tool = nullptr;
 	filePos = prev->filePos;
 	flags.endCoordinatesValid = prev->flags.endCoordinatesValid;
-	acceleration = deceleration = reprap.GetMove().NormalAcceleration(Z_AXIS);
+	peakAcceleration = peakDeceleration = reprap.GetMove().NormalAcceleration(Z_AXIS);
 
 #if SUPPORT_LASER && SUPPORT_IOBITS
 	if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
@@ -618,8 +644,8 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 	startSpeed = nextMove.startSpeed;
 	endSpeed = nextMove.endSpeed;
 	requestedSpeed = nextMove.requestedSpeed;
-	acceleration = nextMove.acceleration;
-	deceleration = nextMove.deceleration;
+	peakAcceleration = nextMove.acceleration;
+	peakDeceleration = nextMove.deceleration;
 
 # if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();
@@ -653,11 +679,19 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 
 	// Normalise the move to unit distance
 	params.totalDistance = totalDistance = 1.0;
+#if SUPPORT_S_CURVE
+	params.initialAcceleration = params.peakAcceleration = params.finalAcceleration = initialAcceleration = peakAcceleration = finalAcceleration = msg.acceleration;
+	params.initialDeceleration = params.peakDeceleration = params.finalDeceleration = initialDeceleration = peakDeceleration = finalDeceleration = msg.deceleration;
+	params.accelConstantClocks = msg.accelerationClocks;
+	params.decelConstantClocks = msg.decelClocks;
+	params.accelStartClocks = params.accelEndClocks = params.decelStartClocks = params.decelEndClocks = 0.0;
+#else
 	params.acceleration = acceleration = msg.acceleration;
 	params.deceleration = deceleration = msg.deceleration;
 	params.accelClocks = msg.accelerationClocks;
-	params.steadyClocks = msg.steadyClocks;
 	params.decelClocks = msg.decelClocks;
+#endif
+	params.steadyClocks = msg.steadyClocks;
 	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
 
 	// We occasionally receive a message with zero clocks needed. This messes up the calculations, so add one steady clock in this case.
@@ -666,12 +700,22 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 		clocksNeeded = params.steadyClocks = 1;
 	}
 
+#if SUPPORT_S_CURVE
+	const float accelDistanceExTopSpeed = -0.5 * params.peakAcceleration * fsquare((float)params.accelConstantClocks);
+	const float decelDistanceExTopSpeed = -0.5 * params.peakDeceleration * fsquare((float)params.decelConstantClocks);
+	topSpeed = (params.totalDistance - accelDistanceExTopSpeed - decelDistanceExTopSpeed)/clocksNeeded;
+
+	params.accelDistance =      accelDistanceExTopSpeed + topSpeed * params.accelConstantClocks;
+	const float decelDistance = decelDistanceExTopSpeed + topSpeed * params.decelConstantClocks;
+#else
 	const float accelDistanceExTopSpeed = -0.5 * params.acceleration * fsquare((float)params.accelClocks);
 	const float decelDistanceExTopSpeed = -0.5 * params.deceleration * fsquare((float)params.decelClocks);
 	topSpeed = (params.totalDistance - accelDistanceExTopSpeed - decelDistanceExTopSpeed)/clocksNeeded;
 
 	params.accelDistance =      accelDistanceExTopSpeed + topSpeed * params.accelClocks;
 	const float decelDistance = decelDistanceExTopSpeed + topSpeed * params.decelClocks;
+#endif
+
 	params.decelStartDistance =  1.0 - decelDistance;
 
 	MovementFlags segFlags;
@@ -1067,11 +1111,11 @@ void DDA::MatchSpeeds() noexcept
 		if (directionVector[drive] != 0.0 || next->directionVector[drive] != 0.0)
 		{
 			const float totalFraction = fabsf(directionVector[drive] - next->directionVector[drive]);
-			const float jerk = totalFraction * beforePrepare.targetNextSpeed;
-			const float allowedJerk = reprap.GetMove().GetPrintingInstantDv(drive);
-			if (jerk > allowedJerk)
+			const float instantSpeedChange = totalFraction * beforePrepare.targetNextSpeed;
+			const float allowedInstantSpeedChange = reprap.GetMove().GetPrintingInstantDv(drive);
+			if (instantSpeedChange > allowedInstantSpeedChange)
 			{
-				beforePrepare.targetNextSpeed = allowedJerk/totalFraction;
+				beforePrepare.targetNextSpeed = allowedInstantSpeedChange/totalFraction;
 			}
 		}
 	}
@@ -1548,13 +1592,13 @@ void DDA::LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration) noexc
 	{
 		requestedSpeed = maxSpeed;
 	}
-	if (acceleration > maxAcceleration)
+	if (peakAcceleration > maxAcceleration)
 	{
-		acceleration = maxAcceleration;
+		peakAcceleration = maxAcceleration;
 	}
-	if (deceleration > maxAcceleration)
+	if (peakDeceleration > maxAcceleration)
 	{
-		deceleration = maxAcceleration;
+		peakDeceleration = maxAcceleration;
 	}
 }
 

@@ -34,9 +34,11 @@ struct PrepParams
 	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive
 #else
 	uint32_t accelClocks, steadyClocks, decelClocks;
-	float accelDistance;
 	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
+# define peakAcceleration	acceleration
+# define peakDeceleration	deceleration
 #endif
+	float accelDistance;
 	float totalDistance;
 	float decelStartDistance;
 	float topSpeed;									// the top speed, may be modified by the input shaper
