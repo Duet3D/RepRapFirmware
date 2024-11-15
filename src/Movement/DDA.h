@@ -154,7 +154,6 @@ public:
 
 	uint32_t GetClocksNeeded() const noexcept { return clocksNeeded; }
 	bool HasExpired() const noexcept pre(IsCommitted());
-	bool IsGoodToPrepare() const noexcept;
 	bool IsNonPrintingExtruderMove() const noexcept { return flags.isNonPrintingExtruderMove; }
 	void UpdateMovementAccumulators(volatile int32_t *accumulators) const noexcept;
 	uint32_t GetMoveStartTime() const noexcept { return afterPrepare.moveStartTime; }
@@ -254,7 +253,7 @@ private:
 	LaserPwmOrIoBits laserPwmOrIoBits;				// laser PWM required or port state required during this move (here because it is currently 16 bits)
 #endif
 
-	const Tool *tool;								// which tool (if any) is active
+	const Tool *_ecv_null tool;						// which tool (if any) is active
 
     FilePosition filePos;							// The position in the SD card file after this move was read, or zero if not read from SD card
 
@@ -280,7 +279,7 @@ private:
 
 	float proportionDone;							// what proportion of the extrusion in the G1 or G0 move of which this is a part has been done after this segment is complete
 	float initialUserC0, initialUserC1;				// if this is a segment of an arc move, the user X and Y coordinates at the start
-	uint32_t clocksNeeded;
+	uint32_t clocksNeeded;							// how long this move will take in step clocks
 
 	union
 	{
@@ -290,6 +289,9 @@ private:
 			float accelDistance;
 			float decelDistance;
 			float targetNextSpeed;					// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
+#if SUPPORT_S_CURVE
+			float targetNextAcceleration;			// The acceleration that the next move would like to start at
+#endif
 		} beforePrepare;
 
 		// Values that are not set or accessed before Prepare is called
@@ -308,12 +310,6 @@ private:
 	void LogProbePosition() noexcept;
 #endif
 };
-
-// Return true if there is no reason to delay preparing this move
-inline bool DDA::IsGoodToPrepare() const noexcept
-{
-	return endSpeed >= topSpeed;							// if it never decelerates, we can't improve it
-}
 
 inline bool DDA::CanPauseAfter() const noexcept
 {
