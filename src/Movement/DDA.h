@@ -88,6 +88,7 @@ public:
 #endif
 
 	DDAState GetState() const noexcept { return state; }
+	bool IsCommitted() const noexcept { return state == DDA::committed; }
 	DDA* GetNext() const noexcept { return next; }
 	DDA* GetPrevious() const noexcept { return prev; }
 	uint32_t GetTimeLeft() const noexcept;
@@ -108,8 +109,18 @@ public:
 	float GetRequestedSpeedMmPerClock() const noexcept { return requestedSpeed; }
 	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(requestedSpeed); }
 	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(topSpeed); }
-	float GetAccelerationMmPerSecSquared() const noexcept { return InverseConvertAcceleration(acceleration); }
-	float GetDecelerationMmPerSecSquared() const noexcept { return InverseConvertAcceleration(deceleration); }
+	float GetAccelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
+#if SUPPORT_S_CURVE
+		{ return InverseConvertAcceleration(peakAcceleration); }
+#else
+		{ return InverseConvertAcceleration(acceleration); }
+#endif
+	float GetDecelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
+#if SUPPORT_S_CURVE
+		{ return InverseConvertAcceleration(peakDeceleration); }
+#else
+		{ return InverseConvertAcceleration(deceleration); }
+#endif
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float GetTotalExtrusionRate() const noexcept;
 
@@ -123,7 +134,7 @@ public:
 	float GetInitialUserC1() const noexcept { return initialUserC1; }
 
 	uint32_t GetClocksNeeded() const noexcept { return clocksNeeded; }
-	bool HasExpired() const noexcept pre(state == committed);
+	bool HasExpired() const noexcept pre(IsCommitted());
 	bool IsGoodToPrepare() const noexcept;
 	bool IsNonPrintingExtruderMove() const noexcept { return flags.isNonPrintingExtruderMove; }
 	void UpdateMovementAccumulators(volatile int32_t *accumulators) const noexcept;
@@ -131,6 +142,11 @@ public:
 	uint32_t GetMoveFinishTime() const noexcept { return afterPrepare.moveStartTime + clocksNeeded; }
 
 	float GetMotorTopSpeed(uint8_t axis) const noexcept;							// Return the top speed in microsteps/sec for the specified motor
+	float GetAverageExtrusionSpeed() const noexcept pre(IsCommitted()) { return afterPrepare.averageExtrusionSpeed; }
+	bool HaveDoneIoBits() const noexcept { return flags.doneIoBits; }
+	bool HaveDoneFeedForward() const noexcept { return flags.doneFeedForward; }
+	void SetDoneIoBits() noexcept { flags.doneIoBits = true; }
+	void SetDoneFeedForward() noexcept { flags.doneFeedForward = true; }
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }
@@ -204,13 +220,11 @@ private:
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
 					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
 					 controlLaser : 1,				// True if this move controls the laser or iobits
-					 wasAccelOnlyMove : 1,			// set by Prepare if this was an acceleration-only move, for the next move to look at
-					 isolatedMove : 1				// set if we disable input shaping for this move and wait for it to finish e.g. for a G1 H2 move
+					 isolatedMove : 1,				// set if we disable input shaping for this move and wait for it to finish e.g. for a G1 H2 move
+					 doneIoBits : 1,				// set if we have written the IOBITS ports for this move
+					 doneFeedForward : 1			// set if we have commanded feedforward for this move
 #if SUPPORT_SCANNING_PROBES
 					 , scanningProbeMove : 1 	 	// True if this is a scanning Z probe move
-#endif
-#if SUPPORT_REMOTE_COMMANDS
-					 , isRemote : 1					// True if this move was commanded from a remote
 #endif
 					 ;
 		};
@@ -229,8 +243,18 @@ private:
 	float endCoordinates[MaxAxesPlusExtruders];		// The Cartesian coordinates at the end of the move plus extrusion amounts
 	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;							// How long is the move in hypercuboid space
+#if SUPPORT_S_CURVE
+    float initialAcceleration;
+    float peakAcceleration;
+    float finalAcceleration;
+    float initialDeceleration;
+    float peakDeceleration;
+    float finalDeceleration;
+	float jerk;										// The magnitude of the rate of change of acceleration or deceleration, always positive
+#else
 	float acceleration;								// The acceleration to use, always positive
 	float deceleration;								// The deceleration to use, always positive
+#endif
     float requestedSpeed;							// The speed that the user asked for
     float virtualExtruderPosition;					// the virtual extruder position at the end of this move, used for pause/resume
 

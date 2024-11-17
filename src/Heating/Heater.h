@@ -32,6 +32,7 @@ struct CanMessageSetHeaterTemperature;
 struct CanMessageSetHeaterMonitors;
 struct CanMessageHeaterTuningCommand;
 struct CanMessageSetHeaterFaultDetectionParameters;
+struct CanMessageHeaterFeedForwardNew;
 #endif
 
 // Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
@@ -52,12 +53,12 @@ public:
 	virtual float GetTemperature() const noexcept = 0;					// Get the current temperature and error status
 	virtual float GetAveragePWM() const noexcept = 0;					// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
 	virtual GCodeResult ResetFault(const StringRef& reply) noexcept = 0;	// Reset a fault condition - only call this if you know what you are doing
-	virtual void SwitchOff() noexcept = 0;
+	virtual void SwitchOff() noexcept;
 	virtual void Spin() noexcept = 0;
 	virtual void Suspend(bool sus) noexcept = 0;						// Suspend the heater to conserve power or while doing Z probing
 	virtual float GetAccumulator() const noexcept = 0;					// Get the inertial term accumulator
-	virtual void FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept = 0;
-	virtual void SetExtrusionFeedForward(float pwm) noexcept = 0;
+	virtual void SetFanFeedForwardPwm(float fanPwm) noexcept = 0;
+	virtual void SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept = 0;
 
 #if SUPPORT_CAN_EXPANSION
 	virtual bool IsLocal() const noexcept = 0;
@@ -90,6 +91,8 @@ public:
 	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
 	GCodeResult SetFaultDetectionParameters(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept;
 	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;
+	virtual GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept = 0;
+	uint8_t GetModeByte() const { return (uint8_t)GetMode(); }
 #endif
 
 	bool IsHeaterEnabled() const noexcept								// Is this heater enabled?
@@ -103,10 +106,6 @@ public:
 	void SetAsBedOrChamberHeater() noexcept;
 
 	bool IsCoolingDevice() const noexcept { return model.IsInverted(); }
-
-#if SUPPORT_REMOTE_COMMANDS
-	uint8_t GetModeByte() const { return (uint8_t)GetMode(); }
-#endif
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
@@ -122,7 +121,7 @@ protected:
 		float GetNormalGain() const noexcept { return heatingRate/coolingRate; }
 	};
 
-	virtual void ResetHeater() noexcept = 0;
+	virtual void ResetHeater() noexcept;
 	virtual HeaterMode GetMode() const noexcept = 0;
 	virtual GCodeResult SwitchOn(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult UpdateModel(const StringRef& reply) noexcept = 0;
@@ -145,6 +144,10 @@ protected:
 	void SetAndReportModelAfterTuning(bool usingFans) noexcept;
 
 	HeaterMonitor monitors[MaxMonitorsPerHeater];			// embedding them in the Heater uses less memory than dynamic allocation
+	volatile float lastFanPwm;								// The fan PWM when we last calculated heater feedforward for the fan
+	volatile float lastExtrusionPwmBoost;					// The last value of extrusion boost we applied
+	volatile float extrusionTemperatureBoost;				// the amount of extrusion temperature boost we are currently applying
+
 	bool tuned;												// true if tuning was successful
 
 	// Constants used during heater tuning

@@ -70,6 +70,13 @@ static __nocache MessageBufferIn messageBufferIn;
 # define USE_DMAC_MANAGER	1		// use SAMD/SAME DMA controller via DmacManager module
 # define USE_XDMAC          0		// use SAME7 XDMA controller
 
+# define USE_MEMORY_WATCHER	1		// use a memory watcher to detect and fix memory corruption by DMAC
+# define USE_MEMORY_CHECKER	0		// use memory checkers to attempt to detect corrupted memory (not fully working yet because of other DMA)
+
+# if USE_MEMORY_CHECKER
+extern uint32_t _sbss;
+# endif
+
 // Compatibility with existing RRF Code
 constexpr Pin APIN_ESP_SPI_MISO = EspMisoPin;
 constexpr Pin APIN_ESP_SPI_SCK = EspSclkPin;
@@ -473,7 +480,10 @@ void WiFiInterface::Activate() noexcept
 #if SAME70
 		bufferOut = &messageBufferOut;
 		bufferIn = &messageBufferIn;
-#elif HAS_LWIP_NETWORKING && defined(DUET3MINI_V04)
+#elif HAS_LWIP_NETWORKING && defined(DUET3MINI_V04) && !USE_MEMORY_WATCHER
+		// This code saves RAM by allocating the message buffers on top of the unused Ethernet memory/
+		// However it means that we can no longer predict the range of memory that may be corrupted by the DMAC.
+		// So this code is best disabled and the memory watcher used, see #elif line above.
 		{
 			void *const mem = AllocateFromPbufPool(sizeof(MessageBufferOut));
 			bufferOut = (mem != nullptr) ? new (mem) MessageBufferOut : new MessageBufferOut;
@@ -693,18 +703,7 @@ void WiFiInterface::Spin() noexcept
 						{
 							reprap.GetPlatform().MessageF(NetworkErrorMessage, "failed to set WiFi hostname: %s\n", TranslateWiFiResponse(rc));
 						}
-#if SAME5x
-						// If running the RTOS-based WiFi module code, tell the module to increase SPI clock speed to 40MHz.
-						// This is safe on SAME5x processors but not on SAM4 processors.
-						if (isdigit(wiFiServerVersion[0]) && wiFiServerVersion[0] >= '2')
-						{
-							rc = SendCommand(NetworkCommand::networkSetClockControl, 0, 0, 0x2001, nullptr, 0, nullptr, 0);
-							if (rc != ResponseEmpty)
-							{
-								reprap.GetPlatform().MessageF(NetworkErrorMessage, "failed to set WiFi SPI speed: %s\n", TranslateWiFiResponse(rc));
-							}
-						}
-#endif
+
 						SetState(NetworkState::idle);
 						espStatusChanged = true;				// make sure we fetch the current state and enable the ESP interrupt
 					}
@@ -2162,7 +2161,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		}
 	}
 
-#if SAME5x
+#if SAME5x && USE_MEMORY_WATCHER
 	// There appears to be a DMA/SPI bug in the SAME5x:
 	// - The SPI packet length used by the WiFi module is variable and we don't know it in advance, so we set the receive DMAC channel to the maximum transfer length
 	// - When the SS line goes high to terminate the transaction, we need to disable the DMA channel even though the DMA count hasn't expired
@@ -2244,26 +2243,61 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	espWaitingTask = nullptr;
 
 #if SAME5x
-	if (WiFiSpiSercom->SPI.STATUS.bit.BUFOVF)
-	{
-		++spiRxOverruns;
-	}
-
-	if (watcher.Check(1))					// check whether the watched memory has been corrupted. We never observe corruption at this point.
-	{
-		delay(50);
-	}
+# if USE_MEMORY_WATCHER
+	watcher.Check(0);						// check whether the watched memory has been corrupted. We never observe corruption at this point.
+# endif
+	unsigned int dmaDisableFailCount = 0;
+# if USE_MEMORY_CHECKER
+	MemoryChecker mc1, mc2, mc3, mc4, mc5;
+# endif
 	{
 		AtomicCriticalSectionLocker lock;	// disable interrupts for this section in case it helps prevent the DMA memory corruption
-		spi_dma_disable();
-		DisableSpi();
-		__DMB();							// just in case this might help
+		DmacManager::DisableChannel(DmacChanWiFiTx);
+		if (!DmacManager::DisableChannel(DmacChanWiFiRx))
+		{
+			++dmaDisableFailCount;
+			if (!DmacManager::DisableChannel(DmacChanWiFiRx))
+			{
+				++dmaDisableFailCount;
+			}
+		}
+
+# if USE_MEMORY_CHECKER
+		// The input buffer is earlier in memory than the Network task stack
+		mc1.Init(&_sbss, reinterpret_cast<const uint32_t*>(0x20004700));									// CRC from start of BSS part way to message buffer in
+		mc2.Init(reinterpret_cast<const uint32_t*>(0x20004700), reinterpret_cast<const uint32_t*>(0x20004740));	// CRC from there to just before message buffer in
+		mc3.Init(reinterpret_cast<const uint32_t*>(0x20004740), reinterpret_cast<const uint32_t*>(bufferIn));	// CRC from there to just before message buffer in
+		mc4.Init(reinterpret_cast<const uint32_t*>(bufferIn + 1), GetStackPointer() - 10);				// CRC from end of message buffer in to just below our stack
+		mc5.Init(reinterpret_cast<uint32_t*>(&mc5) + 4, reinterpret_cast<uint32_t*>(0x20020000));		// CRC from just above the last MemoryWatcher to about halfway through the remaining RAM
+# endif
+
+		DisableSpi();						// this is where the memory corruption happens
+# if USE_MEMORY_CHECKER
+		mc1.Check();
+		mc2.Check();
+		mc3.Check();
+		mc4.Check();
+		mc5.Check();
+# endif
 	}
 
-	if (watcher.Check(2))					// check whether the watched memory has been corrupted. This is where we observe corruption.
+	const uint32_t tag = reinterpret_cast<uint32_t>(&(bufferIn->data[bufferIn->hdr.response * 4]));
+
+# if USE_MEMORY_CHECKER
+	mc1.Report(tag);
+	mc2.Report(tag);
+	mc3.Report(tag);
+	mc4.Report(tag);
+	mc5.Report(tag);
+#endif
+
+# if USE_MEMORY_WATCHER
+	const bool memdiff = watcher.Check(tag);	// check whether the watched memory has been corrupted. This is where we observe corruption.
+	if (dmaDisableFailCount != 0 && reprap.Debug(Module::Debug))
 	{
-		delay(50);
+		debugPrintf("Failed to disable receive DMA, count %u, memdiff = %u\n", dmaDisableFailCount, memdiff);
 	}
+# endif
 #else
 	while (!spi_dma_check_rx_complete()) { }	// Wait for DMA to complete
 #endif

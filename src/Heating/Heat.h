@@ -36,6 +36,7 @@ class HeaterMonitor;
 class GCodeBuffer;
 class CanMessageSensorTemperatures;
 class CanMessageHeatersStatus;
+class CanMessageHeaterFeedForwardNew;
 
 class Heat INHERIT_OBJECT_MODEL
 {
@@ -127,8 +128,8 @@ public:
 
 	GCodeResult SetActiveOrStandby(int heater, const Tool *_ecv_null tool, bool active, const StringRef& reply) noexcept;	// Turn a heater on
 	void SwitchOff(int heater) noexcept;								// Turn off a specific heater
-	void FeedForwardAdjustment(unsigned int heater, float fanPwmChange, float extrusionChange) const noexcept;
-	void SetExtrusionFeedForward(unsigned int heater, float pwm) const noexcept;
+	void SetFanFeedForwardPwm(unsigned int heater, float fanPwm) const noexcept;
+	void SetExtrusionFeedForward(unsigned int heater, float pwmBoost, float tempBoost) const noexcept;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteModelParameters(FileStore *f) const noexcept;				// Write heater model parameters to file returning true if no error
@@ -149,7 +150,7 @@ public:
 	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;
 	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
 	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept;
-	GCodeResult FeedForward(const CanMessageHeaterFeedForward& msg, const StringRef& reply) noexcept;
+	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept;
 #endif
 
 	static TaskHandle GetHeatTask() noexcept;

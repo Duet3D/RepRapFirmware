@@ -46,8 +46,8 @@ public:
 
 	float GetRequestedSpeedMmPerSec() const noexcept;
 	float GetTopSpeedMmPerSec() const noexcept;
-	float GetAccelerationMmPerSecSquared() const noexcept;
-	float GetDecelerationMmPerSecSquared() const noexcept;
+	float GetAccelerationMmPerSecSquared() const noexcept;								// Get the (peak) acceleration for reporting in the object model
+	float GetDecelerationMmPerSecSquared() const noexcept;								// Get the (peak) deceleration for reporting in the object model
 	float GetTotalExtrusionRate() const noexcept;
 
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the position at the end of the last queued move in untransformed coords
@@ -66,9 +66,7 @@ public:
 #if SUPPORT_LASER
 	uint32_t ManageLaserPower() noexcept;												// Manage the laser power
 #endif
-#if SUPPORT_IOBITS
-	uint32_t ManageIOBits() noexcept;													// Manage the IOBITS (G1 P parameter)
-#endif
+	uint32_t ManageIOBitsAndFeedForward() noexcept;										// Manage the IOBITS (G1 P parameter) and extruder heater feedforward
 
 	void RecordLookaheadError() noexcept { ++numLookaheadErrors; }						// Record a lookahead error
 	void Diagnostics(MessageType mtype, unsigned int ringNumber) noexcept;
@@ -96,6 +94,9 @@ private:
 
 	unsigned int numDdasInRing;													// The number of DDAs that this ring contains
 	uint32_t gracePeriod;														// The minimum idle time in milliseconds, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
+
+	const Tool *_ecv_null lastFeedForwardTool;									// the tool we last applied heater feedforward to
+	float lastAverageExtrusionSpeed;											// the extrusion speed we last set heater feedforward for
 
 	uint32_t scheduledMoves;													// Number of moves scheduled in this ring
 	uint32_t completedMoves;													// Number of moves completed in this ring

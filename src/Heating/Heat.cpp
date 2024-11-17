@@ -302,7 +302,7 @@ void Heat::Exit() noexcept
 
 void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 {
-	CanMessageHeatersStatus * const msg = buf.SetupStatusMessage<CanMessageHeatersStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+	CanMessageHeatersStatus * const msg = buf.SetupRequestMessageNoRid<CanMessageHeatersStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 	msg->whichHeaters = 0;
 	unsigned int heatersFound = 0;
 
@@ -457,7 +457,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 #if SUPPORT_REMOTE_COMMANDS
 				else if (CanInterface::InExpansionMode())
 				{
-					auto msg = buf.SetupStatusMessage<CanMessageHeaterTuningReport>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+					auto msg = buf.SetupRequestMessageNoRid<CanMessageHeaterTuningReport>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 					if (LocalHeater::GetTuningCycleData(*msg))
 					{
 						msg->SetStandardFields(heaterBeingTuned);
@@ -481,7 +481,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 
 				// Send our fan RPMs
 				{
-					CanMessageFansReport * const msg = buf.SetupStatusMessage<CanMessageFansReport>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+					CanMessageFansReport * const msg = buf.SetupRequestMessageNoRid<CanMessageFansReport>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 					const unsigned int numReported = reprap.GetFansManager().PopulateFansReport(*msg);
 					if (numReported != 0)
 					{
@@ -501,7 +501,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 
 				// Send a board health message
 				{
-					CanMessageBoardStatus * const boardStatusMsg = buf.SetupStatusMessage<CanMessageBoardStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+					CanMessageBoardStatus * const boardStatusMsg = buf.SetupRequestMessageNoRid<CanMessageBoardStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 					boardStatusMsg->Clear();
 
 					const StepTimer::Ticks movementDelayNeeded = StepTimer::CheckMovementDelayIncreasedNoClear();
@@ -888,25 +888,23 @@ void Heat::SwitchOffAllLocalFromISR() noexcept
 	}
 }
 
-void Heat::FeedForwardAdjustment(unsigned int heater, float fanPwmChange, float extrusionChange) const noexcept
+// Update the heater feedforward because of a change in the print cooling fan PWM
+void Heat::SetFanFeedForwardPwm(unsigned int heater, float fanPwm) const noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
 	{
-		h->FeedForwardAdjustment(fanPwmChange, extrusionChange);
+		h->SetFanFeedForwardPwm(fanPwm);
 	}
 }
 
-// This one is called from an ISR so we must not get a lock
-void Heat::SetExtrusionFeedForward(unsigned int heater, float pwm) const noexcept
+// Update the heater feedforward because of a change in the extrusion rate
+void Heat::SetExtrusionFeedForward(unsigned int heater, float pwmBoost, float tempBoost) const noexcept
 {
-	if (heater < MaxHeaters)
+	const auto h = FindHeater(heater);
+	if (h.IsNotNull())
 	{
-		Heater * const h = heaters[heater];
-		if (h != nullptr)
-		{
-			h->SetExtrusionFeedForward(pwm);
-		}
+		h->SetExtrusionFeedForward(pwmBoost, tempBoost);
 	}
 }
 
@@ -1516,14 +1514,14 @@ GCodeResult Heat::TuningCommand(const CanMessageHeaterTuningCommand& msg, const 
 	return h->TuningCommand(msg, reply);
 }
 
-GCodeResult Heat::FeedForward(const CanMessageHeaterFeedForward& msg, const StringRef& reply) noexcept
+GCodeResult Heat::ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heaterNumber);
 	if (h.IsNull())
 	{
 		return UnknownHeater(msg.heaterNumber, reply);
 	}
-	h->FeedForwardAdjustment(msg.fanPwmAdjustment, msg.extrusionAdjustment);
+	h->ApplyFeedForward(msg, reply);
 	return GCodeResult::ok;
 }
 

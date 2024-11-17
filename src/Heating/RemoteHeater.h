@@ -29,14 +29,15 @@ public:
 	float GetAveragePWM() const noexcept override;							// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
 	float GetAccumulator() const noexcept override;							// Return the integral accumulator
 	void Suspend(bool sus) noexcept override;								// Suspend the heater to conserve power or while doing Z probing
-	void FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept override;
-	void SetExtrusionFeedForward(float pwm) noexcept override { }			// We can't yet set feedforward on remote heaters because this is called from an ISR
+	void SetFanFeedForwardPwm(float pwm) noexcept override;
+	void SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept override;
 	bool IsLocal() const noexcept override { return false; }
 	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept override;
 	void UpdateHeaterTuning(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept override;
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept override;
+	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept override { return GCodeResult::error; }	// this should never be called on a remote heater
 #endif
 
 protected:
@@ -60,6 +61,7 @@ private:
 
 	GCodeResult SendTuningCommand(const StringRef& reply, bool on) noexcept;
 	void StopTuning() noexcept;
+	void UpdateFeedForward() noexcept;
 
 	static constexpr uint32_t RemoteStatusTimeout = 2000;
 

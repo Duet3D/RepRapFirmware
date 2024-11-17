@@ -746,10 +746,11 @@ private:
 
 	// To write a register, we send one 8-byte packet to write it, then a 4-byte packet to ask for the IFCOUNT register, then we receive an 8-byte packet containing IFCOUNT.
 	// This is the message we send - volatile because we care about when it is written
-	alignas(4) __attribute__((section(".DmaBuffers"))) static volatile uint8_t sendData[12];
+	// We can't put it in section DmaBuffers because it is initialised
+	alignas(4) static volatile uint8_t sendData[12];
 
 	// Buffer for the message we receive when reading data. The first 4 or 12 bytes bytes are our own transmitted data.
-	alignas(4) __attribute__((section(".DmaBuffers"))) static volatile uint8_t receiveData[20];
+	alignas(16) __attribute__((section(".DmaBuffers"))) static volatile uint8_t receiveData[20];
 
 	uint16_t readErrors;									// how many read errors we had
 	uint16_t writeErrors;									// how many write errors we had

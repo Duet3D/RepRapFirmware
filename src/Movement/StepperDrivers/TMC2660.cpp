@@ -442,7 +442,8 @@ pre(!driversPowered)
 	registers[StallGuardConfig] = defaultSgscConfReg;
 	registers[DriveConfig] = defaultDrvConfReg;
 	registersToUpdate = UpdateAllRegisters;
-	accumulatedStatus = lastReadStatus = 0;
+	accumulatedStatus = 0;
+	lastReadStatus = 0;
 	rdselState = 0xFF;
 	mstepPosition = 0xFFFFFFFF;
 	ResetLoadRegisters();

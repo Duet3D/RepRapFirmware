@@ -62,11 +62,11 @@ constexpr ObjectModelArrayTableEntry Tool::objectModelArrayTable[] =
 		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->driveCount; },
 		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Tool*)self)->drives[context.GetLastIndex()]); }
 	},
-	// 3. Feedforward
+	// 3. Feedforward PWM
 	{
 		nullptr,					// no lock needed
 		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->heaterFeedForward[context.GetLastIndex()], 3); }
+		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->heaterFeedForwardPwm[context.GetLastIndex()], 3); }
 	},
 	// 4. Heaters
 	{
@@ -91,7 +91,13 @@ constexpr ObjectModelArrayTableEntry Tool::objectModelArrayTable[] =
 		nullptr,					// no lock needed
 		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
 		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->standbyTemperatures[context.GetLastIndex()], 1); }
-	}
+	},
+	// 8. Feedforward temperatire increase
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
+		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->heaterFeedForwardTemp[context.GetLastIndex()], 3); }
+	},
 };
 
 DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(Tool)
@@ -100,34 +106,37 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Tool members
-	{ "active",				OBJECT_MODEL_FUNC_ARRAY(0), 												ObjectModelEntryFlags::live },
-	{ "axes",				OBJECT_MODEL_FUNC_ARRAY(1), 												ObjectModelEntryFlags::none },
-	{ "extruders",			OBJECT_MODEL_FUNC_ARRAY(2), 												ObjectModelEntryFlags::none },
-	{ "fans",				OBJECT_MODEL_FUNC(self->fanMapping), 										ObjectModelEntryFlags::none },
-	{ "feedForward",		OBJECT_MODEL_FUNC_ARRAY(3), 												ObjectModelEntryFlags::none },
-	{ "filamentExtruder",	OBJECT_MODEL_FUNC((int32_t)self->filamentExtruder),							ObjectModelEntryFlags::none },
-	{ "heaters",			OBJECT_MODEL_FUNC_ARRAY(4), 												ObjectModelEntryFlags::none },
-	{ "isRetracted",		OBJECT_MODEL_FUNC(self->IsRetracted()), 									ObjectModelEntryFlags::live },
-	{ "mix",				OBJECT_MODEL_FUNC_ARRAY(5), 												ObjectModelEntryFlags::none },
-	{ "name",				OBJECT_MODEL_FUNC(self->name),						 						ObjectModelEntryFlags::none },
-	{ "number",				OBJECT_MODEL_FUNC((int32_t)self->myNumber),									ObjectModelEntryFlags::none },
-	{ "offsets",			OBJECT_MODEL_FUNC_ARRAY(6), 												ObjectModelEntryFlags::none },
-	{ "offsetsProbed",		OBJECT_MODEL_FUNC((int32_t)self->axisOffsetsProbed.GetRaw()),				ObjectModelEntryFlags::none },
-	{ "retraction",			OBJECT_MODEL_FUNC(self, 1),													ObjectModelEntryFlags::none },
-	{ "spindle",			OBJECT_MODEL_FUNC((int32_t)self->spindleNumber),							ObjectModelEntryFlags::none },
-	{ "spindleRpm",			OBJECT_MODEL_FUNC((int32_t)self->spindleRpm),								ObjectModelEntryFlags::none },
-	{ "standby",			OBJECT_MODEL_FUNC_ARRAY(7), 												ObjectModelEntryFlags::live },
-	{ "state",				OBJECT_MODEL_FUNC(self->state.ToString()), 									ObjectModelEntryFlags::live },
+	{ "active",				OBJECT_MODEL_FUNC_ARRAY(0), 															ObjectModelEntryFlags::live },
+	{ "axes",				OBJECT_MODEL_FUNC_ARRAY(1), 															ObjectModelEntryFlags::none },
+	{ "extruders",			OBJECT_MODEL_FUNC_ARRAY(2), 															ObjectModelEntryFlags::none },
+	{ "fans",				OBJECT_MODEL_FUNC(self->fanMapping), 													ObjectModelEntryFlags::none },
+	{ "feedForward",		OBJECT_MODEL_FUNC_ARRAY(3), 															ObjectModelEntryFlags::obsolete },	// replaced by feedForwardPwm
+	{ "feedForwardAdvance", OBJECT_MODEL_FUNC((int32_t)((self->feedForwardAdvanceClocks * 1000)/StepClockRate)),	ObjectModelEntryFlags::none },
+	{ "feedForwardPwm",		OBJECT_MODEL_FUNC_ARRAY(3), 															ObjectModelEntryFlags::none },
+	{ "feedForwardTemp",	OBJECT_MODEL_FUNC_ARRAY(8), 															ObjectModelEntryFlags::none },
+	{ "filamentExtruder",	OBJECT_MODEL_FUNC((int32_t)self->filamentExtruder),										ObjectModelEntryFlags::none },
+	{ "heaters",			OBJECT_MODEL_FUNC_ARRAY(4), 															ObjectModelEntryFlags::none },
+	{ "isRetracted",		OBJECT_MODEL_FUNC(self->IsRetracted()), 												ObjectModelEntryFlags::live },
+	{ "mix",				OBJECT_MODEL_FUNC_ARRAY(5), 															ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC(self->name),						 									ObjectModelEntryFlags::none },
+	{ "number",				OBJECT_MODEL_FUNC((int32_t)self->myNumber),												ObjectModelEntryFlags::none },
+	{ "offsets",			OBJECT_MODEL_FUNC_ARRAY(6), 															ObjectModelEntryFlags::none },
+	{ "offsetsProbed",		OBJECT_MODEL_FUNC((int32_t)self->axisOffsetsProbed.GetRaw()),							ObjectModelEntryFlags::none },
+	{ "retraction",			OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
+	{ "spindle",			OBJECT_MODEL_FUNC((int32_t)self->spindleNumber),										ObjectModelEntryFlags::none },
+	{ "spindleRpm",			OBJECT_MODEL_FUNC((int32_t)self->spindleRpm),											ObjectModelEntryFlags::none },
+	{ "standby",			OBJECT_MODEL_FUNC_ARRAY(7), 															ObjectModelEntryFlags::live },
+	{ "state",				OBJECT_MODEL_FUNC(self->state.ToString()), 												ObjectModelEntryFlags::live },
 
 	// 1. Tool.retraction members
-	{ "extraRestart",		OBJECT_MODEL_FUNC(self->retractExtra, 1),									ObjectModelEntryFlags::none },
-	{ "length",				OBJECT_MODEL_FUNC(self->retractLength, 1),									ObjectModelEntryFlags::none },
-	{ "speed" ,				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->retractSpeed), 1),	ObjectModelEntryFlags::none },
-	{ "unretractSpeed",		OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->unRetractSpeed), 1),	ObjectModelEntryFlags::none },
-	{ "zHop",				OBJECT_MODEL_FUNC(self->configuredRetractHop, 2),							ObjectModelEntryFlags::none },
+	{ "extraRestart",		OBJECT_MODEL_FUNC(self->retractExtra, 1),												ObjectModelEntryFlags::none },
+	{ "length",				OBJECT_MODEL_FUNC(self->retractLength, 1),												ObjectModelEntryFlags::none },
+	{ "speed" ,				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->retractSpeed), 1),				ObjectModelEntryFlags::none },
+	{ "unretractSpeed",		OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->unRetractSpeed), 1),				ObjectModelEntryFlags::none },
+	{ "zHop",				OBJECT_MODEL_FUNC(self->configuredRetractHop, 2),										ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 18, 5 };
+constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 21, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 
@@ -253,9 +262,8 @@ uint16_t Tool::numToolsToReport = 0;
 		const int8_t heaterNumber = (int8_t)h[heater];
 		reprap.GetHeat().SetAsToolHeater(heaterNumber);
 		t->heaters[heater] = heaterNumber;
-		t->activeTemperatures[heater] = ABS_ZERO;
-		t->standbyTemperatures[heater] = ABS_ZERO;
-		t->heaterFeedForward[heater] = 0.0;
+		t->activeTemperatures[heater] = t->standbyTemperatures[heater] = ABS_ZERO;
+		t->heaterFeedForwardPwm[heater] = t->heaterFeedForwardTemp[heater] = 0.0;
 	}
 
 	if (t->filament != nullptr)
@@ -871,7 +879,7 @@ void Tool::SetFansPwm(float f) const noexcept
 	const float pwmChange = reprap.GetFansManager().SetFansValue(fanMapping, f);
 	if (pwmChange != 0.0)
 	{
-		IterateHeaters([pwmChange](unsigned int heater) { reprap.GetHeat().FeedForwardAdjustment(heater, pwmChange, 0.0); });
+		IterateHeaters([f](unsigned int heater) { reprap.GetHeat().SetFanFeedForwardPwm(heater, f); });
 	}
 }
 
@@ -939,20 +947,39 @@ GCodeResult Tool::SetFirmwareRetraction(GCodeBuffer &gb, const StringRef &reply,
 	return GCodeResult::ok;
 }
 
+// Set or report the feedforward parameters for the tool heaters
 GCodeResult Tool::GetSetFeedForward(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	bool seen = false;
 	if (gb.Seen('S'))
 	{
 		size_t numValues = heaterCount;
-		gb.GetFloatArray(heaterFeedForward, numValues, false);
+		gb.GetFloatArray(heaterFeedForwardPwm, numValues, true);
+		seen = true;
+	}
+	if (gb.Seen('T'))
+	{
+		size_t numValues = heaterCount;
+		gb.GetFloatArray(heaterFeedForwardTemp, numValues, true);
+		seen = true;
+	}
+	uint32_t advance;
+	if (gb.TryGetLimitedUIValue('A', advance, seen, 101))
+	{
+		feedForwardAdvanceClocks = advance * StepClockRate/1000;
+	}
+
+	if (seen)
+	{
 		ToolUpdated();
+		Move::CreateLaserTask();					// we need the laser task to implement feedforward
 	}
 	else
 	{
-		reply.printf("Tool %u heater feedforward:", myNumber);
+		reply.printf("Tool %u heater feedforward: advance %" PRIu32 "ms, amounts (pwm/temperature)", myNumber, (feedForwardAdvanceClocks * 1000)/StepClockRate);
 		for (size_t i = 0; i < heaterCount; ++i)
 		{
-			reply.catf(" %.3f", (double)heaterFeedForward[i]);
+			reply.catf(" %.3f/%.3f", (double)heaterFeedForwardPwm[i], (double)heaterFeedForwardTemp[i]);
 		}
 	}
 
@@ -960,22 +987,22 @@ GCodeResult Tool::GetSetFeedForward(GCodeBuffer& gb, const StringRef& reply) THR
 }
 
 // Apply feedforward to the current tool. Called from an ISR context or with BASEPRI set high.
-void Tool::ApplyFeedForward(float extrusionSpeed) const noexcept
+void Tool::ApplyExtrusionFeedForward(float extrusionSpeed) const noexcept
 {
 	Heat& heat = reprap.GetHeat();
 	for (size_t i = 0; i < heaterCount; ++i)
 	{
-		heat.SetExtrusionFeedForward(heaters[i], extrusionSpeed * heaterFeedForward[i]);
+		heat.SetExtrusionFeedForward(heaters[i], extrusionSpeed * heaterFeedForwardPwm[i], extrusionSpeed * heaterFeedForwardTemp[i]);
 	}
 }
 
 // Stop applying feedforward to the current tool. Called from an ISR context or with BASEPRI set high.
-void Tool::StopFeedForward() const noexcept
+void Tool::StopExtrusionFeedForward() const noexcept
 {
 	Heat& heat = reprap.GetHeat();
 	for (size_t i = 0; i < heaterCount; ++i)
 	{
-		heat.SetExtrusionFeedForward(heaters[i], 0.0);
+		heat.SetExtrusionFeedForward(heaters[i], 0.0, 0.0);
 	}
 }
 

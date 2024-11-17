@@ -65,7 +65,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 			fileLength = f->Length();
 			if (fileOffset >= fileLength)
 			{
-				CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
+				CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessageNoRid<CanMessageFirmwareUpdateResponse>(CanInterface::GetCurrentMasterAddress(), src);
 				msgp->dataLength = 0;
 				msgp->err = CanMessageFirmwareUpdateResponse::ErrBadOffset;
 				msgp->fileLength = fileLength;
@@ -87,7 +87,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 
 				for (;;)
 				{
-					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
+					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessageNoRid<CanMessageFirmwareUpdateResponse>(CanInterface::GetCurrentMasterAddress(), src);
 					const size_t lengthToSend = min<size_t>(lreq, sizeof(msgp->data));
 					if (f->Read(msgp->data, lengthToSend) != (int)lengthToSend)
 					{
@@ -123,7 +123,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 
 		if (lreq != 0)			// if we didn't complete the request
 		{
-			CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
+			CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessageNoRid<CanMessageFirmwareUpdateResponse>(CanInterface::GetCurrentMasterAddress(), src);
 			msgp->dataLength = 0;
 			msgp->err = CanMessageFirmwareUpdateResponse::ErrNoFile;
 			msgp->fileLength = 0;
@@ -143,7 +143,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 	{
 		const unsigned int bootloaderVersion = msg.bootloaderVersion;
 		const unsigned int fileWanted = msg.fileWanted;
-		CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
+		CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessageNoRid<CanMessageFirmwareUpdateResponse>(CanInterface::GetCurrentMasterAddress(), src);
 		msgp->dataLength = 0;
 		msgp->err = CanMessageFirmwareUpdateResponse::ErrOther;
 		msgp->fileLength = 0;
@@ -421,9 +421,9 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetHeat().ConfigureHeater(buf->msg.generic, replyRef);
 				break;
 
-			case CanMessageType::heaterFeedForward:
-				requestId = buf->msg.heaterFeedForward.requestId;
-				rslt = reprap.GetHeat().FeedForward(buf->msg.heaterFeedForward, replyRef);
+			case CanMessageType::heaterFeedForwardNew:
+				requestId = CanRequestIdNoReplyNeeded;
+				rslt = reprap.GetHeat().ApplyFeedForward(buf->msg.heaterFeedForwardNew, replyRef);
 				break;
 
 			case CanMessageType::heaterModelNewNew:

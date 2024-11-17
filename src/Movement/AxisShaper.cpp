@@ -14,6 +14,10 @@
 #include "Move.h"
 #include "MoveDebugFlags.h"
 
+#if SUPPORT_CAN_EXPANSION
+# include <CAN/CanInterface.h>
+#endif
+
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -274,7 +278,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			return reprap.GetMove().UpdateRemoteInputShaping(numImpulses, fCoefficients, delays, reply);
 		}
 # else
-		return reprap.GetMove().UpdateRemoteInputShaping(numImpulses, coefficients, delays, reply);
+		return UpdateRemoteInputShaping(reply);
 # endif
 #else
 		// Fall through to return GCodeResult::ok
@@ -304,6 +308,52 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 	return GCodeResult::ok;
 }
 
+void AxisShaper::Diagnostics(MessageType mtype) noexcept
+{
+	// We no longer report anything here
+}
+
+#if SUPPORT_CAN_EXPANSION
+
+GCodeResult AxisShaper::UpdateRemoteInputShaping(const StringRef& reply) const noexcept
+{
+	const ExpansionManager& expansion = reprap.GetExpansion();
+	GCodeResult res = GCodeResult::ok;
+	if (expansion.GetNumExpansionBoards() != 0)
+	{
+		// Build a CAN message to update the remote drivers
+		for (uint8_t addr = 0; addr < CanId::MaxCanAddress; ++addr)
+		{
+			if (addr != CanInterface::GetCanAddress())
+			{
+				const ExpansionBoardData *boardData = expansion.GetBoardDetails(addr);
+				if (boardData != nullptr && boardData->numDrivers != 0)
+				{
+					CanMessageBuffer *const buf = CanMessageBuffer::BlockingAllocate();
+					const CanRequestId rid = CanInterface::AllocateRequestId(addr, buf);
+					auto msg = buf->SetupRequestMessage<CanMessageSetInputShapingNew>(rid, CanInterface::GetCanAddress(), addr);
+					msg->numImpulses = numImpulses;
+					for (unsigned int i = 0; i < numImpulses; ++i)
+					{
+						msg->impulses[i].coefficient = coefficients[i];
+						msg->impulses[i].delay = delays[i];
+					}
+					buf->dataLength = msg->GetActualDataLength();
+					msg->SetRequestId(rid);
+					const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, 0);
+					if (rslt > res)
+					{
+						res = rslt;
+					}
+				}
+			}
+		}
+	}
+	return res;
+}
+
+#endif
+
 #if SUPPORT_REMOTE_COMMANDS
 
 // Handle a request from the master board to set input shaping parameters
@@ -323,10 +373,5 @@ GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShapingNew& m
 }
 
 #endif
-
-void AxisShaper::Diagnostics(MessageType mtype) noexcept
-{
-	// We no longer report anything here
-}
 
 // End

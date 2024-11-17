@@ -59,6 +59,11 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
+
+#if SUPPORT_CAN_EXPANSION
+	GCodeResult UpdateRemoteInputShaping(const StringRef& reply) const noexcept;
+#endif
+
 	static constexpr unsigned int MaxImpulses = 5;
 	static constexpr float DefaultFrequency = 40.0;
 	static constexpr float DefaultDamping = 0.05;

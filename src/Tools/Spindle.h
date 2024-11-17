@@ -46,6 +46,7 @@ public:
 	SpindleType GetType() const noexcept { return type; }
 	SpindleState GetState() const noexcept { return state; }
 	void SetState(SpindleState newState) noexcept;
+	bool IsConfigured() const noexcept { return state != SpindleState::unconfigured; }
 };
 
 #endif

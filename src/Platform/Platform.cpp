@@ -626,9 +626,13 @@ void Platform::Init() noexcept
 	vInMonitorAdcChannel = PinToAdcChannel(PowerMonitorVinDetectPin);
 	pinMode(PowerMonitorVinDetectPin, AIN);
 	AnalogInEnableChannel(vInMonitorAdcChannel, true);
-	currentVin = highestVin = 0;
+	currentVin = 0;
+	highestVin = 0;
 	lowestVin = 9999;
-	numVinUnderVoltageEvents = previousVinUnderVoltageEvents = numVinOverVoltageEvents = previousVinOverVoltageEvents = 0;
+	numVinUnderVoltageEvents = 0;
+	previousVinUnderVoltageEvents = 0;
+	numVinOverVoltageEvents = 0;
+	previousVinOverVoltageEvents = 0;
 #endif
 
 #if HAS_12V_MONITOR
@@ -655,7 +659,8 @@ void Platform::Init() noexcept
 // Reset the min and max recorded voltages to the current values
 void Platform::ResetVoltageMonitors() noexcept
 {
-	lowestVin = highestVin = currentVin;
+	lowestVin = currentVin;
+	highestVin = currentVin;
 
 #if HAS_12V_MONITOR
 	lowestV12 = highestV12 = currentV12;
@@ -2210,6 +2215,47 @@ static inline uint32_t GetAddress(GCodeBuffer& gb)
 		address = gb.GetUIValue();
 	}
 	return address;
+}
+
+/**
+ * Converts a single byte of hex value to its ASCII hex representation.
+ *
+ * @param hex The hex value to convert.
+ * @param asciiHex The buffer to store the ASCII hex representation. The buffer must be at least 2 bytes long.
+ *
+ * @throws None
+ */
+static inline void ConvertHexToAsciiHex(uint8_t hex, uint8_t asciiHex[2])
+{
+	uint8_t hexSplit[2] = {0};
+	hexSplit[0] = hex >> 4;	  // Get the upper 4 bits
+	hexSplit[1] = hex & 0x0F; // Get the lower 4 bits
+
+	for (size_t i = 0; i < 2; i++)
+	{
+		uint8_t h = hexSplit[i];
+
+		// If the value is between 0x00 and 0x09, it is a number, otherwise it is a letter
+		if (h >= 0 && h <= 9)
+		{
+			asciiHex[i] = h + 0x30; // ASCII '0' is 0x30
+		}
+		else if (h >= 0x0A && h <= 0x0F)
+		{
+			asciiHex[i] = h + 0x41 - 0x0A; // ASCII 'A' is 0x41, subtracting 0x0A shifts the value to 'A'
+		}
+	}
+}
+
+static inline void CalculateNordsonUltimusVCheckSum(uint8_t* data, size_t len, uint8_t checksum[2])
+{
+	uint16_t sum = 0;
+	for (size_t i = 0; i < len; i++)
+	{
+		sum -= data[i];
+	}
+
+	ConvertHexToAsciiHex(sum & 0xFF, checksum); // take last byte of sum and convert to ascii hex
 }
 
 // Handle M260 and M260.1 - send and possibly receive via I2C, or send via Modbus

@@ -105,6 +105,16 @@ SECTIONS
     . = ALIGN(4);
     _etext = .;
 
+    /* DMA programming and write-back memory, here because they are volatile so we must't CRC them when we check for data corruption */
+    .dmaBuffers (NOLOAD) :
+    {
+    	. = ALIGN(16);
+    	_sDmaBuffers = . ;
+    	*(.DmaBuffers .DmaBuffers.*)
+    	. = ALIGN(8);
+    	_eDmaBuffers = . ;
+    } > ram
+
     .relocate : AT (_etext)
     {
         . = ALIGN(4);

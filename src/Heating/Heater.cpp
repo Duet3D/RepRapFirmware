@@ -118,6 +118,7 @@ Heater::Heater(unsigned int num) noexcept
 	  isBedOrChamber(false),
 	  active(false), modelSetByUser(false), monitorsSetByUser(false)
 {
+	Heater::ResetHeater();
 }
 
 Heater::~Heater() noexcept
@@ -126,6 +127,19 @@ Heater::~Heater() noexcept
 	{
 		h.Disable();
 	}
+}
+
+void Heater::ResetHeater() noexcept
+{
+	lastExtrusionPwmBoost = 0.0;
+	extrusionTemperatureBoost = 0.0;
+	lastFanPwm = 0.0;
+}
+
+void Heater::SwitchOff() noexcept
+{
+	lastExtrusionPwmBoost = 0.0;
+	extrusionTemperatureBoost = 0.0;
 }
 
 void Heater::SetSensorNumber(int sn) noexcept
@@ -151,23 +165,18 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 
 	if (gb.Seen('K'))
 	{
-		// New style model parameters
+		// New style cooling rate parameters
 		seen = true;
 		float coolingRates[2];
 		size_t numValues = 2;
 		gb.GetFloatArray(coolingRates, numValues, false);
 		basicCoolingRate = coolingRates[0];
 		fanCoolingRate = (numValues == 2) ? coolingRates[1] : 0.0;
-		if (gb.Seen('R'))
-		{
-			seen = true;
-			heatingRate = gb.GetPositiveFValue();
-		}
 		gb.TryGetFValue('E', coolingRateExponent, seen);
 	}
 	else if (gb.Seen('C'))
 	{
-		// Old style model parameters
+		// Old style cooling time constant parameters
 		seen = true;
 		float timeConstants[2];
 		size_t numValues = 2;
@@ -177,9 +186,10 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 		coolingRateExponent = 1.0;
 	}
 
-	if (gb.TryGetFValue('R', heatingRate, seen))
+	if (gb.Seen('R'))
 	{
-		// We have the heating rate
+		seen = true;
+		heatingRate = gb.GetPositiveFValue();
 	}
 	else
 	{
@@ -187,7 +197,6 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 		if (gb.TryGetFValue('A', gain, seen))
 		{
 			// Old style heating model. A = gain, C = cooling time constant
-			seen = true;
 			heatingRate = gain * basicCoolingRate * 0.01;
 		}
 	}

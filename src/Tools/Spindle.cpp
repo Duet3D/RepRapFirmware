@@ -23,17 +23,17 @@ constexpr ObjectModelTableEntry Spindle::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Spindle members
-	{ "active",			OBJECT_MODEL_FUNC((int32_t)self->configuredRpm),			ObjectModelEntryFlags::none },
-	{ "canReverse",		OBJECT_MODEL_FUNC(self->reverseNotForwardPort.IsValid()),	ObjectModelEntryFlags::none },
-	{ "current",		OBJECT_MODEL_FUNC((int32_t)self->currentRpm),				ObjectModelEntryFlags::live },
-	{ "frequency",		OBJECT_MODEL_FUNC((int32_t)self->frequency),				ObjectModelEntryFlags::verbose },
-	{ "idlePwm",		OBJECT_MODEL_FUNC(self->idlePwm, 2),						ObjectModelEntryFlags::verbose },
-	{ "max",			OBJECT_MODEL_FUNC((int32_t)self->maxRpm),					ObjectModelEntryFlags::verbose },
-	{ "maxPwm",			OBJECT_MODEL_FUNC(self->maxPwm, 2),							ObjectModelEntryFlags::verbose },
-	{ "min",			OBJECT_MODEL_FUNC((int32_t)self->minRpm),					ObjectModelEntryFlags::verbose },
-	{ "minPwm",			OBJECT_MODEL_FUNC(self->minPwm, 2),							ObjectModelEntryFlags::verbose },
-	{ "state",			OBJECT_MODEL_FUNC(self->state.ToString()),					ObjectModelEntryFlags::live },
-	{ "type", 			OBJECT_MODEL_FUNC(self->type.ToString()),					ObjectModelEntryFlags::verbose },
+	{ "active",			OBJECT_MODEL_FUNC_IF(self->IsConfigured(), (int32_t)self->configuredRpm),			ObjectModelEntryFlags::none },
+	{ "canReverse",		OBJECT_MODEL_FUNC_IF(self->IsConfigured(), self->reverseNotForwardPort.IsValid()),	ObjectModelEntryFlags::none },
+	{ "current",		OBJECT_MODEL_FUNC_IF(self->IsConfigured(), (int32_t)self->currentRpm),				ObjectModelEntryFlags::live },
+	{ "frequency",		OBJECT_MODEL_FUNC_IF(self->IsConfigured(), (int32_t)self->frequency),				ObjectModelEntryFlags::verbose },
+	{ "idlePwm",		OBJECT_MODEL_FUNC_IF(self->IsConfigured(), self->idlePwm, 2),						ObjectModelEntryFlags::verbose },
+	{ "max",			OBJECT_MODEL_FUNC_IF(self->IsConfigured(), (int32_t)self->maxRpm),					ObjectModelEntryFlags::verbose },
+	{ "maxPwm",			OBJECT_MODEL_FUNC_IF(self->IsConfigured(), self->maxPwm, 2),						ObjectModelEntryFlags::verbose },
+	{ "min",			OBJECT_MODEL_FUNC_IF(self->IsConfigured(), (int32_t)self->minRpm),					ObjectModelEntryFlags::verbose },
+	{ "minPwm",			OBJECT_MODEL_FUNC_IF(self->IsConfigured(), self->minPwm, 2),						ObjectModelEntryFlags::verbose },
+	{ "state",			OBJECT_MODEL_FUNC(self->state.ToString()),											ObjectModelEntryFlags::live },
+	{ "type", 			OBJECT_MODEL_FUNC_IF(self->IsConfigured(), self->type.ToString()),					ObjectModelEntryFlags::verbose },
 };
 
 constexpr uint8_t Spindle::objectModelTableDescriptor[] = { 1, 11 };

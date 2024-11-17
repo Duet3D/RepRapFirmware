@@ -83,10 +83,12 @@ inline void LocalHeater::SetHeater(float power) const noexcept
 
 void LocalHeater::ResetHeater() noexcept
 {
+	Heater::ResetHeater();
+	lastExtrusionTemperatureBoost = 0.0;
 	mode = HeaterMode::off;
 	previousTemperaturesGood = 0;
 	previousTemperatureIndex = 0;
-	iAccumulator = extrusionBoost = 0.0;
+	iAccumulator = 0.0;
 	badTemperatureCount = 0;
 	averagePWM = lastPwm = 0.0;
 	heatingFaultCount = 0;
@@ -189,7 +191,7 @@ GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 		return GCodeResult::error;
 	}
 
-	const float target = GetTargetTemperature();
+	const float target = min<float>(GetTargetTemperature() + extrusionTemperatureBoost, GetHighestTemperatureLimit());
 	const HeaterMode newMode = (temperature + TemperatureCloseEnough < target) ? HeaterMode::heating
 								: (temperature > target + TemperatureCloseEnough) ? HeaterMode::cooling
 									: HeaterMode::stable;
@@ -229,6 +231,8 @@ void LocalHeater::SwitchOff() noexcept
 			}
 		}
 	}
+	Heater::SwitchOff();
+	lastExtrusionTemperatureBoost = 0.0;
 }
 
 // This is called when the heater model has been updated. Returns true if successful.
@@ -282,57 +286,65 @@ void LocalHeater::Spin() noexcept
 		if (GetModel().IsEnabled())
 		{
 			// Get the target temperature and the error
-			const float targetTemperature = GetTargetTemperature();
+			const float targetTemperature = min<float>(GetTargetTemperature() + extrusionTemperatureBoost, GetHighestTemperatureLimit());
+
+			if (IsPidMode(mode) && extrusionTemperatureBoost != lastExtrusionTemperatureBoost)
+			{
+				// Calculate new heater mode to prevent heater fault due to exceededAllowedExcursion
+				mode = (temperature + TemperatureCloseEnough < targetTemperature) ? HeaterMode::heating
+						: (temperature > targetTemperature + TemperatureCloseEnough) ? HeaterMode::cooling
+							: HeaterMode::stable;
+				lastExtrusionTemperatureBoost = extrusionTemperatureBoost;
+			}
+
 			const float error = targetTemperature - temperature;
 
 			// Do the heating checks
-			switch(mode)
+			switch (mode)
 			{
 			case HeaterMode::heating:
+				if (error <= TemperatureCloseEnough)
 				{
-					if (error <= TemperatureCloseEnough)
+					mode = HeaterMode::stable;
+					heatingFaultCount = 0;
+				}
+				else
+				{
+					const uint32_t now = millis();
+					if ((float)(now - timeSetHeating) < GetModel().GetDeadTime() * SecondsToMillis * 2)		// wait for twice the dead time before we start looking at the temperature rise
 					{
-						mode = HeaterMode::stable;
-						heatingFaultCount = 0;
+						// Record the temperature for when we are past the dead time
+						lastTemperatureValue = temperature;
+						lastTemperatureMillis = now;
 					}
-					else
+					else if (gotDerivative)												// this is a check in case we just had a temperature spike
 					{
-						const uint32_t now = millis();
-						if ((float)(now - timeSetHeating) < GetModel().GetDeadTime() * SecondsToMillis * 2)		// wait for twice the dead time before we start looking at the temperature rise
+						const float expectedRate = GetExpectedHeatingRate();
+						const float minSamplingInterval = 3.0/expectedRate;				// only check the temperature when we expect at least 3C rise since last time
+						const float actualInterval = (float)(now - lastTemperatureMillis) * MillisToSeconds;
+						if (actualInterval >= minSamplingInterval)
 						{
-							// Record the temperature for when we are past the dead time
-							lastTemperatureValue = temperature;
-							lastTemperatureMillis = now;
-						}
-						else if (gotDerivative)												// this is a check in case we just had a temperature spike
-						{
-							const float expectedRate = GetExpectedHeatingRate();
-							const float minSamplingInterval = 3.0/expectedRate;				// only check the temperature when we expect at least 3C rise since last time
-							const float actualInterval = (float)(now - lastTemperatureMillis) * MillisToSeconds;
-							if (actualInterval >= minSamplingInterval)
+							// Check that we are heating fast enough, and if so, take another sample
+							const float expectedTemperatureRise = expectedRate * actualInterval;
+							const float actualTemperatureRise = temperature - lastTemperatureValue;
+							// Bed heaters sometimes have much slower long term heating rates than their short term heating rates, so allow them a lower measured heating rate
+							if (actualTemperatureRise < expectedTemperatureRise * ((IsBedOrChamber()) ? MinBedTemperatureRiseFactor : MinToolTemperatureRiseFactor))
 							{
-								// Check that we are heating fast enough, and if so, take another sample
-								const float expectedTemperatureRise = expectedRate * actualInterval;
-								const float actualTemperatureRise = temperature - lastTemperatureValue;
-								// Bed heaters sometimes have much slower long term heating rates than their short term heating rates, so allow them a lower measured heating rate
-								if (actualTemperatureRise < expectedTemperatureRise * ((IsBedOrChamber()) ? MinBedTemperatureRiseFactor : MinToolTemperatureRiseFactor))
+								++heatingFaultCount;
+								if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
 								{
-									++heatingFaultCount;
-									if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
-									{
-										RaiseHeaterFault(HeaterFaultType::temperatureRisingTooSlowly,
-															"expected %.2f" DEGREE_SYMBOL "C/sec measured %.2f" DEGREE_SYMBOL "C/sec",
-																(double)expectedRate, (double)(actualTemperatureRise/actualInterval));
-									}
+									RaiseHeaterFault(HeaterFaultType::temperatureRisingTooSlowly,
+														"expected %.2f" DEGREE_SYMBOL "C/sec measured %.2f" DEGREE_SYMBOL "C/sec",
+															(double)expectedRate, (double)(actualTemperatureRise/actualInterval));
 								}
-								else
+							}
+							else
+							{
+								lastTemperatureValue = temperature;
+								lastTemperatureMillis = now;
+								if (heatingFaultCount != 0)
 								{
-									lastTemperatureValue = temperature;
-									lastTemperatureMillis = now;
-									if (heatingFaultCount != 0)
-									{
-										--heatingFaultCount;
-									}
+									--heatingFaultCount;
 								}
 							}
 						}
@@ -396,7 +408,7 @@ void LocalHeater::Spin() noexcept
 					// If the P and D terms together demand that the heater is full on or full off, disregard the I term
 					const float errorMinusDterm = error - (params.tD * derivative);
 					const float pPlusD = params.kP * errorMinusDterm;
-					const float expectedPwm = GetModel().EstimateRequiredPwm(temperature - NormalAmbientTemperature, 0.0);
+					const float expectedPwm = GetModel().EstimateRequiredPwm(temperature - NormalAmbientTemperature, lastFanPwm);
 					if (pPlusD + expectedPwm > GetModel().GetMaxPwm())
 					{
 						lastPwm = GetModel().GetMaxPwm();
@@ -413,10 +425,13 @@ void LocalHeater::Spin() noexcept
 					else
 					{
 						const float errorToUse = error;
-						iAccumulator = constrain<float>
-										(iAccumulator + (errorToUse * params.kP * params.recipTi * (HeatSampleIntervalMillis * MillisToSeconds)),
-											0.0, GetModel().GetMaxPwm());
-						lastPwm = constrain<float>(pPlusD + iAccumulator + extrusionBoost, 0.0, GetModel().GetMaxPwm());
+						{
+							InterruptCriticalSectionLocker lock;					// avoid a race with tasks that implement feedforward
+							iAccumulator = constrain<float>
+											(iAccumulator + (errorToUse * params.kP * params.recipTi * (HeatSampleIntervalMillis * MillisToSeconds)),
+												0.0, GetModel().GetMaxPwm());
+						}
+						lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, GetModel().GetMaxPwm());
 					}
 #if HAS_VOLTAGE_MONITOR
 					// Scale the PID based on the current voltage vs. the calibration voltage
@@ -553,31 +568,34 @@ GCodeResult LocalHeater::StartAutoTune(const StringRef& reply, bool seenA, float
 }
 
 // Call this when the PWM of a cooling fan has changed. If there are multiple fans, caller must divide pwmChange by the number of fans.
-void LocalHeater::FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept
+void LocalHeater::SetFanFeedForwardPwm(float pwm) noexcept
 {
 	if (mode == HeaterMode::stable)
 	{
-		const float boost = GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, fanPwmChange) * FanFeedForwardMultiplier;
-#if 0
-		if (reprap.Debug(moduleHeat))
-		{
-			debugPrintf("iacc=%.3f, applying boost %.3f\n", (double)iAccumulator, (double)boost);
-		}
-#endif
+		const float pwmChange = pwm - lastFanPwm;
+		lastFanPwm = pwm;
+		const float boost = GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, pwmChange) * FanFeedForwardMultiplier;
 		InterruptCriticalSectionLocker lock;
 		iAccumulator += boost;
 	}
 }
 
-// Set extrusion feedforward. This is called from an ISR.
-void LocalHeater::SetExtrusionFeedForward(float pwm) noexcept
+// Set extrusion feedforward
+void LocalHeater::SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept
 {
-	extrusionBoost = pwm;
+	if (mode == HeaterMode::stable)
+	{
+		const float pwmChange = pwmBoost - lastExtrusionPwmBoost;
+		lastExtrusionPwmBoost = pwmBoost;
+		InterruptCriticalSectionLocker lock;
+		iAccumulator += pwmChange;
+	}
+	extrusionTemperatureBoost = tempBoost;
 }
 
 /* Notes on the auto tune algorithm
  *
- * Most 3D printer firmwares use the �str�m-H�gglund relay tuning method (sometimes called Ziegler-Nichols + relay).
+ * Most 3D printer firmwares use the Åström-Hägglund relay tuning method (sometimes called Ziegler-Nichols + relay).
  * This gives results  of variable quality, but they seem to be generally satisfactory.
  *
  * We use Cohen-Coon tuning instead. This models the heating process as a first-order process (i.e. one that with constant heating
@@ -593,7 +611,7 @@ void LocalHeater::SetExtrusionFeedForward(float pwm) noexcept
  * In practice the transition from no change to the exponential curve is not instant, however this model is a reasonable approximation.
  *
  * Having a process model allows us to preset the I accumulator to a suitable value when switching between heater full on/off and using PID.
- * It will also make it easier to include feedforward terms in future.
+ * It also makes it easier to include feedforward terms.
  *
  * We can calculate the P, I and D parameters from G, td and tc using the modified Cohen-Coon tuning rules, or the Ho et al tuning rules.
  *    Cohen-Coon (modified to use half the original Kc value):
@@ -969,6 +987,26 @@ GCodeResult LocalHeater::TuningCommand(const CanMessageHeaterTuningCommand& msg,
 	{
 		SwitchOff();
 	}
+	return GCodeResult::ok;
+}
+
+// Update heater feedforward
+GCodeResult LocalHeater::ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept
+{
+	if (mode == HeaterMode::stable)
+	{
+		float pwmBoost = msg.extrusionPwmBoost - lastExtrusionPwmBoost;
+		lastExtrusionPwmBoost = msg.extrusionPwmBoost;
+		if (msg.fanPwmFraction != lastFanPwm)
+		{
+			const float pwmChange = msg.fanPwmFraction - lastFanPwm;
+			lastFanPwm = msg.fanPwmFraction;
+			pwmBoost += GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, pwmChange) * FanFeedForwardMultiplier;
+		}
+		InterruptCriticalSectionLocker lock;
+		iAccumulator += pwmBoost;
+	}
+	extrusionTemperatureBoost = msg.extrusionTemperatureBoost;
 	return GCodeResult::ok;
 }
 

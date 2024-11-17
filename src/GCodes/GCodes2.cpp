@@ -1742,15 +1742,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						const float f = gb.GetPwmValue();
 						if (seenFanNum)
 						{
-							result = reprap.GetFansManager().SetFanValue(fanNum, f, reply);
 							// If this is a print cooling fan for an active tool, set the virtual fan speed in the corresponding MovementState
 							for (MovementState& ms : moveStates)
 							{
 								if (ms.currentTool != nullptr && ms.currentTool->GetFanMapping().IsBitSet(fanNum))
 								{
 									ms.virtualFanSpeed = f;
+									if (ms.currentTool->GetFanMapping().IsOnlyBitSet(fanNum))
+									{
+										ms.currentTool->SetFansPwm(f);
+									}
 								}
 							}
+
+							// Set the fan value here to ensure that the tool heaters' heating rates are correctly updated first
+							result = reprap.GetFansManager().SetFanValue(fanNum, f, reply);
 						}
 						else
 						{
@@ -2603,64 +2609,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 208: // Set/print maximum axis lengths. If there is an S parameter with value 1 then we set the min value, else we set the max value.
-				{
-					bool setMin = (gb.Seen('S') ? (gb.GetIValue() == 1) : false);
-					bool seen = false;
-					Move& move = reprap.GetMove();
-					for (size_t axis = 0; axis < numTotalAxes; axis++)
-					{
-						if (gb.Seen(axisLetters[axis]))
-						{
-							seen = true;
-							float values[2];
-							size_t numValues = 2;
-							gb.GetFloatArray(values, numValues, false);
-							bool ok;
-							if (numValues == 2)
-							{
-								ok = values[1] > values[0];
-								if (ok)
-								{
-									move.SetAxisMinimum(axis, values[0], gb.LatestMachineState().runningM501);
-									move.SetAxisMaximum(axis, values[1], gb.LatestMachineState().runningM501);
-								}
-							}
-							else if (setMin)
-							{
-								ok = move.AxisMaximum(axis) > values[0];
-								if (ok)
-								{
-									move.SetAxisMinimum(axis, values[0], gb.LatestMachineState().runningM501);
-								}
-							}
-							else
-							{
-								ok = values[0] > move.AxisMinimum(axis);
-								if (ok)
-								{
-									move.SetAxisMaximum(axis, values[0], gb.LatestMachineState().runningM501);
-								}
-							}
-
-							if (!ok)
-							{
-								reply.printf("%c axis maximum must be greater than minimum", axisLetters[axis]);
-								result = GCodeResult::error;
-							}
-						}
-					}
-
-					if (!seen)
-					{
-						reply.copy("Axis limits (mm");
-						char sep = ')';
-						for (size_t axis = 0; axis < numTotalAxes; axis++)
-						{
-							reply.catf("%c %c%.1f:%.1f", sep, axisLetters[axis], (double)move.AxisMinimum(axis), (double)move.AxisMaximum(axis));
-							sep = ',';
-						}
-					}
-				}
+				result = reprap.GetMove().ConfigureAxisLimits(gb, reply, axisLetters, numTotalAxes, gb.LatestMachineState().runningM501);
 				break;
 
 			case 220:	// Set/report speed factor override percentage
@@ -3240,8 +3189,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					ms.ResetLaser();
 				}
 
-				Move::CreateLaserTask();
-
 				if (gb.Seen('C'))
 				{
 					if (!platform.AssignLaserPin(gb, reply))
@@ -3265,6 +3212,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 
+				Move::CreateLaserTask();
 				reprap.StateUpdated();
 				break;
 #endif
@@ -3939,23 +3887,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 			case 592: // Configure nonlinear extrusion
-				{
-					const unsigned int extruder = gb.GetLimitedUIValue('D', MaxExtruders);
-					bool seen = false;
-					float a = 0.0, b = 0.0, limit = DefaultNonlinearExtrusionLimit;
-					gb.TryGetFValue('A', a, seen);
-					gb.TryGetFValue('B', b, seen);
-					gb.TryGetFValue('L', limit, seen);
-					if (seen)
-					{
-						reprap.GetMove().SetNonlinearExtrusion(extruder, a, b, limit);
-					}
-					else
-					{
-						const NonlinearExtrusion& nl = reprap.GetMove().GetExtrusionCoefficients(extruder);
-						reply.printf("Drive %u nonlinear extrusion coefficients: A=%.3f, B=%.4f, limit=%.2f", extruder, (double)nl.A, (double)nl.B, (double)nl.limit);
-					}
-				}
+				result = reprap.GetMove().ConfigureNonlinearExtrusion(gb, reply);
 				break;
 #endif
 
@@ -4134,8 +4066,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if SUPPORT_IOBITS
 			case 670:
-				Move::CreateLaserTask();
 				result = GetGCodeResultFromError(reprap.GetPortControl().Configure(gb, reply));
+				Move::CreateLaserTask();
 				break;
 #endif
 
@@ -4415,10 +4347,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
-					if (code == 906 && gb.Seen('I'))
+					if (code == 906)
 					{
-						seen = true;
-						move.SetIdleCurrentFactor(gb.GetNonNegativeFValue()/100.0);
+						if (gb.Seen('I'))
+						{
+							seen = true;
+							move.SetIdleCurrentFactor(gb.GetLimitedFValue('I', 0.0, 100.0)/100.0);
+						}
+						if (gb.Seen('T'))
+						{
+							seen = true;
+							move.SetIdleTimeout(gb.GetPositiveFValue());
+						}
 					}
 
 					if (seen)
@@ -4444,7 +4384,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 						if (code == 906)
 						{
-							reply.catf(", idle factor %d%%", (int)(move.GetIdleCurrentFactor() * 100.0));
+							reply.catf(", idle factor %d%%, timeout %.1f sec", (int)(move.GetIdleCurrentFactor() * 100.0), (double)(move.GetIdleTimeout()/1000.0));
 						}
 					}
 				}

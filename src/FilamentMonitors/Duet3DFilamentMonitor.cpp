@@ -63,7 +63,8 @@ Duet3DFilamentMonitor::Duet3DFilamentMonitor(unsigned int drv, unsigned int moni
 
 void Duet3DFilamentMonitor::InitReceiveBuffer() noexcept
 {
-	edgeCaptureReadPointer = edgeCaptureWritePointer = 1;
+	edgeCaptureReadPointer = 1;
+	edgeCaptureWritePointer = 1;
 	edgeCaptures[0] = StepTimer::GetTimerTicks();				// pretend we just had a high-to-low transition
 	state = RxdState::waitingForStartBit;
 }

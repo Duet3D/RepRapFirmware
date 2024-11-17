@@ -196,7 +196,7 @@ void RemoteHeater::Spin() noexcept
 
 void RemoteHeater::ResetHeater() noexcept
 {
-	// This is only called by UpdateModel. Nothing needed here.
+	Heater::ResetHeater();
 }
 
 GCodeResult RemoteHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply)
@@ -247,6 +247,7 @@ void RemoteHeater::SwitchOff() noexcept
 			reprap.GetPlatform().MessageF(ErrorMessage, errMsg, GetHeaterNumber(), reply.c_str());
 		}
 	}
+	Heater::SwitchOff();
 }
 
 GCodeResult RemoteHeater::ResetFault(const StringRef& reply) noexcept
@@ -328,27 +329,36 @@ GCodeResult RemoteHeater::StartAutoTune(const StringRef& reply, bool seenA, floa
 	return GCodeResult::ok;
 }
 
-void RemoteHeater::FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept
+void RemoteHeater::SetFanFeedForwardPwm(float pwm) noexcept
 {
-	constexpr const char* warnMsg = "Failed to make heater feedforward adjustment: %s\n";
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
-	if (buf == nullptr)
+	if (pwm != lastFanPwm)
 	{
-		reprap.GetPlatform().MessageF(WarningMessage, warnMsg, "no CAN buffer");
+		lastFanPwm = pwm;
+		UpdateFeedForward();
 	}
-	else
+}
+
+void RemoteHeater::SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept
+{
+	if (pwmBoost != lastExtrusionPwmBoost || tempBoost != extrusionTemperatureBoost)
 	{
-		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
-		auto msg = buf->SetupRequestMessage<CanMessageHeaterFeedForward>(rid, CanInterface::GetCanAddress(), boardAddress);
-		msg->heaterNumber = GetHeaterNumber();
-		msg->fanPwmAdjustment = fanPwmChange;
-		msg->extrusionAdjustment = extrusionChange;
-		String<StringLength100> reply;
-		if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef()) != GCodeResult::ok)
-		{
-			reprap.GetPlatform().MessageF(WarningMessage, reply.c_str());
-		}
+		lastExtrusionPwmBoost = pwmBoost;
+		extrusionTemperatureBoost = tempBoost;
+		UpdateFeedForward();
 	}
+}
+
+// Send a message to the remote heater to update its feedforward parameters
+//TODO: should we change this to a message that doesn't wait for a response?
+void RemoteHeater::UpdateFeedForward() noexcept
+{
+	CanMessageBuffer buf;
+	auto msg = buf.SetupRequestMessageNoRid<CanMessageHeaterFeedForwardNew>(CanInterface::GetCanAddress(), boardAddress);
+	msg->heaterNumber = GetHeaterNumber();
+	msg->fanPwmFraction = lastFanPwm;
+	msg->extrusionPwmBoost = lastExtrusionPwmBoost;
+	msg->extrusionTemperatureBoost = extrusionTemperatureBoost;
+	CanInterface::SendMessageNoReplyNoFree(&buf);
 }
 
 void RemoteHeater::Suspend(bool sus) noexcept

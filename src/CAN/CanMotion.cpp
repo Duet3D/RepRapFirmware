@@ -117,7 +117,7 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 
 		buf->next = movementBufferList;
 		movementBufferList = buf;
-		auto move = buf->SetupRequestMessage<CanMessageMovementLinearShaped>(0, CanInterface::GetCurrentMasterAddress(), canDriver.boardAddress);
+		auto move = buf->SetupRequestMessageNoRid<CanMessageMovementLinearShaped>(CanInterface::GetCurrentMasterAddress(), canDriver.boardAddress);
 
 		// Common parameters
 		if (buf->next == nullptr)
@@ -250,7 +250,7 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 			if (!sl->sentRevertRequest)						// if we've already reverted the drivers on this board, no more to do
 			{
 				// Set up a reversion message in case we are going to revert the drivers on this board
-				auto revertMsg = urgentMessageBuffer.SetupRequestMessage<CanMessageRevertPosition>(0, CanInterface::GetCanAddress(), sl->boardAddress);
+				auto revertMsg = urgentMessageBuffer.SetupRequestMessageNoRid<CanMessageRevertPosition>(CanInterface::GetCanAddress(), sl->boardAddress);
 				uint16_t driversToStop = 0, driversToRevert = 0;
 				size_t numDriversReverted = 0;
 				for (size_t driver = 0; driver < sl->numDrivers; ++driver)
@@ -270,7 +270,7 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 
 				if (driversToStop != 0)
 				{
-					auto stopMsg = urgentMessageBuffer.SetupRequestMessage<CanMessageStopMovement>(0, CanInterface::GetCanAddress(), sl->boardAddress);
+					auto stopMsg = urgentMessageBuffer.SetupRequestMessageNoRid<CanMessageStopMovement>(CanInterface::GetCanAddress(), sl->boardAddress);
 					stopMsg->whichDrives = driversToStop;
 					//debugPrintf("Stopping drivers %u on board %u\n", driversToStop, sl->boardAddress);
 					return &urgentMessageBuffer;

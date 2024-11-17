@@ -137,12 +137,15 @@ public:
 	void DisableOneLocalDriver(size_t driver) noexcept;
 	void EmergencyDisableDrivers() noexcept;
 	void SetDriversIdle() noexcept;
+
 	GCodeResult ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) noexcept
 		pre(driver < GetNumActualDirectDrivers());
 	GCodeResult SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply) noexcept;
+
 	int GetMotorCurrent(size_t axisOrExtruder, int code) const noexcept;
 	void SetIdleCurrentFactor(float f) noexcept;
 	float GetIdleCurrentFactor() const noexcept { return idleCurrentFactor; }
+	uint32_t GetIdleTimeout() const noexcept { return idleTimeout; }
 	bool SetDriverMicrostepping(size_t driver, unsigned int microsteps, bool interpolate) noexcept;
 	bool SetDriversMicrostepping(size_t axisOrExtruder, int microsteps, bool interpolate, const StringRef& reply) noexcept;
 	void SetDriverStepTiming(size_t driver, const float microseconds[4]) noexcept;
@@ -233,7 +236,6 @@ public:
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 	const NonlinearExtrusion& GetExtrusionCoefficients(size_t extruder) const noexcept pre(extruder < MaxExtruders) { return nonlinearExtrusion[extruder]; }
-	void SetNonlinearExtrusion(size_t extruder, float a, float b, float limit) noexcept;
 #endif
 
 	float DriveStepsPerMm(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return driveStepsPerMm[axisOrExtruder]; }
@@ -249,7 +251,6 @@ public:
 
 #if SUPPORT_CAN_EXPANSION
 	GCodeResult UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndExtruders, const StringRef& reply) noexcept;
-	GCodeResult UpdateRemoteInputShaping(unsigned int numImpulses, const float coefficients[], const uint32_t delays[], const StringRef& reply) const noexcept;
 #endif
 
 	// Various functions called from GCodes module
@@ -302,8 +303,10 @@ public:
 
 	float PushBabyStepping(MovementSystemNumber msNumber, size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
 
-	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// process M595
-	GCodeResult ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M572
+	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);				// process M595
+	GCodeResult ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// process M572
+	GCodeResult ConfigureAxisLimits(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array axisLetters, size_t numTotalAxes, bool inM501) THROWS(GCodeException);	// process M208
+	GCodeResult ConfigureNonlinearExtrusion(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// process M592
 
 	ExtruderShaper& GetExtruderShaperForExtruder(size_t extruder) noexcept;
 	void ClearExtruderMovementPending(size_t extruder) noexcept;
@@ -404,8 +407,8 @@ public:
 	DDARing& GetMainDDARing() noexcept { return rings[0]; }
 	float GetTopSpeedMmPerSec() const noexcept { return rings[0].GetTopSpeedMmPerSec(); }
 	float GetRequestedSpeedMmPerSec() const noexcept { return rings[0].GetRequestedSpeedMmPerSec(); }
-	float GetAccelerationMmPerSecSquared() const noexcept { return rings[0].GetAccelerationMmPerSecSquared(); }
-	float GetDecelerationMmPerSecSquared() const noexcept { return rings[0].GetDecelerationMmPerSecSquared(); }
+	float GetAccelerationMmPerSecSquared() const noexcept { return rings[0].GetAccelerationMmPerSecSquared(); }		// Get the (peak) acceleration for reporting in the object model
+	float GetDecelerationMmPerSecSquared() const noexcept { return rings[0].GetDecelerationMmPerSecSquared(); }		// Get the (peak) deceleration for reporting in the object model
 	float GetTotalExtrusionRate() const noexcept { return rings[0].GetTotalExtrusionRate(); }
 
 	float LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept;				// Get a single coordinate for reporting e.g.in the OM
@@ -483,13 +486,13 @@ public:
 	bool HasMovementError() const noexcept;
 	void ResetAfterError() noexcept;
 	void GenerateMovementErrorDebug() noexcept;
+	void AddPrepareHiccup() noexcept { ++numPrepareHiccups; }
 
 	// We now use the laser task to take readings from scanning Z probes, so we always need it
 	[[noreturn]] void LaserTaskRun() noexcept;
 
 	static void CreateLaserTask() noexcept;													// create the laser task if we haven't already
 	static void WakeLaserTask() noexcept;													// wake up the laser task, called at the start of a new move
-	static void WakeLaserTaskFromISR() noexcept;											// wake up the laser task, called at the start of a new move
 
 	static void WakeMoveTaskFromISR() noexcept;
 	static const TaskBase *_ecv_from GetMoveTaskHandle() noexcept { return &moveTask; }
@@ -508,12 +511,12 @@ private:
 		timing			// no moves being executed or in queue, motors are at full current
 	};
 
-enum class StepErrorState : uint8_t
-{
-	noError = 0,	// no error
-	haveError,		// had an error, movement is stopped
-	resetting		// had an error, ready to reset it
-};
+	enum class StepErrorState : uint8_t
+	{
+		noError = 0,	// no error
+		haveError,		// had an error, movement is stopped
+		resetting		// had an error, ready to reset it
+	};
 
 #if SUPPORT_SCANNING_PROBES
 	struct ScanningProbeControl
@@ -652,7 +655,8 @@ enum class StepErrorState : uint8_t
 
 	unsigned int jerkPolicy;							// When we allow jerk
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
-	unsigned int numHiccups;							// The number of hiccups inserted
+	unsigned int numInterruptHiccups;					// The number of hiccups inserted by the ISR
+	unsigned int numPrepareHiccups;						// The number of hiccups inserted when preparing the move
 
 	uint32_t whenLastMoveAdded[NumMovementSystems];		// The time when we last added a move to each DDA ring
 	uint32_t whenIdleTimerStarted;						// The approximate time at which the state last changed, except we don't record timing -> idle

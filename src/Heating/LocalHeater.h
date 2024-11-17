@@ -38,8 +38,8 @@ public:
 	float GetAveragePWM() const noexcept override;							// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
 	float GetAccumulator() const noexcept override;							// Return the integral accumulator
 	void Suspend(bool sus) noexcept override;								// Suspend the heater to conserve power or while doing Z probing
-	void FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept override;
-	void SetExtrusionFeedForward(float pwm) noexcept override;				// Set extrusion feedforward
+	void SetFanFeedForwardPwm(float fanPwmChange) noexcept override;
+	void SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept override;				// Set extrusion feedforward
 #if SUPPORT_CAN_EXPANSION
 	bool IsLocal() const noexcept override { return true; }
 	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept override { }
@@ -48,6 +48,7 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept override;
+	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept override;
 
 	static bool GetTuningCycleData(CanMessageHeaterTuningReport& msg) noexcept;	// get a heater tuning cycle report, if we have one
 #endif
@@ -75,8 +76,8 @@ private:
 	float iAccumulator;										// The integral LocalHeater component
 	float lastPwm;											// The last PWM value set for this heater
 	float averagePWM;										// The running average of the PWM, after scaling.
-	volatile float extrusionBoost;							// The amount of extrusion feedforward to apply
 	float lastTemperatureValue;								// the last temperature we recorded while heating up
+	float lastExtrusionTemperatureBoost;					// the value of the feedforward temperature boost in the previous PID controller iteration
 	uint32_t lastTemperatureMillis;							// when we recorded the last temperature
 	uint32_t timeSetHeating;								// When we turned on the heater
 	uint32_t lastSampleTime;								// Time when the temperature was last sampled by Spin()
