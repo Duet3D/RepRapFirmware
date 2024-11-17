@@ -106,8 +106,4 @@ private:
 
 #endif
 
-void ConvertHexToAsciiHex(uint8_t hex, uint8_t asciiHex[2]);
-void ConvertAsciiHexToHex(uint8_t asciiHex[2], uint8_t &hex);
-void CalculateUartCheckSum(uint8_t* data, size_t len, uint8_t checksum[2]);
-
 #endif /* SRC_COMMS_AUXDEVICE_H_ */

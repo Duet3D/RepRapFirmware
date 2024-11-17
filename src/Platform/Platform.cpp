@@ -2495,7 +2495,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 		}
 
 		uint8_t checksum[2] = {0};
-		CalculateUartCheckSum(&data[1], numToSend + 2, checksum);
+		CalculateNordsonUltimusVCheckSum(&data[1], numToSend + 2, checksum);
 
 		data[numToSend + 3] = checksum[0];
 		data[numToSend + 4] = checksum[1];
