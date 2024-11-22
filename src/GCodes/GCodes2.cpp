@@ -543,6 +543,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				g68Angle = 0.0;
 				UpdateCurrentUserPosition(gb);
+				reprap.MoveUpdated();
 			}
 			break;
 #endif
