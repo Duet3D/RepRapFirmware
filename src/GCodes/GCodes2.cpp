@@ -541,7 +541,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			if (gb.Executing())
 # endif
 			{
-				g68Angle = 0.0;
+				g68Angle = g68Centre[0] = g68Centre[1] = 0.0;
 				UpdateCurrentUserPosition(gb);
 				reprap.MoveUpdated();
 			}
