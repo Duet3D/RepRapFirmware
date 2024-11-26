@@ -55,7 +55,7 @@ public:
 	GCodeResult SetPwm(float speed, const StringRef& reply) noexcept;
 	bool HasMonitoredSensors() const noexcept { return sensorsMonitored.IsNonEmpty(); }
 	unsigned int GetNumber() const { return fanNumber; }
-	const char *_ecv_array GetName() const noexcept { return name.c_str(); }
+	AutoStringHandle GetName() const noexcept { return name; }
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteSettings(FileStore *f, size_t fanNum) const noexcept;	// save the settings of this fan if it isn't thermostatic
@@ -80,8 +80,7 @@ protected:
 	PwmFrequency pwmFreq;
 	uint32_t blipTime;										// how long we blip the fan for, in milliseconds
 	SensorsBitmap sensorsMonitored;
-
-	String<MaxFanNameLength> name;
+	AutoStringHandle name;
 };
 
 #endif /* SRC_FAN_H_ */

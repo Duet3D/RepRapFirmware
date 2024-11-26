@@ -143,8 +143,10 @@ constexpr size_t StringLength100 = 100;					// Used for error messages
 constexpr size_t StringLength500 = 500;					// Used when writing the height map
 constexpr size_t StringLength256 = 256;					// Used for various things
 
-constexpr size_t MaxHeaterNameLength = StringLength20;	// Maximum number of characters in a heater name
-constexpr size_t MaxFanNameLength = StringLength20;		// Maximum number of characters in a fan name
+constexpr size_t MaxHeaterNameLength = StringLength50;	// Maximum number of characters in a heater name
+constexpr size_t MaxFanNameLength = StringLength50;		// Maximum number of characters in a fan name
+constexpr size_t MaxToolNameLength = StringLength50;	// Maximum allowed length for tool names
+
 #ifdef DUET3_ATE
 constexpr size_t GCodeReplyLength = StringLength500;	// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer (ATE codes can generate long replies)
 constexpr size_t FormatStringLength = StringLength500;	// GCode replies are processed by Platform::MessageF which uses an intermediate buffer of this length

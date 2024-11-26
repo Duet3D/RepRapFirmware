@@ -32,7 +32,12 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 	gb.TryGetNonNegativeFValue('T', tParam, dummy);
 
 	MessageBoxLimits limits;
-	gb.TryGetBValue('J', limits.canCancel, dummy);
+	uint32_t jParam = 0;
+	if(gb.TryGetLimitedUIValue('J', jParam, dummy, 3))
+	{
+		limits.canCancel = jParam > 0;
+		limits.shouldAbort = jParam < 2;
+	}
 
 	AxesBitmap axisControls;
 
@@ -129,11 +134,12 @@ GCodeResult GCodes::AcknowledgeMessage(GCodeBuffer&gb, const StringRef& reply) T
 	}
 
 	bool wasBlocking;
-	if (MessageBox::Acknowledge(seq, wasBlocking))
+	bool shouldAbort;
+	if (MessageBox::Acknowledge(seq, wasBlocking, shouldAbort))
 	{
 		if (wasBlocking)
 		{
-			MessageBoxClosed(cancelled, true, seq, rslt);
+			MessageBoxClosed(cancelled, shouldAbort, true, seq, rslt);
 		}
 	}
 	else
@@ -142,21 +148,25 @@ GCodeResult GCodes::AcknowledgeMessage(GCodeBuffer&gb, const StringRef& reply) T
 		// so that when it is executed the message box has already timed out (issue 730). So don't report an error in this case.
 		// Do nothing
 	}
-	return GCodeResult::ok;
+
+	// Return -1 if cancelled. If shouldAbort is true, then the containing macro will be aborted before
+	// this value can be read - but for consistency, we return 0.
+	return (cancelled && !shouldAbort) ? GCodeResult::m291Cancelled : GCodeResult::ok;
 }
 
 // Deal with processing a M292 or timing out a message box
-void GCodes::MessageBoxClosed(bool cancelled, bool m292, uint32_t seq, ExpressionValue rslt) noexcept
+void GCodes::MessageBoxClosed(bool cancelled, bool shouldAbort, bool m292, uint32_t seq, ExpressionValue rslt) noexcept
 {
 	platform.MessageF(MessageType::LogInfo,
-						"%s: cancelled=%s",
+						"%s: cancelled=%s shouldAbort=%s",
 							(m292) ? "M292" : "Message box timed out",
-								(cancelled ? "true" : "false"));
+								(cancelled ? "true" : "false"),
+									(shouldAbort ? "true" : "false"));
 	for (GCodeBuffer *_ecv_null targetGb : gcodeSources)
 	{
 		if (targetGb != nullptr)
 		{
-			targetGb->MessageAcknowledged(cancelled, seq, rslt);
+			targetGb->MessageAcknowledged(cancelled, shouldAbort, seq, rslt);
 		}
 	}
 }

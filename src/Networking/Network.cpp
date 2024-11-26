@@ -794,12 +794,28 @@ void Network::Diagnostics(MessageType mtype) noexcept
 
 IPAddress Network::GetIPAddress(unsigned int interface) const noexcept
 {
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		return reportedIPAddress;
+	}
+#endif
+
 	return
 #if HAS_NETWORKING
 			(interface < GetNumNetworkInterfaces()) ? interfaces[interface]->GetIPAddress() :
 #endif
 					IPAddress();
 }
+
+#if HAS_SBC_INTERFACE
+void Network::SetReportedIPAddress(IPAddress p_ipAddress) noexcept
+{
+	reportedIPAddress.SetV4LittleEndian(p_ipAddress.GetV4LittleEndian());
+
+}
+#endif
+
 
 #if HAS_NETWORKING
 

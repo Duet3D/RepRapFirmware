@@ -1223,6 +1223,9 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::DateTime_tc:
 	case TypeCode::Port:
 	case TypeCode::UniqueId_tc:
+#if SUPPORT_CAN_EXPANSION
+	case TypeCode::CanExpansionBoardDetails:
+#endif
 		// All these types are represented as strings
 		value.AppendAsString(rslt.GetRef());
 		payloadLength = expressionLength + rslt.strlen();

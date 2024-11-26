@@ -21,6 +21,7 @@ struct MessageBoxLimits
 
 	ExpressionValue minVal, maxVal, defaultVal, choices;
 	bool canCancel = false;
+	bool shouldAbort = true;
 };
 
 // Message box data
@@ -34,7 +35,7 @@ public:
 	static bool HaveCurrent() noexcept { return mboxList != nullptr; }
 	static MessageBox *_ecv_null GetCurrent() noexcept { return mboxList; }
 	static ReadLockedPointer<const MessageBox> GetLockedCurrent() noexcept;
-	static bool Acknowledge(uint32_t ackSeq, bool& wasBlocking) noexcept;
+	static bool Acknowledge(uint32_t ackSeq, bool& wasBlocking, bool& shouldAbort) noexcept;
 	static bool CheckTimeout() noexcept;
 
 	// Return true if the mode of this message box is one that the legacy status calls can handle
@@ -54,6 +55,7 @@ public:
 	const char *_ecv_array GetTitle() const noexcept { return title.c_str(); }
 	ExpressionValue GetDefaultValue() const noexcept { return limits.defaultVal; }
 	bool CanCancel() const noexcept { return limits.canCancel; }
+	bool ShouldAbort() const noexcept { return limits.shouldAbort; }
 
 	static ReadWriteLock mboxLock;
 

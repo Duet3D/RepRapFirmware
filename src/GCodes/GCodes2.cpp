@@ -544,8 +544,9 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			if (gb.Executing())
 # endif
 			{
-				g68Angle = 0.0;
+				g68Angle = g68Centre[0] = g68Centre[1] = 0.0;
 				UpdateCurrentUserPosition(gb);
+				reprap.MoveUpdated();
 			}
 			break;
 #endif
@@ -3459,8 +3460,22 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if HAS_NETWORKING
+#if HAS_NETWORKING || HAS_SBC_INTERFACE
 			case 552: // Enable/Disable network and/or Set/Get IP address
+# if HAS_SBC_INTERFACE
+				// Allow the SBC to set the IP address reported on 12864 displays
+				if (gb.IsBinary() && gb.Seen('P'))
+				{
+					IPAddress address;
+					gb.GetIPAddress(address);
+					reprap.GetNetwork().SetReportedIPAddress(address);
+					break;
+				}
+#  if !HAS_NETWORKING
+				break;
+#  endif
+# endif
+# if HAS_NETWORKING
 				if (CheckNetworkCommandAllowed(gb, reply, result))
 				{
 					Network& network = reprap.GetNetwork();
@@ -3533,6 +3548,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
+# endif
 #endif
 
 			case 555: // Set/report firmware type to emulate

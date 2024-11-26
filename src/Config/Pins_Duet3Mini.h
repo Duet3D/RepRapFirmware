@@ -226,7 +226,7 @@ constexpr Pin SdMciPins[] = { PortAPin(20), PortAPin(21), PortBPin(18), PortBPin
 constexpr GpioPinFunction SdMciPinsFunction = GpioPinFunction::I;
 Sdhc * const SdhcDevice = SDHC1;
 constexpr IRQn_Type SdhcIRQn = SDHC1_IRQn;
-constexpr uint32_t ExpectedSdCardSpeed = 15000000;
+constexpr uint32_t ExpectedSdCardSpeed = 22500000;
 
 // 12864 LCD
 // The ST7920 datasheet specifies minimum clock cycle time 400ns @ Vdd=4.5V, min. clock width 200ns high and 20ns low.

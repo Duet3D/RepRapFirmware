@@ -17,7 +17,7 @@
 constexpr ObjectModelTableEntry MessageBox::objectModelTable[] =
 {
 	{ "axisControls",			OBJECT_MODEL_FUNC_IF(self->mode == 2 || self->mode == 3, (int32_t)self->controls.GetRaw()),	ObjectModelEntryFlags::important },
-	{ "cancelButton",			OBJECT_MODEL_FUNC(self->limits.canCancel),						ObjectModelEntryFlags::important },
+	{ "cancelButton",			OBJECT_MODEL_FUNC(self->CanCancel()),							ObjectModelEntryFlags::important },
 	{ "choices",				OBJECT_MODEL_FUNC_IF(self->mode == 4, self->limits.choices),	ObjectModelEntryFlags::important },
 	{ "default",				OBJECT_MODEL_FUNC_IF(self->mode >= 4, self->limits.defaultVal),	ObjectModelEntryFlags::important },
 	{ "max",					OBJECT_MODEL_FUNC_IF(self->mode >= 5, self->limits.maxVal),		ObjectModelEntryFlags::important },
@@ -100,7 +100,7 @@ unsigned int MessageBox::numAutoCancelledMessages = 0;
 	{
 		mbox->limits.canCancel = false;
 	}
-	mbox->timeout = (p_mode <= 1 || mbox->limits.canCancel) ? lrintf(max<float>(p_timeout, 0.0) * 1000.0) : 0;
+	mbox->timeout = (p_mode <= 1 || mbox->CanCancel()) ? lrintf(max<float>(p_timeout, 0.0) * 1000.0) : 0;
 
 	if (mbp == &mboxList)
 	{
@@ -117,7 +117,7 @@ float MessageBox::GetTimeLeft() const noexcept
 }
 
 // If we have an active message box with the specified sequence number, close it and tell the caller whether it was blocking or not, and return true
-/*static*/ bool MessageBox::Acknowledge(uint32_t ackSeq, bool& wasBlocking) noexcept
+/*static*/ bool MessageBox::Acknowledge(uint32_t ackSeq, bool& wasBlocking, bool& shouldAbort) noexcept
 {
 	if (mboxList != nullptr)
 	{
@@ -130,6 +130,7 @@ float MessageBox::GetTimeLeft() const noexcept
 			if (ackSeq == 0 || mb->GetSeq() == ackSeq)
 			{
 				wasBlocking = mb->IsBlocking();
+				shouldAbort = mb->ShouldAbort();
 				if (mbp == &mboxList)
 				{
 					startTime = millis();
@@ -172,7 +173,7 @@ void MessageBox::TimeOut() noexcept
 {
 	if (IsBlocking())
 	{
-		reprap.GetGCodes().MessageBoxClosed(CanCancel(), false, seq, GetDefaultValue());
+		reprap.GetGCodes().MessageBoxClosed(CanCancel(), ShouldAbort(), false, seq, GetDefaultValue());
 	}
 	--numMessages;
 	delete this;

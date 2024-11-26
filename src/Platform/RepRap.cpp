@@ -1197,13 +1197,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 							return  (fanValue < 0.0) ? -1 : (int)lrintf(fanValue * 100.0);
 						});
 
-		// Cooling fan names
-		if (type == 2)
-		{
-			response->cat(',');
-			AppendStringArray(response, "fanNames", numFans, [this](size_t fan) noexcept { return fansManager->GetFanName(fan); });
-		}
-
 		// Speed and Extrusion factors in %
 		response->catf(",\"speedFactor\":%.1f,", (double)(gCodes->GetPrimarySpeedFactor() * 100.0));
 		AppendFloatArray(response, "extrFactors", Tool::GetExtrudersInUse(), [this](size_t extruder) noexcept { return gCodes->GetExtrusionFactor(extruder) * 100.0; }, 1);
@@ -1280,13 +1273,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 			// Current states
 			response->cat(',');
 			AppendIntArray(response, "state", numHeaters, [this](size_t heater) noexcept { return (int)heat->GetStatus(heater).ToBaseType(); });
-
-			// Names of the sensors use to control heaters
-			if (type == 2)
-			{
-				response->cat(',');
-				AppendStringArray(response, "names", numHeaters, [this](size_t heater) noexcept { return heat->GetHeaterSensorName(heater); });
-			}
 		}
 
 		// Tool temperatures
@@ -1311,33 +1297,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 					response->cat(',');
 				}
 			}
-		}
-
-		// Named extra temperature sensors
-		// TODO don't send the ones that we send in "names"
-		response->cat("]},\"extra\":[");
-		bool first = true;
-		unsigned int nextSensorNumber = 0;
-		for (;;)
-		{
-			const auto sensor = heat->FindSensorAtOrAbove(nextSensorNumber);
-			if (sensor.IsNull())
-			{
-				break;
-			}
-			const char * const nm = sensor->GetSensorName();
-			if (nm != nullptr)
-			{
-				if (!first)
-				{
-					response->cat(',');
-				}
-				first = false;
-				float temp;
-				(void)sensor->GetLatestTemperature(temp);
-				response->catf("{\"name\":\"%.s\",\"temp\":%.1f}", nm, (double)HideNan(temp));
-			}
-			nextSensorNumber = sensor->GetSensorNumber() + 1;
 		}
 
 		response->cat("]}");
@@ -1458,13 +1417,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 			{
 				// Number
 				response->catf("{\"number\":%d,", tool->Number());
-
-				// Name
-				const char * const toolName = tool->GetName();
-				if (toolName[0] != 0)
-				{
-					response->catf("\"name\":\"%.s\",", toolName);
-				}
 
 				// Heaters
 				AppendIntArray(response, "heaters", tool->HeaterCount(), [tool](size_t heater) noexcept { return tool->GetHeater(heater); });

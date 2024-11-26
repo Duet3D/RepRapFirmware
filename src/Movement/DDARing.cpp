@@ -700,7 +700,7 @@ void DDARing::Diagnostics(MessageType mtype, unsigned int ringNumber) noexcept
 
 #if SUPPORT_LASER
 
-// Manage the laser power. Return the number of ticks until we should be called again, or 0 to be called at the start of the next move.
+// Manage the laser power. Return the number of ticks until we should be called again, or portMAX_DELAY to be called at the start of the next move.
 uint32_t DDARing::ManageLaserPower() noexcept
 {
 	SetBasePriority(NvicPriorityStep);							// lock out step interrupts
@@ -715,12 +715,12 @@ uint32_t DDARing::ManageLaserPower() noexcept
 	// If we get here then there is no active laser move
 	SetBasePriority(0);
 	reprap.GetPlatform().SetLaserPwm(0);						// turn off the laser
-	return 0;
+	return portMAX_DELAY;
 }
 
 #endif
 
-// Manage the IOBITS (G1 P parameter) and extruder heater feedforward. Called by the Laser task.
+// Manage the IOBITS (G1 P parameter) and extruder heater feedforward. Called by the Laser task. Return the number of ticks until we should be called again, up to portMAX_DELAY.
 uint32_t DDARing::ManageIOBitsAndFeedForward() noexcept
 {
 #if SUPPORT_IOBITS

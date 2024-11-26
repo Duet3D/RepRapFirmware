@@ -215,17 +215,7 @@ uint16_t Tool::numToolsToReport = 0;
 		t->filamentExtruder = -1;
 	}
 
-	const size_t nameLength = strlen(toolName);
-	if (nameLength != 0)
-	{
-		char *_ecv_array tName = new char[nameLength + 1];
-		SafeStrncpy(tName, toolName, nameLength + 1);
-		t->name = tName;
-	}
-	else
-	{
-		t->name = nullptr;
-	}
+	t->name.Assign(toolName);
 
 	t->next = nullptr;
 	t->myNumber = (uint16_t)toolNumber;
@@ -461,9 +451,9 @@ uint16_t Tool::numToolsToReport = 0;
 void Tool::PrintTool(const StringRef& reply) const noexcept
 {
 	reply.printf("Tool %u - ", myNumber);
-	if (name != nullptr)
+	if (!name.IsNull())
 	{
-		reply.catf("name: %s; ", name);
+		reply.catf("name: %s; ", name.Get().Ptr());
 	}
 
 	if (driveCount == 0)

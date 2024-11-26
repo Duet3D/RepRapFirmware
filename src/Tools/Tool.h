@@ -39,8 +39,6 @@ constexpr uint8_t TPreBit = 1u << 1;
 constexpr uint8_t TPostBit = 1u << 2;
 constexpr uint8_t DefaultToolChangeParam = TFreeBit | TPreBit | TPostBit;
 
-constexpr size_t ToolNameLength = 32;						// maximum allowed length for tool names
-
 NamedEnum(ToolState, uint8_t, off, active, standby);
 
 class Filament;
@@ -49,8 +47,6 @@ class Tool final INHERIT_OBJECT_MODEL
 {
 public:
 	DECLARE_FREELIST_NEW_DELETE(Tool)
-
-	~Tool() override { delete name; }
 
 	static Tool *_ecv_null Create(
 			unsigned int toolNumber,
@@ -95,7 +91,6 @@ public:
 	bool CanDriveExtruder(bool extrude) const noexcept;
 	size_t HeaterCount() const noexcept;
 	int GetHeater(size_t heaterNumber) const noexcept pre(heaterNumber < HeaterCount());
-	const char *_ecv_array GetName() const noexcept;
 	int Number() const noexcept;
 	void DefineMix(const float m[]) noexcept;
 	const float *_ecv_array GetMix() const noexcept;
@@ -166,7 +161,7 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
-	Tool() noexcept : next(nullptr), filament(nullptr), name(nullptr), state(ToolState::off) { }
+	Tool() noexcept : next(nullptr), filament(nullptr), state(ToolState::off) { }
 
 	void SetToolHeaterActiveOrStandbyTemperature(size_t heaterNumber, float temp, bool active) THROWS(GCodeException);
 	void SetTemperatureFault(int8_t dudHeater) noexcept;
@@ -184,7 +179,7 @@ private:
 	Tool* _ecv_null next;
 	Filament *_ecv_null filament;
 	int filamentExtruder;
-	const char *_ecv_array _ecv_null name;
+	AutoStringHandle name;
 	float offset[MaxAxes];
 	float mix[MaxExtrudersPerTool];
 	float activeTemperatures[MaxHeatersPerTool];
@@ -231,11 +226,6 @@ inline size_t Tool::HeaterCount() const noexcept
 inline int Tool::GetHeater(size_t heaterNumber) const noexcept
 {
 	return heaters[heaterNumber];
-}
-
-inline const char *_ecv_array Tool::GetName() const noexcept
-{
-	return (name == nullptr) ? "" : _ecv_not_null(name);
 }
 
 inline int Tool::Number() const noexcept

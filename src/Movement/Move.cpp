@@ -1538,10 +1538,11 @@ void Move::SetupNextScanningProbeReading() noexcept
 
 void Move::LaserTaskRun() noexcept
 {
+	uint32_t ticks = portMAX_DELAY;
 	for (;;)
 	{
 		// Sleep until we are woken up by the start of a move
-		(void)TaskBase::TakeIndexed(NotifyIndices::Laser);
+		(void)TaskBase::TakeIndexed(NotifyIndices::Laser, ticks);
 #if SUPPORT_SCANNING_PROBES || SUPPORT_LASER
 		GCodes& gcodes = reprap.GetGCodes();
 #endif
@@ -1559,21 +1560,13 @@ void Move::LaserTaskRun() noexcept
 			if (gcodes.GetMachineType() == MachineType::laser)
 		{
 			// Manage the laser power
-			uint32_t ticks;
-			while ((ticks = rings[0].ManageLaserPower()) != 0)
-			{
-				(void)TaskBase::TakeIndexed(NotifyIndices::Laser, ticks);
-			}
+			ticks = rings[0].ManageLaserPower();
 		}
 		else
 #endif
 		{
 			// Manage the feedforward and IOBits
-			uint32_t ticks;
-			while ((ticks = rings[0].ManageIOBitsAndFeedForward()) != 0)
-			{
-				(void)TaskBase::TakeIndexed(NotifyIndices::Laser, ticks);
-			}
+			ticks = rings[0].ManageIOBitsAndFeedForward();
 		}
 	}
 }

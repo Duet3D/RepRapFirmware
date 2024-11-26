@@ -1870,7 +1870,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 #if HAS_SBC_INTERFACE
 	case GCodeState::waitingForAcknowledgement:	// finished M291 and the SBC expects a response next
+		stateMachineResult = gb.GetLastResult();
+		gb.SetState(GCodeState::normal);
+		break;
 #endif
+
 	case GCodeState::checkError:				// we return to this state after running the retractprobe macro when there may be a stored error message
 		gb.SetState(GCodeState::normal);
 		break;
@@ -1910,7 +1914,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We completed a command, so unlock resources and tell the host about it
 		gb.StopTimer();
 		UnlockAll(gb);
-		gb.LatestMachineState().RetrieveStateMachineResult(gb, reply, stateMachineResult);
+		if (stateMachineResult != GCodeResult::m291Cancelled)
+		{
+			gb.LatestMachineState().RetrieveStateMachineResult(gb, reply, stateMachineResult);
+		}
 		HandleReply(gb, stateMachineResult, reply.c_str());
 
 		CheckForDeferredPause(gb);

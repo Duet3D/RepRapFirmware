@@ -1620,14 +1620,14 @@ float DDA::GetMotorTopSpeed(uint8_t axis) const noexcept
 
 #if SUPPORT_LASER
 
-// Manage the laser power. Return the number of ticks until we should be called again, or 0 to be called at the start of the next move.
+// Manage the laser power. Return the number of ticks until we should be called again, or portMAX_DELAY to be called at the start of the next move.
 uint32_t DDA::ManageLaserPower() const noexcept
 {
 	Platform& platform = reprap.GetPlatform();
 	if (!flags.controlLaser || laserPwmOrIoBits.laserPwm == 0)
 	{
 		platform.SetLaserPwm(0);
-		return 0;
+		return portMAX_DELAY;
 	}
 
 	const uint32_t clocksMoving = StepTimer::GetMovementTimerTicks() - afterPrepare.moveStartTime;

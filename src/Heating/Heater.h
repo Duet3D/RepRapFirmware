@@ -68,7 +68,6 @@ public:
 
 	HeaterStatus GetStatus() const noexcept;							// Get the status of the heater
 	unsigned int GetHeaterNumber() const noexcept { return heaterNumber; }
-	const char *GetSensorName() const noexcept;							// Get the name of the sensor for this heater, or nullptr if it hasn't been named
 	void SetTemperature(float t, bool activeNotStandby) THROWS(GCodeException);
 	float GetActiveTemperature() const noexcept { return activeTemperature; }
 	float GetStandbyTemperature() const noexcept { return standbyTemperature; }

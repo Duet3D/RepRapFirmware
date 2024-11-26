@@ -97,7 +97,6 @@ public:
 	void Diagnostics(MessageType mtype) noexcept;						// Output useful information
 
 	// Methods that relate to a particular heater
-	const char *_ecv_array GetHeaterSensorName(size_t heater) const noexcept;		// Get the name of the sensor associated with heater, or nullptr if it hasn't been named
 	float GetAveragePWM(size_t heater) const noexcept					// Return the running average PWM to the heater as a fraction in [0, 1].
 	pre(heater < MaxHeaters);
 

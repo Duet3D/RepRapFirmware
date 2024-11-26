@@ -39,9 +39,6 @@ public:
 	TemperatureSensor(unsigned int sensorNum, const char *_ecv_array type) noexcept;
 	TemperatureSensor(const TemperatureSensor &_ecv_from) = delete;
 
-	// Virtual destructor
-	virtual ~TemperatureSensor() noexcept override;
-
 	// Configure the sensor from M308 parameters.
 	// If we find any parameters, process them, if successful then initialise the sensor and return GCodeResult::ok.
 	// If an error occurs while processing the parameters, return GCodeResult::error and write an error message to 'reply.
@@ -96,8 +93,8 @@ public:
 	// Set the name - normally called only once
 	void SetSensorName(const char *_ecv_array _ecv_null newName) noexcept;
 
-	// Get the name. Returns nullptr if no name has been assigned.
-	const char *_ecv_array GetSensorName() const noexcept { return sensorName; }
+	// Get the name
+	const AutoStringHandle& GetSensorName() const noexcept { return sensorName; }
 
 	// Get/set the next sensor in the linked list
 	TemperatureSensor *_ecv_from GetNext() const noexcept { return next; }
@@ -138,7 +135,7 @@ private:
 	TemperatureSensor *_ecv_from _ecv_null next;
 	unsigned int sensorNumber;																// the number of this sensor
 	const char *_ecv_array const sensorType;
-	const char *_ecv_array _ecv_null sensorName;
+	AutoStringHandle sensorName;
 	float lastTemperature;
 	uint32_t whenLastRead;
 	float offsetAdjustment = 0.0;

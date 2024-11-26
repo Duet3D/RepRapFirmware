@@ -50,14 +50,8 @@ TemperatureSensor::SensorTypeDescriptor::SensorTypeDescriptor(const char *_ecv_a
 
 // Constructor
 TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *_ecv_array t) noexcept
-	: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr),
+	: next(nullptr), sensorNumber(sensorNum), sensorType(t),
 	  lastTemperature(0.0), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::ok) {}
-
-// Virtual destructor
-TemperatureSensor::~TemperatureSensor() noexcept
-{
-	delete sensorName;
-}
 
 // Return the latest temperature reading
 TemperatureError TemperatureSensor::GetLatestTemperature(float& t) noexcept
@@ -85,16 +79,7 @@ TemperatureError TemperatureSensor::GetAdditionalOutput(float& t, uint8_t output
 void TemperatureSensor::SetSensorName(const char *_ecv_array _ecv_null newName) noexcept
 {
 	// Change the heater name in a thread-safe manner
-	const char *_ecv_array _ecv_null oldName = sensorName;
-	sensorName = nullptr;
-	delete oldName;
-
-	if (newName != nullptr && strlen(newName) != 0)
-	{
-		char *_ecv_array const temp = new char[strlen(newName) + 1];
-		strcpy(temp, newName);
-		sensorName = temp;
-	}
+	sensorName.Assign(newName);
 }
 
 // Default implementation of Configure, for sensors that have no configurable parameters
@@ -129,9 +114,10 @@ GCodeResult TemperatureSensor::Configure(const CanMessageGenericParser& parser, 
 void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 {
 	reply.printf("Sensor %u", sensorNumber);
-	if (sensorName != nullptr)
+	if (!sensorName.IsNull())
 	{
-		reply.catf(" (%s)", sensorName);
+		ReadLockedPointer<const char> tempName = sensorName.Get();
+		reply.catf(" (%s)", tempName.Ptr());
 	}
 	reply.catf(" type %s", sensorType);
 	AppendPinDetails(reply);

@@ -1208,7 +1208,7 @@ void GCodeBuffer::MacroFileClosed() noexcept
 
 // Tell this input source that any message it sent and is waiting on has been acknowledged
 // Allow for the possibility that the source may have started running a macro since it started waiting
-void GCodeBuffer::MessageAcknowledged(bool cancelled, uint32_t seq, ExpressionValue rslt) noexcept
+void GCodeBuffer::MessageAcknowledged(bool cancelled, bool shouldAbort, uint32_t seq, ExpressionValue rslt) noexcept
 {
 	for (GCodeMachineState *_ecv_null ms = machineState; ms != nullptr; ms = ms->GetPrevious())
 	{
@@ -1216,14 +1216,14 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled, uint32_t seq, ExpressionVa
 		{
 			ms->waitingForAcknowledgement = false;
 			ms->messageAcknowledged = true;
-			ms->messageCancelled = cancelled;
+			ms->messageShouldAbort = cancelled && shouldAbort;
 			m291Result = rslt;
 			if (cancelled)
 			{
 				lastResult = GCodeResult::m291Cancelled;
 			}
 #if HAS_SBC_INTERFACE
-			messageAcknowledged = !cancelled || !ms->DoingFile();
+			messageAcknowledged = !(cancelled && shouldAbort) || !ms->DoingFile();
 			reprap.GetSbcInterface().EventOccurred();
 #endif
 		}

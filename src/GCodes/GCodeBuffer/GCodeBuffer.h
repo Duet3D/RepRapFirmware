@@ -241,7 +241,7 @@ public:
 	void SetState(GCodeState newState) noexcept;
 	void SetState(GCodeState newState, uint16_t param) noexcept;
 	void AdvanceState() noexcept;
-	void MessageAcknowledged(bool cancelled, uint32_t seq, ExpressionValue rslt) noexcept;
+	void MessageAcknowledged(bool cancelled, bool shouldAbort, uint32_t seq, ExpressionValue rslt) noexcept;
 
 	GCodeChannel GetChannel() const noexcept { return codeChannel; }
 	bool IsFileChannel() const noexcept

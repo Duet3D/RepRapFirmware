@@ -603,12 +603,6 @@ HeaterStatus Heater::GetStatus() const noexcept
 							: HeaterStatus::standby;
 }
 
-const char* Heater::GetSensorName() const noexcept
-{
-	const auto sensor = reprap.GetHeat().FindSensor(sensorNumber);
-	return (sensor.IsNotNull()) ? sensor->GetSensorName() : nullptr;
-}
-
 GCodeResult Heater::SetActiveOrStandby(bool setActive, const StringRef& reply) noexcept
 {
 	if (GetMode() != HeaterMode::fault)

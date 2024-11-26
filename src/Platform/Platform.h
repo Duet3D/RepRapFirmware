@@ -470,10 +470,9 @@ protected:
 
 private:
 	const char *_ecv_array InternalGetSysDir() const noexcept;  				// where the system files are - not thread-safe!
-
 	void RawMessage(MessageType type, const char *_ecv_array message) noexcept;	// called by Message after handling error/warning flags
-
 	float GetCpuTemperature() const noexcept;
+	GCodeResult PrintTestReport(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) const THROWS(GCodeException);
 
 #if HAS_SMART_DRIVERS
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
