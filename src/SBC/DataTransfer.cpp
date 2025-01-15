@@ -1296,7 +1296,7 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 		break;
 	case TypeCode::DriverId_tc:
 		header->dataType = DataType::DriverId_dt;
-		header->uintValue = value.uVal;
+		header->uintValue = (value.param << 16) | value.uVal;
 		break;
 	case TypeCode::Uint32:
 		header->dataType = DataType::UInt;
