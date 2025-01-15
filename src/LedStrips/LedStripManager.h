@@ -28,7 +28,7 @@ public:
 	bool MustStopMovement(GCodeBuffer& gb) noexcept;			// test whether this strip requires motion to be stopped before sending a command
 
 	size_t GetNumLedStrips() const noexcept;					// called by RepRap.cpp object model entry
-	const LedStripBase *_ecv_from GetLedStrip(size_t index) const noexcept;		// called by RepRap.cpp object model entry
+	const LedStripBase *_ecv_from _ecv_null GetLedStrip(size_t index) const noexcept;	// called by RepRap.cpp object model entry
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult HandleM950Led(const CanMessageGeneric &msg, const StringRef& reply, uint8_t& extra) noexcept;
@@ -38,7 +38,7 @@ public:
 	static ReadWriteLock ledLock;								// needs to be public and static because RepRap.cpp needs to get it for the object model
 
 private:
-	LedStripBase *_ecv_from strips[MaxLedStrips];
+	LedStripBase *_ecv_from _ecv_null strips[MaxLedStrips];
 };
 
 #endif

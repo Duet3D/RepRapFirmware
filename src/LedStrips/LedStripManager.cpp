@@ -31,7 +31,7 @@ ReadWriteLock LedStripManager::ledLock;
 
 LedStripManager::LedStripManager() noexcept
 {
-	for (LedStripBase*& strip : strips)
+	for (LedStripBase *_ecv_from _ecv_null & strip : strips)
 	{
 		strip = nullptr;
 	}
@@ -41,7 +41,7 @@ LedStripManager::LedStripManager() noexcept
 GCodeResult LedStripManager::CreateStrip(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
 	const uint32_t stripNumber = gb.GetLimitedUIValue('E', MaxLedStrips);
-	LedStripBase*& slot = strips[stripNumber];
+	LedStripBase *_ecv_from _ecv_null & slot = strips[stripNumber];
 
 	if (!gb.Seen('C') && !gb.Seen('T') && !gb.Seen('U'))
 	{
@@ -72,7 +72,7 @@ GCodeResult LedStripManager::CreateStrip(GCodeBuffer &gb, const StringRef &reply
 		return GCodeResult::ok;							// just deleting an existing strip
 	}
 
-	LedStripBase *newStrip = nullptr;
+	LedStripBase *_ecv_from _ecv_null newStrip = nullptr;
 
 #if SUPPORT_CAN_EXPANSION
 	if (board != CanInterface::GetCanAddress())
@@ -136,7 +136,7 @@ GCodeResult LedStripManager::HandleM150(GCodeBuffer &gb, const StringRef &reply)
 
 	{
 		ReadLocker locker(ledLock);
-		LedStripBase *const strip = strips[stripNumber];
+		LedStripBase *_ecv_from _ecv_null const strip = strips[stripNumber];
 		if (strip != nullptr)
 		{
 			if (strip->MustStopMovement())
@@ -184,7 +184,7 @@ size_t LedStripManager::GetNumLedStrips() const noexcept
 }
 
 // Retrieve an LED strip. Caller must acquire ledLock before calling this. Called to build the object model.
-const LedStripBase *LedStripManager::GetLedStrip(size_t index) const noexcept
+const LedStripBase *_ecv_from _ecv_null LedStripManager::GetLedStrip(size_t index) const noexcept
 {
 	return (index < MaxLedStrips) ? strips[index] : nullptr;
 }

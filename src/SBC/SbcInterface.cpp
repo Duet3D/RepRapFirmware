@@ -618,6 +618,12 @@ void SbcInterface::ExchangeData() noexcept
 					packetAcknowledged = false;
 				}
 			}
+			else
+			{
+				// No output memory available, skip the packet content and try again later
+				(void)transfer.ReadData(packet->length);
+				packetAcknowledged = false;
+			}
 			break;
 		}
 
@@ -902,31 +908,39 @@ void SbcInterface::ExchangeData() noexcept
 
 		// Result of a file exists check
 		case SbcRequest::CheckFileExistsResult:
+		{
+			bool success = transfer.ReadBoolean();
 			if (fileOperation == FileOperation::checkFileExists)
 			{
-				fileSuccess = transfer.ReadBoolean();
+				fileSuccess = success;
 				fileOperation = FileOperation::none;
 				fileSemaphore.Give();
 			}
 			break;
+		}
 
 		// Result of a deletion request
 		case SbcRequest::FileDeleteResult:
+		{
+			bool success = transfer.ReadBoolean();
 			if (fileOperation == FileOperation::deleteFileOrDirectory || fileOperation == FileOperation::deleteFileOrDirectoryRecursively)
 			{
-				fileSuccess = transfer.ReadBoolean();
+				fileSuccess = success;
 				fileOperation = FileOperation::none;
 				fileSemaphore.Give();
 			}
 			break;
+		}
 
 		// Result of a file open request
 		case SbcRequest::OpenFileResult:
+		{
+			FileHandle handle = transfer.ReadOpenFileResult(fileOffset);
 			if (fileOperation == FileOperation::openRead ||
 				fileOperation == FileOperation::openWrite ||
 				fileOperation == FileOperation::openAppend)
 			{
-				fileHandle = transfer.ReadOpenFileResult(fileOffset);
+				fileHandle = handle;
 				fileSuccess = (fileHandle != noFileHandle);
 				fileOperation = FileOperation::none;
 				if (fileSuccess)
@@ -936,55 +950,72 @@ void SbcInterface::ExchangeData() noexcept
 				fileSemaphore.Give();
 			}
 			break;
+		}
 
 		// Result of a file read request
 		case SbcRequest::FileReadResult:
+		{
+			int bytesRead = transfer.ReadFileData(fileReadBuffer, fileBufferLength);
 			if (fileOperation == FileOperation::read)
 			{
-				int bytesRead = transfer.ReadFileData(fileReadBuffer, fileBufferLength);
 				fileSuccess = bytesRead >= 0;
 				fileOffset = fileSuccess ? bytesRead : 0;
 				fileOperation = FileOperation::none;
 				fileSemaphore.Give();
 			}
 			break;
+		}
 
 		// Result of a file write request
 		case SbcRequest::FileWriteResult:
+		{
+			bool success = transfer.ReadBoolean();
 			if (fileOperation == FileOperation::write)
 			{
-				fileSuccess = transfer.ReadBoolean();
-				if (!fileSuccess || fileBufferLength == 0)
+				fileSuccess = success;
+				if (!success || fileBufferLength == 0)
 				{
-					fileOperationPending = false;
+					fileOperationPending = fileBufferLength != 0;
 					fileOperation = FileOperation::none;
 					fileSemaphore.Give();
 				}
+				else
+				{
+					fileOperationPending = true;
+				}
 			}
 			break;
+		}
 
 		// Result of a file seek request
 		case SbcRequest::FileSeekResult:
+		{
+			bool success = transfer.ReadBoolean();
 			if (fileOperation == FileOperation::seek)
 			{
-				fileSuccess = transfer.ReadBoolean();
+				fileSuccess = success;
 				fileOperation = FileOperation::none;
 				fileSemaphore.Give();
 			}
 			break;
+		}
 
 		// Result of a file seek request
 		case SbcRequest::FileTruncateResult:
+		{
+			bool success = transfer.ReadBoolean();
 			if (fileOperation == FileOperation::truncate)
 			{
-				fileSuccess = transfer.ReadBoolean();
+				fileSuccess = success;
 				fileOperation = FileOperation::none;
 				fileSemaphore.Give();
 			}
 			break;
+		}
 
 		// Invalid request
 		default:
+			(void)transfer.ReadData(packet->length);		// skip the packet content
 #ifdef DEBUG
 			// Report this error only in debug builds. We may get here when the SBC sends a file response but the connection was reset
 			REPORT_INTERNAL_ERROR;
@@ -1000,8 +1031,7 @@ void SbcInterface::ExchangeData() noexcept
 	}
 
 	// Check if we can wait a short moment to reduce CPU load on the SBC
-	if (!skipNextDelay && numEvents < numMaxEvents &&
-		!fileOperationPending && fileOperation == FileOperation::none)
+	if (!skipNextDelay && numEvents < numMaxEvents && !fileOperationPending && fileOperation == FileOperation::none)
 	{
 		delaying = true;
 		if (!TaskBase::TakeIndexed(NotifyIndices::SbcInterface, (numOpenFiles != 0) ? maxFileOpenDelay : maxDelayBetweenTransfers))
@@ -1068,13 +1098,11 @@ void SbcInterface::ExchangeData() noexcept
 		case FileOperation::write:
 		{
 			const size_t bytesNotWritten = fileBufferLength;
-			if (transfer.WriteFileData(fileHandle, fileWriteBuffer, fileBufferLength))
+			fileOperationPending = !transfer.WriteFileData(fileHandle, fileWriteBuffer, fileBufferLength);
+			if (!fileOperationPending)
 			{
+				// File data sent, move forwards in the buffer
 				fileWriteBuffer += bytesNotWritten - fileBufferLength;
-				if (fileBufferLength == 0)
-				{
-					fileOperationPending = false;
-				}
 			}
 			break;
 		}
@@ -1715,7 +1743,6 @@ void SbcInterface::CloseFile(FileHandle handle) noexcept
 bool SbcInterface::DoFileOperation(FileOperation f) noexcept
 {
 	fileOperation = f;
-	TaskBase::ClearCurrentTaskNotifyCount(NotifyIndices::SbcInterface);
 	fileOperationPending.store(true, std::memory_order_release);
 
 	// Let the SBC task process this request as quickly as possible

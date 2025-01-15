@@ -41,7 +41,7 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 #if SUPPORT_CAN_EXPANSION
 													self->IsLocal() &&
 #endif
-													self->dataReceived && self->HaveCalibrationData(), self, 1),					ObjectModelEntryFlags::live },
+													self->dataReceived && self->HaveCalibrationData(), self, 1),					ObjectModelEntryFlags::liveNotPanelDue },
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 #ifdef DUET3_ATE
 	{ "position",			OBJECT_MODEL_FUNC((int32_t)self->sensorValue),															ObjectModelEntryFlags::live },
@@ -49,10 +49,10 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 #endif
 
 	// 1. LaserFilamentMonitor.calibrated members
-	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio)), 											ObjectModelEntryFlags::live },
-	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio)), 											ObjectModelEntryFlags::live },
-	{ "sensitivity",		OBJECT_MODEL_FUNC(ConvertToPercent(self->MeasuredSensitivity())), 										ObjectModelEntryFlags::live },
-	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::live },
+	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio)), 											ObjectModelEntryFlags::liveNotPanelDue },
+	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio)), 											ObjectModelEntryFlags::liveNotPanelDue },
+	{ "sensitivity",		OBJECT_MODEL_FUNC(ConvertToPercent(self->MeasuredSensitivity())), 										ObjectModelEntryFlags::liveNotPanelDue },
+	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::liveNotPanelDue },
 
 	// 2. LaserFilamentMonitor.configured members
 	{ "allMoves",			OBJECT_MODEL_FUNC(self->checkNonPrintingMoves), 														ObjectModelEntryFlags::none },

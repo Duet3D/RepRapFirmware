@@ -20,9 +20,9 @@ enum class DriverMode : unsigned int
 	unknown					// must be last!
 };
 
-const char* TranslateDriverMode(unsigned int mode) noexcept;
+const char *_ecv_array TranslateDriverMode(unsigned int mode) noexcept;
 
-inline const char* TranslateDriverMode(DriverMode mode) noexcept
+inline const char *_ecv_array TranslateDriverMode(DriverMode mode) noexcept
 {
 	return TranslateDriverMode((unsigned int)mode);
 }
@@ -40,6 +40,7 @@ enum class SmartDriverRegister : unsigned int
 	chopperControl,
 	coolStep,
 	tpwmthrs,
+	tcoolthrs,
 	thigh,
 	mstepPos,
 	pwmScale,

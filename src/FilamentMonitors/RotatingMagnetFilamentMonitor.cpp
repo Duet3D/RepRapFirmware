@@ -41,17 +41,17 @@ constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[
 #if SUPPORT_CAN_EXPANSION
 													self->IsLocal() &&
 #endif
-													self->dataReceived && self->HaveCalibrationData(), self, 1), 					ObjectModelEntryFlags::live },
+													self->dataReceived && self->HaveCalibrationData(), self, 1), 					ObjectModelEntryFlags::liveNotPanelDue },
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 #ifdef DUET3_ATE
 	{ "mag",				OBJECT_MODEL_FUNC((int32_t)self->magnitude),															ObjectModelEntryFlags::live },
 #endif
 
 	// 1. RotatingMagnetFilamentMonitor.calibrated members
-	{ "mmPerRev",			OBJECT_MODEL_FUNC(self->MeasuredSensitivity(), 2), 														ObjectModelEntryFlags::live },
-	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio * self->MeasuredSensitivity())), 				ObjectModelEntryFlags::live },
-	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio * self->MeasuredSensitivity())), 				ObjectModelEntryFlags::live },
-	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::live },
+	{ "mmPerRev",			OBJECT_MODEL_FUNC(self->MeasuredSensitivity(), 2), 														ObjectModelEntryFlags::liveNotPanelDue },
+	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio * self->MeasuredSensitivity())), 				ObjectModelEntryFlags::liveNotPanelDue },
+	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio * self->MeasuredSensitivity())), 				ObjectModelEntryFlags::liveNotPanelDue },
+	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::liveNotPanelDue },
 
 	// 2. RotatingMagnetFilamentMonitor.configured members
 	{ "allMoves",			OBJECT_MODEL_FUNC(self->checkNonPrintingMoves), 														ObjectModelEntryFlags::none },
@@ -83,7 +83,7 @@ RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int drv, u
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
 	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), checkNonPrintingMoves(false)
 {
-	switchOpenMask = (monitorType == 4) ? TypeMagnetV1SwitchOpenMask : 0;
+	switchOpenMask = (monitorType == 4) ? TypeMagnetV1SwitchOpenMask : 0u;
 	Init();
 }
 

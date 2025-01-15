@@ -372,16 +372,16 @@ void W5500Interface::Diagnostics(MessageType mtype) noexcept
 		MutexLocker lock(interfaceMutex);
 		phycfgr = getPHYCFGR();
 	}
-	const char * const linkSpeed = ((phycfgr & 1) == 0) ? "down" : ((phycfgr & 2) != 0) ? "100Mbps" : "10Mbps";
-	const char * const linkDuplex = ((phycfgr & 1) == 0) ? "" : ((phycfgr & 4) != 0) ? " full duplex" : " half duplex";
+	const char *_ecv_array const linkSpeed = ((phycfgr & 1) == 0) ? "down" : ((phycfgr & 2) != 0) ? "100Mbps" : "10Mbps";
+	const char *_ecv_array const linkDuplex = ((phycfgr & 1) == 0) ? "" : ((phycfgr & 4) != 0) ? " full duplex" : " half duplex";
 	platform.MessageF(mtype, "Interface state %s, link %s%s\n", GetStateName(), linkSpeed, linkDuplex);
 
 	// Report the socket states
 	String<StringLength50> str;
 	str.copy("Socket states:");
-	for (const Socket* skt : sockets)
+	for (const W5500Socket* skt : sockets)
 	{
-		str.catf(" %u", (unsigned int)skt->GetState());
+		str.catf(" %u", skt->GetState());
 	}
 	str.cat('\n');
 	platform.Message(mtype, str.c_str());
@@ -416,7 +416,7 @@ int W5500Interface::EnableState() const noexcept
 	return (GetState() == NetworkState::disabled) ? 0 : 1;
 }
 
-void W5500Interface::UpdateHostname(const char *name) noexcept /*override*/
+void W5500Interface::UpdateHostname(const char *_ecv_array name) noexcept /*override*/
 {
 	mdnsResponder->Announce();
 }

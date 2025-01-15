@@ -68,7 +68,7 @@ GCodeResult RemoteLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply) 
 {
 	CanMessageGenericConstructor cons(M150Params);
 	cons.PopulateFromCommand(gb);
-	return cons.SendAndGetResponse(CanMessageType::writeLedStrip, boardNumber, reply, &remoteProperties);
+	return cons.SendAndGetResponse(CanMessageType::writeLedStrip, boardNumber, reply);
 }
 
 #endif

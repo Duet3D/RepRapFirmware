@@ -215,7 +215,7 @@ sd_mmc_err_t sd_mmc_start_read_blocks(void *dest, uint16_t nb_block, uint8_t slo
  * \return return SD_MMC_OK if success,
  *         otherwise return an error code (\ref sd_mmc_err_t).
  */
-sd_mmc_err_t sd_mmc_wait_end_of_read_blocks(bool abort, uint8_t slot) noexcept;
+sd_mmc_err_t sd_mmc_wait_end_of_read_blocks(bool doAbort, uint8_t slot) noexcept;
 
 /**
  * \brief Initialize the write blocks of data
@@ -250,7 +250,7 @@ sd_mmc_err_t sd_mmc_start_write_blocks(const void *src, uint16_t nb_block, uint8
  * \return return SD_MMC_OK if success,
  *         otherwise return an error code (\ref sd_mmc_err_t).
  */
-sd_mmc_err_t sd_mmc_wait_end_of_write_blocks(bool abort, uint8_t slot) noexcept;
+sd_mmc_err_t sd_mmc_wait_end_of_write_blocks(bool doAbort, uint8_t slot) noexcept;
 
 #ifdef SDIO_SUPPORT_ENABLE
 /**

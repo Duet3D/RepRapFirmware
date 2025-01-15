@@ -27,13 +27,13 @@ QUICKREF
         memcpy ansi pure
 	*/
 
-#include <_ansi.h>
+#include <ecv_duet3d.h>
 #include <string.h>
 #include "local.h"
 
 /* Nonzero if either X or Y is not aligned on a "long" boundary.  */
 #define UNALIGNED(X, Y) \
-  (((long)X & (sizeof (long) - 1)) | ((long)Y & (sizeof (long) - 1)))
+  ((((unsigned long)X & (sizeof(unsigned long) - 1)) | ((unsigned long)Y & (sizeof(unsigned long) - 1))) != 0)
 
 /* How many bytes are copied each iteration of the 4X unrolled loop.  */
 #define BIGBLOCKSIZE    (sizeof (long) << 2)
@@ -63,10 +63,10 @@ memcpy (void *__restrict dst0,
 
   return save;
 #else
-  char *dst = dst0;
-  const char *src = src0;
-  long *aligned_dst;
-  const long *aligned_src;
+  char *_ecv_array dst = (char*_ecv_array)dst0;
+  const char *_ecv_array src = (const char *_ecv_array)src0;
+  long *_ecv_array aligned_dst;
+  const long *_ecv_array aligned_src;
 
   /* If the size is small, or either SRC or DST is unaligned,
      then punt into the byte copy loop.  This should be rare.  */
@@ -76,8 +76,8 @@ memcpy (void *__restrict dst0,
 #endif
 	  )
     {
-      aligned_dst = (long*)dst;
-      aligned_src = (long*)src;
+      aligned_dst = (long *_ecv_array)dst;
+      aligned_src = (const long *_ecv_array)src;
 
       /* Copy 4X long words at a time if possible.  */
       while (len0 >= BIGBLOCKSIZE)
@@ -97,8 +97,8 @@ memcpy (void *__restrict dst0,
         }
 
        /* Pick up any residual with a byte copier.  */
-      dst = (char*)aligned_dst;
-      src = (char*)aligned_src;
+      dst = (char *_ecv_array)aligned_dst;
+      src = (const char *_ecv_array)aligned_src;
     }
 
   while (len0--)

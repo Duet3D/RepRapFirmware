@@ -28,7 +28,7 @@ public:
 
 	NetworkResponder *_ecv_from _ecv_null GetNext() const noexcept { return next; }
 	virtual bool Spin() noexcept = 0;															// do some work, returning true if we did anything significant
-	virtual bool Accept(Socket *s, NetworkProtocol protocol) noexcept = 0;						// ask the responder to accept this connection, returns true if it did
+	virtual bool Accept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept = 0;			// ask the responder to accept this connection, returns true if it did
 	virtual void Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept = 0;	// terminate the responder if it is serving the specified protocol on the specified interface
 	virtual void Diagnostics(MessageType mtype) const noexcept = 0;
 
@@ -78,7 +78,7 @@ protected:
 	NetworkResponder *_ecv_from _ecv_null next;			// next responder in the list
 	ResponderState responderState;						// the current state
 	ResponderState stateAfterSending;					// if we are sending, the state to enter when sending is complete
-	Socket *_ecv_null skt;								// the network socket this responder is using
+	Socket *_ecv_from _ecv_null skt;					// the network socket this responder is using
 	uint32_t timer;										// a general purpose millisecond timer
 
 	// Buffers for sending responses

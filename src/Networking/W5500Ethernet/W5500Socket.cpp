@@ -18,7 +18,7 @@
 
 const unsigned int MaxBuffersPerSocket = 4;
 
-W5500Socket::W5500Socket(NetworkInterface *iface) noexcept
+W5500Socket::W5500Socket(NetworkInterface *_ecv_from iface) noexcept
 	: Socket(iface), receivedData(nullptr)
 {
 }
@@ -145,7 +145,7 @@ bool W5500Socket::ReadChar(char& c) noexcept
 }
 
 // Return a pointer to data in a buffer and a length available
-bool W5500Socket::ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept
+bool W5500Socket::ReadBuffer(const uint8_t *_ecv_array &buffer, size_t &len) noexcept
 {
 	if (receivedData != nullptr)
 	{
@@ -311,7 +311,7 @@ void W5500Socket::DiscardReceivedData() noexcept
 }
 
 // Send the data, returning the length buffered
-size_t W5500Socket::Send(const uint8_t *data, size_t length) noexcept
+size_t W5500Socket::Send(const uint8_t *_ecv_array data, size_t length) noexcept
 {
 	MutexLocker lock(interface->interfaceMutex);
 

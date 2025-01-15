@@ -38,14 +38,14 @@ constexpr uint8_t MessageBox::objectModelTableDescriptor[] =
 DEFINE_GET_OBJECT_MODEL_TABLE(MessageBox)
 
 uint32_t MessageBox::nextSeq = 0;
-MessageBox *MessageBox::mboxList = nullptr;
+MessageBox *_ecv_null MessageBox::mboxList = nullptr;
 ReadWriteLock MessageBox::mboxLock;
 uint32_t MessageBox::startTime;
 unsigned int MessageBox::numMessages = 0;
 unsigned int MessageBox::numAutoCancelledMessages = 0;
 
 // Create a message box. Caller must have a write lock on the message box lock first.
-/*static*/ uint32_t MessageBox::Create(const char *msg, const char *p_title, int p_mode, float p_timeout, AxesBitmap p_controls, MessageBoxLimits *_ecv_null p_limits) noexcept
+/*static*/ uint32_t MessageBox::Create(const char *_ecv_array msg, const char *_ecv_array p_title, int p_mode, float p_timeout, AxesBitmap p_controls, MessageBoxLimits *_ecv_null p_limits) noexcept
 {
 	// Find the end of the message box list. On the way, if we already have the maximum allowed number of messages in the list, time out the oldest non-blocking one.
 	// Also reduce the timeout of any remaining non-blocking message boxes to 1 second.

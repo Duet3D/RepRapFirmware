@@ -62,6 +62,10 @@ constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 # include <spi/spi.h>
 #endif
 
+#if SAME5x
+# include <Serial.h>
+#endif
+
 #if defined(DUET3_MB6HC) && HAS_WIFI_NETWORKING
 extern void ESP_SPI_HANDLER() noexcept;
 #endif

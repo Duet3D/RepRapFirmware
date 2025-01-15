@@ -20,11 +20,22 @@ struct RawMove
 	float moveStartVirtualExtruderPosition;							// the virtual extruder position at the start of this move, for normal moves
 	FilePosition filePos;											// offset in the file being printed at the start of reading this move
 	float proportionDone;											// what proportion of the entire move has been done when this segment is complete
+#if 0	// we don't use this yet
 	float cosXyAngle;												// the cosine of the change in XY angle between the previous move and this move
+#endif
 	float maxPrintingAcceleration;
 	float maxTravelAcceleration;
 
 	const Tool *_ecv_null movementTool;								// which tool (if any) is being used by this move
+
+	static constexpr LogicalDrivesBitmap allLogicalDrives = LogicalDrivesBitmap::MakeLowestNBits(MaxAxesPlusExtruders);
+
+#if SUPPORT_ASYNC_MOVES
+	AxesBitmap axesAndExtrudersOwned;								// axes and extruders that this movement system has moved since the last sync, or owns for other reasons
+	LogicalDrivesBitmap logicalDrivesOwned;							// logical drives that this movement system owns
+#else
+	static constexpr LogicalDrivesBitmap logicalDrivesOwned = allLogicalDrives;
+#endif
 
 	uint16_t moveType : 3,											// the H parameter from the G0 or G1 command, 0 for a normal move
 			applyM220M221 : 1,										// true if this move is affected by M220 and M221 (this could be moved to ExtendedRawMove)
@@ -57,7 +68,7 @@ struct RawMove
 	// GCC normally calls memcpy to assign objects of this class. We can do better because we know they must be 32-bit aligned.
 	RawMove &_ecv_from operator=(const RawMove& arg) noexcept
 	{
-		memcpyu32(reinterpret_cast<uint32_t *_ecv_array>(this), reinterpret_cast<const uint32_t *_ecv_array>(&arg), sizeof(*this)/4);
+		memcpyu32(reinterpret_cast<uint32_t *_ecv_array>(this), reinterpret_cast<const uint32_t *_ecv_array>(&arg), sizeof(RawMove)/4);
 		return *this;
 	}
 };
@@ -78,31 +89,37 @@ constexpr size_t ResumeObjectRestorePointNumber = NumVisibleRestorePoints + 1;
 
 // Details of a move that are needed only by GCodes
 // CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
-class MovementState : public RawMove
+class MovementState final : public RawMove
 {
 public:
-
 #if SUPPORT_ASYNC_MOVES
-	static void GlobalInit(size_t numVisibleAxes) noexcept;
-	static const float *GetLastKnownMachinePositions() noexcept { return lastKnownMachinePositions; }
-	static AxesBitmap GetAxesAndExtrudersMoved() noexcept { return axesAndExtrudersMoved; }
-	static void SetLastKnownMachinePosition(size_t axis, float pos) noexcept { lastKnownMachinePositions[axis] = pos; }
-
 	AxesBitmap GetAxesAndExtrudersOwned() const noexcept { return axesAndExtrudersOwned; }	// Get the axes and extruders that this movement system owns
 	ParameterLettersBitmap GetOwnedAxisLetters() const noexcept { return ownedAxisLetters; } // Get the letters denoting axes that this movement system owns
-	AxesBitmap AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept;	// try to allocate the requested axes, if we can't then return the axes we can't allocate
+	LogicalDrivesBitmap AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept;	// try to allocate the requested axes, if we can't then return the logical drives we can't allocate
+	LogicalDrivesBitmap AllocateDrives(LogicalDrivesBitmap drivesNeeded) noexcept;			// try to allocate logical drives directly
 	void ReleaseAllOwnedAxesAndExtruders() noexcept;
 	void ReleaseNonToolAxesAndExtruders() noexcept;
 	void ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept;
 	void ReleaseAxisLetter(char letter) noexcept;											// stop claiming that we own an axis letter (if we do) but don't release the associated axis
-	void UpdateOwnAxisCoordinates() noexcept;													// fetch and save the coordinates of axes we own to lastKnownMachinePositions
-	void OwnedAxisCoordinatesUpdated(AxesBitmap axesIncluded) noexcept;						// update changed coordinates of some owned axes - called after G92
-	void OwnedAxisCoordinateUpdated(size_t axis) noexcept;									// update the machine coordinate of an axis we own - called after Z probing
+	void UpdateCoordinatesFromLastKnownEndpoints() noexcept;								// update our coordinates from the saved endpoints
 #endif
+
+	void SaveOwnDriveCoordinates() const noexcept;											// fetch and save the endpoints of logical drives we own to lastKnownEndpoints
+	void SetNewPositionOfOwnedAxes(float ncoords[MaxAxes]) noexcept;
+	void ChangeEndpointsAfterHoming(LogicalDrivesBitmap drives, const int32_t endpoints[MaxAxes]) noexcept;
+	void ChangeSingleEndpointAfterHoming(size_t drive, int32_t ep) noexcept;
+	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;			// adjust the endpoints following delta calibration
+	float LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept;				// Get a single coordinate for reporting e.g.in the OM
+	void ForceLiveCoordinatesUpdate() noexcept { forceLiveCoordinatesUpdate = true; }		// Force the stored coordinates to be updated next time LiveMachineCoordinate is called
+	void UpdateOwnedDriveEndpointsFromMotors() noexcept;									// fetch lastKnownEndpoints from the motors for our owned drives and update the endpoints in our DDA ring
+	void UpdateOwnedDriveLastEndpoints(const int32_t endPoints[MaxAxes]) noexcept;			// update lastKnownEndpoints for our owned drives
 
 	MovementSystemNumber GetNumber() const noexcept { return msNumber; }
 	float GetProportionDone() const noexcept;												// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
+
 	void Init(MovementSystemNumber p_msNumber) noexcept;
+	void SetInitialMachineCoordinates(const float initialPosition[MaxAxesPlusExtruders]) noexcept;
+
 	void ResetLaser() noexcept;																// reset the laser parameters
 	void ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept;			// change the extrusion factor of an extruder
 	const RestorePoint& GetRestorePoint(size_t n) const pre(n < NumTotalRestorePoints) { return restorePoints[n]; }
@@ -132,7 +149,8 @@ public:
 	void StopPrinting(GCodeBuffer& gb) noexcept;
 	void ResumePrinting(GCodeBuffer& gb) noexcept;
 
-	void Diagnostics(MessageType mtype) noexcept;
+	// Reporting
+	void Diagnostics(MessageType mtype) const noexcept;
 
 	// These variables are currently all public, but we ought to make most of them private
 	Tool *_ecv_null currentTool;									// the current tool of this movement system
@@ -179,6 +197,10 @@ public:
 	RestorePoint& GetSimulationRestorePoint() noexcept { return restorePoints[SimulationRestorePointNumber]; }		// The position and feed rate when we started simulating
 	RestorePoint& GetResumeObjectRestorePoint() noexcept { return restorePoints[ResumeObjectRestorePointNumber]; }	// The position and feed rate when we resumed printing objects
 
+	AxesBitmap axesToSenseLength;									// The axes on which we are performing axis length sensing
+	AxesBitmap axesToHome;											// The axes or logical drives we are homing
+	LogicalDrivesBitmap endstopsTriggered;							// The axis or drives for which endstops were triggered
+
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	FilePosition fileOffsetToPrint;									// the offset to start printing from
 # if SUPPORT_ASYNC_MOVES
@@ -206,15 +228,26 @@ public:
 	SegmentedMoveState segMoveState;
 	bool pausedInMacro;												// if we are paused then this is true if we paused while fileGCode was executing a macro
 
+	static void SetInitialMotorPositions(const float initialPosition[MaxAxesPlusExtruders]) noexcept;
+	static void SaveEndpointsBeforeSimulating() noexcept;
+	static void RestoreEndpointsAfterSimulating() noexcept;
+	static const int32_t *_ecv_array GetLastKnownEndpoints() noexcept { return lastKnownEndpoints; }
+	static void AdjustEndpoint(size_t drive, float ratio) noexcept pre(drive < MaxAxesPlusExtruders) { lastKnownEndpoints[drive] = lrintf((float)lastKnownEndpoints[drive] * ratio); }
+	static void DebugPrintLastKnownEndpoints(const char *_ecv_array str) noexcept;
+
 private:
 	MovementSystemNumber msNumber;
+	mutable bool forceLiveCoordinatesUpdate = true;					// true if we want to force latestLiveCoordinates to be updated
+	mutable float latestLiveCoordinates[MaxAxesPlusExtruders];		// the most recent set of live coordinates that we fetched
+	mutable uint32_t latestLiveCoordinatesFetchedAt = 0;			// when we fetched the live coordinates
+
+	static int32_t lastKnownEndpoints[MaxAxesPlusExtruders];		// the last stored position of the logical drives
+	static int32_t endpointsAtSimulationStart[MaxAxesPlusExtruders];	// the endpoints when we started a simulation
 
 #if SUPPORT_ASYNC_MOVES
-	AxesBitmap axesAndExtrudersOwned;								// axes and extruders that this movement system has moved since the last sync
 	ParameterLettersBitmap ownedAxisLetters;						// cache of letters denoting user axes for which the corresponding machine axes for the current tool are definitely owned
 
-	static AxesBitmap axesAndExtrudersMoved;						// axes and extruders that are owned by any movement system
-	static float lastKnownMachinePositions[MaxAxesPlusExtruders];	// the last stored machine position of the axes
+	static LogicalDrivesBitmap allLogicalDrivesOwned;				// logical drives owned by any movement system
 #endif
 };
 

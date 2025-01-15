@@ -10,6 +10,7 @@
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <limits>
 
 #if HAS_VREF_MONITOR
 # include <GCodes/GCodes.h>
@@ -77,7 +78,7 @@ int32_t Thermistor::GetRawReading(bool& valid) const noexcept
 		// Filtered ADC channel
 		const volatile ThermistorAveragingFilter& tempFilter = reprap.GetPlatform().GetAdcFilter(adcFilterChannel);
 		valid = tempFilter.IsValid();
-		return tempFilter.GetSum()/(tempFilter.NumAveraged() >> AdcOversampleBits);
+		return tempFilter.GetSum()/(ThermistorAveragingFilter::NumAveraged() >> AdcOversampleBits);
 	}
 
 	// Raw ADC channel
@@ -219,7 +220,7 @@ void Thermistor::InitPort() noexcept
 }
 
 // Configure the temperature sensor
-GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
+GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
 	if (!ConfigurePort(gb, reply, PinAccess::readAnalog, changed))
 	{

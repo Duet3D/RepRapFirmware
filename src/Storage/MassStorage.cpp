@@ -69,13 +69,11 @@ protected:
 void SdCardInfo::Clear(unsigned int card) noexcept
 {
 	memset(&fileSystem, 0, sizeof(fileSystem));
-#if SAME70
+# if SAME70
 	fileSystem.win = sectorBuffers[card];
 	memset(sectorBuffers[card], 0, sizeof(sectorBuffers[card]));
-#endif
+# endif
 }
-
-#if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -86,26 +84,26 @@ void SdCardInfo::Clear(unsigned int card) noexcept
 #define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(SdCardInfo, _condition,__VA_ARGS__)
 
 // These two functions are only called from one place each in the OM table, hence inlined
-static inline uint64_t GetFreeSpace(size_t slot)
+static inline uint64_t GetFreeSpace(size_t slot) noexcept
 {
 	MassStorage::SdCardReturnedInfo returnedInfo;
 	(void)MassStorage::GetCardInfo(slot, returnedInfo);
 	return returnedInfo.freeSpace;
 }
 
-static inline uint64_t GetPartitionSize(size_t slot)
+static inline uint64_t GetPartitionSize(size_t slot) noexcept
 {
 	MassStorage::SdCardReturnedInfo returnedInfo;
 	(void)MassStorage::GetCardInfo(slot, returnedInfo);
 	return returnedInfo.partitionSize;
 }
 
-static const char * const VolPathNames[] = { "0:/", "1:/" };
+static const char *_ecv_array const VolPathNames[] = { "0:/", "1:/" };
 static_assert(ARRAY_SIZE(VolPathNames) >= NumSdCards, "Incorrect VolPathNames array");
 
-#ifdef DUET3_MB6HC
+# ifdef DUET3_MB6HC
 static IoPort sd1Ports[2];		// first element is CS port, second is CD port
-#endif
+# endif
 
 constexpr ObjectModelTableEntry SdCardInfo::objectModelTable[] =
 {
@@ -130,11 +128,10 @@ constexpr uint8_t SdCardInfo::objectModelTableDescriptor[] = { 1, 7 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(SdCardInfo)
 
-#endif
-
 static SdCardInfo info[NumSdCards];
 static DIR findDir;
-#endif
+
+#endif	// HAS_MASS_STORAGE
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 static Mutex dirMutex;
@@ -356,7 +353,7 @@ void MassStorage::Init() noexcept
 # endif
 
 # if HAS_MASS_STORAGE
-	static const char * const VolMutexNames[] = { "SD0", "SD1" };
+	static const char *_ecv_array const VolMutexNames[] = { "SD0", "SD1" };
 	static_assert(ARRAY_SIZE(VolMutexNames) >= NumSdCards, "Incorrect VolMutexNames array");
 
 	// Initialise the SD card structs
@@ -461,7 +458,7 @@ FileStore *null MassStorage::OpenFile(const char *_ecv_array filePath, OpenMode 
 		{
 			if (fs.IsFree())
 			{
-				FileStore * const ret = (fs.Open(filePath, mode, preAllocSize)) ? &fs: nullptr;
+				FileStore *_ecv_null const ret = (fs.Open(filePath, mode, preAllocSize)) ? &fs: nullptr;
 # if HAS_MASS_STORAGE
 				if (ret != nullptr && (mode == OpenMode::write || mode == OpenMode::writeWithCrc))
 				{

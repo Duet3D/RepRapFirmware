@@ -82,6 +82,9 @@ namespace CanInterface
 	GCodeResult SetRemoteDriverStepsPerMmAndMicrostepping(const CanDriversData<StepsPerUnitAndMicrostepping>& data, const StringRef& reply) noexcept;
 	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException);
+	void EnableRemoteStallEndstop(DriverId did, float speed) THROWS(GCodeException) pre(did.IsRemote());
+	void DisableRemoteStallEndstops(CanAddress boardId) noexcept;
+
 #if 0	// not currently used
 	unsigned int GetNumPendingMotionMessages() noexcept;
 #endif
@@ -111,6 +114,7 @@ namespace CanInterface
 	GCodeResult StartAccelerometer(DriverId device, uint8_t axes, uint16_t numSamples, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 #endif
 	GCodeResult StartClosedLoopDataCollection(DriverId device, uint16_t filter, uint16_t numSamples, uint16_t rateRequested, uint8_t movementRequested, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult ProcessM655(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 #if SUPPORT_MULTICAST_DISCOVERY
 	void SetStatusLedIdentify(uint32_t seconds) noexcept;

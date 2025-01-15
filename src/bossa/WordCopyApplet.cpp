@@ -43,20 +43,17 @@ WordCopyApplet::~WordCopyApplet()
 {
 }
 
-void
-WordCopyApplet::setDstAddr(uint32_t dstAddr) THROWS(GCodeException)
+void WordCopyApplet::setDstAddr(uint32_t dstAddr) THROWS(GCodeException)
 {
     _samba.writeWord(_addr + applet.dst_addr, dstAddr);
 }
 
-void
-WordCopyApplet::setSrcAddr(uint32_t srcAddr) THROWS(GCodeException)
+void WordCopyApplet::setSrcAddr(uint32_t srcAddr) THROWS(GCodeException)
 {
     _samba.writeWord(_addr + applet.src_addr, srcAddr);
 }
 
-void
-WordCopyApplet::setWords(uint32_t words) THROWS(GCodeException)
+void WordCopyApplet::setWords(uint32_t words) THROWS(GCodeException)
 {
     _samba.writeWord(_addr + applet.words, words);
 }

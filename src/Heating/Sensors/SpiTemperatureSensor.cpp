@@ -18,7 +18,7 @@ SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *_
     SetResult(0.0, TemperatureError::notInitialised);
 }
 
-bool SpiTemperatureSensor::ConfigurePort(GCodeBuffer& gb, const StringRef& reply, bool& seen)
+bool SpiTemperatureSensor::ConfigurePort(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException)
 {
 	const bool ret = SensorWithPort::ConfigurePort(gb, reply, PinAccess::write1, seen);
 	device.SetCsPin(port.GetPin());

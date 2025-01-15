@@ -9,7 +9,7 @@
 #include "DriverMode.h"
 
 // This table must be in the same order as enum DriverMode
-static const char * const DriverModeStrings[] =
+static const char *_ecv_array const DriverModeStrings[] =
 {
 	"constant off-time",
 	"random off-time",
@@ -23,7 +23,7 @@ static const char * const DriverModeStrings[] =
 
 static_assert(ARRAY_SIZE(DriverModeStrings) == (unsigned int)DriverMode::unknown + 1, "bad driver mode string table");
 
-const char* TranslateDriverMode(unsigned int mode) noexcept
+const char *_ecv_array TranslateDriverMode(unsigned int mode) noexcept
 {
 	const unsigned int imode = min<unsigned int>(mode, (unsigned int)DriverMode::unknown);
 	return DriverModeStrings[imode];

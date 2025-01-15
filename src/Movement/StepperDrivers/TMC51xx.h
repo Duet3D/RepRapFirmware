@@ -12,8 +12,10 @@
 
 #if SUPPORT_TMC51xx
 
-#include "DriverMode.h"
 #include <Endstops/EndstopDefs.h>
+#include "DriverMode.h"
+
+#include <atomic>
 
 namespace SmartDrivers
 {
@@ -28,6 +30,7 @@ namespace SmartDrivers
 	void EnableDrive(size_t driver, bool en) noexcept;
 	bool SetMicrostepping(size_t drive, unsigned int microsteps, bool interpolation) noexcept;
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation) noexcept;
+
 #if SUPPORT_PHASE_STEPPING
 	bool EnablePhaseStepping(size_t driver, bool enable) noexcept;
 	bool IsPhaseSteppingEnabled(size_t driver) noexcept;
@@ -37,6 +40,7 @@ namespace SmartDrivers
 	void SetTmcExternalClock(uint32_t frequency) noexcept;
 	bool SetMotorPhases(size_t driver, uint32_t regVal) noexcept;
 #endif
+
 	bool SetDriverMode(size_t driver, unsigned int mode) noexcept;
 	DriverMode GetDriverMode(size_t driver) noexcept;
 	void SetStallThreshold(size_t driver, int sgThreshold) noexcept;
@@ -56,7 +60,14 @@ namespace SmartDrivers
 	GCodeResult GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept;
 	GCodeResult SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
 	StandardDriverStatus GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept;
-	EndstopValidationResult CheckStallDetectionEnabled(size_t driver, float speed) noexcept;
+	uint32_t GetDriverClockFrequency() noexcept;
+
+	const char *_ecv_array _ecv_null CheckStallDetectionEnabled(size_t driver, float speed) noexcept;
+
+#if SUPPORT_REMOTE_COMMANDS
+	GCodeResult SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept;
+	extern std::atomic<uint16_t> driverStallsToNotify;
+#endif
 }
 
 #endif

@@ -77,7 +77,7 @@ ThermocoupleSensor31855::ThermocoupleSensor31855(unsigned int sensorNum) noexcep
 }
 
 // Configure this temperature sensor
-GCodeResult ThermocoupleSensor31855::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
+GCodeResult ThermocoupleSensor31855::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
 	if (!ConfigurePort(gb, reply, changed))
 	{

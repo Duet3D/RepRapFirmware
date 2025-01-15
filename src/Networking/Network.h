@@ -128,7 +128,7 @@ public:
 	void SetCorsSite(const char *_ecv_array site) noexcept { corsSite.copy(site); }
 #endif
 
-	bool FindResponder(Socket *skt, NetworkProtocol protocol) noexcept;
+	bool FindResponder(Socket *_ecv_from skt, NetworkProtocol protocol) noexcept;
 
 #if HAS_CLIENTS
 	bool StartClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept;

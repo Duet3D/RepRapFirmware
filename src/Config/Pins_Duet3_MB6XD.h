@@ -62,10 +62,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 
 // The physical capabilities of the machine
 
-#include <Duet3Common.h>							// this file is in the CANlib project because both main and expansion boards need it
-
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
-constexpr size_t MaxCanDrivers = 20;
+constexpr size_t MaxCanDrivers = 30;
 constexpr size_t MaxCanBoards = 20;
 
 constexpr size_t MaxPortsPerHeater = 3;
@@ -90,6 +88,9 @@ constexpr size_t MaxExtrudersPerTool = 12;			// Increased in 3.5.2 because a use
 constexpr unsigned int MaxTriggers = 32;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 
 constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels not counting the WiFi serial connection (USB and two auxiliary UARTs)
+constexpr size_t FirstAuxChannel = 1;
+constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
+
 #define SERIAL_MAIN_DEVICE serialUSB
 #define SERIAL_AUX_DEVICE serialUart1
 #define SERIAL_AUX2_DEVICE serialUart2
@@ -339,8 +340,11 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_3,	PinCapability::ainr,	"io3.in"				},	// PE05 IO3_IN
 };
 
-constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
-static_assert(NumNamedPins == 32+32+32+32+6);
+constexpr size_t NumNamedPins = ARRAY_SIZE(PinTable);
+constexpr size_t NumRealPins = 32+32+32+32+6;
+constexpr size_t NumVirtualPins = 0;
+
+static_assert(NumNamedPins == NumRealPins + NumVirtualPins);
 
 // Serial Interfaces
 constexpr Pin APIN_Serial0_RXD = PortDPin(25);

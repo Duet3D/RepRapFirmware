@@ -90,7 +90,7 @@ enum class PinAccess : int
 
 enum class PinUsedBy : uint8_t
 {
-	unused = 0,
+	notUsed = 0,
 	heater,
 	fan,
 	endstop,
@@ -342,6 +342,7 @@ constexpr size_t NumRealModules = Module::NumValues - 1;
 class Network;
 class Platform;
 class GCodes;
+class MovementState;
 class Move;
 class DDA;
 class Kinematics;
@@ -411,18 +412,28 @@ typedef float floatc_t;								// type of matrix element used for calibration
 #endif
 
 #if SUPPORT_CAN_EXPANSION
+
+# include <Duet3Common.h>
+
 typedef Bitmap<uint32_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
-typedef Bitmap<uint64_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
-#else
-static_assert(MaxAxesPlusExtruders <= 16);			// Make sure we can use a 16-bit bitmap to represent a set of axes/extruders
-typedef Bitmap<uint16_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
-typedef Bitmap<uint32_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
-#endif
 typedef Bitmap<uint32_t> ExtrudersBitmap;			// Type of a bitmap representing a set of extruder drive numbers
-typedef Bitmap<uint32_t> DriversBitmap;				// Type of a bitmap representing a set of local driver numbers
-typedef Bitmap<uint32_t> FansBitmap;				// Type of a bitmap representing a set of fan numbers
-typedef Bitmap<uint32_t> HeatersBitmap;				// Type of a bitmap representing a set of heater numbers
-typedef Bitmap<uint16_t> DriverChannelsBitmap;		// Type of a bitmap representing a set of drivers that typically have a common cooling fan
+typedef Bitmap<uint32_t> LogicalDrivesBitmap;		// Type of a bitmap representing a set of logical drives i.e. motor sets
+typedef Bitmap<uint64_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
+
+#else
+
+typedef Bitmap<uint16_t> HeatersBitmap;
+typedef Bitmap<uint16_t> FansBitmap;
+typedef Bitmap<uint32_t> SensorsBitmap;
+typedef Bitmap<uint16_t> LocalDriversBitmap;
+
+typedef Bitmap<uint16_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
+typedef Bitmap<uint16_t> ExtrudersBitmap;			// Type of a bitmap representing a set of extruder drive numbers
+typedef Bitmap<uint16_t> LogicalDrivesBitmap;		// Type of a bitmap representing a set of logical drives i.e. motor sets
+typedef Bitmap<uint32_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
+
+#endif
+
 typedef Bitmap<uint32_t> TriggerNumbersBitmap;		// Type of a bitmap representing a set of trigger numbers
 typedef Bitmap<uint64_t> ToolNumbersBitmap;			// Type of a bitmap representing a set of tool numbers
 
@@ -434,19 +445,13 @@ typedef Bitmap<uint32_t> ParameterLettersBitmap;	// Type of a bitmap representin
 constexpr char HighestAxisLetter = 'f';
 #endif
 
-#if SUPPORT_CAN_EXPANSION
-typedef Bitmap<uint64_t> SensorsBitmap;
-#else
-typedef Bitmap<uint32_t> SensorsBitmap;
-#endif
-
-typedef unsigned int MovementSystemNumber;			// we could use uint8_t for this but using unsigned int may be more efficient
-
 static_assert(MaxAxesPlusExtruders <= AxesBitmap::MaxBits());
+static_assert(MaxAxesPlusExtruders <= LogicalDrivesBitmap::MaxBits());
 static_assert(MaxExtruders <= ExtrudersBitmap::MaxBits());
-static_assert(MaxFans <= FansBitmap::MaxBits());
+static_assert(NumDirectDrivers <= LocalDriversBitmap::MaxBits());
 static_assert(MaxHeaters <= HeatersBitmap::MaxBits());
-static_assert(NumDirectDrivers <= DriversBitmap::MaxBits());
+static_assert(MaxFans <= FansBitmap::MaxBits());
+static_assert(MaxSensors <= SensorsBitmap::MaxBits());
 static_assert(MaxSensors <= SensorsBitmap::MaxBits());
 static_assert(MaxGpInPorts <= InputPortsBitmap::MaxBits());
 static_assert(MaxTriggers <= TriggerNumbersBitmap::MaxBits());
@@ -457,6 +462,7 @@ static_assert(MaxAxes + 17 <= ParameterLettersBitmap::MaxBits());	// so that we 
 static_assert(MaxExtruders >= NumDirectDrivers);					// so that we get enough ExtruderShapers and nonlinear extrusion data when in expansion mode
 #endif
 
+typedef unsigned int MovementSystemNumber;	// we could use uint8_t for this
 typedef uint16_t Pwm_t;						// Type of a PWM value when we don't want to use floats
 
 #if SUPPORT_IOBITS
@@ -537,7 +543,7 @@ extern "C" void debugPrintf(const char *_ecv_array fmt, ...) noexcept __attribut
 
 float HideNan(float val) noexcept;
 
-void ListDrivers(const StringRef& str, DriversBitmap drivers) noexcept;
+void ListDrivers(const StringRef& str, LocalDriversBitmap drivers) noexcept;
 
 // Macro to assign an array from an initialiser list
 #define ARRAY_INIT(_dest, _init) static_assert(sizeof(_dest) == sizeof(_init), "Incompatible array types"); memcpy(_dest, _init, sizeof(_init));
@@ -605,12 +611,6 @@ constexpr size_t U_AXIS = 3;										// The assumed index of the U axis when ex
 constexpr size_t NO_AXIS = 0x3F;									// A value to represent no axis, must fit in 6 bits (see EndstopHitDetails and RemoteInputHandle) and not be a valid axis number
 
 static_assert(MaxAxesPlusExtruders <= MaxAxes + MaxExtruders);
-
-#if SUPPORT_CAN_EXPANSION
-constexpr size_t MaxTotalDrivers = NumDirectDrivers + MaxCanDrivers;
-#else
-constexpr size_t MaxTotalDrivers = NumDirectDrivers;
-#endif
 
 // Convert between extruder drive numbers and logical drive numbers.
 // In order to save memory when MaxAxesPlusExtruders < MaxAxes + MaxExtruders, the logical drive number of an axis is the same as the axis number,

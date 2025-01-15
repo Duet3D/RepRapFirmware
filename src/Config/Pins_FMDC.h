@@ -109,6 +109,8 @@ constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 constexpr size_t MaxLedStrips = 2;					// Maximum number of LED strips
 
 constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB and one auxiliary UART)
+constexpr size_t FirstAuxChannel = 1;
+constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 
 #define SERIAL_MAIN_DEVICE (serialUSB)
 #define SERIAL_AUX_DEVICE (serialUart0)
@@ -462,8 +464,11 @@ constexpr PinDescription PinTable[] =
 #endif
 };
 
-constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
-static_assert(NumNamedPins == 32+32+29);
+constexpr size_t NumNamedPins = ARRAY_SIZE(PinTable);
+constexpr size_t NumRealPins = 32+32+29;
+constexpr size_t NumVirtualPins = 0;
+
+static_assert(NumNamedPins == NumRealPins + NumVirtualPins);
 
 // DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
 // When static arbitration within a priority level is selected, lower channel number have higher priority.

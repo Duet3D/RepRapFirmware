@@ -22,6 +22,10 @@
 # include <Comms/FirmwareUpdater.h>
 #endif
 
+#if SUPPORT_PANELDUE_FLASH
+# include <Comms/PanelDueUpdater.h>
+#endif
+
 // Execute a step of the state machine
 // CAUTION: don't allocate any long strings or other large objects directly within this function.
 // The reason is that this function calls FinishedBedProbing(), which on a delta calls DoAutoCalibration(), which uses lots of stack.
@@ -45,49 +49,91 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	switch (state)
 	{
 	case GCodeState::waitingForSpecialMoveToComplete:
-	case GCodeState::abortWhenMovementFinished:
 		if (   LockCurrentMovementSystemAndWaitForStandstill(gb)		// movement should already be locked, but we need to wait for standstill and fetch the current position
 #if SUPPORT_CAN_EXPANSION
 			&& CanMotion::RevertStoppedDrivers()
 #endif
 		   )
 		{
-			// Check for move aborted due to incorrectly configured stall detection
-			uint8_t driver;
-			const EndstopValidationResult res = platform.GetEndstops().GetEndstopValidationResult(driver);
-			if (res != EndstopValidationResult::ok)
+			// Check whether we need to action any endstops
+			if (ms.axesToHome.IsNonEmpty())						// check whether we made any G1 H1 moves and need to set axis positions
 			{
-				const char *_ecv_array errMsg;
-				switch (res)
+				Move& move = reprap.GetMove();
+				if (reprap.GetMove().GetKinematics().GetHomingMode() == HomingMode::homeCartesianAxes)
 				{
-				//case EndstopValidationResult::stallDetectionNotEnabled:	errMsg = "driver does not have stall detection enabled"; break;		// this one is currently unused
-				case EndstopValidationResult::stallDetectionNotSupported:	errMsg = "Homing move abandoned because driver %d does not support stall detection"; break;
-				case EndstopValidationResult::moveTooSlow:					errMsg = "Homing move abandoned because driver %d is moving too slowly for stall detection"; break;
-				case EndstopValidationResult::driverNotInStealthChopMode:	errMsg = "Homing move abandoned because driver %d is not in stealthChop mode"; break;
-				case EndstopValidationResult::driverNotInSpreadCycleMode:	errMsg = "Homing move abandoned because driver %d is not in spreadCycle mode"; break;
-				case EndstopValidationResult::ok:
-				default:													errMsg = "Homing move abandoned, driver %d stall detection issue"; break;
+					// Now change the machine coordinates corresponding to endpoints that triggered
+					(ms.axesToHome & ms.endstopsTriggered)
+						.Iterate([this, &move, &ms](unsigned int axis, unsigned int) noexcept
+									{
+										const EndStopPosition stopType = platform.GetEndstops().GetEndStopPosition(axis);
+										if (stopType == EndStopPosition::highEndStop)
+										{
+											ms.coords[axis] = move.AxisMaximum(axis);
+										}
+										else if (stopType == EndStopPosition::lowEndStop)
+										{
+											ms.coords[axis] = move.AxisMinimum(axis);
+										}
+										SetAxisIsHomed(axis);
+									}
+								);
+
+					// Update the user coordinates
+					ToolOffsetInverseTransform(ms);
+
+					// Update the endpoints and start coordinates
+					move.AxisAndBedTransform(ms.coords, ms.currentTool, true);
+					move.UpdateStartCoordinates(ms.GetNumber(), ms.coords);
+					int32_t endpoints[MaxAxes];
+					move.CartesianToMotorSteps(ms.coords, endpoints, false);
+					ms.ChangeEndpointsAfterHoming(ms.logicalDrivesOwned, endpoints);
 				}
-				gb.LatestMachineState().SetError(errMsg, (int)driver);
-				gb.AbortFile(true);
-				gb.SetState(GCodeState::normal);
-				break;
+				else
+				{
+					// Adjust the endpoints to take account of the endstops that triggered
+					(ms.axesToHome & ms.endstopsTriggered)
+						.Iterate([this, &move, &ms](unsigned int drive, unsigned int) noexcept
+									{
+										const EndStopPosition stopType = platform.GetEndstops().GetEndStopPosition(drive);
+										if (stopType == EndStopPosition::highEndStop)
+										{
+											ms.ChangeSingleEndpointAfterHoming(drive, move.GetEndstopPositionSteps(drive, true));
+										}
+										else if (stopType == EndStopPosition::lowEndStop)
+										{
+											ms.ChangeSingleEndpointAfterHoming(drive, move.GetEndstopPositionSteps(drive, false));
+										}
+										SetAxisIsHomed(drive);
+									}
+								);
+					// Calculate the new motor endpoints and machine coordinates
+					move.MotorStepsToCartesian(MovementState::GetLastKnownEndpoints(), numVisibleAxes, numTotalAxes, ms.coords);
+					move.UpdateStartCoordinates(ms.GetNumber(), ms.coords);
+					move.InverseAxisAndBedTransform(ms.coords, ms.currentTool);
+					ToolOffsetInverseTransform(ms);
+				}
+			}
+			else if (ms.axesToSenseLength.IsNonEmpty())			// check whether we made any G1 H3 moves and need to set the axis limits
+			{
+				(ms.axesToSenseLength & ms.endstopsTriggered)
+					.Iterate([this, &ms](unsigned int axis, unsigned int) noexcept
+								{
+									const EndStopPosition stopType = platform.GetEndstops().GetEndStopPosition(axis);
+									if (stopType == EndStopPosition::highEndStop)
+									{
+										reprap.GetMove().SetAxisMaximum(axis, ms.coords[axis], true);
+									}
+									else if (stopType == EndStopPosition::lowEndStop)
+									{
+										reprap.GetMove().SetAxisMinimum(axis, ms.coords[axis], true);
+									}
+								}
+							);
 			}
 
-			// Check whether we made any G1 S3 moves and need to set the axis limits
-			axesToSenseLength.Iterate([this, &ms](unsigned int axis, unsigned int)
-										{
-											const EndStopPosition stopType = platform.GetEndstops().GetEndStopPosition(axis);
-											if (stopType == EndStopPosition::highEndStop)
-											{
-												reprap.GetMove().SetAxisMaximum(axis, ms.coords[axis], true);
-											}
-											else if (stopType == EndStopPosition::lowEndStop)
-											{
-												reprap.GetMove().SetAxisMinimum(axis, ms.coords[axis], true);
-											}
-										}
-									);
+#if SUPPORT_CAN_EXPANSION
+			platform.GetEndstops().DisableRemoteStallEndstops();
+#endif
 
 			if (gb.LatestMachineState().compatibility == Compatibility::NanoDLP && !DoingFileMacro())
 			{
@@ -95,10 +141,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 
 			gb.SetState(GCodeState::normal);
-			if (state == GCodeState::abortWhenMovementFinished)
-			{
-				AbortPrint(gb);
-			}
+		}
+		break;
+
+	case GCodeState::abortWhenMovementFinished:
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))		// movement should already be locked, but we need to wait for standstill and fetch the current position
+		{
+			gb.SetState(GCodeState::normal);
+			AbortPrint(gb);
 		}
 		break;
 
@@ -616,7 +666,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			ToolOffsetTransform(ms);
 			ms.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
 			gb.SetState((restoreZ) ? GCodeState::resuming3 : GCodeState::resuming2);
-			NewSingleSegmentMoveAvailable(ms);
+			NewSegmentableMoveAvailable(ms);
 #endif
 		}
 		break;
@@ -1343,7 +1393,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// Successful probing
 					float m[MaxAxes];
-					reprap.GetMove().GetCurrentMachinePosition(m, ms.GetNumber(), false);		// get height without bed compensation
+					reprap.GetMove().GetCurrentMachinePosition(m, ms.GetNumber());		// get height without bed compensation
 					const float g30zStoppedHeight = m[Z_AXIS] - g30HValue;		// save for later
 					zp->SetLastStoppedHeight(g30zStoppedHeight);
 					if (tapsDone > 0)											// don't accumulate the result if we are doing fast-then-slow probing and this was the fast probe
@@ -1369,10 +1419,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// Reset the Z axis origin according to the height error so that we can move back up to the dive height
 					ms.coords[Z_AXIS] = zp->GetActualTriggerHeight();
-#if SUPPORT_ASYNC_MOVES
-					ms.OwnedAxisCoordinateUpdated(Z_AXIS);
-#endif
-					reprap.GetMove().SetNewPositionOfOwnedAxes(ms, false);
+					ms.SetNewPositionOfOwnedAxes(ms.coords);
 
 					// Find the coordinates of the Z probe to pass to SetZeroHeightError
 					float tempCoords[MaxAxes];
@@ -1435,7 +1482,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				// Setting the Z height with G30
 				ms.coords[Z_AXIS] -= g30zHeightError;
-				reprap.GetMove().SetNewPositionOfOwnedAxes(ms, false);
+				ms.SetNewPositionOfOwnedAxes(ms.coords);
 
 				// Find the coordinates of the Z probe to pass to SetZeroHeightError
 				float tempCoords[MaxAxes];
@@ -1462,21 +1509,22 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// G30 with a silly Z value and S=1 is equivalent to G30 with no parameters in that it sets the current Z height
 				// This is useful because it adjusts the XY position to account for the probe offset.
 				ms.coords[Z_AXIS] -= g30zHeightError;
-				reprap.GetMove().SetNewPositionOfOwnedAxes(ms, false);
+				ms.SetNewPositionOfOwnedAxes(ms.coords);
 				ToolOffsetInverseTransform(ms);
 			}
 			else if (g30SValue >= -1)
 			{
-				if (reprap.GetMove().FinishedBedProbing(g30SValue, reply))
+				const GCodeResult ret = reprap.GetMove().FinishedBedProbing(ms, g30SValue, reply);
+				if (ret != GCodeResult::ok)
 				{
-					stateMachineResult = GCodeResult::error;
+					stateMachineResult = ret;
 				}
 				else if (reprap.GetMove().GetKinematics().SupportsAutoCalibration())
 				{
 					zDatumSetByProbing = true;			// if we successfully auto calibrated or adjusted leadscrews, we've set the Z datum by probing
 					// Auto calibration may have adjusted the motor positions and the geometry, so the head may now be at a different position
 #if SUPPORT_ASYNC_MOVES
-					ms.UpdateOwnAxisCoordinates();
+					ms.SaveOwnDriveCoordinates();
 #endif
 					UpdateUserPositionFromMachinePosition(gb, ms);
 				}
@@ -1698,25 +1746,27 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #if SUPPORT_ASYNC_MOVES
 				// We already allocated the Z axes to this MS when we began the retraction, so no need to do it here
 #endif
+#if 0			// I don't think the following is needed, but if used it should be before we call SetMoveBufferDefaults in case it causes the machine coordinates to change slightly
+				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetNumber(), true, t);
+#endif
 				SetMoveBufferDefaults(ms);
 				ms.movementTool = t;
-				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetNumber(), 0, t);
 				memcpyf(ms.initialCoords, ms.coords, ARRAY_SIZE(ms.initialCoords));
 				const AxesBitmap zAxes = t->GetZAxisMap();
 
 				// See if we can apply the requested Z hop without exceeding machine limits
 				float zHopToUse = t->GetConfiguredRetractHop();
-				zAxes.Iterate([&ms, &zHopToUse](unsigned int axis, unsigned int)->void { ms.coords[axis] += zHopToUse; });
+				zAxes.Iterate([&ms, &zHopToUse](unsigned int axis, unsigned int) noexcept { ms.coords[axis] += zHopToUse; });
 				if (reprap.GetMove().GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, AxesBitmap::MakeFromBits(Z_AXIS), true, true) != LimitPositionResult::ok)
 				{
 					// We can't apply Z hop to all the Z axes without exceeding machine limits
-					zAxes.Iterate([&ms, &zHopToUse](unsigned int axis, unsigned int)->void { zHopToUse = min<float>(zHopToUse, ms.coords[axis] - ms.initialCoords[axis]); });
+					zAxes.Iterate([&ms, &zHopToUse](unsigned int axis, unsigned int) noexcept { zHopToUse = min<float>(zHopToUse, ms.coords[axis] - ms.initialCoords[axis]); });
 					if (zHopToUse <= 0.0)
 					{
 						gb.SetState(GCodeState::normal);
 						break;
 					}
-					zAxes.Iterate([&ms, zHopToUse](unsigned int axis, unsigned int)->void { ms.coords[axis] = ms.initialCoords[axis] + zHopToUse; });
+					zAxes.Iterate([&ms, zHopToUse](unsigned int axis, unsigned int) noexcept { ms.coords[axis] = ms.initialCoords[axis] + zHopToUse; });
 				}
 
 				t->SetActualZHop(zHopToUse);
@@ -1737,9 +1787,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			const Tool *_ecv_null const t = ms.currentTool;
 			if (t != nullptr && t->DriveCount() != 0)
 			{
+#if 0			// I don't think the following is needed, but if used it should be before we call SetMoveBufferDefaults in case it causes the machine coordinates to change slightly
+				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetNumber(), true, ms.currentTool);
+#endif
 				SetMoveBufferDefaults(ms);
 				ms.movementTool = t;
-				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetNumber(), 0, ms.currentTool);
 				for (size_t i = 0; i < t->DriveCount(); ++i)
 				{
 					ms.coords[ExtruderToLogicalDrive(t->GetDrive(i))] = t->GetRetractLength() + t->GetRetractExtra();

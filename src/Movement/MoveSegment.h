@@ -252,7 +252,7 @@ inline bool MoveSegment::NormaliseAndCheckLinear(motioncalc_t distanceCarriedFor
 // Release a MoveSegment.  Not thread-safe.
 inline void MoveSegment::Release(MoveSegment *item) noexcept
 {
-	const irqflags_t iflags = IrqSave();
+	const auto iflags = IrqSave();
 	item->next = freeList;
 	freeList = item;
 	IrqRestore(iflags);

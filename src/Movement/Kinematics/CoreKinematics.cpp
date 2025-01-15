@@ -177,7 +177,7 @@ void CoreKinematics::Recalc() noexcept
 // Return true if the axis doesn't have a single dedicated motor
 inline bool CoreKinematics::HasSharedMotor(size_t axis) const noexcept
 {
-	return controllingDrivers[axis] != AxesBitmap::MakeFromBits(axis);
+	return controllingDrivers[axis] != LogicalDrivesBitmap::MakeFromBits(axis);
 }
 
 CoreKinematics::CoreKinematics(KinematicsType k) noexcept : ZLeadscrewKinematics(k), modified(false)
@@ -237,7 +237,7 @@ CoreKinematics::CoreKinematics(KinematicsType k) noexcept : ZLeadscrewKinematics
 }
 
 // Return the name of the current kinematics
-const char* CoreKinematics::GetName(bool forStatusReport) const noexcept
+const char *_ecv_array CoreKinematics::GetName(bool forStatusReport) const noexcept
 {
 	// This reports the original kinematics that was requested. It doesn't allow for the matrix having been patched to change the kinematics.
 	switch (GetKinematicsType())
@@ -383,32 +383,9 @@ void CoreKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float
 	}
 }
 
-// This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
-// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
-void CoreKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
-{
-	Move& move = reprap.GetMove();
-	const float hitPoint = (highEnd) ? move.AxisMaximum(axis) : move.AxisMinimum(axis);
-	if (HasSharedMotor(axis))
-	{
-		float tempCoordinates[MaxAxes];
-		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
-		for (size_t axis = 0; axis < numTotalAxes; ++axis)
-		{
-			tempCoordinates[axis] = dda.GetEndCoordinate(axis, false);
-		}
-		tempCoordinates[axis] = hitPoint;
-		dda.SetPositions(move, tempCoordinates, controllingDrivers[axis]);
-	}
-	else
-	{
-		dda.SetDriveCoordinate(lrintf(hitPoint * inverseMatrix(axis, axis) * stepsPerMm[axis]), axis);
-	}
-}
-
 // Limit the speed and acceleration of a move to values that the mechanics can handle
 // The speeds along individual Cartesian axes have already been limited before this is called, so we need only be concerned with shared motors
-void CoreKinematics::LimitSpeedAndAcceleration(DDA& dda, const float* normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
+void CoreKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *_ecv_array normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
 {
 	// For each shared motor, calculate how much of the total move it contributes
 	float motorMovements[MaxAxes];
@@ -448,9 +425,36 @@ void CoreKinematics::LimitSpeedAndAcceleration(DDA& dda, const float* normalised
 
 // Return a bitmap of the motors that are involved in homing a particular axis or tower. Used for implementing stall detection endstops.
 // Usually it is just the corresponding motor (hence this default implementation), but CoreXY and similar kinematics move multiple motors to home an individual axis.
-AxesBitmap CoreKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
+LogicalDrivesBitmap CoreKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
 {
-	return controllingDrivers[axis];
+	return (axis < MaxAxes) ? controllingDrivers[axis] : LogicalDrivesBitmap::MakeFromBits(axis);
+}
+
+// Convert axis movement or speed amounts to logical drive amounts. Only relevant if GetHomingMode() == HomingMode::homeCartesianAxes.
+void CoreKinematics::ConvertAxisAmountsToLogicalDriveAmounts(float amounts[MaxAxes], size_t numVisibleAxes, size_t numTotalAxes) const noexcept
+{
+	float convertedAmounts[MaxAxes];
+	for (size_t motor = 0; motor < numTotalAxes; ++motor)
+	{
+		const size_t axisLimit = min<size_t>(numVisibleAxes, lastAxis[motor] + 1);
+		size_t axis = firstAxis[motor];
+		if (axis < axisLimit)
+		{
+			float total = inverseMatrix(axis, motor) * amounts[axis];
+			++axis;
+			while (axis < axisLimit)
+			{
+				total += inverseMatrix(axis, motor) * amounts[axis];
+				++axis;
+			}
+			convertedAmounts[motor] = total;
+		}
+		else
+		{
+			convertedAmounts[motor] = 0.0;
+		}
+	}
+	memcpyf(amounts, convertedAmounts, MaxAxes);
 }
 
 // End

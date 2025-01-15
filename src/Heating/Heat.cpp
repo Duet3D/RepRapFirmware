@@ -1338,7 +1338,7 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const noexcept
 void Heat::ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemperatures& msg) noexcept
 {
 	Bitmap<uint64_t> sensorsReported(msg.whichSensors);
-	sensorsReported.Iterate([this, src, &msg](unsigned int sensor, unsigned int index)
+	sensorsReported.Iterate([this, src, &msg](unsigned int sensor, unsigned int index) noexcept
 								{
 									if (index < ARRAY_SIZE(msg.temperatureReports))
 									{
@@ -1371,7 +1371,7 @@ void Heat::ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemp
 void Heat::ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersStatus& msg) noexcept
 {
 	Bitmap<uint64_t> heatersReported(msg.whichHeaters);
-	heatersReported.Iterate([this, src, &msg](unsigned int heaterNum, unsigned int index)
+	heatersReported.Iterate([this, src, &msg](unsigned int heaterNum, unsigned int index) noexcept
 								{
 									if (index < ARRAY_SIZE(msg.reports))
 									{

@@ -1283,7 +1283,7 @@ uint8_t  WIZCHIP_READ (uint32_t AddrSel) noexcept;
  * @param wb Write data
  * @return void
  */
-void     WIZCHIP_WRITE(uint32_t AddrSel, uint8_t wb ) noexcept;
+void     WIZCHIP_WRITE(uint32_t AddrSel, uint8_t wb) noexcept;
 
 /**
  * @ingroup Basic_IO_function
@@ -1292,7 +1292,7 @@ void     WIZCHIP_WRITE(uint32_t AddrSel, uint8_t wb ) noexcept;
  * @param pBuf Pointer buffer to read data
  * @param len Data length
  */
-void     WIZCHIP_READ_BUF (uint32_t AddrSel, uint8_t* pBuf, uint16_t len) noexcept;
+void     WIZCHIP_READ_BUF (uint32_t AddrSel, uint8_t *_ecv_array pBuf, uint16_t len) noexcept;
 
 /**
  * @ingroup Basic_IO_function
@@ -1301,7 +1301,7 @@ void     WIZCHIP_READ_BUF (uint32_t AddrSel, uint8_t* pBuf, uint16_t len) noexce
  * @param pBuf Pointer buffer to write data
  * @param len Data length
  */
-void     WIZCHIP_WRITE_BUF(uint32_t AddrSel, const uint8_t* pBuf, uint16_t len) noexcept;
+void     WIZCHIP_WRITE_BUF(uint32_t AddrSel, const uint8_t *_ecv_array pBuf, uint16_t len) noexcept;
 
 // Read into an IPAddress
 void WIZCHIP_READ_IP(uint32_t AddrSel, IPAddress& ip) noexcept;
@@ -1385,7 +1385,7 @@ static inline void getSUBR(IPAddress& subr) noexcept
  * @param (uint8_t*)shar Pointer variable to set local MAC address. It should be allocated 6 bytes.
  * @sa getSHAR()
  */
-static inline void setSHAR(const uint8_t *shar) noexcept
+static inline void setSHAR(const uint8_t shar[6]) noexcept
 {
 	WIZCHIP_WRITE_BUF(SHAR, shar, 6);
 }
@@ -1396,7 +1396,7 @@ static inline void setSHAR(const uint8_t *shar) noexcept
  * @param (uint8_t*)shar Pointer variable to get local MAC address. It should be allocated 6 bytes.
  * @sa setSHAR()
  */
-static inline void getSHAR(uint8_t *shar) noexcept
+static inline void getSHAR(uint8_t shar[6]) noexcept
 {
 	WIZCHIP_READ_BUF(SHAR, shar, 6);
 }
@@ -1634,7 +1634,7 @@ static inline uint8_t getPMAGIC() noexcept
  * @param (uint8_t*)phar Pointer variable to set PPP destination MAC register address. It should be allocated 6 bytes.
  * @sa getPHAR()
  */
-static inline void setPHAR(const uint8_t *phar) noexcept
+static inline void setPHAR(const uint8_t phar[6]) noexcept
 {
 	WIZCHIP_WRITE_BUF(PHAR, phar, 6);
 }
@@ -1645,7 +1645,7 @@ static inline void setPHAR(const uint8_t *phar) noexcept
  * @param (uint8_t*)phar Pointer variable to PPP destination MAC register address. It should be allocated 6 bytes.
  * @sa setPHAR()
  */
-static inline void getPHAR(uint8_t *phar) noexcept
+static inline void getPHAR(uint8_t phar[6]) noexcept
 {
 	WIZCHIP_READ_BUF(PHAR, phar, 6);
 }
@@ -1703,7 +1703,7 @@ static inline uint16_t getPMRU() noexcept
  * @brief Get unreachable IP address
  * @param (uint8_t*)uipr Pointer variable to get unreachable IP address. It should be allocated 4 bytes.
  */
-static inline void getUIPR(uint8_t *uipr) noexcept
+static inline void getUIPR(uint8_t uipr[4]) noexcept
 {
 	WIZCHIP_READ_BUF(UIPR, uipr, 4);
 }
@@ -1896,7 +1896,7 @@ static inline uint16_t getSn_PORT(uint8_t sn) noexcept
  * @param (uint8_t*)dhar Pointer variable to set socket n destination hardware address. It should be allocated 6 bytes.
  * @sa getSn_DHAR()
  */
-static inline void setSn_DHAR(uint8_t sn, const uint8_t *dhar) noexcept
+static inline void setSn_DHAR(uint8_t sn, const uint8_t dhar[6]) noexcept
 {
 	WIZCHIP_WRITE_BUF(Sn_DHAR(sn), dhar, 6);
 }
@@ -1908,7 +1908,7 @@ static inline void setSn_DHAR(uint8_t sn, const uint8_t *dhar) noexcept
  * @param (uint8_t*)dhar Pointer variable to get socket n destination hardware address. It should be allocated 6 bytes.
  * @sa setSn_DHAR()
  */
-static inline void getSn_DHAR(uint8_t sn, uint8_t *dhar) noexcept
+static inline void getSn_DHAR(uint8_t sn, uint8_t dhar[6]) noexcept
 {
 	WIZCHIP_READ_BUF(Sn_DHAR(sn), dhar, 6);
 }
@@ -2273,7 +2273,7 @@ static inline uint16_t getSn_TxMAX(uint8_t sn) noexcept
  * @param len Data length
  * @sa wiz_recv_data()
  */
-void wiz_send_data(uint8_t sn, const uint8_t *wizdata, uint16_t len) noexcept;
+void wiz_send_data(uint8_t sn, const uint8_t *_ecv_array wizdata, uint16_t len) noexcept;
 
 // Alternative to wiz_send_data to work around an apparent bug
 void wiz_send_data_at(uint8_t sn, const uint8_t *wizdata, uint16_t len, uint16_t ptr) noexcept;
@@ -2292,10 +2292,10 @@ void wiz_send_data_at(uint8_t sn, const uint8_t *wizdata, uint16_t len, uint16_t
  * @param len Data length
  * @sa wiz_send_data()
  */
-void wiz_recv_data(uint8_t sn, uint8_t *wizdata, uint16_t len) noexcept;
+void wiz_recv_data(uint8_t sn, uint8_t *_ecv_array wizdata, uint16_t len) noexcept;
 
 // Alternative to wiz_recv_data to work around an apparent bug
-void wiz_recv_data_at(uint8_t sn, uint8_t *wizdata, uint16_t len, uint16_t ptr) noexcept;
+void wiz_recv_data_at(uint8_t sn, uint8_t *_ecv_array wizdata, uint16_t len, uint16_t ptr) noexcept;
 
 /**
  * @ingroup Basic_IO_function

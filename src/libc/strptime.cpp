@@ -39,12 +39,10 @@
 #define _GNU_SOURCE
 #include <ecv_duet3d.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <time.h>
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
 

@@ -97,7 +97,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		const InputShaperType newType(shaperName.c_str());
 		if (!newType.IsValid())
 		{
-			reply.printf("Unsupported input shaper type '%s'", shaperName.c_str());
+			reply.printf("Unknown input shaper type '%s'", shaperName.c_str());
 			return GCodeResult::error;
 		}
 		seen = true;

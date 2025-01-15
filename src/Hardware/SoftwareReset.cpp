@@ -14,7 +14,7 @@
 extern uint32_t _estack;			// defined in the linker script
 
 // The following must be kept in line with enum class SoftwareResetReason
-const char *const SoftwareResetData::ReasonText[] =
+const char *_ecv_array const SoftwareResetData::ReasonText[] =
 {
 	"User",
 	"Erase",
@@ -39,10 +39,10 @@ uint8_t SoftwareResetData::extraDebugInfo;			// extra info for debugging
 // Return true if this struct can be written without erasing it first
 bool SoftwareResetData::IsVacant() const noexcept
 {
-	const uint32_t *p = reinterpret_cast<const uint32_t*>(this);
+	const uint32_t *_ecv_array p = reinterpret_cast<const uint32_t *_ecv_array>(this);
 	for (size_t i = 0; i < sizeof(*this)/sizeof(uint32_t); ++i)
 	{
-		if (*p != 0xFFFFFFFF)
+		if (*p != 0xFFFFFFFFu)
 		{
 			return false;
 		}
@@ -57,7 +57,7 @@ void SoftwareResetData::Clear() noexcept
 }
 
 // Populate this reset data from the parameters passed and the CPU state
-void SoftwareResetData::Populate(uint16_t reason, const uint32_t *stk) noexcept
+void SoftwareResetData::Populate(uint16_t reason, const uint32_t *_ecv_array _ecv_null stk) noexcept
 {
 	magic = magicValue;
 	resetReason = reason | ((extraDebugInfo & 0x07) << 5);
@@ -79,7 +79,7 @@ void SoftwareResetData::Populate(uint16_t reason, const uint32_t *stk) noexcept
 	bfar = SCB->BFAR;
 #endif
 	// Get the task name if we can. There may be no task executing, so we must allow for this.
-	const TaskHandle_t currentTask = xTaskGetCurrentTaskHandle();
+	const TaskHandle_t _ecv_null currentTask = xTaskGetCurrentTaskHandle();
 	taskName = (currentTask == nullptr) ? 0x656e6f6e : LoadLEU32(pcTaskGetName(currentTask));
 
 	sp = reinterpret_cast<uint32_t>(stk);
@@ -91,19 +91,19 @@ void SoftwareResetData::Populate(uint16_t reason, const uint32_t *stk) noexcept
 	}
 	else
 	{
-		const char *stackLimit = (currentTask == nullptr) ? sysStackLimit : (const char*)currentTask + sizeof(TaskBase);
-		stackOffset = ((const char*)stk - stackLimit) >> 2;
+		const char *_ecv_array stackLimit = (currentTask == nullptr) ? sysStackLimit : (const char *_ecv_array)currentTask + sizeof(TaskBase);
+		stackOffset = (uint32_t)((const char *_ecv_array)stk - stackLimit) >> 2;
 		stackMarkerValid = stackLimit[0] == 0xA5 && stackLimit[3] == 0xA5;
 		spare = 0;
-		for (uint32_t& stval : stack)
+		for (size_t i = 0; i < ARRAY_SIZE(stack); ++i)
 		{
 #if __FPU_USED
-			if (&stval - stack == 8 && ResetReasonHasExceptionFrame(reason))
+			if (i == 8 && ResetReasonHasExceptionFrame(reason))
 			{
 				stk += 18;				// skip the FP registers
 			}
 #endif
-			stval = (stk < &_estack) ? *stk++ : 0xFFFFFFFF;
+			stack[i] = (stk < &_estack) ? *stk++ : 0xFFFFFFFFu;
 		}
 	}
 }
@@ -132,7 +132,7 @@ void SoftwareResetData::Printit(MessageType mtype, unsigned int slot) const noex
 	scratchString.cat(ReasonText[(resetReason >> 5) & 0x0F]);
 
 	// If it's a forced hard fault or a memory access fault, provide some more information
-	if ((resetReason & (uint16_t)SoftwareResetReason::mainReasonMask) == (uint16_t)SoftwareResetReason::hardFault && (hfsr & 1u << 30) != 0)
+	if ((resetReason & (uint16_t)SoftwareResetReason::mainReasonMask) == (uint16_t)SoftwareResetReason::hardFault && (hfsr & (1u << 30)) != 0)
 	{
 		if (cfsr & (1u << 25)) { scratchString.cat(" zeroDiv"); }
 		if (cfsr & (1u << 24)) { scratchString.cat(" unaligned"); }

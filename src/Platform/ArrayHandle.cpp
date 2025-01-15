@@ -9,7 +9,7 @@
 #include <ObjectModel/ObjectModel.h>
 
 // Declare placement new operator for class ExpressionValue so that we don't have to include <new>
-void* operator new(std::size_t, ExpressionValue* arg) noexcept { return arg; }
+void* operator new(size_t, ExpressionValue* arg) noexcept { return arg; }
 
 // Version of struct StorageSpace to represent an array. This overlays struct StorageSpace, so the 'length' field corresponds to the same field in that struct.
 struct ArrayStorageSpace
@@ -51,7 +51,7 @@ void ArrayHandle::AssignElement(size_t index, ExpressionValue &val) THROWS(GCode
 #endif
 	if (slotPtr != nullptr)
 	{
-		ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
+		ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(_ecv_not_null(slotPtr->storage));
 		if (index < aSpace->count)
 		{
 			aSpace->elements[index] = val;
@@ -62,26 +62,26 @@ void ArrayHandle::AssignElement(size_t index, ExpressionValue &val) THROWS(GCode
 }
 
 // Make an array unique and assign an element, possibly nested
-void ArrayHandle::AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException)
+void ArrayHandle::AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *_ecv_array indices) THROWS(GCodeException)
 {
 	WriteLocker locker(Heap::heapLock);							// prevent other tasks modifying the heap
 	InternalAssignIndexed(this, ev, numIndices, indices);
 }
 
 // Make an array unique and assign an element, possibly nested
-void ArrayHandle::InternalAssignIndexed(volatile ArrayHandle *ah, const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException)
+void ArrayHandle::InternalAssignIndexed(volatile ArrayHandle *_ecv_from ah, const ExpressionValue& ev, size_t numIndices, const uint32_t *_ecv_array indices) THROWS(GCodeException)
 {
 	while (true)
 	{
-		if (indices[0] >= (const_cast<ArrayHandle*>(ah))->GetNumElements())
+		if (indices[0] >= (const_cast<ArrayHandle *_ecv_from>(ah))->GetNumElements())
 		{
 			throw GCodeException("array index out of bounds");
 		}
 
-		Heap::IndexSlot *const newSlotPtr = MakeUnique(ah);
+		Heap::IndexSlot *const newSlotPtr = _ecv_not_null(MakeUnique(ah));
 
 		// CAUTION: the object that 'ah' points to may have been moved by garbage collection inside the call to MakeUnique; so don't refer to 'ah' any more until we reassign it
-		ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(newSlotPtr->storage);
+		ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(_ecv_not_null(newSlotPtr->storage));
 		if (numIndices == 1)
 		{
 			aSpace->elements[indices[0]] = ev;
@@ -118,7 +118,7 @@ size_t ArrayHandle::GetNumElements() const noexcept
 	{
 		return 0;
 	}
-	return reinterpret_cast<const ArrayStorageSpace*>(storage)->count;
+	return reinterpret_cast<const ArrayStorageSpace*>(_ecv_not_null(storage))->count;
 }
 
 // Retrieve an array element, returning false if the index is out of bounds
@@ -136,7 +136,7 @@ bool ArrayHandle::GetElement(size_t index, ExpressionValue &rslt) const noexcept
 		const Heap::StorageSpace *const _ecv_null storage = slotPtr->storage;
 		if (storage != nullptr)
 		{
-			const ArrayStorageSpace *const aSpace = reinterpret_cast<const ArrayStorageSpace*>(storage);
+			const ArrayStorageSpace *const aSpace = reinterpret_cast<const ArrayStorageSpace*>(_ecv_not_null(storage));
 			if (index < aSpace->count)
 			{
 				rslt = aSpace->elements[index];
@@ -159,7 +159,7 @@ TypeCode ArrayHandle::GetElementType(size_t index) const noexcept
 #if CHECK_HANDLES
 		Heap::CheckSlotGood(slotPtr);
 #endif
-		ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
+		ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(_ecv_not_null(slotPtr->storage));
 		if (index < aSpace->count)
 		{
 			return aSpace->elements[index].GetType();
@@ -177,10 +177,10 @@ void ArrayHandle::Delete() noexcept
 		if (slotPtr->refCount == 1)
 		{
 			// The call to Heap:::DeleteSlot will deallocate the slot, so release the contents first
-			ArrayStorageSpace *const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
+			ArrayStorageSpace *const aSpace = reinterpret_cast<ArrayStorageSpace*>(_ecv_not_null(slotPtr->storage));
 			for (size_t i = 0; i < aSpace->count; ++i)
 			{
-				aSpace->elements[i].~ExpressionValue();			// call destructor on the elements
+				aSpace->elements[i].Release();					// release the element
 			}
 		}
 		Heap::DeleteSlot(slotPtr);
@@ -188,7 +188,7 @@ void ArrayHandle::Delete() noexcept
 	}
 }
 
-const ArrayHandle& ArrayHandle::IncreaseRefCount() const noexcept
+const ArrayHandle &_ecv_from  ArrayHandle::IncreaseRefCount() const noexcept
 {
 	if (slotPtr != nullptr)
 	{
@@ -199,12 +199,12 @@ const ArrayHandle& ArrayHandle::IncreaseRefCount() const noexcept
 
 // Make this handle refer to a non-shared array (the individual elements may be shared). Caller must already own a write lock on the heap.
 // Return a pointer to the (possibly new) slot that the array is stored in
-Heap::IndexSlot *ArrayHandle::MakeUnique(volatile ArrayHandle *ah) THROWS(GCodeException)
+Heap::IndexSlot *_ecv_null ArrayHandle::MakeUnique(volatile ArrayHandle *_ecv_from ah) THROWS(GCodeException)
 {
 #if CHECK_HEAP_LOCKED
 	Heap::heapLock.CheckHasWriteLock();
 #endif
-	Heap::IndexSlot * const oldSlotPtr = ah->slotPtr;
+	Heap::IndexSlot *_ecv_null const oldSlotPtr = ah->slotPtr;
 	if (oldSlotPtr != nullptr && oldSlotPtr->refCount > 1)
 	{
 		// CAUTION: the object that 'ah' points to may be moved by garbage collection when we allocate space for a copy of the array.
@@ -213,7 +213,7 @@ Heap::IndexSlot *ArrayHandle::MakeUnique(volatile ArrayHandle *ah) THROWS(GCodeE
 		Heap::IndexSlot *const newSlotPtr = Heap::AllocateHandle();				// this sets the ref count of the new slot to 1 and the storage to nullptr
 		ah->slotPtr = newSlotPtr;
 		--(oldSlotPtr->refCount);
-		const size_t numElements = reinterpret_cast<const ArrayStorageSpace*>(oldSlotPtr->storage)->count;
+		const size_t numElements = reinterpret_cast<const ArrayStorageSpace*>(_ecv_not_null(oldSlotPtr->storage))->count;
 
 		// From now on in this scope we must not reference 'ah' because the object it points to may be moved by the call to AllocateSpace
 		Heap::StorageSpace *const space = Heap::AllocateSpace(sizeof(ArrayStorageSpace) + numElements * sizeof(ExpressionValue));
@@ -224,7 +224,7 @@ Heap::IndexSlot *ArrayHandle::MakeUnique(volatile ArrayHandle *ah) THROWS(GCodeE
 			throw GCodeException("Array too large");
 		}
 
-		ArrayStorageSpace *const oldSpace = reinterpret_cast<ArrayStorageSpace*>(oldSlotPtr->storage);
+		ArrayStorageSpace *const oldSpace = reinterpret_cast<ArrayStorageSpace*>(_ecv_not_null(oldSlotPtr->storage));
 		ArrayStorageSpace *const newSpace = reinterpret_cast<ArrayStorageSpace*>(space);
 		newSpace->count = numElements;
 		for (size_t i = 0; i < numElements; ++i)
@@ -250,7 +250,7 @@ AutoArrayHandle::AutoArrayHandle(AutoArrayHandle &&other) noexcept
 	other.slotPtr = nullptr;
 }
 
-AutoArrayHandle& AutoArrayHandle::operator =(const AutoArrayHandle &other) noexcept
+AutoArrayHandle & AutoArrayHandle::operator =(const AutoArrayHandle &other) noexcept
 {
 	if (slotPtr != other.slotPtr)
 	{

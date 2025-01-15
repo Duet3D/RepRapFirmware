@@ -31,13 +31,26 @@ static constexpr int32_t FilteredAdcRange = 1u << (AdcBits + AdcOversampleBits);
 // Sensor type descriptors
 TemperatureSensor::SensorTypeDescriptor LinearAnalogSensor::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new LinearAnalogSensor(sensorNum); } );
 
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(LinearAnalogSensor, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry LinearAnalogSensor::objectModelTable[] =
+{
+	{ "highReading",		OBJECT_MODEL_FUNC(self->highTemp, 1), 		ObjectModelEntryFlags::none },
+	{ "lowReading",			OBJECT_MODEL_FUNC(self->lowTemp, 1), 		ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t LinearAnalogSensor::objectModelTableDescriptor[] = { 1, 2 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(LinearAnalogSensor, SensorWithPort)
+
 LinearAnalogSensor::LinearAnalogSensor(unsigned int sensorNum) noexcept
 	: SensorWithPort(sensorNum, "Linear analog"), lowTemp(DefaultLowTemp), highTemp(DefaultHighTemp), filtered(true), adcFilterChannel(-1)
 {
 	CalcDerivedParameters();
 }
 
-GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
+GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
 	if (!ConfigurePort(gb, reply, PinAccess::readAnalog, changed))
 	{

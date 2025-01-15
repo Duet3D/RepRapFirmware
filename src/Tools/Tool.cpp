@@ -116,7 +116,7 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 	{ "feedForwardTemp",	OBJECT_MODEL_FUNC_ARRAY(8), 															ObjectModelEntryFlags::none },
 	{ "filamentExtruder",	OBJECT_MODEL_FUNC((int32_t)self->filamentExtruder),										ObjectModelEntryFlags::none },
 	{ "heaters",			OBJECT_MODEL_FUNC_ARRAY(4), 															ObjectModelEntryFlags::none },
-	{ "isRetracted",		OBJECT_MODEL_FUNC(self->IsRetracted()), 												ObjectModelEntryFlags::live },
+	{ "isRetracted",		OBJECT_MODEL_FUNC(self->IsRetracted()), 												ObjectModelEntryFlags::liveNotPanelDue },
 	{ "mix",				OBJECT_MODEL_FUNC_ARRAY(5), 															ObjectModelEntryFlags::none },
 	{ "name",				OBJECT_MODEL_FUNC(self->name),						 									ObjectModelEntryFlags::none },
 	{ "number",				OBJECT_MODEL_FUNC((int32_t)self->myNumber),												ObjectModelEntryFlags::none },
@@ -387,7 +387,7 @@ uint16_t Tool::numToolsToReport = 0;
 	return false;
 }
 
-// If there are any tool numbers flagged foe cold extrusion warnings, display the warning messages, clear them and return true
+// If there are any tool numbers flagged for cold extrusion warnings, display the warning messages, clear them and return true
 /*static*/ bool Tool::DisplayColdExtrusionWarnings() noexcept
 {
 	if (prohibitedExtrusionTools.IsEmpty())
@@ -396,7 +396,7 @@ uint16_t Tool::numToolsToReport = 0;
 	}
 
 	prohibitedExtrusionTools.Iterate
-		([](unsigned int index, unsigned int count) -> void
+		([](unsigned int index, unsigned int count) noexcept -> void
 			{
 				reprap.GetPlatform().MessageF(WarningMessage, "Tool %u was not driven because its heater temperatures were not high enough or it has a heater fault\n", index);
 			}

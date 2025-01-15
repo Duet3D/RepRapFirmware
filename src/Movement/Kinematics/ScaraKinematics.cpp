@@ -15,6 +15,7 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/DDA.h>
 #include <Movement/Move.h>
+#include <Movement/RawMove.h>
 
 #include <limits>
 
@@ -53,7 +54,7 @@ ScaraKinematics::ScaraKinematics() noexcept
 }
 
 // Return the name of the current kinematics
-const char *ScaraKinematics::GetName(bool forStatusReport) const noexcept
+const char *_ecv_array ScaraKinematics::GetName(bool forStatusReport) const noexcept
 {
 	return "Scara";
 }
@@ -251,7 +252,7 @@ bool ScaraKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) co
 }
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
-LimitPositionResult ScaraKinematics::LimitPosition(float finalCoords[], const float * null initialCoords,
+LimitPositionResult ScaraKinematics::LimitPosition(float finalCoords[], const float *_ecv_array null initialCoords,
 													size_t numVisibleAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept
 {
 	// First limit all axes according to M208
@@ -397,42 +398,30 @@ AxesBitmap ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap a
 	return ret;
 }
 
-// This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
-// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
-void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
+float ScaraKinematics::GetEndstopPosition(size_t drive, bool highEnd) noexcept
 {
-	switch (axis)
+	switch (drive)
 	{
 	case X_AXIS:	// proximal joint homing switch
-		{
-			const float hitPoint = (highEnd) ? thetaLimits[1] : thetaLimits[0];
-			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
-		}
-		break;
+		return (highEnd) ? thetaLimits[1] : thetaLimits[0];
 
 	case Y_AXIS:	// distal joint homing switch
 		{
-			const float hitPoint = ((highEnd) ? psiLimits[1] : psiLimits[0])
-									- ((dda.DriveCoordinates()[X_AXIS] * crosstalk[0])/stepsPerMm[X_AXIS]);
-			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+			Move& move = reprap.GetMove();
+			return ((highEnd) ? psiLimits[1] : psiLimits[0])
+								- (MovementState::GetLastKnownEndpoints()[X_AXIS] * crosstalk[0] * move.DriveStepsPerMm(X_AXIS) / move.DriveStepsPerMm(Y_AXIS));
 		}
-		break;
 
 	case Z_AXIS:	// Z axis homing switch
 		{
-			const float hitPoint = ((highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis))
-									- ((dda.DriveCoordinates()[X_AXIS] * crosstalk[1])/stepsPerMm[X_AXIS])
-									- ((dda.DriveCoordinates()[Y_AXIS] * crosstalk[2])/stepsPerMm[Y_AXIS]);
-			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+			Move& move = reprap.GetMove();
+			return ((highEnd) ? reprap.GetMove().AxisMaximum(drive) : reprap.GetMove().AxisMinimum(drive))
+										- (MovementState::GetLastKnownEndpoints()[X_AXIS] * crosstalk[1] * move.DriveStepsPerMm(X_AXIS) / move.DriveStepsPerMm(Z_AXIS))
+										- (MovementState::GetLastKnownEndpoints()[Y_AXIS] * crosstalk[2] * move.DriveStepsPerMm(Y_AXIS) / move.DriveStepsPerMm(Z_AXIS));
 		}
-		break;
 
 	default:		// Additional axis
-		{
-			const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
-			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
-		}
-		break;
+		return Kinematics::GetEndstopPosition(drive, highEnd);
 	}
 }
 
@@ -443,12 +432,12 @@ bool ScaraKinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 }
 
 // Return the drivers that control an axis or tower
-AxesBitmap ScaraKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
+LogicalDrivesBitmap ScaraKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
 {
 	const unsigned int numCoupledAxes = (crosstalk[1] != 0.0 || crosstalk[2] != 0.0) ? 3 : 2;
 	return (forHoming || axis >= numCoupledAxes)
-			? AxesBitmap::MakeFromBits(axis)
-				: AxesBitmap::MakeLowestNBits(numCoupledAxes);
+			? LogicalDrivesBitmap::MakeFromBits(axis)
+				: LogicalDrivesBitmap::MakeLowestNBits(numCoupledAxes);
 }
 
 // Recalculate the derived parameters

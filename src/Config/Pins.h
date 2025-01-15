@@ -16,8 +16,6 @@
 #  else
 #   error Unknown platform
 #  endif
-# elif defined(DUET_M)
-#  define PLATFORM DuetM
 # elif defined(PCCB)
 #  define PLATFORM Pccb
 # elif defined(DUET3MINI_V04)

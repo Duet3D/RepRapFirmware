@@ -17,7 +17,7 @@ class CanMessageTimeSync;
 // In order to achieve the maximum step rate possible, the timer code doesn't check for this, because the step generation code checks which drivers are due steps anyway.
 // Any other client that uses the timer MUST do a similar check. The simple way to do this is to use a callback function of the following form:
 // if (timer.ScheduleCallbackFromIsr()) { /* code to execute it the callback really was due */ }
-class StepTimer
+class StepTimer final
 {
 public:
 	typedef uint32_t Ticks;
@@ -125,13 +125,13 @@ private:
 	static bool movementDelayIncreased;											// true if movement delay has increased and we haven't yet broadcast that
 #endif
 
-	StepTimer *next;
+	StepTimer *_ecv_null next;
 	Ticks whenDue;
-	TimerCallbackFunction callback;
+	TimerCallbackFunction _ecv_null callback;
 	CallbackParameter cbParam;
 	volatile bool active;
 
-	static StepTimer * volatile pendingList;									// list of pending callbacks, soonest first
+	static StepTimer *_ecv_null volatile pendingList;									// list of pending callbacks, soonest first
 
 #if SUPPORT_REMOTE_COMMANDS
 	static volatile uint32_t localTimeOffset;									// local time minus master time

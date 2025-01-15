@@ -65,7 +65,7 @@ RtdSensor31865::RtdSensor31865(unsigned int sensorNum) noexcept
 }
 
 // Configure this temperature sensor
-GCodeResult RtdSensor31865::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
+GCodeResult RtdSensor31865::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
 	if (!ConfigurePort(gb, reply, changed))
 	{

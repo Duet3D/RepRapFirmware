@@ -24,9 +24,10 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 
 // Return true if the GCode in the GCodeBuffer should be queued
 // Caller has already checked that the command does not contain an expression and involves modifying tool temperatures or spindle speed
-/*static*/ bool GCodeQueue::ShouldQueueG10(GCodeBuffer &gb) noexcept
+/*static*/ bool GCodeQueue::ShouldQueueG10(GCodeBuffer &gb, ParameterLettersBitmap allAxisLetters) noexcept
 {
 	return reprap.GetMove().GetScheduledMoves() != reprap.GetMove().GetCompletedMoves()
+			&& !gb.AllParameters().Intersects(allAxisLetters)					// only queue it if it does not modify tool offsets
 			&& gb.DataLength() <= BufferSizePerQueueItem;						// only queue it if it is short enough to fit in a queue item
 }
 
@@ -217,11 +218,11 @@ void GCodeQueue::Clear() noexcept
 	}
 }
 
-void GCodeQueue::Diagnostics(MessageType mtype, unsigned int queueNumber) noexcept
+void GCodeQueue::Diagnostics(MessageType mtype) noexcept
 {
 	if (queuedItems == nullptr)
 	{
-		reprap.GetPlatform().MessageF(mtype, "Code queue %u is empty\n", queueNumber);
+		reprap.GetPlatform().MessageF(mtype, "Code queue is empty\n");
 	}
 	else
 	{
@@ -234,7 +235,7 @@ void GCodeQueue::Diagnostics(MessageType mtype, unsigned int queueNumber) noexce
 			if (!reprap.UsingSbcInterface())
 #endif
 			{
-				reprap.GetPlatform().MessageF(mtype, "Queue %u has '%.*s' for move %" PRIu32 "\n", queueNumber, item->dataLength, item->data, item->executeAtMove);
+				reprap.GetPlatform().MessageF(mtype, "Code queue has '%.*s' for move %" PRIu32 "\n", item->dataLength, item->data, item->executeAtMove);
 			}
 		} while ((item = item->Next()) != nullptr);
 	}

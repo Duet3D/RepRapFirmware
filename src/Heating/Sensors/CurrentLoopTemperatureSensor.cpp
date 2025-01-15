@@ -36,7 +36,7 @@ CurrentLoopTemperatureSensor::CurrentLoopTemperatureSensor(unsigned int sensorNu
 }
 
 // Configure this temperature sensor
-GCodeResult CurrentLoopTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
+GCodeResult CurrentLoopTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
 	if (!ConfigurePort(gb, reply, changed))
 	{

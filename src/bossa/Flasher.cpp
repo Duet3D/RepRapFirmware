@@ -34,7 +34,7 @@
 
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
-#include <General/Vector.hpp>
+#include <General/Vector.h>
 #if HAS_SBC_INTERFACE
 # include <SBC/SbcInterface.h>
 #endif
@@ -61,7 +61,7 @@ bool Flasher::write(FileStore *infile, uint32_t& foffset) THROWS(GCodeException)
 		if (infile->Length() == 0)
 		{
 			infile->Close();
-			platform.MessageF(ErrorMessage, "Firmware file is empt\n");
+			platform.MessageF(ErrorMessage, "Firmware file is empty\n");
 			throw GCodeException(nullptr);
 		}
     }

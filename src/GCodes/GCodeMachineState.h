@@ -179,7 +179,7 @@ public:
 
 		explicit BlockState(BlockState *p_prev) noexcept : prev(p_prev) { }
 		BlockType GetType() const noexcept { return blockType; }
-		BlockState *GetPrevious() const noexcept { return prev; }
+		BlockState *_ecv_null GetPrevious() const noexcept { return prev; }
 		void SetPrevious(BlockState *p) noexcept { prev = p; }
 		uint32_t GetIterations() const noexcept { return iterationsDone; }
 		uint32_t GetLineNumber() const noexcept { return lineNumber; }
@@ -196,7 +196,7 @@ public:
 		void IncrementIterations() noexcept { ++iterationsDone; }
 
 	private:
-		BlockState *prev;
+		BlockState *_ecv_null prev;
 		FilePosition fpos;											// the file offset at which the current block started
 		uint32_t lineNumber;										// the line number at which the current block started
 		uint32_t iterationsDone;									// the number of iterations completed of the innermost while-loop

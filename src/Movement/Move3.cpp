@@ -15,7 +15,7 @@
 #include <Tools/Tool.h>
 #include <Endstops/ZProbe.h>
 
-void Move::AxisAndBedTransform(float xyzPoint[MaxAxes], const Tool *tool, bool useBedCompensation) const noexcept
+void Move::AxisAndBedTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool, bool useBedCompensation) const noexcept
 {
 	AxisTransform(xyzPoint, tool);
 	if (useBedCompensation)
@@ -24,14 +24,14 @@ void Move::AxisAndBedTransform(float xyzPoint[MaxAxes], const Tool *tool, bool u
 	}
 }
 
-void Move::InverseAxisAndBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
+void Move::InverseAxisAndBedTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept
 {
 	InverseBedTransform(xyzPoint, tool);
 	InverseAxisTransform(xyzPoint, tool);
 }
 
 // Do the Axis transform BEFORE the bed transform
-void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
+void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept
 {
 	// Identify the lowest Y axis
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
@@ -57,7 +57,7 @@ void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexce
 }
 
 // Invert the Axis transform AFTER the bed transform
-void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
+void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept
 {
 	// Identify the lowest Y axis
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
@@ -83,7 +83,7 @@ void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 }
 
 // Compute the height correction needed at a point, ignoring taper
-float Move::ComputeHeightCorrection(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
+float Move::ComputeHeightCorrection(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept
 {
 	float zCorrection = 0.0;
 	unsigned int numCorrections = 0;
@@ -92,10 +92,10 @@ float Move::ComputeHeightCorrection(float xyzPoint[MaxAxes], const Tool *tool) c
 
 	// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
 	Tool::GetAxisMapping(tool, grid.GetAxisNumber(0))
-		.Iterate([this, xyzPoint, tool, axis1Axes, &zCorrection, &numCorrections](unsigned int axis0Axis, unsigned int)
+		.Iterate([this, xyzPoint, tool, axis1Axes, &zCorrection, &numCorrections](unsigned int axis0Axis, unsigned int) noexcept
 					{
 						const float axis0Coord = xyzPoint[axis0Axis] + Tool::GetOffset(tool, axis0Axis);
-						axis1Axes.Iterate([this, xyzPoint, tool, axis0Coord, &zCorrection, &numCorrections](unsigned int axis1Axis, unsigned int)
+						axis1Axes.Iterate([this, xyzPoint, tool, axis0Coord, &zCorrection, &numCorrections](unsigned int axis1Axis, unsigned int) noexcept
 											{
 												const float axis1Coord = xyzPoint[axis1Axis] + Tool::GetOffset(tool, axis1Axis);
 												zCorrection += heightMap.GetInterpolatedHeightError(axis0Coord, axis1Coord);
@@ -114,7 +114,7 @@ float Move::ComputeHeightCorrection(float xyzPoint[MaxAxes], const Tool *tool) c
 }
 
 // Do the bed transform AFTER the axis transform
-void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
+void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept
 {
 	if (usingMesh)
 	{
@@ -128,7 +128,7 @@ void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcep
 }
 
 // Invert the bed transform BEFORE the axis transform
-void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept
+void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept
 {
 	if (usingMesh)
 	{
@@ -219,7 +219,7 @@ float Move::GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePo
 	return probePoints.GetZHeight(count);
 }
 
-const char *Move::GetCompensationTypeString() const noexcept
+const char *_ecv_array Move::GetCompensationTypeString() const noexcept
 {
 	return (usingMesh) ? "mesh" : "none";
 }
@@ -227,7 +227,7 @@ const char *Move::GetCompensationTypeString() const noexcept
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Load the height map from file, returning true if an error occurred with the error reason appended to the buffer
-bool Move::LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
+bool Move::LoadHeightMapFromFile(FileStore *f, const char *_ecv_array fname, const StringRef& r) noexcept
 {
 	const bool err = heightMap.LoadFromFile(f, fname, r
 #if SUPPORT_PROBE_POINTS_FILE
@@ -249,7 +249,7 @@ bool Move::LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRe
 }
 
 // Save the height map to a file returning true if an error occurred
-bool Move::SaveHeightMapToFile(FileStore *f, const char *fname) noexcept
+bool Move::SaveHeightMapToFile(FileStore *f, const char *_ecv_array fname) noexcept
 {
 	return heightMap.SaveToFile(f, fname, zShift);
 }
@@ -257,7 +257,7 @@ bool Move::SaveHeightMapToFile(FileStore *f, const char *fname) noexcept
 # if SUPPORT_PROBE_POINTS_FILE
 
 // Load the probe points map from a file returning true if an error occurred
-bool Move::LoadProbePointsFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
+bool Move::LoadProbePointsFromFile(FileStore *f, const char *_ecv_array fname, const StringRef& r) noexcept
 {
 	return heightMap.LoadFromFile(f, fname, r, true);
 }
@@ -318,9 +318,9 @@ void Move::SetXYCompensation(bool xyCompensation)
 // Calibrate or set the bed equation after probing, returning true if an error occurred
 // sParam is the value of the S parameter in the G30 command that provoked this call.
 // Caller already owns the GCode movement lock.
-bool Move::FinishedBedProbing(int sParam, const StringRef& reply) noexcept
+GCodeResult Move::FinishedBedProbing(MovementState& ms, int sParam, const StringRef& reply) noexcept
 {
-	bool error = false;
+	GCodeResult ret = GCodeResult::ok;
 	const size_t numPoints = probePoints.NumberOfProbePoints();
 
 	if (sParam < 0)
@@ -331,7 +331,7 @@ bool Move::FinishedBedProbing(int sParam, const StringRef& reply) noexcept
 	else if (numPoints < (size_t)sParam)
 	{
 		reply.printf("Bed calibration : %d factor calibration requested but only %d points provided\n", sParam, numPoints);
-		error = true;
+		ret = GCodeResult::error;
 	}
 	else
 	{
@@ -348,23 +348,26 @@ bool Move::FinishedBedProbing(int sParam, const StringRef& reply) noexcept
 		if (!probePoints.GoodProbePoints(numPoints))
 		{
 			reply.copy("Compensation or calibration cancelled due to probing errors");
-			error = true;
+			ret = GCodeResult::error;
 		}
 		else if (kinematics->SupportsAutoCalibration())
 		{
-			error = kinematics->DoAutoCalibration(sParam, probePoints, reply);
+			if (kinematics->DoAutoCalibration(ms, sParam, probePoints, reply))
+			{
+				ret = GCodeResult::error;
+			}
 		}
 		else
 		{
 			reply.copy("This kinematics does not support auto-calibration");
-			error = true;
+			ret = GCodeResult::error;
 		}
 	}
 
 	// Clear out the Z heights so that we don't re-use old points.
 	// This allows us to use different numbers of probe point on different occasions.
 	probePoints.ClearProbeHeights();
-	return error;
+	return ret;
 }
 
 // End

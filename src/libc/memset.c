@@ -26,31 +26,32 @@ QUICKREF
 	memset ansi pure
 */
 
+#include <ecv_duet3d.h>
 #include <string.h>
 #include "local.h"
 
 #define LBLOCKSIZE (sizeof(long))
-#define UNALIGNED(X)   ((long)X & (LBLOCKSIZE - 1))
+#define UNALIGNED(X)   ((unsigned long)X & (LBLOCKSIZE - 1u))
 #define TOO_SMALL(LEN) ((LEN) < LBLOCKSIZE)
 
 void *
 __inhibit_loop_to_libcall
 memset (void *m,
 	int c,
-	size_t n)
+	size_t n) noexcept
 {
-  char *s = (char *) m;
+  char *_ecv_array s = (char *_ecv_array) m;
 
 #if !defined(PREFER_SIZE_OVER_SPEED) && !defined(__OPTIMIZE_SIZE__)
   unsigned int i;
   unsigned long buffer;
-  unsigned long *aligned_addr;
+  unsigned long *_ecv_array aligned_addr;
   unsigned int d = c & 0xff;	/* To avoid sign extension, copy C to an
 				   unsigned variable.  */
 
   while (UNALIGNED (s))
     {
-      if (n--)
+      if (n-- != 0)
         *s++ = (char) c;
       else
         return m;
@@ -59,7 +60,7 @@ memset (void *m,
   if (!TOO_SMALL (n))
     {
       /* If we get this far, we know that n is large and s is word-aligned. */
-      aligned_addr = (unsigned long *) s;
+      aligned_addr = (unsigned long *_ecv_array) s;
 
       /* Store D into each char sized location in BUFFER so that
          we can set large blocks quickly.  */
@@ -84,12 +85,12 @@ memset (void *m,
           n -= LBLOCKSIZE;
         }
       /* Pick up the remainder with a bytewise loop.  */
-      s = (char*)aligned_addr;
+      s = (char *_ecv_array)aligned_addr;
     }
 
 #endif /* not PREFER_SIZE_OVER_SPEED */
 
-  while (n--)
+  while (n-- != 0)
     *s++ = (char) c;
 
   return m;

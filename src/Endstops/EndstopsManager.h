@@ -33,13 +33,13 @@ public:
 	void ClearEndstops() noexcept;
 
 	// Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command returning true if successful
-	bool EnableAxisEndstops(AxesBitmap axes, bool forHoming, bool& reduceAcceleration) noexcept __attribute__ ((warn_unused_result));
+	void EnableAxisEndstops(AxesBitmap axes, const float speeds[MaxAxes], bool forHoming, bool& reduceAcceleration) THROWS(GCodeException);
 
 	// Clear all endstops then set up the active endstops for Z probing returning true if successful
 	bool EnableZProbe(size_t probeNumber, bool probingAway = false) noexcept __attribute__ ((warn_unused_result));
 
 	// Enable extruder endstops, adding to any axis endstops already set up
-	bool EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept;
+	void EnableExtruderEndstops(ExtrudersBitmap logicalDrivesMoving, const float speeds[MaxExtruders]) THROWS(GCodeException);
 
 	// Get the first endstop that has triggered and remove it from the active list if appropriate
 	EndstopHitDetails CheckEndstops() noexcept;
@@ -57,12 +57,6 @@ public:
 
 	void GetM119report(const StringRef& reply) noexcept;
 
-	// Validate any enabled stall endstops, returning true if all OK, else store the error details and return false
-	bool ValidateEndstops(const DDA& dda) noexcept;
-
-	// Get and clear the validation result
-	EndstopValidationResult GetEndstopValidationResult(uint8_t& driver) noexcept;
-
 	// Z probe
 	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// M558
 	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// G31
@@ -79,6 +73,8 @@ public:
 	void HandleRemoteEndstopChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
 	void HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state, uint32_t reading) noexcept;
 	void HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t reading) noexcept;
+	void HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled) noexcept;
+	void DisableRemoteStallEndstops() noexcept;
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -108,24 +104,14 @@ private:
 	EndstopOrZProbe *_ecv_from _ecv_null volatile activeEndstops;	// linked list of endstops and Z probes that are active for the current move
 
 	Endstop *_ecv_from _ecv_null axisEndstops[MaxAxes];				// the endstops assigned to each axis (each one may have several switches), each may be null
-#if HAS_STALL_DETECT
+#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 	StallDetectionEndstop *_ecv_null extrudersEndstop;				// the endstop used for extruder stall detection, one will do for all extruders
 #endif
 	ZProbe *_ecv_from _ecv_null zProbes[MaxZProbes];				// the Z probes used. The first one is always non-null.
 	ZProbe *_ecv_from _ecv_null defaultZProbe;
 
-	EndstopValidationResult validationResult;			// the error coder we got from validating endstops
 	uint8_t failingDriverNumber;						// the number of the local driver that failed validation
 	bool isHomingMove;									// true if calls to CheckEndstops are for the purpose of homing
 };
-
-// Get and clear the validation result
-inline EndstopValidationResult EndstopsManager::GetEndstopValidationResult(uint8_t& driver) noexcept
-{
-	driver = failingDriverNumber;
-	const EndstopValidationResult ret = validationResult;
-	validationResult = EndstopValidationResult::ok;
-	return ret;
-}
 
 #endif /* SRC_ENDSTOPS_ENDSTOPMANAGER_H_ */

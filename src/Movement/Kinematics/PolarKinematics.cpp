@@ -266,26 +266,18 @@ AxesBitmap PolarKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap a
 	return ret;
 }
 
-// This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
-// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
-void PolarKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
+float PolarKinematics::GetEndstopPosition(size_t drive, bool highEnd) noexcept
 {
-	switch(axis)
+	switch(drive)
 	{
 	case X_AXIS:	// radius
-		dda.SetDriveCoordinate(lrintf(homedRadius * stepsPerMm[axis]), axis);
-		break;
+		return homedRadius;
 
 	case Y_AXIS:	// bed
-		dda.SetDriveCoordinate(0, axis);
-		break;
+		return 0.0;
 
 	default:
-		{
-			const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
-			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
-		}
-		break;
+		return Kinematics::GetEndstopPosition(drive, highEnd);
 	}
 }
 
@@ -324,10 +316,10 @@ bool PolarKinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 }
 
 // Return the drivers that control an axis or tower
-AxesBitmap PolarKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
+LogicalDrivesBitmap PolarKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
 {
 	return (forHoming || axis >= Z_AXIS)
-			? AxesBitmap::MakeFromBits(axis)
+			? LogicalDrivesBitmap::MakeFromBits(axis)
 				: XyAxes;
 }
 

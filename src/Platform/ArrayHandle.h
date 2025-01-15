@@ -26,25 +26,25 @@ public:
 
 	void Allocate(size_t numElements) THROWS(GCodeException);
 	void AssignElement(size_t index, ExpressionValue& val) THROWS(GCodeException);
-	void AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException) pre(numIndices != 0);
+	void AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *_ecv_array indices) THROWS(GCodeException) pre(numIndices != 0);
 
 	size_t GetNumElements() const noexcept;												// get the number of elements
 	bool GetElement(size_t index, ExpressionValue& rslt) const noexcept;				// return true and get the specified element if the index is in range
 	TypeCode GetElementType(size_t index) const noexcept;
 	void Delete() noexcept;
-	const ArrayHandle& IncreaseRefCount() const noexcept;
+	const ArrayHandle &_ecv_from IncreaseRefCount() const noexcept;
 	bool IsNull() const noexcept { return slotPtr == nullptr; }
 
 protected:
 	Heap::IndexSlot * null slotPtr;
 
 private:
-	static Heap::IndexSlot *MakeUnique(volatile ArrayHandle *ah) THROWS(GCodeException);
-	static void InternalAssignIndexed(volatile ArrayHandle *ah, const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException) pre(numIndices != 0);
+	static Heap::IndexSlot *_ecv_null MakeUnique(volatile ArrayHandle *_ecv_from ah) THROWS(GCodeException);
+	static void InternalAssignIndexed(volatile ArrayHandle *_ecv_from ah, const ExpressionValue& ev, size_t numIndices, const uint32_t *_ecv_array indices) THROWS(GCodeException) pre(numIndices != 0);
 };
 
 // Version of ArrayHandle that updates the reference counts automatically
-class AutoArrayHandle : public ArrayHandle
+class AutoArrayHandle final : public ArrayHandle
 {
 public:
 	AutoArrayHandle() noexcept : ArrayHandle() { }

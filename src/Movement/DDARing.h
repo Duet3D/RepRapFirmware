@@ -14,7 +14,7 @@
 
 class MovementState;
 
-class DDARing INHERIT_OBJECT_MODEL
+class DDARing final INHERIT_OBJECT_MODEL
 {
 public:
 	DDARing() noexcept;
@@ -34,7 +34,7 @@ public:
 	bool IsIdle() const noexcept;														// Return true if this DDA ring is idle
 	uint32_t GetGracePeriod() const noexcept { return gracePeriod; }					// Return the minimum idle time, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
-	DDA *GetCurrentDDA() const noexcept;												// If a move from this ring should be executing now, fetch its DDA
+	DDA *_ecv_null GetCurrentDDA() const noexcept;										// If a move from this ring should be executing now, fetch its DDA
 	float PushBabyStepping(size_t axis, float amount) noexcept;							// Try to push some babystepping through the lookahead queue, returning the amount pushed
 
 	uint32_t GetScheduledMoves() const noexcept { return scheduledMoves; }				// How many moves have been scheduled?
@@ -50,17 +50,19 @@ public:
 	float GetDecelerationMmPerSecSquared() const noexcept;								// Get the (peak) deceleration for reporting in the object model
 	float GetTotalExtrusionRate() const noexcept;
 
-	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the position at the end of the last queued move in untransformed coords
-#if SUPPORT_ASYNC_MOVES
-	void GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) const noexcept;	// Return the machine coordinates of just some axes
-#endif
+	void GetCurrentMachinePosition(float m[MaxAxes]) const noexcept;					// Get the position at the end of the last queued move in untransformed coords
+	void GetLastEndpoints(LogicalDrivesBitmap logicalDrives, int32_t returnedEndpoints[MaxAxesPlusExtruders]) const noexcept;
+	int32_t GetLastEndpoint(size_t drive) const noexcept;
+	void SetLastEndpoints(LogicalDrivesBitmap logicalDrives, const int32_t *_ecv_array ep) noexcept;
+	void SetLastEndpoint(size_t drive, int32_t ep) noexcept;
 
-	void SetPositions(Move& move, const float positions[MaxAxesPlusExtruders], AxesBitmap axes) noexcept;	// Force the machine coordinates to be these
-	void AdjustMotorPositions(Move& move, const float adjustment[], size_t numMotors) noexcept;		// Adjust the motor endpoints without moving the motors
+	float GetStartCoordinate(size_t axis) const noexcept pre(axis < MaxAxes) { return startCoordinates[axis]; }
+	void SetStartCoordinate(size_t axis, float pos) noexcept pre(axis < MaxAxes) { startCoordinates[axis] = pos; }
+	void UpdateStartCoordinates(const float coords[MaxAxes]) noexcept;
 
 	bool PauseMoves(MovementState& ms) noexcept;										// Pause the print as soon as we can, returning true if we were able to skip any moves in the queue
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
-	bool LowPowerOrStallPause(RestorePoint& rp) noexcept;								// Pause the print immediately, returning true if we were able to
+	bool LowPowerOrStallPause(MovementState& ms) noexcept;								// Pause the print immediately, returning true if we were able to
 #endif
 
 #if SUPPORT_LASER
@@ -77,10 +79,6 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;			// add a move from the ATE to the movement queue
-#endif
-
-#if SUPPORT_REMOTE_COMMANDS
-	const volatile int32_t *GetLastMoveStepsTaken() const noexcept { return lastMoveStepsTaken; }
 #endif
 
 protected:
@@ -107,9 +105,8 @@ private:
 	unsigned int numLookaheadErrors;											// How many times our lookahead algorithm failed
 
 	float simulationTime;														// Print time since we started simulating
-#if SUPPORT_REMOTE_COMMANDS
-	volatile int32_t lastMoveStepsTaken[NumDirectDrivers];						// how many steps were taken in the last move we did
-#endif
+
+	float startCoordinates[MaxAxes];											// the axis coordinates to start the next move from
 
 	volatile bool waitingForRingToEmpty;										// True if Move has signalled that we are waiting for this ring to empty
 };

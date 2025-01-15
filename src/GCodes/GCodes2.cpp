@@ -28,14 +28,11 @@
 #include <Movement/StepperDrivers/DriverMode.h>
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
+#include <Networking/Network.h>
 #include <Version.h>
 
 #if SUPPORT_IOBITS
 # include <Platform/PortControl.h>
-#endif
-
-#if HAS_NETWORKING
-# include <Networking/Network.h>
 #endif
 
 #if SUPPORT_MQTT
@@ -65,6 +62,10 @@
 
 #if HAS_MASS_STORAGE
 # include <Platform/Logger.h>
+#endif
+
+#if SUPPORT_PANELDUE_FLASH
+# include <Comms/PanelDueUpdater.h>
 #endif
 
 // If the code to act on is completed, this returns true, otherwise false.
@@ -307,21 +308,17 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 
 						// Should we queue this code?
-						if (gb.CanQueueCodes())
+						// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
+						// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
+						if (gb.CanQueueCodes() && GCodeQueue::ShouldQueueG10(gb, allAxisLetters))
 						{
-							GCodeQueue * const codeQueue = GetMovementState(gb).codeQueue;
-							if (codeQueue->ShouldQueueG10(gb))
+							if (GetMovementState(gb).segmentsLeft == 0 && GetMovementState(gb).codeQueue->QueueCode(gb))
 							{
-								// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
-								// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
-								if (GetMovementState(gb).segmentsLeft == 0 && codeQueue->QueueCode(gb))
-								{
-									HandleReply(gb, GCodeResult::ok, "");
-									return true;
-								}
-
-								return false;		// we should queue this code but we can't yet, so wait until we can either execute it or queue it
+								HandleReply(gb, GCodeResult::ok, "");
+								return true;
 							}
+
+							return false;		// we should queue this code but we can't yet, so wait until we can either execute it or queue it
 						}
 
 						// We don't want to queue it
@@ -607,7 +604,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	if (   IsSimulating()
 		&& (code < 20 || code > 37)													// allow file operations while simulating
 		&& code != 0 && code != 1 && code != 82 && code != 83
-		&& code != 105 && code != 109 && code != 111 && code != 112 && code != 115 && code != 122
+		&& code != 98 && code != 99													// allow macro calls when simulating
+		&& code != 105 && code != 109 && code != 111 && code != 112 && code != 115 && code != 120 && code != 121 && code != 122
 		&& code != 200 && code != 204 && code != 205 && code != 207
 		&& code != 408 && code != 409 && code != 486
 		&& code != 572 && code != 593												// allow changes to PA and IS while simulating
@@ -656,21 +654,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 	// Can we queue this code?
-	if (gb.CanQueueCodes())
+	// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
+	// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
+	if (gb.CanQueueCodes() && GCodeQueue::ShouldQueueMCode(gb))
 	{
-		GCodeQueue * const codeQueue = GetMovementState(gb).codeQueue;
-		if (codeQueue->ShouldQueueMCode(gb))
+		if (GetMovementState(gb).segmentsLeft == 0 && GetMovementState(gb).codeQueue->QueueCode(gb))
 		{
-			// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
-			// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
-			if (GetMovementState(gb).segmentsLeft == 0 && codeQueue->QueueCode(gb))
-			{
-				HandleReply(gb, GCodeResult::ok, "");
-				return true;
-			}
-
-			return false;		// we should queue this code but we can't yet, so wait until we can either execute it or queue it
+			HandleReply(gb, GCodeResult::ok, "");
+			return true;
 		}
+
+		return false;		// we should queue this code but we can't yet, so wait until we can either execute it or queue it
 	}
 
 #if HAS_SBC_INTERFACE
@@ -1446,8 +1440,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 			}
 
-#if 0		// was (HAS_MASS_STORAGE || HAS_EMBEDDED_FILES), removed this function to save space on Duet 2
-			case 38: // Report SHA1 of file
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+			case 38: // Report CRC32 of file
 				if (!LockFileSystem(gb))								// getting file hash takes several calls and isn't reentrant
 				{
 					return false;
@@ -1578,20 +1572,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					bool seen = false;
 #if SUPPORT_CAN_EXPANSION
-					AxesBitmap axesToUpdate;
+					LogicalDrivesBitmap drivesToUpdate;
 #endif
 					Move& move = reprap.GetMove();
-					for (size_t axis = 0; axis < numTotalAxes; axis++)
+					for (size_t drive = 0; drive < numTotalAxes; drive++)
 					{
-						if (gb.Seen(axisLetters[axis]))
+						if (gb.Seen(axisLetters[drive]))
 						{
 							if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 							{
 								return false;
 							}
-							move.SetDriveStepsPerMm(axis, gb.GetPositiveFValue(), ustepMultiplier);
+							const float ratio = move.SetDriveStepsPerMm(drive, gb.GetPositiveFValue(), ustepMultiplier);
+							AdjustEndpoint(drive, ratio);
 #if SUPPORT_CAN_EXPANSION
-							axesToUpdate.SetBit(axis);
+							drivesToUpdate.SetBit(drive);
 #endif
 							seen = true;
 						}
@@ -1618,9 +1613,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							const size_t drive = ExtruderToLogicalDrive(e);
 #if SUPPORT_CAN_EXPANSION
-							axesToUpdate.SetBit(drive);
+							drivesToUpdate.SetBit(drive);
 #endif
-							move.SetDriveStepsPerMm(drive, eVals[e], ustepMultiplier);
+							const float ratio = move.SetDriveStepsPerMm(drive, eVals[e], ustepMultiplier);
+							AdjustEndpoint(drive, ratio);
 						}
 					}
 
@@ -1632,20 +1628,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 					if (seen)
 					{
-						// On a delta, if we change the drive steps/mm then we need to recalculate the motor positions
-						for (const MovementState& ms : moveStates)
-						{
-							if (ms.GetNumber() == 0)
-							{
-								reprap.GetMove().SetNewPositionOfAllAxes(ms, true);
-							}
-							else
-							{
-								reprap.GetMove().SetNewPositionOfOwnedAxes(ms, true);
-							}
-						}
 #if SUPPORT_CAN_EXPANSION
-						result = move.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply);
+						result = move.UpdateRemoteStepsPerMmAndMicrostepping(drivesToUpdate, reply);
 #endif
 					}
 					else
@@ -1900,65 +1884,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 111: // Debug level
-				{
-					bool seen = false;
-					if (gb.Seen('B'))
-					{
-						seen = true;
-						if (!Platform::SetDebugBufferSize(gb.GetUIValue()))
-						{
-							// We don't bother with an error message here because this is a debugging function, but we do report that there has been an error
-							result = GCodeResult::error;
-							break;
-						}
-					}
-					uint32_t flags = 0;
-					Module module = Module::none;
-					if (gb.Seen('S'))
-					{
-						flags = gb.GetUIValue();
-						if (flags != 0)
-						{
-							flags = 0xFFFFFFFFu;
-						}
-						seen = true;
-					}
-					else if (gb.Seen('D'))
-					{
-						flags = gb.GetUIValue();
-						seen = true;
-					}
-					if (gb.Seen('P'))
-					{
-						module = static_cast<Module>(gb.GetLimitedUIValue('P', NumRealModules));
-						seen = true;
-					}
-					if (seen)
-					{
-						if (module != Module::none)
-						{
-							reprap.SetDebug(module, flags);
-							reprap.PrintDebug(gb.GetResponseMessageType());
-							return true;
-						}
-						else if (flags != 0)
-						{
-							// Repetier Host sends M111 with various S parameters to enable echo and similar features, which used to turn on all out debugging.
-							// But it's not useful to enable all debugging anyway. So we no longer allow debugging to be enabled without a P parameter.
-							reply.copy("Use P parameter to specify which module to debug");
-						}
-						else
-						{
-							// M111 S0 still clears all debugging
-							reprap.ClearDebug();
-						}
-					}
-					else
-					{
-						reprap.PrintDebug(gb.GetResponseMessageType());
-						return true;
-					}
-				}
+				result = reprap.ProcessM111(gb, reply);
 				break;
 
 			case 112: // Emergency stop - acted upon in Webserver, but also here in case it comes from USB etc.
@@ -3918,6 +3844,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 			case 595:	// Configure movement queue size
+				if (!LockAllMovementSystemsAndWaitForStandstill(gb))
+				{
+					return false;
+				}
 				result = reprap.GetMove().ConfigureMovementQueue(gb, reply);
 				break;
 
@@ -3951,6 +3881,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			// M650 (set peel move parameters) and M651 (execute peel move) are no longer handled specially. Use macros to specify what they should do.
 
+#if SUPPORT_CAN_EXPANSION
+			case 655:
+				result = CanInterface::ProcessM655(gb, reply);
+				break;
+#endif
+
 #if SUPPORT_LINEAR_DELTA
 			case 665: // Set delta configuration
 				if (!LockAllMovementSystemsAndWaitForStandstill(gb))
@@ -3971,29 +3907,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					const bool changed = move.GetKinematics().Configure(code, gb, reply, error);
 					if (changedMode)
 					{
-						for (MovementState& ms : moveStates)
-						{
-							move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, ms.coords);
-							ToolOffsetInverseTransform(ms);
-						}
+						SetInitialAxisAndDrivePositions();
 					}
 					if (changed || changedMode)
 					{
-						for (MovementState& ms : moveStates)
-						{
-							if (move.GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
-							{
-								ToolOffsetInverseTransform(ms);					// make sure the limits are reflected in the user position
-							}
-							if (ms.GetNumber() == 0)
-							{
-								reprap.GetMove().SetNewPositionOfAllAxes(ms, true);
-							}
-							else
-							{
-								reprap.GetMove().SetNewPositionOfOwnedAxes(ms, true);
-							}
-						}
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();
 					}
@@ -4054,27 +3971,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (seen)
 					{
 						// We changed something significant, so reset the positions and set all axes not homed
-						for (MovementState& ms : moveStates)
-						{
-							if (move.GetKinematics().GetKinematicsType() != oldK)
-							{
-								move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, ms.coords);
-								ToolOffsetInverseTransform(ms);
-							}
-							if (move.GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
-							{
-								ToolOffsetInverseTransform(ms);				// make sure the limits are reflected in the user position
-							}
-							if (ms.GetNumber() == 0)
-							{
-								reprap.GetMove().SetNewPositionOfAllAxes(ms, true);
-							}
-							else
-							{
-								reprap.GetMove().SetNewPositionOfOwnedAxes(ms, true);
-							}
-						}
 						SetAllAxesNotHomed();
+						if (move.GetKinematics().GetKinematicsType() != oldK)
+						{
+							SetInitialAxisAndDrivePositions();
+						}
 						reprap.MoveUpdated();
 					}
 				}
@@ -4159,7 +4060,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							}
 
 							// An axis letter is given, so try to level the given axis
-							const float correctionAngle = atanf((z2 - z1) / (a2 - a1)) * 180.0 / M_PI;
+							const float correctionAngle = atanf((z2 - z1) / (a2 - a1)) * 180.0 / Pi;
 							const float correctionFactor = gb.Seen('S') ? gb.GetPositiveFValue() : 1.0;
 							ms.coords[axisToUse] += correctionAngle * correctionFactor;
 							ms.rotationalAxesMentioned = true;
@@ -4427,7 +4328,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						if (seenCommandString)
 						{
 							// Replace the power fail script atomically
-							char *_ecv_array newPowerFailScript = new char[powerFailString.strlen() + 1];
+							char *_ecv_array _ecv_null newPowerFailScript = new char[powerFailString.strlen() + 1];
 							strcpy(newPowerFailScript, powerFailString.c_str());
 							ReplaceObject(powerFailScript, newPowerFailScript);
 							reprap.StateUpdated();

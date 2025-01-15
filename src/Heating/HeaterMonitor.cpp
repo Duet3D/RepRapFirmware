@@ -62,7 +62,7 @@ void HeaterMonitor::Report(unsigned int heater, unsigned int index, const String
 	}
 	else
 	{
-		const char *actionString, *triggerString;
+		const char *_ecv_array actionString, *_ecv_array triggerString;
 		switch (action)
 		{
 		case HeaterMonitorAction::GenerateFault:		actionString = "generate a heater fault"; break;
@@ -84,7 +84,7 @@ void HeaterMonitor::Report(unsigned int heater, unsigned int index, const String
 }
 
 // Get the condition for a temperature event as a string
-const char *HeaterMonitor::GetTriggerName() const noexcept
+const char *_ecv_array HeaterMonitor::GetTriggerName() const noexcept
 {
 	switch (trigger)
 	{

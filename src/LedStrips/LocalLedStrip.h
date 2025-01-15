@@ -52,6 +52,8 @@ public:
 	LocalLedStrip(LedStripType p_type, uint32_t p_freq) noexcept;
 	~LocalLedStrip() override;
 
+	bool MustStopMovement() const noexcept override { return !useDma; }
+
 protected:
 	DECLARE_OBJECT_MODEL
 
@@ -72,14 +74,13 @@ protected:
 #endif
 	};
 
-	GCodeResult CommonConfigure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName, bool& seen) THROWS(GCodeException);
+	GCodeResult CommonConfigure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array _ecv_null pinName, bool& seen) THROWS(GCodeException);
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult CommonConfigure(CanMessageGenericParser& parser, const StringRef& reply, bool& seen, uint8_t& extra) noexcept;
 #endif
 
 	GCodeResult CommonReportDetails(const StringRef& reply) noexcept;
-	bool MustStopMovement() const noexcept override { return !useDma; }
 	virtual size_t GetBytesPerLed() const noexcept = 0;
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
@@ -102,7 +103,7 @@ protected:
 
 	uint32_t maxLeds = DefaultMaxNumLeds;
 	size_t chunkBufferSize = 0;											// the size of the allocated buffer
-	uint8_t *chunkBuffer = nullptr;										// pointer to 32-bit aligned buffer for holding the data to send
+	uint8_t *_ecv_array _ecv_null chunkBuffer = nullptr;				// pointer to 32-bit aligned buffer for holding the data to send
 
 #if SAME70
 	alignas(4) static __nocache uint8_t dmaBuffer[DmaBufferSize];		// buffer for sending data to LEDs by DMA on SAME7x processors

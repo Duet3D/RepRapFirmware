@@ -47,7 +47,7 @@ constexpr unsigned int AdcBits = LegacyAnalogIn::AdcBits;
 bool IoPort::AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, PinAccess access) THROWS(GCodeException)
 {
 	IoPort *_ecv_from const p = this;
-	return AssignPorts(gb, reply, neededFor, 1, &p, &access) == 1;
+	return AssignPorts(gb, reply, neededFor, 1, (IoPort *_ecv_from const *_ecv_array)&p, &access) == 1;
 }
 
 // Try to assign ports, returning the number of ports successfully assigned
@@ -111,7 +111,7 @@ bool IoPort::AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neede
 bool IoPort::AssignPort(const char *_ecv_array pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept
 {
 	IoPort *_ecv_from const p = this;
-	return AssignPorts(pinName, reply, neededFor, 1, &p, &access) == 1;
+	return AssignPorts(pinName, reply, neededFor, 1, (IoPort *_ecv_from const *_ecv_array)&p, &access) == 1;
 }
 
 /*static*/ const char *_ecv_array IoPort::TranslatePinAccess(PinAccess access) noexcept
@@ -138,7 +138,7 @@ int8_t IoPort::logicalPinModes[NumNamedPins];	// what mode each logical pin is s
 {
 	for (PinUsedBy& p : portUsedBy)
 	{
-		p = PinUsedBy::unused;
+		p = PinUsedBy::notUsed;
 	}
 	for (int8_t& p : logicalPinModes)
 	{
@@ -158,7 +158,7 @@ void IoPort::Release() noexcept
 #if SAME5x
 		ClearAnalogCallback();
 #endif
-		portUsedBy[logicalPin] = PinUsedBy::unused;
+		portUsedBy[logicalPin] = PinUsedBy::notUsed;
 		logicalPinModes[logicalPin] = PIN_MODE_NOT_CONFIGURED;
 	}
 	logicalPin = NoLogicalPin;
@@ -168,14 +168,14 @@ void IoPort::Release() noexcept
 // Attach an interrupt to the pin. Not permitted if we allocated the pin in shared input mode.
 bool IoPort::AttachInterrupt(StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param) const noexcept
 {
-	return IsValid() && !isSharedInput && attachInterrupt(GetPinNoCheck(), callback, mode, param);
+	return IsValid() && !isSharedInput && AttachPinInterrupt(GetPinNoCheck(), callback, mode, param);
 }
 
 void IoPort::DetachInterrupt() const noexcept
 {
 	if (IsValid() && !isSharedInput)
 	{
-		detachInterrupt(logicalPin);
+		DetachPinInterrupt(logicalPin);
 	}
 }
 
@@ -253,7 +253,7 @@ bool IoPort::Allocate(const char *_ecv_array pn, const StringRef& reply, PinUsed
 	if (lp != NoLogicalPin)					// if not assigning "nil"
 	{
 		bool doSetMode = true;
-		if (portUsedBy[lp] == PinUsedBy::unused || (portUsedBy[lp] == PinUsedBy::temporaryInput && neededFor != PinUsedBy::temporaryInput))
+		if (portUsedBy[lp] == PinUsedBy::notUsed || (portUsedBy[lp] == PinUsedBy::temporaryInput && neededFor != PinUsedBy::temporaryInput))
 		{
 			portUsedBy[lp] = neededFor;
 		}
@@ -390,65 +390,67 @@ void IoPort::AppendPinName(const StringRef& str) const noexcept
 {
 	if (IsValid())
 	{
+		const char *_ecv_array _ecv_null pn = PinTable[logicalPin].GetNames();
+		if (pn != nullptr)
+		{
 #if SUPPORT_REMOTE_COMMANDS
-		if (CanInterface::InExpansionMode())
-		{
-			str.catf("%u.", CanInterface::GetCanAddress());
-		}
+			if (CanInterface::InExpansionMode())
+			{
+				str.catf("%u.", CanInterface::GetCanAddress());
+			}
 #endif
-		if (GetInvert())
-		{
-			str.cat('!');
-		}
-		const size_t insertPoint = str.strlen();
-		const char *_ecv_array pn = PinTable[logicalPin].GetNames();
-		unsigned int numPrinted = 0;
-		do
-		{
-			bool inverted = (*pn == '!');
-			if (inverted)
+			if (GetInvert())
 			{
-				++pn;
+				str.cat('!');
 			}
-			if (hardwareInvert)
+			const size_t insertPoint = str.strlen();
+			unsigned int numPrinted = 0;
+			do
 			{
-				inverted = !inverted;
-			}
-			if (inverted)
-			{
-				// skip this one
-				while (*pn != 0 && *pn != ',')
+				bool inverted = (*pn == '!');
+				if (inverted)
 				{
 					++pn;
 				}
-			}
-			else
+				if (hardwareInvert)
+				{
+					inverted = !inverted;
+				}
+				if (inverted)
+				{
+					// skip this one
+					while (*pn != 0 && *pn != ',')
+					{
+						++pn;
+					}
+				}
+				else
+				{
+					// Include this one
+					if (numPrinted != 0)
+					{
+						str.cat(',');
+					}
+					++numPrinted;
+					while (*pn != 0 && *pn != ',')
+					{
+						str.cat(*pn);
+						++pn;
+					}
+				}
+
+			} while (*pn++ == ',');
+
+			if (numPrinted > 1)
 			{
-				// Include this one
-				if (numPrinted != 0)
-				{
-					str.cat(',');
-				}
-				++numPrinted;
-				while (*pn != 0 && *pn != ',')
-				{
-					str.cat(*pn);
-					++pn;
-				}
+				str.Insert(insertPoint, '(');
+				str.cat(')');
 			}
-
-		} while (*pn++ == ',');
-
-		if (numPrinted > 1)
-		{
-			str.Insert(insertPoint, '(');
-			str.cat(')');
 		}
+		return;
 	}
-	else
-	{
-		str.cat(NoPinName);
-	}
+
+	str.cat(NoPinName);
 }
 
 /*static*/ void IoPort::AppendPinNames(const StringRef& str, size_t numPorts, const IoPort * const ports[]) noexcept

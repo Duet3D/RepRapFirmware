@@ -55,8 +55,6 @@ public:
 	void HandleGCodeReply(MessageType type, const char *reply) noexcept;		// accessed by Platform
 	void HandleGCodeReply(MessageType type, OutputBuffer *buffer) noexcept;		// accessed by Platform
 
-	bool GetFileChunk(const char *filename, uint32_t offset, char *buffer, uint32_t& bufferLength, uint32_t& fileLength) noexcept;
-
 	bool FileExists(const char *filename) noexcept;
 	bool DeleteFileOrDirectory(const char *fileOrDirectory, bool recursive = false) noexcept;
 

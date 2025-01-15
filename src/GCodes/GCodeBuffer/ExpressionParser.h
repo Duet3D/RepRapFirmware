@@ -65,7 +65,7 @@ public:
 
 private:
 	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *_ecv_array str) const THROWS(GCodeException);
-	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *_ecv_array str, const char *param) const THROWS(GCodeException);
+	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *_ecv_array str, const char *_ecv_array param) const THROWS(GCodeException);
 	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *_ecv_array str, uint32_t param) const THROWS(GCodeException);
 
 	void __attribute__((noinline)) ParseInternal(ExpressionValue& val, bool evaluate, uint8_t priority) THROWS(GCodeException);
@@ -82,7 +82,7 @@ private:
 
 	time_t __attribute__((noinline)) ParseDateTime(const char *_ecv_array s) const THROWS(GCodeException);
 
-	void __attribute__((noinline)) GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, ObjectExplorationContext& context, bool isParameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException);
+	void __attribute__((noinline)) GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *_ecv_array name, ObjectExplorationContext& context, bool isParameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException);
 
 	void ConvertToFloat(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToInteger(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);

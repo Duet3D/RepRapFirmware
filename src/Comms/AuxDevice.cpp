@@ -316,6 +316,40 @@ GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 	return GCodeResult::ok;
 }
 
+GCodeResult AuxDevice::ModbusRawTransaction(uint8_t p_slaveAddress, const uint8_t *_ecv_array rawDataOut, size_t numOut, uint8_t *_ecv_array rawDataIn, size_t numIn) noexcept
+{
+	if (!mutex.Take(BusAvailableTimeout))
+	{
+		return GCodeResult::error;
+	}
+
+	uart->ClearTransmitBuffer();
+	uart->DisableTransmit();
+	crc.Reset(ModbusCrcInit);
+	bytesTransmitted = 0;
+
+	slaveAddress = p_slaveAddress;
+	ModbusWriteByte(slaveAddress);
+	function = ModbusFunction::generic;
+	while (numOut != 0)
+	{
+		ModbusWriteByte(*rawDataOut++);
+		--numOut;
+	}
+	uart->write((uint8_t)crc.Get());
+	uart->write((uint8_t)(crc.Get() >> 8));
+
+	txNotRx.WriteDigital(true);								// set port to transmit
+	delay(CalcTransmissionTime(4));							// Modbus specifies a 3.5 character interval
+	uart->ClearReceiveBuffer();
+	uart->EnableTransmit();
+	whenStartedTransmitting = millis();
+
+	bytesExpected = numIn + 3;
+	receivedData = rawDataIn;
+	return GCodeResult::ok;
+}
+
 // Check whether the Modbus operation completed.
 GCodeResult AuxDevice::CheckModbusResult() noexcept
 {
@@ -339,48 +373,59 @@ GCodeResult AuxDevice::CheckModbusResult() noexcept
 
 	// If we get here then we received sufficient bytes for a valid reply
 	crc.Reset(ModbusCrcInit);
-	if (ModbusReadByte() == slaveAddress && ModbusReadByte() == (uint8_t)function)
+	if (ModbusReadByte() == slaveAddress)
 	{
-		switch(function)
+		if (function == ModbusFunction::generic)
 		{
-		case ModbusFunction::writeSingleCoil:
-		case ModbusFunction::writeSingleRegister:
-		case ModbusFunction::writeMultipleCoils:
-		case ModbusFunction::writeMultipleRegisters:
-			if (ModbusReadWord() == startRegister && ModbusReadWord() == numRegistersOrDataWord)
+			for (size_t i = 0; i + 3 < bytesExpected; ++i)
 			{
-				return ReleaseMutexAndCheckCrc();
+				*receivedData++ = ModbusReadByte();
 			}
-			break;
-
-		case ModbusFunction::readCoils:
-		case ModbusFunction::readDiscreteInputs:
-			if (ModbusReadByte() == (numRegistersOrDataWord + 7u)/8u)
+			return ReleaseMutexAndCheckCrc();
+		}
+		else if (ModbusReadByte() == (uint8_t)function)
+		{
+			switch(function)
 			{
-				for (size_t i = 0; i < (numRegistersOrDataWord + 7u)/8u; ++i)
+			case ModbusFunction::writeSingleCoil:
+			case ModbusFunction::writeSingleRegister:
+			case ModbusFunction::writeMultipleCoils:
+			case ModbusFunction::writeMultipleRegisters:
+				if (ModbusReadWord() == startRegister && ModbusReadWord() == numRegistersOrDataWord)
 				{
-					*receivedData++ = ModbusReadByte();
+					return ReleaseMutexAndCheckCrc();
 				}
-				return ReleaseMutexAndCheckCrc();
-			}
-			break;
+				break;
 
-		case ModbusFunction::readInputRegisters:
-		case ModbusFunction::readHoldingRegisters:
-			if (ModbusReadByte() == 2 * numRegistersOrDataWord)
-			{
-				while (numRegistersOrDataWord != 0)
+			case ModbusFunction::readCoils:
+			case ModbusFunction::readDiscreteInputs:
+				if (ModbusReadByte() == (numRegistersOrDataWord + 7u)/8u)
 				{
-					*(uint16_t*)receivedData = ModbusReadWord();
-					receivedData += sizeof(uint16_t);
-					--numRegistersOrDataWord;
+					for (size_t i = 0; i < (numRegistersOrDataWord + 7u)/8u; ++i)
+					{
+						*receivedData++ = ModbusReadByte();
+					}
+					return ReleaseMutexAndCheckCrc();
 				}
-				return ReleaseMutexAndCheckCrc();
-			}
-			break;
+				break;
 
-		default:
-			break;
+			case ModbusFunction::readInputRegisters:
+			case ModbusFunction::readHoldingRegisters:
+				if (ModbusReadByte() == 2 * numRegistersOrDataWord)
+				{
+					while (numRegistersOrDataWord != 0)
+					{
+						*(uint16_t*)receivedData = ModbusReadWord();
+						receivedData += sizeof(uint16_t);
+						--numRegistersOrDataWord;
+					}
+					return ReleaseMutexAndCheckCrc();
+				}
+				break;
+
+			default:
+				break;
+			}
 		}
 	}
 

@@ -45,7 +45,7 @@ struct DateTime
 };
 
 // Struct used to hold the expressions with polymorphic types
-struct ExpressionValue
+struct ExpressionValue final
 {
 	uint32_t type : 8,								// what type is stored in the union
 			 param : 24;							// additional parameter, e.g. number of usual displayed decimal places for a float,
@@ -129,7 +129,7 @@ struct ExpressionValue
 
 	ExpressionValue(const ExpressionValue& other) noexcept;
 	ExpressionValue(ExpressionValue&& other) noexcept;
-	~ExpressionValue();
+	~ExpressionValue() { Release(); }
 	ExpressionValue& operator=(const ExpressionValue& other) noexcept;
 	void Release() noexcept;					// release any associated storage
 
@@ -183,20 +183,40 @@ struct ExpressionValue
 enum class ObjectModelEntryFlags : uint8_t
 {
 	// none, live and verbose are alternatives occupying the bottom 2 bits
+	// 'notPanelDue' is set on fields that have 'live' set but are not of interest to PaneDue
 	none = 0,					// nothing special
 	live = 1,					// fast changing data, included in common status response
-	important = 2,				// important when it is present, so include in unsolicited responses to PanelDue
-	liveOrImportantMask = 3,	// mask to select values flagged as either live or important
+	important = 2,				// important when it is present, so include in unsolicited responses to PanelDue. Used for message boxes.
 	verbose = 4,				// omit reporting this value by default
-	obsolete = 8				// entry is deprecated and should not be used any more
+	obsolete = 8,				// entry is deprecated and should not be used any more
+	notPanelDue = 16,			// not of interest to PanelDue and other UIs that don't need so much detail (used in conjunction with 'live')
+
+	liveNotPanelDue = live | notPanelDue
 };
+
+inline constexpr ObjectModelEntryFlags operator|(ObjectModelEntryFlags a, ObjectModelEntryFlags b) noexcept
+{
+	return (ObjectModelEntryFlags)((uint8_t)a | (uint8_t)b);
+}
+
+inline constexpr ObjectModelEntryFlags& operator|=(ObjectModelEntryFlags& a, ObjectModelEntryFlags b) noexcept
+{
+	a = a | b;
+	return a;
+}
+
+inline constexpr ObjectModelEntryFlags& operator&=(ObjectModelEntryFlags& a, uint8_t b) noexcept
+{
+	a = (ObjectModelEntryFlags)((uint8_t)a & b);
+	return a;
+}
 
 // Context passed to object model functions
 class ObjectExplorationContext
 {
 public:
 	// Constructor used when reporting the OM as JSON
-	ObjectExplorationContext(const GCodeBuffer *_ecv_null gbp, bool wal, const char *reportFlags, unsigned int initialMaxDepth, size_t initialBufferOffset) noexcept;
+	ObjectExplorationContext(const GCodeBuffer *_ecv_null gbp, bool wal, const char *_ecv_array reportFlags, unsigned int initialMaxDepth, size_t initialBufferOffset) noexcept;
 
 	// Constructor used when evaluating expressions
 	ObjectExplorationContext(const GCodeBuffer *_ecv_null gbp, bool wal, bool wex, int p_line, int p_col) noexcept;
@@ -231,8 +251,8 @@ public:
 	bool ObsoleteFieldQueried() const noexcept { return obsoleteFieldQueried; }
 	void SetObsoleteFieldQueried() noexcept { obsoleteFieldQueried = true; }
 
-	GCodeException ConstructParseException(const char *msg) const noexcept;
-	GCodeException ConstructParseException(const char *msg, const char *sparam) const noexcept;
+	GCodeException ConstructParseException(const char *_ecv_array msg) const noexcept;
+	GCodeException ConstructParseException(const char *_ecv_array msg, const char *_ecv_array sparam) const noexcept;
 	void CheckStack(uint32_t calledFunctionStackUsage) const THROWS(GCodeException);
 
 private:
@@ -248,16 +268,16 @@ private:
 	int line;
 	int column;
 	const GCodeBuffer *_ecv_null gb;
-	unsigned int shortForm : 1,
+	uint16_t shortForm : 1,
 				wantArrayLength : 1,
 				wantExists : 1,
 				includeNonLive : 1,
 				includeImportant : 1,
+				includePanelDue : 1,
 				includeNulls : 1,
-				excludeVerbose : 1,
-				excludeObsolete : 1,
 				obsoleteFieldQueried : 1,
 				truncateLongArrays : 1;
+	ObjectModelEntryFlags excludedFlags;			// don't report fields with any of these flags set
 };
 
 // Entry to describe an array of objects or values. These must be brace-initializable into flash memory.
@@ -309,7 +329,7 @@ protected:
 	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *_ecv_array idString) const THROWS(GCodeException);
 
 	// Get the object model table entry for the current level object in the query
-	const ObjectModelTableEntry *FindObjectModelTableEntry(const ObjectModelClassDescriptor *classDescriptor, uint8_t tableNumber, const char *_ecv_array idString) const noexcept;
+	const ObjectModelTableEntry *_ecv_null FindObjectModelTableEntry(const ObjectModelClassDescriptor *classDescriptor, uint8_t tableNumber, const char *_ecv_array idString) const noexcept;
 
 	virtual const ObjectModelClassDescriptor *_ecv_null GetObjectModelClassDescriptor() const noexcept = 0;
 
@@ -398,7 +418,7 @@ public:
 	// Member functions. These must all be 'const'.
 
 	// Return true if this object table entry matches a filter or query
-	bool Matches(const char *filter, const ObjectExplorationContext& context) const noexcept;
+	bool Matches(const char *_ecv_array filter, const ObjectExplorationContext& context) const noexcept;
 
 	// Check if the queried field is obsolete
 	bool IsObsolete() const noexcept { return ((uint8_t)flags & (uint8_t)ObjectModelEntryFlags::obsolete) != 0; }
@@ -410,7 +430,7 @@ public:
 	const char *_ecv_array  GetName() const noexcept { return name; }
 
 	// Compare the name of this field with the filter string that we are trying to match
-	int IdCompare(const char *id) const noexcept;
+	int IdCompare(const char *_ecv_array id) const noexcept;
 
 	// Return true if a section of the OMT is ordered
 	static inline constexpr bool IsOrdered(const ObjectModelTableEntry *_ecv_array omt, size_t len) noexcept
@@ -502,25 +522,48 @@ struct ObjectModelClassDescriptor
 		return _parent::GetObjectModelArrayEntry(index); \
 	}
 
-#define OBJECT_MODEL_FUNC_BODY(_class,...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
+#define OBJECT_MODEL_FUNC_BODY(_class,...)							[] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
 	{ const _class * const self = static_cast<const _class*>(arg); return ExpressionValue(__VA_ARGS__); }
-#define OBJECT_MODEL_FUNC_IF_BODY(_class,_condition,...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
+#define OBJECT_MODEL_FUNC_IF_BODY(_class,_condition,...)			[] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
 	{ const _class * const self = static_cast<const _class*>(arg); return (_condition) ? ExpressionValue(__VA_ARGS__) : ExpressionValue(nullptr); }
-#define OBJECT_MODEL_FUNC_ARRAY(_index) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
+
+#define OBJECT_MODEL_FUNC_BODY_NONLEAF(_class,...)					[] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
+	{ const _class *_ecv_from const self = static_cast<const _class *_ecv_from>(arg); return ExpressionValue(__VA_ARGS__); }
+#define OBJECT_MODEL_FUNC_IF_BODY_NONLEAF(_class,_condition,...)	[] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
+	{ const _class *_ecv_from const self = static_cast<const _class *_ecv_from>(arg); return (_condition) ? ExpressionValue(__VA_ARGS__) : ExpressionValue(nullptr); }
+
+#define OBJECT_MODEL_FUNC_ARRAY(_index)								[] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
 	{ \
 		static_assert((unsigned int)_index >= ArrayIndexOffset); \
 		static_assert((unsigned int)_index < sizeof(objectModelArrayTable)/sizeof(ObjectModelArrayTableEntry) + ArrayIndexOffset); \
 		return ExpressionValue(arg, _index, true); \
 	}
-#define OBJECT_MODEL_FUNC_ARRAY_IF_BODY(_class,_condition,_index) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
+#define OBJECT_MODEL_FUNC_ARRAY_IF_BODY(_class,_condition,_index)	[] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
 	{ \
 		static_assert((unsigned int)_index >= ArrayIndexOffset); \
 		static_assert((unsigned int)_index < sizeof(objectModelArrayTable)/sizeof(ObjectModelArrayTableEntry) + ArrayIndexOffset); \
 		const _class * const self = static_cast<const _class*>(arg); \
 		return (_condition) ? ExpressionValue(arg, _index, true) : ExpressionValue(nullptr); \
 	}
-#define OBJECT_MODEL_FUNC_NOSELF(...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(__VA_ARGS__); }
-#define OBJECT_MODEL_FUNC_IF_NOSELF(_condition,...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
+
+#define OBJECT_MODEL_FUNC_NOSELF(...)								[] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
+	{ return ExpressionValue(__VA_ARGS__); }
+#define OBJECT_MODEL_FUNC_IF_NOSELF(_condition,...)					[] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept -> ExpressionValue \
 	{ return (_condition) ? ExpressionValue(__VA_ARGS__) : ExpressionValue(nullptr); }
+
+#define OBJECT_MODEL_ARRAY_COUNT_BODY(_class,_value)				[] (const ObjectModel *_ecv_from rawSelf, const ObjectExplorationContext& context) noexcept -> size_t \
+	{ const _class *const self = static_cast<const _class *const>(rawSelf); return _value; }
+#define OBJECT_MODEL_ARRAY_VALUE_BODY(_class,...)					[] (const ObjectModel *_ecv_from rawSelf, ObjectExplorationContext& context) noexcept -> ExpressionValue \
+	{ const _class *const self = static_cast<const _class *const>(rawSelf); return ExpressionValue(__VA_ARGS__); }
+
+#define OBJECT_MODEL_ARRAY_COUNT_BODY_NONLEAF(_class,_value)		[] (const ObjectModel *_ecv_from rawSelf, const ObjectExplorationContext& context) noexcept -> size_t \
+	{ const _class *_ecv_from const self = static_cast<const _class *_ecv_from const>(rawSelf); return _value; }
+#define OBJECT_MODEL_ARRAY_VALUE_BODY_NONLEAF(_class,...)			[] (const ObjectModel *_ecv_from rawSelf, ObjectExplorationContext& context) noexcept -> ExpressionValue \
+	{ const _class *_ecv_from const self = static_cast<const _class *_ecv_from const>(rawSelf); return ExpressionValue(__VA_ARGS__); }
+
+#define OBJECT_MODEL_ARRAY_COUNT_NOSELF(_value)						[] (const ObjectModel *_ecv_from rawSelf, const ObjectExplorationContext& context) noexcept -> size_t \
+	{ return _value; }
+#define OBJECT_MODEL_ARRAY_VALUE_NOSELF(...)						[] (const ObjectModel *_ecv_from rawSelf, ObjectExplorationContext& context) noexcept -> ExpressionValue \
+	{ return ExpressionValue(__VA_ARGS__); }
 
 #endif /* SRC_OBJECTMODEL_OBJECTMODEL_H_ */

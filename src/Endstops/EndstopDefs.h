@@ -24,17 +24,6 @@ enum class EndstopHitAction : uint8_t
 	stopAll = 3						// stop movement completely
 };
 
-// Result code from trying to validate an endstop
-enum class EndstopValidationResult
-{
-	ok = 0,
-	stallDetectionNotSupported,
-	//stallDetectionNotEnabled,		// this one is currently unused
-	driverNotInStealthChopMode,
-	driverNotInSpreadCycleMode,
-	moveTooSlow
-};
-
 // Struct to return info about what endstop has been triggered and what to do about it
 struct EndstopHitDetails
 {
@@ -52,6 +41,8 @@ struct EndstopHitDetails
 			 setAxisHigh : 1,		// whether or not to set the axis position to its max
 			 isZProbe : 1;			// whether this is a Z probe
 	DriverId driver;
+
+	static_assert(MaxAxes <= 64);				// because we have allocated 6 bits to hold the axis number
 };
 
 // The values of the following enumeration must tally with the X,Y,... parameters for the M574 command

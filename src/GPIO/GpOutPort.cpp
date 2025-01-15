@@ -34,7 +34,7 @@ constexpr ObjectModelTableEntry GpOutputPort::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	{ "freq",	OBJECT_MODEL_FUNC((int32_t)self->GetPwmFrequency()),	ObjectModelEntryFlags::none },
-	{ "pwm",	OBJECT_MODEL_FUNC(self->lastPwm, 3),					ObjectModelEntryFlags::live },
+	{ "pwm",	OBJECT_MODEL_FUNC(self->lastPwm, 3),					ObjectModelEntryFlags::liveNotPanelDue },
 };
 
 constexpr uint8_t GpOutputPort::objectModelTableDescriptor[] = { 1, 2 };
@@ -53,7 +53,7 @@ bool GpOutputPort::IsUnused() const noexcept
 		!port.IsValid();
 }
 
-GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuffer &gb, const StringRef &reply)
+GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
 	PwmFrequency freq = 0;
 	const bool seenFreq = gb.Seen('Q');

@@ -21,7 +21,7 @@ alignas(4) __nocache uint8_t LocalLedStrip::dmaBuffer[DmaBufferSize];		// buffer
 #endif
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(LocalLedStrip, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY_NONLEAF(LocalLedStrip, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry LocalLedStrip::objectModelTable[] =
 {
@@ -53,7 +53,7 @@ LocalLedStrip::~LocalLedStrip()
 }
 
 // Configure parameters that are common to all local LED strips i.e. port name, frequency, and whether DMA is used
-GCodeResult LocalLedStrip::CommonConfigure(GCodeBuffer &gb, const StringRef &reply, const char *_ecv_array pinName, bool &seen) THROWS(GCodeException)
+GCodeResult LocalLedStrip::CommonConfigure(GCodeBuffer &gb, const StringRef &reply, const char *_ecv_array _ecv_null pinName, bool &seen) THROWS(GCodeException)
 {
 	// See if the frequency was provided
 	gb.TryGetUIValue('Q', frequency, seen);

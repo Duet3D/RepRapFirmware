@@ -23,16 +23,7 @@
 #ifndef DUET3_ATE
 # include <InputMonitors/InputMonitor.h>
 # include <Version.h>
-
-# if SUPPORT_TMC2660
-#  include <Movement/StepperDrivers/TMC2660.h>
-# endif
-# if SUPPORT_TMC22xx
-#  include <Movement/StepperDrivers/TMC22xx.h>
-# endif
-# if SUPPORT_TMC51xx
-#  include <Movement/StepperDrivers/TMC51xx.h>
-# endif
+# include <Movement/StepperDrivers/SmartDrivers.h>
 #endif
 
 #if SUPPORT_ACCELEROMETERS
@@ -163,20 +154,25 @@ static void HandleInputStateChanged(const CanMessageInputChangedNew& msg, CanAdd
 	{
 		const RemoteInputHandle handle(msg.results[i].handle);
 		const bool state = (msg.states & (1u << i)) != 0;
-		switch (handle.u.parts.type)
+		switch (handle.parts.type)
 		{
 		case RemoteInputHandle::typeEndstop:
-			p.GetEndstops().HandleRemoteEndstopChange(src, handle.u.parts.major, handle.u.parts.minor, state);
+			p.GetEndstops().HandleRemoteEndstopChange(src, handle.parts.major, handle.parts.minor, state);
 			endstopStatesChanged = true;
 			break;
 
 		case RemoteInputHandle::typeZprobe:
-			p.GetEndstops().HandleRemoteZProbeChange(src, handle.u.parts.major, handle.u.parts.minor, state, LoadLEU32(&msg.results[i].reading));
+			p.GetEndstops().HandleRemoteZProbeChange(src, handle.parts.major, handle.parts.minor, state, LoadLEU32(&msg.results[i].reading));
 			endstopStatesChanged = true;
 			break;
 
 		case RemoteInputHandle::typeGpIn:
-			p.HandleRemoteGpInChange(src, handle.u.parts.major, handle.u.parts.minor, state);
+			p.HandleRemoteGpInChange(src, handle.parts.major, handle.parts.minor, state);
+			break;
+
+		case RemoteInputHandle::typeStallEndstop:
+			// In this case there should be exactly one handle and the 'reading' is a bitmap of stalled drivers
+			p.GetEndstops().HandleStalledRemoteDrivers(src, LocalDriversBitmap((LocalDriversBitmap::BaseType)msg.results[i].reading));
 			break;
 
 		default:
@@ -550,6 +546,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = InputMonitor::Change(buf->msg.changeInputMonitorNew, replyRef, extra);
 				break;
 
+			case CanMessageType::enableStallEndstop:
+				requestId = buf->msg.enableStallEndstop.requestId;
+				rslt = reprap.GetMove().SetStallEndstopReporting(buf->msg.enableStallEndstop, replyRef);
+				break;
+
 			case CanMessageType::readInputsRequest:
 				// This one has its own reply message type
 				InputMonitor::ReadInputs(buf);
@@ -570,6 +571,12 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::configureFilamentMonitor:
 				requestId = buf->msg.generic.requestId;
 				rslt = FilamentMonitor::Configure(buf->msg.generic, replyRef);
+				break;
+
+			case CanMessageType::m655:
+				requestId = buf->msg.generic.requestId;
+				reply.copy("not supported by this board");
+				rslt = GCodeResult::error;
 				break;
 
 			default:

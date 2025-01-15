@@ -27,7 +27,7 @@
 # endif
 #endif
 
-StepTimer * volatile StepTimer::pendingList = nullptr;
+StepTimer *_ecv_null volatile StepTimer::pendingList = nullptr;
 uint32_t StepTimer::movementDelay = 0;											// how many timer ticks the move timer is behind the raw timer
 
 #if SUPPORT_CAN_EXPANSION
@@ -151,7 +151,7 @@ void StepTimer::Init() noexcept
 {
 	// Get the current timer value into 'rslt'
 	// If we don't disable interrupts here then maxInterval ends up at -3. Presumably, this means we get an interrupt while we are within this code and the ISR calls it again.
-	const irqflags_t flags = IrqSave();
+	const auto flags = IrqSave();
 # if SAME5x
 	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
 	// On the SAME5x it isn't enough just to wait for SYNCBUSY.COUNT here, nor is it enough just to use a DSB instruction first
@@ -336,12 +336,12 @@ void StepTimer::DisableTimerInterrupt() noexcept
 // The guts of the ISR
 /*static*/ inline void StepTimer::Interrupt() noexcept
 {
-	StepTimer * tmr = pendingList;
+	StepTimer *_ecv_null tmr = pendingList;
 	if (tmr != nullptr)
 	{
 		for (;;)
 		{
-			StepTimer * const nextTimer = tmr->next;
+			StepTimer *_ecv_null const nextTimer = tmr->next;
 			pendingList = nextTimer;								// remove it from the pending list
 
 			tmr->active = false;
@@ -423,7 +423,7 @@ bool StepTimer::ScheduleCallbackFromIsr() noexcept
 	}
 
 	// Optimise the common case i.e. no other timer is pending
-	StepTimer *tmr = pendingList;			// capture volatile variable
+	StepTimer *_ecv_null tmr = pendingList;			// capture volatile variable
 	if (tmr == nullptr)
 	{
 		if (ScheduleTimerInterrupt(whenDue))
@@ -474,7 +474,7 @@ bool StepTimer::ScheduleCallback(Ticks when) noexcept
 // Cancel any scheduled callback for this timer. Harmless if there is no callback scheduled.
 void StepTimer::CancelCallbackFromIsr() noexcept
 {
-	for (StepTimer** ppst = const_cast<StepTimer**>(&pendingList); *ppst != nullptr; ppst = &((*ppst)->next))
+	for (StepTimer *_ecv_null * ppst = const_cast<StepTimer *_ecv_null *>(&pendingList); *ppst != nullptr; ppst = &((*ppst)->next))
 	{
 		if (*ppst == this)
 		{
@@ -504,7 +504,7 @@ void StepTimer::CancelCallback() noexcept
 		peakReceiveDelay = 0;
 	}
 #endif
-	StepTimer *pst = pendingList;
+	StepTimer *_ecv_null pst = pendingList;
 	if (pst == nullptr)
 	{
 		reply.cat("no step interrupt scheduled");

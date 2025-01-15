@@ -911,7 +911,7 @@ const MacAddress& Network::GetMacAddress(unsigned int interface) const noexcept
 #endif
 
 // Find a responder to process a new connection
-bool Network::FindResponder(Socket *skt, NetworkProtocol protocol) noexcept
+bool Network::FindResponder(Socket *_ecv_from skt, NetworkProtocol protocol) noexcept
 {
 #if HAS_RESPONDERS
 	for (NetworkResponder *_ecv_from _ecv_null r = responders; r != nullptr; r = r->GetNext())

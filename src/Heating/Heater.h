@@ -46,7 +46,7 @@ public:
 	Heater(const Heater &_ecv_from) = delete;
 
 	// Configuration methods
-	virtual GCodeResult ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) = 0;
+	virtual GCodeResult ConfigurePortAndSensor(const char *_ecv_array portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) = 0;
 	virtual GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) = 0;
 	virtual GCodeResult ReportDetails(const StringRef& reply) const noexcept = 0;
 
@@ -177,8 +177,8 @@ protected:
 	static DeviationAccumulator dLow;
 	static DeviationAccumulator tOn;
 	static DeviationAccumulator tOff;
-	static DeviationAccumulator heatingRate;
-	static DeviationAccumulator coolingRate;
+	static DeviationAccumulator heatingRateAcc;
+	static DeviationAccumulator coolingRateAcc;
 	static DeviationAccumulator tuningVoltage;				// sum of the voltage readings we take during the heating phase
 
 	static uint32_t lastOffTime;
@@ -198,7 +198,7 @@ protected:
 	static void ClearCounters() noexcept;
 
 private:
-	static const char* const TuningPhaseText[];
+	static const char *_ecv_array const TuningPhaseText[];
 
 	FopDt model;
 	unsigned int heaterNumber;

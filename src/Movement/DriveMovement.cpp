@@ -42,7 +42,6 @@ void DriveMovement::Init(size_t drv) noexcept
 	driversNormallyUsed = driversCurrentlyUsed = driverEndstopsTriggeredAtStart = 0;
 	nextDM = nullptr;
 	segments = nullptr;
-	homingDda = nullptr;
 	isExtruder = false;
 	segmentFlags.Init();
 
@@ -56,7 +55,7 @@ void DriveMovement::DebugPrint() const noexcept
 	const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + LogicalDriveToExtruder(drive));
 	if (state != DMState::idle)
 	{
-		debugPrintf("DM%c state=%u err=%u dir=%c next=%" PRIi32 " rev=%" PRIi32 " ssl=%" PRIi32 " sns=%" PRIi32 " interval=%" PRIu32 " q=%.4e t0=%.4e p=%.4e dcf=%.2f\n",
+		debugPrintf("DM%c state=%u err=%u dir=%c next=%" PRIi32 " rev=%" PRIi32 " ssl=%" PRIi32 " sns=%" PRIi32 " interval=%" PRIu32 " q=%.4g t0=%.4g p=%.4g dcf=%.2f\n",
 						c, (unsigned int)state, (unsigned int)stepErrorType, (direction) ? 'F' : 'B',
 							nextStep, reverseStartStep, segmentStepLimit, netStepsThisSegment, stepInterval,
 								(double)q, (double)t0, (double)p, (double)distanceCarriedForwards);
@@ -111,13 +110,13 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 // set driversCurrentlyUsed to 0 to suppress the step pulse, and return the segment.
 // If there is a segment ready to execute and it has steps, set up our movement parameters, copy the flags over, set the 'executing' flag in the segment, and return the segment.
 // If there is a segment ready to execute but it involves zero steps, skip and free it and start again.
-MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
+MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 {
 	positionAtSegmentStart = currentMotorPosition;
 
 	while (true)
 	{
-		MoveSegment *seg = segments;				// capture volatile variable
+		MoveSegment *_ecv_null seg = segments;				// capture volatile variable
 		if (seg == nullptr)
 		{
 			segmentFlags.Init();
@@ -283,14 +282,14 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		seg->DebugPrint();
 #endif
 		motioncalc_t newDcf = distanceCarriedForwards + seg->GetLength();
-		if (fabsm(newDcf) > 1.0)
+		if (fabsm(newDcf) > (motioncalc_t)1.0)
 		{
 			if (reprap.Debug(Module::Move))
 			{
 				debugPrintf("newDcf=%.3e\n", (double)newDcf);
 			}
-			LogStepError(7);
-			newDcf = (motioncalc_t)0.0;							// to prevent the next segment erroring out
+			LogStepError(7, (float)newDcf);
+			newDcf = constrain<motioncalc_t>(newDcf, -1.0, 1.0);	// to prevent the next segment erroring out
 		}
 		distanceCarriedForwards = newDcf;
 		MoveSegment *oldSeg = seg;
@@ -310,7 +309,7 @@ static inline motioncalc_t fastLimSqrtm(motioncalc_t f) noexcept
 }
 
 // Tell the Move class that we had a step error. This always returns false so that CalcNextStepTimeFull can tail-chain to it.
-bool DriveMovement::LogStepError(uint8_t type) noexcept
+bool DriveMovement::LogStepError(uint8_t type, float extra) noexcept
 {
 	state = DMState::stepError;
 	stepErrorType = type;
@@ -320,7 +319,7 @@ bool DriveMovement::LogStepError(uint8_t type) noexcept
 		DebugPrint();
 		MoveSegment::DebugPrintList(segments);
 	}
-	reprap.GetMove().LogStepError(type);
+	reprap.GetMove().LogStepError(type, drive, extra);
 	return false;
 }
 
@@ -342,11 +341,11 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 			distanceCarriedForwards += currentSegment->GetLength() - (motioncalc_t)netStepsThisSegment;
 			if (distanceCarriedForwards > (motioncalc_t)1.0 || distanceCarriedForwards < (motioncalc_t)-1.0)
 			{
-				return LogStepError(5);
+				return LogStepError(5, distanceCarriedForwards);
 			}
 			if (currentMotorPosition - positionAtSegmentStart != netStepsThisSegment)
 			{
-				return LogStepError(6);
+				return LogStepError(6, 0.0);
 			}
 			if (isExtruder)
 			{
@@ -368,7 +367,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 
 			if (unlikely((int32_t)(currentSegment->GetStartTime() - prevEndTime) < -10))
 			{
-				return LogStepError(1);
+				return LogStepError(1, (float)(int32_t)(currentSegment->GetStartTime() - prevEndTime));
 			}
 
 			// Leave shiftFactor set to 0 so that we compute a single step time, because the interval will have changed
@@ -450,7 +449,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 #if SEGMENT_DEBUG
 		debugPrintf("DMstate %u, quitting\n", (unsigned int)state);
 #endif
-		return LogStepError(4);
+		return LogStepError(4, 0.0);
 	}
 
 	nextCalcStepTime += t0;
@@ -461,7 +460,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 		{
 			debugPrintf("nextCalcStepTime=%.3e\n", (double)nextCalcStepTime);
 		}
-		return LogStepError(2);
+		return LogStepError(2, (float)nextCalcStepTime);
 	}
 
 	uint32_t iNextCalcStepTime = (uint32_t)nextCalcStepTime;
@@ -553,9 +552,9 @@ void DriveMovement::TakeStepsAndCalcStepTimeRarely(uint32_t clocksNow) noexcept
 
 #endif
 
-// If the driver is moving, stop it, update the position and pass back the net steps taken in the executing segment.
+// If the logical drive is moving, stop it and update the position.
 // Return true if the drive was moving.
-bool DriveMovement::StopDriver(int32_t& netStepsTaken) noexcept
+bool DriveMovement::StopLogicalDrive(int32_t& netStepsTaken) noexcept
 {
 	AtomicCriticalSectionLocker lock;
 
@@ -567,10 +566,7 @@ bool DriveMovement::StopDriver(int32_t& netStepsTaken) noexcept
 		MoveSegment *seg = nullptr;
 		std::swap(seg, const_cast<MoveSegment*&>(segments));
 		MoveSegment::ReleaseAll(seg);
-		if (homingDda != nullptr)
-		{
-			homingDda->SetDriveCoordinate(currentMotorPosition, drive);
-		}
+		//TODO do we need to update the endpoint anywhere? Or will the caller do this?
 #if STEPS_DEBUG
 		positionRequested = currentMotorPosition;
 #endif
@@ -604,7 +600,7 @@ void DriveMovement::CheckSegment(unsigned int line, MoveSegment *seg) noexcept
 void DriveMovement::StopDriverFromRemote() noexcept
 {
 	int32_t dummy;
-	(void)StopDriver(dummy);
+	(void)StopLogicalDrive(dummy);
 }
 
 #endif

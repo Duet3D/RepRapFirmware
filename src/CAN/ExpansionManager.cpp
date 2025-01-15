@@ -49,37 +49,37 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	{ "accelerometer",		OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasAccelerometer, self, 4),					ObjectModelEntryFlags::none },
 	{ "canAddress",			OBJECT_MODEL_FUNC((int32_t)(&(self->FindIndexedBoard(context.GetLastIndex())) - self->boards)),					ObjectModelEntryFlags::none },
 	{ "closedLoop",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasClosedLoop, self, 5),					ObjectModelEntryFlags::none },
-	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY_IF(self->FindIndexedBoard(context.GetLastIndex()).HasDrivers(), 0),						ObjectModelEntryFlags::live },
+	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY_IF(self->FindIndexedBoard(context.GetLastIndex()).HasDrivers(), 0),						ObjectModelEntryFlags::liveNotPanelDue },
 	{ "firmwareDate",		OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareDate),		ObjectModelEntryFlags::none },
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName,
 												(self->FindIndexedBoard(context.GetLastIndex()).usesUf2Binary)
 												? ExpansionDetail::firmwareFileNameUf2
 													: ExpansionDetail::firmwareFileNameBin),												ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareVersion),	ObjectModelEntryFlags::none },
-	{ "freeRam",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).neverUsedRam),						ObjectModelEntryFlags::live },
+	{ "freeRam",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).neverUsedRam),						ObjectModelEntryFlags::liveNotPanelDue },
 	{ "inductiveSensor",	OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasInductiveSensor, self, 6),				ObjectModelEntryFlags::none },
 	{ "maxMotors",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).numDrivers),							ObjectModelEntryFlags::none },
-	{ "mcuTemp",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasMcuTemp, self, 1),						ObjectModelEntryFlags::live },
+	{ "mcuTemp",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasMcuTemp, self, 1),						ObjectModelEntryFlags::liveNotPanelDue },
 	{ "name",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::longName),			ObjectModelEntryFlags::none },
 	{ "shortName",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::shortName),			ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).state.ToString()),								ObjectModelEntryFlags::none },
 	{ "uniqueId",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).uniqueId.IsValid(),
 													self->FindIndexedBoard(context.GetLastIndex()).uniqueId),								ObjectModelEntryFlags::none },
-	{ "v12",				OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasV12, self, 3),							ObjectModelEntryFlags::live },
-	{ "vIn",				OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasVin, self, 2),							ObjectModelEntryFlags::live },
+	{ "v12",				OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasV12, self, 3),							ObjectModelEntryFlags::liveNotPanelDue },
+	{ "vIn",				OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasVin, self, 2),							ObjectModelEntryFlags::liveNotPanelDue },
 
 	// 1. mcuTemp members
-	{ "current",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.current, 1),							ObjectModelEntryFlags::live },
+	{ "current",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.current, 1),							ObjectModelEntryFlags::liveNotPanelDue },
 	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.maximum, 1),							ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).mcuTemp.minimum, 1),							ObjectModelEntryFlags::none },
 
 	// 2. vIn members
-	{ "current",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).vin.current, 1),								ObjectModelEntryFlags::live },
+	{ "current",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).vin.current, 1),								ObjectModelEntryFlags::liveNotPanelDue },
 	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).vin.maximum, 1),								ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).vin.minimum, 1),								ObjectModelEntryFlags::none },
 
 	// 3. v12 members
-	{ "current",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.current, 1),								ObjectModelEntryFlags::live },
+	{ "current",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.current, 1),								ObjectModelEntryFlags::liveNotPanelDue },
 	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.maximum, 1),								ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.minimum, 1),								ObjectModelEntryFlags::none },
 
@@ -285,9 +285,9 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 		memcpy(&data, (const uint8_t*)&msg + offset, sizeof(AnalogHandleData));
 		offset += sizeof(AnalogHandleData);
 		// Currently only Z probes use analog handles, so ask the EndstopsManager to deal with it
-		if (data.handle.u.parts.type == RemoteInputHandle::typeZprobe)
+		if (data.handle.parts.type == RemoteInputHandle::typeZprobe)
 		{
-			reprap.GetPlatform().GetEndstops().HandleRemoteAnalogZProbeValueChange(address, data.handle.u.parts.major, data.handle.u.parts.minor, data.reading);
+			reprap.GetPlatform().GetEndstops().HandleRemoteAnalogZProbeValueChange(address, data.handle.parts.major, data.handle.parts.minor, data.reading);
 		}
 	}
 }

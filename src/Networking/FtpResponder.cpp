@@ -20,7 +20,7 @@ FtpResponder::FtpResponder(NetworkResponder *_ecv_from _ecv_null n) noexcept
 }
 
 // Ask the responder to accept this connection, returns true if it did
-bool FtpResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
+bool FtpResponder::Accept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept
 {
 	if (responderState == ResponderState::free && protocol == FtpProtocol)
 	{

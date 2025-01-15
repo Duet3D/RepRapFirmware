@@ -28,9 +28,9 @@ protected:
 	void CorePrint(Lcd &_ecv_from lcd) noexcept override;
 
 private:
-	const char *text;
-	const char *command;
-	const char *m_acFile; // used when action ("command") is "menu"
+	const char *_ecv_array text;
+	const char *_ecv_array command;
+	const char *_ecv_array m_acFile;		// used when action ("command") is "menu"
 };
 
 #endif

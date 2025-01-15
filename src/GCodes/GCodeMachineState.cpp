@@ -27,7 +27,7 @@ GCodeMachineState::GCodeMachineState() noexcept
 #endif
 	  stateParameter(0),
 	  compatibility(Compatibility::RepRapFirmware),
-	  previous(nullptr), currentBlockState(new BlockState(nullptr)), errorMessage(nullptr),
+	  previous(nullptr), currentBlockState(new BlockState(nullptr)),
 	  blockNesting(0), state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
 #if SUPPORT_ASYNC_MOVES
 	  , commandedQueueNumber(0), ownQueueNumber(0), executeAllCommands(true)
@@ -56,7 +56,7 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 	  lastCodeFromSbc(prev.lastCodeFromSbc), macroStartedByCode(prev.macroStartedByCode), fileFinished(prev.fileFinished),
 #endif
 	  compatibility(prev.compatibility),
-	  previous(&prev), currentBlockState(new BlockState(nullptr)), errorMessage(nullptr),
+	  previous(&prev), currentBlockState(new BlockState(nullptr)),
 	  blockNesting((withinSameFile) ? prev.blockNesting : 0u),
 	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
 #if SUPPORT_ASYNC_MOVES
@@ -157,10 +157,11 @@ GCodeMachineState::~GCodeMachineState() noexcept
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	fileState.Close();
 #endif
-	while (currentBlockState != nullptr)
+	BlockState *_ecv_null bs = currentBlockState;
+	while (bs != nullptr)
 	{
-		BlockState *const tempBs = currentBlockState;
-		currentBlockState = currentBlockState->GetPrevious();
+		BlockState *const tempBs = _ecv_not_null(bs);
+		bs = bs->GetPrevious();
 		delete tempBs;
 	}
 }
@@ -313,7 +314,7 @@ void GCodeMachineState::RetrieveStateMachineResult(const GCodeBuffer& gb, const 
 
 GCodeMachineState *GCodeMachineState::Pop() const noexcept
 {
-	GCodeMachineState * const rslt = GetPrevious();
+	GCodeMachineState * const rslt = _ecv_not_null(GetPrevious());
 	if (!errorMessage.IsNull())
 	{
 		rslt->errorMessage = errorMessage;
@@ -358,7 +359,7 @@ void GCodeMachineState::EndBlock() noexcept
 	if (blockNesting != 0)
 	{
 		BlockState *const oldBs = currentBlockState;
-		currentBlockState = currentBlockState->GetPrevious();
+		currentBlockState = _ecv_not_null(currentBlockState->GetPrevious());
 		delete oldBs;
 		--blockNesting;
 		variables.EndScope(blockNesting);

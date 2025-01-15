@@ -44,7 +44,7 @@ size_t FilamentMonitor::firstDriveToSend = 0;
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(FilamentMonitor, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY_NONLEAF(FilamentMonitor, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry FilamentMonitor::objectModelTable[] =
 {

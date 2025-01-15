@@ -127,6 +127,9 @@ constexpr size_t MaxSpindles = 4;					// Maximum number of configurable spindles
 constexpr size_t MaxLedStrips = 2;					// Maximum number of LED strips
 
 constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
+constexpr size_t FirstAuxChannel = 1;
+constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
+
 #define SERIAL_MAIN_DEVICE	serialUSB
 #define SERIAL_AUX_DEVICE	serialUart
 
@@ -434,8 +437,11 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"sx1509b.15" 								},
 };
 
-constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
-static_assert(NumNamedPins == 32+32+32+32+6+16+16);
+constexpr size_t NumNamedPins = ARRAY_SIZE(PinTable);
+constexpr size_t NumRealPins = 32+32+32+32+6+16+16;				// including SX1509B expansion
+constexpr size_t NumVirtualPins = 0;
+
+static_assert(NumNamedPins == NumRealPins + NumVirtualPins);
 
 // USARTs used for SPI
 constexpr Pin APIN_USART_SSPI_MOSI = PortBPin(1);

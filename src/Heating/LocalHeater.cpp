@@ -96,7 +96,7 @@ void LocalHeater::ResetHeater() noexcept
 }
 
 // Configure the heater port and the sensor number
-GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply)
+GCodeResult LocalHeater::ConfigurePortAndSensor(const char *_ecv_array portName, PwmFrequency freq, unsigned int sn, const StringRef& reply)
 {
 	if constexpr (MaxPortsPerHeater == 1)
 	{
@@ -108,7 +108,7 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *portName, PwmFrequen
 	else
 	{
 		PinAccess access[MaxPortsPerHeater];
-		IoPort* portAddrs[MaxPortsPerHeater];
+		IoPort *_ecv_from portAddrs[MaxPortsPerHeater];
 		for (size_t i = 0; i < MaxPortsPerHeater; ++i)
 		{
 			access[i] = PinAccess::pwm;
@@ -331,7 +331,7 @@ void LocalHeater::Spin() noexcept
 							if (actualTemperatureRise < expectedTemperatureRise * ((IsBedOrChamber()) ? MinBedTemperatureRiseFactor : MinToolTemperatureRiseFactor))
 							{
 								++heatingFaultCount;
-								if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
+								if ((float)(heatingFaultCount * HeatSampleIntervalMillis) > GetMaxHeatingFaultTime() * SecondsToMillis)
 								{
 									RaiseHeaterFault(HeaterFaultType::temperatureRisingTooSlowly,
 														"expected %.2f" DEGREE_SYMBOL "C/sec measured %.2f" DEGREE_SYMBOL "C/sec",
@@ -356,7 +356,7 @@ void LocalHeater::Spin() noexcept
 				if (fabsf(error) > GetMaxTemperatureExcursion() && temperature > MaxAmbientTemperature)
 				{
 					++heatingFaultCount;
-					if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
+					if ((float)(heatingFaultCount * HeatSampleIntervalMillis) > GetMaxHeatingFaultTime() * SecondsToMillis)
 					{
 						RaiseHeaterFault(HeaterFaultType::exceededAllowedExcursion,
 											"target %.1f" DEGREE_SYMBOL "C actual %.1f" DEGREE_SYMBOL "C",
@@ -762,7 +762,7 @@ void LocalHeater::DoTuningStep() noexcept
 			dHigh.Add((float)(peakTime - lastOffTime));
 			tOff.Add((float)(now - lastOffTime));
 			const float currentCoolingRate = (afterPeakTemp - temperature) * SecondsToMillis/(now - afterPeakTime);
-			coolingRate.Add(currentCoolingRate);
+			coolingRateAcc.Add(currentCoolingRate);
 
 			// Decide whether to finish this phase
 			if (tuningPhase == 2)				// if we are doing idle cycles
@@ -780,13 +780,13 @@ void LocalHeater::DoTuningStep() noexcept
 					++idleCyclesDone;
 				}
 			}
-			else if (coolingRate.GetNumSamples() >= MinTuningHeaterCycles)
+			else if (coolingRateAcc.GetNumSamples() >= MinTuningHeaterCycles)
 			{
 				const bool isConsistent = dLow.DeviationFractionWithin(0.2)
 										&& dHigh.DeviationFractionWithin(0.2)
-										&& heatingRate.DeviationFractionWithin(0.1)
-										&& coolingRate.DeviationFractionWithin(0.1);
-				if (isConsistent || coolingRate.GetNumSamples() == MaxTuningHeaterCycles)
+										&& heatingRateAcc.DeviationFractionWithin(0.1)
+										&& coolingRateAcc.DeviationFractionWithin(0.1);
+				if (isConsistent || coolingRateAcc.GetNumSamples() == MaxTuningHeaterCycles)
 				{
 					if (!isConsistent)
 					{
@@ -892,7 +892,7 @@ void LocalHeater::DoTuningStep() noexcept
 			// We have reached the target temperature, so record a data point and turn the heater off
 			dLow.Add((float)(peakTime - lastOnTime));
 			tOn.Add((float)(now - lastOnTime));
-			heatingRate.Add((temperature - afterPeakTemp) * SecondsToMillis/(now - afterPeakTime));
+			heatingRateAcc.Add((temperature - afterPeakTemp) * SecondsToMillis/(now - afterPeakTime));
 			lastOffTime = peakTime = afterPeakTime = now;
 			peakTemp = afterPeakTemp = temperature;
 			lastPwm = 0.0;								// turn heater off

@@ -4,7 +4,7 @@
  *  Created on: 19 Jul 2022
  *      Author: David
  *
- *  This file defined member functions of the GCodes class that handle bed probing and height maps
+ *  This file defines member functions of the GCodes class that handle bed probing and height maps
  */
 
 #include "GCodes.h"
@@ -72,7 +72,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 				reprap.GetMove().SetZBedProbePoint((size_t)g30ProbePointIndex, z, false, false);
 				if (g30SValue >= -1)
 				{
-					return GetGCodeResultFromError(reprap.GetMove().FinishedBedProbing(g30SValue, reply));
+					return reprap.GetMove().FinishedBedProbing(ms, g30SValue, reply);
 				}
 			}
 			else
@@ -540,7 +540,7 @@ void GCodes::ClearBedMapping() noexcept
 	reprap.GetMove().SetIdentityTransform();
 	for (MovementState& ms : moveStates)
 	{
-		reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetNumber(), 0, ms.currentTool);
+		reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetNumber(), true, ms.currentTool);
 		ToolOffsetInverseTransform(ms);		// update user coordinates to remove any height map offset there was at the current position
 	}
 }
@@ -766,10 +766,19 @@ bool GCodes::SetupM585ProbingMove(GCodeBuffer& gb) noexcept
 		}
 		reduceAcceleration = true;
 	}
-	else if (!platform.GetEndstops().EnableAxisEndstops(AxesBitmap::MakeFromBits(m585Settings.axisNumber), false, reduceAcceleration))
+	else
 	{
-		gb.LatestMachineState().SetError("Failed to enable endstop");
-		return false;
+		float speeds[MaxAxes];
+		speeds[m585Settings.axisNumber] = m585Settings.feedRate;
+		try
+		{
+			platform.GetEndstops().EnableAxisEndstops(AxesBitmap::MakeFromBits(m585Settings.axisNumber), speeds, false, reduceAcceleration);
+		}
+		catch (GCodeException& exc)
+		{
+			gb.LatestMachineState().SetError(exc);
+			return false;
+		}
 	}
 
 	MovementState& ms = GetMovementState(gb);

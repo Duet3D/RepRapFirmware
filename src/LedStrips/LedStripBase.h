@@ -26,7 +26,7 @@ public:
 	virtual ~LedStripBase() override { }
 
 	// Configure or report on this LED strip. If pinName is not null then we are doing the initial configuration; else we are doing minor configuration or reporting.
-	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException) = 0;
+	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array _ecv_null pinName) THROWS(GCodeException) = 0;
 
 	// Handle a M150 command addressed to this strip
 	virtual GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) = 0;

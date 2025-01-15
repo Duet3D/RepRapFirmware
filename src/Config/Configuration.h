@@ -65,7 +65,7 @@ constexpr float DefaultFilamentDiameter = 1.75;			// the default filament diamet
 constexpr unsigned int MaxTools = 50;					// this limit is to stop the serialised object model getting too large
 constexpr unsigned int MinVisibleAxes = 2;				// the minimum number of axes that we allow to be visible
 
-constexpr float DefaultBacklashCorrectionDistanceFactor = 10.0;	// backlash correction is spread over (backlash amount * this) mm
+constexpr unsigned int DefaultBacklashCorrectionDistanceFactor = 10;	// backlash correction is spread over (backlash amount * this) mm
 
 // Timeouts
 constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
@@ -218,6 +218,8 @@ constexpr float MinArcSegmentLength = 0.02;				// G2 and G3 arc movement command
 constexpr float MaxArcSegmentLength = 1.0;				// G2 and G3 arc movement commands get split into segments at most this long
 constexpr float MaxArcSegmentsPerSec = 200.0;
 constexpr unsigned int SegmentsPerFulArcCalculation = 8; // we do the full sine/cosine calculation every this number of segments
+
+constexpr uint32_t MaxSegmentTime = 5 * 60;				// maximum time (seconds) to execute a segment, we segment moves that would take longer than this
 
 constexpr uint32_t DefaultIdleTimeout = 30000;			// Milliseconds
 constexpr float DefaultIdleCurrentFactor = 0.3;			// Proportion of normal motor current that we use for idle hold

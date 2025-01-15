@@ -23,15 +23,17 @@
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(LinearDeltaKinematics, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(LinearDeltaKinematics, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(LinearDeltaKinematics, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(LinearDeltaKinematics, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry LinearDeltaKinematics::objectModelArrayTable[] =
 {
 	// 10. Towers
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const LinearDeltaKinematics*)self)->numTowers; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 1); }
+		OBJECT_MODEL_ARRAY_COUNT(self->numTowers),
+		OBJECT_MODEL_ARRAY_VALUE(self, 1)
 	}
 };
 
@@ -69,7 +71,7 @@ LinearDeltaKinematics::LinearDeltaKinematics() noexcept : RoundBedKinematics(Kin
 }
 
 // Return the name of the current kinematics
-const char *LinearDeltaKinematics::GetName(bool forStatusReport) const noexcept
+const char *_ecv_array LinearDeltaKinematics::GetName(bool forStatusReport) const noexcept
 {
 	return (forStatusReport) ? "delta" : "Linear delta";
 }
@@ -249,7 +251,7 @@ void LinearDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], cons
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
-LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], const float * null initialCoords,
+LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], const float *_ecv_array _ecv_null initialCoords,
 															size_t numVisibleAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept
 {
 	bool limited = false;
@@ -294,8 +296,8 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 						dy = finalCoords[Y_AXIS] - initialCoords[Y_AXIS];
 			const float P2 = fsquare(dx) + fsquare(dy);							// square of the distance moved in the XY plane
 			float dz = finalCoords[Z_AXIS] - initialCoords[Z_AXIS];
-			float Q2 = P2 + fsquare(dz);										// square of the total distance moved
-			if (Q2 != 0.0)														// if there is any XYZ movement
+			float tdmSquared = P2 + fsquare(dz);										// square of the total distance moved
+			if (tdmSquared != 0.0)														// if there is any XYZ movement
 			{
 				// If t is the proportion of movement completed from initial to final coordinates, the t-value corresponding to the maximum tower height is:
 				// t = (+/- dz*sqrt(d^2*P2 - (dx*(y0-yt)-dy*(x0-xt))^2)*Q
@@ -322,8 +324,8 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 						}
 						else
 						{
-							const float tP2Q2 = dz * fastSqrtf(discriminant * Q2) - ((tx * dx) + (ty * dy)) * Q2;
-							const float P2Q2 = P2 * Q2;
+							const float tP2Q2 = dz * fastSqrtf(discriminant * tdmSquared) - ((tx * dx) + (ty * dy)) * tdmSquared;
+							const float P2Q2 = P2 * tdmSquared;
 							if (tP2Q2 >= P2Q2)
 							{
 								limitFinalHeight = true;						// the maximum is beyond the final position
@@ -353,7 +355,7 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 
 											// Update the intermediate variables that have changed
 											again = true;
-											Q2 = P2 + fsquare(dz);
+											tdmSquared = P2 + fsquare(dz);
 											if (reprap.Debug(Module::Kinematics))
 											{
 												debugPrintf("Limit tower %u, t=%.2f\n", tower, (double)t);
@@ -386,7 +388,7 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 								if (tower + 1 < numTowers)
 								{
 									dz -= proposedAdjustment;
-									Q2 = P2 + fsquare(dz);
+									tdmSquared = P2 + fsquare(dz);
 								}
 							}
 							else
@@ -426,7 +428,7 @@ void LinearDeltaKinematics::GetAssumedInitialPosition(size_t numAxes, float posi
 }
 
 // Auto calibrate from a set of probe points returning true if it failed
-bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
+bool LinearDeltaKinematics::DoAutoCalibration(MovementState& ms, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
 	constexpr size_t NumDeltaFactors = 9;		// maximum number of delta machine factors we can adjust
 
@@ -571,7 +573,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			}
 
 			// Adjust the motor endpoints to allow for the change to endstop adjustments
-			reprap.GetMove().AdjustMotorPositions(heightAdjust, UsualNumTowers);
+			ms.AdjustMotorPositions(heightAdjust, UsualNumTowers);
 		}
 
 		// Calculate the expected probe heights using the new parameters
@@ -1014,31 +1016,21 @@ AxesBitmap LinearDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBi
 	return Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
 }
 
-// This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
-// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
-void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
+float LinearDeltaKinematics::GetEndstopPosition(size_t drive, bool highEnd) noexcept
 {
-	if (axis < numTowers)
+	if (drive < numTowers && highEnd)
 	{
-		if (highEnd)
-		{
-			dda.SetDriveCoordinate(lrintf(homedCarriageHeights[axis] * stepsPerMm[axis]), axis);
-		}
+		return homedCarriageHeights[drive];
 	}
-	else
-	{
-		// Assume that any additional axes are linear
-		const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
-		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
-	}
+	return Kinematics::GetEndstopPosition(drive, highEnd);
 }
 
 // Return the drivers that control an axis or tower
-AxesBitmap LinearDeltaKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
+LogicalDrivesBitmap LinearDeltaKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
 {
 	return (forHoming || axis > Z_AXIS)
-			? AxesBitmap::MakeFromBits(axis)
-				: AxesBitmap::MakeLowestNBits(numTowers);
+			? LogicalDrivesBitmap::MakeFromBits(axis)
+				: LogicalDrivesBitmap::MakeLowestNBits(numTowers);
 }
 
 #endif	// SUPPORT_LINEAR_DELTA

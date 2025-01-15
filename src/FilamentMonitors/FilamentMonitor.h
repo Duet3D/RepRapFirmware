@@ -153,7 +153,7 @@ protected:
 	const IoPort& GetPort() const noexcept { return port; }
 	bool HaveIsrStepsCommanded() const noexcept { return haveIsrStepsCommanded; }
 
-	static int32_t ConvertToPercent(float f)
+	static int32_t ConvertToPercent(float f) noexcept
 	{
 		return lrintf(100 * f);
 	}

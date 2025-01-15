@@ -20,7 +20,7 @@ class WiFiInterface;
 class WiFiSocket : public Socket
 {
 public:
-	WiFiSocket(NetworkInterface *iface) noexcept;
+	explicit WiFiSocket(NetworkInterface *_ecv_from iface) noexcept;
 	void Init(SocketNumber n) noexcept;
 	int State() const noexcept { return (int)state; }				// used only for reporting debug info, hence the 'int' return
 	void SetNeedsPolling() noexcept { needsPolling = true; }
@@ -32,11 +32,11 @@ public:
 	void Terminate() noexcept override;
 	void TerminateAndDisable() noexcept override { Terminate(); }
 	bool ReadChar(char& c) noexcept override;
-	bool ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept override;
+	bool ReadBuffer(const uint8_t *_ecv_array &buffer, size_t &len) noexcept override;
 	void Taken(size_t len) noexcept override;
 	bool CanRead() const noexcept override;
 	bool CanSend() const noexcept override;
-	size_t Send(const uint8_t *data, size_t length) noexcept override;
+	size_t Send(const uint8_t *_ecv_array data, size_t length) noexcept override;
 	void Send() noexcept override;
 
 private:
@@ -55,7 +55,7 @@ private:
 	void ReceiveData(uint16_t bytesAvailable) noexcept;
 	void DiscardReceivedData() noexcept;
 
-	NetworkBuffer *receivedData;						// List of buffers holding received data
+	NetworkBuffer *_ecv_null receivedData;				// List of buffers holding received data
 	bool hasMoreDataPending;							// If there is more data left to read when the buffered data has been processed
 	uint32_t whenInState;								// General purpose timekeeping value for duration spent in various socket states
 	uint16_t txBufferSpace;								// How much free transmit buffer space the WiFi mofule reported

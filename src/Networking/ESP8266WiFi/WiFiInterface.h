@@ -86,10 +86,10 @@ public:
 	void ResetWiFi() noexcept;
 	void ResetWiFiForUpload(bool external) noexcept;
 	const char *_ecv_array GetWiFiServerVersion() const noexcept { return wiFiServerVersion.c_str(); }
-	static const char* TranslateWiFiState(WiFiState w) noexcept;
+	static const char *_ecv_array TranslateWiFiState(WiFiState w) noexcept;
 	void SpiInterrupt() noexcept;
 	void EspRequestsTransfer() noexcept;
-	void UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClosedSockets) noexcept;
+	void UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClosedSockets, int8_t p_rssi) noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -115,9 +115,9 @@ private:
 
 	void SetupSpi() noexcept;
 
-	int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, uint32_t param32, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept;
+	int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, uint32_t param32, const void *_ecv_null dataOut, size_t dataOutLength, void *_ecv_null dataIn, size_t dataInLength) noexcept;
 
-	template<class T> int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, const void *dataOut, size_t dataOutLength, Receiver<T>& recvr) noexcept
+	template<class T> int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, const void *_ecv_null dataOut, size_t dataOutLength, Receiver<T>& recvr) noexcept
 	{
 		return SendCommand(cmd, socket, flags, 0, dataOut, dataOutLength, recvr.DmaPointer(), recvr.Size());
 	}
@@ -127,24 +127,24 @@ private:
 	void GetNewStatus() noexcept;
 	void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept;
 
-	int32_t SendCredential(size_t credIndex, const uint8_t *buffer, size_t bufferSize);
-	int32_t SendFileCredential(GCodeBuffer &gb, size_t credIndex);
-	int32_t SendTextCredential(GCodeBuffer &gb, size_t credIndex);
+	int32_t SendCredential(size_t credIndex, const uint8_t *_ecv_array buffer, size_t bufferSize) noexcept;
+	int32_t SendFileCredential(GCodeBuffer &gb, size_t credIndex) noexcept;
+	int32_t SendTextCredential(GCodeBuffer &gb, size_t credIndex) noexcept;
 	size_t CheckCredential(GCodeBuffer &gb, bool file = false) THROWS(GCodeException);
 
-	static const char* TranslateWiFiResponse(int32_t response) noexcept;
-	static const char* TranslateEspResetReason(uint32_t reason) noexcept;
+	static const char *_ecv_array TranslateWiFiResponse(int32_t response) noexcept;
+	static const char *_ecv_array TranslateEspResetReason(uint32_t reason) noexcept;
 
 	Platform& platform;
 	uint32_t lastTickMillis;
 	bool lastDataReadyPinState;
 	uint8_t risingEdges;
 
-	MessageBufferOut *bufferOut;
-	MessageBufferIn *bufferIn;
+	MessageBufferOut *_ecv_null bufferOut;
+	MessageBufferIn *_ecv_null bufferIn;
 
-	WifiFirmwareUploader *uploader;
-	TaskHandle espWaitingTask;
+	WifiFirmwareUploader *_ecv_null uploader;
+	TaskHandle _ecv_null espWaitingTask;
 
 	WiFiSocket *sockets[NumWiFiTcpSockets];
 	size_t currentSocket;
@@ -174,6 +174,7 @@ private:
 	String<StringLength20> wiFiServerVersion;
 
 	uint8_t startupRetryCount;
+	int8_t rssi = 0;
 	bool usingDhcp = true;
 
 	// For processing debug messages from the WiFi module
