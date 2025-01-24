@@ -572,6 +572,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			gb.SetState((zPendingRestore) ? GCodeState::resuming2 : GCodeState::resuming3);
 #else
+			SetMoveBufferDefaults(ms);
 			const bool restoreZ = (gb.GetState() != GCodeState::resuming1 || ms.coords[Z_AXIS] <= ms.GetPauseRestorePoint().moveCoords[Z_AXIS]);
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
