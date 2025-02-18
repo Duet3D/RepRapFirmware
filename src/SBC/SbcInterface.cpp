@@ -557,6 +557,7 @@ void SbcInterface::ExchangeData() noexcept
 					{
 						ExpressionParser parser(gb, expression.c_str(), expression.c_str() + expression.strlen());
 						const ExpressionValue val = parser.Parse();
+						parser.CheckForExtraCharacters();
 						if (val.GetType() == TypeCode::HeapArray)
 						{
 							// Write heap arrays as JSON
