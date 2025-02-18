@@ -28,7 +28,7 @@ constexpr ObjectModelTableEntry Fan::objectModelTable[] =
 	{ "frequency",			OBJECT_MODEL_FUNC((int32_t)self->pwmFreq), 														ObjectModelEntryFlags::none },
 	{ "max",				OBJECT_MODEL_FUNC(self->maxVal, 2), 															ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->minVal, 2), 															ObjectModelEntryFlags::none },
-	{ "name",				OBJECT_MODEL_FUNC(self->name.c_str()), 															ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC(self->name), 																	ObjectModelEntryFlags::none },
 	{ "requestedValue",		OBJECT_MODEL_FUNC(self->val, 2), 																ObjectModelEntryFlags::live },
 	{ "rpm",				OBJECT_MODEL_FUNC(self->GetRPM()), 																ObjectModelEntryFlags::live },
 	{ "tachoPpr",			OBJECT_MODEL_FUNC(self->tachoPulsesPerRev, 1), 													ObjectModelEntryFlags::none },
@@ -139,7 +139,9 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 		if (gb.Seen('C'))
 		{
 			seen = true;
-			gb.GetQuotedString(name.GetRef());
+			String<MaxFanNameLength> tempName;
+			gb.GetQuotedString(tempName.GetRef());
+			name.Assign(tempName.c_str());
 		}
 
 		if (seen)
@@ -160,9 +162,10 @@ bool Fan::Configure(unsigned int mcode, size_t fanNum, GCodeBuffer& gb, const St
 		{
 			// Report the configuration of the specified fan
 			reply.printf("Fan %u", fanNum);
-			if (name.strlen() != 0)
+			if (!name.IsNull())
 			{
-				reply.catf(" (%s)", name.c_str());
+				ReadLockedPointer<const char> tempName = name.Get();
+				reply.catf(" (%s)", tempName.Ptr());
 			}
 			if (sensorsMonitored.IsEmpty())
 			{

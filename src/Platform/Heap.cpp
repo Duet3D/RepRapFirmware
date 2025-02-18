@@ -30,7 +30,7 @@ namespace Heap
 
 		IndexBlock() noexcept : next(nullptr) { }
 
-		IndexBlock *next;
+		IndexBlock *_ecv_null next;
 		IndexSlot slots[IndexBlockSlots];
 	};
 
@@ -41,17 +41,17 @@ namespace Heap
 		void operator delete(void* ptr) noexcept {}
 		void operator delete(void* ptr, std::align_val_t align) noexcept {}
 
-		HeapBlock(HeapBlock *pNext) noexcept : next(pNext), allocated(0) { }
-		HeapBlock *next;
+		explicit HeapBlock(HeapBlock *_ecv_null pNext) noexcept : next(pNext), allocated(0) { }
+		HeapBlock *_ecv_null next;
 		size_t allocated;
 		char data[HeapBlockSize];
 	};
 
 	void GarbageCollectInternal() noexcept;
-	void AdjustHandles(char *startAddr, char *endAddr, size_t moveDown, unsigned int numHandles) noexcept;
+	void AdjustHandles(char *_ecv_array startAddr, char *_ecv_array endAddr, size_t moveDown, unsigned int numHandles) noexcept;
 
-	IndexBlock *indexRoot = nullptr;
-	HeapBlock *heapRoot = nullptr;
+	IndexBlock *_ecv_null indexRoot = nullptr;
+	HeapBlock *_ecv_null heapRoot = nullptr;
 	size_t handlesAllocated = 0;
 	std::atomic<size_t> handlesUsed = 0;
 	size_t heapAllocated = 0;
@@ -75,10 +75,10 @@ void Heap::GarbageCollectInternal() noexcept
 #endif
 
 	heapUsed = 0;
-	for (HeapBlock *currentBlock = heapRoot; currentBlock != nullptr; )
+	for (HeapBlock *_ecv_null currentBlock = heapRoot; currentBlock != nullptr; )
 	{
 		// Skip any used blocks at the start because they won't be moved
-		char *p = currentBlock->data;
+		char *_ecv_array p = currentBlock->data;
 		while (p < currentBlock->data + currentBlock->allocated)
 		{
 			const size_t len = reinterpret_cast<StorageSpace*>(p)->length;
@@ -91,7 +91,7 @@ void Heap::GarbageCollectInternal() noexcept
 
 		if (p < currentBlock->data + currentBlock->allocated)					// if we found an unused block before we reached the end
 		{
-			char* startSkip = p;
+			char *_ecv_array startSkip = p;
 
 			for (;;)
 			{
@@ -114,7 +114,7 @@ void Heap::GarbageCollectInternal() noexcept
 				else
 				{
 					// Find all the contiguous blocks
-					char *startUsed = p;
+					char *_ecv_array startUsed = p;
 					unsigned int numHandlesToAdjust = 0;
 					while (p < currentBlock->data + currentBlock->allocated)
 					{
@@ -145,14 +145,14 @@ void Heap::GarbageCollectInternal() noexcept
 }
 
 // Find all handles pointing to storage between startAddr and endAddr and move the pointers down by amount moveDown
-void Heap::AdjustHandles(char *startAddr, char *endAddr, size_t moveDown, unsigned int numHandles) noexcept
+void Heap::AdjustHandles(char *_ecv_array startAddr, char *_ecv_array endAddr, size_t moveDown, unsigned int numHandles) noexcept
 {
-	for (IndexBlock *indexBlock = indexRoot; indexBlock != nullptr; indexBlock = indexBlock->next)
+	for (IndexBlock *_ecv_null indexBlock = indexRoot; indexBlock != nullptr; indexBlock = indexBlock->next)
 	{
 		for (size_t i = 0; i < IndexBlockSlots; ++i)
 		{
-			char * const p = (char *)indexBlock->slots[i].storage;
-			if (p != nullptr && p >= startAddr && p < endAddr)
+			char *_ecv_array _ecv_null const p = (char *_ecv_array _ecv_null)indexBlock->slots[i].storage;
+			if (p != nullptr && _ecv_not_null(p) >= startAddr && _ecv_not_null(p) < endAddr)
 			{
 				indexBlock->slots[i].storage = reinterpret_cast<StorageSpace*>(p - moveDown);
 				--numHandles;
@@ -171,9 +171,9 @@ bool Heap::CheckIntegrity(const StringRef& errmsg) noexcept
 
 	// Check that all heap block entries end at the allocated length
 	unsigned int numHeapErrors = 0;
-	for (HeapBlock *currentBlock = heapRoot; currentBlock != nullptr; currentBlock = currentBlock->next)
+	for (HeapBlock *_ecv_null currentBlock = heapRoot; currentBlock != nullptr; currentBlock = currentBlock->next)
 	{
-		const char *p = currentBlock->data;
+		const char *_ecv_array p = currentBlock->data;
 		while (p != currentBlock->data + currentBlock->allocated)
 		{
 			if (p > currentBlock->data + currentBlock->allocated)
@@ -193,19 +193,19 @@ bool Heap::CheckIntegrity(const StringRef& errmsg) noexcept
 
 	// Check that all handles point into allocated heap block entries
 	unsigned int numHandleErrors = 0, numHandleFreeErrors = 0;
-	for (IndexBlock *curBlock = indexRoot; curBlock != nullptr; curBlock = curBlock->next)
+	for (IndexBlock *_ecv_null curBlock = indexRoot; curBlock != nullptr; curBlock = curBlock->next)
 	{
 		for (size_t i = 0; i < IndexBlockSlots; ++i)
 		{
-			const char *st = (const char*)curBlock->slots[i].storage;
+			const char *_ecv_array _ecv_null st = (const char *_ecv_array _ecv_null)curBlock->slots[i].storage;
 			if (st != nullptr)
 			{
 				bool found = false;
-				for (HeapBlock *currentBlock = heapRoot; currentBlock != nullptr; currentBlock = currentBlock->next)
+				for (HeapBlock *_ecv_null currentBlock = heapRoot; currentBlock != nullptr; currentBlock = currentBlock->next)
 				{
-					const char *p = currentBlock->data;
-					const char * const limit = currentBlock->data + currentBlock->allocated;
-					if (st >= p && st < limit)
+					const char *_ecv_array p = currentBlock->data;
+					const char *_ecv_array const limit = currentBlock->data + currentBlock->allocated;
+					if (_ecv_not_null(st) >= p && _ecv_not_null(st) < limit)
 					{
 						while (p < limit)
 						{
@@ -249,8 +249,8 @@ Heap::IndexSlot *Heap::AllocateHandle() noexcept
 	heapLock.CheckHasWriteLock();
 #endif
 
-	IndexBlock *prevIndexBlock = nullptr;
-	for (IndexBlock* curBlock = indexRoot; curBlock != nullptr; )
+	IndexBlock *_ecv_null prevIndexBlock = nullptr;
+	for (IndexBlock *_ecv_null curBlock = indexRoot; curBlock != nullptr; )
 	{
 		// Search for a free slot in this block
 		for (size_t i = 0; i < IndexBlockSlots; ++i)
@@ -297,7 +297,7 @@ Heap::StorageSpace *Heap::AllocateSpace(size_t length) noexcept
 	bool collected = false;
 	do
 	{
-		for (HeapBlock *currentBlock = heapRoot; currentBlock != nullptr; currentBlock = currentBlock->next)
+		for (HeapBlock *_ecv_null currentBlock = heapRoot; currentBlock != nullptr; currentBlock = currentBlock->next)
 		{
 			if (HeapBlockSize >= currentBlock->allocated + length)		// if the data will fit at the end of the current block
 			{
@@ -333,7 +333,7 @@ void Heap::CheckSlotGood(IndexSlot *slotPtr) noexcept
 {
 	RRF_ASSERT(((uint32_t)slotPtr & 3) == 0);
 	bool ok = false;
-	for (IndexBlock *indexBlock = indexRoot; indexBlock != nullptr; indexBlock = indexBlock->next)
+	for (IndexBlock *_ecv_null indexBlock = indexRoot; indexBlock != nullptr; indexBlock = indexBlock->next)
 	{
 		if (slotPtr >= &indexBlock->slots[0] && slotPtr < &indexBlock->slots[IndexBlockSlots])
 		{

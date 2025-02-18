@@ -14,16 +14,16 @@ ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Font
 {
 }
 
-void ButtonMenuItem::CorePrint(Lcd& lcd) noexcept
+void ButtonMenuItem::CorePrint(Lcd &_ecv_from lcd) noexcept
 {
 	lcd.WriteSpaces(1);				// space at start in case highlighted
 	lcd.printf("%s", text);
 	lcd.WriteSpaces(1);				// space at end to allow for highlighting
 }
 
-void ButtonMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
+void ButtonMenuItem::Draw(Lcd &_ecv_from lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
-	if (IsVisible() && (itemChanged || !drawn || highlight != highlighted) && column < lcd.GetNumCols())
+	if (IsVisible() && (itemChanged || !drawn || highlight != (bool)highlighted) && column < lcd.GetNumCols())
 	{
 		highlighted = highlight;
 		PrintAligned(lcd, rightMargin);
@@ -32,7 +32,7 @@ void ButtonMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noe
 	}
 }
 
-void ButtonMenuItem::UpdateWidthAndHeight(Lcd& lcd) noexcept
+void ButtonMenuItem::UpdateWidthAndHeight(Lcd &_ecv_from lcd) noexcept
 {
 	if (width == 0)
 	{
@@ -88,7 +88,7 @@ PixelNumber ButtonMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, P
 	}
 
 	// Should we move back up?
-	if (row < tCurrentOffset + 3)
+	if (row < tCurrentOffset + 3u)
 	{
 		tOffsetRequest = (row > 3) ? row - 3 : 0;
 	}

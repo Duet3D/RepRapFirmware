@@ -53,7 +53,7 @@ public:
 	bool CalcNextStepTime(uint32_t now) noexcept SPEED_CRITICAL;
 
 	void DebugPrint() const noexcept;
-	bool StopDriver(int32_t& netStepsTaken) noexcept;					// if the driver is moving, stop it, update the position and pass back the net steps taken
+	bool StopLogicalDrive(int32_t& netStepsTaken) noexcept;					// if the driver is moving, stop it, update the position and pass back the net steps taken
 #if SUPPORT_REMOTE_COMMANDS
 	void StopDriverFromRemote() noexcept;
 #endif
@@ -91,11 +91,11 @@ private:
 #if SUPPORT_CAN_EXPANSION
 	void TakeStepsAndCalcStepTimeRarely(uint32_t clocksNow) noexcept SPEED_CRITICAL;
 #endif
-	MoveSegment *NewSegment(uint32_t now) noexcept SPEED_CRITICAL;
+	MoveSegment *_ecv_null NewSegment(uint32_t now) noexcept SPEED_CRITICAL;
 	bool ScheduleFirstSegment() noexcept;
 
 	void ReleaseSegments() noexcept;					// release the list of segments and set it to nullptr
-	bool LogStepError(uint8_t type) noexcept;			// tell the Move class that we had a step error
+	bool LogStepError(uint8_t type, float extra) noexcept;	// tell the Move class that we had a step error
 
 #if SUPPORT_PHASE_STEPPING
 	motioncalc_t GetPhaseStepsTakenThisSegment() const noexcept;
@@ -113,7 +113,6 @@ private:
 	DriveMovement *_ecv_null nextDM ;					// link to next DM that needs a step
 	MoveSegment *volatile _ecv_null segments;			// pointer to the segment list for this driver
 
-	DDA *_ecv_null homingDda;							// if we are checking endstops then this is the DDA that represents the move
 	ExtruderShaper extruderShaper;						// pressure advance control
 
 	DMState state;										// whether this is active or not

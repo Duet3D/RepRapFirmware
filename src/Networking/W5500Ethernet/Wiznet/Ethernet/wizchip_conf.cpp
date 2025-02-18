@@ -61,7 +61,7 @@
 
 static const char WizchipId[6] = "w5500";
 
-int8_t ctlwizchip(ctlwizchip_type cwtype, void* arg) noexcept
+int8_t ctlwizchip(ctlwizchip_type cwtype, void *_ecv_null arg) noexcept
 {
 	switch(cwtype)
 	{
@@ -70,10 +70,10 @@ int8_t ctlwizchip(ctlwizchip_type cwtype, void* arg) noexcept
 		break;
 	case CW_INIT_WIZCHIP:
 		{
-			uint8_t* ptmp[2] = {0,0};
-			if (arg != 0)
+			uint8_t *_ecv_array _ecv_null ptmp[2] = {0,0};
+			if (arg != nullptr)
 			{
-				ptmp[0] = (uint8_t*)arg;
+				ptmp[0] = (uint8_t *_ecv_array )arg;
 				ptmp[1] = ptmp[0] + _WIZCHIP_SOCK_NUM_;
 			}
 			return wizchip_init(ptmp[0], ptmp[1]);
@@ -152,7 +152,7 @@ void wizchip_sw_reset() noexcept
 	setSIPR(sip);
 }
 
-int8_t wizchip_init(const uint8_t* txsize, const uint8_t* rxsize) noexcept
+int8_t wizchip_init(const uint8_t *_ecv_array _ecv_null txsize, const uint8_t *_ecv_array _ecv_null rxsize) noexcept
 {
 	WizSpi::Init();
 	wizchip_sw_reset();

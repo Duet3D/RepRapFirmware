@@ -20,7 +20,7 @@
 #include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
-const char * const Kinematics::HomeAllFileName = "homeall.g";
+const char *_ecv_array const Kinematics::HomeAllFileName = "homeall.g";
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -105,7 +105,7 @@ bool Kinematics::TryConfigureSegmentation(GCodeBuffer& gb) THROWS(GCodeException
 bool Kinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept
 {
 	const Move& move = reprap.GetMove();
-	return axes.IterateWhile([&move, axesCoords](unsigned int axis, unsigned int count) -> bool {
+	return axes.IterateWhile([&move, axesCoords](unsigned int axis, unsigned int count) noexcept -> bool {
 		if (axesCoords[axis] >= move.AxisMinimum(axis) && axesCoords[axis] <= move.AxisMaximum(axis))
 		{
 			return true;
@@ -116,7 +116,7 @@ bool Kinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const n
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
 // This default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
-LimitPositionResult Kinematics::LimitPosition(float finalCoords[], const float * null initialCoords,
+LimitPositionResult Kinematics::LimitPosition(float finalCoords[], const float *_ecv_array _ecv_null initialCoords,
 												size_t numVisibleAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept
 {
 	return (applyM208Limits && LimitPositionFromAxis(finalCoords, 0, numVisibleAxes, axesToLimit)) ? LimitPositionResult::adjusted : LimitPositionResult::ok;
@@ -203,11 +203,55 @@ AxesBitmap Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alread
 	return homeFirst & ~alreadyHomed;
 }
 
-// Return a bitmap of the motors that affect this axis or tower. Used for implementing stall detection endstops and energising additional motors.
-// Usually it is just the corresponding motor (hence this default implementation), but CoreXY and similar kinematics move multiple motors to home an individual axis.
-AxesBitmap Kinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
+// Return the position of a drive at which the homing switch is triggered
+// The default is to return the M208 limits.
+float Kinematics::GetEndstopPosition(size_t drive, bool highEnd) noexcept
 {
-	return AxesBitmap::MakeFromBits(axis);
+	return (highEnd) ? reprap.GetMove().AxisMaximum(drive) : reprap.GetMove().AxisMinimum(drive);
+}
+
+// Return a bitmap of the drives that affect this axis or tower. Used for implementing stall detection endstops and energising additional motors.
+// For Cartesian kinematics it is just the corresponding motor, hence this default implementation.
+// Overridden in CoreXY and many other kinematics.
+LogicalDrivesBitmap Kinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
+{
+	return LogicalDrivesBitmap::MakeFromBits(axis);
+}
+
+// Return a bitmap of all the drives that affect a set of axes
+LogicalDrivesBitmap Kinematics::GetAllDrivesUsed(AxesBitmap axesAndExtruders) const noexcept
+{
+	LogicalDrivesBitmap result;
+	axesAndExtruders.Iterate([this, &result](size_t axis, size_t count) noexcept { result |= GetControllingDrives(axis, false); });
+	return result;
+}
+
+// Return a bitmap of all axes (but not extruders) affected by a particular drive. Used only for planning raw motor moves, so it doesn't need to be efficient.
+AxesBitmap Kinematics::GetAffectedAxes(size_t drive, size_t numAxes) const noexcept
+{
+	AxesBitmap result;
+	for (size_t axis = 0; axis < numAxes; ++axis)
+	{
+		if (GetControllingDrives(axis, false).IsBitSet(drive))
+		{
+			result.SetBit(axis);
+		}
+	}
+	return result;
+}
+
+// Return a bitmap of all axes (but not extruders) affected by set of drives
+AxesBitmap Kinematics::GetAffectedAxes(LogicalDrivesBitmap drives, size_t numAxes) const noexcept
+{
+	AxesBitmap result;
+	for (size_t axis = 0; axis < numAxes; ++axis)
+	{
+		if (GetControllingDrives(axis, false).Intersects(drives))
+		{
+			result.SetBit(axis);
+		}
+	}
+	return result;
 }
 
 // Return true if the specified axis is a continuous rotation axis. This default implementation is overridden in some classes e.g. polar.
@@ -220,7 +264,7 @@ bool Kinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 // The speeds in Cartesian space have already been limited.
 // The default implementation in this class just limits the combined XY speed to the lower of the individual X and Y limits. This is appropriate for
 // many types of kinematics, but not for Cartesian.
-void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
+void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *_ecv_array normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
 {
 	const float dx = normalisedDirectionVector[X_AXIS];
 	const float dy = normalisedDirectionVector[Y_AXIS];
@@ -235,7 +279,7 @@ void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDire
 	}
 }
 
-/*static*/ Kinematics *Kinematics::Create(KinematicsType k) noexcept
+/*static*/ Kinematics *_ecv_from Kinematics::Create(KinematicsType k) noexcept
 {
 	switch (k)
 	{

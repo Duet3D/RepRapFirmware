@@ -52,7 +52,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	// 0. inputs[] root
 	{ "active",
 #if SUPPORT_ASYNC_MOVES
-							OBJECT_MODEL_FUNC(self->Executing()),												ObjectModelEntryFlags::live },
+							OBJECT_MODEL_FUNC(self->Executing()),												ObjectModelEntryFlags::liveNotPanelDue },
 #else
 							OBJECT_MODEL_FUNC_NOSELF(true),														ObjectModelEntryFlags::none },
 #endif
@@ -60,21 +60,21 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "compatibility",		OBJECT_MODEL_FUNC(self->machineState->compatibility.ToString()),					ObjectModelEntryFlags::none },
 	{ "distanceUnit",		OBJECT_MODEL_FUNC(self->GetDistanceUnits()),										ObjectModelEntryFlags::none },
 	{ "drivesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->drivesRelative),						ObjectModelEntryFlags::none },
-	{ "feedRate",			OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->machineState->feedRate), 1),	ObjectModelEntryFlags::live },
-	{ "inMacro",			OBJECT_MODEL_FUNC((bool)self->machineState->doingFileMacro),						ObjectModelEntryFlags::live },
+	{ "feedRate",			OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->machineState->feedRate), 1),	ObjectModelEntryFlags::liveNotPanelDue },
+	{ "inMacro",			OBJECT_MODEL_FUNC((bool)self->machineState->doingFileMacro),						ObjectModelEntryFlags::liveNotPanelDue },
 	{ "inverseTimeMode",	OBJECT_MODEL_FUNC((bool)self->machineState->inverseTimeMode),						ObjectModelEntryFlags::none },
-	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->GetLineNumber()),									ObjectModelEntryFlags::live },
+	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->GetLineNumber()),									ObjectModelEntryFlags::liveNotPanelDue },
 	{ "macroRestartable",	OBJECT_MODEL_FUNC((bool)self->machineState->macroRestartable),						ObjectModelEntryFlags::none },
 	{ "motionSystem",
 #if SUPPORT_ASYNC_MOVES
-							OBJECT_MODEL_FUNC((int32_t)self->GetActiveQueueNumber()),							ObjectModelEntryFlags::live },
+							OBJECT_MODEL_FUNC((int32_t)self->GetActiveQueueNumber()),							ObjectModelEntryFlags::liveNotPanelDue },
 #else
 							OBJECT_MODEL_FUNC_NOSELF((int32_t)0),												ObjectModelEntryFlags::none },
 #endif
 	{ "name",				OBJECT_MODEL_FUNC(self->codeChannel.ToString()),									ObjectModelEntryFlags::none },
 	{ "selectedPlane",		OBJECT_MODEL_FUNC((int32_t)self->machineState->selectedPlane),						ObjectModelEntryFlags::none },
 	{ "stackDepth",			OBJECT_MODEL_FUNC((int32_t)self->GetStackDepth()),									ObjectModelEntryFlags::none },
-	{ "state",				OBJECT_MODEL_FUNC(self->GetStateText()),											ObjectModelEntryFlags::live },
+	{ "state",				OBJECT_MODEL_FUNC(self->GetStateText()),											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "volumetric",			OBJECT_MODEL_FUNC((bool)self->machineState->volumetricExtrusion),					ObjectModelEntryFlags::none },
 };
 
@@ -576,7 +576,7 @@ uint32_t GCodeBuffer::GetUIValue() THROWS(GCodeException)
 	return PARSER_OPERATION(GetUIValue());
 }
 
-// Get an unsigned integer value, throw if >= limit
+// Get an unsigned integer value, throw if >= limit or the parameter letter is not seen
 uint32_t GCodeBuffer::GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException)
 {
 	MustSee(c);
@@ -1208,7 +1208,7 @@ void GCodeBuffer::MacroFileClosed() noexcept
 
 // Tell this input source that any message it sent and is waiting on has been acknowledged
 // Allow for the possibility that the source may have started running a macro since it started waiting
-void GCodeBuffer::MessageAcknowledged(bool cancelled, uint32_t seq, ExpressionValue rslt) noexcept
+void GCodeBuffer::MessageAcknowledged(bool cancelled, bool shouldAbort, uint32_t seq, ExpressionValue rslt) noexcept
 {
 	for (GCodeMachineState *_ecv_null ms = machineState; ms != nullptr; ms = ms->GetPrevious())
 	{
@@ -1216,14 +1216,14 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled, uint32_t seq, ExpressionVa
 		{
 			ms->waitingForAcknowledgement = false;
 			ms->messageAcknowledged = true;
-			ms->messageCancelled = cancelled;
+			ms->messageShouldAbort = cancelled && shouldAbort;
 			m291Result = rslt;
 			if (cancelled)
 			{
 				lastResult = GCodeResult::m291Cancelled;
 			}
 #if HAS_SBC_INTERFACE
-			messageAcknowledged = !cancelled || !ms->DoingFile();
+			messageAcknowledged = !(cancelled && shouldAbort) || !ms->DoingFile();
 			reprap.GetSbcInterface().EventOccurred();
 #endif
 		}
@@ -1383,6 +1383,16 @@ void GCodeBuffer::ThrowGCodeException(const char *_ecv_array msg) const THROWS(G
 }
 
 void GCodeBuffer::ThrowGCodeException(const char *_ecv_array msg, uint32_t param) const THROWS(GCodeException)
+{
+	const int column =
+#if HAS_SBC_INTERFACE
+						(isBinaryBuffer) ? -1 :
+#endif
+							stringParser.GetColumn();
+	throw GCodeException(this, column, msg, param);
+}
+
+[[noreturn]] void GCodeBuffer::ThrowGCodeException(const char *_ecv_array msg, const char *_ecv_array param) const THROWS(GCodeException)
 {
 	const int column =
 #if HAS_SBC_INTERFACE

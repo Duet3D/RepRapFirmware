@@ -25,7 +25,7 @@ bool InputMonitor::Activate(bool useInterrupt) noexcept
 		if (threshold == 0)
 		{
 			// Digital input
-			const irqflags_t flags = IrqSave();
+			const auto flags = IrqSave();
 			ok = !useInterrupt || port.AttachInterrupt(CommonDigitalPortInterrupt, InterruptMode::change, CallbackParameter(this));
 			state = port.ReadDigital();
 			IrqRestore(flags);
@@ -164,12 +164,12 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 {
 	WriteLocker lock(listLock);
 
-	Delete(msg.handle.u.all);						// delete any existing monitor with the same handle
+	Delete(msg.handle.all);						// delete any existing monitor with the same handle
 
 	// Allocate a new one
 	InputMonitor *newMonitor = new InputMonitor;
 
-	newMonitor->handle = msg.handle.u.all;
+	newMonitor->handle = msg.handle.all;
 	newMonitor->active = false;
 	newMonitor->state = false;
 	newMonitor->minInterval = msg.minInterval;
@@ -182,7 +182,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 		newMonitor->next = monitorsList;
 		monitorsList = newMonitor;
 		// Pins used only by the ATE may not have interrupts, and the ATE doesn't need interrupts from them
-		const bool ok = newMonitor->Activate(msg.handle.u.parts.type != RemoteInputHandle::typeAte);
+		const bool ok = newMonitor->Activate(msg.handle.parts.type != RemoteInputHandle::typeAte);
 		extra = (newMonitor->state) ? 1 : 0;
 		if (!ok)
 		{
@@ -202,19 +202,19 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 	{
 		WriteLocker lock(listLock);
 
-		if (Delete(msg.handle.u.all))
+		if (Delete(msg.handle.all))
 		{
 			return GCodeResult::ok;
 		}
 
-		reply.printf("Board %u does not have input handle %04x", CanInterface::GetCanAddress(), msg.handle.u.all);
+		reply.printf("Board %u does not have input handle %04x", CanInterface::GetCanAddress(), msg.handle.all);
 		return GCodeResult::warning;					// only a warning when deleting a non-existent handle
 	}
 
-	auto m = Find(msg.handle.u.all);
+	auto m = Find(msg.handle.all);
 	if (m.IsNull())
 	{
-		reply.printf("Board %u does not have input handle %04x", CanInterface::GetCanAddress(), msg.handle.u.all);
+		reply.printf("Board %u does not have input handle %04x", CanInterface::GetCanAddress(), msg.handle.all);
 		return GCodeResult::error;
 	}
 
@@ -310,8 +310,8 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 	const CanMessageReadInputsRequest& req = buf->msg.readInputsRequest;
 	const CanAddress srcAddress = buf->id.Src();
 	const uint16_t rid = req.requestId;
-	const uint16_t mask = req.mask.u.all;
-	const uint16_t pattern = req.pattern.u.all & mask;
+	const uint16_t mask = req.mask.all;
+	const uint16_t pattern = req.pattern.all & mask;
 
 	// Construct the new message in the same buffer
 	auto reply = buf->SetupResponseMessage<CanMessageReadInputsReply>(rid, CanInterface::GetCanAddress(), srcAddress);
@@ -349,7 +349,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 		{
 			AnalogHandleData data;
 			data.reading = h->GetAnalogValue();
-			data.handle.u.all = h->handle;
+			data.handle.all = h->handle;
 			memcpy(buffer, &data, sizeof(AnalogHandleData));
 			buffer += sizeof(AnalogHandleData);
 			spaceLeft -= sizeof(AnalogHandleData);

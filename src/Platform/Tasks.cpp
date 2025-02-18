@@ -27,9 +27,9 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include <freertos_task_additions.h>
-#include <malloc.h>
+#include <malloc.h>						// non-standard include file, defines 'mallinfo'
 
-const uint8_t memPattern = 0xA5;		// this must be the same pattern as FreeRTOS because we use common code for checking for stack overflow
+const char memPattern = (char)0xA5;		// this must be the same pattern as FreeRTOS because we use common code for checking for stack overflow
 
 // Define replacement standard library functions
 #include <syscalls.h>
@@ -59,8 +59,8 @@ static Task<IdleTaskStackWords> idleTask;
 
 extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize) noexcept
 {
-	*ppxIdleTaskTCBBuffer = idleTask.GetTaskMemory();
-	*ppxIdleTaskStackBuffer = idleTask.GetStackBase();
+	*ppxIdleTaskTCBBuffer = (xSTATIC_TCB*)idleTask.GetTaskMemory();
+	*ppxIdleTaskStackBuffer = (uint32_t*)idleTask.GetStackBase();
 	*pulIdleTaskStackSize = idleTask.GetStackSize();
 }
 
@@ -106,15 +106,15 @@ extern "C" void ReleaseMallocMutex() noexcept
 // Instead we use either the bottom or top of the main task stack.
 // Parameter 'stk' is the stack we are interested in, which we must not overwrite; or null.
 // If it is not null then the caller is either using the same stack a little lower, or the exception stack.
-void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
+void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array _ecv_null stk) noexcept
 {
 	constexpr size_t stackAllowance = 128;
 	static_assert((sizeof(NonVolatileMemory) & 3) == 0);
 	static_assert(MainTaskStackWords * 4 >= 2 * sizeof(NonVolatileMemory) + stackAllowance + 4);
-	const char * const cStack = reinterpret_cast<const char*>((stk == nullptr) ? GetStackPointer() : stk);
+	const char *_ecv_array const cStack = reinterpret_cast<const char *_ecv_array>((stk == nullptr) ? GetStackPointer() : _ecv_not_null(stk));
 
 	// See if we can use the bottom of the main task stack
-	char *ret = (char *)&mainTask + sizeof(TaskBase);
+	char *_ecv_array ret = (char *_ecv_array)&mainTask + sizeof(TaskBase);
 	if (cStack > ret + (sizeof(NonVolatileMemory) + stackAllowance + 4))	// allow space for the buffer + 128b in case we are on that stack
 	{
 		ret += 4;															// the +4 is so that we leave the stack marker alone in case the main task raised the exception
@@ -157,8 +157,8 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 	// Check the integrity of the firmware by checking the firmware CRC
 	// If we have embedded files then the CRC is stored after those files, so we need to fetch the CRC address form the vector table
 	{
-		const char *firmwareStart = reinterpret_cast<const char*>(SCB->VTOR & 0xFFFFFF80);
-		const char *firmwareCrcAddr = (const char*)exception_table
+		const char *_ecv_array firmwareStart = reinterpret_cast<const char *_ecv_array>(SCB->VTOR & 0xFFFFFF80);
+		const char *_ecv_array firmwareCrcAddr = (const char *_ecv_array)exception_table
 # if SAME5x
 										.pvReservedM9;
 # else
@@ -268,8 +268,8 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 // Return the amount of free handler stack space. It may be negative if the stack has overflowed into the area reserved for the heap.
 static ptrdiff_t GetHandlerFreeStack() noexcept
 {
-	const char * const ramend = (const char*)&_estack;
-	const char * stack_lwm = sysStackLimit;
+	const char *_ecv_array const ramend = (const char *_ecv_array)&_estack;
+	const char *_ecv_array stack_lwm = sysStackLimit;
 	while (stack_lwm < ramend && *stack_lwm == memPattern)
 	{
 		++stack_lwm;
@@ -282,7 +282,7 @@ ptrdiff_t Tasks::GetNeverUsedRam() noexcept
 	return heapLimit - heapTop;
 }
 
-const char* Tasks::GetHeapTop() noexcept
+const char *_ecv_array Tasks::GetHeapTop() noexcept
 {
 	return heapTop;
 }
@@ -329,13 +329,13 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 	p.Message(mtype, "=== RTOS ===\n");
 	// Print memory stats
 	{
-		const char * const ramstart =
+		const char *_ecv_array const ramstart =
 #if SAME5x
-			(char *) HSRAM_ADDR;
+			reinterpret_cast<const char *_ecv_array>(HSRAM_ADDR);
 #else
-			(char *) IRAM_ADDR;
+			reinterpret_cast<const char *_ecv_array>(IRAM_ADDR);
 #endif
-		p.MessageF(mtype, "Static ram: %d\n", &_end - ramstart);
+		p.MessageF(mtype, "Static ram: %d\n", (const char *_ecv_array)&_end - ramstart);
 
 		const struct mallinfo mi = mallinfo();
 		p.MessageF(mtype, "Dynamic ram: %d of which %d recycled\n", mi.uordblks, mi.fordblks);
@@ -349,12 +349,12 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 	const uint64_t timeSinceLastCall = TaskResetRunTimeCounter();
 	float totalCpuPercent = 0.0;
 	p.Message(mtype, "Tasks:");
-	for (TaskBase *t = TaskBase::GetTaskList(); t != nullptr; t = t->GetNext())
+	for (TaskBase *_ecv_from _ecv_null t = TaskBase::GetTaskList(); t != nullptr; t = t->GetNext())
 	{
 		ExtendedTaskStatus_t taskDetails;
 		vTaskGetExtendedInfo(t->GetFreeRTOSHandle(), &taskDetails);
 
-		const char* stateText;
+		const char *_ecv_array stateText;
 		switch (taskDetails.eCurrentState)
 		{
 		case esRunning:
@@ -391,7 +391,7 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 		{
 		case esResourceWaiting:
 			{
-				const Mutex *m = Mutex::GetMutexList();
+				const Mutex *_ecv_null m = Mutex::GetMutexList();
 				while (m != nullptr)
 				{
 					if ((const void *)m == taskDetails.pvResource)
@@ -416,9 +416,9 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 	}
 	p.MessageF(mtype, ", total %.1f%%\nOwned mutexes:", (double)totalCpuPercent);
 
-	for (const Mutex *m = Mutex::GetMutexList(); m != nullptr; m = m->GetNext())
+	for (const Mutex *_ecv_null m = Mutex::GetMutexList(); m != nullptr; m = m->GetNext())
 	{
-		const TaskHandle holder = m->GetHolder();
+		const TaskHandle _ecv_null holder = m->GetHolder();
 		if (holder != nullptr)
 		{
 			p.MessageF(mtype, " %s(%s)", m->GetName(), pcTaskGetName(holder->GetFreeRTOSHandle()));

@@ -3,7 +3,8 @@
  *
  *  Created on: 5 Dec 2017
  *      Author: David
- *  This file contains functions that are called form file GCodes2.cpp to execute various G and M codes.
+ *
+ *  This file contains functions that are called from file GCodes2.cpp to execute various G and M codes.
  */
 
 #include "GCodes.h"
@@ -18,19 +19,10 @@
 #include <PrintMonitor/PrintMonitor.h>
 #include <Platform/Tasks.h>
 #include <Hardware/I2C.h>
+#include <Movement/StepperDrivers/SmartDrivers.h>
 
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 # include <Comms/FirmwareUpdater.h>
-#endif
-
-#if SUPPORT_TMC2660
-# include <Movement/StepperDrivers/TMC2660.h>
-#endif
-#if SUPPORT_TMC22xx
-# include <Movement/StepperDrivers/TMC22xx.h>
-#endif
-#if SUPPORT_TMC51xx
-# include <Movement/StepperDrivers/TMC51xx.h>
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -86,10 +78,10 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 		}
 #if SUPPORT_ASYNC_MOVES
 		// Check for setting unowned axes before processing the command
-		axisLettersMentioned.ClearBits(ms.GetOwnedAxisLetters());
-		if (axisLettersMentioned.IsNonEmpty())
+		const ParameterLettersBitmap axisLettersNeeded = axisLettersMentioned & ~ms.GetOwnedAxisLetters();
+		if (axisLettersNeeded.IsNonEmpty())
 		{
-			AllocateAxisLetters(gb, ms, axisLettersMentioned);
+			AllocateAxisLetters(gb, ms, axisLettersNeeded);
 		}
 #endif
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
@@ -119,14 +111,15 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 	{
 		ToolOffsetTransform(ms);
 
-		if (reprap.GetMove().GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesIncluded, false, limitAxes) != LimitPositionResult::ok)
+		Move& move = reprap.GetMove();
+		if (move.GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesIncluded, false, limitAxes) != LimitPositionResult::ok)
 		{
 			ToolOffsetInverseTransform(ms);					// make sure the limits are reflected in the user position
 		}
-#if SUPPORT_ASYNC_MOVES
-		ms.OwnedAxisCoordinatesUpdated(axesIncluded);		// save coordinates of any owned axes we changed
-#endif
-		reprap.GetMove().SetNewPositionOfOwnedAxes(ms, true);
+		float ncoords[MaxAxes];
+		memcpyf(ncoords, ms.coords, ARRAY_SIZE(ncoords));
+		move.AxisAndBedTransform(ncoords, ms.currentTool, true);
+		ms.SetNewPositionOfOwnedAxes(ncoords);
 		if (!IsSimulating())
 		{
 			axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
@@ -289,11 +282,20 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 	{
 		if (!IsSimulating())
 		{
-			axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
+			// Ensure that lastKnownEndpoints is up to date with the current endpoints for drives that are owned and may have been moved
+			// Also save the current tool for each machine state, the feed rate, and job file position (if any)
+			// It is convenient to use a RestorePoint to save these, however we don't make use of the coordinates in the RestorePoint when the simulation ends, so we could use a smaller struct instead
 			for (MovementState& ms : moveStates)
 			{
+				ms.SaveOwnDriveCoordinates();
 				ms.SavePosition(SimulationRestorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetJobFilePosition());
 			}
+
+			// Now that lastKnownEndpoints is up to date, save it
+			MovementState::RestoreEndpointsAfterSimulating();
+
+			// Pretend that all axes have been homed
+			axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);
 		}
 		simulationTime = 0.0;
 		exitSimulationWhenFileComplete = true;
@@ -335,8 +337,10 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 				axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
 				for (MovementState& ms : moveStates)
 				{
+					ms.SaveOwnDriveCoordinates();
 					ms.SavePosition(SimulationRestorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetJobFilePosition());
 				}
+				MovementState::SaveEndpointsBeforeSimulating();
 			}
 			simulationTime = 0.0;
 		}
@@ -372,13 +376,13 @@ GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 
 	const bool activeHigh = (!gb.Seen('S') || gb.GetUIValue() >= 1);
 	Platform& pfm = platform;
-	const bool ok = endstopsToWaitFor.IterateWhile([&pfm, activeHigh](unsigned int axis, unsigned int)->bool
+	const bool ok = endstopsToWaitFor.IterateWhile([&pfm, activeHigh](unsigned int axis, unsigned int) noexcept -> bool
 								{
 									const bool stopped = pfm.GetEndstops().Stopped(axis);
 									return stopped == activeHigh;
 								}
 							 )
-				&& portsToWaitFor.IterateWhile([&pfm, activeHigh](unsigned int port, unsigned int)->bool
+				&& portsToWaitFor.IterateWhile([&pfm, activeHigh](unsigned int port, unsigned int) noexcept -> bool
 								{
 									return (port >= MaxGpInPorts || pfm.GetGpInPort(port).GetState() == activeHigh);
 								}
@@ -415,8 +419,6 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	bool seen = false, seenExtrude = false;
 	GCodeResult rslt = GCodeResult::ok;
-
-	const size_t originalVisibleAxes = numVisibleAxes;
 	const char *_ecv_array lettersToTry = AllowedAxisLetters;
 
 #if SUPPORT_CAN_EXPANSION
@@ -503,8 +505,10 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 						--numExtruders;
 					}
 					numVisibleAxes = numTotalAxes;						// assume any new axes are visible unless there is a P parameter
+
+					// Set the initial coordinates of the new drive
 					float initialCoords[MaxAxes];
-					reprap.GetMove().GetKinematics().GetAssumedInitialPosition(drive + 1, initialCoords);
+					reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numTotalAxes, initialCoords);
 					for (MovementState& ms : moveStates)
 					{
 						ms.coords[drive] = initialCoords[drive];		// user has defined a new axis, so set its position
@@ -568,24 +572,6 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 	if (seen || seenExtrude)
 	{
 		reprap.MoveUpdated();
-		if (numVisibleAxes > originalVisibleAxes)
-		{
-			// In the DDA ring, the axis positions for invisible non-moving axes are not always copied over from previous moves.
-			// So if we have more visible axes than before, then we need to update their positions to get them in sync.
-			//TODO for multiple motion systems, is this correct? Other input channel must wait until we have finished.
-			for (MovementState& ms : moveStates)
-			{
-				ToolOffsetTransform(ms);										// ensure that the position of any new axes are updated in moveBuffer
-				if (ms.GetNumber() == 0)
-				{
-					reprap.GetMove().SetNewPositionOfAllAxes(ms, true);			// tell the Move system where the axes are
-				}
-				else
-				{
-					reprap.GetMove().SetNewPositionOfOwnedAxes(ms, true);		// tell the Move system where the axes are
-				}
-			}
-		}
 #if SUPPORT_CAN_EXPANSION
 		rslt = max(rslt, move.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply));
 #endif
@@ -1695,5 +1681,50 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 		}
 	}
 }
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+
+// M38 (SHA1 hash of a file) implementation:
+bool GCodes::StartHash(const char* filename) noexcept
+{
+	// Get a FileStore object
+	fileBeingHashed = platform.OpenFile(FS_PREFIX, filename, OpenMode::read);
+	if (fileBeingHashed == nullptr)
+	{
+		return false;
+	}
+
+	// Start hashing
+	hash.Reset();
+	return true;
+}
+
+GCodeResult GCodes::AdvanceHash(const StringRef &reply) noexcept
+{
+	// Read and process some more data from the file
+	alignas(4) char buffer[FILE_BUFFER_SIZE];
+	const int bytesRead = fileBeingHashed->Read(buffer, FILE_BUFFER_SIZE);
+	if (bytesRead != -1)
+	{
+		hash.Update(buffer, bytesRead);
+
+		if (bytesRead != FILE_BUFFER_SIZE)
+		{
+			fileBeingHashed->Close();
+			fileBeingHashed = nullptr;
+			reply.printf("%08" PRIx32, hash.Get());
+			return GCodeResult::ok;
+		}
+		return GCodeResult::notFinished;
+	}
+
+	// Something went wrong, we cannot read any more from the file
+	fileBeingHashed->Close();
+	fileBeingHashed = nullptr;
+	reply.copy("error reading file");
+	return GCodeResult::error;
+}
+
+#endif
 
 // End

@@ -18,7 +18,7 @@ NeoPixelLedStrip::NeoPixelLedStrip(bool p_isRGBW) noexcept
 }
 
 // Configure or report on this strip
-GCodeResult NeoPixelLedStrip::Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException)
+GCodeResult NeoPixelLedStrip::Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array _ecv_null pinName) THROWS(GCodeException)
 {
 	bool seen = false;
 	GCodeResult rslt = CommonConfigure(gb, reply, pinName, seen);
@@ -124,7 +124,7 @@ size_t NeoPixelLedStrip::GetBytesPerLed() const noexcept
 // A 0 bit is encoded as 1000
 // A 1 bit is encoded as 1110
 // All encoding is MSB first
-static void EncodeNeoPixelByte(uint8_t *p, uint8_t val) noexcept
+static void EncodeNeoPixelByte(uint8_t *_ecv_array p, uint8_t val) noexcept
 {
 	static constexpr uint8_t EncodedByte[4] = { 0b10001000, 0b10001110, 0b11101000, 0b11101110 };
 
@@ -147,7 +147,7 @@ GCodeResult NeoPixelLedStrip::SpiSendData(const LedParams& params) noexcept
 {
 	const unsigned int bytesPerLed = (isRGBW) ? 16 : 12;
 	unsigned int numLeds = params.numLeds;
-	uint8_t *p = chunkBuffer + (bytesPerLed * numAlreadyInBuffer);
+	uint8_t *_ecv_array p = chunkBuffer + (bytesPerLed * numAlreadyInBuffer);
 	while (numLeds != 0 && p + bytesPerLed <= chunkBuffer + chunkBufferSize)
 	{
 		EncodeNeoPixelByte(p, (uint8_t)params.green);
@@ -195,7 +195,7 @@ GCodeResult NeoPixelLedStrip::BitBangData(const LedParams& params) noexcept
 {
 	const unsigned int bytesPerLed = (isRGBW) ? 4 : 3;
 	unsigned int numLeds = params.numLeds;
-	uint8_t *p = chunkBuffer + (bytesPerLed * numAlreadyInBuffer);
+	uint8_t *_ecv_array p = chunkBuffer + (bytesPerLed * numAlreadyInBuffer);
 	while (numLeds != 0 && p + bytesPerLed <= chunkBuffer + chunkBufferSize)
 	{
 		*p++ = (uint8_t)params.green;
@@ -211,7 +211,7 @@ GCodeResult NeoPixelLedStrip::BitBangData(const LedParams& params) noexcept
 
 	if (!params.following)
 	{
-		const uint8_t *q = chunkBuffer;
+		const uint8_t *_ecv_array q = _ecv_not_null(chunkBuffer);
 		uint32_t nextDelay = TCY;
 		const Pin pin = port.GetPin();
 #if SAME70

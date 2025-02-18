@@ -56,6 +56,7 @@ public:
 	GCodeResult SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, const uint8_t *_ecv_array data) noexcept;
 	GCodeResult ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, uint8_t *_ecv_array data) noexcept
 		pre(function == 3 || function == 4);
+	GCodeResult ModbusRawTransaction(uint8_t p_slaveAddress, const uint8_t *_ecv_array rawDataOut, size_t numOut, uint8_t *_ecv_array rawDataIn, size_t numIn) noexcept;
 	GCodeResult CheckModbusResult() noexcept;
 
 	void TxEndedCallback() noexcept;

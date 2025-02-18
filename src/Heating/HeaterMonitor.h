@@ -54,7 +54,7 @@ public:
 	float GetTemperatureLimit() const noexcept { return limit; }		// Get the temperature limit
 	HeaterMonitorAction GetAction() const noexcept { return action; }	// Get the action to trigger when a temperature event occurs
 	HeaterMonitorTrigger GetTrigger() const noexcept { return trigger; }	// Get the condition for a temperature event
-	const char *GetTriggerName() const noexcept;						// Get the condition for a temperature event
+	const char *_ecv_array GetTriggerName() const noexcept;				// Get the condition for a temperature event
 
 	void Report(unsigned int heater, unsigned int index, const StringRef& reply) const noexcept;	// Append a report of this monitor to the string
 

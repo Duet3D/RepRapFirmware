@@ -14,16 +14,7 @@
 #include <Tools/Tool.h>
 #include <CAN/CanInterface.h>
 #include <CAN/CanDriversData.h>
-
-#if SUPPORT_TMC2660
-# include "Movement/StepperDrivers/TMC2660.h"
-#endif
-#if SUPPORT_TMC22xx
-# include "Movement/StepperDrivers/TMC22xx.h"
-#endif
-#if SUPPORT_TMC51xx
-# include "Movement/StepperDrivers/TMC51xx.h"
-#endif
+#include "StepperDrivers/SmartDrivers.h"
 
 #if SUPPORT_REMOTE_COMMANDS
 # include <CanMessageGenericParser.h>
@@ -32,26 +23,26 @@
 
 // Set the microstepping for local drivers, returning true if successful. All drivers for the same axis must use the same microstepping.
 // Caller must deal with remote drivers.
-bool Move::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool interp, const StringRef& reply) noexcept
+bool Move::SetMicrostepping(size_t drive, unsigned int microsteps, bool interp, const StringRef& reply) noexcept
 {
-	bool ret = SetDriversMicrostepping(axisOrExtruder, microsteps, interp, reply);
+	const bool ret = SetDriversMicrostepping(drive, microsteps, interp, reply);
 	if (ret)
 	{
-		microstepping[axisOrExtruder] = (interp) ? microsteps | 0x8000 : microsteps;
+		microstepping[drive] = (interp) ? microsteps | 0x8000 : microsteps;
 		reprap.MoveUpdated();
 	}
 	return ret;
 }
 
 // Get the microstepping for an axis or extruder
-unsigned int Move::GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const noexcept
+unsigned int Move::GetMicrostepping(size_t drive, bool& interpolation) const noexcept
 {
-	interpolation = (microstepping[axisOrExtruder] & 0x8000) != 0;
-	return microstepping[axisOrExtruder] & 0x7FFF;
+	interpolation = (microstepping[drive] & 0x8000) != 0;
+	return microstepping[drive] & 0x7FFF;
 }
 
-// Set the drive steps per mm. Called when processing M92.
-void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept
+// Set the drive steps per mm. Called when processing M92. Return the new steps/mm divided by the old one.
+float Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept
 {
 	if (requestedMicrostepping != 0)
 	{
@@ -63,8 +54,10 @@ void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t reque
 	}
 
 	value = max<float>(value, MinimumStepsPerMm);					// don't allow zero or negative
+	const float ret = value/driveStepsPerMm[axisOrExtruder];
 	driveStepsPerMm[axisOrExtruder] = value;
 	reprap.MoveUpdated();
+	return ret;
 }
 
 // Process M205 or M566
@@ -189,7 +182,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 		}
 		else
 		{
-			const Tool * const ct = reprap.GetGCodes().GetConstMovementState(gb).currentTool;
+			const Tool *_ecv_null const ct = reprap.GetGCodes().GetConstMovementState(gb).currentTool;
 			if (ct == nullptr)
 			{
 				reply.copy("No tool selected");
@@ -314,16 +307,23 @@ GCodeResult Move::ConfigureNonlinearExtrusion(GCodeBuffer& gb, const StringRef& 
 		nonlinearExtrusion[extruder].limit = limit;
 		nonlinearExtrusion[extruder].A = a;
 		nonlinearExtrusion[extruder].B = b;
+		reprap.MoveUpdated();
 	}
 	else
 	{
 		const NonlinearExtrusion& nl = GetExtrusionCoefficients(extruder);
-		reply.printf("Drive %u nonlinear extrusion coefficients: A=%.3f, B=%.4f, limit=%.2f", extruder, (double)nl.A, (double)nl.B, (double)nl.limit);
+		reply.printf("Drive %u nonlinear extrusion coefficients: A=%.3g, B=%.3g, limit=%.2f", extruder, (double)nl.A, (double)nl.B, (double)nl.limit);
 	}
 	return GCodeResult::ok;
 }
 
 #endif
+
+// Return the position of an endstop in steps. Only called for kinematics that home drives individually.
+int32_t Move::GetEndstopPositionSteps(size_t drive, bool highEnd) noexcept
+{
+	return kinematics->GetEndstopPosition(drive, highEnd) * driveStepsPerMm[drive];
+}
 
 // This is called from the step ISR as well as other places, so keep it fast
 // If drive >= MaxAxesPlusExtruders then we are setting an individual motor direction
@@ -518,7 +518,7 @@ StandardDriverStatus Move::GetLocalDriverStatus(size_t driver) const noexcept
 // Must not be called from an ISR, or with interrupts disabled.
 void Move::SetDriversIdle() noexcept
 {
-	if (idleCurrentFactor == 0)
+	if (idleCurrentFactor == 0.0)
 	{
 		DisableAllDrivers();
 		reprap.GetGCodes().SetAllAxesNotHomed();
@@ -549,7 +549,7 @@ void Move::SetDriversIdle() noexcept
 }
 
 // Configure the brake port for a driver
-GCodeResult Move::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) noexcept
+GCodeResult Move::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) THROWS(GCodeException)
 {
 # if !SUPPORT_BRAKE_PWM
 	if (gb.Seen('V'))
@@ -802,28 +802,26 @@ void Move::SetIdleCurrentFactor(float f) noexcept
 	reprap.MoveUpdated();
 
 #if SUPPORT_CAN_EXPANSION
-	CanDriversData<float> canDriversToUpdate;
+	CanDriversList canDriversToUpdate;
 #endif
 	for (size_t axisOrExtruder = 0; axisOrExtruder < MaxAxesPlusExtruders; ++axisOrExtruder)
 	{
 		if (driverState[axisOrExtruder] == DriverStatus::idle)
 		{
-			const float requiredCurrent = motorCurrents[axisOrExtruder] * idleCurrentFactor;
 			IterateDrivers(axisOrExtruder,
-							[this, requiredCurrent](uint8_t driver){ UpdateMotorCurrent(driver, requiredCurrent); }
+							[this, axisOrExtruder](uint8_t driver){ UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * idleCurrentFactor); }
 #if SUPPORT_CAN_EXPANSION
-								, [this, requiredCurrent, &canDriversToUpdate](DriverId driver) { canDriversToUpdate.AddEntry(driver, (uint16_t)requiredCurrent); }
+							, [this, &canDriversToUpdate](DriverId driver) { canDriversToUpdate.AddEntry(driver); }
 #endif
 						  );
 		}
 	}
 #if SUPPORT_CAN_EXPANSION
-	String<1> dummy;
-	(void)CanInterface::SetRemoteDriverCurrents(canDriversToUpdate, dummy.GetRef());
+	CanInterface::SetRemoteDriversIdle(canDriversToUpdate, idleCurrentFactor);
 #endif
 }
 
-bool Move::SetDriversMicrostepping(size_t axisOrExtruder, int microsteps, bool interp, const StringRef& reply) noexcept
+bool Move::SetDriversMicrostepping(size_t axisOrExtruder, unsigned int microsteps, bool interp, const StringRef& reply) noexcept
 {
 	bool ok = true;
 	IterateLocalDrivers(axisOrExtruder,
@@ -877,7 +875,7 @@ void Move::SetEnableValue(size_t driver, int8_t eVal) noexcept
 		if (eVal == -1)
 		{
 			// User has asked to disable status monitoring for this driver, so clear its error bits
-			const DriversBitmap mask = ~DriversBitmap::MakeFromBits(driver);
+			const LocalDriversBitmap mask = ~LocalDriversBitmap::MakeFromBits(driver);
 			temperatureShutdownDrivers &= mask;
 			temperatureWarningDrivers &= mask;
 			shortToGroundDrivers &= mask;
@@ -903,7 +901,7 @@ GCodeResult Move::EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<floa
 	}
 
 	GCodeResult rslt = GCodeResult::ok;
-	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) noexcept
 						{
 							if (driver >= NumDirectDrivers)
 							{
@@ -933,7 +931,7 @@ GCodeResult Move::EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrive
 	}
 
 	GCodeResult rslt = GCodeResult::ok;
-	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) noexcept
 						{
 							if (driver >= NumDirectDrivers)
 							{
@@ -942,7 +940,7 @@ GCodeResult Move::EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrive
 							}
 							else
 							{
-								SetDriveStepsPerMm(driver, msg.values[count].GetStepsPerUnit(), 0);
+								(void)SetDriveStepsPerMm(driver, msg.values[count].GetStepsPerUnit(), 0);
 #if HAS_SMART_DRIVERS
 								const uint16_t rawMicrostepping = msg.values[count].GetMicrostepping();
 								const uint16_t microsteppingOnly = rawMicrostepping & 0x03FF;
@@ -959,7 +957,7 @@ GCodeResult Move::EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest
 {
 	//TODO check message is long enough for the number of drivers specified
 	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
-	drivers.Iterate([this, &msg](unsigned int driver, unsigned int count) -> void
+	drivers.Iterate([this, &msg](unsigned int driver, unsigned int count) noexcept
 		{
 			switch (msg.values[count].mode)
 			{
@@ -1342,7 +1340,7 @@ GCodeResult Move::EutProcessM915(const CanMessageGeneric& msg, const StringRef& 
 		return GCodeResult::error;
 	}
 
-	const auto drivers = DriversBitmap::MakeFromRaw(driverBits);
+	const auto drivers = LocalDriversBitmap::MakeFromRaw(driverBits);
 
 	bool seen = false;
 	{
@@ -1430,12 +1428,23 @@ void Move::SendDriversStatus(CanMessageBuffer& buf) noexcept
 // Stop some drivers and update the corresponding motor positions
 void Move::StopDriversFromRemote(uint16_t whichDrives) noexcept
 {
-	DriversBitmap dr(whichDrives);
-	dr.Iterate([this](size_t drive, unsigned int)
+	LocalDriversBitmap dr(whichDrives);
+	dr.Iterate([this](size_t drive, unsigned int) noexcept
 				{
 					StopDriveFromRemote(drive);
 				}
 			  );
+}
+
+// Stall endstops
+GCodeResult Move::SetStallEndstopReporting(const CanMessageEnableStallEndstop& msg, const StringRef& reply) noexcept
+{
+#if HAS_SMART_DRIVERS
+	return SmartDrivers::SetStallEndstopReporting(msg.driverNumber, msg.speed, reply);
+#else
+	reply.printf("stall detection not supported on board %u", CanInterface::GetCanAddress());
+	return GCodeResult::error;
+#endif
 }
 
 #endif	// SUPPORT_REMOTE_COMMANDS

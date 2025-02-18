@@ -1175,13 +1175,6 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROW
 	return rslt;
 }
 
-// Get the name of a heater, or nullptr if it hasn't been named
-const char *Heat::GetHeaterSensorName(size_t heater) const noexcept
-{
-	const auto h = FindHeater(heater);
-	return (h.IsNotNull()) ? h->GetSensorName() : nullptr;
-}
-
 // Configure heater protection (M143). Returns true if an error occurred
 GCodeResult Heat::HandleM143(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
@@ -1345,7 +1338,7 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const noexcept
 void Heat::ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemperatures& msg) noexcept
 {
 	Bitmap<uint64_t> sensorsReported(msg.whichSensors);
-	sensorsReported.Iterate([this, src, &msg](unsigned int sensor, unsigned int index)
+	sensorsReported.Iterate([this, src, &msg](unsigned int sensor, unsigned int index) noexcept
 								{
 									if (index < ARRAY_SIZE(msg.temperatureReports))
 									{
@@ -1378,7 +1371,7 @@ void Heat::ProcessRemoteSensorsReport(CanAddress src, const CanMessageSensorTemp
 void Heat::ProcessRemoteHeatersReport(CanAddress src, const CanMessageHeatersStatus& msg) noexcept
 {
 	Bitmap<uint64_t> heatersReported(msg.whichHeaters);
-	heatersReported.Iterate([this, src, &msg](unsigned int heaterNum, unsigned int index)
+	heatersReported.Iterate([this, src, &msg](unsigned int heaterNum, unsigned int index) noexcept
 								{
 									if (index < ARRAY_SIZE(msg.reports))
 									{

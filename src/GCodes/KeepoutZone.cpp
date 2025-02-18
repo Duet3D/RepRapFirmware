@@ -98,7 +98,7 @@ GCodeResult KeepoutZone::Configure(GCodeBuffer &gb, const StringRef &reply) THRO
 	{
 		// No axes or S parameter, so report current configuration
 		reply.printf("Keepout zone %s, limits:", (active) ? "enabled" : "disabled");
-		axesChecked.Iterate([this, axisNames, reply](unsigned int axis, unsigned int)
+		axesChecked.Iterate([this, axisNames, reply](unsigned int axis, unsigned int) noexcept
 							{
 								reply.catf(" %c (%.1f to %.1f)", axisNames[axis], (double)coords[axis][0], (double)coords[axis][1]);
 							});
@@ -144,7 +144,7 @@ bool KeepoutZone::DoesLineIntrude(const float startCoords[MaxAxes], const float 
 	// To do this we compute the intervals of P at which the line crosses the start and end of the zone.
 	// If there is a value of P that is in all these intervals and also in the interval 0..1 then the line intrudes into the zone.
 	float pLow = 0.0, pHigh = 1.0;
-	return axesChecked.IterateWhile([this, startCoords, endCoords, &pLow, &pHigh](unsigned int axis, unsigned int)->bool
+	return axesChecked.IterateWhile([this, startCoords, endCoords, &pLow, &pHigh](unsigned int axis, unsigned int) noexcept -> bool
 									{
 										const float diff = endCoords[axis] - startCoords[axis];
 										if (fabsf(diff) < 0.01)
@@ -349,7 +349,7 @@ bool KeepoutZone::DoesArcIntrude(const float startCoords[MaxAxes], const float e
 	float pLow = 0.0, pHigh = 1.0;
 	const AxesBitmap linearAxes = axesChecked - (cosineAxes | sineAxes);
 	if (   !linearAxes.IsEmpty()
-		&& !linearAxes.IterateWhile([this, startCoords, endCoords, &pLow, &pHigh](unsigned int axis, unsigned int)->bool
+		&& !linearAxes.IterateWhile([this, startCoords, endCoords, &pLow, &pHigh](unsigned int axis, unsigned int) noexcept -> bool
 									{
 										const float diff = endCoords[axis] - startCoords[axis];
 										if (fabsf(diff) < 0.01)
@@ -417,7 +417,7 @@ bool KeepoutZone::DoesArcIntrude(const float startCoords[MaxAxes], const float e
 #endif
 
 	// Handle the axis whose coordinates vary with the cosine of the angle
-	cosineAxes.IterateWhile([this, arcCentres, arcRadius, &angleIntervals](unsigned int axis, unsigned int)->bool
+	cosineAxes.IterateWhile([this, arcCentres, arcRadius, &angleIntervals](unsigned int axis, unsigned int) noexcept -> bool
 								{
 									// Check for the circle being wholly outside the keepout zone
 									if (arcCentres[axis] + arcRadius <= coords[axis][0] || arcCentres[axis] - arcRadius >= coords[axis][1])
@@ -461,7 +461,7 @@ bool KeepoutZone::DoesArcIntrude(const float startCoords[MaxAxes], const float e
 #if ARC_DEBUG
 		debugPrintf("Iterating sine axes\n");
 #endif
-		sineAxes.IterateWhile([this, arcCentres, arcRadius, &angleIntervals](unsigned int axis, unsigned int)->bool
+		sineAxes.IterateWhile([this, arcCentres, arcRadius, &angleIntervals](unsigned int axis, unsigned int) noexcept -> bool
 								{
 									// Check for the circle being wholly outside the keepout zone
 									if (arcCentres[axis] + arcRadius <= coords[axis][0] || arcCentres[axis] - arcRadius >= coords[axis][1])

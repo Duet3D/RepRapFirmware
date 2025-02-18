@@ -21,7 +21,7 @@ constexpr uint32_t Esp32FlashModuleSize = 4 * 1024 * 1024;		// assume at least 4
 // ESP8266 command codes
 const uint8_t ESP_FLASH_BEGIN = 0x02;		// Four 32-bit words: size to erase, number of data packets, data size in one packet, flash offset.
 const uint8_t ESP_FLASH_DATA = 0x03;		// Four 32-bit words: data size, sequence number, 0, 0, then data. Uses Checksum.
-const uint8_t ESP_FLASH_END = 0x04;			// One 32-bit word: 0 to reboot, 1 ‚Äúrun to user code‚Äù. Not necessary to send this command if you wish to stay in the loader
+const uint8_t ESP_FLASH_END = 0x04;			// One 32-bit word: 0 to reboot, 1 ìrun to user codeî. Not necessary to send this command if you wish to stay in the loader
 const uint8_t ESP_MEM_BEGIN = 0x05;			// total size, number of data packets, data size in one packet, memory offset
 const uint8_t ESP_MEM_END = 0x06;			// Two 32-bit words: execute flag, entry point address
 const uint8_t ESP_MEM_DATA = 0x07;			// Four 32-bit words: data size, sequence number, 0, 0, then data. Uses Checksum.
@@ -45,16 +45,16 @@ const uint8_t ESP_CHECKSUM_MAGIC = 0xef;
 
 // Status body lengths, used to initially identify ESP8266 v ESP32 devices
 const size_t ESP_BODY_LENGTHS[] = {0, 2, 4, 4};
-const char * const ESP_NAMES[] = {"unknown", "ESP8266", "ESP32", "ESP32+"};
+const char *_ecv_array const ESP_NAMES[] = {"unknown", "ESP8266", "ESP32", "ESP32+"};
 
 // Following address contains unique per device type id used to confirm ESP8266 and identify original ESP32
-const uint32_t CHIP_DETECT_MAGIC_REG_ADDR = 0x40001000;
+const uint32_t CHIP_DETECT_MAGIC_REG_ADDR = 0x40001000u;
 
 // value stored at the above address (values taken from the esptool.py source)
-const uint32_t ESP_IDS[] = {0xffffffff, 0xfff0c101, 0x00f01d83, 0x0000000};
+const uint32_t ESP_IDS[] = {0xffffffffu, 0xfff0c101u, 0x00f01d83u, 0x0000000u};
 
 // Messages corresponding to result codes, should make sense when followed by " error"
-const char * const resultMessages[] =
+const char *_ecv_array const resultMessages[] =
 {
 	"no",											// 0
 	"unknown", "unknown", "unknown", "unknown",		// 0x01 to 0x04
@@ -97,7 +97,7 @@ bool WifiFirmwareUploader::IsReady() const noexcept
 	return state == UploadState::idle;
 }
 
-void WifiFirmwareUploader::MessageF(const char *fmt, ...) noexcept
+void WifiFirmwareUploader::MessageF(const char *_ecv_array fmt, ...) noexcept
 {
 	va_list vargs;
 	va_start(vargs, fmt);
@@ -172,7 +172,7 @@ int WifiFirmwareUploader::ReadByte(uint8_t& data, bool slipDecode) noexcept
 
 // When we write a sync packet, there must be no gaps between most of the characters.
 // So use this function, which does a block write to the UART buffer in the latest CoreNG.
-void WifiFirmwareUploader::writePacketRaw(const uint8_t *buf, size_t len) noexcept
+void WifiFirmwareUploader::writePacketRaw(const uint8_t *_ecv_array buf, size_t len) noexcept
 {
 	uploadPort.write(buf, len);
 }
@@ -209,7 +209,7 @@ inline void WifiFirmwareUploader::WriteByteSlip(uint8_t b) noexcept
 //
 // If an error occurs, return a negative value.  Otherwise, return the number
 // of bytes in the response (or zero if the response was not the standard "two bytes of zero").
-WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t op, uint32_t *valp, size_t& bodyLen, uint32_t *status, uint32_t msTimeout) noexcept
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t op, uint32_t *_ecv_null valp, size_t& bodyLen, uint32_t *_ecv_null status, uint32_t msTimeout) noexcept
 {
 	enum class PacketState
 	{
@@ -242,7 +242,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 			return(EspUploadResult::timeout);
 		}
 
-		if (uploadPort.available() < needBytes)
+		if (uploadPort.available() < (int)needBytes)
 		{
 			// insufficient data available
 			// preferably, return to Spin() here
@@ -350,7 +350,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 }
 
 // Send a block of data performing SLIP encoding of the content.
-inline void WifiFirmwareUploader::writePacket(const uint8_t *data, size_t len) noexcept
+inline void WifiFirmwareUploader::writePacket(const uint8_t *_ecv_array data, size_t len) noexcept
 {
 	while (len != 0)
 	{
@@ -362,7 +362,7 @@ inline void WifiFirmwareUploader::writePacket(const uint8_t *data, size_t len) n
 // Send a packet to the serial port while performing SLIP framing. The packet data comprises a header and an optional data block.
 // A SLIP packet begins and ends with 0xc0.  The data encapsulated has the bytes
 // 0xc0 and 0xdb replaced by the two-byte sequences {0xdb, 0xdc} and {0xdb, 0xdd} respectively.
-void WifiFirmwareUploader::writePacket(const uint8_t *hdr, size_t hdrLen, const uint8_t *data, size_t dataLen) noexcept
+void WifiFirmwareUploader::writePacket(const uint8_t *_ecv_array hdr, size_t hdrLen, const uint8_t *_ecv_array data, size_t dataLen) noexcept
 {
 	WriteByteRaw(0xc0);				// send the packet start character
 	writePacket(hdr, hdrLen);		// send the header
@@ -372,7 +372,7 @@ void WifiFirmwareUploader::writePacket(const uint8_t *hdr, size_t hdrLen, const 
 
 // Send a packet to the serial port while performing SLIP framing. The packet data comprises a header and an optional data block.
 // This is like writePacket except that it does a fast block write for both the header and the main data with no SLIP encoding. Used to send sync commands.
-void WifiFirmwareUploader::writePacketRaw(const uint8_t *hdr, size_t hdrLen, const uint8_t *data, size_t dataLen) noexcept
+void WifiFirmwareUploader::writePacketRaw(const uint8_t *_ecv_array hdr, size_t hdrLen, const uint8_t *_ecv_array data, size_t dataLen) noexcept
 {
 	WriteByteRaw(0xc0);				// send the packet start character
 	writePacketRaw(hdr, hdrLen);	// send the header
@@ -382,7 +382,7 @@ void WifiFirmwareUploader::writePacketRaw(const uint8_t *hdr, size_t hdrLen, con
 
 // Send a command to the attached device together with the supplied data, if any.
 // The data is supplied via a list of one or more segments.
-void WifiFirmwareUploader::sendCommand(uint8_t op, uint32_t checkVal, const uint8_t *data, size_t dataLen) noexcept
+void WifiFirmwareUploader::sendCommand(uint8_t op, uint32_t checkVal, const uint8_t *_ecv_array data, size_t dataLen) noexcept
 {
 	struct __attribute__((packed)) CommandHeader
 	{
@@ -399,16 +399,16 @@ void WifiFirmwareUploader::sendCommand(uint8_t op, uint32_t checkVal, const uint
 	flushInput();
 	if (op == ESP_SYNC)
 	{
-		writePacketRaw((const uint8_t*)&cmdHdr, sizeof(cmdHdr), data, dataLen);
+		writePacketRaw((const uint8_t *_ecv_array)&cmdHdr, sizeof(cmdHdr), data, dataLen);
 	}
 	else
 	{
-		writePacket((const uint8_t*)&cmdHdr, sizeof(cmdHdr), data, dataLen);
+		writePacket((const uint8_t *_ecv_array)&cmdHdr, sizeof(cmdHdr), data, dataLen);
 	}
 }
 
 // Send a command to the attached device together with the supplied data, if any, and get the response
-WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::doCommand(uint8_t op, const uint8_t *data, size_t dataLen, uint32_t checkVal, uint32_t *valp, uint32_t msTimeout) noexcept
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::doCommand(uint8_t op, const uint8_t *_ecv_array data, size_t dataLen, uint32_t checkVal, uint32_t *_ecv_null valp, uint32_t msTimeout) noexcept
 {
 	sendCommand(op, checkVal, data, dataLen);
 	size_t bodyLen;
@@ -520,34 +520,34 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t 
 	const uint32_t buf[5] = { erase_size, blkCnt, EspFlashBlockSize, offset, 0 };		// last word means not encrypted
 
 	const uint32_t timeout = (erase_size != 0) ? eraseTimeout : defaultTimeout;
-	return doCommand(ESP_FLASH_BEGIN, (const uint8_t*)buf, (espType == ESPType::ESP32_PLUS) ? sizeof(buf) : sizeof(buf) - sizeof(uint32_t), 0, nullptr, timeout);
+	return doCommand(ESP_FLASH_BEGIN, (const uint8_t *_ecv_array)buf, (espType == ESPType::ESP32_PLUS) ? sizeof(buf) : sizeof(buf) - sizeof(uint32_t), 0, nullptr, timeout);
 }
 
 // Send a command to the device to terminate the Flash process
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashFinish(bool reboot) noexcept
 {
 	const uint32_t data = (reboot) ? 0 : 1;
-	return doCommand(ESP_FLASH_END, (const uint8_t*)&data, sizeof(data), 0, nullptr, defaultTimeout);
+	return doCommand(ESP_FLASH_END, (const uint8_t *_ecv_array)&data, sizeof(data), 0, nullptr, defaultTimeout);
 }
 
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashSpiSetParameters(uint32_t size) noexcept
 {
 	const uint32_t buf[6] = { 0, size, 64 * 1024, 4 * 1024, 256, 0x0000FFFF };	// id, size, block size, sector size, page size, status mask
-	return doCommand(ESP_SPI_SET_PARAMS, (const uint8_t*)buf, sizeof(buf), 0, nullptr, defaultTimeout);
+	return doCommand(ESP_SPI_SET_PARAMS, (const uint8_t *_ecv_array)buf, sizeof(buf), 0, nullptr, defaultTimeout);
 }
 
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashSpiAttach() noexcept
 {
 	const uint32_t buf[2] = { 0, 0 };
-	return doCommand(ESP_SPI_ATTACH, (const uint8_t*)buf, sizeof(buf), 0, nullptr, defaultTimeout);
+	return doCommand(ESP_SPI_ATTACH, (const uint8_t *_ecv_array)buf, sizeof(buf), 0, nullptr, defaultTimeout);
 }
 
 // Compute the checksum of a block of data
-uint16_t WifiFirmwareUploader::checksum(const uint8_t *data, uint16_t dataLen, uint16_t cksum) noexcept
+uint16_t WifiFirmwareUploader::checksum(const uint8_t *_ecv_array _ecv_null data, uint16_t dataLen, uint16_t cksum) noexcept
 {
 	if (data != NULL)
 	{
-		while (dataLen--)
+		while (dataLen-- != 0)
 		{
 			cksum ^= (uint16_t)*data++;
 		}
@@ -566,7 +566,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 	// On the STM32F4 our stack is not DMA capable, so we can't use the stack instead we allocate it when we open the file.
 	uint32_t blkBuf32[blkBufSize/4];
 #endif
-	uint8_t * const blkBuf = reinterpret_cast<uint8_t*>(blkBuf32);
+	uint8_t *_ecv_array const blkBuf = reinterpret_cast<uint8_t *_ecv_array>(blkBuf32);
 
 	// Prepare the header for the block
 	blkBuf32[0] = blkSize;
@@ -575,7 +575,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 	blkBuf32[3] = 0;
 
 	// Get the data for the block
-	size_t cnt = uploadFile->Read(reinterpret_cast<char *>(blkBuf + dataOfst), blkSize);
+	size_t cnt = uploadFile->Read(reinterpret_cast<char *_ecv_array>(blkBuf + dataOfst), blkSize);
 	if (cnt != blkSize)
 	{
 		if (uploadFile->Position() == fileSize)
@@ -626,7 +626,7 @@ void WifiFirmwareUploader::Identify() noexcept
 		uint32_t regVal;
 		EspUploadResult stat;
 
-		if ((stat = doCommand(ESP_READ_REG, (const uint8_t*)&addr, sizeof(addr), 0, &regVal, defaultTimeout)) == EspUploadResult::success)
+		if ((stat = doCommand(ESP_READ_REG, (const uint8_t *_ecv_array)&addr, sizeof(addr), 0, &regVal, defaultTimeout)) == EspUploadResult::success)
 		{
 			//debugPrintf("read magic returns %x current type is %s\n", regVal, ESP_NAMES[espType]);
 			if (regVal == ESP_IDS[ESPType::ESP8266])
@@ -824,7 +824,7 @@ void WifiFirmwareUploader::Spin() noexcept
 }
 
 // Try to upload the given file at the given address
-void WifiFirmwareUploader::SendUpdateFile(const char *file, uint32_t address) noexcept
+void WifiFirmwareUploader::SendUpdateFile(const char *_ecv_array file, uint32_t address) noexcept
 {
 	Platform& platform = reprap.GetPlatform();
 	uploadFile = platform.OpenFile(FIRMWARE_DIRECTORY, file, OpenMode::read);

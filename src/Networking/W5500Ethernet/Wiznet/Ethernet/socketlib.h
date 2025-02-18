@@ -85,6 +85,7 @@
 #ifndef _SOCKET_H_
 #define _SOCKET_H_
 
+#include <ecv_duet3d.h>
 #include "Networking/W5500Ethernet/Wiznet/Ethernet/wizchip_conf.h"
 
 #define SOCKET                uint8_t  ///< SOCKET type define for legacy driver
@@ -236,7 +237,7 @@ void disconnectNoWait(uint8_t sn) noexcept;
  *                        @ref SOCKERR_TIMEOUT     - Timeout occurred \n
  *                        @ref SOCK_BUSY           - Socket is busy.
  */
-int32_t sendto(uint8_t sn, const uint8_t * buf, uint16_t len, IPAddress destIp, uint16_t port) noexcept;
+int32_t sendto(uint8_t sn, const uint8_t *_ecv_array buf, uint16_t len, IPAddress destIp, uint16_t port) noexcept;
 
 /**
  * @ingroup WIZnet_socket_APIs
@@ -266,7 +267,7 @@ int32_t sendto(uint8_t sn, const uint8_t * buf, uint16_t len, IPAddress destIp, 
  *                       @ref SOCKERR_SOCKNUM    - Invalid socket number \n
  *                       @ref SOCKBUSY           - Socket is busy.
  */
-int32_t recvfrom(uint8_t sn, uint8_t * buf, uint16_t len, uint8_t * addr, uint16_t *port) noexcept;
+int32_t recvfrom(uint8_t sn, uint8_t *_ecv_array buf, uint16_t len, uint8_t addr[6], uint16_t *port) noexcept;
 
 
 /////////////////////////////

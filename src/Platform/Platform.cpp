@@ -47,9 +47,12 @@
 #include <Storage/CRC32.h>
 #include <Accelerometers/Accelerometers.h>
 
+#if SUPPORT_PANELDUE_FLASH
+# include <Comms/PanelDueUpdater.h>
+#endif
+
 #if SAM4E || SAM4S || SAME70
 # include <AnalogIn.h>
-using LegacyAnalogIn::AdcBits;
 # include <DmacManager.h>
 # include <pmc/pmc.h>
 # if SAME70
@@ -58,7 +61,6 @@ static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA chan
 #elif SAME5x
 # include <AnalogIn.h>
 # include <DmacManager.h>
-using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have the AnalogIn namespace
 #endif
 
 #include <Libraries/sd_mmc/sd_mmc.h>
@@ -110,24 +112,24 @@ using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have 
 
 	float Platform::AdcReadingToPowerVoltage(uint16_t adcVal) const noexcept
 	{
-		return (adcVal * powerMonitorVoltageRange)/(1u << AdcBits);
+		return (adcVal * powerMonitorVoltageRange)/(1u << AnalogIn::AdcBits);
 	}
 
 	uint16_t Platform::PowerVoltageToAdcReading(float voltage) const noexcept
 	{
-		return (uint16_t)((voltage * (1u << AdcBits))/powerMonitorVoltageRange);
+		return (uint16_t)((voltage * (1u << AnalogIn::AdcBits))/powerMonitorVoltageRange);
 	}
 
 # else
 
 inline constexpr float AdcReadingToPowerVoltage(uint16_t adcVal) noexcept
 {
-	return adcVal * (PowerMonitorVoltageRange/(1u << AdcBits));
+	return adcVal * (PowerMonitorVoltageRange/(1u << AnalogIn::AdcBits));
 }
 
 inline constexpr uint16_t PowerVoltageToAdcReading(float voltage) noexcept
 {
-	return (uint16_t)(voltage * ((1u << AdcBits)/PowerMonitorVoltageRange));
+	return (uint16_t)(voltage * ((1u << AnalogIn::AdcBits)/PowerMonitorVoltageRange));
 }
 
 constexpr uint16_t driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);			// minimum voltage at which we initialise the drivers
@@ -146,12 +148,12 @@ constexpr uint16_t driverNormalVoltageAdcReading = PowerVoltageToAdcReading(27.5
 
 inline constexpr float AdcReadingToV12Voltage(uint16_t adcVal) noexcept
 {
-	return adcVal * (V12MonitorVoltageRange/(1u << AdcBits));
+	return adcVal * (V12MonitorVoltageRange/(1u << AnalogIn::AdcBits));
 }
 
 inline constexpr uint16_t V12VoltageToAdcReading(float voltage) noexcept
 {
-	return (uint16_t)(voltage * ((1u << AdcBits)/V12MonitorVoltageRange));
+	return (uint16_t)(voltage * ((1u << AnalogIn::AdcBits)/V12MonitorVoltageRange));
 }
 
 constexpr uint16_t driverV12OnAdcReading = V12VoltageToAdcReading(10.0);				// minimum voltage at which we initialise the drivers
@@ -164,9 +166,9 @@ int debugLine = 0;
 
 // Global functions
 
-DriversBitmap AxisDriversConfig::GetDriversBitmap() const noexcept
+LocalDriversBitmap AxisDriversConfig::GetLocalDriversBitmap() const noexcept
 {
-	DriversBitmap rslt;
+	LocalDriversBitmap rslt;
 	for (size_t i = 0; i < numDrivers; ++i)
 	{
 #if SUPPORT_CAN_EXPANSION
@@ -197,8 +199,8 @@ constexpr ObjectModelArrayTableEntry Platform::objectModelArrayTable[] =
 	// 0. boards[0].drivers
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumDirectDrivers; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&reprap.GetMove(), 14); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(NumDirectDrivers),
+		OBJECT_MODEL_ARRAY_VALUE_NOSELF(&reprap.GetMove(), 14)
 	}
 };
 
@@ -216,12 +218,12 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #if SUPPORT_DIRECT_LCD
 	{ "directDisplay",		OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetDisplay().IsPresent(), &reprap.GetDisplay()),					ObjectModelEntryFlags::none },
 #endif
-	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(0),																			ObjectModelEntryFlags::live },
+	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(0),																			ObjectModelEntryFlags::liveNotPanelDue },
 	{ "firmwareDate",		OBJECT_MODEL_FUNC_NOSELF(DATE),																		ObjectModelEntryFlags::none },
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),														ObjectModelEntryFlags::none },
 	{ "firmwareName",		OBJECT_MODEL_FUNC_NOSELF(FIRMWARE_NAME),															ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(VERSION),																	ObjectModelEntryFlags::none },
-	{ "freeRam",			OBJECT_MODEL_FUNC_NOSELF((int32_t)Tasks::GetNeverUsedRam()),										ObjectModelEntryFlags::live },
+	{ "freeRam",			OBJECT_MODEL_FUNC_NOSELF((int32_t)Tasks::GetNeverUsedRam()),										ObjectModelEntryFlags::liveNotPanelDue },
 #if HAS_SBC_INTERFACE
 	{ "iapFileNameSBC",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE_SBC),														ObjectModelEntryFlags::none },
 #endif
@@ -231,7 +233,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "maxHeaters",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),														ObjectModelEntryFlags::verbose },
 	{ "maxMotors",			OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),												ObjectModelEntryFlags::verbose },
 #if HAS_CPU_TEMP_SENSOR
-	{ "mcuTemp",			OBJECT_MODEL_FUNC(self, 1),																			ObjectModelEntryFlags::live },
+	{ "mcuTemp",			OBJECT_MODEL_FUNC(self, 1),																			ObjectModelEntryFlags::liveNotPanelDue },
 #endif
 #ifdef DUET_NG
 	{ "name",				OBJECT_MODEL_FUNC(self->GetBoardName()),															ObjectModelEntryFlags::none },
@@ -245,31 +247,31 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "uniqueId",			OBJECT_MODEL_FUNC_IF(self->uniqueId.IsValid(), self->uniqueId),										ObjectModelEntryFlags::none },
 #endif
 #if HAS_12V_MONITOR
-	{ "v12",				OBJECT_MODEL_FUNC(self, 3),																			ObjectModelEntryFlags::live },
+	{ "v12",				OBJECT_MODEL_FUNC(self, 3),																			ObjectModelEntryFlags::liveNotPanelDue },
 #endif
 #if HAS_VOLTAGE_MONITOR
-	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::live },
+	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::liveNotPanelDue },
 #endif
 #if HAS_WIFI_NETWORKING
 	{ "wifiFirmwareFileName", OBJECT_MODEL_FUNC_NOSELF(WIFI_FIRMWARE_FILE),														ObjectModelEntryFlags::none },
 #endif
 #if HAS_CPU_TEMP_SENSOR
 	// 1. boards[0].mcuTemp members
-	{ "current",			OBJECT_MODEL_FUNC(self->GetMcuTemperatures().current, 1),											ObjectModelEntryFlags::live },
+	{ "current",			OBJECT_MODEL_FUNC(self->GetMcuTemperatures().current, 1),											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "max",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().maximum, 1),											ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->GetMcuTemperatures().minimum, 1),											ObjectModelEntryFlags::none },
 #endif
 
 	// 2. boards[0].vIn members
 #if HAS_VOLTAGE_MONITOR
-	{ "current",			OBJECT_MODEL_FUNC(self->GetCurrentPowerVoltage(), 1),												ObjectModelEntryFlags::live },
+	{ "current",			OBJECT_MODEL_FUNC(self->GetCurrentPowerVoltage(), 1),												ObjectModelEntryFlags::liveNotPanelDue },
 	{ "max",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().maximum, 1),												ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->GetPowerVoltages().minimum, 1),												ObjectModelEntryFlags::none },
 #endif
 
 #if HAS_12V_MONITOR
 	// 3. boards[0].v12 members
-	{ "current",			OBJECT_MODEL_FUNC(self->GetV12Voltages().current, 1),												ObjectModelEntryFlags::live },
+	{ "current",			OBJECT_MODEL_FUNC(self->GetV12Voltages().current, 1),												ObjectModelEntryFlags::liveNotPanelDue },
 	{ "max",				OBJECT_MODEL_FUNC(self->GetV12Voltages().maximum, 1),												ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->GetV12Voltages().minimum, 1),												ObjectModelEntryFlags::none },
 #endif
@@ -286,7 +288,7 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
 	5,																		// number of sections
 	11 + SUPPORT_ACCELEROMETERS + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR
-	  + SUPPORT_CAN_EXPANSION + SUPPORT_DIRECT_LCD + MCU_HAS_UNIQUE_ID + HAS_WIFI_NETWORKING,		// section 0: boards[0]
+	  + SUPPORT_CAN_EXPANSION + (int)SUPPORT_DIRECT_LCD + MCU_HAS_UNIQUE_ID + HAS_WIFI_NETWORKING,		// section 0: boards[0]
 #if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp
 #else
@@ -757,7 +759,7 @@ bool Platform::FlushMessages() noexcept
 	if (usbHasMore)
 	{
 		MutexLocker lock(usbMutex);
-		OutputBuffer *usbOutputBuffer = usbOutput.GetFirstItem();
+		OutputBuffer *_ecv_null usbOutputBuffer = usbOutput.GetFirstItem();
 		if (usbOutputBuffer == nullptr)
 		{
 			(void) usbOutput.Pop();
@@ -830,7 +832,7 @@ void Platform::Spin() noexcept
 	if (move.HasMovementError())
 	{
 		const StepErrorDetails details = move.GetStepErrorDetails();
-		MessageF(AddError(MessageType::GenericMessage), "Movement halted because a step timing error occurred (code %u). Please reset the controller.\n", details.stepErrorType);
+		MessageF(AddError(MessageType::GenericMessage), "Movement halted because a step timing error occurred on drive %u (code %u). Please reset the controller.\n", details.drive, details.stepErrorType);
 		if (details.stepErrorType == 3)
 		{
 			MessageF(AddError(MessageType::GenericMessage), "Existing: start=%" PRIu32 " length=%" PRIu32 ", new: start=%" PRIu32 ", overlap=%" PRIu32 " time now=%" PRIu32 "\n",
@@ -838,8 +840,13 @@ void Platform::Spin() noexcept
 						details.executingStartTime + details.executingDuration - details.newSegmentStartTime,
 						details.timeNow);
 		}
+		else
+		{
+			MessageF(AddError(MessageType::GenericMessage), "Extra info=%.6g\n", (double)details.extra);
+		}
 		move.GenerateMovementErrorDebug();
 		move.ResetAfterError();
+		reprap.GetHeat().SwitchOffAll(true);
 	}
 
 	// Check for debug messages
@@ -1016,7 +1023,7 @@ void Platform::Spin() noexcept
 
 			// Check for a VSSA fault
 #if HAS_VREF_MONITOR
-			constexpr uint32_t MaxVssaFilterSum = (15 * (1u << AdcBits) * ThermistorAverageReadings * 4)/2200;		// VSSA fuse should have <= 15 ohms resistance
+			constexpr uint32_t MaxVssaFilterSum = (15 * (1u << AnalogIn::AdcBits) * ThermistorAverageReadings * 4)/2200;		// VSSA fuse should have <= 15 ohms resistance
 			if (adcFilters[VssaFilterIndex].GetSum() > MaxVssaFilterSum)
 			{
 				Message(ErrorMessage, "VSSA fault, check thermistor wiring\n");
@@ -1102,7 +1109,7 @@ void Platform::Spin() noexcept
 
 // Report driver status conditions that require attention.
 // Sets 'reported' if we reported anything, else leaves 'reported' alone.
-void Platform::ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept
+void Platform::ReportDrivers(MessageType mt, LocalDriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept
 {
 	if (whichDrivers.IsNonEmpty())
 	{
@@ -1182,7 +1189,7 @@ float Platform::GetCpuTemperature() const noexcept
 	result = (divisor == 0) ? 0 : result/divisor;
 	return (float)result/16 + mcuTemperatureAdjust;
 #else
-	const float voltage = (float)adcFilters[CpuTempFilterIndex].GetSum() * (3.3/(float)((1u << AdcBits) * ThermistorAverageReadings));
+	const float voltage = (float)adcFilters[CpuTempFilterIndex].GetSum() * (3.3/(float)((1u << AnalogIn::AdcBits) * ThermistorAverageReadings));
 # if SAM4E || SAM4S
 	return (voltage - 1.44) * (1000.0/4.7) + 27.0 + mcuTemperatureAdjust;			// accuracy at 27C is +/-13C
 # elif SAME70
@@ -1358,7 +1365,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	{
 		NonVolatileMemory mem;
 		unsigned int slot;
-		const SoftwareResetData * const srd = mem.GetLastWrittenResetData(slot);
+		const SoftwareResetData *_ecv_null const srd = mem.GetLastWrittenResetData(slot);
 		if (srd == nullptr)
 		{
 			Message(mtype, "Last software reset details not available\n");
@@ -1485,162 +1492,165 @@ static uint32_t TimedSqrt(uint64_t arg, uint32_t& timeAcc) noexcept
 	return ret;
 }
 
+GCodeResult Platform::PrintTestReport(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) const THROWS(GCodeException)
+{
+	if (!OutputBuffer::Allocate(buf))
+	{
+		reply.copy("No output buffer");
+		return GCodeResult::error;
+	}
+
+	bool testFailed = false;
+#if HAS_MASS_STORAGE
+	// Check the SD card detect and speed
+	if (!MassStorage::IsCardDetected(0))
+	{
+		buf->copy("SD card 0 not detected");
+		testFailed = true;
+	}
+# if HAS_HIGH_SPEED_SD
+	else if (sd_mmc_get_interface_speed(0) != ExpectedSdCardSpeed)
+	{
+		buf->printf("SD card speed %.2fMbytes/sec is unexpected", (double)((float)sd_mmc_get_interface_speed(0) * 0.000001));
+		testFailed = true;
+	}
+# endif
+	else
+	{
+		buf->copy("SD card interface OK");
+	}
+#endif
+
+#if HAS_CPU_TEMP_SENSOR
+	// Check the MCU temperature
+	{
+		gb.MustSee('T');
+		float tempMinMax[2];
+		size_t numTemps = 2;
+		gb.GetFloatArray(tempMinMax, numTemps, false);
+		const float currentMcuTemperature = GetCpuTemperature();
+		if (currentMcuTemperature < tempMinMax[0])
+		{
+			buf->lcatf("MCU temperature %.1f is lower than expected", (double)currentMcuTemperature);
+			testFailed = true;
+		}
+		else if (currentMcuTemperature > tempMinMax[1])
+		{
+			buf->lcatf("MCU temperature %.1f is higher than expected", (double)currentMcuTemperature);
+			testFailed = true;
+		}
+		else
+		{
+			buf->lcat("MCU temperature reading OK");
+		}
+	}
+#endif
+
+#if HAS_VOLTAGE_MONITOR
+	// Check the supply voltage
+	{
+		gb.MustSee('V');
+		float voltageMinMax[2];
+		size_t numVoltages = 2;
+		gb.GetFloatArray(voltageMinMax, numVoltages, false);
+		const float voltage = AdcReadingToPowerVoltage(currentVin);
+		if (voltage < voltageMinMax[0])
+		{
+			buf->lcatf("VIN voltage reading %.1f is lower than expected", (double)voltage);
+			testFailed = true;
+		}
+		else if (voltage > voltageMinMax[1])
+		{
+			buf->lcatf("VIN voltage reading %.1f is higher than expected", (double)voltage);
+			testFailed = true;
+		}
+		else
+		{
+			buf->lcat("VIN voltage reading OK");
+		}
+	}
+#endif
+
+#if HAS_12V_MONITOR
+	// Check the 12V rail voltage
+	{
+		gb.MustSee('W');
+		float voltageMinMax[2];
+		size_t numVoltages = 2;
+		gb.GetFloatArray(voltageMinMax, numVoltages, false);
+
+		const float voltage = AdcReadingToV12Voltage(currentV12);
+		if (voltage < voltageMinMax[0])
+		{
+			buf->lcatf("12V voltage reading %.1f is lower than expected", (double)voltage);
+			testFailed = true;
+		}
+		else if (voltage > voltageMinMax[1])
+		{
+			buf->lcatf("12V voltage reading %.1f is higher than expected", (double)voltage);
+			testFailed = true;
+		}
+		else
+		{
+			buf->lcat("12V voltage reading OK");
+		}
+	}
+#endif
+
+#if HAS_SMART_DRIVERS
+	// Check the stepper driver status
+	bool driversOK = true;
+	for (size_t driver = 0; driver < reprap.GetMove().GetNumSmartDrivers(); ++driver)
+	{
+		const StandardDriverStatus stat = Move::GetSmartDriverStatus(driver, true, false);
+		if (stat.ot || stat.otpw)
+		{
+			buf->lcatf("Driver %u reports over temperature", driver);
+			driversOK = false;
+		}
+		if (stat.s2ga || stat.s2gb || stat.s2vsa || stat.s2vsb)
+		{
+			buf->lcatf("Driver %u reports short-to-ground", driver);
+			driversOK = false;
+		}
+	}
+	if (driversOK)
+	{
+		buf->lcat("Driver status OK");
+	}
+	else
+	{
+		testFailed = true;
+	}
+#endif
+	buf->lcat((testFailed) ? "***** ONE OR MORE CHECKS FAILED *****" : "All checks passed");
+
+#if MCU_HAS_UNIQUE_ID
+	if (!testFailed)
+	{
+		buf->lcat("Board ID: ");
+		uniqueId.AppendCharsToBuffer(buf);
+	}
+#endif
+	return GCodeResult::ok;
+}
+
 GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf, unsigned int d) THROWS(GCodeException)
 {
 	switch (d)
 	{
 	case (unsigned int)DiagnosticTestType::PrintTestReport:
+		return PrintTestReport(gb, reply, buf);
+
+	case (unsigned int)DiagnosticTestType::OutputBufferStarvation:
 		{
-			bool testFailed = false;
-			if (!OutputBuffer::Allocate(buf))
-			{
-				reply.copy("No output buffer");
-				return GCodeResult::error;
-			}
-
-#if HAS_MASS_STORAGE
-			// Check the SD card detect and speed
-			if (!MassStorage::IsCardDetected(0))
-			{
-				buf->copy("SD card 0 not detected");
-				testFailed = true;
-			}
-# if HAS_HIGH_SPEED_SD
-			else if (sd_mmc_get_interface_speed(0) != ExpectedSdCardSpeed)
-			{
-				buf->printf("SD card speed %.2fMbytes/sec is unexpected", (double)((float)sd_mmc_get_interface_speed(0) * 0.000001));
-				testFailed = true;
-			}
-# endif
-			else
-			{
-				buf->copy("SD card interface OK");
-			}
-#endif
-
-#if HAS_CPU_TEMP_SENSOR
-			// Check the MCU temperature
-			{
-				gb.MustSee('T');
-				float tempMinMax[2];
-				size_t numTemps = 2;
-				gb.GetFloatArray(tempMinMax, numTemps, false);
-				const float currentMcuTemperature = GetCpuTemperature();
-				if (currentMcuTemperature < tempMinMax[0])
-				{
-					buf->lcatf("MCU temperature %.1f is lower than expected", (double)currentMcuTemperature);
-					testFailed = true;
-				}
-				else if (currentMcuTemperature > tempMinMax[1])
-				{
-					buf->lcatf("MCU temperature %.1f is higher than expected", (double)currentMcuTemperature);
-					testFailed = true;
-				}
-				else
-				{
-					buf->lcat("MCU temperature reading OK");
-				}
-			}
-#endif
-
-#if HAS_VOLTAGE_MONITOR
-			// Check the supply voltage
-			{
-				gb.MustSee('V');
-				float voltageMinMax[2];
-				size_t numVoltages = 2;
-				gb.GetFloatArray(voltageMinMax, numVoltages, false);
-				const float voltage = AdcReadingToPowerVoltage(currentVin);
-				if (voltage < voltageMinMax[0])
-				{
-					buf->lcatf("VIN voltage reading %.1f is lower than expected", (double)voltage);
-					testFailed = true;
-				}
-				else if (voltage > voltageMinMax[1])
-				{
-					buf->lcatf("VIN voltage reading %.1f is higher than expected", (double)voltage);
-					testFailed = true;
-				}
-				else
-				{
-					buf->lcat("VIN voltage reading OK");
-				}
-			}
-#endif
-
-#if HAS_12V_MONITOR
-			// Check the 12V rail voltage
-			{
-				gb.MustSee('W');
-				float voltageMinMax[2];
-				size_t numVoltages = 2;
-				gb.GetFloatArray(voltageMinMax, numVoltages, false);
-
-				const float voltage = AdcReadingToV12Voltage(currentV12);
-				if (voltage < voltageMinMax[0])
-				{
-					buf->lcatf("12V voltage reading %.1f is lower than expected", (double)voltage);
-					testFailed = true;
-				}
-				else if (voltage > voltageMinMax[1])
-				{
-					buf->lcatf("12V voltage reading %.1f is higher than expected", (double)voltage);
-					testFailed = true;
-				}
-				else
-				{
-					buf->lcat("12V voltage reading OK");
-				}
-			}
-#endif
-
-#if HAS_SMART_DRIVERS
-			// Check the stepper driver status
-			bool driversOK = true;
-			for (size_t driver = 0; driver < reprap.GetMove().GetNumSmartDrivers(); ++driver)
-			{
-				const StandardDriverStatus stat = Move::GetSmartDriverStatus(driver, true, false);
-				if (stat.ot || stat.otpw)
-				{
-					buf->lcatf("Driver %u reports over temperature", driver);
-					driversOK = false;
-				}
-				if (stat.s2ga || stat.s2gb || stat.s2vsa || stat.s2vsb)
-				{
-					buf->lcatf("Driver %u reports short-to-ground", driver);
-					driversOK = false;
-				}
-			}
-			if (driversOK)
-			{
-				buf->lcat("Driver status OK");
-			}
-			else
-			{
-				testFailed = true;
-			}
-#endif
-			buf->lcat((testFailed) ? "***** ONE OR MORE CHECKS FAILED *****" : "All checks passed");
-
-#if MCU_HAS_UNIQUE_ID
-			if (!testFailed)
-			{
-				buf->lcat("Board ID: ");
-				uniqueId.AppendCharsToBuffer(buf);
-			}
-#endif
+			OutputBuffer *_ecv_null nbuf;
+			while (OutputBuffer::Allocate(nbuf)) { }
+			OutputBuffer::ReleaseAll(nbuf);
 		}
 		break;
 
-	case (int)DiagnosticTestType::OutputBufferStarvation:
-		{
-			OutputBuffer *buf;
-			while (OutputBuffer::Allocate(buf)) { }
-			OutputBuffer::ReleaseAll(buf);
-		}
-		break;
-
-	case (int)DiagnosticTestType::SetWriteBuffer:
+	case (unsigned int)DiagnosticTestType::SetWriteBuffer:
 #if SAME70
 		//TODO set cache to write-back instead
 		reply.copy("Write buffer not supported on this processor");
@@ -1878,6 +1888,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 					"\nGCodes %08" PRIx32 "-%08" PRIx32
 					"\nMove %08" PRIx32 "-%08" PRIx32
 					"\nHeat %08" PRIx32 "-%08" PRIx32
+					"\n"
 					, reinterpret_cast<uint32_t>(this), reinterpret_cast<uint32_t>(this) + sizeof(Platform) - 1
 #if HAS_SBC_INTERFACE
 					, reinterpret_cast<uint32_t>(&reprap.GetSbcInterface())
@@ -1890,7 +1901,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 				);
 
 		MessageF(MessageType::GenericMessage,
-					"\nPrintMonitor %08" PRIx32 "-%08" PRIx32
+					"PrintMonitor %08" PRIx32 "-%08" PRIx32
 					"\nFansManager %08" PRIx32 "-%08" PRIx32
 #if SUPPORT_IOBITS
 					"\nPortControl %08" PRIx32 "-%08" PRIx32
@@ -1901,7 +1912,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 #if SUPPORT_CAN_EXPANSION
 					"\nExpansionManager %08" PRIx32 "-%08" PRIx32
 #endif
-
+					"\n"
 					, reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()), reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()) + sizeof(PrintMonitor) - 1
 					, reinterpret_cast<uint32_t>(&reprap.GetFansManager()), reinterpret_cast<uint32_t>(&reprap.GetFansManager()) + sizeof(FansManager) - 1
 #if SUPPORT_IOBITS
@@ -2054,7 +2065,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 {
 	// Get the channel specified by the command and the corresponding GCode buffer
 	const size_t chan = gb.GetLimitedUIValue('P', NumSerialChannels);
-	GCodeBuffer * const gbp = reprap.GetGCodes().GetSerialGCodeBuffer(chan);
+	GCodeBuffer *_ecv_null const gbp = reprap.GetGCodes().GetSerialGCodeBuffer(chan);
 
 #if HAS_AUX_DEVICES
 	// If a baud rate has been provided, just store it for later use
@@ -2089,7 +2100,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 #if HAS_AUX_DEVICES
 		if (chan != 0)
 		{
-			AuxDevice& dev = auxDevices[chan - 1];
+			AuxDevice& dev = auxDevices[chan - FirstAuxChannel];
 			if (newMode == AuxMode::device)
 			{
 # if SUPPORT_MODBUS_RTU
@@ -2134,7 +2145,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 	{
 		if (chan != 0)
 		{
-			auxDevices[chan - 1].SetBaudRate(baudRate);
+			auxDevices[chan - FirstAuxChannel].SetBaudRate(baudRate);
 			ResetChannel(chan);
 		}
 	}
@@ -2143,22 +2154,22 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 	{
 		// Just print the existing configuration
 		const uint32_t cp = GetCommsProperties(chan);
-		const char *crcMode = (cp & 4) ? "requires CRC"
+		const char *_ecv_array crcMode = (cp & 4) ? "requires CRC"
 								: (cp & 1) ? "requires checksum or CRC"
 									: "does not require checksum or CRC";
 #if HAS_AUX_DEVICES
 		if (chan != 0)
 		{
 			if (!IsAuxEnabled(chan - 1)
-				&& (chan >= NumSerialChannels || auxDevices[chan - 1].GetMode() != AuxMode::device)
+				&& (chan >= NumSerialChannels || auxDevices[chan - FirstAuxChannel].GetMode() != AuxMode::device)
 			   )
 			{
 				reply.printf("Channel %u is disabled", chan);
 			}
 			else
 			{
-				const AuxDevice& dev = auxDevices[chan - 1];
-				const char *modeString = (dev.GetMode() == AuxMode::device) ? "Device / modbus RTU" :
+				const AuxDevice& dev = auxDevices[chan - FirstAuxChannel];
+				const char *_ecv_array modeString = (dev.GetMode() == AuxMode::device) ? "Device / modbus RTU" :
 											(IsAuxRaw(chan - 1)) ? "raw"
 												: "PanelDue";
 				reply.printf("Channel %d: baud rate %" PRIu32 ", %s mode, ", chan, GetBaudRate(chan), modeString);
@@ -2206,17 +2217,6 @@ bool Platform::IsAuxRaw(size_t auxNumber) const noexcept
 #endif
 }
 
-static inline uint32_t GetAddress(GCodeBuffer& gb)
-{
-	uint32_t address = 0;
-	if (gb.GetCommandFraction() < 2)
-	{
-		gb.MustSee('A');
-		address = gb.GetUIValue();
-	}
-	return address;
-}
-
 /**
  * Converts a single byte of hex value to its ASCII hex representation.
  *
@@ -2247,7 +2247,9 @@ static inline void ConvertHexToAsciiHex(uint8_t hex, uint8_t asciiHex[2])
 	}
 }
 
-static inline void CalculateNordsonUltimusVCheckSum(uint8_t* data, size_t len, uint8_t checksum[2])
+# if !defined(DUET_NG)			// we don't support this on Duet 2 because we are running low on flash memory space
+
+static inline void CalculateNordsonUltimusVCheckSum(uint8_t *_ecv_array data, size_t len, uint8_t checksum[2])
 {
 	uint16_t sum = 0;
 	for (size_t i = 0; i < len; i++)
@@ -2258,22 +2260,42 @@ static inline void CalculateNordsonUltimusVCheckSum(uint8_t* data, size_t len, u
 	ConvertHexToAsciiHex(sum & 0xFF, checksum); // take last byte of sum and convert to ascii hex
 }
 
+#endif
+
+static Variable *_ecv_null GetResultVariable(GCodeBuffer& gb) THROWS(GCodeException)
+{
+	String<MaxVariableNameLength> varName;
+	bool seenV = false;
+	gb.TryGetQuotedString('V', varName.GetRef(), seenV, false);
+	Variable *_ecv_null resultVar = nullptr;
+	if (seenV)
+	{
+		if (!Variable::IsValidVariableName(varName.c_str()))
+		{
+			gb.ThrowGCodeException("variable '%s' is not a valid name", varName.c_str());
+		}
+		auto vset = WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables());
+		Variable *_ecv_null const v = vset->Lookup(varName.c_str(), false);
+		if (v != nullptr)
+		{
+			gb.ThrowGCodeException("variable '%s' already exists", varName.c_str());
+		}
+		resultVar = vset->InsertNew(varName.c_str(), ExpressionValue(), gb.CurrentFileMachineState().GetBlockNesting());
+	}
+	return resultVar;
+}
+
 // Handle M260 and M260.1 - send and possibly receive via I2C, or send via Modbus
 GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
 	// Get the slave address and bytes or words to send
-
-# if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
-	const uint32_t address = GetAddress(gb);
-#endif
-
-	int32_t values[MaxI2cOrModbusValues] = {0};
+	int32_t valuesToSend[MaxI2cOrModbusValues] = { 0 };
 	size_t numToSend = 0;
 
 	if (gb.Seen('B'))
 	{
 		numToSend = MaxI2cOrModbusValues;
-		gb.GetIntArray(values, numToSend, false);
+		gb.GetIntArray(valuesToSend, numToSend, false);
 	}
 	else if (gb.Seen('S'))
 	{
@@ -2289,7 +2311,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 
 		for (size_t i = 0; i < numToSend; i++)
 		{
-			values[i] = (int32_t)str[i];
+			valuesToSend[i] = (int32_t)str[i];
 		}
 	}
 	else if (gb.GetCommandFraction() > 0)
@@ -2298,24 +2320,39 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 		return GCodeResult::error;
 	}
 
+#if HAS_AUX_DEVICES
+	size_t auxChannel = 0;
+	if (gb.GetCommandFraction() > 0)
+	{
+		auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
+		if (auxDevices[auxChannel].GetMode() != AuxMode::device)
+		{
+			reply.copy("Port has not been set to device mode");
+			return GCodeResult::error;
+		}
+	}
+#endif
+
 	switch (gb.GetCommandFraction())
 	{
 # if defined(I2C_IFACE)
 	case 0:		// I2C
 	case -1:
 		{
+			const uint32_t address = gb.GetLimitedUIValue('A', 1u << 10);
 			uint32_t numToReceive = 0;
 			bool seenR;
 			gb.TryGetUIValue('R', numToReceive, seenR);
+			Variable *_ecv_null const resultVar = GetResultVariable(gb);
 
 			if (numToSend + numToReceive > MaxI2cOrModbusValues)
 			{
 				numToReceive = MaxI2cOrModbusValues - numToSend;
 			}
-			uint8_t bValues[MaxI2cOrModbusValues] = {0};
+			uint8_t bValues[MaxI2cOrModbusValues] = { 0 };
 			for (size_t i = 0; i < numToSend; ++i)
 			{
-				bValues[i] = (uint8_t)values[i];
+				bValues[i] = (uint8_t)valuesToSend[i];
 			}
 
 			I2C::Init();
@@ -2328,16 +2365,28 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 			}
 			else if (numToReceive != 0)
 			{
-				reply.copy("Received");
-				if (bytesTransferred == numToSend)
+				if (resultVar != nullptr)
 				{
-					reply.cat(" nothing");
+					resultVar->AssignArray(bytesTransferred - numToSend,
+											[bValues, numToSend](size_t index)->ExpressionValue
+											{
+												return ExpressionValue((int32_t)bValues[index + numToSend]);
+											}
+										  );
 				}
 				else
 				{
-					for (size_t i = numToSend; i < bytesTransferred; ++i)
+					reply.copy("Received");
+					if (bytesTransferred == numToSend)
 					{
-						reply.catf(" %02x", bValues[i]);
+						reply.cat(" nothing");
+					}
+					else
+					{
+						for (size_t i = numToSend; i < bytesTransferred; ++i)
+						{
+							reply.catf(" %02x", bValues[i]);
+						}
 					}
 				}
 			}
@@ -2348,13 +2397,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 # if SUPPORT_MODBUS_RTU
 	case 1:		// Modbus
 		{
-			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-			if (auxDevices[auxChannel].GetMode() != AuxMode::device)
-			{
-				reply.copy("Port has not been set to device mode");
-				return GCodeResult::error;
-			}
-
+			const uint32_t address = gb.GetLimitedUIValue('A', 256);
 			const uint16_t firstRegister = gb.GetLimitedUIValue('R', 1u << 16);
 			const uint8_t function = (gb.Seen('F')) ? gb.GetLimitedUIValue('F', 5, 17) : 16;	// default to Modbus function Write Multiple Registers but also allow Write Coils, Write Single Coil
 			uint16_t registersToSend[MaxI2cOrModbusValues];
@@ -2366,7 +2409,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 					reply.copy("Invalid Modbus data");
 					return GCodeResult::error;
 				}
-				registersToSend[0] = (values[0] == 0) ? 0 : 0xFF00;
+				registersToSend[0] = (valuesToSend[0] == 0) ? 0 : 0xFF00;
 				break;
 
 			case (uint8_t)ModbusFunction::writeSingleRegister:
@@ -2375,14 +2418,14 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 					reply.copy("Invalid Modbus data");
 					return GCodeResult::error;
 				}
-				registersToSend[0] = (uint16_t)values[0];
+				registersToSend[0] = (uint16_t)valuesToSend[0];
 				break;
 
 			case (uint8_t)ModbusFunction::writeMultipleCoils:
 				memset(registersToSend, 0, sizeof(registersToSend));
 				for (size_t i = 0; i < numToSend; ++i)
 				{
-					if (values[i] != 0)
+					if (valuesToSend[i] != 0)
 					{
 						registersToSend[i/16] |= 1u << (i % 16);
 					}
@@ -2392,7 +2435,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 			case (uint8_t)ModbusFunction::writeMultipleRegisters:
 				for (size_t i = 0; i < numToSend; ++i)
 				{
-					registersToSend[i] = (uint16_t)values[i];
+					registersToSend[i] = (uint16_t)valuesToSend[i];
 				}
 				break;
 
@@ -2420,23 +2463,67 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 			}
 			return rslt;
 		}
+
+	case 4:					// generic Modbus send/receive
+		{
+			const uint32_t address = gb.GetLimitedUIValue('A', 256);
+			Variable *_ecv_null const resultVar = GetResultVariable(gb);
+			uint8_t bValues[MaxI2cOrModbusValues] = { 0 };
+			for (size_t i = 0; i < numToSend; ++i)
+			{
+				bValues[i] = (uint8_t)valuesToSend[i];
+			}
+			const uint32_t numToReceive = gb.GetLimitedUIValue('R', 1, MaxI2cOrModbusValues + 1);
+			uint8_t dataIn[MaxI2cOrModbusValues];
+			GCodeResult rslt = auxDevices[auxChannel].ModbusRawTransaction(address, bValues, numToSend, dataIn, numToReceive);
+			if (rslt == GCodeResult::ok)
+			{
+				do
+				{
+					delay(2);
+					rslt = auxDevices[auxChannel].CheckModbusResult();
+				} while (rslt == GCodeResult::notFinished);
+
+				if (rslt == GCodeResult::ok)
+				{
+					if (resultVar != nullptr)
+					{
+						resultVar->AssignArray(numToReceive, [dataIn](size_t index)->ExpressionValue
+												{
+													return ExpressionValue((int32_t)dataIn[index]);
+												}
+											  );
+					}
+					else
+					{
+						reply.copy("Received");
+						for (size_t i = 0; i < numToReceive; ++i)
+						{
+							reply.catf(" %02x", dataIn[i]);
+						}
+					}
+				}
+				else
+				{
+					reply.copy("no or bad response from Modbus device");
+				}
+			}
+			else
+			{
+				reply.copy("couldn't initiate Modbus transaction");
+			}
+			return rslt;
+		}
 # endif
 
 # if HAS_AUX_DEVICES
 	case 2:
 	{
-		const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-		if (auxDevices[auxChannel].GetMode() != AuxMode::device)
-		{
-			reply.copy("Port has not been set to device mode");
-			return GCodeResult::error;
-		}
-
 		uint8_t data[MaxI2cOrModbusValues] = {0};
 
 		for (size_t i = 0; i < numToSend; i++)
 		{
-			data[i] = (uint8_t)values[i];
+			data[i] = (uint8_t)valuesToSend[i];
 		}
 
 		GCodeResult rslt = auxDevices[auxChannel].SendUartData(data, numToSend);
@@ -2447,15 +2534,9 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 		return rslt;
 	}
 
+# if !defined(DUET_NG)			// don't support this on Duet 2 because we are running low on flash memory space
 	case 3: // Nordson Ultimus V https://www.manualslib.com/manual/2917329/Nordson-Ultimus-V.html?page=46#manual
 	{
-		const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-		if (auxDevices[auxChannel].GetMode() != AuxMode::device)
-		{
-			reply.copy("Port has not been set to device mode");
-			return GCodeResult::error;
-		}
-
 		AuxDevice& dev = auxDevices[auxChannel];
 
 		// Send `ENQ`
@@ -2491,7 +2572,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 
 		for (size_t i = 0; i < numToSend; i++)
 		{
-			data[i + 3] = (uint8_t)values[i];
+			data[i + 3] = (uint8_t)valuesToSend[i];
 		}
 
 		uint8_t checksum[2] = {0};
@@ -2550,6 +2631,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 
 		return rslt;
 	}
+# endif
 #endif
 
 	default:
@@ -2560,31 +2642,21 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 // Handle M261 and M261.1
 GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
-# if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
-	const uint32_t address = GetAddress(gb);
-#endif
-
 	const uint32_t numValues = gb.GetLimitedUIValue('B', 0, MaxI2cOrModbusValues + 1);
-	String<MaxVariableNameLength> varName;
-	bool seenV = false;
-	gb.TryGetQuotedString('V', varName.GetRef(), seenV, false);
-	Variable *_ecv_null resultVar = nullptr;
-	if (seenV)
+	Variable *_ecv_null const resultVar = GetResultVariable(gb);
+
+#if HAS_AUX_DEVICES
+	size_t auxChannel = 0;
+	if (gb.GetCommandFraction() > 0)
 	{
-		if (!Variable::IsValidVariableName(varName.c_str()))
+		auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
+		if (auxDevices[auxChannel].GetMode() != AuxMode::device)
 		{
-			reply.printf("variable '%s' is not a valid name", varName.c_str());
+			reply.copy("Port has not been set to device mode");
 			return GCodeResult::error;
 		}
-		auto vset = WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables());
-		Variable *_ecv_null const v = vset->Lookup(varName.c_str(), false);
-		if (v != nullptr)
-		{
-			reply.printf("variable '%s' already exists", varName.c_str());
-			return GCodeResult::error;
-		}
-		resultVar = vset->InsertNew(varName.c_str(), ExpressionValue(), gb.CurrentFileMachineState().GetBlockNesting());
 	}
+#endif
 
 	switch (gb.GetCommandFraction())
 	{
@@ -2592,6 +2664,7 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 	case 0:		// I2C
 	case -1:
 		{
+			const uint32_t address = gb.GetLimitedUIValue('A', 1u << 10);
 			I2C::Init();
 			uint8_t bValues[MaxI2cOrModbusValues];
 			const size_t bytesRead = I2C::Transfer(address, bValues, 0, numValues);
@@ -2630,13 +2703,7 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 #if SUPPORT_MODBUS_RTU
 	case 1:		// Modbus
 		{
-			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-			if (auxDevices[auxChannel].GetMode() != AuxMode::device)
-			{
-				reply.copy("Port has not been set to device mode");
-				return GCodeResult::error;
-			}
-
+			const uint32_t address = gb.GetLimitedUIValue('A', 256);
 			const uint16_t firstRegister = gb.GetLimitedUIValue('R', 1u << 16);
 			const uint8_t function = (gb.Seen('F')) ? gb.GetLimitedUIValue('F', 1, 5) : 4;			// default to Modbus function Read Input Registers but also allow Read Holding Registers, Read Coils, Read Inputs
 			uint16_t registersToReceive[MaxI2cOrModbusValues];
@@ -2711,13 +2778,6 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 #if HAS_AUX_DEVICES
 	case 2:		// Uart
 		{
-			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-			if (auxDevices[auxChannel].GetMode() != AuxMode::device)
-			{
-				reply.copy("Port has not been set to device mode");
-				return GCodeResult::error;
-			}
-
 			uint8_t dataReceived[MaxI2cOrModbusValues];
 			GCodeResult rslt = auxDevices[auxChannel].ReadUartData(dataReceived, numValues);
 			if (rslt == GCodeResult::ok)
@@ -2748,6 +2808,8 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 		}
 #endif
 
+	case 3:				// Nordson Ultimus V, use M260.3
+	case 4:				// Modbus generic, use M260.4
 	default:
 		return GCodeResult::errorNotSupported;
 	}
@@ -2890,7 +2952,7 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 		MutexLocker lock(usbMutex);
 
 		// Ensure we have a valid buffer to write to that isn't referenced for other destinations
-		OutputBuffer *usbOutputBuffer = usbOutput.GetLastItem();
+		OutputBuffer *_ecv_null usbOutputBuffer = usbOutput.GetLastItem();
 		if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
 		{
 			if (OutputBuffer::Allocate(usbOutputBuffer))
@@ -2912,7 +2974,7 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 // Note: this overload of Platform::Message does not process the special action flags in the MessageType.
 // Also it treats calls to send a blocking USB message the same as ordinary USB messages,
 // and calls to send an immediate LCD message the same as ordinary LCD messages
-void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
+void Platform::Message(MessageType type, OutputBuffer *buffer) noexcept
 {
 #if HAS_MASS_STORAGE
 	// First deal with logging because it doesn't hang on to the buffer
@@ -3092,7 +3154,7 @@ GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) 
 	if (gb.Seen('S'))
 	{
 		StopLogging();
-		const auto logLevel = (LogLevel) gb.GetLimitedUIValue('S', LogLevel::off, LogLevel::NumValues);
+		const auto logLevel = (LogLevel::RawType)gb.GetLimitedUIValue('S', LogLevel::off, LogLevel::NumValues);
 		if (logLevel > LogLevel::off)
 		{
 			// Start logging
@@ -3233,7 +3295,7 @@ GCodeResult Platform::HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(
 		delayedPowerDown = gb.Seen('D');
 		if (delayedPowerDown)
 		{
-			whenToPowerDown = (gb.GetUIValue() * SecondsToMillis) + millis();
+			whenToPowerDown = (gb.GetUIValue() * (uint32_t)SecondsToMillis) + millis();
 		}
 		if (!powerDownWhenFansStop && !delayedPowerDown)
 		{
@@ -3274,7 +3336,7 @@ void Platform::SetBaudRate(size_t chan, uint32_t br) noexcept
 #if HAS_AUX_DEVICES
 	if (chan != 0 && chan < NumSerialChannels)
 	{
-		auxDevices[chan - 1].SetBaudRate(br);
+		auxDevices[chan - FirstAuxChannel].SetBaudRate(br);
 	}
 #endif
 }
@@ -3283,7 +3345,7 @@ uint32_t Platform::GetBaudRate(size_t chan) const noexcept
 {
 	return
 #if HAS_AUX_DEVICES
-		(chan != 0 && chan < NumSerialChannels) ? auxDevices[chan - 1].GetBaudRate() :
+		(chan != 0 && chan < NumSerialChannels) ? auxDevices[chan - FirstAuxChannel].GetBaudRate() :
 #endif
 		0;
 }
@@ -3298,7 +3360,7 @@ void Platform::SetCommsProperties(size_t chan, uint32_t cp) noexcept
 
 uint32_t Platform::GetCommsProperties(size_t chan) const noexcept
 {
-	return (chan < NumSerialChannels) ? commsParams[chan] : 0;
+	return (chan < NumSerialChannels) ? commsParams[chan] : 0u;
 }
 
 // Re-initialise a serial channel.
@@ -3316,7 +3378,7 @@ void Platform::ResetChannel(size_t chan) noexcept
 #if HAS_AUX_DEVICES
 	else if (chan < NumSerialChannels)
 	{
-		AuxDevice& device = auxDevices[chan - 1];
+		AuxDevice& device = auxDevices[chan - FirstAuxChannel];
 		AuxMode mode = device.GetMode();
 		device.Disable();
 		device.SetMode(mode);
@@ -3571,7 +3633,7 @@ bool Platform::DeleteSysFile(const char *_ecv_array filename) const noexcept
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 // Open a file
-FileStore* Platform::OpenFile(const char *_ecv_array folder, const char *_ecv_array fileName, OpenMode mode, uint32_t preAllocSize) const noexcept
+FileStore *_ecv_null Platform::OpenFile(const char *_ecv_array folder, const char *_ecv_array fileName, OpenMode mode, uint32_t preAllocSize) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return (MassStorage::CombineName(location.GetRef(), folder, fileName))
@@ -3588,7 +3650,7 @@ bool Platform::FileExists(const char *_ecv_array folder, const char *_ecv_array 
 // Return a pointer to a string holding the directory where the system files are. Lock the sysdir lock before calling this.
 const char *_ecv_array Platform::InternalGetSysDir() const noexcept
 {
-	return (sysDir != nullptr) ? sysDir : DEFAULT_SYS_DIR;
+	return (sysDir != nullptr) ? _ecv_not_null(sysDir) : DEFAULT_SYS_DIR;
 }
 
 bool Platform::SysFileExists(const char *_ecv_array filename) const noexcept
@@ -3597,7 +3659,7 @@ bool Platform::SysFileExists(const char *_ecv_array filename) const noexcept
 	return MakeSysFileName(location.GetRef(), filename) && MassStorage::FileExists(location.c_str());
 }
 
-FileStore* Platform::OpenSysFile(const char *_ecv_array filename, OpenMode mode) const noexcept
+FileStore *_ecv_null Platform::OpenSysFile(const char *_ecv_array filename, OpenMode mode) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return (MakeSysFileName(location.GetRef(), filename))
@@ -3644,7 +3706,7 @@ GCodeResult Platform::SetSysDir(const char *_ecv_array dir, const StringRef& rep
 
 	newSysDir.cat('/');								// the call to DirectoryExists removed the trailing '/'
 	const size_t len = newSysDir.strlen() + 1;
-	char* const nsd = new char[len];
+	char *_ecv_array _ecv_null const nsd = new char[len];
 	memcpy(nsd, newSysDir.c_str(), len);
 	ReplaceObject(sysDir, nsd);
 	reprap.DirectoriesUpdated();
@@ -3762,13 +3824,13 @@ float Platform::GetCurrentV12Voltage() const noexcept
 
 // Real-time clock
 
-bool Platform::SetDateTime(time_t time) noexcept
+bool Platform::SetDateTime(time_t tim) noexcept
 {
 	struct tm brokenDateTime;
-	const bool ok = (gmtime_r(&time, &brokenDateTime) != nullptr);
+	const bool ok = (gmtime_r(&tim, &brokenDateTime) != nullptr);
 	if (ok)
 	{
-		realTime = time;			// set the date and time
+		realTime = tim;			// set the date and time
 
 		// Write a log message, giving the time since power up in same format as the logger does
 		const uint32_t timeSincePowerUp = (uint32_t)(millis64()/1000u);
@@ -4108,7 +4170,7 @@ void Platform::Tick() noexcept
 	}
 #endif
 
-	const ZProbe& currentZProbe = endstops.GetDefaultZProbeFromISR();
+	const ZProbe &_ecv_from currentZProbe = endstops.GetDefaultZProbeFromISR();
 	switch (tickState)
 	{
 	case 1:

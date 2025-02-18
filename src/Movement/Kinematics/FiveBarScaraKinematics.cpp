@@ -890,33 +890,19 @@ AxesBitmap FiveBarScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesB
 	return ret;
 }
 
-// This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
-// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
-void FiveBarScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
+float FiveBarScaraKinematics::GetEndstopPosition(size_t drive, bool highEnd) noexcept
 {
-	switch (axis)
+	switch (drive)
 	{
 	case X_AXIS:	// Left arm homing switch
-		dda.SetDriveCoordinate(lrintf(homingAngleL * stepsPerMm[axis]), axis);
-		break;
+		return homingAngleL;
 
 	case Y_AXIS:	// Left arm homing switch
-		dda.SetDriveCoordinate(lrintf(homingAngleR * stepsPerMm[axis]), axis);
-		break;
+		return homingAngleR;
 
 	case Z_AXIS:	// Z axis homing switch
-		{
-			const float hitPoint = ((highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis));
-			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
-		}
-		break;
-
 	default:		// Additional axis
-		{
-			const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
-			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
-		}
-		break;
+		return Kinematics::GetEndstopPosition(drive, highEnd);
 	}
 }
 
@@ -926,10 +912,10 @@ bool FiveBarScaraKinematics::IsContinuousRotationAxis(size_t axis) const noexcep
 	return axis == X_AXIS || axis == Y_AXIS || Kinematics::IsContinuousRotationAxis(axis);
 }
 
-AxesBitmap FiveBarScaraKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
+LogicalDrivesBitmap FiveBarScaraKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
 {
 	return (forHoming || axis >= Z_AXIS)
-			? AxesBitmap::MakeFromBits(axis)
+			? LogicalDrivesBitmap::MakeFromBits(axis)
 				: XyAxes;
 }
 

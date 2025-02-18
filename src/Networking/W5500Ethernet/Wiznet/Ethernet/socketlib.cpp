@@ -252,7 +252,7 @@ void disconnectNoWait(uint8_t sn) noexcept
 	ExecCommand(sn, Sn_CR_DISCON);
 }
 
-int32_t sendto(uint8_t sn, const uint8_t * buf, uint16_t len, IPAddress destIp, uint16_t port) noexcept
+int32_t sendto(uint8_t sn, const uint8_t *_ecv_array buf, uint16_t len, IPAddress destIp, uint16_t port) noexcept
 {
 	switch(getSn_MR(sn) & 0x0F)
 	{
@@ -321,7 +321,7 @@ int32_t CheckSendComplete(uint8_t sn) noexcept
 	return SOCK_BUSY;
 }
 
-int32_t recvfrom(uint8_t sn, uint8_t * buf, uint16_t len, uint8_t * addr, uint16_t *port) noexcept
+int32_t recvfrom(uint8_t sn, uint8_t *_ecv_array buf, uint16_t len, uint8_t addr[6], uint16_t *port) noexcept
 {
 	const uint8_t mr = getSn_MR(sn);
 	switch(mr & 0x0F)

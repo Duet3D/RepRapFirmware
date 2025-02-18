@@ -154,7 +154,7 @@ void DuetExpansion::DueXnTaskInit() noexcept
 	if (dueXnBoardType != ExpansionBoardType::none)
 	{
 		// Set up the interrupt on any input change
-		attachInterrupt(DueX_INT, DueXIrq, InterruptMode::falling, CallbackParameter(nullptr));
+		AttachPinInterrupt(DueX_INT, DueXIrq, InterruptMode::falling, CallbackParameter(nullptr));
 
 		// Clear any initial interrupts
 		(void)dueXnExpander.interruptSourceAndClear();
@@ -357,9 +357,9 @@ uint16_t DuetExpansion::DiagnosticRead() noexcept
 	return retval;
 }
 
-void DuetExpansion::Exit()
+void DuetExpansion::Exit() noexcept
 {
-	detachInterrupt(DueX_INT);
+	DetachPinInterrupt(DueX_INT);
 	if (dueXTask != nullptr)
 	{
 		dueXTask->TerminateAndUnlink();

@@ -64,7 +64,7 @@ private:
 	FlashState state;
 	FileStore *_ecv_null firmwareFile;
 
-	AsyncSerial* GetAuxPort() noexcept;
+	AsyncSerial *_ecv_null GetAuxPort() noexcept;
 };
 
 #endif	// HAS_AUX_DEVICES

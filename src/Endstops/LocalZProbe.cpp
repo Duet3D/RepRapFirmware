@@ -59,7 +59,7 @@ GCodeResult LocalZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool
 	if (gb.Seen('C'))										// input channel
 	{
 		seen = true;
-		IoPort* const ports[] = { &inputPort, &modulationPort };
+		IoPort *_ecv_from const ports[] = { &inputPort, &modulationPort };
 
 		if (!IoPort::AssignPorts(gb, reply, PinUsedBy::zprobe, 2, ports, access))
 		{

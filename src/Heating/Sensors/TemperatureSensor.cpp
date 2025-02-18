@@ -17,7 +17,7 @@
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(TemperatureSensor, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY_NONLEAF(TemperatureSensor, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry TemperatureSensor::objectModelTable[] =
 {
@@ -50,14 +50,8 @@ TemperatureSensor::SensorTypeDescriptor::SensorTypeDescriptor(const char *_ecv_a
 
 // Constructor
 TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *_ecv_array t) noexcept
-	: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr),
+	: next(nullptr), sensorNumber(sensorNum), sensorType(t),
 	  lastTemperature(0.0), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::ok) {}
-
-// Virtual destructor
-TemperatureSensor::~TemperatureSensor() noexcept
-{
-	delete sensorName;
-}
 
 // Return the latest temperature reading
 TemperatureError TemperatureSensor::GetLatestTemperature(float& t) noexcept
@@ -81,20 +75,25 @@ TemperatureError TemperatureSensor::GetAdditionalOutput(float& t, uint8_t output
 	return TemperatureError::invalidOutputNumber;
 }
 
+// Configure one of the additional outputs on this sensor. Ignore the A, U and V parameters because those are handled by ConfigureCommonParameters.
+// The output number should already have been range checked before we get here, so no need to return an error if it is out of range.
+// Most sensors either have no additional outputs or the additional outputs don't need additional configuration, so this default implementation does nothing.
+GCodeResult TemperatureSensor::ConfigureAdditionalOutput(GCodeBuffer& gb, const StringRef& reply, bool& changed, uint8_t outputNumber) THROWS(GCodeException)
+{
+	return GCodeResult::ok;
+}
+
+// Report the parameters of an additional output by appending them to the reply
+void TemperatureSensor::AppendAdditionalOutputParameters(const StringRef& reply, uint8_t outputNumber) noexcept
+{
+	// By default there are no parameters to report
+}
+
 // Set the name - normally called only once, so we allow heap memory to be allocated
 void TemperatureSensor::SetSensorName(const char *_ecv_array _ecv_null newName) noexcept
 {
 	// Change the heater name in a thread-safe manner
-	const char *_ecv_array _ecv_null oldName = sensorName;
-	sensorName = nullptr;
-	delete oldName;
-
-	if (newName != nullptr && strlen(newName) != 0)
-	{
-		char *_ecv_array const temp = new char[strlen(newName) + 1];
-		strcpy(temp, newName);
-		sensorName = temp;
-	}
+	sensorName.Assign(newName);
 }
 
 // Default implementation of Configure, for sensors that have no configurable parameters
@@ -124,14 +123,21 @@ GCodeResult TemperatureSensor::Configure(const CanMessageGenericParser& parser, 
 	return GCodeResult::ok;
 }
 
+// Default implementation to configure parameters for an additional output
+GCodeResult TemperatureSensor::ConfigureAdditionalOutput(const CanMessageGenericParser& parser, const StringRef& reply, bool& changed, uint8_t outputNumber) noexcept
+{
+	return GCodeResult::ok;
+}
+
 #endif
 
 void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 {
 	reply.printf("Sensor %u", sensorNumber);
-	if (sensorName != nullptr)
+	if (!sensorName.IsNull())
 	{
-		reply.catf(" (%s)", sensorName);
+		ReadLockedPointer<const char> tempName = sensorName.Get();
+		reply.catf(" (%s)", tempName.Ptr());
 	}
 	reply.catf(" type %s", sensorType);
 	AppendPinDetails(reply);
@@ -223,7 +229,7 @@ TemperatureSensor *_ecv_from _ecv_null TemperatureSensor::Create(unsigned int se
 
 	{
 		ts = nullptr;
-		for (const SensorTypeDescriptor *desc = SensorTypeDescriptor::GetRoot(); desc != nullptr; desc = desc->GetNext())
+		for (const SensorTypeDescriptor *_ecv_null desc = SensorTypeDescriptor::GetRoot(); desc != nullptr; desc = desc->GetNext())
 		{
 			if (ReducedStringEquals(typeName, desc->GetName()))
 			{

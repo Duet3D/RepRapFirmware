@@ -225,13 +225,6 @@ bool FansManager::IsFanControllable(size_t fanNum) const noexcept
 	return fan.IsNotNull() && !fan->HasMonitoredSensors();
 }
 
-// Return the fan's name
-const char *_ecv_array FansManager::GetFanName(size_t fanNum) const noexcept
-{
-	auto fan = FindFan(fanNum);
-	return (fan.IsNull()) ? "" : fan->GetName();
-}
-
 // Get current fan RPM, or -1 if the fan is invalid or doesn't have a tacho pin
 int32_t FansManager::GetFanRPM(size_t fanNum) const noexcept
 {

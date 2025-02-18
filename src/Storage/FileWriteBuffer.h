@@ -30,27 +30,27 @@ class FileWriteBuffer
 {
 public:
 #if SAME70
-	FileWriteBuffer(FileWriteBuffer *n, char *storage) noexcept : next(n), index(0), buf(storage) { }
+	FileWriteBuffer(FileWriteBuffer *_ecv_null n, char *_ecv_array storage) noexcept : next(n), index(0), buf(storage) { }
 #else
-	explicit FileWriteBuffer(FileWriteBuffer *n) noexcept : next(n), index(0) { }
+	explicit FileWriteBuffer(FileWriteBuffer *_ecv_null n) noexcept : next(n), index(0) { }
 #endif
 	static void UsingSbcMode() { fileWriteBufLen = SbcFileWriteBufLen; }	// only called by RepRap on startup
 
-	FileWriteBuffer *Next() const noexcept { return next; }
-	void SetNext(FileWriteBuffer *n) noexcept { next = n; }
+	FileWriteBuffer *_ecv_null Next() const noexcept { return next; }
+	void SetNext(FileWriteBuffer *_ecv_null n) noexcept { next = n; }
 
 	char *_ecv_array Data() noexcept { return buf; }
 	const char *_ecv_array Data() const noexcept { return buf; }
 	const size_t BytesStored() const noexcept { return index; }
 	const size_t BytesLeft() const noexcept { return fileWriteBufLen - index; }
 
-	size_t Store(const char *data, size_t length) noexcept;				// Stores some data and returns how much could be stored
+	size_t Store(const char *_ecv_array data, size_t length) noexcept;				// Stores some data and returns how much could be stored
 	void DataTaken() noexcept { index = 0; }							// Called to indicate that the buffer has been written to the SD card
 	void DataStored(size_t numBytes) noexcept { index += numBytes; }	// Called when more data has been stored directly in the buffer
 
 private:
 	static size_t fileWriteBufLen;
-	FileWriteBuffer *next;
+	FileWriteBuffer *_ecv_null next;
 
 	size_t index;
 #if SAME70
@@ -60,7 +60,7 @@ private:
 #endif
 };
 
-inline size_t FileWriteBuffer::Store(const char *data, size_t length) noexcept
+inline size_t FileWriteBuffer::Store(const char *_ecv_array data, size_t length) noexcept
 {
 	size_t bytesToStore = min<size_t>(BytesLeft(), length);
 	memcpy(buf + index, data, bytesToStore);

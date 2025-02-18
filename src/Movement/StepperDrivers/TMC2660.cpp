@@ -31,7 +31,7 @@
 #endif
 
 constexpr float MaximumMotorCurrent = 2500.0;
-constexpr float MinimumOpenLoadMotorCurrent = 500;			// minimum current in mA for the open load status to be taken seriously
+constexpr float MinimumOpenLoadMotorCurrent = 500.0;		// minimum current in mA for the open load status to be taken seriously
 constexpr uint32_t DefaultMicrosteppingShift = 4;			// x16 microstepping
 constexpr bool DefaultInterpolation = true;					// interpolation enabled
 constexpr int DefaultStallDetectThreshold = 1;
@@ -221,10 +221,10 @@ static inline constexpr uint32_t CurrentToCsBits(float current) noexcept
 
 constexpr uint32_t MinimumOpenLoadCsBits = CurrentToCsBits(MinimumOpenLoadMotorCurrent);
 
-class TmcDriverState
+class TmcDriverState final
 {
 public:
-	void Init(uint32_t driverNumber, uint32_t p_pin) noexcept;
+	void Init(uint8_t p_driverNumber, Pin p_pin) noexcept;
 	void SetAxisNumber(size_t p_axisNumber) noexcept;
 	void WriteAll() noexcept;
 	bool UpdatePending() const noexcept { return registersToUpdate != 0; }
@@ -240,7 +240,7 @@ public:
 	void SetStallDetectThreshold(int sgThreshold) noexcept;
 	void SetStallDetectFilter(bool sgFilter) noexcept;
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept;
-	EndstopValidationResult CheckStallDetectionEnabled(float speed) noexcept;
+	const char *_ecv_array _ecv_null CheckStallDetectionEnabled(float speed) noexcept;
 
 	void AppendStallConfig(const StringRef& reply) const noexcept;
 	void AppendDriverStatus(const StringRef& reply) noexcept;
@@ -277,19 +277,21 @@ private:
 
 	static constexpr uint32_t UpdateAllRegisters = (1u << NumRegisters) - 1;	// bitmap in registersToUpdate for all registers
 
-	uint32_t pin;											// the pin number that drives the chip select pin of this driver
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state
 	volatile uint32_t registersToUpdate;					// bitmap of register values that need to be sent to the driver chip
-	DriversBitmap driverBit;								// bitmap of just this driver number
-	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
-	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection, in step clocks
 	uint32_t mstepPosition;									// the current microstep position, or 0xFFFFFFFF if unknown
 
 	volatile uint32_t lastReadStatus;						// the status word that we read most recently, updated by the ISR
 	volatile uint32_t accumulatedStatus;
 
+	LocalDriversBitmap driverBit;							// bitmap of just this driver number
 	uint16_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
+
+	Pin pin;												// the pin number that drives the chip select pin of this driver
+	uint8_t driverNumber;
+	uint8_t logicalDriveNumber;										// the axis number of this driver as used to index the DriveMovements in the DDA
+	uint8_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	bool enabled;
 	volatile uint8_t rdselState;							// 0-3 = actual RDSEL value, 0xFF = unknown
 };
@@ -308,11 +310,11 @@ static Pdc * const spiPdc =
 #endif
 
 // Words to send and receive driver SPI data from/to
-volatile static uint32_t spiDataOut = 0;					// volatile because we care about when it is written
-volatile static uint32_t spiDataIn = 0;						// volatile because the PDC writes it
+static volatile uint32_t spiDataOut = 0;					// volatile because we care about when it is written
+static volatile uint32_t spiDataIn = 0;						// volatile because the PDC writes it
 
 // Variables used by the ISR
-static TmcDriverState * volatile currentDriver = nullptr;	// volatile because the ISR changes it
+static TmcDriverState *_ecv_null volatile currentDriver = nullptr;	// volatile because the ISR changes it
 
 // Set up the PDC to send a register and receive the status
 /*static*/ inline void TmcDriverState::SetupDMA(uint32_t outVal) noexcept
@@ -427,11 +429,10 @@ static TmcDriverState * volatile currentDriver = nullptr;	// volatile because th
 }
 
 // Initialise the state of the driver and its CS pin
-void TmcDriverState::Init(uint32_t driverNumber, uint32_t p_pin) noexcept
-pre(!driversPowered)
+void TmcDriverState::Init(uint8_t p_driverNumber, Pin p_pin) noexcept
 {
-	axisNumber = driverNumber;												// assume straight through mapping at initialisation
-	driverBit = DriversBitmap::MakeFromBits(driverNumber);
+	logicalDriveNumber = driverNumber = p_driverNumber;								// assume straight through mapping at initialisation
+	driverBit = LocalDriversBitmap::MakeFromBits(p_driverNumber);
 	pin = p_pin;
 	pinMode(pin, OUTPUT_HIGH);
 	enabled = false;
@@ -455,7 +456,7 @@ pre(!driversPowered)
 
 inline void TmcDriverState::SetAxisNumber(size_t p_axisNumber) noexcept
 {
-	axisNumber = p_axisNumber;
+	logicalDriveNumber = p_axisNumber;
 }
 
 // Write all registers. This is called when the drivers are known to be powered up.
@@ -709,7 +710,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 		threshold -= 128;
 	}
 	const uint32_t fullstepsPerSecond = StepClockRate/maxStallStepInterval;
-	const float stepsPerMm = reprap.GetMove().DriveStepsPerMm(axisNumber);
+	const float stepsPerMm = reprap.GetMove().DriveStepsPerMm(logicalDriveNumber);
 	const float speed = (float)(fullstepsPerSecond << microstepShiftFactor)/stepsPerMm;
 	reply.catf("stall threshold %d, filter %s, full steps/sec %" PRIu32 " (%.1f mm/sec), coolstep %" PRIx32,
 				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed, registers[SmartEnable] & 0xFFFF);
@@ -737,13 +738,13 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const noexcep
 }
 
 // Check that stall detection can occur at the specified speed
-EndstopValidationResult TmcDriverState::CheckStallDetectionEnabled(float speed) noexcept
+const char *_ecv_array _ecv_null TmcDriverState::CheckStallDetectionEnabled(float speed) noexcept
 {
 	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor) * 1.2)
 	{
-		return EndstopValidationResult::moveTooSlow;
+		return "move is too slow for driver %u to detect stall";
 	}
-	return EndstopValidationResult::ok;
+	return nullptr;
 }
 
 // This is called by the ISR when the SPI transfer has completed
@@ -754,7 +755,7 @@ inline void TmcDriverState::TransferDone() noexcept
 	{
 		Cache::InvalidateAfterDMAReceive(&spiDataIn, sizeof(spiDataIn));
 		uint32_t status = be32_to_cpu(spiDataIn) >> 12;			// get the status
-		const uint32_t interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
+		const uint32_t interval = reprap.GetMove().GetStepInterval(logicalDriveNumber, microstepShiftFactor);		// get the full step interval
 		if (interval == 0 || interval > maxStallStepInterval)	// if the motor speed is too low to get reliable stall indication
 		{
 			status &= ~TMC_RR_SG;								// remove the stall status bit
@@ -872,7 +873,7 @@ extern "C" void TMC2660_SPI_Handler(void) noexcept SPEED_CRITICAL;
 
 void TMC2660_SPI_Handler(void) noexcept
 {
-	TmcDriverState *driver = currentDriver;				// capture volatile variable
+	TmcDriverState *_ecv_array _ecv_null driver = currentDriver;	// capture volatile variable
 	if (driver != nullptr)
 	{
 		driver->TransferDone();							// tidy up after the transfer we just completed
@@ -956,7 +957,7 @@ void SmartDrivers::Init(const Pin driverSelectPins[NumDirectDrivers], size_t num
 #endif
 
 	driversState = DriversState::noPower;
-	EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
+	EndstopOrZProbe::SetDriversNotStalled(LocalDriversBitmap::MakeLowestNBits(MaxSmartDrivers));
 	for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
 	{
 		driverStates[driver].Init(driver, driverSelectPins[driver]);		// axes are mapped straight through to drivers initially
@@ -1055,7 +1056,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 		{
 		case DriversState::noPower:
 			// Power to the drivers has been provided or restored, so we need to enable and re-initialise them
-			EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
+			EndstopOrZProbe::SetDriversNotStalled(LocalDriversBitmap::MakeLowestNBits(MaxSmartDrivers));
 			for (size_t driver = 0; driver < numTmc2660Drivers; ++driver)
 			{
 				driverStates[driver].WriteAll();
@@ -1165,7 +1166,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 	{
 		digitalWrite(GlobalTmc2660EnablePin, HIGH);			// disable the drivers
 		driversState = DriversState::noPower;
-		EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
+		EndstopOrZProbe::SetDriversNotStalled(LocalDriversBitmap::MakeLowestNBits(MaxSmartDrivers));
 	}
 }
 
@@ -1174,7 +1175,7 @@ void SmartDrivers::TurnDriversOff() noexcept
 {
 	digitalWrite(GlobalTmc2660EnablePin, HIGH);				// disable the drivers
 	driversState = DriversState::noPower;
-	EndstopOrZProbe::SetDriversNotStalled(DriversBitmap::MakeLowestNBits(MaxSmartDrivers));
+	EndstopOrZProbe::SetDriversNotStalled(LocalDriversBitmap::MakeLowestNBits(MaxSmartDrivers));
 }
 
 void SmartDrivers::SetStallThreshold(size_t driver, int sgThreshold) noexcept
@@ -1248,9 +1249,12 @@ StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bo
 	return rslt;
 }
 
-EndstopValidationResult SmartDrivers::CheckStallDetectionEnabled(size_t driver, float speed) noexcept
+// Check whether stall detection is viable. If yes, return nullptr. If no, return a message string in flash memory containing a single %u placeholder for the driver number.
+const char *_ecv_array _ecv_null SmartDrivers::CheckStallDetectionEnabled(size_t driver, float speed) noexcept
 {
-	return (driver < numTmc2660Drivers) ? driverStates[driver].CheckStallDetectionEnabled(speed) : EndstopValidationResult::stallDetectionNotSupported;
+	return (driver < numTmc2660Drivers)
+			? driverStates[driver].CheckStallDetectionEnabled(speed)
+				: "driver %u does not support stall detection";
 }
 
 #endif

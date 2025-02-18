@@ -10,10 +10,11 @@
 
 #include <RepRapFirmware.h>
 #include <ObjectModel/ObjectModel.h>
+#include <Movement/HomingMode.h>
 
 template<class T> class MathMatrix;
 
-inline floatc_t fcsquare(floatc_t a)
+inline floatc_t fcsquare(floatc_t a) noexcept
 {
 	return a * a;
 }
@@ -39,14 +40,6 @@ enum class KinematicsType : uint8_t
 	sixAxisDelta,		// reserved for @tkln, see https://forum.duet3d.com/post/314950
 
 	unknown				// this one must be last!
-};
-
-// Class used to define homing mode
-enum class HomingMode : uint8_t
-{
-	homeCartesianAxes,
-	homeIndividualMotors,
-	homeSharedMotors
 };
 
 // Return value from limitPosition
@@ -112,7 +105,7 @@ public:
 
 	// Perform auto calibration. Override this implementation in kinematics that support it. Caller already owns the movement lock.
 	// Return true if an error occurred.
-	virtual bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
+	virtual bool DoAutoCalibration(MovementState& ms, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 	pre(SupportsAutoCalibration()) { return false; }
 
 	// Set the default parameters that are changed by auto calibration back to their defaults.
@@ -153,12 +146,11 @@ public:
 	// that some additional axes should be considered not homed.
 	virtual AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept;
 
-	// This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
-	// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
-	virtual void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept = 0;
-
 	// Return the type of homing we do
 	virtual HomingMode GetHomingMode() const noexcept = 0;
+
+	// Return the position of a drive at which the homing switch is triggered. Only called if the homing mode is HomingMode::homeIndividualDrives.
+	virtual float GetEndstopPosition(size_t drive, bool highEnd) noexcept;
 
 	// Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
 	// This default is good for Cartesian and Core printers, but not deltas or SCARA
@@ -185,7 +177,11 @@ public:
 	// Return a bitmap of the motors that cause movement of a particular axis or tower.
 	// This is used to determine which motors we need to enable to move a particular axis, and which motors to monitor for stall detect homing.
 	// For example, the first XY move made by a CoreXY machine may be a diagonal move, and it's important to enable the non-moving motor too.
-	virtual AxesBitmap GetControllingDrives(size_t axis, bool forHoming) const noexcept;
+	// Also used to determine which logical drives to allocate when allocating an axis or extruder.
+	virtual LogicalDrivesBitmap GetControllingDrives(size_t axis, bool forHoming) const noexcept;
+
+	// Convert axis movement or speed amounts to logical drive amounts. Only relevant if GetHomingMode() == HomingMode::homeCartesianAxes.
+	virtual void ConvertAxisAmountsToLogicalDriveAmounts(float amounts[MaxAxes], size_t numVisibleAxes, size_t numTotalAxes) const noexcept { }		// default implementation leaves them unchanged
 
 	// Override this virtual destructor if your constructor allocates any dynamic memory
 	virtual ~Kinematics() override { }
@@ -201,6 +197,14 @@ public:
 	float GetSegmentsPerSecond() const noexcept pre(GetSegmentationType().useSegmentation) { return segmentsPerSecond; }
 	float GetMinSegmentLength() const noexcept pre(GetSegmentationType().useSegmentation) { return minSegmentLength; }
 	float GetReciprocalMinSegmentLength() const noexcept pre(GetSegmentationType().useSegmentation) { return reciprocalMinSegmentLength; }
+
+	LogicalDrivesBitmap GetAllDrivesUsed(AxesBitmap axesAndExtruders) const noexcept;
+
+	// Get the set of all axes (but not extruders) that a logical drive affects
+	AxesBitmap GetAffectedAxes(size_t drive, size_t numAxes) const noexcept;
+
+	// Get the set of all axes (but not extruders) that a set of logical drives affects
+	AxesBitmap GetAffectedAxes(LogicalDrivesBitmap drives, size_t numAxes) const noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -220,7 +224,7 @@ protected:
 	static void PrintVector(const char *_ecv_array s, const float *_ecv_array v, size_t numElems) noexcept;
 	static void PrintVector(const char *_ecv_array s, const double *_ecv_array v, size_t numElems) noexcept;
 
-	static const char * const HomeAllFileName;
+	static const char *_ecv_array const HomeAllFileName;
 
 private:
 	// Default values for those kinematics that always use segmentation

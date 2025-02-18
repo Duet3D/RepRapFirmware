@@ -568,11 +568,10 @@ AxesBitmap HangprinterKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBi
 	return AxesBitmap();
 }
 
-// This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
-// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
-void HangprinterKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
+float HangprinterKinematics::GetEndstopPosition(size_t drive, bool highEnd) noexcept
 {
 	// Hangprinter homing is not supported
+	return Kinematics::GetEndstopPosition(drive, highEnd);
 }
 
 // Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates

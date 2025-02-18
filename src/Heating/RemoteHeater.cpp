@@ -134,13 +134,13 @@ void RemoteHeater::Spin() noexcept
 	case TuningState::cycling:
 		if (newTuningResult)
 		{
-			if (coolingRate.GetNumSamples() >= MinTuningHeaterCycles)
+			if (coolingRateAcc.GetNumSamples() >= MinTuningHeaterCycles)
 			{
 				const bool isConsistent = dLow.DeviationFractionWithin(0.2)
 										&& dHigh.DeviationFractionWithin(0.2)
-										&& heatingRate.DeviationFractionWithin(0.1)
-										&& coolingRate.DeviationFractionWithin(0.1);
-				if (isConsistent || coolingRate.GetNumSamples() == MaxTuningHeaterCycles)
+										&& heatingRateAcc.DeviationFractionWithin(0.1)
+										&& coolingRateAcc.DeviationFractionWithin(0.1);
+				if (isConsistent || coolingRateAcc.GetNumSamples() == MaxTuningHeaterCycles)
 				{
 					if (!isConsistent)
 					{
@@ -489,8 +489,8 @@ void RemoteHeater::UpdateHeaterTuning(CanAddress src, const CanMessageHeaterTuni
 		tOff.Add((float)msg.toff);
 		dHigh.Add((float)msg.dhigh);
 		dLow.Add((float)msg.dlow);
-		heatingRate.Add(msg.heatingRate);
-		coolingRate.Add(msg.coolingRate);
+		heatingRateAcc.Add(msg.heatingRate);
+		coolingRateAcc.Add(msg.coolingRate);
 		tuningVoltage.Add(msg.voltage);
 		currentCoolingRate = msg.coolingRate;
 		tuningCyclesDone = msg.cyclesDone;

@@ -42,9 +42,10 @@ GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply, boo
 		// It's just a query for the sensor parameters, so prefix the sensor number and name
 		String<StringLength50> temp;
 		temp.printf("Sensor %u ", GetSensorNumber());
-		if (GetSensorName() != nullptr)
+		const AutoStringHandle& tempName = GetSensorName();
+		if (!tempName.IsNull())
 		{
-			temp.catf("(%s) ", GetSensorName());
+			temp.catf("(%s) ", tempName.Get().Ptr());
 		}
 		reply.Insert(0, temp.c_str());
 	}

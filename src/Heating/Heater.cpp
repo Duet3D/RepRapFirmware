@@ -42,7 +42,7 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Heater members
 	{ "active",				OBJECT_MODEL_FUNC(self->GetActiveTemperature(), 1), 									ObjectModelEntryFlags::live },
-	{ "avgPwm",				OBJECT_MODEL_FUNC(self->GetAveragePWM(), 3), 											ObjectModelEntryFlags::live },
+	{ "avgPwm",				OBJECT_MODEL_FUNC(self->GetAveragePWM(), 3), 											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "current",			OBJECT_MODEL_FUNC(self->GetTemperature(), 2), 											ObjectModelEntryFlags::live },
 	{ "max",				OBJECT_MODEL_FUNC(self->GetHighestTemperatureLimit(), 1), 								ObjectModelEntryFlags::none },
 	{ "maxBadReadings",		OBJECT_MODEL_FUNC((int32_t)self->maxBadTemperatureCount), 								ObjectModelEntryFlags::none },
@@ -82,8 +82,8 @@ DeviationAccumulator Heater::dHigh;
 DeviationAccumulator Heater::dLow;
 DeviationAccumulator Heater::tOn;
 DeviationAccumulator Heater::tOff;
-DeviationAccumulator Heater::heatingRate;
-DeviationAccumulator Heater::coolingRate;
+DeviationAccumulator Heater::heatingRateAcc;
+DeviationAccumulator Heater::coolingRateAcc;
 DeviationAccumulator Heater::tuningVoltage;				// sum of the voltage readings we take during the heating phase
 
 uint32_t Heater::tuningBeginTime;						// when we started the tuning process
@@ -108,8 +108,8 @@ Heater::HeaterParameters Heater::fanOffParams, Heater::fanOnParams;
 	dLow.Clear();
 	tOn.Clear();
 	tOff.Clear();
-	heatingRate.Clear();
-	coolingRate.Clear();
+	heatingRateAcc.Clear();
+	coolingRateAcc.Clear();
 }
 
 Heater::Heater(unsigned int num) noexcept
@@ -320,7 +320,7 @@ GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansB
 	return rslt;
 }
 
-const char *const Heater::TuningPhaseText[] =
+const char *_ecv_array const Heater::TuningPhaseText[] =
 {
 	"checking temperature is stable",
 	"heating up",
@@ -377,12 +377,12 @@ void Heater::CalculateModel(HeaterParameters& params) noexcept
 										lrintf(tOff.GetMean()), lrintf(tOff.GetDeviation()),
 										lrintf(dHigh.GetMean()), lrintf(dHigh.GetDeviation()),
 										lrintf(dLow.GetMean()), lrintf(dLow.GetDeviation()),
-										(double)heatingRate.GetMean(), (double)heatingRate.GetDeviation(),
-										(double)coolingRate.GetMean(), (double)coolingRate.GetDeviation(),
+										(double)heatingRateAcc.GetMean(), (double)heatingRateAcc.GetDeviation(),
+										(double)coolingRateAcc.GetMean(), (double)coolingRateAcc.GetDeviation(),
 #if HAS_VOLTAGE_MONITOR
 										(double)tuningVoltage.GetMean(), (double)tuningVoltage.GetDeviation(),
 #endif
-										coolingRate.GetNumSamples()
+										coolingRateAcc.GetNumSamples()
 									 );
 	}
 
@@ -391,8 +391,8 @@ void Heater::CalculateModel(HeaterParameters& params) noexcept
 	const float averageTemperatureRiseCooling = tuningTargetTemp - TuningPeakTempDrop - 0.5 * tuningHysteresis - tuningStartTemp.GetMean();
 	const float averageTemperatureRise = (averageTemperatureRiseHeating * tOn.GetMean() + averageTemperatureRiseCooling * tOff.GetMean()) / cycleTime;
 	params.deadTime = (((dHigh.GetMean() * tOff.GetMean()) + (dLow.GetMean() * tOn.GetMean())) * MillisToSeconds)/cycleTime;	// in seconds
-	params.coolingRate = coolingRate.GetMean();
-	params.heatingRate = (heatingRate.GetMean() + (coolingRate.GetMean() * averageTemperatureRiseHeating/averageTemperatureRiseCooling)) / tuningPwm;
+	params.coolingRate = coolingRateAcc.GetMean();
+	params.heatingRate = (heatingRateAcc.GetMean() + (coolingRateAcc.GetMean() * averageTemperatureRiseHeating/averageTemperatureRiseCooling)) / tuningPwm;
 	params.gain = (tOn.GetMean() + tOff.GetMean()) * averageTemperatureRise/tOn.GetMean();
 	params.numCycles = dHigh.GetNumSamples();
 }
@@ -601,12 +601,6 @@ HeaterStatus Heater::GetStatus() const noexcept
 					: (mode >= HeaterMode::tuning0) ? HeaterStatus::tuning
 						: (active) ? HeaterStatus::active
 							: HeaterStatus::standby;
-}
-
-const char* Heater::GetSensorName() const noexcept
-{
-	const auto sensor = reprap.GetHeat().FindSensor(sensorNumber);
-	return (sensor.IsNotNull()) ? sensor->GetSensorName() : nullptr;
 }
 
 GCodeResult Heater::SetActiveOrStandby(bool setActive, const StringRef& reply) noexcept

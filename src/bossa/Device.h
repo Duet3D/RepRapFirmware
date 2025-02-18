@@ -83,13 +83,13 @@ public:
 
     Family getFamily() const noexcept { return _family; }
 
-    BossaFlash *_ecv_from null getFlash() const noexcept { return _flash; }
+    BossaFlash *_ecv_from _ecv_null getFlash() const noexcept { return _flash; }
 
     void reset() noexcept;
 
 private:
     Samba& _samba;
-    BossaFlash *_ecv_from null _flash;
+    BossaFlash *_ecv_from _ecv_null _flash;
     Family _family;
 
 #if ORIGINAL_BOSSA_CODE

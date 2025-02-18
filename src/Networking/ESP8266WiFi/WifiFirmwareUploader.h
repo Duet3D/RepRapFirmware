@@ -20,7 +20,7 @@ class WifiFirmwareUploader
 public:
 	WifiFirmwareUploader(AsyncSerial& port, WiFiInterface &iface) noexcept;
 	bool IsReady() const noexcept;
-	void SendUpdateFile(const char *file, uint32_t address) noexcept;
+	void SendUpdateFile(const char *_ecv_array file, uint32_t address) noexcept;
 	void Spin() noexcept;
 
 	// Offsets in flash memory
@@ -88,31 +88,31 @@ private:
 		ESP32_PLUS
 	};
 
-	void MessageF(const char *fmt, ...) noexcept;
+	void MessageF(const char *_ecv_array fmt, ...) noexcept;
 	int ReadByte(uint8_t& data, bool slipDecode) noexcept;
 	void WriteByteRaw(uint8_t b) noexcept;
 	void WriteByteSlip(uint8_t b) noexcept;
 	void flushInput() noexcept;
-	EspUploadResult readPacket(uint8_t op, uint32_t *valp, size_t& bodyLen, uint32_t *status, uint32_t msTimeout) noexcept;
-	void writePacket(const uint8_t *data, size_t len) noexcept;
-	void writePacketRaw(const uint8_t *buf, size_t len) noexcept;
-	void writePacket(const uint8_t *hdr, size_t hdrLen, const uint8_t *data, size_t dataLen) noexcept;
-	void writePacketRaw(const uint8_t *hdr, size_t hdrLen, const uint8_t *data, size_t dataLen) noexcept;
-	void sendCommand(uint8_t op, uint32_t checkVal, const uint8_t *data, size_t dataLen) noexcept;
-	EspUploadResult doCommand(uint8_t op, const uint8_t *data, size_t dataLen, uint32_t checkVal, uint32_t *valp, uint32_t msTimeout) noexcept;
+	EspUploadResult readPacket(uint8_t op, uint32_t *_ecv_null valp, size_t& bodyLen, uint32_t *_ecv_null status, uint32_t msTimeout) noexcept;
+	void writePacket(const uint8_t *_ecv_array data, size_t len) noexcept;
+	void writePacketRaw(const uint8_t *_ecv_array buf, size_t len) noexcept;
+	void writePacket(const uint8_t *_ecv_array hdr, size_t hdrLen, const uint8_t *_ecv_array data, size_t dataLen) noexcept;
+	void writePacketRaw(const uint8_t *_ecv_array hdr, size_t hdrLen, const uint8_t *_ecv_array data, size_t dataLen) noexcept;
+	void sendCommand(uint8_t op, uint32_t checkVal, const uint8_t *_ecv_array data, size_t dataLen) noexcept;
+	EspUploadResult doCommand(uint8_t op, const uint8_t *_ecv_array data, size_t dataLen, uint32_t checkVal, uint32_t *_ecv_null valp, uint32_t msTimeout) noexcept;
 	EspUploadResult Sync(uint16_t timeout) noexcept;
 	EspUploadResult flashBegin(uint32_t offset, uint32_t size) noexcept;
 	EspUploadResult flashFinish(bool reboot) noexcept;
 	EspUploadResult flashSpiSetParameters(uint32_t size) noexcept;
 	EspUploadResult flashSpiAttach() noexcept;
-	static uint16_t checksum(const uint8_t *data, uint16_t dataLen, uint16_t cksum) noexcept;
+	static uint16_t checksum(const uint8_t *_ecv_array _ecv_null data, uint16_t dataLen, uint16_t cksum) noexcept;
 	EspUploadResult flashWriteBlock(uint16_t flashParmVal, uint16_t flashParmMask) noexcept;
 	EspUploadResult DoErase(uint32_t address, uint32_t size) noexcept;
 	void Identify() noexcept;
 
 	AsyncSerial& uploadPort;
 	WiFiInterface& interface;
-	FileStore *uploadFile;
+	FileStore *_ecv_null uploadFile;
 	FilePosition fileSize;
 	uint32_t uploadAddress;
 	uint32_t uploadBlockNumber;

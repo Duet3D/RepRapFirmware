@@ -26,6 +26,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ///////////////////////////////////////////////////////////////////////////////
+
 #include "Samba.h"
 
 #include "RepRapFirmware.h"
@@ -103,7 +104,7 @@ void Samba::writeWord(uint32_t addr, uint32_t value) THROWS(GCodeException)
 
     SafeSnprintf((char *_ecv_array) cmd, sizeof(cmd), "W%08" PRIX32 ",%08" PRIX32 "#", addr, value);
     if (_port->write(cmd, sizeof(cmd) - 1) != (int)sizeof(cmd) - 1)
-        throw SambaError("Samba::writeWord: _port->write failed");
+        throw SambaError("Samba::writeWord: write failed");
 }
 
 
@@ -113,9 +114,9 @@ uint32_t Samba::readWord(uint32_t addr) THROWS(GCodeException)
 
     SafeSnprintf((char *_ecv_array) cmd, sizeof(cmd), "w%08" PRIX32 ",4#", addr);
     if (_port->write(cmd, sizeof(cmd) - 1) != (int)sizeof(cmd) - 1)
-        throw SambaError("Samba::readWord: _port->write failed");
+        throw SambaError("Samba::readWord: write failed");
     if (_port->read(cmd, sizeof(uint32_t)) != (int)sizeof(uint32_t))
-        throw SambaError("Samba::readWord: _port->read failed");
+        throw SambaError("Samba::readWord: read failed");
 
     const uint32_t value = (cmd[3] << 24 | cmd[2] << 16 | cmd[1] << 8 | cmd[0] << 0);
 
@@ -160,7 +161,7 @@ void Samba::readXmodem(uint8_t *_ecv_array buffer, size_t size) THROWS(GCodeExce
             }
         }
         if (retries == MAX_RETRIES)
-            throw SambaError("Samba::readXmodem: max retries reached 1");
+            throw SambaError("Samba::readXmodem: too many retries 1");
 
         _port->put(ACK);
 
@@ -181,7 +182,7 @@ void Samba::readXmodem(uint8_t *_ecv_array buffer, size_t size) THROWS(GCodeExce
         _port->put(NAK);
     }
     if (retries == MAX_RETRIES)
-        throw SambaError("Samba::readXmodem: max retries reached 2");
+        throw SambaError("Samba::readXmodem: too many retries 2");
 }
 
 void Samba::writeXmodem(const uint8_t *_ecv_array buffer, size_t size) THROWS(GCodeException)
@@ -197,7 +198,7 @@ void Samba::writeXmodem(const uint8_t *_ecv_array buffer, size_t size) THROWS(GC
             break;
     }
     if (retries == MAX_RETRIES)
-        throw SambaError("Samba::writeXmodem: max retries reached getting START signal");
+        throw SambaError("Samba::writeXmodem: too many retries getting START");
 
     CRC16 crc16;
     while (size != 0)
@@ -222,14 +223,14 @@ void Samba::writeXmodem(const uint8_t *_ecv_array buffer, size_t size) THROWS(GC
         {
             bytes = _port->write(blk, sizeof(blk));
             if (bytes != (int)sizeof(blk))
-                throw SambaError("Samba::writeXmodem: _port->write failed");
+                throw SambaError("Samba::writeXmodem: write failed");
 
             if (_port->get() == ACK)
                 break;
         }
 
         if (retries == MAX_RETRIES)
-            throw SambaError("Samba::writeXmodem: max retries reached 2");
+            throw SambaError("Samba::writeXmodem: too many retries 2");
 
         buffer += BLK_SIZE;
         size -= sizeToMove;
@@ -243,7 +244,7 @@ void Samba::writeXmodem(const uint8_t *_ecv_array buffer, size_t size) THROWS(GC
             break;
     }
     if (retries == MAX_RETRIES)
-        throw SambaError("Samba::writeXmodem: max retries reached 3");
+        throw SambaError("Samba::writeXmodem: too many retries 3");
 }
 
 void Samba::read(uint32_t addr, uint8_t *_ecv_array buffer, size_t size) THROWS(GCodeException)
@@ -256,7 +257,7 @@ void Samba::read(uint32_t addr, uint8_t *_ecv_array buffer, size_t size) THROWS(
 
 	SafeSnprintf((char *_ecv_array) cmd, sizeof(cmd), "R%08" PRIX32 ",%08X#", addr, size);
 	if (_port->write(cmd, sizeof(cmd) - 1) != (int)sizeof(cmd) - 1)
-		throw SambaError("Samba::read: _port->write failed");
+		throw SambaError("Samba::read: write failed");
 
 	readXmodem(buffer, size);
 }
@@ -271,7 +272,7 @@ void Samba::write(uint32_t addr, const uint8_t *_ecv_array buffer, size_t size) 
 
 	SafeSnprintf((char *_ecv_array) cmd, sizeof(cmd), "S%08" PRIX32 ",%08X#", addr, size);
 	if (_port->write(cmd, sizeof(cmd) - 1) != (int)sizeof(cmd) - 1)
-		throw SambaError("Samba::write: _port->write failed");
+		throw SambaError("Samba::write: write failed");
 
 	writeXmodem(buffer, size);
 }
@@ -286,7 +287,7 @@ void Samba::go(uint32_t addr) THROWS(GCodeException)
 
     SafeSnprintf((char *_ecv_array) cmd, sizeof(cmd), "G%08" PRIX32 "#", addr);
     if (_port->write(cmd, sizeof(cmd) - 1) != (int)sizeof(cmd) - 1)
-        throw SambaError("Samba::go: _port->write failed");
+        throw SambaError("Samba::go: write failed");
 }
 
 // End

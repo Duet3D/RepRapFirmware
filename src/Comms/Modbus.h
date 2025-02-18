@@ -11,7 +11,7 @@
 #include <cstdint>
 
 // Modbus RTU function codes
-enum class ModbusFunction : uint8_t
+enum class ModbusFunction : uint16_t
 {
 	readCoils = 0x01,
 	readDiscreteInputs = 0x02,
@@ -22,7 +22,9 @@ enum class ModbusFunction : uint8_t
 	writeMultipleCoils = 0x0F,
 	writeMultipleRegisters = 0x10,
 	readDeviceId1 = 0x0E,
-	readDeviceId2 = 0x2B
+	readDeviceId2 = 0x2B,
+
+	generic = 0x100
 };
 
 #endif /* SRC_COMMS_MODBUS_H_ */

@@ -71,7 +71,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(GridDefinition)
 
 #endif
 
-constexpr const char* GridDefinition::HeightMapLabelLines[] =
+constexpr const char *_ecv_array GridDefinition::HeightMapLabelLines[] =
 {
 	"xmin,xmax,ymin,ymax,radius,spacing,xnum,ynum",														// old version label line
 	"xmin,xmax,ymin,ymax,radius,xspacing,yspacing,xnum,ynum",											// label line until 3.3-beta1
@@ -186,8 +186,8 @@ bool GridDefinition::ReadParameters(const StringRef& s, int version) noexcept
 {
 	// 2018-04-08: rewrote this not to use sscanf because that function isn't thread safe
 	isValid = false;						// assume failure
-	const char *p = s.c_str();
-	const char *q;
+	const char *_ecv_array p = s.c_str();
+	const char *_ecv_array q;
 
 	if (version < 2)
 	{
@@ -366,7 +366,7 @@ unsigned int HeightMap::GetMinimumSegments(float deltaAxis0, float deltaAxis1) c
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Save the grid to file returning true if an error occurred
-bool HeightMap::SaveToFile(FileStore *f, const char *fname, float zOffset) noexcept
+bool HeightMap::SaveToFile(FileStore *f, const char *_ecv_array fname, float zOffset) noexcept
 {
 	String<StringLength500> bufferSpace;
 	const StringRef buf = bufferSpace.GetRef();
@@ -430,14 +430,14 @@ bool HeightMap::SaveToFile(FileStore *f, const char *fname, float zOffset) noexc
 }
 
 // Load the grid from file, returning true if an error occurred with the error reason appended to the buffer
-bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
+bool HeightMap::LoadFromFile(FileStore *f, const char *_ecv_array fname, const StringRef& r
 # if SUPPORT_PROBE_POINTS_FILE
 							, bool isPointsFile
 # endif
 							) noexcept
 {
 	const size_t MaxLineLength = (MaxAxis0GridPoints * 8) + 2;					// maximum length of a line in the height map file, need 8 characters per grid point
-	const char* const readFailureText = "failed to read line from file";
+	const char *_ecv_array const readFailureText = "failed to read line from file";
 	char buffer[MaxLineLength + 1];
 	StringRef s(buffer, ARRAY_SIZE(buffer));
 
@@ -489,7 +489,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 				r.cat(readFailureText);
 				return true;								// failed to read a line
 			}
-			const char *p = buffer;
+			const char *_ecv_array p = buffer;
 			for (uint32_t col = 0; col < def.nums[0]; ++col)
 			{
 				while (*p == ' ' || *p == '\t')
@@ -508,8 +508,8 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 				}
 				else
 				{
-					const char* np;
-					const float f = SafeStrtof(p, &np);
+					const char *_ecv_array np;
+					const float ff = SafeStrtof(p, &np);
 					if (np == p)
 					{
 						r.catf("number expected at line %" PRIu32 " column %d", row + 3, (p - buffer) + 1);
@@ -518,7 +518,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 #if SUPPORT_PROBE_POINTS_FILE
 					if (isPointsFile)
 					{
-						if (f > 0.0)
+						if (ff > 0.0)
 						{
 							gridPointInvalid.ClearBit((row * def.nums[0]) + col);
 						}
@@ -530,7 +530,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 					else
 #endif
 					{
-						SetGridHeight(col, row, f);
+						SetGridHeight(col, row, ff);
 					}
 					p = np;
 				}
@@ -656,7 +656,7 @@ void HeightMap::ExtrapolateMissing() noexcept
 	//2: filling in missing points
 
 	//algorithm: http://www.ilikebigbits.com/blog/2015/3/2/plane-from-points
-	float sumAxis0 = 0, sumAxis1 = 0, sumZ = 0;
+	float sumAxis0 = 0.0, sumAxis1 = 0.0, sumZ = 0.0;
 	int n = 0;
 	for (uint32_t iAxis1 = 0; iAxis1 < def.nums[1]; iAxis1++)
 	{
@@ -708,7 +708,7 @@ void HeightMap::ExtrapolateMissing() noexcept
 	}
 
 	const float detZ = axis0Axis0*axis1Axis1 - axis0Axis1*axis0Axis1;
-	if (detZ <= 0)
+	if (detZ <= 0.0)
 	{
 		// Not a valid plane (or a vertical one)
 		return;

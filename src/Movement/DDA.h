@@ -43,7 +43,7 @@ struct PrepParams
 };
 
 // This defines a single coordinated movement of one or several motors
-class DDA
+class DDA final
 {
 	friend class DriveMovement;
 	friend class ExtruderShaper;
@@ -94,16 +94,13 @@ public:
 	uint32_t GetTimeLeft() const noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
-	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
+	bool InitFromRemote(DDARing& ring, const CanMessageMovementLinearShaped& msg) noexcept;
 #endif
 
-	const int32_t *_ecv_array DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates
-	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;									// Force an end point
+	const int32_t *_ecv_array DriveCoordinates() const noexcept { return endPoint; }				// Get endpoints of a move in machine coordinates
+	void SetDriveCoordinate(size_t drive, int32_t ep) noexcept;										// Force an end point
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
-	float GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept;
-	float GetRawEndCoordinate(size_t drive) const noexcept { return endCoordinates[drive]; }
-	void SetPositions(Move& move, const float position[MaxAxes], AxesBitmap axesMoved) noexcept;	// Force the endpoints to be these
-	void AdjustMotorPositions(Move& move, const float adjustment[], size_t numMotors) noexcept;		// Adjust the motor endpoints without moving the motors
+	void GetEndCoordinates(float returnedCoords[MaxAxes]) noexcept;					// Calculate the machine axis coordinates (after bed and skew correction) at the end of this move
 
 	FilePosition GetFilePosition() const noexcept { return filePos; }
 	float GetRequestedSpeedMmPerClock() const noexcept { return requestedSpeed; }
@@ -125,7 +122,7 @@ public:
 	float GetTotalExtrusionRate() const noexcept;
 
 	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcept;	// Try to push babystepping earlier in the move queue
-	const Tool *GetTool() const noexcept { return tool; }
+	const Tool *_ecv_null GetTool() const noexcept { return tool; }
 	float GetTotalDistance() const noexcept { return totalDistance; }
 	void LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration) noexcept;	// Limit the speed an acceleration of this move
 
@@ -141,7 +138,6 @@ public:
 	uint32_t GetMoveStartTime() const noexcept { return afterPrepare.moveStartTime; }
 	uint32_t GetMoveFinishTime() const noexcept { return afterPrepare.moveStartTime + clocksNeeded; }
 
-	float GetMotorTopSpeed(uint8_t axis) const noexcept;							// Return the top speed in microsteps/sec for the specified motor
 	float GetAverageExtrusionSpeed() const noexcept pre(IsCommitted()) { return afterPrepare.averageExtrusionSpeed; }
 	bool HaveDoneIoBits() const noexcept { return flags.doneIoBits; }
 	bool HaveDoneFeedForward() const noexcept { return flags.doneFeedForward; }
@@ -161,7 +157,7 @@ public:
 	IoBits_t GetIoBits() const noexcept { return laserPwmOrIoBits.ioBits; }
 #endif
 
-	void DebugPrint(const char *tag) const noexcept;								// print the DDA only
+	void DebugPrint(const char *_ecv_array tag) const noexcept;						// print the DDA only
 
 	static void PrintMoves() noexcept;												// print saved moves for debugging
 
@@ -182,7 +178,7 @@ private:
 	void MatchSpeeds() noexcept SPEED_CRITICAL;
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be an acceleration-only move
-	void DebugPrintVector(const char *name, const float *vec, size_t len) const noexcept;
+	void DebugPrintVector(const char *_ecv_array name, const float *_ecv_array vec, size_t len) const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
 	int32_t PrepareRemoteExtruder(size_t drive, float& extrusionPending, float speedChange) const noexcept;
@@ -199,8 +195,8 @@ private:
     static void Scale(float v[], float scale) noexcept;						// Multiply a vector by a scalar
     static float VectorBoxIntersection(const float v[], const float box[]) noexcept;	// Compute the length that a vector would have to have to just touch the surface of a hyperbox of MaxAxesPlusExtruders dimensions.
 
-    DDA *next;										// The next one in the ring
-	DDA *prev;										// The previous one in the ring
+    DDA *_ecv_null next;							// The next one in the ring
+	DDA *_ecv_null prev;							// The previous one in the ring
 
 	volatile DDAState state;						// What state this DDA is in
 
@@ -208,8 +204,7 @@ private:
 	{
 		struct
 		{
-			uint16_t endCoordinatesValid : 1,		// True if endCoordinates can be relied
-					 canPauseAfter : 1,				// True if we can pause at the end of this move
+			uint16_t canPauseAfter : 1,				// True if we can pause at the end of this move
 					 isPrintingMove : 1,			// True if this move includes XY movement and extrusion
 					 usePressureAdvance : 1,		// True if pressure advance should be applied to any forward extrusion
 					 hadLookaheadUnderrun : 1,		// True if the lookahead queue was not long enough to optimise this move
@@ -235,12 +230,11 @@ private:
 	LaserPwmOrIoBits laserPwmOrIoBits;				// laser PWM required or port state required during this move (here because it is currently 16 bits)
 #endif
 
-	const Tool *tool;								// which tool (if any) is active
+	const Tool *_ecv_null tool;						// which tool (if any) is active
 
     FilePosition filePos;							// The position in the SD card file after this move was read, or zero if not read from SD card
 
 	int32_t endPoint[MaxAxesPlusExtruders];  		// Machine coordinates of the endpoint
-	float endCoordinates[MaxAxesPlusExtruders];		// The Cartesian coordinates at the end of the move plus extrusion amounts
 	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;							// How long is the move in hypercuboid space
 #if SUPPORT_S_CURVE
@@ -267,6 +261,10 @@ private:
 	float initialUserC0, initialUserC1;				// if this is a segment of an arc move, the user X and Y coordinates at the start
 	uint32_t clocksNeeded;
 
+#if SUPPORT_ASYNC_MOVES
+	LogicalDrivesBitmap ownedDrives;				// logical drives we are allowed to move
+#endif
+
 	union
 	{
 		// Values that are needed only before Prepare is called and in the first few lines of Prepare
@@ -283,7 +281,7 @@ private:
 			// These are calculated from the above and used in the ISR, so they are set up by Prepare()
 			uint32_t moveStartTime;					// clock count at which the move is due to start (before execution) or was started (during execution)
 			float averageExtrusionSpeed;			// the average extrusion speed in mm/sec, for applying heater feedforward
-			AxesBitmap drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving and to determine when a move that checks endstops has terminated
+			LogicalDrivesBitmap drivesMoving;		// bitmap of logical drives moving - needed to keep track of whether remote drives are moving and to determine when a move that checks endstops has terminated
 		} afterPrepare;
 	};
 

@@ -31,19 +31,19 @@
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(Duet3DFilamentMonitor, __VA_ARGS__)
-#define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(Duet3DFilamentMonitor, _condition, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY_NONLEAF(Duet3DFilamentMonitor, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY_NONLEAF(Duet3DFilamentMonitor, _condition, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry Duet3DFilamentMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Duet3DFilamentMonitor members
-	{ "avgPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->avgPercentage),		ObjectModelEntryFlags::live },
-	{ "lastPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->lastPercentage),		ObjectModelEntryFlags::live },
-	{ "maxPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->maxPercentage),		ObjectModelEntryFlags::live },
-	{ "minPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->minPercentage),		ObjectModelEntryFlags::live },
-	{ "position",			OBJECT_MODEL_FUNC((int32_t)self->lastKnownPosition),						ObjectModelEntryFlags::live },
-	{ "totalExtrusion",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1),						ObjectModelEntryFlags::live },
+	{ "avgPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->avgPercentage),		ObjectModelEntryFlags::liveNotPanelDue },
+	{ "lastPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->lastPercentage),		ObjectModelEntryFlags::liveNotPanelDue },
+	{ "maxPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->maxPercentage),		ObjectModelEntryFlags::liveNotPanelDue },
+	{ "minPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->minPercentage),		ObjectModelEntryFlags::liveNotPanelDue },
+	{ "position",			OBJECT_MODEL_FUNC((int32_t)self->lastKnownPosition),						ObjectModelEntryFlags::liveNotPanelDue },
+	{ "totalExtrusion",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1),						ObjectModelEntryFlags::liveNotPanelDue },
 };
 
 constexpr uint8_t Duet3DFilamentMonitor::objectModelTableDescriptor[] =

@@ -82,7 +82,7 @@ constexpr size_t MaxSmartDrivers = NumDirectDrivers;	// The maximum number of sm
 
 #if SUPPORT_CAN_EXPANSION
 constexpr size_t MaxCanDrivers = 8;					// enough to support another Mini5+ as an expansion board plus a tool board, or eight closed-loop motors
-constexpr unsigned int MaxCanBoards = 8;			// enough to support eight closed loop motors
+constexpr size_t MaxCanBoards = 8;					// enough to support eight closed loop motors
 #endif
 
 constexpr size_t MaxPortsPerHeater = 2;
@@ -106,11 +106,13 @@ constexpr size_t MaxExtrudersPerTool = 8;
 
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 
-# ifdef DUET3_ATE
+#ifdef DUET3_ATE
 constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB and one auxiliary UART) - reserve the second UART for ATE use
 #else
 constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB and two auxiliary UARTs)
 #endif
+constexpr size_t FirstAuxChannel = 1;
+constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 
 #define SERIAL_MAIN_DEVICE (serialUSB)
 #define SERIAL_AUX_DEVICE (serialUart0)
@@ -226,7 +228,7 @@ constexpr Pin SdMciPins[] = { PortAPin(20), PortAPin(21), PortBPin(18), PortBPin
 constexpr GpioPinFunction SdMciPinsFunction = GpioPinFunction::I;
 Sdhc * const SdhcDevice = SDHC1;
 constexpr IRQn_Type SdhcIRQn = SDHC1_IRQn;
-constexpr uint32_t ExpectedSdCardSpeed = 15000000;
+constexpr uint32_t ExpectedSdCardSpeed = 22500000;
 
 // 12864 LCD
 // The ST7920 datasheet specifies minimum clock cycle time 400ns @ Vdd=4.5V, min. clock width 200ns high and 20ns low.
@@ -464,24 +466,15 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		6,	PinCapability::rw,		"spi.cs1"		},	// PD11 SPI2 CS1
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		7,	PinCapability::read	,	"ate.spi.cd"	},	// PD12 SPI2_CD
 
-#if 1
 	// Port D 13-19 are not on the chip
 	// Port D 20-21 are driver 3 dir and driver 4 dir but those don't need to be in the pin table
-#else
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD13 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD14 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD15 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD16 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD17 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD18 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD19 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD20 driver6 dir
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD21 driver5 dir
-#endif
 };
 
-constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
-static_assert(NumNamedPins == 32+32+32+13);
+constexpr size_t NumNamedPins = ARRAY_SIZE(PinTable);
+constexpr size_t NumRealPins = 32+32+32+13;
+constexpr size_t NumVirtualPins = 0;
+
+static_assert(NumNamedPins == NumRealPins + NumVirtualPins);
 
 // DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
 // When static arbitration within a priority level is selected, lower channel number have higher priority.

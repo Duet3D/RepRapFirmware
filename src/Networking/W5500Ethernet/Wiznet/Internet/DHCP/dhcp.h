@@ -77,7 +77,7 @@ enum class DhcpRunResult : uint8_t
  * @param s   - socket number
  * @param hname - null-terminated host name string
  */
-void DHCP_init(uint8_t s, uint32_t seed, const char *hname) noexcept;
+void DHCP_init(uint8_t s, uint32_t seed, const char *_ecv_array hname) noexcept;
 
 /*
  * @brief DHCP 1s Tick Timer handler
@@ -91,7 +91,7 @@ void DHCP_time_handler(void) noexcept;
  * @param ip_update   - callback func when IP is changed
  * @prarm ip_conflict - callback func when the assigned IP is conflict with others.
  */
-void reg_dhcp_cbfunc(void(*ip_assign)() noexcept, void(*ip_update)() noexcept, void(*ip_conflict)() noexcept) noexcept;
+void reg_dhcp_cbfunc(void(*_ecv_null ip_assign)() noexcept, void(*_ecv_null ip_update)() noexcept, void(*_ecv_null ip_conflict)() noexcept) noexcept;
 
 /*
  * @brief DHCP client in the main loop

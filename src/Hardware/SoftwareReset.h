@@ -88,13 +88,13 @@ struct SoftwareResetData
 	bool IsVacant() const noexcept;				// return true if this struct can be written without erasing it first
 	bool IsValid() const noexcept { return magic == magicValue; }
 	void Clear() noexcept;
-	void Populate(uint16_t reason, const uint32_t *stk) noexcept;
+	void Populate(uint16_t reason, const uint32_t *_ecv_array _ecv_null stk) noexcept;
 	void Printit(MessageType mtype, unsigned int slot) const noexcept;
 
 	static constexpr uint16_t versionValue = 9;		// increment this whenever this struct changes
 	static constexpr uint16_t magicValue = 0x7D00 | versionValue;	// value we use to recognise that all the flash data has been written
 
-	static const char *const ReasonText[];
+	static const char *_ecv_array const ReasonText[];
 	static uint8_t extraDebugInfo;				// 3 bits of extra info for debugging can be stored here
 };
 

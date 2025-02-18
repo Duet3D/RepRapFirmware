@@ -206,7 +206,7 @@ float ZProbe::GetScanningHeight() const noexcept
 
 bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept
 {
-	const char* axisLetters = reprap.GetGCodes().GetAxisLetters();
+	const char *_ecv_array axisLetters = reprap.GetGCodes().GetAxisLetters();
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 	String<StringLength256> scratchString;
 	scratchString.printf("G31 K%u P%" PRIi32, probeNumber, targetAdcValue);
@@ -252,7 +252,7 @@ int32_t ZProbe::GetReading() const noexcept
 		case ZProbeType::zMotorStall:
 #if HAS_STALL_DETECT
 			{
-				const DriversBitmap zDrivers = reprap.GetMove().GetAxisDriversConfig(Z_AXIS).GetDriversBitmap();
+				const LocalDriversBitmap zDrivers = reprap.GetMove().GetAxisDriversConfig(Z_AXIS).GetLocalDriversBitmap();
 				zProbeVal = (GetStalledDrivers(zDrivers).IsNonEmpty()) ? 1000 : 0;
 			}
 #else
@@ -387,7 +387,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	}
 
 	// After this we don't return notFinished, so it is safe to amend values directly
-	const char* axisLetters = reprap.GetGCodes().GetAxisLetters();
+	const char *_ecv_array axisLetters = reprap.GetGCodes().GetAxisLetters();
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 	for (size_t i = 0; i < numTotalAxes; ++i)
 	{

@@ -19,7 +19,7 @@ TelnetResponder::TelnetResponder(NetworkResponder *_ecv_from n) noexcept : Netwo
 }
 
 // Ask the responder to accept this connection, returns true if it did
-bool TelnetResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
+bool TelnetResponder::Accept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept
 {
 	if (responderState == ResponderState::free && protocol == TelnetProtocol)
 	{

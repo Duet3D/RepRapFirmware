@@ -106,6 +106,10 @@ public:
 
 	IPAddress GetIPAddress(unsigned int interface) const noexcept;
 
+#if HAS_SBC_INTERFACE
+	void SetReportedIPAddress(IPAddress p_ipAddress) noexcept;
+#endif
+
 #if HAS_NETWORKING
 	void SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept;
 	IPAddress GetNetmask(unsigned int interface) const noexcept;
@@ -124,7 +128,7 @@ public:
 	void SetCorsSite(const char *_ecv_array site) noexcept { corsSite.copy(site); }
 #endif
 
-	bool FindResponder(Socket *skt, NetworkProtocol protocol) noexcept;
+	bool FindResponder(Socket *_ecv_from skt, NetworkProtocol protocol) noexcept;
 
 #if HAS_CLIENTS
 	bool StartClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept;
@@ -181,6 +185,9 @@ private:
 #endif
 
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
+#if HAS_SBC_INTERFACE
+	IPAddress reportedIPAddress;					// IP address to use for 12864 displays in SBC mode
+#endif
 };
 
 inline unsigned int Network::GetNumNetworkInterfaces() const noexcept

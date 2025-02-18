@@ -235,6 +235,8 @@ enum dhcp_mode
    NETINFO_DHCP           ///< Dynamic IP configruation from a DHCP sever
 };
 
+#if 0		// this is unused and the declaration of 'dns' clashes with a declaration in an enclosing scope
+
 /**
  * @ingroup DATA_TYPE
  *  Network Information for WIZCHIP
@@ -248,6 +250,8 @@ struct wiz_NetInfo
    uint8_t dns[4];  ///< DNS server IP Address
    dhcp_mode dhcp;  ///< 1 - Static, 2 - DHCP
 };
+
+#endif
 
 /**
  * @ingroup DATA_TYPE
@@ -282,7 +286,7 @@ struct wiz_NetTimeout
  * @return  0 : Success \n
  *         -1 : Fail because of invalid \ref ctlwizchip_type or unsupported \ref ctlwizchip_type in WIZCHIP
  */
-int8_t ctlwizchip(ctlwizchip_type cwtype, void* arg) noexcept;
+int8_t ctlwizchip(ctlwizchip_type cwtype, void *_ecv_null arg) noexcept;
 
 /*
  * The following functions are implemented for internal use.
@@ -303,7 +307,7 @@ void wizchip_sw_reset() noexcept;
  * @return 0 : succcess \n
  *        -1 : fail. Invalid buffer size
  */
-int8_t wizchip_init(const uint8_t* txsize, const uint8_t* rxsize) noexcept;
+int8_t wizchip_init(const uint8_t *_ecv_array _ecv_null txsize, const uint8_t *_ecv_array _ecv_null rxsize) noexcept;
 
 /**
  * @ingroup extra_functions

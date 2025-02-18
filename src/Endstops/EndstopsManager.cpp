@@ -88,10 +88,10 @@ constexpr ObjectModelTableEntry EndstopsManager::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. sensors members
-	{ "analog",				OBJECT_MODEL_FUNC_ARRAY(0),		ObjectModelEntryFlags::live },
+	{ "analog",				OBJECT_MODEL_FUNC_ARRAY(0),		ObjectModelEntryFlags::liveNotPanelDue },
 	{ "endstops",			OBJECT_MODEL_FUNC_ARRAY(1), 	ObjectModelEntryFlags::live },
-	{ "filamentMonitors",	OBJECT_MODEL_FUNC_ARRAY(2),		ObjectModelEntryFlags::live },
-	{ "gpIn",				OBJECT_MODEL_FUNC_ARRAY(3), 	ObjectModelEntryFlags::live },
+	{ "filamentMonitors",	OBJECT_MODEL_FUNC_ARRAY(2),		ObjectModelEntryFlags::liveNotPanelDue },
+	{ "gpIn",				OBJECT_MODEL_FUNC_ARRAY(3), 	ObjectModelEntryFlags::liveNotPanelDue },
 	{ "probes",				OBJECT_MODEL_FUNC_ARRAY(4),		ObjectModelEntryFlags::live },
 };
 
@@ -121,7 +121,6 @@ EndstopsManager::EndstopsManager() noexcept
 void EndstopsManager::Init() noexcept
 {
 	activeEndstops = nullptr;
-	validationResult = EndstopValidationResult::ok;
 
 #if ALLOCATE_DEFAULT_PORTS
 	// Configure default endstops
@@ -192,8 +191,8 @@ void EndstopsManager::ClearEndstops() noexcept
 	activeEndstops = nullptr;
 }
 
-// Clear any existing endstops and set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command. Return true if successful.
-bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming, bool& reduceAcceleration) noexcept
+// Clear any existing endstops and set up the active endstop list according to the axes commanded to move in a G0/G1 H1/H3/H4 command. Throw an exception if we fail.
+void EndstopsManager::EnableAxisEndstops(AxesBitmap axes, const float speeds[MaxAxes], bool forHoming, bool& reduceAcceleration) THROWS(GCodeException)
 {
 	activeEndstops = nullptr;
 	reduceAcceleration = false;
@@ -204,21 +203,45 @@ bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming, bool& 
 		const unsigned int axis = axes.LowestSetBit();
 		axes.ClearBit(axis);
 		Endstop *_ecv_from _ecv_null const es = axisEndstops[axis];
-		if (es != nullptr && es->Prime(kin, reprap.GetMove().GetAxisDriversConfig(axis)))
-		{
-			AddToActive(*es);
-			if (es->ShouldReduceAcceleration())
-			{
-				reduceAcceleration = true;
-			}
-		}
-		else
+		if (es == nullptr)
 		{
 			activeEndstops = nullptr;
-			return false;
+			ThrowGCodeException("no endstop configured for axis %u", axis);
+		}
+		try
+		{
+			es->PrimeAxis(kin, reprap.GetMove().GetAxisDriversConfig(axis), speeds[axis]);
+		}
+		catch (GCodeException&)
+		{
+			activeEndstops = nullptr;
+			throw;
+		}
+
+		AddToActive(*es);
+		if (es->ShouldReduceAcceleration())
+		{
+			reduceAcceleration = true;
 		}
 	}
-	return true;
+}
+
+// Enable extruder endstops. This adds to any existing axis endstops, so you must call EnableAxisEndstops before calling this.
+void EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders, const float speeds[MaxExtruders]) THROWS(GCodeException)
+{
+	if (extruders.IsNonEmpty())
+	{
+#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
+		if (extrudersEndstop == nullptr)
+		{
+			extrudersEndstop = new StallDetectionEndstop;
+		}
+		extrudersEndstop->PrimeExtruders(extruders, speeds);
+		AddToActive(*extrudersEndstop);
+#else
+		ThrowGCodeException("extruder endstops not supported by this system");
+#endif
+	}
 }
 
 // Set up the active endstops for Z probing, returning true if successful
@@ -230,46 +253,6 @@ bool EndstopsManager::EnableZProbe(size_t probeNumber, bool probingAway) noexcep
 	{
 		zProbes[probeNumber]->PrepareForUse(probingAway);
 		AddToActive(*zProbes[probeNumber]);
-	}
-	return true;
-}
-
-// Enable extruder endstops. This adds to any existing axis endstops, so you must call EnableAxisEndstops before calling this.
-bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept
-{
-	if (extruders.IsNonEmpty())
-	{
-#if HAS_STALL_DETECT
-		if (extrudersEndstop == nullptr)
-		{
-			extrudersEndstop = new StallDetectionEndstop;
-		}
-		DriversBitmap drivers;
-		while (extruders.IsNonEmpty())
-		{
-			const unsigned int extruder = extruders.LowestSetBit();
-			extruders.ClearBit(extruder);
-			const DriverId driver = reprap.GetMove().GetExtruderDriver(extruder);
-# if SUPPORT_CAN_EXPANSION
-			if (driver.IsLocal())
-			{
-				drivers.SetBit(driver.localDriver);
-			}
-			else
-			{
-				//TODO remote stall detect endstop
-				return false;
-			}
-# else
-			drivers.SetBit(driver.localDriver);
-# endif
-		}
-
-		extrudersEndstop->SetDrivers(drivers);
-		AddToActive(*extrudersEndstop);
-#else
-		return false;
-#endif
 	}
 	return true;
 }
@@ -449,7 +432,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 			{
 				switch (inputType.ToBaseType())
 				{
-#if HAS_STALL_DETECT
+#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 				case EndStopType::motorStallAny:
 					// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
 					ReplaceObject(axisEndstops[axis], new StallDetectionEndstop(axis, pos, false));
@@ -467,12 +450,12 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 					return GCodeResult::error;
 #endif
 				case EndStopType::zProbeAsEndstop:
-				{
-					// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
-					const uint32_t zProbeNumber = gb.Seen('K') ? gb.GetUIValue() : 0;
-					ReplaceObject(axisEndstops[axis], new ZProbeEndstop(axis, pos, zProbeNumber));
-					break;
-				}
+					{
+						// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
+						const uint32_t zProbeNumber = gb.Seen('K') ? gb.GetUIValue() : 0;
+						ReplaceObject(axisEndstops[axis], new ZProbeEndstop(axis, pos, zProbeNumber));
+						break;
+					}
 
 				case EndStopType::inputPin:
 					if (   axisEndstops[axis] == nullptr
@@ -754,20 +737,6 @@ GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply) 
 	return zp->HandleG31(gb, reply);
 }
 
-// Validate any enabled stall endstops, returning true if all OK, else store the error details and return false
-bool EndstopsManager::ValidateEndstops(const DDA& dda) noexcept
-{
-	for (const EndstopOrZProbe *_ecv_from _ecv_null es = activeEndstops; es != nullptr; es = es->GetNext())
-	{
-		validationResult = es->Validate(dda, failingDriverNumber);
-		if (validationResult != EndstopValidationResult::ok)
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
 size_t EndstopsManager::GetNumProbesToReport() const noexcept
 {
 	size_t ret = MaxZProbes;
@@ -785,6 +754,7 @@ void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMa
 {
 	if (handleMajor < ARRAY_SIZE(axisEndstops))
 	{
+		TaskCriticalSectionLocker lock;						// make sure endstops are not changed or deleted while we operate on them
 		Endstop * const es = axisEndstops[handleMajor];
 		if (es != nullptr)
 		{
@@ -798,6 +768,7 @@ void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMaj
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
+		ReadLocker lock(zProbesLock);					// make sure Z peobes are not changed or deleted while we operate on them
 		ZProbe * const zp = zProbes[handleMajor];
 		if (zp != nullptr)
 		{
@@ -810,11 +781,48 @@ void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
+		ReadLocker lock(zProbesLock);					// make sure Z peobes are not changed or deleted while we operate on them
 		ZProbe * const zp = zProbes[handleMajor];
 		if (zp != nullptr)
 		{
 			zp->UpdateRemoteReading(src, handleMinor, reading);
 		}
+	}
+}
+
+void EndstopsManager::HandleStalledRemoteDrivers(CanAddress boardAddress, RemoteDriversBitmap driversReportedStalled) noexcept
+{
+	ReadLocker lock(endstopsLock);						// make sure endstops are not changed or deleted while we operate on them
+
+	for (Endstop * es : axisEndstops)
+	{
+		if (es != nullptr)
+		{
+			es->HandleStalledRemoteDrivers(boardAddress, driversReportedStalled);
+		}
+	}
+
+	if (extrudersEndstop != nullptr)
+	{
+		extrudersEndstop->HandleStalledRemoteDrivers(boardAddress, driversReportedStalled);
+	}
+}
+
+void EndstopsManager::DisableRemoteStallEndstops() noexcept
+{
+	ReadLocker lock(endstopsLock);						// make sure endstops are not changed or deleted while we operate on them
+
+	for (Endstop * es : axisEndstops)
+	{
+		if (es != nullptr)
+		{
+			es->DeleteRemoteStallEndstops();
+		}
+	}
+
+	if (extrudersEndstop != nullptr)
+	{
+		extrudersEndstop->DeleteRemoteStallEndstops();
 	}
 }
 

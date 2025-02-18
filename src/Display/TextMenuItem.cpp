@@ -14,12 +14,12 @@ TextMenuItem::TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignmen
 {
 }
 
-void TextMenuItem::CorePrint(Lcd& lcd) noexcept
+void TextMenuItem::CorePrint(Lcd &_ecv_from lcd) noexcept
 {
 	lcd.printf("%s", text);
 }
 
-void TextMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
+void TextMenuItem::Draw(Lcd &_ecv_from lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	// We ignore the 'highlight' parameter because text items are not selectable
 	if (IsVisible() && (!drawn || itemChanged))
@@ -30,7 +30,7 @@ void TextMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexc
 	}
 }
 
-void TextMenuItem::UpdateWidthAndHeight(Lcd& lcd) noexcept
+void TextMenuItem::UpdateWidthAndHeight(Lcd &_ecv_from lcd) noexcept
 {
 	if (width == 0)
 	{

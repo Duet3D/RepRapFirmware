@@ -65,7 +65,7 @@ constexpr float DefaultFilamentDiameter = 1.75;			// the default filament diamet
 constexpr unsigned int MaxTools = 50;					// this limit is to stop the serialised object model getting too large
 constexpr unsigned int MinVisibleAxes = 2;				// the minimum number of axes that we allow to be visible
 
-constexpr float DefaultBacklashCorrectionDistanceFactor = 10.0;	// backlash correction is spread over (backlash amount * this) mm
+constexpr unsigned int DefaultBacklashCorrectionDistanceFactor = 10;	// backlash correction is spread over (backlash amount * this) mm
 
 // Timeouts
 constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
@@ -143,8 +143,10 @@ constexpr size_t StringLength100 = 100;					// Used for error messages
 constexpr size_t StringLength500 = 500;					// Used when writing the height map
 constexpr size_t StringLength256 = 256;					// Used for various things
 
-constexpr size_t MaxHeaterNameLength = StringLength20;	// Maximum number of characters in a heater name
-constexpr size_t MaxFanNameLength = StringLength20;		// Maximum number of characters in a fan name
+constexpr size_t MaxHeaterNameLength = StringLength50;	// Maximum number of characters in a heater name
+constexpr size_t MaxFanNameLength = StringLength50;		// Maximum number of characters in a fan name
+constexpr size_t MaxToolNameLength = StringLength50;	// Maximum allowed length for tool names
+
 #ifdef DUET3_ATE
 constexpr size_t GCodeReplyLength = StringLength500;	// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer (ATE codes can generate long replies)
 constexpr size_t FormatStringLength = StringLength500;	// GCode replies are processed by Platform::MessageF which uses an intermediate buffer of this length
@@ -216,6 +218,8 @@ constexpr float MinArcSegmentLength = 0.02;				// G2 and G3 arc movement command
 constexpr float MaxArcSegmentLength = 1.0;				// G2 and G3 arc movement commands get split into segments at most this long
 constexpr float MaxArcSegmentsPerSec = 200.0;
 constexpr unsigned int SegmentsPerFulArcCalculation = 8; // we do the full sine/cosine calculation every this number of segments
+
+constexpr uint32_t MaxSegmentTime = 5 * 60;				// maximum time (seconds) to execute a segment, we segment moves that would take longer than this
 
 constexpr uint32_t DefaultIdleTimeout = 30000;			// Milliseconds
 constexpr float DefaultIdleCurrentFactor = 0.3;			// Proportion of normal motor current that we use for idle hold

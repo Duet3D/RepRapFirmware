@@ -26,7 +26,7 @@ namespace Tasks
 		sizeof(float)
 #endif
 		) noexcept;
-	const char* GetHeapTop() noexcept;
+	const char *_ecv_array GetHeapTop() noexcept;
 	Mutex *GetI2CMutex() noexcept;
 	void *GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept;
 }

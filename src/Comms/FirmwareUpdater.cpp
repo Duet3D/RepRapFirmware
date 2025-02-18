@@ -81,14 +81,14 @@ namespace FirmwareUpdater
 	bool IsReady() noexcept
 	{
 #if HAS_WIFI_NETWORKING && (HAS_MASS_STORAGE || HAS_EMBEDDED_FILES)
-		WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
+		WifiFirmwareUploader *_ecv_null const uploader = reprap.GetNetwork().GetWifiUploader();
 		if (uploader != nullptr && !uploader->IsReady())
 		{
 			return false;
 		}
 #endif
 #if SUPPORT_PANELDUE_FLASH
-		PanelDueUpdater * const panelDueUpdater = reprap.GetPlatform().GetPanelDueUpdater();
+		PanelDueUpdater *_ecv_null const panelDueUpdater = reprap.GetPlatform().GetPanelDueUpdater();
 		if (panelDueUpdater != nullptr && !panelDueUpdater->Idle())
 		{
 			return false;
@@ -117,10 +117,10 @@ namespace FirmwareUpdater
 			if (reprap.GetPlatform().IsDuetWiFi())
 # endif
 			{
-				WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
+				WifiFirmwareUploader *_ecv_null const uploader = reprap.GetNetwork().GetWifiUploader();
 				if (uploader != nullptr)
 				{
-					const char* binaryFilename = filenameRef.IsEmpty() ? WIFI_FIRMWARE_FILE : filenameRef.c_str();
+					const char *_ecv_array binaryFilename = filenameRef.IsEmpty() ? WIFI_FIRMWARE_FILE : filenameRef.c_str();
 					uploader->SendUpdateFile(binaryFilename, WifiFirmwareUploader::FirmwareAddress);
 				}
 			}

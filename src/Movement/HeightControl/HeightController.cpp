@@ -152,7 +152,7 @@ void HeightController::Stop() noexcept
 			lastWakeTime = xTaskGetTickCount();
 			lastReadingOk = false;
 			float machinePos[MaxAxes];
-			reprap.GetMove().GetCurrentMachinePosition(machinePos, HeightControlMovementSystemNumber, false);
+			reprap.GetMove().GetCurrentMachinePosition(machinePos, HeightControlMovementSystemNumber);
 			currentZ = machinePos[Z_AXIS];
 			iAccumulator = constrain<float>(currentZ, zMin, zMax);
 		}

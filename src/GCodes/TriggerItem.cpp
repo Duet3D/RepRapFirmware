@@ -42,7 +42,7 @@ bool TriggerItem::Check() noexcept
 	if (endstopsMonitored.IsNonEmpty())
 	{
 		EndstopsManager& endstops = reprap.GetPlatform().GetEndstops();
-		endstopsMonitored.Iterate([this, &endstops, &triggered](unsigned int axis, unsigned int)
+		endstopsMonitored.Iterate([this, &endstops, &triggered](unsigned int axis, unsigned int) noexcept
 									{
 										const bool stopped = endstops.Stopped(axis);
 										if (stopped != endstopStates.IsBitSet(axis))
@@ -72,7 +72,7 @@ bool TriggerItem::Check() noexcept
 	if (portsMonitored.IsNonEmpty())
 	{
 		Platform& platform = reprap.GetPlatform();
-		portsMonitored.Iterate([this, &platform, &triggered](unsigned int inPort, unsigned int)
+		portsMonitored.Iterate([this, &platform, &triggered](unsigned int inPort, unsigned int) noexcept
 								{
 									const bool isActive = reprap.GetPlatform().GetGpInPort(inPort).GetState();
 									if (isActive != inputStates.IsBitSet(inPort))

@@ -52,7 +52,7 @@ private:
 
 	static constexpr float MinSpacing = 0.1;						// The minimum point spacing allowed
 	static constexpr float MinRange = 1.0;							// The minimum X and Y range allowed
-	static const char * const HeightMapLabelLines[];				// The line we write to the height map file listing the parameter names
+	static const char *_ecv_array const HeightMapLabelLines[];		// The line we write to the height map file listing the parameter names
 
 	// Primary parameters
 	char letters[2];												// Axis letters for this grid
@@ -79,7 +79,7 @@ public:
 	float GetInterpolatedHeightError(float axis0, float axis1) const noexcept;			// Compute the interpolated height error at the specified point
 	void ClearGridHeights() noexcept;													// Clear all grid height corrections
 	void SetGridHeight(size_t axis0Index, size_t axis1Index, float height) noexcept;	// Set the height of a grid point
-	
+
 	bool IsValid() const noexcept { return def.IsValid(); }
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE

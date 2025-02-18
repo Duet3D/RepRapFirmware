@@ -27,7 +27,7 @@ namespace I2C
 	// Transfer data to/from an I2C peripheral.
 	// If the caller needs to do multiple I2C transactions without being interrupted, it should own the i2C mutex before calling this.
 	// Otherwise the caller need not own the mutex because it will be acquired here.
-	inline size_t Transfer(uint16_t address, uint8_t *buffer, size_t numToWrite, size_t numToRead) noexcept
+	inline size_t Transfer(uint16_t address, uint8_t *_ecv_array buffer, size_t numToWrite, size_t numToRead) noexcept
 	{
 		MutexLocker Lock(Tasks::GetI2CMutex());
 		return I2C_IFACE.Transfer(address, buffer, numToWrite, numToRead, statusWaitFunc);

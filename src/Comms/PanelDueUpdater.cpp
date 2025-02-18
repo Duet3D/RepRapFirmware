@@ -251,7 +251,7 @@ void PanelDueUpdater::Spin() noexcept
 		case FlashState::bossaWriteOptions:
 			{
 				reprap.GetPlatform().Message(GenericMessage, "Writing PanelDue flash options\n");
-				BossaFlash *_ecv_from flash = device->getFlash();
+				BossaFlash *_ecv_from flash = _ecv_not_null(device->getFlash());
 				flash->setBootFlash(true);
 				flash->writeOptions();
 				state = FlashState::bossaReset;
@@ -333,7 +333,7 @@ void PanelDueUpdater::Spin() noexcept
 	}
 }
 
-AsyncSerial* PanelDueUpdater::GetAuxPort() noexcept
+AsyncSerial *_ecv_null PanelDueUpdater::GetAuxPort() noexcept
 {
 	return
 			(serialChannel == 0 || serialChannel > NumSerialChannels) ? nullptr :

@@ -28,9 +28,9 @@ public:
 	void Clear() noexcept;												// Clean up all the stored codes
 	bool IsIdle() const noexcept;										// Return true if there is nothing to do
 
-	void Diagnostics(MessageType mtype, unsigned int queueNumber) noexcept;
+	void Diagnostics(MessageType mtype) noexcept;
 
-	static bool ShouldQueueG10(GCodeBuffer &gb) noexcept;					// Return true if this code should be queued
+	static bool ShouldQueueG10(GCodeBuffer &gb, ParameterLettersBitmap allAxisLetters) noexcept;					// Return true if this code should be queued
 	static bool ShouldQueueMCode(GCodeBuffer &gb) THROWS(GCodeException);	// Return true if this code should be queued
 
 private:

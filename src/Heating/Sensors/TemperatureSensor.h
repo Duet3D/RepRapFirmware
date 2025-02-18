@@ -23,7 +23,7 @@ public:
 
 		const char *_ecv_array GetName() const noexcept { return sensorTypeName; }
 		const SensorTypeDescriptor *_ecv_null GetNext() const noexcept { return next; }
-		TemperatureSensor *Create(unsigned int sensorNum) const noexcept { return createFunction(sensorNum); }
+		TemperatureSensor *_ecv_from Create(unsigned int sensorNum) const noexcept { return createFunction(sensorNum); }
 
 		static const SensorTypeDescriptor *_ecv_null GetRoot() noexcept { return sensorTypeListRoot; }
 
@@ -38,9 +38,6 @@ public:
 
 	TemperatureSensor(unsigned int sensorNum, const char *_ecv_array type) noexcept;
 	TemperatureSensor(const TemperatureSensor &_ecv_from) = delete;
-
-	// Virtual destructor
-	virtual ~TemperatureSensor() noexcept override;
 
 	// Configure the sensor from M308 parameters.
 	// If we find any parameters, process them, if successful then initialise the sensor and return GCodeResult::ok.
@@ -57,6 +54,12 @@ public:
 	// How many additional outputs does this sensor have
 	virtual const uint8_t GetNumAdditionalOutputs() const noexcept { return 0; }
 
+	// Configure one of the additional outputs on this sensor. Ignore the A, U and V parameters because those are handled by ConfigureCommonParameters.
+	virtual GCodeResult ConfigureAdditionalOutput(GCodeBuffer& gb, const StringRef& reply, bool& changed, uint8_t outputNumber) THROWS(GCodeException);
+
+	// Report the parameters of an additional output
+	virtual void AppendAdditionalOutputParameters(const StringRef& reply, uint8_t outputNumber) noexcept;
+
 	// Get the smart drivers channel that this sensor monitors, or -1 if it doesn't
 	virtual int GetSmartDriversChannel() const noexcept { return -1; }
 
@@ -68,9 +71,12 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	// Configure the sensor from M308 parameters.
-	// If we find any parameters, process them and return true. If an error occurs while processing them, return error and write an error message to 'reply.
+	// If we find any parameters, process them and return ok. If an error occurs while processing them, return error and write an error message to 'reply.
 	// If we find no relevant parameters, report the current parameters to 'reply' and return ok.
 	virtual GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept;
+
+	// As above but get the parameters from a CAN message parser
+	virtual GCodeResult ConfigureAdditionalOutput(const CanMessageGenericParser& parser, const StringRef& reply, bool& changed, uint8_t outputNumber) noexcept;
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -84,9 +90,6 @@ public:
 	// Try to get a temperature reading
 	TemperatureError GetLatestTemperature(float& t) noexcept;
 
-	// Return the sensor type
-	const char *_ecv_array GetSensorType() const noexcept { return sensorType; }
-
 	// Return the sensor number
 	unsigned int GetSensorNumber() const noexcept { return sensorNumber; }
 
@@ -96,12 +99,12 @@ public:
 	// Set the name - normally called only once
 	void SetSensorName(const char *_ecv_array _ecv_null newName) noexcept;
 
-	// Get the name. Returns nullptr if no name has been assigned.
-	const char *_ecv_array GetSensorName() const noexcept { return sensorName; }
+	// Get the name
+	const AutoStringHandle& GetSensorName() const noexcept { return sensorName; }
 
 	// Get/set the next sensor in the linked list
-	TemperatureSensor *_ecv_from GetNext() const noexcept { return next; }
-	void SetNext(TemperatureSensor *_ecv_from n) noexcept { next = n; }
+	TemperatureSensor *_ecv_from _ecv_null GetNext() const noexcept { return next; }
+	void SetNext(TemperatureSensor *_ecv_from _ecv_null n) noexcept { next = n; }
 
 	// Get the time of the last reading
 	uint32_t GetLastReadingTime() const noexcept { return whenLastRead; }
@@ -138,7 +141,7 @@ private:
 	TemperatureSensor *_ecv_from _ecv_null next;
 	unsigned int sensorNumber;																// the number of this sensor
 	const char *_ecv_array const sensorType;
-	const char *_ecv_array _ecv_null sensorName;
+	AutoStringHandle sensorName;
 	float lastTemperature;
 	uint32_t whenLastRead;
 	float offsetAdjustment = 0.0;

@@ -79,7 +79,7 @@ void WIZCHIP_WRITE(uint32_t AddrSel, uint8_t wb) noexcept
 	WizSpi::ReleaseSS();
 }
 
-void WIZCHIP_READ_BUF (uint32_t AddrSel, uint8_t* pBuf, uint16_t len) noexcept
+void WIZCHIP_READ_BUF (uint32_t AddrSel, uint8_t *_ecv_array pBuf, uint16_t len) noexcept
 {
 	WizSpi::AssertSS();
 	WizSpi::SendAddress(AddrSel | (_W5500_SPI_READ_ | _W5500_SPI_VDM_OP_));
@@ -87,7 +87,7 @@ void WIZCHIP_READ_BUF (uint32_t AddrSel, uint8_t* pBuf, uint16_t len) noexcept
 	WizSpi::ReleaseSS();
 }
 
-void WIZCHIP_WRITE_BUF(uint32_t AddrSel, const uint8_t* pBuf, uint16_t len) noexcept
+void WIZCHIP_WRITE_BUF(uint32_t AddrSel, const uint8_t *_ecv_array pBuf, uint16_t len) noexcept
 {
 	WizSpi::AssertSS();
 	WizSpi::SendAddress(AddrSel | (_W5500_SPI_WRITE_ | _W5500_SPI_VDM_OP_));

@@ -794,12 +794,28 @@ void Network::Diagnostics(MessageType mtype) noexcept
 
 IPAddress Network::GetIPAddress(unsigned int interface) const noexcept
 {
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		return reportedIPAddress;
+	}
+#endif
+
 	return
 #if HAS_NETWORKING
 			(interface < GetNumNetworkInterfaces()) ? interfaces[interface]->GetIPAddress() :
 #endif
 					IPAddress();
 }
+
+#if HAS_SBC_INTERFACE
+void Network::SetReportedIPAddress(IPAddress p_ipAddress) noexcept
+{
+	reportedIPAddress.SetV4LittleEndian(p_ipAddress.GetV4LittleEndian());
+
+}
+#endif
+
 
 #if HAS_NETWORKING
 
@@ -895,7 +911,7 @@ const MacAddress& Network::GetMacAddress(unsigned int interface) const noexcept
 #endif
 
 // Find a responder to process a new connection
-bool Network::FindResponder(Socket *skt, NetworkProtocol protocol) noexcept
+bool Network::FindResponder(Socket *_ecv_from skt, NetworkProtocol protocol) noexcept
 {
 #if HAS_RESPONDERS
 	for (NetworkResponder *_ecv_from _ecv_null r = responders; r != nullptr; r = r->GetNext())

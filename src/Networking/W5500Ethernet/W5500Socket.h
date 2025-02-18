@@ -31,7 +31,24 @@ public:
 	size_t Send(const uint8_t *_ecv_array data, size_t length) noexcept override;
 	void Send() noexcept override;
 
+	unsigned int GetState() const noexcept { return (unsigned int)state; }		// used only for reporting debug info, hence the 'unsigned int' return
+
 private:
+	// States that a socket can be in
+	enum class SocketState : uint8_t
+	{
+		disabled,
+		inactive,
+		listening,
+		connecting,
+		waitingForResponder,
+		connected,
+		peerDisconnecting,
+		closing,
+		broken,
+		aborted
+	};
+
 	void ReInit() noexcept;
 	bool ReceiveData() noexcept;
 	void DiscardReceivedData() noexcept;
@@ -41,6 +58,7 @@ private:
 	bool persistConnection;								// Do we expect this connection to stay alive?
 	bool isTerminated;									// Will be true if the connection has gone down unexpectedly (TCP RST)
 	SocketNumber socketNum;								// The W5500 socket number we are using
+	SocketState state;
 	bool sendOutstanding;								// True if we have written data to the socket but not flushed it
 	bool isSending;										// True if we have written data to the W5500 to send and have not yet seen success or timeout
 	uint16_t wizTxBufferPtr;							// Current offset into the Wizchip send buffer, if sendOutstanding is true

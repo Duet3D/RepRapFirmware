@@ -36,6 +36,10 @@
 #if SUPPORT_REMOTE_COMMANDS
 # include <Version.h>
 # include <InputMonitors/InputMonitor.h>
+
+# if HAS_STALL_DETECT
+#  include <Movement/StepperDrivers/SmartDrivers.h>			// for extern declaration of driverStallsToNotify
+# endif
 #endif
 
 #include <memory>
@@ -53,7 +57,21 @@ constexpr uint32_t MaxUrgentSendWait = 20;									// milliseconds
 constexpr uint32_t MaxTimeSyncSendWait = 2;									// milliseconds
 constexpr uint32_t MaxResponseSendWait = CanInterface::UsualSendTimeout;	// milliseconds
 constexpr uint32_t MaxRequestSendWait = CanInterface::UsualSendTimeout;		// milliseconds
-constexpr uint16_t MaxTimeSyncDelay = 300;									// the maximum normal delay before a CAN time sync message is sent
+
+// Define how often we send time sync messages. This value and the time interval between sending broadcast status messages (currently 250ms) should be relatively prime.
+// The reason is that if we try to send a time sync message just after a board has started broadcasting a status message, the time sync message will get delayed
+// until the broadcast message finishes, which could be up to 600us at 1Mbps (the time taken to send a message with a 64-byte payload when not using BRS).
+// When we used a 200us interval here, this meant that the same clash would occur 1 second later, and again 1 second after that.
+// Using a value here that is relatively prime to 250ms avoids that happening. Alternatively we could add a random element to the interval.
+constexpr uint32_t CanClockIntervalMillis = 211;
+
+// Define the maximum time sync delay that we tolerate. Occasionally on the SAME70 we get spurious very long delays, so we must ignore those.
+// CAN-FD packets have 42 header bits, up to 64*8 data bits and 45 trailer bits. The header and data parts may have added stuff bits.
+// That's a maximum of 554 header+data bits plus up to 20% additional stuff bits, and 45 trailer bits including fixed stuff bits.
+// So the maximum number of bits is less than 710, which takes 710us to transmit at 1Mbps. Allow an extra 5us for scheduling delays.
+constexpr uint16_t MaxTimeSyncDelay = (uint16_t)MicrosecondsToStepClocks((42 + 64 * 8) * 1.2 + 45 + 5);	// the maximum normal delay before a CAN time sync message is sent, in step clocks
+
+static_assert(MaxTimeSyncDelay >= 400 && MaxTimeSyncDelay <= 1000);			// check it's in the right ball park
 
 #define USE_BIT_RATE_SWITCH		0
 #define USE_TX_FIFO				1
@@ -76,10 +94,6 @@ static uint32_t longestWaitTime = 0;
 static uint16_t longestWaitMessageType = 0;
 
 static uint32_t peakTimeSyncTxDelay = 0;
-
-#if SUPPORT_REMOTE_COMMANDS
-static unsigned int messagesIgnored = 0;
-#endif
 
 // Debug
 static unsigned int goodTimeStamps = 0;
@@ -104,6 +118,7 @@ static CanAddress myAddress =
 static uint8_t currentTimeSyncMarker = 0xFF;
 
 #if SUPPORT_REMOTE_COMMANDS
+static unsigned int messagesIgnored = 0;
 static bool inExpansionMode = false;
 static bool inTestMode = false;
 static bool mainBoardAcknowledgedAnnounce = false;
@@ -185,8 +200,6 @@ constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::buffer5;
 constexpr auto RxBufferIndexBroadcast = CanDevice::RxBufferNumber::fifo0;
 constexpr auto RxBufferIndexRequest = CanDevice::RxBufferNumber::fifo0;
 constexpr auto RxBufferIndexResponse = CanDevice::RxBufferNumber::fifo1;
-
-constexpr uint32_t CanClockIntervalMillis = 200;
 
 // CanSender management task
 constexpr size_t CanSenderTaskStackWords = 400;
@@ -488,7 +501,6 @@ static void SendCanMessage(CanDevice::TxBufferNumber whichBuffer, uint32_t timeo
 	}
 }
 
-//TODO can we get rid of the CanSender task if we send movement messages via the Tx FIFO?
 // This task picks up motion messages and sends them
 extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 {
@@ -503,6 +515,15 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 			msg->states = 0;
 			msg->numHandles = 0;
 
+#if HAS_STALL_DETECT
+			// Start by adding any stall detect endstops pending. Do this first so that it must succeed.
+			const uint16_t stallNotifications = SmartDrivers::driverStallsToNotify.exchange(0);
+			if (stallNotifications != 0)
+			{
+				constexpr RemoteInputHandle h(RemoteInputHandle::typeStallEndstop, 0, 0);
+				(void)msg->AddEntry(h.asU16(), (uint32_t)stallNotifications, true);
+			}
+#endif
 			const uint32_t timeToWait = InputMonitor::AddStateChanges(msg);
 			if (msg->numHandles != 0)
 			{
@@ -1168,6 +1189,46 @@ GCodeResult CanInterface::GetSetRemoteDriverStallParameters(const CanDriversList
 	return GCodeResult::ok;
 }
 
+// Enable a stall endstop on a remote board
+void CanInterface::EnableRemoteStallEndstop(DriverId did, float speed) THROWS(GCodeException)
+{
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		return ThrowGCodeException("no CAN buffer available");
+	}
+	const CanRequestId rid = CanInterface::AllocateRequestId(did.boardAddress, buf);
+	auto msg = buf->SetupRequestMessage<CanMessageEnableStallEndstop>(rid, CanInterface::GetCanAddress(), did.boardAddress);
+	msg->driverNumber = did.localDriver;
+	msg->speed = speed;
+
+	// Static buffer to allow a string to be stored that is referred to by a thrown exception.
+	// This isn't ideal, however I consider it unlikely that both motion systems will execute homing moves involving remote drivers at the same time.
+	// An alternative would be to enlarge the GCodeException class to store a copy of the string instead of a pointer to it.
+	static String<StringLength50> enableEndstopsReply;
+	enableEndstopsReply.Clear();
+	if (CanInterface::SendRequestAndGetStandardReply(buf, rid, enableEndstopsReply.GetRef(), nullptr) != GCodeResult::ok)
+	{
+		ThrowGCodeException(enableEndstopsReply.c_str());
+	}
+}
+
+// Disable all stall endstops on a remote board
+void CanInterface::DisableRemoteStallEndstops(CanAddress boardId) noexcept
+{
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		return;								// there's very little we can do here in terms of error handling
+	}
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardId, buf);
+	auto msg = buf->SetupRequestMessage<CanMessageEnableStallEndstop>(rid, CanInterface::GetCanAddress(), boardId);
+	msg->driverNumber = CanMessageEnableStallEndstop::disableAll;
+	msg->speed = 0.0;
+	String<1> reply;
+	(void)CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef(), nullptr);
+}
+
 static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_t param, GCodeBuffer& gb, const StringRef& reply, uint8_t *extra = nullptr) THROWS(GCodeException)
 {
 	CanInterface::CheckCanAddress(boardAddress, gb);
@@ -1405,6 +1466,37 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 																	}
 																});
 	return rslt;
+}
+
+// Process M655 (send request to custom expansion board)
+GCodeResult CanInterface::ProcessM655(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	CanAddress addr;
+	if (gb.Seen('B'))
+	{
+		addr = gb.GetUIValue();
+	}
+	else if (gb.Seen('C'))
+	{
+		String<StringLength50> cParam;
+		gb.GetReducedString(cParam.GetRef());
+		addr = IoPort::RemoveBoardAddress(cParam.GetRef());
+	}
+	else
+	{
+		reply.copy("B or C parameter must be provided");
+		return GCodeResult::error;
+	}
+
+	if (addr == GetCanAddress())
+	{
+		reply.copy("Not implemented on main board");
+		return GCodeResult::error;
+	}
+
+	CanMessageGenericConstructor cons(M655Params);
+	cons.PopulateFromCommand(gb);
+	return cons.SendAndGetResponse(CanMessageType::m655, addr, reply, nullptr);
 }
 
 void CanInterface::Diagnostics(MessageType mtype) noexcept

@@ -41,7 +41,6 @@ Licence: GPL
 #include <GPIO/GpInPort.h>
 #include <GPIO/GpOutPort.h>
 #include <Comms/AuxDevice.h>
-#include <Comms/PanelDueUpdater.h>
 #include <General/IPAddress.h>
 #include <General/function_ref.h>
 
@@ -56,6 +55,10 @@ Licence: GPL
 #if SUPPORT_CAN_EXPANSION
 # include <CanMessageFormats.h>
 # include <RemoteInputHandle.h>
+#endif
+
+#if SUPPORT_PANELDUE_FLASH
+class PanelDueUpdater;
 #endif
 
 // Define the number of ADC filters and the indices of the extra ones
@@ -188,7 +191,7 @@ enum class ErrorCode : uint32_t
 };
 
 // The main class that defines the RepRap machine for the benefit of the other classes
-class Platform INHERIT_OBJECT_MODEL
+class Platform final INHERIT_OBJECT_MODEL
 {
 public:
 	Platform() noexcept;
@@ -271,7 +274,7 @@ public:
     bool IsAuxEnabled(size_t auxNumber) const noexcept;				// Any device on the AUX line?
     bool IsAuxRaw(size_t auxNumber) const noexcept;
 #if SUPPORT_PANELDUE_FLASH
-	PanelDueUpdater* GetPanelDueUpdater() noexcept { return panelDueUpdater; }
+	PanelDueUpdater *_ecv_null GetPanelDueUpdater() noexcept { return panelDueUpdater; }
 	void InitPanelDueUpdater() noexcept;
 #endif
 
@@ -472,13 +475,12 @@ protected:
 
 private:
 	const char *_ecv_array InternalGetSysDir() const noexcept;  				// where the system files are - not thread-safe!
-
 	void RawMessage(MessageType type, const char *_ecv_array message) noexcept;	// called by Message after handling error/warning flags
-
 	float GetCpuTemperature() const noexcept;
+	GCodeResult PrintTestReport(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) const THROWS(GCodeException);
 
 #if HAS_SMART_DRIVERS
-	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
+	void ReportDrivers(MessageType mt, LocalDriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
 #endif
 
 #if defined(DUET3_MB6HC)
@@ -488,7 +490,7 @@ private:
 
 #if HAS_MASS_STORAGE
 	// Logging
-	Logger *logger;
+	Logger *_ecv_null logger;
 #endif
 
 	// Network
@@ -568,15 +570,15 @@ private:
 	Mutex usbMutex;
 
 #if HAS_AUX_DEVICES
-	AuxDevice auxDevices[NumSerialChannels - 1];
+	AuxDevice auxDevices[NumAuxChannels];
 #endif
 #if SUPPORT_PANELDUE_FLASH
-	PanelDueUpdater* panelDueUpdater;
+	PanelDueUpdater *_ecv_null panelDueUpdater;
 #endif
 
 	// Files
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	const char *_ecv_array sysDir;
+	const char *_ecv_array _ecv_null sysDir;
 	mutable ReadWriteLock sysDirLock;
 #endif
 
@@ -585,7 +587,7 @@ private:
 	AnalogChannelNumber zProbeAdcChannel;
 	uint8_t tickState;
 	size_t currentFilterNumber;
-	int debugCode;
+	unsigned int debugCode;
 
 	// Hotend configuration
 	float filamentWidth;

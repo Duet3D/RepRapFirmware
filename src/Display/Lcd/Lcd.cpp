@@ -10,8 +10,8 @@
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...)		OBJECT_MODEL_FUNC_BODY(Lcd, __VA_ARGS__)
-#define OBJECT_MODEL_FUNC_IF(...)	OBJECT_MODEL_FUNC_IF_BODY(Lcd, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)		OBJECT_MODEL_FUNC_BODY_NONLEAF(Lcd, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...)	OBJECT_MODEL_FUNC_IF_BODY_NONLEAF(Lcd, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry Lcd::objectModelTable[] =
 {

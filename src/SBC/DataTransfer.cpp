@@ -62,6 +62,10 @@ constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 # include <spi/spi.h>
 #endif
 
+#if SAME5x
+# include <Serial.h>
+#endif
+
 #if defined(DUET3_MB6HC) && HAS_WIFI_NETWORKING
 extern void ESP_SPI_HANDLER() noexcept;
 #endif
@@ -1223,6 +1227,9 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::DateTime_tc:
 	case TypeCode::Port:
 	case TypeCode::UniqueId_tc:
+#if SUPPORT_CAN_EXPANSION
+	case TypeCode::CanExpansionBoardDetails:
+#endif
 		// All these types are represented as strings
 		value.AppendAsString(rslt.GetRef());
 		payloadLength = expressionLength + rslt.strlen();

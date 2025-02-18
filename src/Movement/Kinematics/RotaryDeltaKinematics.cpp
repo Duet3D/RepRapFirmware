@@ -286,7 +286,7 @@ floatc_t RotaryDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, 
 
 // Perform auto calibration. Caller already owns the movement lock.
 // Return true if an error occurred.
-bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
+bool RotaryDeltaKinematics::DoAutoCalibration(MovementState& ms, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
 	constexpr size_t NumDeltaFactors = 7;		// maximum number of rotary delta machine factors we can adjust
 
@@ -424,7 +424,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			{
 				heightAdjust[drive] = solution[drive];
 			}
-			reprap.GetMove().AdjustMotorPositions(heightAdjust, DELTA_AXES);
+			ms.AdjustMotorPositions(heightAdjust, DELTA_AXES);
 		}
 
 		// Calculate the expected probe heights using the new parameters
@@ -666,31 +666,20 @@ AxesBitmap RotaryDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBi
 	return Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
 }
 
-// This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
-// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
-void RotaryDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
+float RotaryDeltaKinematics::GetEndstopPosition(size_t drive, bool highEnd) noexcept
 {
-	if (axis < DELTA_AXES)
+	if (drive < DELTA_AXES && highEnd)
 	{
-		if (highEnd)
-		{
-			const float hitPoint = maxArmAngle + endstopAdjustments[axis];
-			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
-		}
+		return maxArmAngle + endstopAdjustments[drive];
 	}
-	else
-	{
-		// Assume that any additional axes are linear
-		const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
-		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
-	}
+	return Kinematics::GetEndstopPosition(drive, highEnd);
 }
 
 // Return the drivers that control an axis or tower
-AxesBitmap RotaryDeltaKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
+LogicalDrivesBitmap RotaryDeltaKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
 {
 	return (forHoming || axis > Z_AXIS)
-			? AxesBitmap::MakeFromBits(axis)
+			? LogicalDrivesBitmap::MakeFromBits(axis)
 				: XyzAxes;
 }
 

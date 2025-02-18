@@ -54,7 +54,7 @@ private:
 	unsigned int m_uListingFirstVisibleIndex;
 	unsigned int m_uListingSelectedIndex;
 
-	enum CardState : uint8_t { notStarted, mounting, mounted, error } sdCardState;
+	enum class CardState : uint8_t { notStarted, mounting, mounted, error } sdCardState;
 	uint8_t initialDirectoryNesting;
 };
 

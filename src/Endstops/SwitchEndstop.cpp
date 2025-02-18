@@ -133,10 +133,10 @@ bool SwitchEndstop::Stopped() const noexcept
 }
 
 // This is called to prime axis endstops
-bool SwitchEndstop::Prime(const Kinematics &_ecv_from kin, const AxisDriversConfig& axisDrivers) noexcept
+void SwitchEndstop::PrimeAxis(const Kinematics &_ecv_from kin, const AxisDriversConfig& axisDrivers, float speed) THROWS(GCodeException)
 {
 	// Decide whether we stop just the driver, just the axis, or everything
-	stopAll = kin.GetControllingDrives(GetAxis(), true).Intersects(~AxesBitmap::MakeFromBits(GetAxis()));
+	stopAll = kin.GetControllingDrives(GetAxis(), true).Intersects(~LogicalDrivesBitmap::MakeFromBits(GetAxis()));
 	numPortsLeftToTrigger = (numPortsUsed != axisDrivers.numDrivers) ? 1 : numPortsUsed;
 	portsLeftToTrigger = PortsBitmap::MakeLowestNBits(numPortsUsed);
 
@@ -150,15 +150,11 @@ bool SwitchEndstop::Prime(const Kinematics &_ecv_from kin, const AxisDriversConf
 			String<StringLength100> reply;
 			if (CanInterface::EnableHandle(boardNumbers[i], h, true, states[i], reply.GetRef()) != GCodeResult::ok)
 			{
-				reply.cat('\n');
-				reprap.GetPlatform().Message(ErrorMessage, reply.c_str());
-				return false;
+				ThrowGCodeException(reply.c_str());
 			}
 		}
 	}
 #endif
-
-	return true;
 }
 
 // Check whether the endstop is triggered and return the action that should be performed. Don't update the state until Acknowledge is called.

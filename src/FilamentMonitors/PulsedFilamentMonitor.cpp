@@ -38,15 +38,15 @@ constexpr ObjectModelTableEntry PulsedFilamentMonitor::objectModelTable[] =
 #if SUPPORT_CAN_EXPANSION
 												self->IsLocal() &&
 #endif
-												self->DataReceived() && self->HaveCalibrationData(), self, 1), 					ObjectModelEntryFlags::live },
+												self->DataReceived() && self->HaveCalibrationData(), self, 1), 					ObjectModelEntryFlags::liveNotPanelDue },
 	{ "configured", 	OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
-	{ "position",		OBJECT_MODEL_FUNC((int32_t)(self->sensorValue & 0x0FFF)), 												ObjectModelEntryFlags::live },
+	{ "position",		OBJECT_MODEL_FUNC((int32_t)(self->sensorValue & 0x0FFF)), 												ObjectModelEntryFlags::liveNotPanelDue },
 
 	// 1. PulsedFilamentMonitor.calibrated members
-	{ "mmPerPulse",		OBJECT_MODEL_FUNC(self->MeasuredSensitivity(), 3), 														ObjectModelEntryFlags::live },
-	{ "percentMax",		OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio)), 											ObjectModelEntryFlags::live },
-	{ "percentMin",		OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio)), 											ObjectModelEntryFlags::live },
-	{ "totalDistance",	OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::live },
+	{ "mmPerPulse",		OBJECT_MODEL_FUNC(self->MeasuredSensitivity(), 3), 														ObjectModelEntryFlags::liveNotPanelDue },
+	{ "percentMax",		OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio)), 											ObjectModelEntryFlags::liveNotPanelDue },
+	{ "percentMin",		OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementRatio)), 											ObjectModelEntryFlags::liveNotPanelDue },
+	{ "totalDistance",	OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::liveNotPanelDue },
 
 	// 2. PulsedFilamentMonitor.configured members
 	{ "mmPerPulse",		OBJECT_MODEL_FUNC(self->mmPerPulse, 3), 																ObjectModelEntryFlags::none },

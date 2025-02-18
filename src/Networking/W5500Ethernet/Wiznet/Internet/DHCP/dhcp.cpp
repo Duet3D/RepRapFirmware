@@ -49,8 +49,8 @@
 //
 //*****************************************************************************
 
-#include "Networking/W5500Ethernet/Wiznet/Ethernet/socketlib.h"
-#include "Networking/W5500Ethernet/Wiznet/Internet/DHCP/dhcp.h"
+#include <Networking/W5500Ethernet/Wiznet/Ethernet/socketlib.h>
+#include "dhcp.h"
 #include <cstring>
 
 /* If you want to display debug & processing message, Define _DHCP_DEBUG_ in dhcp.h */
@@ -61,7 +61,7 @@
 extern "C" void debugPrintf(const char *fmt, ...);
 # define DEBUG_PRINTF(...) debugPrintf(__VA_ARGS__)
 #else
-# define DEBUG_PRINTF(_fmt, ...)
+# define DEBUG_PRINTF(...)
 #endif
 
 /* DHCP state machine. */
@@ -103,7 +103,7 @@ enum class DhcpState : uint8_t
 #define DHCP_HOPS                0        ///< Used in hops of @ref RIP_MSG
 #define DHCP_SECS                0        ///< Used in secs of @ref RIP_MSG
 
-#define INFINITE_LEASETIME       0xffffffff	///< Infinite lease time
+#define INFINITE_LEASETIME       0xffffffffu	///< Infinite lease time
 
 #define OPT_SIZE                 312               /// Max OPT size of @ref RIP_MSG
 #define RIP_MSG_SIZE             (236+OPT_SIZE)    /// Max size of @ref RIP_MSG
@@ -290,14 +290,14 @@ void default_ip_conflict() noexcept
 }
 
 /* register the call back func. */
-void reg_dhcp_cbfunc(void(*ip_assign)() noexcept, void(*ip_update)() noexcept, void(*ip_conflict)() noexcept) noexcept
+void reg_dhcp_cbfunc(void(*_ecv_null ip_assign)() noexcept, void(*_ecv_null ip_update)() noexcept, void(*_ecv_null ip_conflict)() noexcept) noexcept
 {
 	dhcp_ip_assign   = default_ip_assign;
 	dhcp_ip_update   = default_ip_update;
 	dhcp_ip_conflict = default_ip_conflict;
-	if(ip_assign)   { dhcp_ip_assign = ip_assign; }
-	if(ip_update)   { dhcp_ip_update = ip_update; }
-	if(ip_conflict) { dhcp_ip_conflict = ip_conflict; }
+	if(ip_assign != nullptr)   { dhcp_ip_assign = _ecv_not_null(ip_assign); }
+	if(ip_update != nullptr)   { dhcp_ip_update = _ecv_not_null(ip_update); }
+	if(ip_conflict != nullptr) { dhcp_ip_conflict = _ecv_not_null(ip_conflict); }
 }
 
 /* make the common DHCP message */
@@ -309,15 +309,15 @@ void makeDHCPMSG() noexcept
 	pDHCPMSG->htype   = DHCP_HTYPE10MB;
 	pDHCPMSG->hlen    = DHCP_HLENETHERNET;
 	pDHCPMSG->hops    = DHCP_HOPS;
-	uint8_t* ptmp     = (uint8_t*)(&pDHCPMSG->xid);
-	*(ptmp+0)         = (uint8_t)((DHCP_XID & 0xFF000000) >> 24);
-	*(ptmp+1)         = (uint8_t)((DHCP_XID & 0x00FF0000) >> 16);
-	*(ptmp+2)         = (uint8_t)((DHCP_XID & 0x0000FF00) >>  8);
-	*(ptmp+3)         = (uint8_t)((DHCP_XID & 0x000000FF) >>  0);
+	uint8_t *_ecv_array ptmp     = (uint8_t *_ecv_array)(&pDHCPMSG->xid);
+	*(ptmp+0)         = (uint8_t)((DHCP_XID & 0xFF000000u) >> 24);
+	*(ptmp+1)         = (uint8_t)((DHCP_XID & 0x00FF0000u) >> 16);
+	*(ptmp+2)         = (uint8_t)((DHCP_XID & 0x0000FF00u) >>  8);
+	*(ptmp+3)         = (uint8_t)((DHCP_XID & 0x000000FFu) >>  0);
 	pDHCPMSG->secs    = DHCP_SECS;
-	ptmp              = (uint8_t*)(&pDHCPMSG->flags);
-	*(ptmp+0)         = (uint8_t)((DHCP_FLAGSBROADCAST & 0xFF00) >> 8);
-	*(ptmp+1)         = (uint8_t)((DHCP_FLAGSBROADCAST & 0x00FF) >> 0);
+	ptmp              = (uint8_t* _ecv_array)(&pDHCPMSG->flags);
+	*(ptmp+0)         = (uint8_t)((DHCP_FLAGSBROADCAST & 0xFF00u) >> 8);
+	*(ptmp+1)         = (uint8_t)((DHCP_FLAGSBROADCAST & 0x00FFu) >> 0);
 
 	pDHCPMSG->ciaddr[0] = 0;
 	pDHCPMSG->ciaddr[1] = 0;
@@ -360,10 +360,10 @@ void makeDHCPMSG() noexcept
 	}
 
 	// MAGIC_COOKIE
-	pDHCPMSG->OPT[0] = (uint8_t)((MAGIC_COOKIE & 0xFF000000) >> 24);
-	pDHCPMSG->OPT[1] = (uint8_t)((MAGIC_COOKIE & 0x00FF0000) >> 16);
-	pDHCPMSG->OPT[2] = (uint8_t)((MAGIC_COOKIE & 0x0000FF00) >>  8);
-	pDHCPMSG->OPT[3] = (uint8_t) (MAGIC_COOKIE & 0x000000FF) >>  0;
+	pDHCPMSG->OPT[0] = (uint8_t)((MAGIC_COOKIE & 0xFF000000u) >> 24);
+	pDHCPMSG->OPT[1] = (uint8_t)((MAGIC_COOKIE & 0x00FF0000u) >> 16);
+	pDHCPMSG->OPT[2] = (uint8_t)((MAGIC_COOKIE & 0x0000FF00u) >>  8);
+	pDHCPMSG->OPT[3] = (uint8_t) (MAGIC_COOKIE & 0x000000FFu) >>  0;
 }
 
 /* SEND DHCP DISCOVER */
@@ -395,7 +395,7 @@ void send_DHCP_DISCOVER() noexcept
 	size_t i;
 	for (i = 0 ; HOST_NAME[i] != 0; i++)
 	{
-		pDHCPMSG->OPT[k++] = HOST_NAME[i];
+		pDHCPMSG->OPT[k++] = (unsigned char)HOST_NAME[i];
 	}
 	pDHCPMSG->OPT[k - (i+1)] = i; // length of hostname
 	pDHCPMSG->OPT[k++] = dhcpParamRequest;
@@ -419,7 +419,7 @@ void send_DHCP_DISCOVER() noexcept
 
 	DEBUG_PRINTF("> Send DHCP_DISCOVER\n");
 
-	(void)sendto(DHCP_SOCKET, (uint8_t *)pDHCPMSG, RIP_MSG_SIZE, ip, DHCP_SERVER_PORT);
+	(void)sendto(DHCP_SOCKET, (const uint8_t *_ecv_array)pDHCPMSG, RIP_MSG_SIZE, ip, DHCP_SERVER_PORT);
 	DEBUG_PRINTF("Sent\n");
 }
 
@@ -432,8 +432,8 @@ void send_DHCP_REQUEST() noexcept
 	IPAddress ip;
 	if (dhcp_state == DhcpState::leased || dhcp_state == DhcpState::rerequest)
 	{
-		*((uint8_t*)(&pDHCPMSG->flags))   = ((DHCP_FLAGSUNICAST & 0xFF00)>> 8);
-		*((uint8_t*)(&pDHCPMSG->flags)+1) = (DHCP_FLAGSUNICAST & 0x00FF);
+		*((uint8_t *_ecv_array)(&pDHCPMSG->flags))   = ((DHCP_FLAGSUNICAST & 0xFF00u)>> 8);
+		*((uint8_t *_ecv_array)(&pDHCPMSG->flags)+1) = (DHCP_FLAGSUNICAST & 0x00FFu);
 		pDHCPMSG->ciaddr[0] = DHCP_allocated_ip.GetQuad(0);
 		pDHCPMSG->ciaddr[1] = DHCP_allocated_ip.GetQuad(1);
 		pDHCPMSG->ciaddr[2] = DHCP_allocated_ip.GetQuad(2);
@@ -485,7 +485,7 @@ void send_DHCP_REQUEST() noexcept
 	size_t i;
 	for (i = 0 ; HOST_NAME[i] != 0; i++)
 	{
-		pDHCPMSG->OPT[k++] = HOST_NAME[i];
+		pDHCPMSG->OPT[k++] = (unsigned char)HOST_NAME[i];
 	}
 	pDHCPMSG->OPT[k - (i+1)] = i; // length of hostname
 	pDHCPMSG->OPT[k++] = dhcpParamRequest;
@@ -500,14 +500,14 @@ void send_DHCP_REQUEST() noexcept
 	pDHCPMSG->OPT[k++] = staticRoute;
 	pDHCPMSG->OPT[k++] = endOption;
 
-	for (size_t i = k; i < OPT_SIZE; i++)
+	for (i = k; i < OPT_SIZE; i++)
 	{
 		pDHCPMSG->OPT[i] = 0;
 	}
 
 	DEBUG_PRINTF("> Send DHCP_REQUEST\n");
 
-	(void)sendto(DHCP_SOCKET, (uint8_t *)pDHCPMSG, RIP_MSG_SIZE, ip, DHCP_SERVER_PORT);
+	(void)sendto(DHCP_SOCKET, (const uint8_t *_ecv_array)pDHCPMSG, RIP_MSG_SIZE, ip, DHCP_SERVER_PORT);
 }
 
 /* SEND DHCP DHCPDECLINE */
@@ -517,8 +517,8 @@ void send_DHCP_DECLINE() noexcept
 
 	size_t k = 4;      // beacaue MAGIC_COOKIE already made by makeDHCPMSG()
 
-	*((uint8_t*)(&pDHCPMSG->flags))   = ((DHCP_FLAGSUNICAST & 0xFF00)>> 8);
-	*((uint8_t*)(&pDHCPMSG->flags)+1) = (DHCP_FLAGSUNICAST & 0x00FF);
+	*((uint8_t*)(&pDHCPMSG->flags))   = ((DHCP_FLAGSUNICAST & 0xFF00u) >> 8);
+	*((uint8_t *_ecv_array)(&pDHCPMSG->flags)+1) = (DHCP_FLAGSUNICAST & 0x00FF);
 
 	// Option Request Param.
 	pDHCPMSG->OPT[k++] = dhcpMessageType;
@@ -562,7 +562,7 @@ void send_DHCP_DECLINE() noexcept
 
 	DEBUG_PRINTF("\n> Send DHCP_DECLINE\n");
 
-	(void)sendto(DHCP_SOCKET, (uint8_t *)pDHCPMSG, RIP_MSG_SIZE, ip, DHCP_SERVER_PORT);
+	(void)sendto(DHCP_SOCKET, (const uint8_t *_ecv_array)pDHCPMSG, RIP_MSG_SIZE, ip, DHCP_SERVER_PORT);
 }
 
 /* PARSE REPLY pDHCPMSG */
@@ -579,7 +579,7 @@ int8_t parseDHCPMSG() noexcept
 
 		uint8_t svr_addr[6];
 		uint16_t svr_port;
-		len = recvfrom(DHCP_SOCKET, (uint8_t *)pDHCPMSG, len, svr_addr, &svr_port);
+		len = recvfrom(DHCP_SOCKET, (uint8_t *_ecv_array)pDHCPMSG, len, svr_addr, &svr_port);
 
 		DEBUG_PRINTF("DHCP message : %d.%d.%d.%d(%d) %d received. \n", svr_addr[0], svr_addr[1], svr_addr[2], svr_addr[3], svr_port, len);
 
@@ -591,9 +591,9 @@ int8_t parseDHCPMSG() noexcept
 				&& (pDHCPMSG->chaddr[4] == DHCP_CHADDR[4]) && (pDHCPMSG->chaddr[5] == DHCP_CHADDR[5])
 			   )
 			{
-				const uint8_t *p = (uint8_t *)(&pDHCPMSG->op);
+				const uint8_t *_ecv_array p = (uint8_t *_ecv_array)(&pDHCPMSG->op);
 				p = p + 240;      // 240 = sizeof(RIP_MSG) + MAGIC_COOKIE size in RIP_MSG.opt - sizeof(RIP_MSG.opt)
-				const uint8_t * const e = p + (len - 240);
+				const uint8_t *_ecv_array const e = p + (len - 240);
 
 				while (p < e)
 				{
@@ -902,13 +902,13 @@ void check_DHCP_leasedIP() noexcept
 
 	// IP conflict detection : ARP request - ARP reply
 	// Broadcasting ARP Request for check the IP conflict using UDP sendto() function
-	sendto(DHCP_SOCKET, (const uint8_t *)"CHECK_IP_CONFLICT", 17, DHCP_allocated_ip, 5000);
+	sendto(DHCP_SOCKET, (const uint8_t *_ecv_array)"CHECK_IP_CONFLICT", 17, DHCP_allocated_ip, 5000);
 
 	// RCR value restore
 	setRCR(tmp);
 }
 
-void DHCP_init(uint8_t s, uint32_t seed, const char *hname) noexcept
+void DHCP_init(uint8_t s, uint32_t seed, const char *_ecv_array hname) noexcept
 {
 	strncpy(HOST_NAME, hname, sizeof(HOST_NAME));
 	HOST_NAME[sizeof(HOST_NAME) - 1] = 0;

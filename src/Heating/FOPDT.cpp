@@ -64,7 +64,7 @@ FopDt::FopDt() noexcept
 bool FopDt::SetParameters(float phr, float pbcr, float pfcr, float pcrExponent, float pdt, float pMaxPwm, float pVoltage, bool pUsePid, bool pInverted, const StringRef& reply) noexcept
 {
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
-	const char *const err =
+	const char *_ecv_array _ecv_null const err =
 		  (phr/pbcr < 0.1) ? "estimated temperature rise too small"					// minimum 10C temperature rise (same as with earlier heater model)
 		: (pfcr < 0.0) ? "fan reduces cooling rate"
 		: (pcrExponent < 1.0 || pcrExponent > 1.6) ? "cooling rate exponent out of range"
@@ -97,7 +97,7 @@ bool FopDt::SetParameters(float phr, float pbcr, float pfcr, float pcrExponent, 
 bool FopDt::SetParameters(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept
 {
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
-	const char *const err =
+	const char *_ecv_array _ecv_null const err =
 		  (msg.heatingRate/msg.basicCoolingRate < 0.1) ? "estimated temperature rise too small"					// minimum 10C temperature rise (same as with earlier heater model)
 		: (msg.fanCoolingRate < 0.0) ? "fan reduces cooling rate"
 		: (msg.coolingRateExponent < 1.0 || msg.coolingRateExponent > 1.6) ? "cooling rate exponent out of range"
@@ -235,7 +235,7 @@ void FopDt::AppendM301Command(unsigned int heaterNumber, const StringRef& str) c
 // Append the model parameters to a reply string
 void FopDt::AppendModelParameters(unsigned int heaterNumber, const StringRef& str, bool includeVoltage) const noexcept
 {
-	const char* const mode = (!usePid) ? "bang-bang"
+	const char *_ecv_array const mode = (!usePid) ? "bang-bang"
 								: (pidParametersOverridden) ? "custom PID"
 									: "PID";
 	str.catf("Heater %u: heating rate %.3f, cooling rate %.3f", heaterNumber, (double)heatingRate, (double)basicCoolingRate);

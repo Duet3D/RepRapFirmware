@@ -59,7 +59,7 @@ const char *_ecv_array DhtTemperatureSensor::GetShortSensorType() const noexcept
 	}
 }
 
-GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
+GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
 #if SAME5x
 	// SAME5x needs two ports because the output ports don't support interrupts

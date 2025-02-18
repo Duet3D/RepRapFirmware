@@ -179,7 +179,7 @@ public:
 
 		explicit BlockState(BlockState *p_prev) noexcept : prev(p_prev) { }
 		BlockType GetType() const noexcept { return blockType; }
-		BlockState *GetPrevious() const noexcept { return prev; }
+		BlockState *_ecv_null GetPrevious() const noexcept { return prev; }
 		void SetPrevious(BlockState *p) noexcept { prev = p; }
 		uint32_t GetIterations() const noexcept { return iterationsDone; }
 		uint32_t GetLineNumber() const noexcept { return lineNumber; }
@@ -196,7 +196,7 @@ public:
 		void IncrementIterations() noexcept { ++iterationsDone; }
 
 	private:
-		BlockState *prev;
+		BlockState *_ecv_null prev;
 		FilePosition fpos;											// the file offset at which the current block started
 		uint32_t lineNumber;										// the line number at which the current block started
 		uint32_t iterationsDone;									// the number of iterations completed of the innermost while-loop
@@ -254,7 +254,7 @@ public:
 		usingInches : 1,						// true if units are inches not mm
 		waitingForAcknowledgement : 1,
 		messageAcknowledged : 1,
-		messageCancelled : 1,
+		messageShouldAbort : 1,
 		localPush : 1,							// true if this stack frame was created by M120, so we use the parent variables
 		macroRestartable : 1,					// true if the current macro has used M98 R1 to say that it can be interrupted and restarted
 		firstCommandAfterRestart : 1,			// true if this is the first command after restarting a macro that was interrupted

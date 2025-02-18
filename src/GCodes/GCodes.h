@@ -40,6 +40,11 @@ Licence: GPL
 #include "StraightProbeSettings.h"
 #include "SimulationMode.h"
 #include <Movement/BedProbing/Grid.h>
+#include <Movement/HomingMode.h>
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+# include <Storage/CRC32.h>
+#endif
 
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
@@ -271,8 +276,11 @@ public:
 	const MovementState& GetPrimaryMovementState() const noexcept { return moveStates[0]; }		// Temporary support for object model and status report values that only handle a single movement system
 	const MovementState& GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept;
 	const MovementState& GetConstMovementState(const GCodeBuffer& gb) const noexcept;			// Get a reference to the movement state associated with the specified GCode buffer (there is a private non-const version)
+
+	void RecordEndstopTriggered(size_t axis, HomingMode hmode) noexcept;
+
 	bool IsHeaterUsedByDifferentCurrentTool(int heaterNumber, const Tool *tool) const noexcept;	// Check if the specified heater is used by a current tool other than the specified one
-	void MessageBoxClosed(bool cancelled, bool m292, uint32_t seq, ExpressionValue rslt) noexcept;
+	void MessageBoxClosed(bool cancelled, bool shouldAbort, bool m292, uint32_t seq, ExpressionValue rslt) noexcept;
 
 # if HAS_VOLTAGE_MONITOR
 	const char *_ecv_array null GetPowerFailScript() const noexcept { return powerFailScript; }
@@ -361,6 +369,9 @@ private:
 	void UnlockMovementFrom(const GCodeBuffer& gb, MovementSystemNumber firstMsNumber) noexcept;	// Release movement locks greater or equal to than the specified one
 #endif
 
+	void SetInitialAxisAndDrivePositions() noexcept;							// Called at initialisation and when new axes are added
+	void AdjustEndpoint(size_t drive, float ratio) const noexcept;				// Adjust an endpoint following a change to steps/mm
+
 	bool SpinGCodeBuffer(GCodeBuffer& gb) noexcept;								// Do some work on an input channel
 	bool StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Fetch a new or old GCode and process it
 	void RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Execute a step of the state machine
@@ -434,7 +445,8 @@ private:
 
 	bool ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Process a whole-line comment
 
-	void LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException);	// Set up the extrusion of a move
+	void LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException);		// Set up the feed rate of a move
+	void LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException);	// Set up the extrusion of a move
 
 	bool Push(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Pop feedrate etc
@@ -548,7 +560,7 @@ private:
 
 	void AppendAxes(const StringRef& reply, AxesBitmap axes) const noexcept;	// Append a list of axes to a string
 
-	void EndSimulation(GCodeBuffer *null gb) noexcept;							// Restore positions etc. when exiting simulation mode
+	void EndSimulation(GCodeBuffer *_ecv_null gb) noexcept;							// Restore positions etc. when exiting simulation mode
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	void SaveResumeInfo(bool wasPowerFailure) noexcept;
@@ -570,15 +582,13 @@ private:
 	GCodeResult SyncMovementSystems(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M598
 	GCodeResult ForkInputReader(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Handle M606
 	GCodeResult ExecuteM400(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);				// Handle M400
-	void AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes, ParameterLettersBitmap axLetters) THROWS(GCodeException);	// allocate axes to a movement state
-	void AllocateAxisLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException);
-																											// allocate axes by letter
-	void AllocateAxesDirectFromLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException);
-																											// allocate axes by letter for a special move
+	void AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes, ParameterLettersBitmap axLetters) THROWS(GCodeException);		// allocate axes to a movement state
+	void AllocateAxisLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException);				// allocate axes by letter
+	void AllocateAxesDirectFromLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException);		// allocate axes by letter for a special move
+	void AllocateLogicalDrivesFromLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException);	// allocate drivers by letter for a raw motor move
 	bool IsAxisFree(unsigned int axis) const noexcept;														// test whether an axis is unowned
 	bool DoSync(GCodeBuffer& gb) noexcept;																	// sync with the other stream returning true if done, false if we need to wait for it
 	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;								// synchronise motion systems
-	void UpdateAllCoordinates(const GCodeBuffer& gb) noexcept;
 #endif
 
 #if SUPPORT_KEEPOUT_ZONES
@@ -742,6 +752,14 @@ private:
 	bool isFlashingPanelDue;					// Are we in the process of flashing PanelDue?
 #endif
 
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	// M38 data
+	FileStore *_ecv_null fileBeingHashed = nullptr;
+	CRC32 hash;
+	bool StartHash(const char* filename) noexcept;
+	GCodeResult AdvanceHash(const StringRef &reply) noexcept;
+#endif
+
 	// Laser
 	float laserMaxPower;
 	bool laserPowerSticky;						// true if G1 S parameters are remembered across G1 commands
@@ -751,7 +769,6 @@ private:
 
 	// Misc
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
-	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
 
 #if SUPPORT_ASYNC_MOVES
 	CollisionAvoider collisionChecker;			// currently we support just one collision avoider

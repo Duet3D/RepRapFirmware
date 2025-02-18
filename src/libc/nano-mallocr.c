@@ -32,6 +32,8 @@
  * Interface documentation refer to malloc.c.
  */
 
+/****** This file beaks so many rules that we don't try to check it with eCv. ******/
+
 #if 0	// DC we don't want to pull in stdio
 #include <stdio.h>
 #endif

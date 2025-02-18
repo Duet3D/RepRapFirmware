@@ -243,17 +243,17 @@ static void EspTransferRequestIsr(CallbackParameter) noexcept
 
 static inline void EnableEspInterrupt() noexcept
 {
-	attachInterrupt(EspDataReadyPin, EspTransferRequestIsr, InterruptMode::rising, CallbackParameter(nullptr));
+	AttachPinInterrupt(EspDataReadyPin, EspTransferRequestIsr, InterruptMode::rising, CallbackParameter(nullptr));
 }
 
 static inline void DisableEspInterrupt() noexcept
 {
-	detachInterrupt(EspDataReadyPin);
+	DetachPinInterrupt(EspDataReadyPin);
 }
 
-static const char* GetWiFiAuthFriendlyStr(WiFiAuth auth) noexcept
+static const char *_ecv_array GetWiFiAuthFriendlyStr(WiFiAuth auth) noexcept
 {
-	const char* res = "Unknown";
+	const char *_ecv_array res = "Unknown";
 
 	switch (auth)
 	{
@@ -328,8 +328,6 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 #endif
 }
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -345,17 +343,16 @@ constexpr ObjectModelTableEntry WiFiInterface::objectModelTable[] =
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->wiFiServerVersion.c_str()),											ObjectModelEntryFlags::none },
 	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),															ObjectModelEntryFlags::none },
 	{ "mac",				OBJECT_MODEL_FUNC_IF(self->GetState() == NetworkState::active, self->macAddress),			ObjectModelEntryFlags::none },
+	{ "rssi",				OBJECT_MODEL_FUNC_IF(self->GetState() == NetworkState::active, (int32_t)self->rssi),		ObjectModelEntryFlags::live },
 	{ "ssid",				OBJECT_MODEL_FUNC_IF(self->GetState() == NetworkState::active, self->actualSsid.c_str()),	ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->GetStateName()),													ObjectModelEntryFlags::none },
 	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),															ObjectModelEntryFlags::none },
 	{ "type",				OBJECT_MODEL_FUNC_NOSELF("wifi"),															ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t WiFiInterface::objectModelTableDescriptor[] = { 1, 8 };
+constexpr uint8_t WiFiInterface::objectModelTableDescriptor[] = { 1, 9 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(WiFiInterface)
-
-#endif
 
 void WiFiInterface::Init() noexcept
 {
@@ -926,10 +923,10 @@ void WiFiInterface::Spin() noexcept
 }
 
 // Translate a ESP8266 reset reason to text. Keep this in step with the codes used in file MessageFormats.h in the WiFi server project.
-const char* WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
+const char *_ecv_array WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
 {
 	// Mapping from known ESP reset codes to reasons
-	static const char * const resetReasonTexts[] =
+	static const char *_ecv_array const resetReasonTexts[] =
 	{
 		"Power up",
 		"Hardware watchdog",
@@ -980,7 +977,7 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 
 			if (currentMode == WiFiState::connected)
 			{
-				constexpr const char* ConnectionModes[4] =  { "none", "802.11b", "802.11g", "802.11n" };
+				constexpr const char *_ecv_array ConnectionModes[4] =  { "none", "802.11b", "802.11g", "802.11n" };
 				platform.MessageF(mtype, "Signal strength %ddBm, channel %u, mode %s, reconnections %u\n",
 											(int)r.rssi, r.channel, ConnectionModes[r.phyMode], reconnectCount);
 			}
@@ -1074,7 +1071,7 @@ int WiFiInterface::EnableState() const noexcept
 
 // Translate the wifi state to text.
 // The 'connected' and 'runningAsAccessPoint' states include a space at the end because the caller is expected to append the access point name.
-/*static*/ const char* WiFiInterface::TranslateWiFiState(WiFiState w) noexcept
+/*static*/ const char *_ecv_array WiFiInterface::TranslateWiFiState(WiFiState w) noexcept
 {
 	switch (w)
 	{
@@ -1103,19 +1100,19 @@ void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress 
 	gateway = p_gateway;
 }
 
-size_t WiFiInterface::CheckCredential(GCodeBuffer &gb, bool file)
+size_t WiFiInterface::CheckCredential(GCodeBuffer &gb, bool file) THROWS(GCodeException)
 {
 	static_assert(MaxCredentialChunkSize <= sizeof(bufferOut->data));
-	StringRef cred(reinterpret_cast<char*>(&(bufferOut->data)), MaxCredentialChunkSize);
+	StringRef cred(reinterpret_cast<char *_ecv_array>(&(bufferOut->data)), MaxCredentialChunkSize);
 	gb.GetQuotedString(cred);
 
 	size_t sz = 0;
 
 	if (file)
 	{
-		FileStore *const f = platform.OpenSysFile(cred.c_str(), OpenMode::read);
+		FileStore *_ecv_null const f = platform.OpenSysFile(cred.c_str(), OpenMode::read);
 
-		if (f)
+		if (f != nullptr)
 		{
 			sz = f->Length();
 			f->Close();
@@ -1140,31 +1137,31 @@ size_t WiFiInterface::CheckCredential(GCodeBuffer &gb, bool file)
 	return sz;
 }
 
-int32_t WiFiInterface::SendCredential(size_t credIndex, const uint8_t *buffer, size_t bufferSize)
+int32_t WiFiInterface::SendCredential(size_t credIndex, const uint8_t *_ecv_array buffer, size_t bufferSize) noexcept
 {
 	return SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
 									static_cast<uint8_t>(AddEnterpriseSsidFlag::CREDENTIAL), credIndex,
 									buffer, bufferSize, nullptr, 0);
 }
 
-int32_t WiFiInterface::SendTextCredential(GCodeBuffer &gb, size_t credIndex)
+int32_t WiFiInterface::SendTextCredential(GCodeBuffer &gb, size_t credIndex) noexcept
 {
 	static_assert(MaxCredentialChunkSize <= sizeof(bufferOut->data));
-	StringRef cred(reinterpret_cast<char*>(&(bufferOut->data)), MaxCredentialChunkSize);
+	StringRef cred(reinterpret_cast<char *_ecv_array>(&(bufferOut->data)), MaxCredentialChunkSize);
 	gb.GetQuotedString(cred);
 
 	// Text credentials are stored as a blob, and does not require the null terminator.
-	return SendCredential(credIndex, reinterpret_cast<const uint8_t*>(cred.c_str()), cred.strlen());
+	return SendCredential(credIndex, reinterpret_cast<const uint8_t *_ecv_array>(cred.c_str()), cred.strlen());
 }
 
-int32_t WiFiInterface::SendFileCredential(GCodeBuffer &gb, size_t credIndex)
+int32_t WiFiInterface::SendFileCredential(GCodeBuffer &gb, size_t credIndex) noexcept
 {
 	static_assert(MaxCredentialChunkSize <= sizeof(bufferOut->data));
 
-	StringRef fileName(reinterpret_cast<char*>(&(bufferOut->data)), MaxCredentialChunkSize);
+	StringRef fileName(reinterpret_cast<char *_ecv_array>(&(bufferOut->data)), MaxCredentialChunkSize);
 	gb.GetQuotedString(fileName);
 
-	FileStore *const cert = platform.OpenSysFile(fileName.c_str(), OpenMode::read);
+	FileStore *_ecv_null const cert = platform.OpenSysFile(fileName.c_str(), OpenMode::read);
 
 	// Send the contents of the file with a null terminator appended at the end. The authentication
 	// fails without the null terminator.
@@ -1439,7 +1436,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						bool found = false;
 						while (offset + ReducedWirelessConfigurationDataSize <= (size_t)rslt)
 						{
-							WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(reinterpret_cast<char*>(buffer) + offset);
+							WirelessConfigurationData * const wp = reinterpret_cast<WirelessConfigurationData *>(reinterpret_cast<char *_ecv_array>(buffer) + offset);
 							if (wp->ssid[0] != 0 || (offset == 0 && jsonFormat))
 							{
 								wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
@@ -1498,7 +1495,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 					{
 						bool found = false;
 						longReply->copy((jsonFormat) ? "{\"networkScanResults\":[" : "Network Scan Results:");
-						WiFiScanData *data = reinterpret_cast<WiFiScanData*>(buffer);
+						WiFiScanData *_ecv_array data = reinterpret_cast<WiFiScanData *_ecv_array>(buffer);
 
 						for (size_t i = 0; i < rslt/sizeof(WiFiScanData); i++)
 						{
@@ -1547,13 +1544,13 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 			gb.GetQuotedString(ssidText.GetRef());
 			if (strcmp(ssidText.c_str(), "*") == 0)
 			{
-				const int32_t rslt = SendCommand(NetworkCommand::networkFactoryReset, 0, 0, 0, nullptr, 0, nullptr, 0);
-				if (rslt == ResponseEmpty)
+				const int32_t locrslt = SendCommand(NetworkCommand::networkFactoryReset, 0, 0, 0, nullptr, 0, nullptr, 0);
+				if (locrslt == ResponseEmpty)
 				{
 					return GCodeResult::ok;
 				}
 
-				reply.printf("Failed to reset the WiFi module to factory settings: %s", TranslateWiFiResponse(rslt));
+				reply.printf("Failed to reset the WiFi module to factory settings: %s", TranslateWiFiResponse(locrslt));
 				return GCodeResult::error;
 			}
 
@@ -1671,7 +1668,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 }
 
 // Set the DHCP hostname
-void WiFiInterface::UpdateHostname(const char *hostname) noexcept
+void WiFiInterface::UpdateHostname(const char *_ecv_array hostname) noexcept
 {
 	// Update the hostname if possible
 	if (GetState() == NetworkState::active)
@@ -1724,8 +1721,9 @@ void WiFiInterface::TerminateSockets(TcpPort port, bool local) noexcept
 }
 
 // This is called to tell the network which sockets are active
-void WiFiInterface::UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClosedSockets) noexcept
+void WiFiInterface::UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClosedSockets, int8_t p_rssi) noexcept
 {
+	rssi = p_rssi;
 	for (size_t i = 0; i < NumWiFiTcpSockets; ++i)
 	{
 		if (((connectedSockets | otherEndClosedSockets) & (1u << i)) != 0)
@@ -1755,7 +1753,7 @@ void WiFiInterface::OpenDataPort(TcpPort port) noexcept
 // Close FTP data port and purge associated resources
 void WiFiInterface::TerminateDataPort() noexcept
 {
-	WiFiSocket *ftpDataSocket = nullptr;
+	WiFiSocket *_ecv_null ftpDataSocket = nullptr;
 	for (WiFiSocket *s : sockets)
 	{
 		if (s->GetLocalPort() == ftpDataPort)
@@ -2121,7 +2119,7 @@ void WiFiInterface::SetupSpi() noexcept
 }
 
 // Send a command to the ESP and get the result
-int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, uint32_t param32, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept
+int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, uint32_t param32, const void *_ecv_null dataOut, size_t dataOutLength, void *_ecv_null dataIn, size_t dataInLength) noexcept
 {
 	if (GetState() == NetworkState::disabled)
 	{
@@ -2185,7 +2183,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	bufferOut->hdr.param32 = param32;
 	bufferOut->hdr.dataLength = (uint16_t)dataOutLength;
 	bufferOut->hdr.dataBufferAvailable = (uint16_t)dataInLength;
-	if (dataOut != nullptr && dataOut != &(bufferOut->data))
+	if (dataOut != nullptr && dataOut != (void*)&(bufferOut->data))
 	{
 		memcpy(bufferOut->data, dataOut, dataOutLength);
 	}
@@ -2387,7 +2385,7 @@ void WiFiInterface::GetNewStatus() noexcept
 	}
 }
 
-/*static*/ const char* WiFiInterface::TranslateWiFiResponse(int32_t response) noexcept
+/*static*/ const char *_ecv_array WiFiInterface::TranslateWiFiResponse(int32_t response) noexcept
 {
 	switch (response)
 	{

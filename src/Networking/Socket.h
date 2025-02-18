@@ -23,7 +23,7 @@ class NetworkInterface;
 class Socket
 {
 public:
-	explicit Socket(NetworkInterface *_ecv_from iface) noexcept : interface(iface), localPort(0), remotePort(0), remoteIPAddress(), state(SocketState::disabled) { }
+	explicit Socket(NetworkInterface *_ecv_from iface) noexcept : interface(iface), localPort(0), remotePort(0), remoteIPAddress() { }
 	Socket(const Socket &_ecv_from) = delete;
 
 	NetworkInterface *_ecv_from GetInterface() const noexcept { return interface; }
@@ -32,8 +32,6 @@ public:
 	IPAddress GetRemoteIP() const noexcept { return remoteIPAddress; }
 	TcpPort GetRemotePort() const noexcept { return remotePort; }
 	NetworkProtocol GetProtocol() const noexcept { return protocol; }
-
-	unsigned int GetState() const noexcept { return (unsigned int)state; }		// used for diagnostics only
 
 	virtual void Poll() noexcept = 0;
 	virtual void Close() noexcept = 0;
@@ -48,22 +46,10 @@ public:
 	virtual void Send() noexcept = 0;
 
 protected:
-	enum class SocketState : uint8_t
-	{
-		disabled,
-		inactive,
-		listening,
-		connected,
-		peerDisconnecting,
-		closing,
-		aborted
-	};
-
 	NetworkInterface *_ecv_from const interface;
 	TcpPort localPort, remotePort;						// The local and remote ports
 	NetworkProtocol protocol;							// What protocol this socket is for
 	IPAddress remoteIPAddress;							// The remote IP address
-	SocketState state;
 };
 
 #endif /* SRC_NETWORKING_SOCKET_H_ */

@@ -36,7 +36,7 @@ bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
 	{
 		seen = true;
 		UpdatePorts(0);
-		IoPort * portAddresses[MaxPorts];
+		IoPort *_ecv_from portAddresses[MaxPorts];
 		PinAccess access[MaxPorts];
 		for (size_t i = 0; i < MaxPorts; ++i)
 		{
@@ -96,11 +96,11 @@ void PortControl::UpdatePorts(IoBits_t newPortState) noexcept
 		for (size_t i = 0; i < numConfiguredPorts; ++i)
 		{
 			const IoBits_t mask = 1u << i;
-			if (bitsToClear & mask)
+			if ((bitsToClear & mask) != 0)
 			{
 				portMap[i].WriteDigital(false);
 			}
-			else if (bitsToSet & mask)
+			else if ((bitsToSet & mask) != 0)
 			{
 				portMap[i].WriteDigital(true);
 			}

@@ -21,7 +21,7 @@ public:
 
 	EndStopType GetEndstopType() const noexcept override;
 	bool Stopped() const noexcept override;
-	bool Prime(const Kinematics &_ecv_from kin, const AxisDriversConfig& axisDrivers) noexcept override;
+	void PrimeAxis(const Kinematics &_ecv_from kin, const AxisDriversConfig& axisDrivers, float speed) THROWS(GCodeException) override;
 	EndstopHitDetails CheckTriggered() noexcept override;
 	bool Acknowledge(EndstopHitDetails what) noexcept override;
 	void AppendDetails(const StringRef& str) noexcept override;

@@ -22,7 +22,7 @@ FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNu
 	}
 
 	initialDirectoryNesting = GetDirectoryNesting();
-	sdCardState = notStarted;
+	sdCardState = CardState::notStarted;
 }
 
 void FilesMenuItem::vResetViewState() noexcept
@@ -54,7 +54,7 @@ void FilesMenuItem::EnterDirectory() noexcept
 
 uint8_t FilesMenuItem::GetDirectoryNesting() const noexcept
 {
-	const char *pcPathElement = currentDirectory.c_str();
+	const char *_ecv_array pcPathElement = currentDirectory.c_str();
 	uint8_t uNumSlashes = 0;
 
 	while ('\0' != *pcPathElement)
@@ -78,30 +78,30 @@ unsigned int FilesMenuItem::uListingEntries() const noexcept
 	return bInSubdirectory() ? (1 + m_uHardItemsInDirectory) : m_uHardItemsInDirectory;
 }
 
-void FilesMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
+void FilesMenuItem::Draw(Lcd &_ecv_from lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	// The 'highlight' parameter is not used to highlight this item, but it is still used to tell whether this item is selected or not
 	if (!IsVisible())
 	{
-		sdCardState = notStarted;
+		sdCardState = CardState::notStarted;
 	}
-	else if (!drawn || itemChanged || highlighted != highlight)
+	else if (!drawn || itemChanged || (bool)highlighted != highlight)
 	{
 		switch (sdCardState)
 		{
-		case notStarted:
+		case CardState::notStarted:
 			if (MassStorage::CheckDriveMounted(currentDirectory.c_str()))
 			{
-				sdCardState = mounted;
+				sdCardState = CardState::mounted;
 				EnterDirectory();
 			}
 			else
 			{
-				sdCardState = mounting;
+				sdCardState = CardState::mounting;
 			}
 			break;
 
-		case mounting:
+		case CardState::mounting:
 			{
 				const size_t card = (isdigit(currentDirectory[0]) && currentDirectory[1] == ':') ? currentDirectory[0] - '0' : 0;
 				String<StringLength50> reply;
@@ -111,7 +111,7 @@ void FilesMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noex
 					return;
 
 				case GCodeResult::ok:
-					sdCardState = mounted;
+					sdCardState = CardState::mounted;
 					EnterDirectory();
 					break;
 
@@ -119,7 +119,7 @@ void FilesMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noex
 					reply.copy("Internal error");
 					// no break
 				case GCodeResult::error:
-					sdCardState = error;
+					sdCardState = CardState::error;
 					lcd.SetFont(fontNumber);
 					lcd.SetCursor(row, column);
 					lcd.SetRightMargin(rightMargin);
@@ -131,17 +131,17 @@ void FilesMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noex
 			}
 			break;
 
-		case mounted:
+		case CardState::mounted:
 			ListFiles(lcd, rightMargin, highlight);
 			break;
 
-		case error:
+		case CardState::error:
 			break;
 		}
 	}
 }
 
-void FilesMenuItem::ListFiles(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
+void FilesMenuItem::ListFiles(Lcd &_ecv_from lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	lcd.SetFont(fontNumber);
 	lcd.SetRightMargin(rightMargin);
@@ -389,7 +389,7 @@ bool FilesMenuItem::Select(const StringRef& cmd) noexcept
 	return false;
 }
 
-void FilesMenuItem::UpdateWidthAndHeight(Lcd& lcd) noexcept
+void FilesMenuItem::UpdateWidthAndHeight(Lcd &_ecv_from lcd) noexcept
 {
 	// The width is always set for a FilesMenuItem so we just need to determine the height
 	if (height == 0)

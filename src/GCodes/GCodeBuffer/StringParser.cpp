@@ -354,6 +354,12 @@ bool StringParser::LineFinished() noexcept
 // Return true if the current line no longer needs to be processed
 bool StringParser::CheckMetaCommand(const StringRef& reply) THROWS(GCodeException)
 {
+	// Ignore comment lines, if they are not indented they mess up the control flow. They may still need to be processed so return false.
+	if (gb.buffer[0] == ';')
+	{
+		return false;
+	}
+
 	if (overflowed)
 	{
 		throw GCodeException(&gb, ARRAY_SIZE(gb.buffer) + commandIndent - 1, "GCode command too long");
@@ -889,11 +895,11 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 		FileStore *_ecv_null const f = reprap.GetPlatform().OpenSysFile(filename.c_str(), openMode);
 		if (f == nullptr)
 		{
-			throw GCodeException(&gb, readPointer + (int)commandIndent, "Failed to create or open file");
+			throw GCodeException(&gb, (int)commandIndent + readPointer, "Failed to create or open file");
 		}
 		outputFile.Set(f);
 #else
-		throw GCodeException(&gb, readPointer + commandIndent, "Can't write to this file system");
+		throw GCodeException(&gb, (int)commandIndent + readPointer, "Can't write to this file system");
 #endif
 	}
 
@@ -1785,17 +1791,6 @@ void StringParser::WriteToFile() noexcept
 			Init();
 			const char *_ecv_array const r = (gb.LatestMachineState().compatibility == Compatibility::Marlin) ? "Done saving file." : "";
 			reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, r);
-			return;
-		}
-	}
-	else if (GetCommandLetter() == 'G' && GetCommandNumber() == 998)						// resend request?
-	{
-		if (Seen('P'))
-		{
-			Init();
-			String<StringLength20> scratchString;
-			scratchString.printf("%" PRIi32 "\n", GetIValue());
-			reprap.GetGCodes().HandleReply(gb, GCodeResult::ok, scratchString.c_str());
 			return;
 		}
 	}

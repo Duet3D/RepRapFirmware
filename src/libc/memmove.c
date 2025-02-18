@@ -28,8 +28,8 @@ QUICKREF
 	memmove ansi pure
 */
 
+#include <ecv_duet3d.h>
 #include <string.h>
-#include <_ansi.h>
 #include <stddef.h>
 #include <limits.h>
 #include "local.h"
@@ -52,7 +52,7 @@ void *
 __inhibit_loop_to_libcall
 memmove (void *dst_void,
 	const void *src_void,
-	size_t length)
+	size_t length) noexcept
 {
 #if defined(PREFER_SIZE_OVER_SPEED) || defined(__OPTIMIZE_SIZE__)
   char *dst = dst_void;
@@ -78,10 +78,10 @@ memmove (void *dst_void,
 
   return dst_void;
 #else
-  char *dst = dst_void;
-  const char *src = src_void;
-  long *aligned_dst;
-  const long *aligned_src;
+  char *_ecv_array dst = (char *_ecv_array)dst_void;
+  const char *_ecv_array src = (const char *_ecv_array)src_void;
+  long *_ecv_array aligned_dst;
+  const long *_ecv_array aligned_src;
 
   if (src < dst && dst < src + length)
     {
@@ -95,13 +95,13 @@ memmove (void *dst_void,
     }
   else
     {
-      /* Use optimizing algorithm for a non-destructive copy to closely 
+      /* Use optimizing algorithm for a non-destructive copy to closely
          match memcpy. If the size is small or either SRC or DST is unaligned,
          then punt into the byte copy loop.  This should be rare.  */
       if (!TOO_SMALL(length) && !UNALIGNED (src, dst))
         {
-          aligned_dst = (long*)dst;
-          aligned_src = (long*)src;
+          aligned_dst = (long *_ecv_array)dst;
+          aligned_src = (const long *_ecv_array)src;
 
           /* Copy 4X long words at a time if possible.  */
           while (length >= BIGBLOCKSIZE)
@@ -121,8 +121,8 @@ memmove (void *dst_void,
             }
 
           /* Pick up any residual with a byte copier.  */
-          dst = (char*)aligned_dst;
-          src = (char*)aligned_src;
+          dst = (char *_ecv_array)aligned_dst;
+          src = (const char *_ecv_array)aligned_src;
         }
 
       while (length--)

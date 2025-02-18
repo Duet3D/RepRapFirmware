@@ -46,7 +46,7 @@ public:
 	Heater(const Heater &_ecv_from) = delete;
 
 	// Configuration methods
-	virtual GCodeResult ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) = 0;
+	virtual GCodeResult ConfigurePortAndSensor(const char *_ecv_array portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) = 0;
 	virtual GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) = 0;
 	virtual GCodeResult ReportDetails(const StringRef& reply) const noexcept = 0;
 
@@ -68,7 +68,6 @@ public:
 
 	HeaterStatus GetStatus() const noexcept;							// Get the status of the heater
 	unsigned int GetHeaterNumber() const noexcept { return heaterNumber; }
-	const char *GetSensorName() const noexcept;							// Get the name of the sensor for this heater, or nullptr if it hasn't been named
 	void SetTemperature(float t, bool activeNotStandby) THROWS(GCodeException);
 	float GetActiveTemperature() const noexcept { return activeTemperature; }
 	float GetStandbyTemperature() const noexcept { return standbyTemperature; }
@@ -178,8 +177,8 @@ protected:
 	static DeviationAccumulator dLow;
 	static DeviationAccumulator tOn;
 	static DeviationAccumulator tOff;
-	static DeviationAccumulator heatingRate;
-	static DeviationAccumulator coolingRate;
+	static DeviationAccumulator heatingRateAcc;
+	static DeviationAccumulator coolingRateAcc;
 	static DeviationAccumulator tuningVoltage;				// sum of the voltage readings we take during the heating phase
 
 	static uint32_t lastOffTime;
@@ -199,7 +198,7 @@ protected:
 	static void ClearCounters() noexcept;
 
 private:
-	static const char* const TuningPhaseText[];
+	static const char *_ecv_array const TuningPhaseText[];
 
 	FopDt model;
 	unsigned int heaterNumber;

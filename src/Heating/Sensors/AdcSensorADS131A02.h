@@ -24,15 +24,22 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;		// configure the sensor from M308 parameters
+	GCodeResult ConfigureAdditionalOutput(const CanMessageGenericParser& parser, const StringRef& reply, bool& changed, uint8_t outputNumber) noexcept override;
 #endif
 
-	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 1; }
+	const uint8_t GetNumAdditionalOutputs() const noexcept override { return NumChannels - 1; }
 	TemperatureError GetAdditionalOutput(float& t, uint8_t outputNumber) noexcept override;
+	GCodeResult ConfigureAdditionalOutput(GCodeBuffer& gb, const StringRef& reply, bool& changed, uint8_t outputNumber) THROWS(GCodeException) override;
+	void AppendAdditionalOutputParameters(const StringRef& reply, uint8_t outputNumber) noexcept override;
+
 	void Poll() noexcept override;
 	const char *_ecv_array GetShortSensorType() const noexcept override { return (bipolar) ? TypeName_chan0_bipolar : TypeName_chan0_unipolar; }
 
 	static constexpr const char *_ecv_array TypeName_chan0_unipolar = "ads131.chan0.u";
 	static constexpr const char *_ecv_array TypeName_chan0_bipolar = "ads131.chan0.b";
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	static SensorTypeDescriptor typeDescriptor_chan0_unipolar;
@@ -43,6 +50,10 @@ private:
 #else
 	static constexpr unsigned int NumChannels = 2;
 #endif
+
+	// The maximum reading is supposed to be provided for a unipolar input of 10V. The reference voltage is 2.442V. The ratio of these is 4.095:1.
+	// We use a voltage divider ratio in the inputs of 13.0:3.0 which is a little higher, so we need to scale the reading up a little.
+	static constexpr float ReadingScalingFactor = (13.5 * 2.442)/(3.0 * 10.0);
 
 	TemperatureError TakeReading() noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
@@ -115,6 +126,7 @@ private:
 	float readingAtMin[NumChannels];
 	float readingAtMax [NumChannels];
 
+	// Collected data
 	float lastReadings[NumChannels];
 	uint16_t lastCommand;
 	TemperatureError lastResult = TemperatureError::notInitialised;

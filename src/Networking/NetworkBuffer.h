@@ -67,7 +67,7 @@ public:
 	static NetworkBuffer *_ecv_null FindLast(NetworkBuffer *_ecv_null list) noexcept;
 
 	// Allocate a buffer
-	static NetworkBuffer *Allocate() noexcept;
+	static NetworkBuffer *_ecv_null Allocate() noexcept;
 
 	// Allocate buffers and put them in the freelist
 	static void AllocateBuffers(unsigned int number) noexcept;

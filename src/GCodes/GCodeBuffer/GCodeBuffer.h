@@ -241,7 +241,7 @@ public:
 	void SetState(GCodeState newState) noexcept;
 	void SetState(GCodeState newState, uint16_t param) noexcept;
 	void AdvanceState() noexcept;
-	void MessageAcknowledged(bool cancelled, uint32_t seq, ExpressionValue rslt) noexcept;
+	void MessageAcknowledged(bool cancelled, bool shouldAbort, uint32_t seq, ExpressionValue rslt) noexcept;
 
 	GCodeChannel GetChannel() const noexcept { return codeChannel; }
 	bool IsFileChannel() const noexcept
@@ -302,6 +302,7 @@ public:
 
 	[[noreturn]] void ThrowGCodeException(const char *_ecv_array msg) const THROWS(GCodeException);
 	[[noreturn]] void ThrowGCodeException(const char *_ecv_array msg, uint32_t param) const THROWS(GCodeException);
+	[[noreturn]] void ThrowGCodeException(const char *_ecv_array msg, const char *_ecv_array param) const THROWS(GCodeException);
 
 #if SUPPORT_COORDINATE_ROTATION
 	bool DoingCoordinateRotation() const noexcept;

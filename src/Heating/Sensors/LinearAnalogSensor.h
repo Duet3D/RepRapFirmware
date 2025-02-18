@@ -25,6 +25,9 @@ public:
 
 	static constexpr const char *_ecv_array TypeName = "linearanalog";
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
 	static SensorTypeDescriptor typeDescriptor;
 

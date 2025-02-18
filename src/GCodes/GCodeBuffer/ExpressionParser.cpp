@@ -74,10 +74,10 @@ void LineReader::SkipTabsAndSpaces() noexcept
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true, input);
 NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, ceil, cos, datetime, degrees, exists, exp, fileexists, fileread, floor, isnan, log, max, min, mod, pow, radians, random, sin, sqrt, tan, vector);
 
-const char *const InvalidExistsMessage = "invalid 'exists' expression";
-const char *const ExpectedNonNegativeIntMessage = "expected non-negative integer";
+const char *_ecv_array const InvalidExistsMessage = "invalid 'exists' expression";
+const char *_ecv_array const ExpectedNonNegativeIntMessage = "expected non-negative integer";
 
-ExpressionParser::ExpressionParser(const GCodeBuffer *_ecv_null p_gb, const char *text, const char *textLimit, int p_column) noexcept
+ExpressionParser::ExpressionParser(const GCodeBuffer *_ecv_null p_gb, const char *_ecv_array text, const char *_ecv_array textLimit, int p_column) noexcept
 	: currentp(text), startp(text), endp(textLimit), gb(p_gb), column(p_column)
 {
 }
@@ -154,7 +154,7 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 // Handle an index after an object model array expression.
 void ExpressionParser::ApplyObjectModelArrayIndex(ExpressionValue& rslt, int indexCol, uint32_t indexValue, bool evaluate) THROWS(GCodeException)
 {
-	const ObjectModelArrayTableEntry *const entry = rslt.omVal->FindObjectModelArrayEntry(rslt.param & 0xFF);
+	const ObjectModelArrayTableEntry *_ecv_null const entry = rslt.omVal->FindObjectModelArrayEntry(rslt.param & 0xFF);
 	if (entry == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
@@ -196,7 +196,7 @@ ExpressionValue ExpressionParser::Parse(bool evaluate) THROWS(GCodeException)
 void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_t priority) THROWS(GCodeException)
 {
 	// Lists of binary operators and their priorities
-	static constexpr const char *operators = "?^&|!=<>+-*/";				// for multi-character operators <= and >= and != this is the first character
+	static constexpr const char *_ecv_array operators = "?^&|!=<>+-*/";				// for multi-character operators <= and >= and != this is the first character
 	static constexpr uint8_t priorities[] = { 1, 2, 3, 3, 4, 4, 4, 4, 5, 5, 6, 6 };
 	constexpr uint8_t UnaryPriority = 10;									// must be higher than any binary operator priority
 	static_assert(ARRAY_SIZE(priorities) == strlen(operators));
@@ -316,7 +316,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 			return;
 		}
 
-		const char * const q = strchr(operators, opChar);
+		const char *_ecv_array _ecv_null const q = strchr(operators, opChar);
 		if (q == nullptr)
 		{
 			return;
@@ -733,7 +733,7 @@ void ExpressionParser::ParseArray(size_t& length, function_ref<void(ExpressionVa
 
 		case TypeCode::ObjectModelArray:
 			{
-				const ObjectModelArrayTableEntry *const entry = ev.omVal->FindObjectModelArrayEntry(ev.param & 0xFF);
+				const ObjectModelArrayTableEntry *const entry = _ecv_not_null(ev.omVal->FindObjectModelArrayEntry(ev.param & 0xFF));
 				ObjectExplorationContext context;
 				ReadLocker locker(entry->lockPointer);
 				const size_t len = entry->GetNumElements(ev.omVal, context);
@@ -888,7 +888,7 @@ void ExpressionParser::ReadArrayFromFile(ExpressionValue& rslt, unsigned int off
 		ThrowParseException("fileRead function: too many elements requested");
 	}
 
-	FileStore *f;
+	FileStore *_ecv_null f;
 	{
 		String<MaxFilenameLength> fname;
 		{
@@ -1299,7 +1299,7 @@ void ExpressionParser::ApplyLengthOperator(ExpressionValue& val, bool evaluate) 
 
 	case TypeCode::ObjectModelArray:
 		{
-			const ObjectModelArrayTableEntry *const entry = val.omVal->FindObjectModelArrayEntry(val.param & 0xFF);
+			const ObjectModelArrayTableEntry *_ecv_null const entry = val.omVal->FindObjectModelArrayEntry(val.param & 0xFF);
 			if (entry == nullptr)
 			{
 				THROW_INTERNAL_ERROR;
@@ -1630,7 +1630,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 			case Function::isnan:
 				ConvertToFloat(rslt, evaluate);
-				rslt.SetBool(std::isnan(rslt.fVal) != 0);
+				rslt.SetBool(std::isnan(rslt.fVal));
 				break;
 
 			case Function::floor:
@@ -1876,7 +1876,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					ConvertToFloat(rslt, evaluate);
 					ConvertToFloat(nextOperand, evaluate);
 					const float fres = powf(rslt.fVal, nextOperand.fVal);
-					if (integerResult && fabsf(fres) <= std::numeric_limits<int32_t>::max())
+					if (integerResult && fabsf(fres) <= (float)std::numeric_limits<int32_t>::max())
 					{
 						rslt.SetInt(lrintf(fres));
 					}
@@ -1966,7 +1966,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 }
 
 // Parse a string to a DateTime
-time_t ExpressionParser::ParseDateTime(const char *s) const THROWS(GCodeException)
+time_t ExpressionParser::ParseDateTime(const char *_ecv_array s) const THROWS(GCodeException)
 {
 	tm timeInfo;
 	if (SafeStrptime(s, "%Y-%m-%dT%H:%M:%S", &timeInfo) == nullptr)
@@ -1977,13 +1977,13 @@ time_t ExpressionParser::ParseDateTime(const char *s) const THROWS(GCodeExceptio
 }
 
 // Get the value of a variable or part of a variable. We have already checked that 'evaluate' is true before calling this.
-void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, ObjectExplorationContext& context, bool isParameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException)
+void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *_ecv_array name, ObjectExplorationContext& context, bool isParameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException)
 {
-	const char *pos = strchr(name, '^');
+	const char *_ecv_array _ecv_null pos = strchr(name, '^');
 	if (pos != nullptr)
 	{
 		// Indexing into a variable
-		const Variable *const var = vars->Lookup(name, pos - name, isParameter);
+		const Variable *_ecv_null const var = vars->Lookup(name, pos - name, isParameter);
 		if (var != nullptr)
 		{
 			ExpressionValue val = var->GetValue();
@@ -2046,7 +2046,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 	}
 	else
 	{
-		const Variable *const var = vars->Lookup(name, strlen(name), isParameter);
+		const Variable *_ecv_null const var = vars->Lookup(name, strlen(name), isParameter);
 		if (wantExists)
 		{
 			rslt.SetBool(var != nullptr);
@@ -2097,7 +2097,7 @@ void ExpressionParser::ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeExce
 			if (isAlpha(CurrentCharacter()))
 			{
 				// Single quote before an alphabetic character forces that character to lower case
-				c = tolower(CurrentCharacter());
+				c = (char)tolower(CurrentCharacter());
 				AdvancePointer();
 			}
 			else if (CurrentCharacter() == c)
@@ -2155,17 +2155,17 @@ int ExpressionParser::GetColumn() const noexcept
 	return (column < 0) ? column : (currentp - startp) + column;
 }
 
-void ExpressionParser::ThrowParseException(const char *str) const THROWS(GCodeException)
+void ExpressionParser::ThrowParseException(const char *_ecv_array str) const THROWS(GCodeException)
 {
 	throw GCodeException(gb, GetColumn(), str);
 }
 
-void ExpressionParser::ThrowParseException(const char *str, const char *param) const THROWS(GCodeException)
+void ExpressionParser::ThrowParseException(const char *_ecv_array str, const char *_ecv_array param) const THROWS(GCodeException)
 {
 	throw GCodeException(gb, GetColumn(), str, param);
 }
 
-void ExpressionParser::ThrowParseException(const char *str, uint32_t param) const THROWS(GCodeException)
+void ExpressionParser::ThrowParseException(const char *_ecv_array str, uint32_t param) const THROWS(GCodeException)
 {
 	throw GCodeException(gb, GetColumn(), str, param);
 }
@@ -2189,7 +2189,7 @@ void ExpressionParser::CheckStack(uint32_t calledFunctionStackUsage) const THROW
 	}
 
 	// Not enough stack left to throw an exception
-	SoftwareReset(SoftwareResetReason::stackOverflow, (const uint32_t *)stackPtr);
+	SoftwareReset(SoftwareResetReason::stackOverflow, (const uint32_t *_ecv_array)stackPtr);
 }
 
 // End

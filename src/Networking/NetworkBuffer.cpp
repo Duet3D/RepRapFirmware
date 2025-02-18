@@ -113,7 +113,7 @@ void NetworkBuffer::Empty() noexcept
 	return list;
 }
 
-/*static*/ NetworkBuffer *NetworkBuffer::Allocate() noexcept
+/*static*/ NetworkBuffer *_ecv_null NetworkBuffer::Allocate() noexcept
 {
 	NetworkBuffer *_ecv_null ret = freelist;
 	if (ret != nullptr)

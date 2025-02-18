@@ -379,7 +379,7 @@ uint8_t SX1509::calculateLEDTRegister(int ms) noexcept
 	const float timeOn1 = 64.0 * regOn1 * 255.0 / _clkX * 1000.0;
 	const float timeOn2 = 512.0 * regOn2 * 255.0 / _clkX * 1000.0;
 
-	return (abs(timeOn1 - ms) < abs(timeOn2 - ms)) ? regOn1 : regOn2;
+	return (fabsf(timeOn1 - ms) < fabsf(timeOn2 - ms)) ? regOn1 : regOn2;
 }
 
 uint8_t SX1509::calculateSlopeRegister(int ms, uint8_t onIntensity, uint8_t offIntensity) noexcept
@@ -401,7 +401,7 @@ uint8_t SX1509::calculateSlopeRegister(int ms, uint8_t onIntensity, uint8_t offI
 	const float regTime1 = regSlope1 * tFactor * 1000.0;
 	const float regTime2 = 16 * regTime1;
 
-	return (abs(regTime1 - ms) < abs(regTime2 - ms)) ? regSlope1 : regSlope2;
+	return (fabsf(regTime1 - ms) < fabsf(regTime2 - ms)) ? regSlope1 : regSlope2;
 }
 
 // readByte(uint8_t registerAddress)

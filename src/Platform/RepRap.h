@@ -39,9 +39,9 @@ enum class ResponseSource
 	Generic
 };
 
-typedef Bitmap<uint32_t> DebugFlags;
+typedef Bitmap<uint16_t> DebugFlags;
 
-class RepRap INHERIT_OBJECT_MODEL
+class RepRap final INHERIT_OBJECT_MODEL
 {
 public:
 	RepRap() noexcept;
@@ -57,16 +57,14 @@ public:
 
 	bool Debug(Module module) const noexcept { return debugMaps[module.ToBaseType()].IsNonEmpty(); }
 	DebugFlags GetDebugFlags(Module m) const noexcept { return debugMaps[m.ToBaseType()]; }
-	void SetDebug(Module m, uint32_t flags) noexcept;
-	void ClearDebug() noexcept;
-	void PrintDebug(MessageType mt) noexcept;
+
 	Module GetSpinningModule() const noexcept;
 
-	const char *_ecv_array GetName() const noexcept;
-	void SetName(const char *_ecv_array nm) noexcept;
+	c_string GetName() const noexcept;
+	void SetName(c_string nm) noexcept;
 	bool NoPasswordSet() const noexcept;
-	bool CheckPassword(const char *_ecv_array pw) const noexcept;
-	void SetPassword(const char *_ecv_array pw) noexcept;
+	bool CheckPassword(c_string pw) const noexcept;
+	void SetPassword(c_string pw) noexcept;
 
 	Platform& GetPlatform() const noexcept { return *platform; }
 	Move& GetMove() const noexcept { return *move; }
@@ -76,18 +74,20 @@ public:
 	PrintMonitor& GetPrintMonitor() const noexcept { return *printMonitor; }
 	FansManager& GetFansManager() const noexcept { return *fansManager; }
 
-	// Message box functions
-	uint32_t SendAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits = nullptr) noexcept;
-	void SendSimpleAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title) noexcept;
+	GCodeResult ProcessM111(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
-	void LogDebugMessage(const char *_ecv_array msg, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3) noexcept;
+	// Message box functions
+	uint32_t SendAlert(MessageType mt, c_string p_message, c_string title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits = nullptr) noexcept;
+	void SendSimpleAlert(MessageType mt, c_string p_message, c_string title) noexcept;
+
+	void LogDebugMessage(c_string msg, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3) noexcept;
 
 #if SUPPORT_IOBITS
  	PortControl& GetPortControl() const noexcept { return *portControl; }
 #endif
 #if SUPPORT_DIRECT_LCD
  	Display& GetDisplay() const noexcept { return *display; }
- 	const char *_ecv_array GetLatestMessage(uint16_t& sequence) const noexcept;
+ 	c_string GetLatestMessage(uint16_t& sequence) const noexcept;
 #endif
 #if HAS_SBC_INTERFACE
  	bool UsingSbcInterface() const noexcept { return usingSbcInterface; }
@@ -106,34 +106,34 @@ public:
 	bool SpinTimeoutImminent() const noexcept;
 	bool IsStopped() const noexcept;
 
-	OutputBuffer *GetStatusResponse(uint8_t type, ResponseSource source) const noexcept;
-	OutputBuffer *GetConfigResponse() noexcept;
-	OutputBuffer *GetLegacyStatusResponse(uint8_t type, int seq) const noexcept;
+	OutputBuffer *_ecv_null GetStatusResponse(uint8_t type, ResponseSource source) const noexcept;
+	OutputBuffer *_ecv_null GetConfigResponse() noexcept;
+	OutputBuffer *_ecv_null GetLegacyStatusResponse(uint8_t type, int seq) const noexcept;
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	OutputBuffer *GetFilesResponse(const char *_ecv_array dir, unsigned int startAt, int maxItems, bool flagsDirs) noexcept;
-	OutputBuffer *GetFilelistResponse(const char *_ecv_array dir, unsigned int startAt, int maxItems) noexcept;
-	OutputBuffer *GetThumbnailResponse(const char *_ecv_array filename, FilePosition offset, bool forM31point1) noexcept;
+	OutputBuffer *_ecv_null GetFilesResponse(c_string dir, unsigned int startAt, int maxItems, bool flagsDirs) noexcept;
+	OutputBuffer *_ecv_null GetFilelistResponse(c_string dir, unsigned int startAt, int maxItems) noexcept;
+	OutputBuffer *_ecv_null GetThumbnailResponse(c_string filename, FilePosition offset, bool forM31point1) noexcept;
 #endif
 
-	GCodeResult GetFileInfoResponse(const char *_ecv_array filename, OutputBuffer *_ecv_null &response, bool quitEarly) noexcept;
-	OutputBuffer *GetModelResponse(const GCodeBuffer *_ecv_null gb, const char *_ecv_array key, const char *_ecv_array flags) const THROWS(GCodeException);
+	GCodeResult GetFileInfoResponse(c_string _ecv_null filename, OutputBuffer *_ecv_null &response, bool quitEarly) noexcept;
+	OutputBuffer *GetModelResponse(const GCodeBuffer *_ecv_null gb, c_string _ecv_null key, c_string _ecv_null flags) const THROWS(GCodeException);
 	Mutex& GetObjectModelReportMutex() noexcept { return objectModelReportMutex; }
 
 	void Beep(unsigned int freq, unsigned int ms) noexcept;
-	void SetMessage(const char *_ecv_array msg) noexcept;
+	void SetMessage(c_string msg) noexcept;
 
 	bool IsProcessingConfig() const noexcept { return processingConfig; }
 
 	// Firmware update operations
 	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply, const StringRef& filenameRef) noexcept;
 #if HAS_MASS_STORAGE
-	void UpdateFirmware(const char *_ecv_array iapFilename, const char *_ecv_array iapParam) noexcept;
+	void UpdateFirmware(c_string iapFilename, c_string iapParam) noexcept;
 #endif
 	void PrepareToLoadIap() noexcept;
-	[[noreturn]] void StartIap(const char *_ecv_array filename) noexcept;
+	[[noreturn]] void StartIap(c_string _ecv_null filename) noexcept;
 
-	void ReportInternalError(const char *_ecv_array file, const char *_ecv_array func, int line) const noexcept;	// report an internal error
+	void ReportInternalError(c_string file, c_string func, int line) const noexcept;	// report an internal error
 
 	static uint32_t DoDivide(uint32_t a, uint32_t b) noexcept;			// helper function for diagnostic tests
 	static void GenerateBusFault() noexcept;							// helper function for diagnostic tests
@@ -142,7 +142,7 @@ public:
 
 	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
 
-	void SaveConfigError(const char *_ecv_array filename, unsigned int lineNumber, const char *_ecv_array errorMessage) noexcept;
+	void SaveConfigError(c_string filename, unsigned int lineNumber, c_string errorMessage) noexcept;
 
 	void BoardsUpdated() noexcept { ++boardsSeq; }
 	void DirectoriesUpdated() noexcept { ++directoriesSeq; }
@@ -164,6 +164,8 @@ public:
 	ReadLockedPointer<const VariableSet> GetGlobalVariablesForReading() noexcept { return globalVariables.GetForReading(); }
 	WriteLockedPointer<VariableSet> GetGlobalVariablesForWriting() noexcept { return globalVariables.GetForWriting(); }
 
+	static constexpr uint16_t DefaultDebugFlags = 0x00FF;
+
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
@@ -174,7 +176,7 @@ private:
 #ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
 	struct DebugLogRecord
 	{
-		const char *_ecv_array _ecv_null msg;
+		c_string _ecv_null msg;
 		uint32_t data[4];
 
 		DebugLogRecord() noexcept : msg(nullptr) { }
@@ -183,15 +185,16 @@ private:
 
 	static constexpr size_t NumDebugRecords = 4;
 
-	static void EncodeString(StringRef& response, const char *_ecv_array src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
-	static void AppendFloatArray(OutputBuffer *buf, const char *_ecv_array name, size_t numValues, function_ref_noexcept<float(size_t) noexcept> func, unsigned int numDecimalDigits) noexcept;
-	static void AppendIntArray(OutputBuffer *buf, const char *_ecv_array name, size_t numValues, function_ref_noexcept<int(size_t) noexcept> func) noexcept;
-	static void AppendStringArray(OutputBuffer *buf, const char *_ecv_array name, size_t numValues, function_ref_noexcept<const char *(size_t) noexcept> func) noexcept;
+	static void EncodeString(StringRef& response, c_string src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
+	static void AppendFloatArray(OutputBuffer *buf, c_string _ecv_null name, size_t numValues, function_ref_noexcept<float(size_t) noexcept> func, unsigned int numDecimalDigits) noexcept;
+	static void AppendIntArray(OutputBuffer *buf, c_string _ecv_null name, size_t numValues, function_ref_noexcept<int(size_t) noexcept> func) noexcept;
+	static void AppendStringArray(OutputBuffer *buf, c_string _ecv_null name, size_t numValues, function_ref_noexcept<const char *(size_t) noexcept> func) noexcept;
 
 	size_t GetStatusIndex() const noexcept;
 	char GetStatusCharacter() const noexcept;
-	const char *_ecv_array GetStatusString() const noexcept;
-	bool RunStartupFile(const char *_ecv_array filename, bool isMainConfigFile) noexcept;
+	c_string GetStatusString() const noexcept;
+	bool RunStartupFile(c_string filename, bool isMainConfigFile) noexcept;
+	void ClearDebug() noexcept;
 
 	static constexpr uint32_t MaxHeatTaskTicksInSpinState = 4000;	// timeout before we reset the processor if the heat task doesn't run
 	static constexpr uint32_t MaxMainTaskTicksInSpinState = 20000;	// timeout before we reset the processor if the main task doesn't run
@@ -355,7 +358,7 @@ template <size_t NumWords> bool MemoryWatcher<NumWords>::Check(unsigned int tag)
 	if (badOffset >= 0 || csumProtected != checkSum || csumCopy != checkSum)
 	{
 		const bool fix = (csumProtected != checkSum && csumCopy == checkSum);
-		constexpr const char *_ecv_array msg = "Mem diff: offset %u, original %08" PRIx32 ", copy %08" PRIx32 ", flags %08" PRIx32 "\n";
+		constexpr c_string msg = "Mem diff: offset %u, original %08" PRIx32 ", copy %08" PRIx32 ", flags %08" PRIx32 "\n";
 		const uint32_t flags = ((csumProtected == checkSum) ? 0 : 1) | ((csumCopy == checkSum) ? 0 : 0x10) | ((fix) ? 0x0100 : 0) | (tag << 16);
 		reprap.LogDebugMessage(msg, (unsigned int)badOffset * 4, checkedData[badOffset], dataCopy[badOffset], flags);
 
