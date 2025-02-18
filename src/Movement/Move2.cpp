@@ -1201,6 +1201,63 @@ void Move::ReportM569Parameters(size_t drive, const StringRef& reply) noexcept
 
 #if SUPPORT_REMOTE_COMMANDS
 
+// Add a move to the movement queue when we are in expansion board mode
+void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
+{
+	// Prepare for movement
+	PrepParams params;
+
+	// Normalise the move to unit distance
+	params.totalDistance = 1.0;
+	params.acceleration = msg.acceleration;
+	params.deceleration = msg.deceleration;
+	params.accelClocks = msg.accelerationClocks;
+	params.steadyClocks = msg.steadyClocks;
+	params.decelClocks = msg.decelClocks;
+	uint32_t clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
+
+	// We occasionally receive a message for a very short move with zero clocks needed. This messes up the calculations, so add one steady clock in this case.
+	if (clocksNeeded == 0)
+	{
+		clocksNeeded = params.steadyClocks = 1;
+	}
+
+	const float accelDistanceExTopSpeed = -0.5 * params.acceleration * fsquare((float)params.accelClocks);
+	const float decelDistanceExTopSpeed = -0.5 * params.deceleration * fsquare((float)params.decelClocks);
+	const float topSpeed = (params.totalDistance - accelDistanceExTopSpeed - decelDistanceExTopSpeed)/clocksNeeded;
+
+	params.accelDistance =      accelDistanceExTopSpeed + topSpeed * params.accelClocks;
+	const float decelDistance = decelDistanceExTopSpeed + topSpeed * params.decelClocks;
+	params.decelStartDistance =  1.0 - decelDistance;
+
+	MovementFlags segFlags;
+	segFlags.nonPrintingMove = !msg.usePressureAdvance;
+	segFlags.noShaping = !msg.useLateInputShaping;
+
+	for (size_t drive = 0; drive < min<size_t>(NumDirectDrivers, msg.numDrivers); drive++)
+	{
+		if ((msg.extruderDrives & (1u << drive)) != 0)
+		{
+			// It's an extruder
+			const float extrusionRequested = msg.perDrive[drive].extrusion;
+			if (extrusionRequested != 0.0)
+			{
+				EnableDrivers(drive, false);
+				AddLinearSegments(drive, msg.whenToExecute, params, extrusionRequested, segFlags.AddIsExtruder());
+			}
+		}
+		else
+		{
+			const float delta = (float)msg.perDrive[drive].steps;
+			if (delta != 0.0)
+			{
+				EnableDrivers(drive, false);
+				AddLinearSegments(drive, msg.whenToExecute, params, delta, segFlags);
+			}
+		}
+	}
+}
+
 GCodeResult Move::EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
 {
 # if HAS_SMART_DRIVERS

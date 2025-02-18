@@ -655,95 +655,6 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 
 #endif
 
-#if SUPPORT_REMOTE_COMMANDS
-
-// Set up a remote move. Return true if it represents real movement, else false.
-// All values have already been converted to step clocks and the total distance has been normalised to 1.0.
-// This version handles the new movement message that includes the input shaping plan and passes extruder movement as distance, not steps
-bool DDA::InitFromRemote(DDARing& ring, const CanMessageMovementLinearShaped& msg) noexcept
-{
-	afterPrepare.moveStartTime = StepTimer::ConvertToLocalTime(msg.whenToExecute);
-	flags.all = 0;
-	flags.isPrintingMove = flags.usePressureAdvance = msg.usePressureAdvance;
-	// TODO For now we treat any non-printing move as a non-printing extruder move. Better to pass a flag for it in the CAN message.
-	flags.isNonPrintingExtruderMove = !flags.isPrintingMove;
-
-	// Prepare for movement
-	PrepParams params;
-
-	// Normalise the move to unit distance
-	params.totalDistance = totalDistance = 1.0;
-	params.acceleration = acceleration = msg.acceleration;
-	params.deceleration = deceleration = msg.deceleration;
-	params.accelClocks = msg.accelerationClocks;
-	params.steadyClocks = msg.steadyClocks;
-	params.decelClocks = msg.decelClocks;
-	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
-
-	// We occasionally receive a message with zero clocks needed. This messes up the calculations, so add one steady clock in this case.
-	if (clocksNeeded == 0)
-	{
-		clocksNeeded = params.steadyClocks = 1;
-	}
-
-	const float accelDistanceExTopSpeed = -0.5 * params.acceleration * fsquare((float)params.accelClocks);
-	const float decelDistanceExTopSpeed = -0.5 * params.deceleration * fsquare((float)params.decelClocks);
-	topSpeed = (params.totalDistance - accelDistanceExTopSpeed - decelDistanceExTopSpeed)/clocksNeeded;
-
-	params.accelDistance =      accelDistanceExTopSpeed + topSpeed * params.accelClocks;
-	const float decelDistance = decelDistanceExTopSpeed + topSpeed * params.decelClocks;
-	params.decelStartDistance =  1.0 - decelDistance;
-
-	MovementFlags segFlags;
-	segFlags.Clear();
-	segFlags.nonPrintingMove = !msg.usePressureAdvance;
-	segFlags.noShaping = !msg.useLateInputShaping;
-
-	afterPrepare.drivesMoving.Clear();
-	Move& move = reprap.GetMove();
-
-	for (size_t drive = 0; drive < NumDirectDrivers; drive++)
-	{
-		endPoint[drive] = prev->endPoint[drive];						// the steps for this move will be added later
-		if (drive >= msg.numDrivers)
-		{
-			directionVector[drive] = 0.0;
-		}
-		else if ((msg.extruderDrives & (1u << drive)) != 0)
-		{
-			// It's an extruder
-			const float extrusionRequested = msg.perDrive[drive].extrusion;
-			directionVector[drive] = extrusionRequested;
-			if (extrusionRequested != 0.0)
-			{
-				move.EnableDrivers(drive, false);
-				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, extrusionRequested, segFlags.AddIsExtruder());
-			}
-		}
-		else
-		{
-			const float delta = (float)msg.perDrive[drive].steps;
-			directionVector[drive] = delta;
-			if (delta != 0.0)
-			{
-				move.EnableDrivers(drive, false);
-				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, delta, segFlags);
-				afterPrepare.drivesMoving.SetBit(drive);
-			}
-		}
-	}
-
-	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves))
-	{
-		DebugPrint("rems");
-	}
-
-	state = committed;
-	return true;
-}
-
-#endif	// SUPPORT_REMOTE_COMMANDS
-
 // Return true if this move is or might have been intended to be a deceleration-only move
 // A move planned as a deceleration-only move may have a short acceleration segment at the start because of rounding error
 bool DDA::IsDecelerationMove() const noexcept
@@ -1192,7 +1103,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						else		// we don't generate segments for leadscrew adjustment moves to remote drivers
 #endif
 						{
-							move.AddLinearSegments(*this, driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
+							move.AddLinearSegments(driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
 						}
 					}
 				}
@@ -1226,7 +1137,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						delta = move.ApplyBacklashCompensation(drive, delta);
 
 						// We generate segments even for nonlocal drivers so that the final position is correct and to track the position in near real time
-						move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
+						move.AddLinearSegments(drive, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
 						afterPrepare.drivesMoving.SetBit(drive);
 
 #if SUPPORT_CAN_EXPANSION
@@ -1278,7 +1189,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 							const motioncalc_t delta = totalDistance * directionVector[drive] * move.DriveStepsPerMm(drive);
 
 							// We generate segments even for nonlocal extruders in order to track extruder position
-							move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, segFlags.AddIsExtruder());
+							move.AddLinearSegments(drive, afterPrepare.moveStartTime, params, delta, segFlags.AddIsExtruder());
 
 #if SUPPORT_CAN_EXPANSION
 							const DriverId driver = move.GetExtruderDriver(extruder);

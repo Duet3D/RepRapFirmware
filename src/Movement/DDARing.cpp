@@ -791,21 +791,4 @@ uint32_t DDARing::ManageIOBitsAndFeedForward() noexcept
 	return (nextWakeupDelay + StepClockRate/1000 - 1)/(StepClockRate/1000);			// convert step clocks to milliseconds, rounding up
 }
 
-#if SUPPORT_REMOTE_COMMANDS
-
-// Add a move from the ATE to the movement queue
-void DDARing::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
-{
-	if (addPointer->GetState() == DDA::empty)
-	{
-		if (addPointer->InitFromRemote(*this, msg))
-		{
-			addPointer = addPointer->GetNext();
-			scheduledMoves++;
-		}
-	}
-}
-
-#endif
-
 // End

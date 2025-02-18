@@ -402,6 +402,7 @@ void CanInterface::SwitchToExpansionMode(CanAddress addr, bool useTestMode) noex
 	inExpansionMode = true;
 	inTestMode = useTestMode;
 	reprap.GetGCodes().SwitchToExpansionMode();
+	reprap.GetMove().SwitchToExpansionMode();
 	ReInit();										// reset the CAN filters to account for our new CAN address
 }
 

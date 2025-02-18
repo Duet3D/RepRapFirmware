@@ -325,15 +325,9 @@ public:
 	GCodeResult EutProcessM915(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	void SendDriversStatus(CanMessageBuffer& buf) noexcept;
 
-	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
+	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;				// add a move to the movement queue when we are in expansion board mode
 	void StopDriversFromRemote(uint16_t whichDrives) noexcept;
 	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
-
-	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept				// add a move to the movement queue when we are in expansion board mode
-	{
-		rings[0].AddMoveFromRemote(msg);
-		MoveAvailable();
-	}
 
 	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutSetInputShaping(const CanMessageSetInputShapingNew& msg, size_t dataLength, const StringRef& reply) noexcept
@@ -343,12 +337,13 @@ public:
 
 	// Stall endstops
 	GCodeResult SetStallEndstopReporting(const CanMessageEnableStallEndstop& msg, const StringRef& reply) noexcept;
+	void SwitchToExpansionMode() noexcept { inExpansionMode = false; }						// we could consider terminating the Move task too
 #endif
 
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
 
 	// Functions called by DDA::Prepare to generate segments for executing DDAs
-	void AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags) noexcept;
+	void AddLinearSegments(size_t logicalDrive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags) noexcept;
 
 	bool AreDrivesStopped(LogicalDrivesBitmap drives) const noexcept;						// return true if none of the drives passed has any movement pending
 
@@ -487,7 +482,7 @@ public:
 	static void CreateLaserTask() noexcept;													// create the laser task if we haven't already
 	static void WakeLaserTask() noexcept;													// wake up the laser task, called at the start of a new move
 
-	static void WakeMoveTaskFromISR() noexcept;
+	void WakeMoveTaskFromISR() noexcept;
 	static const TaskBase *_ecv_from GetMoveTaskHandle() noexcept { return &moveTask; }
 
 	static void TimerCallback(CallbackParameter p) noexcept;
@@ -773,6 +768,11 @@ private:
 	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
 	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
 	bool useTaper;										// True to taper off the compensation
+
+	// Expansion mode control, tracks CanInterface::InExpansionMode()), duplicated here for faster access
+#if SUPPORT_REMOTE_COMMANDS
+	bool inExpansionMode = false;
+#endif
 
 	// Reporting of step errors
 	volatile bool hadStepError = false;

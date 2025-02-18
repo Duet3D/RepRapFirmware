@@ -93,10 +93,6 @@ public:
 	DDA* GetPrevious() const noexcept { return prev; }
 	uint32_t GetTimeLeft() const noexcept;
 
-#if SUPPORT_REMOTE_COMMANDS
-	bool InitFromRemote(DDARing& ring, const CanMessageMovementLinearShaped& msg) noexcept;
-#endif
-
 	const int32_t *_ecv_array DriveCoordinates() const noexcept { return endPoint; }				// Get endpoints of a move in machine coordinates
 	void SetDriveCoordinate(size_t drive, int32_t ep) noexcept;										// Force an end point
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
