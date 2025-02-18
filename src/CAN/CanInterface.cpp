@@ -1568,6 +1568,11 @@ void CanInterface::Diagnostics(const StringRef& reply) noexcept
 	longestWaitMessageType = 0;
 	peakTimeSyncTxDelay = 0;
 	timeSyncMessagesSent = goodTimeStamps = badTimeStamps = 0;
+
+	if (InExpansionMode())
+	{
+		CommandProcessor::AppendBadMotionStats(reply);
+	}
 }
 
 GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer* gb, const StringRef &reply) noexcept

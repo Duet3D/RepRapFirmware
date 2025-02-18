@@ -17,6 +17,7 @@ class CanMessageBuffer;
 namespace CommandProcessor
 {
 	void ProcessReceivedMessage(CanMessageBuffer *buf) noexcept;	// Process a received broadcast or request message and free the message buffer
+	void AppendBadMotionStats(const StringRef& reply) noexcept;		// Append diagnostics relating to bad motion messages
 }
 
 #endif

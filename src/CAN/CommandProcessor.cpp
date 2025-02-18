@@ -34,6 +34,17 @@
 # include <Hardware/NonVolatileMemory.h>
 #endif
 
+static uint8_t expectedSeq = 0xFF;
+static unsigned int duplicateMotionMessages = 0;
+static unsigned int oosMessages1Ahead = 0, oosMessages2Ahead = 0, oosMessages2Behind = 0, oosMessagesOther = 0;
+
+// Append diagnostics relating to bad motion messages
+void CommandProcessor::AppendBadMotionStats(const StringRef& reply) noexcept
+{
+	reply.lcatf("Motion dup %u, oos %u/%u/%u/%u", duplicateMotionMessages, oosMessages1Ahead, oosMessages2Ahead, oosMessages2Behind, oosMessagesOther);
+	duplicateMotionMessages = oosMessages1Ahead = oosMessages2Ahead = oosMessages2Behind = oosMessagesOther = 0;
+}
+
 // Handle a firmware update request
 static void HandleFirmwareBlockRequest(CanMessageBuffer *buf) noexcept
 pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
@@ -316,7 +327,41 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				return;							// no reply needed
 
 			case CanMessageType::movementLinearShaped:
-				//TODO check seq
+				// Check for duplicate and out-of-sequence message
+				// We can get out-of-sequence messages because of a bug in the CAN hardware; so use only the sequence number to detect duplicates
+				{
+					const int8_t seq = buf->msg.moveLinearShaped.seq;
+					if (((seq + 1) & CanMessageMovementLinearShaped::SeqMask) == expectedSeq)
+					{
+						++duplicateMotionMessages;
+						return;
+					}
+
+					if (seq != expectedSeq && expectedSeq != 0xFF)
+					{
+						switch ((seq - expectedSeq) & CanMessageMovementLinearShaped::SeqMask)
+						{
+						case 1:
+							++oosMessages1Ahead;
+							break;
+
+						case 2:
+							++oosMessages2Ahead;
+							break;
+
+						case 0x7E:
+							++oosMessages2Behind;
+							break;
+
+						default:
+							++oosMessagesOther;
+							break;
+						}
+					}
+
+					expectedSeq = (seq + 1) & CanMessageMovementLinearShaped::SeqMask;
+				}
+
 				if (StepTimer::IsSynced())
 				{
 					reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinearShaped);
