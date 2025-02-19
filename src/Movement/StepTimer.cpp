@@ -32,7 +32,7 @@ uint32_t StepTimer::movementDelay = 0;											// how many timer ticks the mov
 
 #if SUPPORT_CAN_EXPANSION
 uint32_t StepTimer::ownMovementDelay = 0;
-bool StepTimer::movementDelayIncreased = false;
+bool StepTimer::ownMovementDelayIncreased = false;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -242,6 +242,7 @@ void StepTimer::DisableTimerInterrupt() noexcept
 	return syncCount == MaxSyncCount;
 }
 
+// Process a received time sync message. This is only called when we are in expansion mode.
 /*static*/ void StepTimer::ProcessTimeSyncMessage(const CanMessageTimeSync& msg, size_t msgLen, uint16_t timeStamp) noexcept
 {
 
@@ -314,9 +315,18 @@ void StepTimer::DisableTimerInterrupt() noexcept
 					peakNegJitter = diff;
 				}
 				reprap.GetGCodes().SetRemotePrinting(msg.isPrinting);
-				if (msgLen >= 16)										// if real time is included
+				if (msgLen >= CanMessageTimeSync::SizeWithRealTime)		// if real time is included
 				{
 					reprap.GetPlatform().SetDateTime(msg.realTime);
+					if (msgLen >= CanMessageTimeSync::SizeWithRealTimeAndMovementDelay)
+					{
+						AtomicCriticalSectionLocker lock;
+						if (msg.movementDelay >= movementDelay)
+						{
+							movementDelay = msg.movementDelay;
+							ownMovementDelayIncreased = false;
+						}
+					}
 				}
 			}
 			else
@@ -543,7 +553,7 @@ void StepTimer::ProcessMovementDelayRequest(uint32_t delayRequested) noexcept
 	{
 		movementDelay = delayRequested;
 	}
-	movementDelayIncreased = true;						// always set this to ensure that we acknowledge the request
+	ownMovementDelayIncreased = true;						// always set this to ensure that we acknowledge the request
 }
 
 #endif

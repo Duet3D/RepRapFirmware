@@ -67,7 +67,7 @@ public:
 	// Get the tick rate (can also access it directly as StepClockRate)
 	static constexpr uint32_t GetTickRate() noexcept { return StepClockRate; }
 
-	// Add more movement delay
+	// Add more movement delay. Called from our step ISR when we can't keep up.
 	static void IncreaseMovementDelay(uint32_t increase) noexcept;
 
 	// Return the current movement delay
@@ -120,7 +120,7 @@ private:
 
 #if SUPPORT_CAN_EXPANSION
 	static uint32_t ownMovementDelay;											// the amount of movement delay requested by this board
-	static bool movementDelayIncreased;											// true if we are in master mode, have increased the movement delay and we haven't yet broadcast that
+	static bool ownMovementDelayIncreased;										// true if have introduced more movement delay and not broadcast it (if in master mode) or requested it (if in expansion mode)
 #endif
 
 	StepTimer *_ecv_null next;
@@ -172,7 +172,7 @@ inline void StepTimer::IncreaseMovementDelay(uint32_t increase) noexcept
 	movementDelay += increase;
 #if SUPPORT_CAN_EXPANSION
 	ownMovementDelay += increase;
-	movementDelayIncreased = true;
+	ownMovementDelayIncreased = true;
 #endif
 }
 
@@ -198,9 +198,9 @@ inline StepTimer::Ticks StepTimer::GetMovementTimerTicks() noexcept
 inline StepTimer::Ticks StepTimer::CheckMovementDelayIncreased() noexcept
 {
 	AtomicCriticalSectionLocker lock;
-	if (movementDelayIncreased)
+	if (ownMovementDelayIncreased)
 	{
-		movementDelayIncreased = false;
+		ownMovementDelayIncreased = false;
 		return movementDelay;
 	}
 	return 0;
@@ -214,7 +214,7 @@ inline StepTimer::Ticks StepTimer::CheckMovementDelayIncreased() noexcept
 // We leave the movementDelayIncreased flag set until the main board acknowledges the increased movement delay.
 inline StepTimer::Ticks StepTimer::CheckMovementDelayIncreasedNoClear() noexcept
 {
-	return (movementDelayIncreased) ? movementDelay : 0;
+	return (ownMovementDelayIncreased) ? movementDelay : 0;
 }
 
 #endif
