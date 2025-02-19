@@ -664,7 +664,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 #if SUPPORT_REMOTE_COMMANDS
 		if (inExpansionMode)
 		{
-			vTaskDelete(nullptr);											// once in expansion mode we can't revert to main board mode, so we don't need this task any more
+			TaskBase::GetCallerTaskHandle()->TerminateAndUnlink();			// once in expansion mode we can't revert to main board mode, so we don't need this task any more
 		}
 #endif
 
