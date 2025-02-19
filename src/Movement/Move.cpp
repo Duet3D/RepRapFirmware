@@ -1251,7 +1251,6 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 	msg2.accelerationClocks = msg2.decelClocks = msg.clocksAllowed/4;
 	msg2.steadyClocks = msg.clocksAllowed/8;
 	msg2.whenToExecute = StepTimer::GetMasterTime() + msg.clocksAllowed/4;
-	msg2.numDrivers = NumDirectDrivers;
 	msg2.extruderDrives = 0;
 	msg2.seq = 0;
 
@@ -1259,10 +1258,12 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 	// So topSpeed is 8/(3 * clocksAllowed) and acceleration is (8/(3 * clocksAllowed))/(clocksAllowed/4) = 32/(3 * clocksAllowed^2).
 	msg2.acceleration = msg2.deceleration = 32.0/(3.0 * msg.clocksAllowed * msg.clocksAllowed);
 
+	constexpr size_t numDriversToRevert = min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave);
+	msg2.numDrivers = numDriversToRevert;
+
 	size_t index = 0;
 	bool needSteps = false;
-	constexpr size_t numDrivers = min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave);
-	for (size_t driver = 0; driver < numDrivers; ++driver)
+	for (size_t driver = 0; driver < numDriversToRevert; ++driver)
 	{
 		int32_t steps = 0;
 		if (msg.whichDrives & (1u << driver))
