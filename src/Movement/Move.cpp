@@ -1250,7 +1250,7 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 	CanMessageMovementLinearShaped msg2;
 	msg2.accelerationClocks = msg2.decelClocks = msg.clocksAllowed/4;
 	msg2.steadyClocks = msg.clocksAllowed/8;
-	msg2.whenToExecute = StepTimer::GetMasterTime() + msg.clocksAllowed/4;
+	msg2.whenToExecute = StepTimer::GetMovementTimerTicks() + msg.clocksAllowed/4;
 	msg2.extruderDrives = 0;
 	msg2.seq = 0;
 
