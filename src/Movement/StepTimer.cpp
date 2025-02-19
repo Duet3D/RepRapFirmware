@@ -411,7 +411,7 @@ bool StepTimer::ScheduleCallbackFromIsr(Ticks when) noexcept
 // As ScheduleCallback but base priority >= NvicPriorityStep when called. Can be called from within a callback.
 bool StepTimer::ScheduleMovementCallbackFromIsr(Ticks when) noexcept
 {
-	whenDue = when + movementDelay;
+	whenDue = when + movementDelay + localTimeOffset;
 	return ScheduleCallbackFromIsr();
 }
 
