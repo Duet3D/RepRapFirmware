@@ -25,16 +25,37 @@ class CanMessageMovementLinearShaped;
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
 struct PrepParams
 {
+#if SUPPORT_S_CURVE
+	uint32_t accelStartClocks, accelConstantClocks, accelEndClocks, steadyClocks, decelStartClocks, decelConstantClocks, decelEndClocks;
+    float initialAcceleration, peakAcceleration, finalAcceleration;
+    float initialDeceleration, peakDeceleration, finalDeceleration;
+    float accelInitialDistance, accelPeakDistance, accelEndDistance;
+    float decelInitialDistance, decelPeakDistance, decelEndDistance;
+	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive
+#else
+	uint32_t accelClocks, steadyClocks, decelClocks;
+	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
+# define peakAcceleration	acceleration
+# define peakDeceleration	deceleration
+#endif
 	float totalDistance;
 	float accelDistance;
 	float decelStartDistance;
-	uint32_t accelClocks, steadyClocks, decelClocks;
-	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
 	float topSpeed;									// the top speed, may be modified by the input shaper
 	bool useInputShaping;
 
+#if SUPPORT_S_CURVE
+	uint32_t TotalAccelClocks() const noexcept { return accelStartClocks + accelConstantClocks + accelEndClocks; }
+	uint32_t TotalDecelClocks() const noexcept { return decelStartClocks + decelConstantClocks + decelEndClocks; }
+	float TotalAccelDistance() const noexcept { return accelInitialDistance + accelPeakDistance + accelEndDistance; }
+#else
+	uint32_t TotalAccelClocks() const noexcept { return accelClocks; }
+	uint32_t TotalDecelClocks() const noexcept { return decelClocks; }
+	float TotalAccelDistance() const noexcept { return accelDistance; }
+#endif
+
 	// Get the total clocks needed
-	uint32_t TotalClocks() const noexcept { return accelClocks + steadyClocks + decelClocks; }
+	uint32_t TotalClocks() const noexcept { return TotalAccelClocks() + steadyClocks + TotalDecelClocks(); }
 
 	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
 	void SetFromDDA(const DDA& dda) noexcept;
@@ -128,7 +149,6 @@ public:
 
 	uint32_t GetClocksNeeded() const noexcept { return clocksNeeded; }
 	bool HasExpired() const noexcept pre(IsCommitted());
-	bool IsGoodToPrepare() const noexcept;
 	bool IsNonPrintingExtruderMove() const noexcept { return flags.isNonPrintingExtruderMove; }
 	void UpdateMovementAccumulators(volatile int32_t *accumulators) const noexcept;
 	uint32_t GetMoveStartTime() const noexcept { return afterPrepare.moveStartTime; }
@@ -234,12 +254,8 @@ private:
 	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;							// How long is the move in hypercuboid space
 #if SUPPORT_S_CURVE
-    float initialAcceleration;
-    float peakAcceleration;
-    float finalAcceleration;
-    float initialDeceleration;
-    float peakDeceleration;
-    float finalDeceleration;
+    float initialAcceleration, peakAcceleration, finalAcceleration;
+    float initialDeceleration, peakDeceleration, finalDeceleration;
 	float jerk;										// The magnitude of the rate of change of acceleration or deceleration, always positive
 #else
 	float acceleration;								// The acceleration to use, always positive
@@ -269,6 +285,9 @@ private:
 			float accelDistance;
 			float decelDistance;
 			float targetNextSpeed;					// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
+#if SUPPORT_S_CURVE
+			float targetNextAcceleration;			// The acceleration that the next move would like to start at
+#endif
 		} beforePrepare;
 
 		// Values that are not set or accessed before Prepare is called
@@ -287,12 +306,6 @@ private:
 	void LogProbePosition() noexcept;
 #endif
 };
-
-// Return true if there is no reason to delay preparing this move
-inline bool DDA::IsGoodToPrepare() const noexcept
-{
-	return endSpeed >= topSpeed;							// if it never decelerates, we can't improve it
-}
 
 inline bool DDA::CanPauseAfter() const noexcept
 {

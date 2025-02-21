@@ -315,7 +315,7 @@
 
 // Define SUPPORT_REMOTE_COMMANDS according to whether this hardware accepts commands over CAN
 #ifndef SUPPORT_REMOTE_COMMANDS
-# define SUPPORT_REMOTE_COMMANDS		(SUPPORT_CAN_EXPANSION && !defined(DUET3_ATE))
+# define SUPPORT_REMOTE_COMMANDS		(SUPPORT_CAN_EXPANSION && !defined(DUET3_ATE) && !SUPPORT_S_CURVE)
 #endif
 
 #ifndef SUPPORT_SCANNING_PROBES

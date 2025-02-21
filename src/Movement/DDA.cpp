@@ -128,10 +128,26 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
 	const float steadyDistance = decelStartDistance - accelDistance;
 	steadyClocks = (steadyDistance <= 0.0) ? 0 : lrintf(steadyDistance/dda.topSpeed);
+#if SUPPORT_S_CURVE
+	initialAcceleration = dda.initialAcceleration;
+	peakAcceleration = dda.peakAcceleration;
+	finalAcceleration = dda.finalAcceleration;
+	initialDeceleration = dda.initialDeceleration;
+	peakDeceleration = dda.peakDeceleration;
+	finalDeceleration = dda.finalDeceleration;
+
+	accelStartClocks = qq;
+	accelConstantClocks = qq;
+	accelEndClocks = qq;
+	decelStartClocks = qq;
+	decelConstantClocks = qq;
+	decelEndClocks = qq;
+#else
 	acceleration = dda.acceleration;
 	deceleration = dda.deceleration;
 	accelClocks = lrintf((dda.topSpeed - dda.startSpeed)/dda.acceleration);
 	decelClocks = lrintf((dda.topSpeed - dda.endSpeed)/dda.deceleration);
+#endif
 	useInputShaping = dda.flags.xyMoving
 					&& !(dda.flags.isolatedMove || dda.flags.isLeadscrewAdjustmentMove
 #if SUPPORT_SCANNING_PROBES
@@ -142,8 +158,23 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 
 void PrepParams::DebugPrint() const noexcept
 {
-	debugPrintf("pp: td=%.3g ad=%.3g dsd=%.3g a=%.3g d=%.3g ac=%" PRIu32 " sc=%" PRIu32 " dc=%" PRIu32 "\n",
-					(double)totalDistance, (double)accelDistance, (double)decelStartDistance, (double)acceleration, (double)deceleration, accelClocks, steadyClocks, decelClocks);
+	debugPrintf("pp: td=%.3g ad=%.3g dsd=%.3g"
+#if SUPPORT_S_CURVE
+				"a=[%.3g %.3g %.3g] d=[%.3g %.3g %.3g] ac=[%" PRIu32 " %" PRIu32 " %" PRIu32 "] sc=%" PRIu32 " dc=[%" PRIu32 " %" PRIu32 " %" PRIu32 "]"
+#else
+				"a=%.3g d=%.3g ac=%" PRIu32 " sc=%" PRIu32 " dc=%" PRIu32
+#endif
+				"\n",
+					(double)totalDistance, (double)accelDistance, (double)decelStartDistance,
+#if SUPPORT_S_CURVE
+					(double)initialAcceleration, (double)peakAcceleration, (double)finalAcceleration,
+					(double)initialDeceleration, (double)peakDeceleration, (double)finalDeceleration,
+					accelStartClocks, accelConstantClocks, accelEndClocks, steadyClocks, decelStartClocks, decelConstantClocks, decelEndClocks
+#else
+					(double)acceleration, (double)deceleration,
+					accelClocks, steadyClocks, decelClocks
+#endif
+				);
 }
 
 DDA::DDA(DDA *_ecv_null n) noexcept : next(n), prev(nullptr), state(empty)
@@ -208,8 +239,19 @@ void DDA::DebugPrint(const char *_ecv_array tag) const noexcept
 {
 	debugPrintf("%s %u ts=%" PRIu32 " DDA: s=%.4g", tag, (unsigned int)state, afterPrepare.moveStartTime, (double)totalDistance);
 	DebugPrintVector(" vec", directionVector, MaxAxesPlusExtruders);
-	debugPrintf("\n" "a=%.4e d=%.4e reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=%04x\n",
-				(double)acceleration, (double)deceleration, (double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded, (uint32_t)filePos, flags.all);
+	debugPrintf("\n"
+#if SUPPORT_S_CURVE
+				"a=[%.4e, %.4e, %.4e] d=[%.4e, %.4e, %.4e] j=%.4e"
+#else
+				"a=%.4e d=%.4e"
+#endif
+				" reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=%04x\n",
+#if SUPPORT_S_CURVE
+				(double)initialAcceleration, (double)peakAcceleration, (double)finalAcceleration, (double)initialDeceleration, (double)peakDeceleration, (double)finalDeceleration, (double)jerk,
+#else
+				(double)acceleration, (double)deceleration,
+#endif
+				(double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded, (uint32_t)filePos, flags.all);
 }
 
 // Set up a real move. Return true if it represents real movement, else false.

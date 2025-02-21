@@ -32,9 +32,10 @@
 
 #if SUPPORT_REMOTE_COMMANDS
 # include <Hardware/NonVolatileMemory.h>
-#endif
 
 static uint8_t expectedSeq = 0xFF;
+#endif
+
 static unsigned int duplicateMotionMessages = 0;
 static unsigned int oosMessages1Ahead = 0, oosMessages2Ahead = 0, oosMessages2Behind = 0, oosMessagesOther = 0;
 
