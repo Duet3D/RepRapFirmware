@@ -2056,18 +2056,38 @@ bool Platform::WritePlatformParameters(FileStore *f, bool includingG31) const no
 
 // USB port functions
 
-void Platform::AppendUsbReply(OutputBuffer *buffer) noexcept
+void Platform::AppendUsbReply(OutputBuffer *buffer, bool rawMessage) noexcept
 {
 	if (!SERIAL_MAIN_DEVICE.IsConnected())
 	{
 		// If the serial USB line is not open, discard the message right away
 		OutputBuffer::ReleaseAll(buffer);
+		usbMessageSeq = 0;							// reset the sequence number for when the USB port connects
 	}
 	else
 	{
 		// Else append incoming data to the stack
 		MutexLocker lock(usbMutex);
-		usbOutput.Push(buffer);
+		if (rawMessage || GetChannelMode(0) == AuxMode::raw)
+		{
+			usbOutput.Push(buffer);
+		}
+		else
+		{
+			OutputBuffer *buf;
+			if (OutputBuffer::Allocate(buf))
+			{
+				usbMessageSeq++;
+				buf->printf("{\"seq\":%" PRIu32 ",\"resp\":", usbMessageSeq);
+				buf->EncodeReply(buffer);
+				buf->cat("}\n");
+				usbOutput.Push(buf);
+			}
+			else
+			{
+				OutputBuffer::ReleaseAll(buffer);
+			}
+		}
 	}
 }
 
@@ -3039,7 +3059,7 @@ void Platform::Message(MessageType type, OutputBuffer *buffer) noexcept
 
 		if ((type & (UsbMessage | BlockingUsbMessage)) != 0)
 		{
-			AppendUsbReply(buffer);
+			AppendUsbReply(buffer, (type & RawMessageFlag) != 0);
 		}
 
 #if HAS_SBC_INTERFACE
