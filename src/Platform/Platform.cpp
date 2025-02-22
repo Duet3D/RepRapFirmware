@@ -2981,22 +2981,37 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 		// Message that is to be sent via the USB line (non-blocking)
 		MutexLocker lock(usbMutex);
 
-		// Ensure we have a valid buffer to write to that isn't referenced for other destinations
-		OutputBuffer *_ecv_null usbOutputBuffer = usbOutput.GetLastItem();
-		if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
+		if (GetChannelMode(0) == AuxMode::raw || message[0] == '{' || (type & RawMessageFlag) != 0)
 		{
-			if (OutputBuffer::Allocate(usbOutputBuffer))
+			// Ensure we have a valid buffer to write to that isn't referenced for other destinations
+			OutputBuffer *_ecv_null usbOutputBuffer = usbOutput.GetLastItem();
+			if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
 			{
-				if (usbOutput.Push(usbOutputBuffer))
+				if (OutputBuffer::Allocate(usbOutputBuffer))
 				{
-					usbOutputBuffer->cat(message);
+					if (usbOutput.Push(usbOutputBuffer))
+					{
+						usbOutputBuffer->cat(message);
+					}
+					// else the stack is full, so discard the message
 				}
-				// else the message buffer has been released, so discard the message
+				// else we can't allocate a buffer, so discard the message
+			}
+			else
+			{
+				usbOutputBuffer->cat(message);		// append the message
 			}
 		}
 		else
 		{
-			usbOutputBuffer->cat(message);		// append the message
+			OutputBuffer *buf;
+			if (OutputBuffer::Allocate(buf))
+			{
+				usbMessageSeq++;
+				buf->printf("{\"seq\":%" PRIu32 ",\"resp\":\"%.s\"}\n", usbMessageSeq, message);
+				usbOutput.Push(buf);
+			}
+			// else we can't allocate a buffer, so discard the message
 		}
 	}
 }
