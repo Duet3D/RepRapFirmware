@@ -3484,9 +3484,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 555: // Set/report firmware type to emulate
 				{
-					bool seen = false;
-					uint32_t val = gb.TryGetLimitedUIValue('P', val, seen, Compatibility::NumValues);
-					if (seen)
+					uint32_t val;
+					bool seen;
+					if (gb.TryGetLimitedUIValue('P', val, seen, Compatibility::NumValues))
 					{
 						gb.LatestMachineState().compatibility.Assign(val);
 						reprap.InputsUpdated();
