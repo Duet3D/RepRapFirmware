@@ -15,8 +15,6 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <GCodes/GCodeException.h>
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -24,14 +22,16 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(Heater, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(Heater, _condition, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(Heater, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(Heater, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry Heater::objectModelArrayTable[] =
 {
 	{
 		// 0. Monitors
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MaxMonitorsPerHeater; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 1); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(MaxMonitorsPerHeater),
+		OBJECT_MODEL_ARRAY_VALUE(self, 1)
 	}
 };
 
@@ -67,8 +67,6 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 13, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
-
-#endif
 
 // Static members of class Heater
 

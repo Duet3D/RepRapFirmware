@@ -14,8 +14,6 @@
 
 #include <cmath>
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -23,32 +21,34 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(GridDefinition, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(GridDefinition, _condition, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(GridDefinition, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(GridDefinition, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry GridDefinition::objectModelArrayTable[] =
 {
 	// 0. Axes
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetAxisLetter(context.GetLastIndex())); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
+		OBJECT_MODEL_ARRAY_VALUE(self->GetAxisLetter(context.GetLastIndex()))
 	},
 	// 1. Maximums
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetMax(context.GetLastIndex()), 1); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
+		OBJECT_MODEL_ARRAY_VALUE(self->GetMax(context.GetLastIndex()), 1)
 	},
 	// 2. Minimums
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetMin(context.GetLastIndex()), 1); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
+		OBJECT_MODEL_ARRAY_VALUE(self->GetMin(context.GetLastIndex()), 1)
 	},
 	// 3. Spacings
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetSpacing(context.GetLastIndex()), 1); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
+		OBJECT_MODEL_ARRAY_VALUE(self->GetSpacing(context.GetLastIndex()), 1)
 	}
 };
 
@@ -68,8 +68,6 @@ constexpr ObjectModelTableEntry GridDefinition::objectModelTable[] =
 constexpr uint8_t GridDefinition::objectModelTableDescriptor[] = { 1, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GridDefinition)
-
-#endif
 
 constexpr const char *_ecv_array GridDefinition::HeightMapLabelLines[] =
 {

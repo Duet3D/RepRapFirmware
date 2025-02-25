@@ -33,70 +33,70 @@
 #include <Platform/RepRap.h>
 #include <Movement/Move.h>
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Tool, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(Tool, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(Tool, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(Tool, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry Tool::objectModelArrayTable[] =
 {
 	// 0. Active temperatures
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->activeTemperatures[context.GetLastIndex()], 1); }
+		OBJECT_MODEL_ARRAY_COUNT(self->heaterCount),
+		OBJECT_MODEL_ARRAY_VALUE(self->activeTemperatures[context.GetLastIndex()], 1)
 	},
 	// 1. Axes
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(((const Tool*)self)->axisMapping); },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->axisMapping[context.GetLastIndex()]); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(ARRAY_SIZE(Tool::axisMapping)),
+		OBJECT_MODEL_ARRAY_VALUE(self->axisMapping[context.GetLastIndex()])
 	},
 	// 2 Extruders
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->driveCount; },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Tool*)self)->drives[context.GetLastIndex()]); }
+		OBJECT_MODEL_ARRAY_COUNT(self->driveCount),
+		OBJECT_MODEL_ARRAY_VALUE((int32_t)self->drives[context.GetLastIndex()])
 	},
 	// 3. Feedforward PWM
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->heaterFeedForwardPwm[context.GetLastIndex()], 3); }
+		OBJECT_MODEL_ARRAY_COUNT(self->heaterCount),
+		OBJECT_MODEL_ARRAY_VALUE(self->heaterFeedForwardPwm[context.GetLastIndex()], 3)
 	},
 	// 4. Heaters
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Tool*)self)->heaters[context.GetLastIndex()]); }
+		OBJECT_MODEL_ARRAY_COUNT(self->heaterCount),
+		OBJECT_MODEL_ARRAY_VALUE((int32_t)self->heaters[context.GetLastIndex()])
 	},
 	// 5. Mix
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->driveCount; },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->mix[context.GetLastIndex()], 2); }
+		OBJECT_MODEL_ARRAY_COUNT(self->driveCount),
+		OBJECT_MODEL_ARRAY_VALUE(self->mix[context.GetLastIndex()], 2)
 	},
 	// 6. Offsets
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->offset[context.GetLastIndex()], 3); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetVisibleAxes()),
+		OBJECT_MODEL_ARRAY_VALUE(self->offset[context.GetLastIndex()], 3)
 	},
 	// 7. Standby temperatures
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->standbyTemperatures[context.GetLastIndex()], 1); }
+		OBJECT_MODEL_ARRAY_COUNT(self->heaterCount),
+		OBJECT_MODEL_ARRAY_VALUE(self->standbyTemperatures[context.GetLastIndex()], 1)
 	},
-	// 8. Feedforward temperatire increase
+	// 8. Feedforward temperature increase
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->heaterFeedForwardTemp[context.GetLastIndex()], 3); }
+		OBJECT_MODEL_ARRAY_COUNT(self->heaterCount),
+		OBJECT_MODEL_ARRAY_VALUE(self->heaterFeedForwardTemp[context.GetLastIndex()], 3)
 	},
 };
 
@@ -139,8 +139,6 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 21, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
-
-#endif
 
 ReadWriteLock Tool::toolListLock;
 Tool *_ecv_null Tool::toolList = nullptr;

@@ -112,10 +112,10 @@ Network::Network(Platform& p) noexcept : platform(p)
 #endif // HAS_NETWORKING
 }
 
-#if SUPPORT_OBJECT_MODEL
-
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(Network, _ret)
+#define OBJECT_MODEL_FUNC(_ret)					OBJECT_MODEL_FUNC_BODY(Network, _ret)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(Network, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(Network, __VA_ARGS__)
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -126,9 +126,9 @@ constexpr ObjectModelArrayTableEntry Network::objectModelArrayTable[] =
 	// 0. Interfaces
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const Network*)self)->GetNumNetworkInterfaces(); },
+		OBJECT_MODEL_ARRAY_COUNT(self->GetNumNetworkInterfaces()),
 #if HAS_NETWORKING
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Network*)self)->interfaces[context.GetLastIndex()]); }
+		OBJECT_MODEL_ARRAY_VALUE(self->interfaces[context.GetLastIndex()])
 #endif
 	}
 };
@@ -161,8 +161,6 @@ constexpr uint8_t Network::objectModelTableDescriptor[] = { 1,
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Network)
-
-#endif
 
 // Note that Platform::Init() must be called before this to that Platform::IsDuetWiFi() returns the correct value
 void Network::Init() noexcept

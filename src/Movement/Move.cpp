@@ -72,56 +72,56 @@ Task<Move::MoveTaskStackWords> Move::moveTask;
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(Move, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(Move, _condition, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(Move, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(Move, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 {
 	// 0. Axes
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext& context) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 9); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetTotalAxes()),
+		OBJECT_MODEL_ARRAY_VALUE(self, 9)
 	},
 	// 1. Extruders
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetNumExtruders(); },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 10); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetNumExtruders()),
+		OBJECT_MODEL_ARRAY_VALUE(self, 10)
 	},
 	// 2. Motion system queues
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(rings); },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&((const Move*)self)->rings[context.GetLastIndex()]); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(ARRAY_SIZE(rings)),
+		OBJECT_MODEL_ARRAY_VALUE(&self->rings[context.GetLastIndex()])
 	},
 
 	// 3. Axis drivers
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const Move*)self)->axisDrivers[context.GetLastIndex()].numDrivers; },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue(((const Move*)self)->axisDrivers[context.GetIndex(1)].driverNumbers[context.GetLastIndex()]); }
+		OBJECT_MODEL_ARRAY_COUNT(self->axisDrivers[context.GetLastIndex()].numDrivers),
+		OBJECT_MODEL_ARRAY_VALUE(self->axisDrivers[context.GetIndex(1)].driverNumbers[context.GetLastIndex()])
 	},
 
 	// 4. Workplace coordinate offsets
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext& context) noexcept -> size_t { return NumCoordinateSystems; },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue(reprap.GetGCodes().GetWorkplaceOffset(context.GetIndex(1), context.GetLastIndex()), 3); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(NumCoordinateSystems),
+		OBJECT_MODEL_ARRAY_VALUE_NOSELF(reprap.GetGCodes().GetWorkplaceOffset(context.GetIndex(1), context.GetLastIndex()), 3)
 	},
 
 #if SUPPORT_COORDINATE_ROTATION
 	// 5. Rotation centre coordinates
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetGCodes().GetRotationCentre(context.GetLastIndex())); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
+		OBJECT_MODEL_ARRAY_VALUE_NOSELF(reprap.GetGCodes().GetRotationCentre(context.GetLastIndex()))
 	},
 #elif SUPPORT_KEEPOUT_ZONES
 	{
 		nullptr,
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return 0; },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(nullptr); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(0),
+		OBJECT_MODEL_ARRAY_VALUE_NOSELF(nullptr)
 	}
 #endif
 
@@ -129,9 +129,8 @@ constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 	// 6. Keepout zone list
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetNumKeepoutZones(); },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return (reprap.GetGCodes().IsKeepoutZoneDefined(context.GetLastIndex())) ? ExpressionValue(reprap.GetGCodes().GetKeepoutZone(context.GetLastIndex())) : ExpressionValue(nullptr); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetNumKeepoutZones()),
+		OBJECT_MODEL_ARRAY_VALUE_NOSELF((reprap.GetGCodes().IsKeepoutZoneDefined(context.GetLastIndex())) ? ExpressionValue(reprap.GetGCodes().GetKeepoutZone(context.GetLastIndex())) : ExpressionValue(nullptr))
 	},
 #endif
 };

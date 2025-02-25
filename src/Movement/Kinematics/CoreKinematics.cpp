@@ -13,42 +13,40 @@
 #include <Movement/DDA.h>
 #include <Movement/Move.h>
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(CoreKinematics, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(CoreKinematics, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(CoreKinematics, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(CoreKinematics, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry CoreKinematics::objectModelArrayTable[] =
 {
 	// 20. Forward matrix elements in a row
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-								{ return ExpressionValue(((const CoreKinematics*)self)->forwardMatrix(context.GetIndex(1), context.GetLastIndex()), 3); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetTotalAxes()),
+		OBJECT_MODEL_ARRAY_VALUE(self->forwardMatrix(context.GetIndex(1), context.GetLastIndex()), 3)
 	},
 	// 21. Inverse matrix elements in a row
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-								{ return ExpressionValue(((const CoreKinematics*)self)->inverseMatrix(context.GetIndex(1), context.GetLastIndex()), 3); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetVisibleAxes()),
+		OBJECT_MODEL_ARRAY_VALUE(self->inverseMatrix(context.GetIndex(1), context.GetLastIndex()), 3)
 	},
 	// 22. Forward matrix rows
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 20 | (context.GetLastIndex() << 8), true); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetVisibleAxes()),
+		OBJECT_MODEL_ARRAY_VALUE(self, 20 | (context.GetLastIndex() << 8), true)
 	},
 	// 23. Inverse matrix rows
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 21 | (context.GetLastIndex() << 8), true); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetTotalAxes()),
+		OBJECT_MODEL_ARRAY_VALUE(self, 21 | (context.GetLastIndex() << 8), true)
 	}
 };
 
@@ -66,8 +64,6 @@ constexpr ObjectModelTableEntry CoreKinematics::objectModelTable[] =
 constexpr uint8_t CoreKinematics::objectModelTableDescriptor[] = { 1, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(CoreKinematics, ZLeadscrewKinematics)
-
-#endif
 
 // Recalculate internal variables following a configuration change
 void CoreKinematics::Recalc() noexcept

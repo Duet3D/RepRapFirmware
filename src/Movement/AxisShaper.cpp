@@ -25,22 +25,22 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(AxisShaper, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(AxisShaper, _condition, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(AxisShaper, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(AxisShaper, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry AxisShaper::objectModelArrayTable[] =
 {
 	// 0. Amplitudes
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numImpulses; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
-											-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->coefficients[context.GetLastIndex()], 3); }
+		OBJECT_MODEL_ARRAY_COUNT(self->numImpulses),
+		OBJECT_MODEL_ARRAY_VALUE(self->coefficients[context.GetLastIndex()], 3)
 	},
 	// 1. Durations
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numImpulses; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
-											-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->delays[context.GetLastIndex()] * (1.0/StepClockRate), 5); }
+		OBJECT_MODEL_ARRAY_COUNT(self->numImpulses),
+		OBJECT_MODEL_ARRAY_VALUE(self->delays[context.GetLastIndex()] * (1.0/StepClockRate), 5)
 	}
 };
 

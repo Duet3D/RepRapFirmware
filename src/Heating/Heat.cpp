@@ -74,10 +74,10 @@ extern "C" [[noreturn]] void HeaterTaskStart(void * pvParameters) noexcept
 	reprap.GetHeat().HeaterTask();
 }
 
-#if SUPPORT_OBJECT_MODEL
-
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Heat, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(Heat, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(Heat, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(Heat, __VA_ARGS__)
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -88,20 +88,20 @@ constexpr ObjectModelArrayTableEntry Heat::objectModelArrayTable[] =
 	// 0. Bed heaters
 	{
 		&heatersLock,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MaxBedHeaters; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Heat*)self)->bedHeaters[context.GetLastIndex()]); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(MaxBedHeaters),
+		OBJECT_MODEL_ARRAY_VALUE((int32_t)self->bedHeaters[context.GetLastIndex()])
 	},
 	// 1. Chamber heaters
 	{
 		&heatersLock,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MaxChamberHeaters; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Heat*)self)->chamberHeaters[context.GetLastIndex()]); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(MaxChamberHeaters),
+		OBJECT_MODEL_ARRAY_VALUE((int32_t)self->chamberHeaters[context.GetLastIndex()])
 	},
 	// 2. Heaters
 	{
 		&heatersLock,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Heat*)self)->GetNumHeatersToReport(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Heat*)self)->heaters[context.GetLastIndex()]); }
+		OBJECT_MODEL_ARRAY_COUNT(self->GetNumHeatersToReport()),
+		OBJECT_MODEL_ARRAY_VALUE(self->heaters[context.GetLastIndex()])
 	}
 };
 
@@ -121,8 +121,6 @@ constexpr ObjectModelTableEntry Heat::objectModelTable[] =
 constexpr uint8_t Heat::objectModelTableDescriptor[] = { 1, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heat)
-
-#endif
 
 ReadWriteLock Heat::heatersLock;
 ReadWriteLock Heat::sensorsLock;

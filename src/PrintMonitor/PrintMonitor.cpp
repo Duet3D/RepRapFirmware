@@ -28,25 +28,23 @@ Licence: GPL
 
 ReadWriteLock PrintMonitor::printMonitorLock;
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(PrintMonitor, __VA_ARGS__)
-#define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(PrintMonitor, _condition,__VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(PrintMonitor, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition,...)	OBJECT_MODEL_FUNC_IF_BODY(PrintMonitor, _condition,__VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(PrintMonitor, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(PrintMonitor, __VA_ARGS__)
 
 const ObjectModelArrayTableEntry PrintMonitor::objectModelArrayTable[] =
 {
 	// 0. Filaments
-		{
+	{
 		&printMonitorLock,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
-				{ return ((const PrintMonitor*)self)->printingFileInfo.numFilaments; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return  ExpressionValue(((const PrintMonitor*)self)->printingFileInfo.filamentNeeded[context.GetLastIndex()], 1); }
+		OBJECT_MODEL_ARRAY_COUNT(self->printingFileInfo.numFilaments),
+		OBJECT_MODEL_ARRAY_VALUE(self->printingFileInfo.filamentNeeded[context.GetLastIndex()], 1)
 	},
 	// 1. Thumbnails
 	{
@@ -60,7 +58,7 @@ const ObjectModelArrayTableEntry PrintMonitor::objectModelArrayTable[] =
 					}
 					return count;
 				},
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 2); }
+		OBJECT_MODEL_ARRAY_VALUE(self, 2)
 	}
 };
 
@@ -120,8 +118,6 @@ int32_t PrintMonitor::GetPrintOrSimulatedDuration() const noexcept
 {
 	return lrintf((gCodes.IsSimulating()) ? gCodes.GetSimulationTime() + reprap.GetMove().GetSimulationTime() : GetPrintDuration());
 }
-
-#endif
 
 PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) noexcept : platform(p), gCodes(gc), lastWarmUpDuration(0), isPrinting(false), heatingUp(false), paused(false), printingFileParsed(false)
 {

@@ -184,8 +184,6 @@ LocalDriversBitmap AxisDriversConfig::GetLocalDriversBitmap() const noexcept
 //*************************************************************************************************
 // Platform class
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
@@ -332,8 +330,6 @@ size_t Platform::GetNumGpOutputsToReport() const noexcept
 	}
 	return ret;
 }
-
-#endif
 
 bool Platform::deliberateError = false;						// true if we deliberately caused an exception for testing purposes
 String<StringLength256> Platform::genericDebugBuffer;
