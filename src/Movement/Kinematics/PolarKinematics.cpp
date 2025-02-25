@@ -28,10 +28,15 @@ constexpr ObjectModelTableEntry PolarKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "name",	OBJECT_MODEL_FUNC(self->GetName(true)), 	ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC(self->GetName(true)), 				ObjectModelEntryFlags::none },
+	{ "radiusHomed",		OBJECT_MODEL_FUNC(self->homedRadius), 					ObjectModelEntryFlags::none },
+	{ "radiusMax",			OBJECT_MODEL_FUNC(self->maxRadius), 					ObjectModelEntryFlags::none },
+	{ "radiusMin",			OBJECT_MODEL_FUNC(self->minRadius), 					ObjectModelEntryFlags::none },
+	{ "ttAccMax",			OBJECT_MODEL_FUNC(self->maxTurntableAcceleration, 1), 	ObjectModelEntryFlags::none },
+	{ "ttSpeedMax",			OBJECT_MODEL_FUNC(self->maxTurntableSpeed, 1), 			ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t PolarKinematics::objectModelTableDescriptor[] = { 1, 1 };
+constexpr uint8_t PolarKinematics::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(PolarKinematics, Kinematics)
 

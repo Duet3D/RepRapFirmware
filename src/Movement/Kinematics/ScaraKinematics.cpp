@@ -26,16 +26,50 @@
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(ScaraKinematics, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(ScaraKinematics, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(ScaraKinematics, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(ScaraKinematics, __VA_ARGS__)
+
+constexpr ObjectModelArrayTableEntry ScaraKinematics::objectModelArrayTable[] =
+{
+	// 10. Theta limits
+	{
+		nullptr,								// no lock needed
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
+		OBJECT_MODEL_ARRAY_VALUE(self->thetaLimits[context.GetLastIndex()], 1)
+	},
+	// 11. Psi limits
+	{
+		nullptr,								// no lock needed
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
+		OBJECT_MODEL_ARRAY_VALUE(self->psiLimits[context.GetLastIndex()], 1)
+	},
+	// 12. Crosstalk
+	{
+		nullptr,								// no lock needed
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(3),
+		OBJECT_MODEL_ARRAY_VALUE(self->crosstalk[context.GetLastIndex()], 1)
+	}
+};
+
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(ScaraKinematics, ZLeadscrewKinematics, 10)
 
 constexpr ObjectModelTableEntry ScaraKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "name",	OBJECT_MODEL_FUNC(self->GetName(true)), 	ObjectModelEntryFlags::none },
+	{ "crosstalk",		OBJECT_MODEL_FUNC_ARRAY(12),					ObjectModelEntryFlags::none },
+	{ "distalLength",	OBJECT_MODEL_FUNC(self->distalArmLength, 2),	ObjectModelEntryFlags::none },
+	{ "minRadius",		OBJECT_MODEL_FUNC(self->requestedMinRadius, 1),	ObjectModelEntryFlags::none },
+	{ "name",			OBJECT_MODEL_FUNC(self->GetName(true)), 		ObjectModelEntryFlags::none },
+	{ "proximalLength",	OBJECT_MODEL_FUNC(self->proximalArmLength, 2),	ObjectModelEntryFlags::none },
+	{ "psiLimits",		OBJECT_MODEL_FUNC_ARRAY(11),					ObjectModelEntryFlags::none },
+	{ "thetaLimits",	OBJECT_MODEL_FUNC_ARRAY(10),					ObjectModelEntryFlags::none },
+	{ "xOffset",		OBJECT_MODEL_FUNC(self->xOffset, 1),			ObjectModelEntryFlags::none },
+	{ "yOffset",		OBJECT_MODEL_FUNC(self->yOffset, 1),			ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t ScaraKinematics::objectModelTableDescriptor[] = { 1, 1 };
+constexpr uint8_t ScaraKinematics::objectModelTableDescriptor[] = { 1, 9 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(ScaraKinematics, ZLeadscrewKinematics)
 

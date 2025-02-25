@@ -44,7 +44,7 @@ public:
 	LogicalDrivesBitmap GetControllingDrives(size_t axis, bool forHoming) const noexcept override;
 
 protected:
-	DECLARE_OBJECT_MODEL
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	static constexpr float DefaultProximalArmLength = 100.0;
