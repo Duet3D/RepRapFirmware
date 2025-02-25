@@ -2207,6 +2207,7 @@ GCodeResult RepRap::GetFileInfoResponse(c_string _ecv_null filename, OutputBuffe
 {
 	const bool specificFile = (filename != nullptr && filename[0] != 0);
 	GCodeFileInfo info;
+	GlobalVariables vars;
 	if (specificFile)
 	{
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -2216,7 +2217,7 @@ GCodeResult RepRap::GetFileInfoResponse(c_string _ecv_null filename, OutputBuffe
 		{
 			info.isValid = false;
 		}
-		else if (MassStorage::GetFileInfo(filePath.c_str(), info, quitEarly, nullptr) == GCodeResult::notFinished)
+		else if (MassStorage::GetFileInfo(filePath.c_str(), info, quitEarly, &vars) == GCodeResult::notFinished)
 		{
 			// This may take a few runs...
 			return GCodeResult::notFinished;
@@ -2295,9 +2296,10 @@ GCodeResult RepRap::GetFileInfoResponse(c_string _ecv_null filename, OutputBuffe
 		{
 			response->cat('[');
 		}
-		response->cat(']');
 
-		response->catf(",\"generatedBy\":\"%.s\"}\n", info.generatedBy.c_str());
+		response->catf("],\"generatedBy\":\"%.s\",\"customInfo\":", info.generatedBy.c_str());
+		vars.ReportAllAsJson(response);
+		response->cat("}\n");
 		return GCodeResult::ok;
 	}
 

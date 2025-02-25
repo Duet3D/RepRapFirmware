@@ -22,6 +22,8 @@ public:
 
 	VariableSet& GetVariables() noexcept { return vars; }
 
+	void ReportAllAsJson(OutputBuffer *buf) const THROWS(GCodeException);
+
 protected:
 	DECLARE_OBJECT_MODEL
 
