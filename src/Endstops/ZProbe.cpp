@@ -31,27 +31,25 @@ constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 	// 0. Offsets
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const ZProbe*)self)->offsets[context.GetLastIndex()], 2); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetVisibleAxes()),
+		OBJECT_MODEL_ARRAY_VALUE(self->offsets[context.GetLastIndex()], 2)
 	},
 	// 1. Speeds
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return (((const ZProbe*)self)->type == ZProbeType::scanningAnalog) ? 3 : 2; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-					{ return ExpressionValue(InverseConvertSpeedToMmPerMin(((const ZProbe*)self)->probeSpeeds[context.GetLastIndex()]), 1); }
+		OBJECT_MODEL_ARRAY_COUNT((self->type == ZProbeType::scanningAnalog) ? 3 : 2),
+		OBJECT_MODEL_ARRAY_VALUE(InverseConvertSpeedToMmPerMin(self->probeSpeeds[context.GetLastIndex()]), 1)
 	},
 	// 2. Temperature coefficients
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::temperatureCoefficients); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-					{ return ExpressionValue(((const ZProbe*)self)->temperatureCoefficients[context.GetLastIndex()], 5); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(ARRAY_SIZE(ZProbe::temperatureCoefficients)),
+		OBJECT_MODEL_ARRAY_VALUE(self->temperatureCoefficients[context.GetLastIndex()], 5)
 	},
 	// 3. Values
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return (((const ZProbe*)self)->type == ZProbeType::dumbModulated) ? 2 : 1; },
+		OBJECT_MODEL_ARRAY_COUNT((self->type == ZProbeType::dumbModulated) ? 2 : 1),
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 					{	int32_t v1 = 0;
 						return ExpressionValue
@@ -64,17 +62,15 @@ constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 	// 4. Dive heights
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::diveHeights); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue(((const ZProbe*)self)->diveHeights[context.GetLastIndex()], 1); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(ARRAY_SIZE(ZProbe::diveHeights)),
+		OBJECT_MODEL_ARRAY_VALUE(self->diveHeights[context.GetLastIndex()], 1)
 	},
 #if SUPPORT_SCANNING_PROBES
 	// 5. Scanning probe coefficients
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::scanCoefficients); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue(((const ZProbe*)self)->scanCoefficients[context.GetLastIndex()], 7); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(ARRAY_SIZE(ZProbe::scanCoefficients)),
+		OBJECT_MODEL_ARRAY_VALUE(self->scanCoefficients[context.GetLastIndex()], 7)
 	},
 #endif
 };
