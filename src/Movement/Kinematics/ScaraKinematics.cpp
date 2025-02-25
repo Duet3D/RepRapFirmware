@@ -32,19 +32,19 @@
 
 constexpr ObjectModelArrayTableEntry ScaraKinematics::objectModelArrayTable[] =
 {
-	// 10. Theta limits
+	// 20. Theta limits
 	{
 		nullptr,								// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
 		OBJECT_MODEL_ARRAY_VALUE(self->thetaLimits[context.GetLastIndex()], 1)
 	},
-	// 11. Psi limits
+	// 21. Psi limits
 	{
 		nullptr,								// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
 		OBJECT_MODEL_ARRAY_VALUE(self->psiLimits[context.GetLastIndex()], 1)
 	},
-	// 12. Crosstalk
+	// 22. Crosstalk
 	{
 		nullptr,								// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(3),
@@ -52,19 +52,19 @@ constexpr ObjectModelArrayTableEntry ScaraKinematics::objectModelArrayTable[] =
 	}
 };
 
-DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(ScaraKinematics, ZLeadscrewKinematics, 10)
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(ScaraKinematics, ZLeadscrewKinematics, 20)
 
 constexpr ObjectModelTableEntry ScaraKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "crosstalk",		OBJECT_MODEL_FUNC_ARRAY(12),					ObjectModelEntryFlags::none },
+	{ "crosstalk",		OBJECT_MODEL_FUNC_ARRAY(22),					ObjectModelEntryFlags::none },
 	{ "distalLength",	OBJECT_MODEL_FUNC(self->distalArmLength, 2),	ObjectModelEntryFlags::none },
 	{ "minRadius",		OBJECT_MODEL_FUNC(self->requestedMinRadius, 1),	ObjectModelEntryFlags::none },
 	{ "name",			OBJECT_MODEL_FUNC(self->GetName(true)), 		ObjectModelEntryFlags::none },
 	{ "proximalLength",	OBJECT_MODEL_FUNC(self->proximalArmLength, 2),	ObjectModelEntryFlags::none },
-	{ "psiLimits",		OBJECT_MODEL_FUNC_ARRAY(11),					ObjectModelEntryFlags::none },
-	{ "thetaLimits",	OBJECT_MODEL_FUNC_ARRAY(10),					ObjectModelEntryFlags::none },
+	{ "psiLimits",		OBJECT_MODEL_FUNC_ARRAY(21),					ObjectModelEntryFlags::none },
+	{ "thetaLimits",	OBJECT_MODEL_FUNC_ARRAY(20),					ObjectModelEntryFlags::none },
 	{ "xOffset",		OBJECT_MODEL_FUNC(self->xOffset, 1),			ObjectModelEntryFlags::none },
 	{ "yOffset",		OBJECT_MODEL_FUNC(self->yOffset, 1),			ObjectModelEntryFlags::none },
 };
