@@ -59,7 +59,7 @@ public:
 	float GetPauseDuration() const noexcept;
 
 	const char *_ecv_array _ecv_null GetPrintingFilename() const noexcept { return (isPrinting) ? filenameBeingPrinted.c_str() : nullptr; }
-	bool GetPrintingFileInfo(GCodeFileInfo& info) noexcept;
+	bool GetPrintingFileInfo(GCodeFileInfo& info, const GlobalVariables *& p_customInfo) noexcept;
 	void SetPrintingFileInfo(const char *_ecv_array filename, GCodeFileInfo& info) noexcept;
 
 	GCodeResult ProcessM73(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);

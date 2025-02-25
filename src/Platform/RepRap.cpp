@@ -2207,7 +2207,8 @@ GCodeResult RepRap::GetFileInfoResponse(c_string _ecv_null filename, OutputBuffe
 {
 	const bool specificFile = (filename != nullptr && filename[0] != 0);
 	GCodeFileInfo info;
-	GlobalVariables vars;
+	GlobalVariables vars;												// if we asked for a specific file then this is the variable set that we fill in for customiNFO
+	const GlobalVariables *p_vars;										// this will be a pointer to whatever GlobalVariables instance holds the customInfo
 	if (specificFile)
 	{
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -2222,11 +2223,12 @@ GCodeResult RepRap::GetFileInfoResponse(c_string _ecv_null filename, OutputBuffe
 			// This may take a few runs...
 			return GCodeResult::notFinished;
 		}
+		p_vars = &vars;
 #else
 		return GCodeResult::warning;
 #endif
 	}
-	else if (!printMonitor->GetPrintingFileInfo(info))
+	else if (!printMonitor->GetPrintingFileInfo(info, p_vars))
 	{
 		return GCodeResult::notFinished;
 	}
@@ -2298,7 +2300,7 @@ GCodeResult RepRap::GetFileInfoResponse(c_string _ecv_null filename, OutputBuffe
 		}
 
 		response->catf("],\"generatedBy\":\"%.s\",\"customInfo\":", info.generatedBy.c_str());
-		vars.ReportAllAsJson(response);
+		p_vars->ReportAllAsJson(response);
 		response->cat("}\n");
 		return GCodeResult::ok;
 	}

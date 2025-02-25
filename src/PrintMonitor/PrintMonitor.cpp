@@ -157,7 +157,7 @@ void PrintMonitor::PrintingFileInfoUpdated() noexcept
 	reprap.JobUpdated();
 }
 
-bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info) noexcept
+bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info, const GlobalVariables *& p_customInfo) noexcept
 {
 	if (IsPrinting())
 	{
@@ -166,6 +166,7 @@ bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info) noexcept
 			return false;					// not ready yet
 		}
 		info = printingFileInfo;
+		p_customInfo = &customInfo;
 	}
 	else
 	{
