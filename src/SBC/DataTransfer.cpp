@@ -433,7 +433,7 @@ DataTransfer::DataTransfer() noexcept : state(InternalTransferState::ExchangingD
 void DataTransfer::Init() noexcept
 {
 	// Initialise transfer ready pin
-	pinMode(SbcTfrReadyPin, OUTPUT_LOW);
+	SetPinMode(SbcTfrReadyPin, OUTPUT_LOW);
 
 	// Allocate buffers in SBC mode
 #if HAS_LWIP_NETWORKING

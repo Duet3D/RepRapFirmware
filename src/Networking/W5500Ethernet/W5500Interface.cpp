@@ -73,7 +73,7 @@ void W5500Interface::Init() noexcept
 	interfaceMutex.Create("W5500");
 
 	// Ensure that the W5500 chip is in the reset state
-	pinMode(W5500ResetPin, OUTPUT_LOW);
+	SetPinMode(W5500ResetPin, OUTPUT_LOW);
 	lastTickMillis = millis();
 
 	SetIPAddress(DefaultIpAddress, DefaultNetMask, DefaultGateway);
@@ -198,7 +198,7 @@ void W5500Interface::Start() noexcept
 	MutexLocker lock(interfaceMutex);
 
 	SetIPAddress(platform.GetIPAddress(), platform.NetMask(), platform.GateWay());
-	pinMode(W5500ResetPin, OUTPUT_LOW);
+	SetPinMode(W5500ResetPin, OUTPUT_LOW);
 	delayMicroseconds(550);						// W550 reset pulse must be at least 500us long
 	IoPort::WriteDigital(W5500ResetPin, true);	// raise /Reset pin
 	delay(55);									// W5500 needs 50ms to start up

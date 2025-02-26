@@ -1659,8 +1659,8 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 void SmartDrivers::Init() noexcept
 {
 	// Make sure the ENN and CS pins are high
-	pinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
-	pinMode(GlobalTmc51xxCSPin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmc51xxCSPin, OUTPUT_HIGH);
 
 	SetPinFunction(TMC51xxMosiPin, TMC51xxMosiPinPeriphMode);
 	SetPinFunction(TMC51xxMisoPin, TMC51xxMisoPinPeriphMode);

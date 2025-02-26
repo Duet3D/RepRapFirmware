@@ -196,7 +196,7 @@ namespace WizSpi
 		SetPinFunction(APIN_W5500_SPI_SCK, SPIPeriphMode);
 		SetPinFunction(APIN_W5500_SPI_MOSI, SPIPeriphMode);
 		SetPinFunction(APIN_W5500_SPI_MISO, SPIPeriphMode);
-		pinMode(APIN_W5500_SPI_SS0, OUTPUT_HIGH);			// use manual SS control
+		SetPinMode(APIN_W5500_SPI_SS0, OUTPUT_HIGH);		// use manual SS control
 
 		pmc_enable_periph_clk(W5500_SPI_INTERFACE_ID);
 

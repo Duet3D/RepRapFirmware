@@ -398,32 +398,32 @@ bool Platform::SetDebugBufferSize(uint32_t size) noexcept
 void Platform::Init() noexcept
 {
 #if HAS_LWIP_NETWORKING
-	pinMode(EthernetPhyResetPin, OUTPUT_LOW);					// reset the Ethernet Phy chip
+	SetPinMode(EthernetPhyResetPin, OUTPUT_LOW);				// reset the Ethernet Phy chip
 #endif
 
 	// Do any board-specific initialisation that needs to be done early and does not depend on the board revision
 
 	// Make sure the on-board drivers are disabled
 #if defined(DUET_NG) || defined(PCCB_10)
-	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
 #elif defined(DUET_M) || defined(DUET3MINI)
-	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 #elif defined(DUET3_MB6HC)
-	pinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
 #endif
 
 	// Make sure any WiFi module is held in reset
 #if defined(DUET_NG)
-	pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500
-	pinMode(EspEnablePin, OUTPUT_LOW);
+	SetPinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500
+	SetPinMode(EspEnablePin, OUTPUT_LOW);
 #elif defined(DUET3_MB6HC)
-	pinMode(EspEnablePin, OUTPUT_LOW);						// make sure that the Wifi module if present is disabled
+	SetPinMode(EspEnablePin, OUTPUT_LOW);						// make sure that the Wifi module if present is disabled
 #endif
 
 	// Set up the local drivers. Do this after we have read any direction pins that specify the board type.
 #if defined(DUET3MINI) && SUPPORT_TMC2240
 	// Check whether we have a TMC2240 prototype expansion board connected, before we set the driver direction pins to outputs
-	pinMode(DIRECTION_PINS[5], INPUT_PULLUP);
+	SetPinMode(DIRECTION_PINS[5], INPUT_PULLUP, false);
 	delayMicroseconds(20);						// give the pullup resistor time to work
 	hasTmc2240Expansion = !digitalRead(DIRECTION_PINS[5]);
 #endif
@@ -468,7 +468,7 @@ void Platform::Init() noexcept
 #endif
 
 #ifdef DUET3_MB6XD
-	pinMode(ModbusTxPin, OUTPUT_LOW);			// turn off the RS485 transmitter
+	SetPinMode(ModbusTxPin, OUTPUT_LOW);		// turn off the RS485 transmitter
 #endif
 
 	// Initialise the IO port subsystem
@@ -480,7 +480,7 @@ void Platform::Init() noexcept
 	// File management and SD card interfaces
 	for (size_t i = 0; i < NumSdCards; ++i)
 	{
-		pinMode(SdCardDetectPins[i], INPUT_PULLUP);
+		SetPinMode(SdCardDetectPins[i], INPUT_PULLUP, true);
 	}
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
@@ -554,7 +554,7 @@ void Platform::Init() noexcept
 	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
 	for (Pin p : SpiTempSensorCsPins)
 	{
-		pinMode(p, INPUT_PULLUP);
+		SetPinMode(p, INPUT_PULLUP, false);
 	}
 #endif
 
@@ -563,7 +563,7 @@ void Platform::Init() noexcept
 #if SAME5x
 	// nothing to do here
 #else
-	pinMode(APIN_USART_SSPI_MISO, INPUT_PULLUP);
+	SetPinMode(APIN_USART_SSPI_MISO, INPUT_PULLUP, false);
 #endif
 
 #ifdef PCCB
@@ -577,15 +577,15 @@ void Platform::Init() noexcept
 	for (size_t thermistor = 0; thermistor < NumThermistorInputs; thermistor++)
 	{
 		// TODO use ports for these?
-		pinMode(TEMP_SENSE_PINS[thermistor], AIN);
+		SetPinMode(TEMP_SENSE_PINS[thermistor], AIN);
 		filteredAdcChannels[thermistor] = PinToAdcChannel(TEMP_SENSE_PINS[thermistor]);	// translate the pin number to the SAM ADC channel number;
 	}
 
 #if HAS_VREF_MONITOR
 	// Set up the VSSA and VREF measurement channels
-	pinMode(VssaSensePin, AIN);
+	SetPinMode(VssaSensePin, AIN);
 	filteredAdcChannels[VssaFilterIndex] = PinToAdcChannel(VssaSensePin);		// translate the pin number to the SAM ADC channel number
-	pinMode(VrefSensePin, AIN);
+	SetPinMode(VrefSensePin, AIN);
 	filteredAdcChannels[VrefFilterIndex] = PinToAdcChannel(VrefSensePin);		// translate the pin number to the SAM ADC channel number
 #endif
 
@@ -625,7 +625,7 @@ void Platform::Init() noexcept
 #if HAS_VOLTAGE_MONITOR
 	// Power monitoring
 	vInMonitorAdcChannel = PinToAdcChannel(PowerMonitorVinDetectPin);
-	pinMode(PowerMonitorVinDetectPin, AIN);
+	SetPinMode(PowerMonitorVinDetectPin, AIN);
 	AnalogInEnableChannel(vInMonitorAdcChannel, true);
 	currentVin = 0;
 	highestVin = 0;
@@ -639,7 +639,7 @@ void Platform::Init() noexcept
 #if HAS_12V_MONITOR
 	// Power monitoring
 	v12MonitorAdcChannel = PinToAdcChannel(PowerMonitorV12DetectPin);
-	pinMode(PowerMonitorV12DetectPin, AIN);
+	SetPinMode(PowerMonitorV12DetectPin, AIN);
 	AnalogInEnableChannel(v12MonitorAdcChannel, true);
 	currentV12 = highestV12 = 0;
 	lowestV12 = 9999;
@@ -3422,8 +3422,8 @@ void Platform::ResetChannel(size_t chan) noexcept
 	// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 or v1.02 boards
 	// Driver 1 has a pulldown resistor on v0.1 and v1.0 boards, however we don't support v0.1 and we don't care about the difference between v0.6 and v1.0, so we don't need to read it
 	// Driver 2 has a pulldown resistor on v1.02 only
-	pinMode(DIRECTION_PINS[2], INPUT_PULLUP);
-	pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
+	SetPinMode(DIRECTION_PINS[2], INPUT_PULLUP, false);
+	SetPinMode(DIRECTION_PINS[0], INPUT_PULLUP, false);
 	delayMicroseconds(20);									// give the pullup resistor time to work
 	if (digitalRead(DIRECTION_PINS[2]))
 	{
@@ -3444,9 +3444,9 @@ void Platform::ResetChannel(size_t chan) noexcept
 {
 	// Driver 0 direction has a pulldown resistor on v1.0  boards only
 	// Driver 5 direction has a pulldown resistor on 1.01 boards only
-	pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
-	pinMode(DIRECTION_PINS[1], INPUT_PULLUP);
-	pinMode(DIRECTION_PINS[5], INPUT_PULLUP);
+	SetPinMode(DIRECTION_PINS[0], INPUT_PULLUP, false);
+	SetPinMode(DIRECTION_PINS[1], INPUT_PULLUP, false);
+	SetPinMode(DIRECTION_PINS[5], INPUT_PULLUP, false);
 	delayMicroseconds(20);									// give the pullup resistor time to work
 	if (digitalRead(DIRECTION_PINS[5]))
 	{
@@ -3463,7 +3463,7 @@ void Platform::SetBoardType() noexcept
 {
 #if defined(DUET3MINI_V04)
 	// Test whether this is a WiFi or an Ethernet board by testing for a pulldown resistor on Dir1
-	pinMode(DIRECTION_PINS[1], INPUT_PULLUP);
+	SetPinMode(DIRECTION_PINS[1], INPUT_PULLUP, false);
 	delayMicroseconds(20);									// give the pullup resistor time to work
 	board = (digitalRead(DIRECTION_PINS[1]))				// if SAME54P20A
 				? BoardType::Duet3Mini_WiFi
@@ -3492,19 +3492,19 @@ void Platform::SetBoardType() noexcept
 	board = BoardType::FMDC;
 #elif defined(DUET_NG)
 	// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
-	pinMode(W5500ModuleSensePin, INPUT_PULLUP);				// set our UART receive pin to be an input pin and enable the pullup
+	SetPinMode(W5500ModuleSensePin, INPUT_PULLUP);			// set our UART receive pin to be an input pin and enable the pullup
 
 	// Set up the VSSA sense pin. Older Duet WiFis don't have it connected, so we enable the pulldown resistor to keep it inactive.
-	pinMode(VssaSensePin, INPUT_PULLUP);
+	SetPinMode(VssaSensePin, INPUT_PULLUP, false);
 	delayMicroseconds(10);
 	const bool vssaHighVal = digitalRead(VssaSensePin);
-	pinMode(VssaSensePin, INPUT_PULLDOWN);
+	SetPinMode(VssaSensePin, INPUT_PULLDOWN);
 	delayMicroseconds(10);
 	const bool vssaLowVal = digitalRead(VssaSensePin);
 	const bool vssaSenseWorking = vssaLowVal || !vssaHighVal;
 	if (vssaSenseWorking)
 	{
-		pinMode(VssaSensePin, INPUT);
+		SetPinMode(VssaSensePin, INPUT, true);
 	}
 
 # if defined(USE_SBC)

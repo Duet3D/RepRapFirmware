@@ -129,7 +129,7 @@ void SerialWiFiPortDeinit(AsyncSerial*) noexcept
 {
 	for (Pin p : WiFiUartSercomPins)
 	{
-		pinMode(p, INPUT_PULLUP);								// just enable pullups on TxD and RxD pins
+		SetPinMode(p, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
 	}
 }
 
@@ -558,25 +558,25 @@ void WiFiInterface::Start() noexcept
 	// The ESP8266 is held in a reset state by a pulldown resistor until we enable it.
 	// Make sure the ESP8266 is in the reset state
 #if !WIFI_USES_ESP32
-	pinMode(EspResetPin, OUTPUT_LOW);
+	SetPinMode(EspResetPin, OUTPUT_LOW);
 #endif
 
-	pinMode(EspEnablePin, OUTPUT_LOW);
+	SetPinMode(EspEnablePin, OUTPUT_LOW);
 
 	// Set up our transfer request pin (GPIO4) as an output and set it low
-	pinMode(SamTfrReadyPin, OUTPUT_LOW);
+	SetPinMode(SamTfrReadyPin, OUTPUT_LOW);
 
 	// Set up our data ready pin (ESP8266 and ESP32 GPIO0) as an output and set it high ready to boot the ESP from flash
-	pinMode(EspDataReadyPin, OUTPUT_HIGH);
+	SetPinMode(EspDataReadyPin, OUTPUT_HIGH);
 
 #if WIFI_USES_ESP32
-	pinMode(SamCsPin, INPUT_PULLUP);		// ensure that SS is pulled high
+	SetPinMode(SamCsPin, INPUT_PULLUP);		// ensure that SS is pulled high
 #else
 	// Set our CS input (ESP8266 GPIO15) low ready for booting the ESP. This also clears the transfer ready latch on older Duet 2 boards.
-	pinMode(SamCsPin, OUTPUT_LOW);
+	SetPinMode(SamCsPin, OUTPUT_LOW);
 
 	// ESP8266 GPIO2 also needs to be high to boot. It's connected to MISO on the SAM, so set the pullup resistor on that pin
-	pinMode(APIN_ESP_SPI_MISO, INPUT_PULLUP);
+	SetPinMode(APIN_ESP_SPI_MISO, INPUT_PULLUP);
 #endif
 
 	// Make sure it has time to reset - no idea how long it needs, but 20ms should be plenty
@@ -594,11 +594,11 @@ void WiFiInterface::Start() noexcept
 
 #if !WIFI_USES_ESP32
 	// Relinquish control of our CS pin so that the ESP can take it over
-	pinMode(SamCsPin, INPUT);
+	SetPinMode(SamCsPin, INPUT, false);
 #endif
 
 	// Set the data request pin to be an input
-	pinMode(EspDataReadyPin, INPUT_PULLUP);
+	SetPinMode(EspDataReadyPin, INPUT_PULLUP, false);
 
 	// The ESP takes about 300ms before it starts talking to us, so don't wait for it here, do that in Spin()
 	spiTxUnderruns = spiRxOverruns = 0;
@@ -2484,10 +2484,10 @@ void WiFiInterface::StartWiFi() noexcept
 void WiFiInterface::ResetWiFi() noexcept
 {
 #if !WIFI_USES_ESP32
-	pinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
+	SetPinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
 #endif
 
-	pinMode(EspEnablePin, OUTPUT_LOW);
+	SetPinMode(EspEnablePin, OUTPUT_LOW);
 
 #if !defined(SAME5x)
 	pinMode(APIN_SerialWiFi_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
@@ -2518,24 +2518,24 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 
 #if !WIFI_USES_ESP32
 	// Make sure the ESP8266 is in the reset state
-	pinMode(EspResetPin, OUTPUT_LOW);
+	SetPinMode(EspResetPin, OUTPUT_LOW);
 #endif
 
 	// Power down the ESP8266
-	pinMode(EspEnablePin, OUTPUT_LOW);
+	SetPinMode(EspEnablePin, OUTPUT_LOW);
 
 	// Set up our transfer request pin (GPIO4) as an output and set it low
-	pinMode(SamTfrReadyPin, OUTPUT_LOW);
+	SetPinMode(SamTfrReadyPin, OUTPUT_LOW);
 
 	// Set up our data ready pin (ESP GPIO0) as an output and set it low ready to boot the ESP from UART
-	pinMode(EspDataReadyPin, OUTPUT_LOW);
+	SetPinMode(EspDataReadyPin, OUTPUT_LOW);
 
 	// GPIO2 also needs to be high to boot up. It's connected to MISO on the SAM, so set the pullup resistor on that pin
-	pinMode(APIN_ESP_SPI_MISO, INPUT_PULLUP);
+	SetPinMode(APIN_ESP_SPI_MISO, INPUT_PULLUP);
 
 #if !WIFI_USES_ESP32
 	// Set our CS input (ESP GPIO15) low ready for booting the ESP. This also clears the transfer ready latch.
-	pinMode(SamCsPin, OUTPUT_LOW);
+	SetPinMode(SamCsPin, OUTPUT_LOW);
 #endif
 
 	// Make sure it has time to reset - no idea how long it needs, but 50ms should be plenty
@@ -2544,8 +2544,8 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	if (external)
 	{
 #if !defined(DUET3MINI)
-		pinMode(APIN_SerialWiFi_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
-		pinMode(APIN_SerialWiFi_RXD, INPUT_PULLUP);
+		SetPinMode(APIN_SerialWiFi_TXD, INPUT_PULLUP);				// just enable pullups on TxD and RxD pins
+		SetPinMode(APIN_SerialWiFi_RXD, INPUT_PULLUP);
 #endif
 	}
 	else

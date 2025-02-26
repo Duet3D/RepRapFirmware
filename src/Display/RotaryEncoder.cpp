@@ -38,9 +38,9 @@ void RotaryEncoder::Init(int pulsesPerClick) noexcept
 	reverseDirection = (pulsesPerClick < 0);
 
 	// Set up pins
-	IoPort::SetPinMode(pin0, INPUT_PULLUP);
-	IoPort::SetPinMode(pin1, INPUT_PULLUP);
-	IoPort::SetPinMode(pinButton, INPUT_PULLUP);
+	::SetPinMode(pin0, INPUT_PULLUP, true);
+	::SetPinMode(pin1, INPUT_PULLUP, true);
+	::SetPinMode(pinButton, INPUT_PULLUP, true);
 	delay(2);                  // ensure we read the initial state correctly
 
 	// Initialise encoder variables

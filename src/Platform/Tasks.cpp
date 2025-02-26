@@ -136,21 +136,21 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array _ecv_null stk) noexcept
 	const bool DiagOnPolarity = (bt >= BoardType::Duet3_6HC_v102) ? DiagOnPolarity102 : DiagOnPolarityPre102;
 	if (bt >= BoardType::Duet3_6HC_v102)
 	{
-		pinMode(UsbPowerSwitchPin, OUTPUT_LOW);								// turn USB power off
-		pinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
+		SetPinMode(UsbPowerSwitchPin, OUTPUT_LOW);							// turn USB power off
+		SetPinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
 	}
 #endif
 #if defined(DUET3_MB6XD)
 	const BoardType bt = Platform::GetMB6XDBoardType();
 	if (bt >= BoardType::Duet3_6XD_v101)
 	{
-		pinMode(UsbPowerSwitchPin, OUTPUT_LOW);								// turn USB power off
-		pinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
+		SetPinMode(UsbPowerSwitchPin, OUTPUT_LOW);							// turn USB power off
+		SetPinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
 	}
 #endif
-	pinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up status LED for debugging and turn it off
+	SetPinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);		// set up status LED for debugging and turn it off
 #if defined(DUET3MINI) || defined(DUET3_MB6HC) || defined(DUET3_MB6XD)
-	pinMode(ActLedPin, (ActOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up activity LED and turn it off
+	SetPinMode(ActLedPin, (ActOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);		// set up activity LED and turn it off
 #endif
 
 #if !defined(DEBUG)		// don't check the CRC of a debug build because debugger breakpoints mess up the CRC

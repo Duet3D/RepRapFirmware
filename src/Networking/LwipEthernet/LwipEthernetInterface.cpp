@@ -416,7 +416,7 @@ void LwipEthernetInterface::Stop() noexcept
 	{
 		netif_set_down(&gs_net_if);
 
-		pinMode(EthernetPhyResetPin, OUTPUT_LOW);		// hold the Ethernet Phy chip in reset
+		SetPinMode(EthernetPhyResetPin, OUTPUT_LOW);		// hold the Ethernet Phy chip in reset
 		SetState(NetworkState::disabled);
 	}
 }

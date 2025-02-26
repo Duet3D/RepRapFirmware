@@ -405,11 +405,11 @@ void Move::Init() noexcept
 	{
 		directions[driver] = true;														// drive moves forwards by default
 #ifdef DUET3_MB6XD
-		pinMode(ENABLE_PINS[driver], INPUT);											// temporarily set up the enable pin for reading
-		pinMode(DRIVER_ERR_PINS[driver], INPUT);										// set up the error pin for reading
+		SetPinMode(ENABLE_PINS[driver], INPUT, false);									// temporarily set up the enable pin for reading
+		SetPinMode(DRIVER_ERR_PINS[driver], INPUT, false);								// set up the error pin for reading
 		const bool activeHighEnable = !digitalRead(ENABLE_PINS[driver]);				// test whether we have a pullup or pulldown on the Enable pin
 		enableValues[driver] = activeHighEnable;
-		pinMode(ENABLE_PINS[driver], (activeHighEnable) ? OUTPUT_LOW : OUTPUT_HIGH);	// set driver disabled
+		SetPinMode(ENABLE_PINS[driver], (activeHighEnable) ? OUTPUT_LOW : OUTPUT_HIGH);	// set driver disabled
 		if (digitalRead(DRIVER_ERR_PINS[driver]))
 		{
 			++numErrorHighDrivers;
@@ -424,10 +424,10 @@ void Move::Init() noexcept
 		enableValues[driver] = 0;														// assume active low enable signal
 #endif
 		// Set up the control pins
-		pinMode(STEP_PINS[driver], OUTPUT_LOW);
-		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
+		SetPinMode(STEP_PINS[driver], OUTPUT_LOW);
+		SetPinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
 #if !defined(DUET3) && !defined(DUET3MINI)
-		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);										// this is OK for the TMC2660 CS pins too
+		SetPinMode(ENABLE_PINS[driver], OUTPUT_HIGH);									// this is OK for the TMC2660 CS pins too
 #endif
 
 		brakeOffDelays[driver] = 0;

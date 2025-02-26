@@ -12,6 +12,7 @@
 
 #include <Interrupts.h>
 #include <AnalogIn.h>
+#include <AnalogOut.h>
 
 // Class to represent a port
 class IoPort
@@ -76,7 +77,7 @@ public:
 #endif
 
 	// Low level port access
-	static void SetPinMode(Pin p, PinMode mode) noexcept;
+	static void SetPinMode(Pin p, PinMode mode, bool debounce = false) noexcept;
 	static bool ReadPin(Pin p) noexcept;
 	static void WriteDigital(Pin p, bool high) noexcept;
 	static void WriteAnalog(Pin p, float pwm, uint16_t frequency) noexcept;
@@ -104,6 +105,31 @@ protected:
 };
 
 static_assert(sizeof(IoPort) == 2, "Unexpected size for class IoPort");		// try to keep these small because triggers have arrays of them
+
+#ifndef DUET_NG
+
+// For all boards except Duet 2 we just pass calls to these functions on to CoreN2G, so inline them
+/*static*/ inline void IoPort::SetPinMode(Pin pin, PinMode mode, bool debounce) noexcept
+{
+	::SetPinMode(pin, mode, debounce);
+}
+
+/*static*/ inline bool IoPort::ReadPin(Pin pin) noexcept
+{
+	return digitalRead(pin);
+}
+
+/*static*/ inline void IoPort::WriteDigital(Pin pin, bool high) noexcept
+{
+	digitalWrite(pin, high);
+}
+
+/*static*/ inline void IoPort::WriteAnalog(Pin pin, float pwm, uint16_t freq) noexcept
+{
+	AnalogOut::Write(pin, pwm, freq);
+}
+
+#endif
 
 // Class to represent an output port that might (or might not) support PWM
 class PwmPort : public IoPort

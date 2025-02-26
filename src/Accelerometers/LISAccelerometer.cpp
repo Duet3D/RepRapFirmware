@@ -259,8 +259,8 @@ bool LISAccelerometer:: StartCollecting(uint8_t axes) noexcept
 	totalNumRead = 0;
 
 	// Before we enable data collection, check that the interrupt line is low
-	pinMode(int1Pin, INPUT);			// make sure we can read the interrupt pin
-	delayMicroseconds(5);
+	SetPinMode(int1Pin, INPUT, true);			// make sure we can read the interrupt pin
+	delay(2);									// wait for longer than the debounce time
 	interruptError = digitalRead(int1Pin);
 	if (interruptError)
 	{

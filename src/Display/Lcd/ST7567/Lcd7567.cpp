@@ -45,7 +45,7 @@ DisplayControllerType Lcd7567::GetControllerType() const noexcept
 
 void Lcd7567::HardwareInit() noexcept
 {
-	pinMode(a0Pin, OUTPUT_LOW);				// set DC/A0 pin to be an output with initial LOW state so as to be in command mode (command: 0, data: 1)
+	SetPinMode(a0Pin, OUTPUT_LOW);			// set DC/A0 pin to be an output with initial LOW state so as to be in command mode (command: 0, data: 1)
 
 	// Post-reset wait of 6ms
 	delay(6);

@@ -119,7 +119,7 @@ ExpansionBoardType DuetExpansion::DueXnInit() noexcept
 		const uint16_t data = dueXnExpander.digitalReadAll();
 		dueXnBoardType = boardTypes[(data & BoardTypePins) >> BoardTypeShift];
 		// Check whether it is a version 0.11 board
-		pinMode(DIRECTION_PINS[5], INPUT_PULLUP);
+		::SetPinMode(DIRECTION_PINS[5], INPUT_PULLUP, false);
 		delayMicroseconds(10);
 		if (!digitalRead(DIRECTION_PINS[5]))
 		{
@@ -134,8 +134,8 @@ ExpansionBoardType DuetExpansion::DueXnInit() noexcept
 
 	if (dueXnBoardType != ExpansionBoardType::none)
 	{
-		pinMode(DueX_INT, INPUT_PULLUP);
-		pinMode(DueX_SG, INPUT_PULLUP);
+		::SetPinMode(DueX_INT, INPUT_PULLUP, false);
+		::SetPinMode(DueX_SG, INPUT_PULLUP, false);
 
 		dueXnExpander.pinModeMultiple(AllFanBits, OUTPUT_PWM_LOW);		// Initialise the PWM pins
 		const uint16_t stopBits = (dueXnBoardType == ExpansionBoardType::DueX2) ? AllStopBitsX2 : AllStopBitsX5;	// I am assuming that the X0 and original X2 have 2 endstop inputs
@@ -214,7 +214,7 @@ const char* _ecv_array null DuetExpansion::GetAdditionalExpansionBoardName() noe
 }
 
 // Set the I/O mode of a pin
-void DuetExpansion::SetPinMode(Pin pin, PinMode mode) noexcept
+void DuetExpansion::SetPinMode(Pin pin, PinMode mode, bool debounce) noexcept
 {
 	if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
 	{

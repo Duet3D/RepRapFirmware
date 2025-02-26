@@ -18,8 +18,8 @@ void AppInit() noexcept
 	// We no longer do the direction pins because we use some of those as board version indicators.
 	for (size_t drive = 0; drive < MaxSmartDrivers; ++drive)
 	{
-		pinMode(STEP_PINS[drive], OUTPUT_LOW);
-		pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);
+		SetPinMode(STEP_PINS[drive], OUTPUT_LOW);
+		SetPinMode(ENABLE_PINS[drive], OUTPUT_HIGH);
 	}
 }
 
