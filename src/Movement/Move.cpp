@@ -1769,7 +1769,7 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 					return;
 				}
 
-				if (startTime > segStartTime)
+				if ((int32_t)(startTime - segStartTime) > 0)
 				{
 					// Split the existing segment
 					prev = tail;
