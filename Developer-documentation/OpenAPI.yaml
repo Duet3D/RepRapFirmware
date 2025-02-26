@@ -173,8 +173,12 @@ paths:
                       type: string
             requestBody:
                 description: 'File content'
+                required: true
                 content:
-                    application/octet-stream: {}
+                  application/octet-stream:
+                    schema:
+                      type: string
+                      format: binary
             responses:
                 '200':
                     description: 'File upload result'
