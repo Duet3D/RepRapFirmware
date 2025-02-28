@@ -135,7 +135,10 @@ constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB po
 // Drivers
 constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin(18), PortCPin(16), PortCPin(28), PortCPin(01), PortCPin(04), PortCPin(9) };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortBPin(05), PortDPin(10), PortAPin(04), PortAPin(22), PortCPin(03), PortDPin(14) };
-constexpr Pin DIAG_PINS[NumDirectDrivers] =			{ PortDPin(29), PortCPin(17), PortDPin(13), PortCPin(02), PortDPin(31), PortCPin(10) };
+
+// The DIAG pins are currently not used by RRF because we can get the stall status often enough over SPI.
+// The last DIAG pin is reallocated to be the RS485 Tx/Rx pin on v1.0c boards.
+//constexpr Pin DIAG_PINS[NumDirectDrivers] =			{ PortDPin(29), PortCPin(17), PortDPin(13), PortCPin(02), PortDPin(31), PortCPin(10) };
 
 // Pin assignments etc. using USART1 in SPI mode
 constexpr Pin GlobalTmc51xxEnablePin = PortAPin(9);		// The pin that drives ENN of all TMC drivers
@@ -193,6 +196,11 @@ constexpr bool ActOnPolarity = false;
 constexpr Pin UsbPowerSwitchPin = PortCPin(6);
 constexpr Pin UsbModePin = PortCPin(20);
 constexpr Pin UsbDetectPin = PortCPin(19);
+
+// RS485 control
+// Modbus (board version 1.02 and later)
+constexpr Pin ModbusTxPin = PortCPin(10);										// was Driver 5 diag0 prior to version 1.06c board
+constexpr const char *ModbusTxPinName = "rs485.tx";
 
 // SD cards
 // PD24 is SWD_EXT_RESET on pre-1.02 boards, PanelDue Card Detect on 1.20 and later
@@ -315,7 +323,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out4.tach"			},	// PC07 OUT4_TACH
 	{ TcOutput::tioa7,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out8"				},	// PC08 OUT8
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC09 driver 5 step
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC10 driver 5 diag
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	ModbusTxPinName		},	// PC10 driver 5 diag (1.02b and earlier), Modbus Tx/~Rx (1.02c)
 	{ TcOutput::tioa8,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out7"				},	// PC11 OUT7
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC12 CAN1_RX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_1,	PinCapability::none,	nullptr				},	// PC13 VssaSensePin

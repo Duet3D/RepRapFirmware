@@ -470,6 +470,12 @@ void Platform::Init() noexcept
 #ifdef DUET3_MB6XD
 	SetPinMode(ModbusTxPin, OUTPUT_LOW);		// turn off the RS485 transmitter
 #endif
+#ifdef DUET3_MB6HC
+	if (board == BoardType::Duet3_6HC_v102c)
+	{
+		SetPinMode(ModbusTxPin, OUTPUT_LOW);	// turn off the RS485 transmitter
+	}
+#endif
 
 	// Initialise the IO port subsystem
 	IoPort::Init();
@@ -2147,8 +2153,14 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 					return GCodeResult::error;
 				}
 			}
-#  if defined(DUET3_MB6XD)
-			else if (chan == 2 && board >= BoardType::Duet3_6XD_v102)
+#  if defined(DUET3_MB6XD) || defined(DUET3_MB6HC)
+			else if (chan == 2 &&
+#   if defined(DUET3_MB6XD)
+						board >= BoardType::Duet3_6XD_v102
+#   elif defined(DUET3_MB6HC)
+						board >= BoardType::Duet3_6HC_v102c
+#   endif
+					)
 			{
 				if (!dev.ConfigureDirectionPort(ModbusTxPinName, reply))
 				{
@@ -3421,7 +3433,8 @@ void Platform::ResetChannel(size_t chan) noexcept
 {
 	// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 or v1.02 boards
 	// Driver 1 has a pulldown resistor on v0.1 and v1.0 boards, however we don't support v0.1 and we don't care about the difference between v0.6 and v1.0, so we don't need to read it
-	// Driver 2 has a pulldown resistor on v1.02 only
+	// Driver 2 has a pulldown resistor on v1.10, v1.02, 1.02a, 1.02b, 1.02c
+	// Driver 3 has a pulldown resistor on v1.02c
 	SetPinMode(DIRECTION_PINS[2], INPUT_PULLUP, false);
 	SetPinMode(DIRECTION_PINS[0], INPUT_PULLUP, false);
 	delayMicroseconds(20);									// give the pullup resistor time to work
@@ -3429,9 +3442,13 @@ void Platform::ResetChannel(size_t chan) noexcept
 	{
 		return (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
 	}
+	else if (digitalRead(DIRECTION_PINS[0]))
+	{
+		return BoardType::Duet3_6HC_v102;
+	}
 	else
 	{
-		return (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v102 : BoardType::Duet3_6HC_v102b;
+		return (digitalRead(DIRECTION_PINS[3])) ? BoardType::Duet3_6HC_v102b : BoardType::Duet3_6HC_v102c;
 	}
 }
 
@@ -3542,7 +3559,8 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v1.0 or earlier";
 	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
 	case BoardType::Duet3_6HC_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or 1.02a";
-	case BoardType::Duet3_6HC_v102b:		return "Duet 3 " BOARD_SHORT_NAME " v1.02b or later";
+	case BoardType::Duet3_6HC_v102b:		return "Duet 3 " BOARD_SHORT_NAME " v1.02b";
+	case BoardType::Duet3_6HC_v102c:		return "Duet 3 " BOARD_SHORT_NAME " v1.02c or later";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "Duet 3 " BOARD_SHORT_NAME " v0.1";
 	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0";
