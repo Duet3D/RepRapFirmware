@@ -124,7 +124,7 @@ protected:
 	// Scanning support
 	float scanCoefficients[4];
 	float touchModeTriggerHeight = DefaultScanningProbeTouchModeTriggerHeight;
-	float touchModeSensitivity = DefaultScanningProbeTouchModeSensitivity;
+	float touchModeThreshold = DefaultScanningProbeTouchModeThreshold;
 	float touchModeProbeSpeed = ConvertSpeedFromMmPerMin(DefaultScanningProbeTouchModeProbeSpeed);
 	bool isCalibrated = false;
 	bool useTouchMode = false;

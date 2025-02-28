@@ -114,8 +114,8 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 #if SUPPORT_SCANNING_PROBES
 	// 1. probe.touchMode members
 	{ "active",						OBJECT_MODEL_FUNC(self->useTouchMode), 														ObjectModelEntryFlags::none },
-	{ "sensitivity",				OBJECT_MODEL_FUNC(self->touchModeSensitivity, 2), 											ObjectModelEntryFlags::none },
 	{ "speed",						OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->touchModeProbeSpeed), 1),				ObjectModelEntryFlags::none },
+	{ "threshold",					OBJECT_MODEL_FUNC(self->touchModeThreshold, 2), 											ObjectModelEntryFlags::none },
 	{ "triggerHeight",				OBJECT_MODEL_FUNC(self->touchModeTriggerHeight, 3), 										ObjectModelEntryFlags::none },
 #endif
 };
@@ -574,7 +574,7 @@ GCodeResult ZProbe::SetTouchModeParameters(GCodeBuffer& gb, const StringRef& rep
 	bool seen = false;
 	gb.TryGetBValue('S', useTouchMode, seen);
 	gb.TryGetFValue('H', touchModeTriggerHeight, seen);
-	gb.TryGetLimitedFValue('V', touchModeSensitivity, seen, 0.0, 1.0);
+	gb.TryGetLimitedFValue('V', touchModeThreshold, seen, 0.0, 5.0);
 	{
 		float speed;
 		if (gb.TryGetPositiveFValue('F', speed, seen))
@@ -589,8 +589,8 @@ GCodeResult ZProbe::SetTouchModeParameters(GCodeBuffer& gb, const StringRef& rep
 	}
 	else
 	{
-		reply.printf("Z probe %u touch mode: %s" "active, speed %.1fmm/min, trigger height %.2fmm, sensitivity %.2f",
-						number, (useTouchMode) ? "" : "not ", (double)InverseConvertSpeedToMmPerMin(touchModeProbeSpeed), (double)touchModeTriggerHeight, (double)touchModeSensitivity);
+		reply.printf("Z probe %u touch mode: %s" "active, speed %.1fmm/min, trigger height %.2fmm, threshold %.2f",
+						number, (useTouchMode) ? "" : "not ", (double)InverseConvertSpeedToMmPerMin(touchModeProbeSpeed), (double)touchModeTriggerHeight, (double)touchModeThreshold);
 	}
 	return GCodeResult::ok;
 }
