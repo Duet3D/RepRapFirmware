@@ -247,7 +247,7 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 # ifdef DUET_M
 			// On the Duet Maestro only, the CS pin is active high and gates the clock signal.
 			// The ST7567 needs an active low CS signal, so we must use a different CS pin and set the original one high to let the clock through.
-			pinMode(LcdCSPin, OUTPUT_HIGH);
+			SetPinMode(LcdCSPin, OUTPUT_HIGH);
 			InitDisplay(gb, new Lcd7567(fonts, ARRAY_SIZE(fonts)), LcdCSAltPin, LcdA0Pin, false);
 # else
 			InitDisplay(gb, new Lcd7567(fonts, ARRAY_SIZE(fonts)), LcdCSPin, LcdA0Pin, false);
