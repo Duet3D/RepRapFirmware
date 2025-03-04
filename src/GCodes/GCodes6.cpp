@@ -37,6 +37,8 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 	AxesBitmap axesMoving;
 #endif
 
+	const auto zp = SetZProbeNumber(gb, 'K');				// may throw
+
 	bool seenP = false;
 	gb.TryGetIValue('P', g30ProbePointIndex, seenP);
 	if (seenP)
@@ -49,21 +51,27 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 		else
 		{
 			// Set the specified probe point index to the specified coordinates
+			const float z = (gb.Seen(axisLetters[Z_AXIS])) ? gb.GetFValue() : ms.currentUserPosition[Z_AXIS];
+
 			const float x = (gb.Seen(axisLetters[X_AXIS]))
 #if SUPPORT_ASYNC_MOVES
 							? (axesMoving.SetBit(X_AXIS), gb.GetFValue())
 #else
 							? gb.GetFValue()
 #endif
-								: ms.currentUserPosition[X_AXIS];
+								: (z > SILLY_Z_VALUE)
+								  ? ms.currentUserPosition[X_AXIS]
+									  : ms.currentUserPosition[X_AXIS] + zp->GetOffset(X_AXIS);		// we will be probing so don't move the head to account for the probe offset
 			const float y = (gb.Seen(axisLetters[Y_AXIS]))
 #if SUPPORT_ASYNC_MOVES
 							? (axesMoving.SetBit(Y_AXIS), gb.GetFValue())
 #else
 							? gb.GetFValue()
 #endif
-								: ms.currentUserPosition[Y_AXIS];
-			const float z = (gb.Seen(axisLetters[Z_AXIS])) ? gb.GetFValue() : ms.currentUserPosition[Z_AXIS];
+								: (z > SILLY_Z_VALUE)
+								  ? ms.currentUserPosition[Y_AXIS]
+									  : ms.currentUserPosition[Y_AXIS] + zp->GetOffset(Y_AXIS);		// we will be probing so don't move the head to account for the probe offset
+
 			reprap.GetMove().SetXYBedProbePoint((size_t)g30ProbePointIndex, x, y);
 
 			if (z > SILLY_Z_VALUE)
@@ -95,7 +103,6 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 	}
 
 	// If we get here then we actually need to probe
-	const auto zp = SetZProbeNumber(gb, 'K');						// may throw, so do this before changing the state
 	InitialiseTaps(zp->FastThenSlowProbing());
 
 #if SUPPORT_ASYNC_MOVES
