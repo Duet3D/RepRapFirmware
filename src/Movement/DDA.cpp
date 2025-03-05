@@ -729,142 +729,118 @@ bool DDA::IsAccelerationMove() const noexcept
 #endif
 
 // Try to increase the ending speed of this move to allow the next move to start at targetNextSpeed.
-// Only called if this move and the next one are both printing moves.
+// Only called if this move and the next one (which we have just added) are both printing moves, or both non-printing moves.
 /*static*/ void DDA::DoLookahead(DDARing& ring, DDA *laDDA) noexcept
 //pre(state == provisional)
 {
 //	if (reprap.Debug(moduleDda)) debugPrintf("Adjusting, %f\n", laDDA->targetNextSpeed);
 	unsigned int laDepth = 0;
-	bool goingUp = true;
 
-	for(;;)					// this loop is used to nest lookahead without making recursive calls
+	// Iterate through the list towards earlier moves
+	for (;;)
 	{
-		if (goingUp)
+		// We have been asked to adjust the end speed of this move to match the next move starting at targetNextSpeed
+		if (laDDA->beforePrepare.targetNextSpeed > laDDA->requestedSpeed)
 		{
-			// We have been asked to adjust the end speed of this move to match the next move starting at targetNextSpeed
-			if (laDDA->beforePrepare.targetNextSpeed > laDDA->requestedSpeed)
-			{
-				laDDA->beforePrepare.targetNextSpeed = laDDA->requestedSpeed;			// don't try for an end speed higher than our requested speed
-			}
-			if (laDDA->topSpeed >= laDDA->requestedSpeed)
-			{
-				// This move already reaches its top speed, so we just need to adjust the deceleration part
-				laDDA->MatchSpeeds();													// adjust it if necessary
-				goingUp = false;
-			}
-			else if (   laDDA->IsDecelerationMove()
-					 && laDDA->prev->beforePrepare.decelDistance > 0.0					// if the previous move has no deceleration phase then no point in adjusting it
-					)
-			{
-				const DDAState st = laDDA->prev->state;
-				// This is a deceleration-only move, and the previous one has a deceleration phase. We may have to adjust the previous move as well to get optimum behaviour.
-				if (   st == provisional
-					&& (   reprap.GetMove().GetJerkPolicy() != 0
-						|| (   laDDA->prev->flags.xyMoving == laDDA->flags.xyMoving
-							&& (   laDDA->prev->flags.isPrintingMove == laDDA->flags.isPrintingMove
-								|| (laDDA->prev->flags.isPrintingMove && laDDA->prev->requestedSpeed == laDDA->requestedSpeed)	// special case to support coast-to-end
-							   )
+			laDDA->beforePrepare.targetNextSpeed = laDDA->requestedSpeed;			// don't try for an end speed higher than our requested speed
+		}
+		if (laDDA->topSpeed >= laDDA->requestedSpeed)
+		{
+			// This move already reaches its top speed, so we just need to adjust the deceleration part
+			break;																	// stop going back to previous moves
+		}
+		if (   laDDA->IsDecelerationMove()
+			 && laDDA->prev->beforePrepare.decelDistance > 0.0						// if the previous move has no deceleration phase then no point in adjusting it
+			)
+		{
+			const DDAState st = laDDA->prev->state;
+			// This is a deceleration-only move, and the previous one has a deceleration phase. We may have to adjust the previous move as well to get optimum behaviour.
+			if (   st == provisional
+				&& (   reprap.GetMove().GetJerkPolicy() != 0
+					|| (   laDDA->prev->flags.xyMoving == laDDA->flags.xyMoving
+						&& (   laDDA->prev->flags.isPrintingMove == laDDA->flags.isPrintingMove
+							|| (laDDA->prev->flags.isPrintingMove && laDDA->prev->requestedSpeed == laDDA->requestedSpeed)	// special case to support coast-to-end
 						   )
 					   )
 				   )
-				{
-					laDDA->MatchSpeeds();
-					const float maxStartSpeed = fastSqrtf(fsquare(laDDA->beforePrepare.targetNextSpeed) + (2 * laDDA->deceleration * laDDA->totalDistance));
-					laDDA->prev->beforePrepare.targetNextSpeed = min<float>(maxStartSpeed, laDDA->requestedSpeed);
-					// leave 'goingUp' true
-				}
-				else
-				{
-					// This move is a deceleration-only move but we can't adjust the previous one
-					if (st == committed)
-					{
-						laDDA->flags.hadLookaheadUnderrun = true;
-					}
-					const float maxReachableSpeed = fastSqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->deceleration * laDDA->totalDistance));
-					if (laDDA->beforePrepare.targetNextSpeed > maxReachableSpeed)
-					{
-						laDDA->beforePrepare.targetNextSpeed = maxReachableSpeed;
-					}
-					laDDA->MatchSpeeds();
-					goingUp = false;
-				}
-			}
-			else
+			   )
 			{
-				// This move doesn't reach its requested speed, but it isn't a deceleration-only move
-				// Set its end speed to the minimum of the requested speed and the highest we can reach
-				const float maxReachableSpeed = fastSqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance));
-				if (laDDA->beforePrepare.targetNextSpeed > maxReachableSpeed)
-				{
-					// Looks like this is an acceleration segment, so to ensure smooth acceleration we should reduce targetNextSpeed to endSpeed as well
-					laDDA->beforePrepare.targetNextSpeed = maxReachableSpeed;
-				}
 				laDDA->MatchSpeeds();
-				goingUp = false;
+				const float maxStartSpeed = fastSqrtf(fsquare(laDDA->beforePrepare.targetNextSpeed) + (2 * laDDA->deceleration * laDDA->totalDistance));
+				laDDA->prev->beforePrepare.targetNextSpeed = min<float>(maxStartSpeed, laDDA->requestedSpeed);
+
+				// Still going up
+				laDDA = _ecv_not_null(laDDA->prev);
+				++laDepth;
+				continue;
+			}
+
+			// This move is a deceleration-only move but we can't adjust the previous one
+			if (st == committed)
+			{
+				laDDA->flags.hadLookaheadUnderrun = true;
+			}
+		}
+
+		// This move doesn't reach its requested speed, but either it isn't a deceleration-only move or we can't adjust the previous one
+		// Set its target end speed to the minimum of the requested speed and the highest we can reach
+		const float maxReachableSpeed = fastSqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance));
+		if (laDDA->beforePrepare.targetNextSpeed > maxReachableSpeed)
+		{
+			laDDA->beforePrepare.targetNextSpeed = maxReachableSpeed;
+		}
+		break;
+	}
+
+	laDDA->MatchSpeeds();													// adjust the target end speed if necessary
+
+	// Iterate back through the list towards later moves
+	for (;;)
+	{
+		if (laDDA->beforePrepare.targetNextSpeed < laDDA->endSpeed)
+		{
+			// This situation should not normally happen except by a small amount because of rounding error.
+			// Don't reduce the end speed of the current move, because that may make the move infeasible.
+			// Report a lookahead error if the change is too large to be accounted for by rounding error.
+			if (laDDA->beforePrepare.targetNextSpeed < laDDA->endSpeed * 0.99)
+			{
+				ring.RecordLookaheadError();
+				if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+				{
+					debugPrintf("DDA.cpp(%d) tn=%f ", __LINE__, (double)laDDA->beforePrepare.targetNextSpeed);
+					laDDA->DebugPrint("la");
+				}
 			}
 		}
 		else
 		{
-			// Going back down the list
-			// We have adjusted the end speed of the previous move as much as is possible. Adjust this move to match it.
-			laDDA->startSpeed = laDDA->prev->endSpeed;
-			const float maxEndSpeed = fastSqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance));
-			if (maxEndSpeed < laDDA->beforePrepare.targetNextSpeed)
-			{
-				laDDA->beforePrepare.targetNextSpeed = maxEndSpeed;
-			}
+			laDDA->endSpeed = laDDA->beforePrepare.targetNextSpeed;
 		}
 
-		if (goingUp)
+LA_DEBUG;
+		laDDA->RecalculateMove(ring);
+
+		if (laDepth == 0)
 		{
-			// Still going up
-			laDDA = _ecv_not_null(laDDA->prev);
-			++laDepth;
 #if 0
 			if (reprap.Debug(moduleDda))
 			{
-				debugPrintf("Recursion start %u\n", laDepth);
+				debugPrintf("Complete, %f\n", laDDA->targetNextSpeed);
 			}
 #endif
+			return;
 		}
-		else
+
+		laDDA = _ecv_not_null(laDDA->next);
+		--laDepth;
+
+		// Going back down the list
+		// We have adjusted the end speed of the previous move as much as is possible. Adjust this move to match it.
+		laDDA->startSpeed = laDDA->prev->endSpeed;
+		const float maxEndSpeed = fastSqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance));
+		if (maxEndSpeed < laDDA->beforePrepare.targetNextSpeed)
 		{
-			// Either just stopped going up, or going down
-			if (laDDA->beforePrepare.targetNextSpeed < laDDA->endSpeed)
-			{
-				// This situation should not normally happen except by a small amount because of rounding error.
-				// Don't reduce the end speed of the current move, because that may make the move infeasible.
-				// Report a lookahead error if the change is too large to be accounted for by rounding error.
-				if (laDDA->beforePrepare.targetNextSpeed < laDDA->endSpeed * 0.99)
-				{
-					ring.RecordLookaheadError();
-					if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
-					{
-						debugPrintf("DDA.cpp(%d) tn=%f ", __LINE__, (double)laDDA->beforePrepare.targetNextSpeed);
-						laDDA->DebugPrint("la");
-					}
-				}
-			}
-			else
-			{
-				laDDA->endSpeed = laDDA->beforePrepare.targetNextSpeed;
-			}
-LA_DEBUG;
-			laDDA->RecalculateMove(ring);
-
-			if (laDepth == 0)
-			{
-#if 0
-				if (reprap.Debug(moduleDda))
-				{
-					debugPrintf("Complete, %f\n", laDDA->targetNextSpeed);
-				}
-#endif
-				return;
-			}
-
-			laDDA = _ecv_not_null(laDDA->next);
-			--laDepth;
+			laDDA->beforePrepare.targetNextSpeed = maxEndSpeed;
 		}
 	}
 }
@@ -1029,7 +1005,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 	clocksNeeded = (uint32_t)totalTime;
 }
 
-// Decide what speed we would really like this move to end at.
+// Decide what speed we would really like this move to end at and the next move to start at, assuming we want to use the same speed for both.
 // On entry, targetNextSpeed is the speed we would like the next move after this one to start at and this one to end at
 // On return, targetNextSpeed is the actual speed we can achieve without exceeding the jerk limits.
 void DDA::MatchSpeeds() noexcept
