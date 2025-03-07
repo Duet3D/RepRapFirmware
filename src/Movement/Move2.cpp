@@ -1144,7 +1144,7 @@ void Move::ReportM569Parameters(size_t drive, const StringRef& reply) noexcept
 			const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
 			const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
 			bool bdummy;
-			const float mmPerSec = (SmartDrivers::GetDriverClockFrequency() * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * DriveStepsPerMm(axis));
+			const float mmPerSec = (SmartDrivers::GetDriverNominalClockFrequency() * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * DriveStepsPerMm(axis));
 			const uint8_t iRun = SmartDrivers::GetIRun(drive);
 			const uint8_t iHold = SmartDrivers::GetIHold(drive);
 			const uint32_t gs = SmartDrivers::GetGlobalScaler(drive);
@@ -1167,20 +1167,20 @@ void Move::ReportM569Parameters(size_t drive, const StringRef& reply) noexcept
 		if (SmartDrivers::GetDriverMode(drive) == DriverMode::stealthChop)
 		{
 			const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
-			const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
 			const uint32_t tcoolthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tcoolthrs);
+			const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
 			bool bdummy;
-			const unsigned int microsteppingTimesClockRate = SmartDrivers::GetMicrostepping(drive, bdummy) * SmartDrivers::GetDriverClockFrequency();
-			const float tpwmMmPerSec = microsteppingTimesClockRate/(256 * tpwmthrs * DriveStepsPerMm(axis));
-			const float tcoolMmPerSec = microsteppingTimesClockRate/(256 * tcoolthrs * DriveStepsPerMm(axis));
+			const unsigned int microstepping = SmartDrivers::GetMicrostepping(drive, bdummy);
+			const float tcoolMmPerSec = (microstepping * SmartDrivers::GetDriverMaxClockFrequency())/(256 * tcoolthrs * DriveStepsPerMm(axis));
+			const float tpwmMmPerSec = (microstepping * SmartDrivers::GetDriverMinClockFrequency())/(256 * tpwmthrs * DriveStepsPerMm(axis));
 			const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
 			const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
 			const unsigned int pwmScaleSum = pwmScale & 0xFF;
 			const int pwmScaleAuto = (int)((((pwmScale >> 16) & 0x01FF) ^ 0x0100) - 0x0100);
 			const unsigned int pwmOfsAuto = pwmAuto & 0xFF;
 			const unsigned int pwmGradAuto = (pwmAuto >> 16) & 0xFF;
-			reply.catf(", tpwmthrs %" PRIu32 " (%.1f mm/sec), tcoolthrs %" PRIu32 " (%.1f mm/sec), pwmScaleSum %u, pwmScaleAuto %d, pwmOfsAuto %u, pwmGradAuto %u",
-						tpwmthrs, (double)tpwmMmPerSec, tcoolthrs, (double)tcoolMmPerSec, pwmScaleSum, pwmScaleAuto, pwmOfsAuto, pwmGradAuto);
+			reply.catf(", tcoolthrs %" PRIu32 " (%.1f mm/sec), tpwmthrs %" PRIu32 " (%.1f mm/sec), pwmScaleSum %u, pwmScaleAuto %d, pwmOfsAuto %u, pwmGradAuto %u",
+						tcoolthrs, (double)tcoolMmPerSec, tpwmthrs, (double)tpwmMmPerSec, pwmScaleSum, pwmScaleAuto, pwmOfsAuto, pwmGradAuto);
 		}
 # endif
 		// Finally, print the microstep position

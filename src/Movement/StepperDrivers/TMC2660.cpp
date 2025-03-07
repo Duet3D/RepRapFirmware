@@ -742,7 +742,7 @@ const char *_ecv_array _ecv_null TmcDriverState::CheckStallDetectionEnabled(floa
 {
 	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor) * 1.2)
 	{
-		return "move is too slow for driver %u to detect stall";
+		return "move is too slow for driver %u to detect stall (increase speed or reduce M915 H parameter)";
 	}
 	return nullptr;
 }

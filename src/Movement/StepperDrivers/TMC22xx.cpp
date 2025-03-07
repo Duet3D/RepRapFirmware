@@ -1234,7 +1234,7 @@ void TmcDriverState::SetStallDetectThreshold(int sgThreshold) noexcept
 
 void TmcDriverState::SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept
 {
-	UpdateRegister(WriteTcoolthrs, (12000000 + (128 * stepsPerSecond))/(256 * stepsPerSecond));
+	UpdateRegister(WriteTcoolthrs, (NominalTmcClockSpeed + (128 * stepsPerSecond))/(256 * stepsPerSecond));
 }
 
 void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
@@ -1242,7 +1242,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 	// Map stall sensitivity value 0..255 to 128..-128
 	const int threshold = 127 - (int)writeRegisters[WriteSgthrs];
 	const uint32_t fullstepsPerSecond = (HighestTmcClockSpeed/256) / writeRegisters[WriteTcoolthrs];
-	reply.catf("stall threshold %d, full steps/sec %" PRIu32 ", coolstep %" PRIx32, threshold, fullstepsPerSecond, writeRegisters[WriteCoolconf] & 0xFFFF);
+	reply.catf("stall threshold %d, full steps/sec %" PRIu32 ", coolstep 0x%" PRIx32, threshold, fullstepsPerSecond, writeRegisters[WriteCoolconf] & 0xFFFF);
 }
 
 // Check that stall detection can occur at the specified speed
@@ -1254,11 +1254,11 @@ const char *_ecv_array _ecv_null TmcDriverState::CheckStallDetectionEnabled(floa
 	}
 	if (speed * (float)StepClockRate * (float)writeRegisters[WriteTcoolthrs] < (float)((HighestTmcClockSpeed/256) << microstepShiftFactor))
 	{
-		return "move is too slow for driver %u to detect stall (increase speed or Tcoolthrs)";
+		return "move is too slow for driver %u to detect stall (increase speed or reduce M915 H parameter)";
 	}
 	if (speed * (float)StepClockRate * (float)writeRegisters[WriteTpwmthrs] > (float)((LowestTmcClockSpeed/256) << microstepShiftFactor))
 	{
-		return "move is too fast for driver %u to detect stall (reduce speed or Tpwmthrs)";
+		return "move is too fast for driver %u to detect stall (reduce speed or M569 V parameter)";
 	}
 	return nullptr;
 }
@@ -2743,9 +2743,19 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 
 #endif
 
-uint32_t SmartDrivers::GetDriverClockFrequency() noexcept
+uint32_t SmartDrivers::GetDriverMinClockFrequency() noexcept
+{
+	return LowestTmcClockSpeed;
+}
+
+uint32_t SmartDrivers::GetDriverNominalClockFrequency() noexcept
 {
 	return NominalTmcClockSpeed;
+}
+
+uint32_t SmartDrivers::GetDriverMaxClockFrequency() noexcept
+{
+	return HighestTmcClockSpeed;
 }
 
 #if SUPPORT_TMC2240

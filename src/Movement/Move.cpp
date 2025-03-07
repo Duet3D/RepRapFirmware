@@ -3048,34 +3048,52 @@ GCodeResult Move::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& repl
 # if HAS_STALL_DETECT
 	// Now check for values to change
 	bool seen = false;
-	if (gb.Seen('S'))
+
+	// Check for stall threshold parameter
 	{
-		seen = true;
-		const int sgThreshold = gb.GetIValue();
-		drivers.Iterate([sgThreshold](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallThreshold(drive, sgThreshold); });
+		int32_t sgThreshold;
+		if (gb.TryGetLimitedIValue('S', sgThreshold, seen,
+#ifdef DUET_NG
+				-64, 63						// TMC2660 accepts values in this range
+#else
+				-128, 127					// TMC2209 accepts 0..255 which we map to -128..127. TMC2160 accepts -64..63. We may have a mixture in a CAN bus system.
+#endif
+		   ))
+		{
+			drivers.Iterate([sgThreshold](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallThreshold(drive, sgThreshold); });
+		}
 	}
-	if (gb.Seen('F'))
+
+	// Check for stall detect filter parameter
 	{
-		seen = true;
-		const bool sgFilter = (gb.GetIValue() == 1);
-		drivers.Iterate([sgFilter](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallFilter(drive, sgFilter); });
+		bool sgFilter;
+		if (gb.TryGetBValue('F', sgFilter, seen))
+		{
+			drivers.Iterate([sgFilter](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallFilter(drive, sgFilter); });
+		}
 	}
+
+	// Check for stall minimum fullsteps/sec parameter
 	if (gb.Seen('H'))
 	{
 		seen = true;
 		const unsigned int stepsPerSecond = gb.GetUIValue();
 		drivers.Iterate([stepsPerSecond](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallMinimumStepsPerSecond(drive, stepsPerSecond); });
 	}
-	if (gb.Seen('T'))
+
+	// Check for coolconf parameter
 	{
-		seen = true;
-		const uint32_t coolStepConfig = gb.GetUIValue();
-		drivers.Iterate([coolStepConfig](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetRegister(drive, SmartDriverRegister::coolStep, coolStepConfig); } );
+		uint32_t coolStepConfig;
+		if (gb.TryGetLimitedUIValue('T', coolStepConfig, seen, 1u << 16))
+		{
+			drivers.Iterate([coolStepConfig](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetRegister(drive, SmartDriverRegister::coolStep, coolStepConfig); } );
+		}
 	}
-	if (gb.Seen('R'))
+
+	// Check for action-on-stall parameter
 	{
-		seen = true;
-		const int action = gb.GetIValue();
+		uint32_t action;
+		if (gb.TryGetLimitedUIValue('R', action, seen, 4))
 		switch (action)
 		{
 		case 0:
@@ -3096,6 +3114,7 @@ GCodeResult Move::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& repl
 			break;
 		}
 	}
+
 #else
 	// Board does not have any local drivers with stall detection but may have CAN-connected drivers
 	const bool seen = gb.SeenAny("SFHTR");

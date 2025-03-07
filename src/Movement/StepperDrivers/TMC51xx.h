@@ -60,7 +60,9 @@ namespace SmartDrivers
 	GCodeResult GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept;
 	GCodeResult SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
 	StandardDriverStatus GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept;
-	uint32_t GetDriverClockFrequency() noexcept;
+	uint32_t GetDriverMinClockFrequency() noexcept;
+	uint32_t GetDriverNominalClockFrequency() noexcept;
+	uint32_t GetDriverMaxClockFrequency() noexcept;
 
 	const char *_ecv_array _ecv_null CheckStallDetectionEnabled(size_t driver, float speed) noexcept;
 
