@@ -3992,7 +3992,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if SUPPORT_IOBITS
 			case 670:
-				result = GetGCodeResultFromError(reprap.GetPortControl().Configure(gb, reply));
+				result = reprap.GetPortControl().Configure(gb, reply);
 				Move::CreateLaserTask();
 				break;
 #endif

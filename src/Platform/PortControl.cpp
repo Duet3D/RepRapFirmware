@@ -28,8 +28,8 @@ void PortControl::Exit() noexcept
 	numConfiguredPorts = 0;
 }
 
-// Set up the GPIO ports returning true if error
-bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
+// Set up the GPIO ports
+GCodeResult PortControl::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	bool seen = false;
 	if (gb.Seen('C'))
@@ -46,7 +46,7 @@ bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
 		numConfiguredPorts = IoPort::AssignPorts(gb, reply, PinUsedBy::gpout, MaxPorts, portAddresses, access);
 		if (numConfiguredPorts == 0)
 		{
-			return true;
+			return GCodeResult::error;
 		}
 	}
 	if (gb.Seen('T'))
@@ -83,7 +83,7 @@ bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
 			}
 		}
 	}
-	return false;
+	return GCodeResult::ok;
 }
 
 // Set the ports to the requested state

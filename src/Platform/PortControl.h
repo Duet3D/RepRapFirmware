@@ -21,7 +21,7 @@ public:
 	PortControl() noexcept;
 	void Init() noexcept;
 	void Exit() noexcept;
-	bool Configure(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 	// Functions called by DDARing
 	void UpdatePorts(IoBits_t newPortState) noexcept;
