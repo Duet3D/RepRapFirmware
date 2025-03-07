@@ -1409,8 +1409,8 @@ void Move::PrepareScanningProbeDataCollection(const DDA& dda, const PrepParams& 
 		probeControl.acceleration = (params.peakAcceleration * params.TotalAccelClocks() - 0.5 * params.jerk * (fsquare(params.accelStartClocks) + fsquare(params.accelEndClocks)))/params.TotalAccelClocks();
 		probeControl.deceleration = (params.peakDeceleration * params.TotalDecelClocks() - 0.5 * params.jerk * (fsquare(params.decelStartClocks) + fsquare(params.decelEndClocks)))/params.TotalDecelClocks();
 #else
-		probeControl.acceleration = dda.acceleration;
-		probeControl.deceleration = dda.deceleration;
+		probeControl.acceleration = dda.maxAcceleration;
+		probeControl.deceleration = dda.maxDeceleration;
 #endif
 		probeControl.initialSpeed = dda.startSpeed;
 		probeControl.topSpeed = dda.topSpeed;

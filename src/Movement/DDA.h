@@ -127,13 +127,13 @@ public:
 #if SUPPORT_S_CURVE
 		{ return InverseConvertAcceleration(peakAcceleration); }
 #else
-		{ return InverseConvertAcceleration(acceleration); }
+		{ return InverseConvertAcceleration(maxAcceleration); }
 #endif
 	float GetDecelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
 #if SUPPORT_S_CURVE
 		{ return InverseConvertAcceleration(peakDeceleration); }
 #else
-		{ return InverseConvertAcceleration(deceleration); }
+		{ return InverseConvertAcceleration(maxDeceleration); }
 #endif
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float GetTotalExtrusionRate() const noexcept;
@@ -141,7 +141,7 @@ public:
 	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcept;	// Try to push babystepping earlier in the move queue
 	const Tool *_ecv_null GetTool() const noexcept { return tool; }
 	float GetTotalDistance() const noexcept { return totalDistance; }
-	void LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration) noexcept;	// Limit the speed an acceleration of this move
+	void LimitSpeedAndAcceleration(float maxSpeed, float maxAllowedAcceleration) noexcept;	// Limit the speed an acceleration of this move
 
 	float GetProportionDone() const noexcept;										// Return the proportion of extrusion for the complete multi-segment move already done
 	float GetInitialUserC0() const noexcept { return initialUserC0; }
@@ -253,13 +253,11 @@ private:
 	int32_t endPoint[MaxAxesPlusExtruders];  		// Machine coordinates of the endpoint
 	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;							// How long is the move in hypercuboid space
+    float maxAcceleration, maxDeceleration;			// The maximum acceleration and deceleration to use, always positive
 #if SUPPORT_S_CURVE
-    float initialAcceleration, peakAcceleration, finalAcceleration;
-    float initialDeceleration, peakDeceleration, finalDeceleration;
+    float startAcceleration, peakAcceleration, finalAcceleration;
+    float initialDeceleration, peakDeceleration, endDeceleration;
 	float jerk;										// The magnitude of the rate of change of acceleration or deceleration, always positive
-#else
-	float acceleration;								// The acceleration to use, always positive
-	float deceleration;								// The deceleration to use, always positive
 #endif
     float requestedSpeed;							// The speed that the user asked for
     float virtualExtruderPosition;					// the virtual extruder position at the end of this move, used for pause/resume

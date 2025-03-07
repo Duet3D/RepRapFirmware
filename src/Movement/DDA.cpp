@@ -129,12 +129,12 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	const float steadyDistance = decelStartDistance - accelDistance;
 	steadyClocks = (steadyDistance <= 0.0) ? 0 : lrintf(steadyDistance/dda.topSpeed);
 #if SUPPORT_S_CURVE
-	initialAcceleration = dda.initialAcceleration;
+	initialAcceleration = dda.startAcceleration;
 	peakAcceleration = dda.peakAcceleration;
 	finalAcceleration = dda.finalAcceleration;
 	initialDeceleration = dda.initialDeceleration;
 	peakDeceleration = dda.peakDeceleration;
-	finalDeceleration = dda.finalDeceleration;
+	finalDeceleration = dda.endDeceleration;
 
 	accelStartClocks = qq;
 	accelConstantClocks = qq;
@@ -143,10 +143,10 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	decelConstantClocks = qq;
 	decelEndClocks = qq;
 #else
-	acceleration = dda.acceleration;
-	deceleration = dda.deceleration;
-	accelClocks = lrintf((dda.topSpeed - dda.startSpeed)/dda.acceleration);
-	decelClocks = lrintf((dda.topSpeed - dda.endSpeed)/dda.deceleration);
+	acceleration = dda.maxAcceleration;
+	deceleration = dda.maxDeceleration;
+	accelClocks = lrintf((dda.topSpeed - dda.startSpeed)/dda.maxAcceleration);
+	decelClocks = lrintf((dda.topSpeed - dda.endSpeed)/dda.maxDeceleration);
 #endif
 	useInputShaping = dda.flags.xyMoving
 					&& !(dda.flags.isolatedMove || dda.flags.isLeadscrewAdjustmentMove
@@ -247,9 +247,9 @@ void DDA::DebugPrint(const char *_ecv_array tag) const noexcept
 #endif
 				" reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=%04x\n",
 #if SUPPORT_S_CURVE
-				(double)initialAcceleration, (double)peakAcceleration, (double)finalAcceleration, (double)initialDeceleration, (double)peakDeceleration, (double)finalDeceleration, (double)jerk,
+				(double)startAcceleration, (double)peakAcceleration, (double)finalAcceleration, (double)initialDeceleration, (double)peakDeceleration, (double)endDeceleration, (double)jerk,
 #else
-				(double)acceleration, (double)deceleration,
+				(double)maxAcceleration, (double)maxDeceleration,
 #endif
 				(double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded, (uint32_t)filePos, flags.all);
 }
@@ -501,12 +501,12 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	float normalisedDirectionVector[MaxAxesPlusExtruders];			// used to hold a unit-length vector in the direction of motion
 	memcpyf(normalisedDirectionVector, directionVector, ARRAY_SIZE(normalisedDirectionVector));
 	Absolute(normalisedDirectionVector, MaxAxesPlusExtruders);
-	acceleration = VectorBoxIntersection(normalisedDirectionVector, accelerations);
+	maxAcceleration = VectorBoxIntersection(normalisedDirectionVector, accelerations);
 	if (flags.xyMoving)												// apply M204 acceleration limits to XY moves
 	{
-		acceleration = min<float>(acceleration, (flags.isPrintingMove) ? nextMove.maxPrintingAcceleration : nextMove.maxTravelAcceleration);
+		maxAcceleration = min<float>(maxAcceleration, (flags.isPrintingMove) ? nextMove.maxPrintingAcceleration : nextMove.maxTravelAcceleration);
 	}
-	deceleration = acceleration;
+	maxDeceleration = maxAcceleration;
 
 	// 6. Set the speed to the smaller of the requested and maximum speed.
 	// Also enforce a minimum speed of 0.5mm/sec. We need a minimum speed to avoid overflow in the movement calculations.
@@ -543,7 +543,10 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	}
 
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
-	endSpeed = 0.0;																// until the next move asks us to adjust it
+	endSpeed = 0.0;																// until we have a following move
+#if SUPPORT_S_CURVE
+	endDeceleration = 0.0;														// end deceleration is zero until we have a following move
+#endif
 
 	// See if we can meld this with the end of the previous one (which must currently have the end speed set to zero)
 	if (   prev->state == provisional											// if previous move has not started yet
@@ -556,15 +559,29 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	   )
 	{
 		// Try to meld this move to the previous move to avoid stop/start
-		// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = v^2 - 2as
-		prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(deceleration * totalDistance * 2.0), requestedSpeed);
-		DoLookahead(ring, prev);
-		startSpeed = prev->endSpeed;
+#if SUPPORT_S_CURVE
+		if (useScurve)
+		{
+			// Assuming that this move ends with zero speed, calculate the maximum possible starting speed and deceleration: u^3 = v^2 - 2as
+			prev->beforePrepare.targetNextSpeed = qq;
+			DoLookahead(ring, prev);
+			startSpeed = qq;
+		}
+		else
+#endif
+		{
+			// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = -2as limited to the requested speed
+			prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(maxDeceleration * totalDistance * 2.0), requestedSpeed);
+			DoLookahead(ring, prev);
+			startSpeed = prev->endSpeed;
+		}
 	}
 	else
 	{
-		// There is no previous move that we can adjust, so start at zero speed.
-		startSpeed = 0.0;
+		startSpeed = 0.0;														// there is no previous move that we can adjust, so start at zero speed.
+#if SUPPORT_S_CURVE
+		startAcceleration = 0.0;												// and zero acceleration
+#endif
 	}
 
 	RecalculateMove(ring);
@@ -608,7 +625,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	virtualExtruderPosition = prev->virtualExtruderPosition;
 	tool = nullptr;
 	filePos = prev->filePos;
-	acceleration = deceleration = reprap.GetMove().NormalAcceleration(Z_AXIS);
+	maxAcceleration = maxDeceleration = reprap.GetMove().NormalAcceleration(Z_AXIS);
 
 #if SUPPORT_LASER && SUPPORT_IOBITS
 	if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
@@ -680,8 +697,8 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 	startSpeed = nextMove.startSpeed;
 	endSpeed = nextMove.endSpeed;
 	requestedSpeed = nextMove.requestedSpeed;
-	acceleration = nextMove.acceleration;
-	deceleration = nextMove.deceleration;
+	maxAcceleration = nextMove.acceleration;
+	maxDeceleration = nextMove.deceleration;
 
 # if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();
@@ -766,7 +783,7 @@ bool DDA::IsAccelerationMove() const noexcept
 			   )
 			{
 				laDDA->MatchSpeeds();
-				const float maxStartSpeed = fastSqrtf(fsquare(laDDA->beforePrepare.targetNextSpeed) + (2 * laDDA->deceleration * laDDA->totalDistance));
+				const float maxStartSpeed = fastSqrtf(fsquare(laDDA->beforePrepare.targetNextSpeed) + (2 * laDDA->maxDeceleration * laDDA->totalDistance));
 				laDDA->prev->beforePrepare.targetNextSpeed = min<float>(maxStartSpeed, laDDA->requestedSpeed);
 
 				// Still going up
@@ -784,7 +801,7 @@ bool DDA::IsAccelerationMove() const noexcept
 
 		// This move doesn't reach its requested speed, but either it isn't a deceleration-only move or we can't adjust the previous one
 		// Set its target end speed to the minimum of the requested speed and the highest we can reach
-		const float maxReachableSpeed = fastSqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance));
+		const float maxReachableSpeed = fastSqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->maxAcceleration * laDDA->totalDistance));
 		if (laDDA->beforePrepare.targetNextSpeed > maxReachableSpeed)
 		{
 			laDDA->beforePrepare.targetNextSpeed = maxReachableSpeed;
@@ -837,7 +854,7 @@ LA_DEBUG;
 		// Going back down the list
 		// We have adjusted the end speed of the previous move as much as is possible. Adjust this move to match it.
 		laDDA->startSpeed = laDDA->prev->endSpeed;
-		const float maxEndSpeed = fastSqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance));
+		const float maxEndSpeed = fastSqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->maxAcceleration * laDDA->totalDistance));
 		if (maxEndSpeed < laDDA->beforePrepare.targetNextSpeed)
 		{
 			laDDA->beforePrepare.targetNextSpeed = maxEndSpeed;
@@ -894,8 +911,8 @@ float DDA::AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcep
 // This may cause a move that we intended to be a deceleration-only move to have a tiny acceleration segment at the start
 void DDA::RecalculateMove(DDARing& ring) noexcept
 {
-	const float twoA = 2 * acceleration;
-	const float twoD = 2 * deceleration;
+	const float twoA = 2 * maxAcceleration;
+	const float twoD = 2 * maxDeceleration;
 	beforePrepare.accelDistance = (fsquare(requestedSpeed) - fsquare(startSpeed))/twoA;
 	beforePrepare.decelDistance = (fsquare(requestedSpeed) - fsquare(endSpeed))/twoD;
 	if (beforePrepare.accelDistance + beforePrepare.decelDistance < totalDistance)
@@ -905,7 +922,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 		// Don't do this if the cause is that the top speed is very low because that results in issues 989 and 994
 		if (startSpeed >= endSpeed)
 		{
-			if (startSpeed + acceleration * MinimumAccelOrDecelClocks > requestedSpeed && startSpeed >= requestedSpeed * 0.9)
+			if (startSpeed + maxAcceleration * MinimumAccelOrDecelClocks > requestedSpeed && startSpeed >= requestedSpeed * 0.9)
 			{
 				topSpeed = startSpeed;
 				beforePrepare.accelDistance = 0.0;
@@ -917,7 +934,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 		}
 		else
 		{
-			if (endSpeed + deceleration * MinimumAccelOrDecelClocks > requestedSpeed && endSpeed >= requestedSpeed * 0.9)
+			if (endSpeed + maxDeceleration * MinimumAccelOrDecelClocks > requestedSpeed && endSpeed >= requestedSpeed * 0.9)
 			{
 				topSpeed = endSpeed;
 				beforePrepare.decelDistance = 0.0;
@@ -952,7 +969,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 				beforePrepare.decelDistance = 0.0;
 				topSpeed = endSpeed;
 				const float newAcceleration = (fsquare(endSpeed) - fsquare(startSpeed))/(2 * totalDistance);
-				if (newAcceleration > 1.02 * acceleration)
+				if (newAcceleration > 1.02 * maxAcceleration)
 				{
 					// The acceleration increase is greater than we expect from rounding error, so record an error
 					ring.RecordLookaheadError();
@@ -962,7 +979,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 						DebugPrint("rm");
 					}
 				}
-				acceleration = newAcceleration;
+				maxAcceleration = newAcceleration;
 			}
 			else
 			{
@@ -970,7 +987,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 				beforePrepare.decelDistance = totalDistance;
 				topSpeed = startSpeed;
 				const float newDeceleration = (fsquare(startSpeed) - fsquare(endSpeed))/(2 * totalDistance);
-				if (newDeceleration > 1.02 * deceleration)
+				if (newDeceleration > 1.02 * maxDeceleration)
 				{
 					// The deceleration increase is greater than we expect from rounding error, so record an error
 					ring.RecordLookaheadError();
@@ -980,7 +997,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 						DebugPrint("rm");
 					}
 				}
-				deceleration = newDeceleration;
+				maxDeceleration = newDeceleration;
 			}
 		}
 	}
@@ -999,8 +1016,8 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 	}
 
 	// We need to set the number of clocks needed here because we use it before the move has been frozen
-	const float totalTime = (topSpeed - startSpeed)/acceleration
-							+ (topSpeed - endSpeed)/deceleration
+	const float totalTime = (topSpeed - startSpeed)/maxAcceleration
+							+ (topSpeed - endSpeed)/maxDeceleration
 							+ (totalDistance - beforePrepare.accelDistance - beforePrepare.decelDistance)/topSpeed;
 	clocksNeeded = (uint32_t)totalTime;
 }
@@ -1445,19 +1462,19 @@ bool DDA::Free() noexcept
 	return flags.hadLookaheadUnderrun;
 }
 
-void DDA::LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration) noexcept
+void DDA::LimitSpeedAndAcceleration(float maxSpeed, float maxAllowedAcceleration) noexcept
 {
 	if (requestedSpeed > maxSpeed)
 	{
 		requestedSpeed = maxSpeed;
 	}
-	if (acceleration > maxAcceleration)
+	if (maxAcceleration > maxAllowedAcceleration)
 	{
-		acceleration = maxAcceleration;
+		maxAcceleration = maxAllowedAcceleration;
 	}
-	if (deceleration > maxAcceleration)
+	if (maxDeceleration > maxAllowedAcceleration)
 	{
-		deceleration = maxAcceleration;
+		maxDeceleration = maxAllowedAcceleration;
 	}
 }
 
@@ -1491,7 +1508,7 @@ uint32_t DDA::ManageLaserPower() const noexcept
 		return LaserPwmIntervalMillis;
 	}
 
-	const float accelSpeed = startSpeed + acceleration * clocksMoving;
+	const float accelSpeed = startSpeed + maxAcceleration * clocksMoving;
 	if (accelSpeed < topSpeed)
 	{
 		// Acceleration phase
@@ -1501,7 +1518,7 @@ uint32_t DDA::ManageLaserPower() const noexcept
 	}
 
 	const uint32_t clocksLeft = clocksNeeded - clocksMoving;
-	const float decelSpeed = endSpeed + deceleration * clocksLeft;
+	const float decelSpeed = endSpeed + maxDeceleration * clocksLeft;
 	if (decelSpeed < topSpeed)
 	{
 		// Deceleration phase
@@ -1512,7 +1529,7 @@ uint32_t DDA::ManageLaserPower() const noexcept
 
 	// We must be in the constant speed phase
 	platform.SetLaserPwm(laserPwmOrIoBits.laserPwm);
-	const uint32_t decelClocks = (uint32_t)((topSpeed - endSpeed)/deceleration);
+	const uint32_t decelClocks = (uint32_t)((topSpeed - endSpeed)/maxDeceleration);
 	if (clocksLeft <= decelClocks)
 	{
 		return LaserPwmIntervalMillis;
