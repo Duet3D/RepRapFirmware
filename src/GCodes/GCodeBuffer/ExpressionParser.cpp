@@ -1091,7 +1091,7 @@ void ExpressionParser::GetNextOperand(ExpressionValue& operand, bool evaluate) T
 // We don't need to handle Port and UniqueId types here because we convent them to string before calling this.
 /*static*/ bool ExpressionParser::TypeHasNoLiterals(TypeCode t) noexcept
 {
-	return t == TypeCode::Char || t == TypeCode::DateTime_tc || t == TypeCode::IPAddress_tc || t == TypeCode::MacAddress_tc || t == TypeCode::DriverId_tc;
+	return t == TypeCode::Char || t == TypeCode::DateTime_tc || t == TypeCode::IPAddress_tc || t == TypeCode::MacAddress_tc || t == TypeCode::DriverId_tc || t == TypeCode::CanExpansionBoardDetails;
 }
 
 // Balance types for a comparison operator
