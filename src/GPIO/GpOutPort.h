@@ -27,7 +27,11 @@ public:
 	GpOutputPort(const GpOutputPort&) = delete;
 
 	bool IsUnused() const noexcept;
+#if SUPPORT_CAN_EXPANSION
+	bool IsLocal() const noexcept;
+#endif
 	GCodeResult WriteAnalog(uint32_t gpioPortNumber, bool isServo, float pwm, const GCodeBuffer& gb, const StringRef& reply) noexcept;
+	void WriteDigital(bool value) noexcept;
 	GCodeResult Configure(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	PwmFrequency GetPwmFrequency() const noexcept { return port.GetFrequency(); }
 

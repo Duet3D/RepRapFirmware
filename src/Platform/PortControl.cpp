@@ -6,7 +6,10 @@
  */
 
 #include "PortControl.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
+#include <GPIO/GpOutPort.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 #if SUPPORT_IOBITS
 
@@ -36,23 +39,30 @@ GCodeResult PortControl::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 	{
 		seen = true;
 		UpdatePorts(0);
-		IoPort *_ecv_from portAddresses[MaxPorts];
-		PinAccess access[MaxPorts];
-		for (size_t i = 0; i < MaxPorts; ++i)
+		numConfiguredPorts = 0;
+		uint32_t tempPorts[MaxPorts];
+		size_t nports = MaxPorts;
+		gb.GetUnsignedArray(tempPorts, nports, false);
+		Platform& platform = reprap.GetPlatform();
+		for (size_t i = 0; i < nports; ++i)
 		{
-			portAddresses[i] = &portMap[i];
-			access[i] = PinAccess::write0;
+			if (   tempPorts[i] >= MaxGpOutPorts
+				|| platform.GetGpOutPort(tempPorts[i]).IsUnused()
+#if SUPPORT_CAN_EXPANSION
+				|| !platform.GetGpOutPort(tempPorts[i]).IsLocal()
+#endif
+			   )
+			{
+				reply.printf("GpOut port %" PRIu32 " is not valid", tempPorts[i]);
+				return GCodeResult::error;
+			}
+			gpOutPortNumbers[i] = tempPorts[i];
 		}
-		numConfiguredPorts = IoPort::AssignPorts(gb, reply, PinUsedBy::gpout, MaxPorts, portAddresses, access);
-		if (numConfiguredPorts == 0)
-		{
-			return GCodeResult::error;
-		}
+		numConfiguredPorts = nports;
 	}
-	if (gb.Seen('T'))
+
+	if (gb.TryGetLimitedUIValue('T', advanceMillis, seen, 50))
 	{
-		seen = true;
-		advanceMillis = (unsigned int)constrain<int>(gb.GetIValue(), 0, 1000);
 		if constexpr (StepClockRate % 1000 == 0)
 		{
 			advanceClocks = advanceMillis * (StepClockRate/1000);
@@ -66,20 +76,20 @@ GCodeResult PortControl::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 			advanceClocks = (advanceMillis * (uint64_t)StepClockRate)/1000;
 		}
 	}
+
 	if (!seen)
 	{
-		reply.printf("Advance %ums, ", advanceMillis);
 		if (numConfiguredPorts == 0)
 		{
 			reply.cat("no port mapping configured");
 		}
 		else
 		{
+			reply.printf("Advance %" PRIu32 "ms, ", advanceMillis);
 			reply.cat("ports");
 			for (size_t i = 0; i < numConfiguredPorts; ++i)
 			{
-				reply.cat(' ');
-				portMap[i].AppendPinName(reply);
+				reply.catf(" %u", gpOutPortNumbers[i]);
 			}
 		}
 	}
@@ -93,16 +103,18 @@ void PortControl::UpdatePorts(IoBits_t newPortState) noexcept
 	{
 		const IoBits_t bitsToClear = currentPortState & ~newPortState;
 		const IoBits_t bitsToSet = newPortState & ~currentPortState;
+		Platform& platform = reprap.GetPlatform();
 		for (size_t i = 0; i < numConfiguredPorts; ++i)
 		{
+			GpOutputPort& port = platform.GetGpOutPort(gpOutPortNumbers[i]);
 			const IoBits_t mask = 1u << i;
 			if ((bitsToClear & mask) != 0)
 			{
-				portMap[i].WriteDigital(false);
+				port.WriteDigital(false);
 			}
 			else if ((bitsToSet & mask) != 0)
 			{
-				portMap[i].WriteDigital(true);
+				port.WriteDigital(true);
 			}
 		}
 		currentPortState = newPortState;

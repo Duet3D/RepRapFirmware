@@ -32,9 +32,9 @@ private:
 
 	static const size_t MaxPorts = 16;		// the port bitmap is currently a 16-bit word
 
-	IoPort portMap[MaxPorts];
+	uint8_t gpOutPortNumbers[MaxPorts];
 	size_t numConfiguredPorts;
-	unsigned int advanceMillis;
+	uint32_t advanceMillis;
 	uint32_t advanceClocks;
 	IoBits_t currentPortState;
 };

@@ -53,6 +53,15 @@ bool GpOutputPort::IsUnused() const noexcept
 		!port.IsValid();
 }
 
+#if SUPPORT_CAN_EXPANSION
+
+bool GpOutputPort::IsLocal() const noexcept
+{
+	return boardAddress == CanInterface::GetCanAddress();
+}
+
+#endif
+
 GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
 	PwmFrequency freq = 0;
@@ -171,6 +180,19 @@ GCodeResult GpOutputPort::WriteAnalog(uint32_t gpioPortNumber, bool isServo, flo
 #endif
 	port.WriteAnalog(pwm);
 	return GCodeResult::ok;
+}
+
+// Set the output low or high. Called by PortControl, only supported on local ports.
+void GpOutputPort::WriteDigital(bool value) noexcept
+{
+	lastPwm = (value) ? 1.0 : 0.0;
+#if SUPPORT_CAN_EXPANSION
+	if (boardAddress != CanInterface::GetCanAddress())
+	{
+		return;
+	}
+#endif
+	port.WriteDigital(value);
 }
 
 #if SUPPORT_REMOTE_COMMANDS
