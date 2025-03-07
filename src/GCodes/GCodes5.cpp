@@ -146,8 +146,8 @@ GCodeResult GCodes::CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) 
 		{
 			std::swap(upperValue, lowerValue);
 			std::swap(upperAxisNumber, lowerAxisNumber);
-			collisionChecker.Set(lowerAxisNumber, upperAxisNumber, upperValue - lowerValue);
 		}
+		collisionChecker.Set(lowerAxisNumber, upperAxisNumber, upperValue - lowerValue);
 	}
 	else if (lowerAxisNumber >= 0)
 	{
