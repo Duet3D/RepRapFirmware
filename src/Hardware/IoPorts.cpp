@@ -120,6 +120,7 @@ bool IoPort::AssignPort(const char *_ecv_array pinName, const StringRef& reply, 
 	{
 	case PinAccess::read:			return "digital read";
 	case PinAccess::readWithPullup_InternalUseOnly:	return "digital read (pullup resistor enabled)";
+	case PinAccess::readNoDebounce:	return "digital read (no debouncing)";
 	case PinAccess::readAnalog:		return "analog read";
 	case PinAccess::write0:			return "write (initially low)";
 	case PinAccess::write1:			return "write (initially high)";
@@ -207,6 +208,10 @@ bool IoPort::Allocate(const char *_ecv_array pn, const StringRef& reply, PinUsed
 		}
 		else if (*pn == '^')
 		{
+			// Note, enabling the pullup for external ports on Duet 3 boards is not needed because there is an external pullup,
+			// and a generally a bad idea because there is a series protection resistor, so the noise margin will be reduced if the internal pullup is enabled.
+			// There are a few pins for which this doesn't apply, e.g. the CS pins on the SPI connector.
+			// Ideally we would include this info in the pin table, e.g. in the bitmap of allowed pin modes.
 			if (access == PinAccess::read)
 			{
 				access = PinAccess::readWithPullup_InternalUseOnly;
@@ -314,6 +319,7 @@ bool IoPort::SetMode(PinAccess access) noexcept
 		desiredMode = INPUT_PULLUP;
 		break;
 	case PinAccess::read:
+	case PinAccess::readNoDebounce:
 	default:
 		desiredMode = INPUT;
 		break;
@@ -340,7 +346,7 @@ bool IoPort::SetMode(PinAccess access) noexcept
 		{
 			return false;
 		}
-		IoPort::SetPinMode(GetPinNoCheck(), desiredMode, access == PinAccess::read);	// debounce pins with external inputs, don't debounce pins with internL
+		IoPort::SetPinMode(GetPinNoCheck(), desiredMode, access == PinAccess::read);	// debounce pins with external inputs, don't debounce pins used internally
 		logicalPinModes[logicalPin] = (int8_t)desiredMode;
 	}
 	return true;

@@ -121,7 +121,7 @@ GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& r
 	if (gb.Seen('C'))
 	{
 		seen = true;
-		if (!port.AssignPort(gb, reply, PinUsedBy::filamentMonitor, PinAccess::read))
+		if (!port.AssignPort(gb, reply, PinUsedBy::filamentMonitor, PinAccess::readNoDebounce))			// debouncing a Duet3D filament monitor results in framing errors
 		{
 			return GCodeResult::error;
 		}
