@@ -639,14 +639,14 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROW
 
 bool Heat::SlowHeatersAtSetTemperatures(float tolerance, bool waitOnFault) const noexcept
 {
-	for (size_t bedHeater : ARRAY_INDICES(bedHeaters))
+	for (int8_t bedHeater : bedHeaters)
 	{
 		if (!HeaterAtSetTemperature(bedHeater, true, tolerance, waitOnFault))
 		{
 			return false;
 		}
 	}
-	for (size_t chamberHeater : ARRAY_INDICES(heaters))
+	for (int8_t chamberHeater : chamberHeaters)
 	{
 		if (!HeaterAtSetTemperature(chamberHeater, true, tolerance, waitOnFault))
 		{
@@ -656,7 +656,7 @@ bool Heat::SlowHeatersAtSetTemperatures(float tolerance, bool waitOnFault) const
 	return true;
 }
 
-//query an individual heater
+// Query whether an individual heater is close enough to its set temperature. Returns true if the heater number is not valid.
 bool Heat::HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance, bool waitOnFault) const noexcept
 {
 	const auto h = FindHeater(heater);
