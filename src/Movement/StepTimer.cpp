@@ -479,10 +479,8 @@ bool StepTimer::ScheduleCallbackFromIsr() noexcept
 
 bool StepTimer::ScheduleCallback(Ticks when) noexcept
 {
-	const uint32_t baseprio = ChangeBasePriority(NvicPriorityStep);
-	const bool rslt = ScheduleCallbackFromIsr(when);
-	RestoreBasePriority(baseprio);
-	return rslt;
+	BasePriorityBooster booster(NvicPriorityStep);
+	return ScheduleCallbackFromIsr(when);
 }
 
 // Cancel any scheduled callback for this timer. Harmless if there is no callback scheduled.
@@ -502,9 +500,8 @@ void StepTimer::CancelCallbackFromIsr() noexcept
 
 void StepTimer::CancelCallback() noexcept
 {
-	const uint32_t baseprio = ChangeBasePriority(NvicPriorityStep);
+	BasePriorityBooster booster(NvicPriorityStep);
 	CancelCallbackFromIsr();
-	RestoreBasePriority(baseprio);
 }
 
 /*static*/ void StepTimer::Diagnostics(const StringRef& reply) noexcept

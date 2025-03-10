@@ -395,7 +395,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 				return LogStepError(6, 0.0, currentSegment);
 			}
 
-			movementAccumulator += netStepsThisSegment;			// update the amount of extrusion
+			movementAccumulator += netStepsThisSegment;				// update the amount of extrusion
 			segments = currentSegment->GetNext();
 			const uint32_t prevEndTime = currentSegment->GetStartTime() + currentSegment->GetDuration();
 			MoveSegment::Release(currentSegment);

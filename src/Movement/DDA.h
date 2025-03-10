@@ -166,7 +166,7 @@ public:
 #endif
 
 #if SUPPORT_LASER
-	uint32_t ManageLaserPower() const noexcept;										// Manage the laser power
+	uint32_t ManageLaserPower(Platform& p) const noexcept;							// Manage the laser power
 #endif
 
 #if SUPPORT_IOBITS

@@ -1265,9 +1265,8 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 			// Before we send movement commands to remote drives, if any endstop switches we are monitoring are already set, make sure we don't start the motors concerned.
 			// This is especially important when using CAN-connected motors or endstops, because we rely on receiving "endstop changed" messages.
 			// Moves that check endstops are always run as isolated moves, so there can be no move in progress and the endstops must already be primed.
-			const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);				// shut out the step interrupt
+			BasePriorityBooster booster(NvicPriorityStep);								// shut out the step interrupt
 			(void)move.CheckEndstops(false);											// this may modify pending CAN moves
-			RestoreBasePriority(oldPrio);
 		}
 
 #if SUPPORT_CAN_EXPANSION
@@ -1491,12 +1490,11 @@ float DDA::GetTotalExtrusionRate() const noexcept
 #if SUPPORT_LASER
 
 // Manage the laser power. Return the number of ticks until we should be called again, or portMAX_DELAY to be called at the start of the next move.
-uint32_t DDA::ManageLaserPower() const noexcept
+uint32_t DDA::ManageLaserPower(Platform& p) const noexcept
 {
-	Platform& platform = reprap.GetPlatform();
 	if (!flags.controlLaser || laserPwmOrIoBits.laserPwm == 0)
 	{
-		platform.SetLaserPwm(0);
+		p.SetLaserPwm(0);
 		return portMAX_DELAY;
 	}
 
@@ -1504,7 +1502,7 @@ uint32_t DDA::ManageLaserPower() const noexcept
 	if (clocksMoving >= clocksNeeded)			// this also covers the case of now < startTime
 	{
 		// Something has gone wrong with the timing. Set zero laser power, but try again soon.
-		platform.SetLaserPwm(0);
+		p.SetLaserPwm(0);
 		return LaserPwmIntervalMillis;
 	}
 
@@ -1513,7 +1511,7 @@ uint32_t DDA::ManageLaserPower() const noexcept
 	{
 		// Acceleration phase
 		const Pwm_t pwm = (Pwm_t)((accelSpeed/topSpeed) * laserPwmOrIoBits.laserPwm);
-		platform.SetLaserPwm(pwm);
+		p.SetLaserPwm(pwm);
 		return LaserPwmIntervalMillis;
 	}
 
@@ -1523,12 +1521,12 @@ uint32_t DDA::ManageLaserPower() const noexcept
 	{
 		// Deceleration phase
 		const Pwm_t pwm = (Pwm_t)((decelSpeed/topSpeed) * laserPwmOrIoBits.laserPwm);
-		platform.SetLaserPwm(pwm);
+		p.SetLaserPwm(pwm);
 		return LaserPwmIntervalMillis;
 	}
 
 	// We must be in the constant speed phase
-	platform.SetLaserPwm(laserPwmOrIoBits.laserPwm);
+	p.SetLaserPwm(laserPwmOrIoBits.laserPwm);
 	const uint32_t decelClocks = (uint32_t)((topSpeed - endSpeed)/maxDeceleration);
 	if (clocksLeft <= decelClocks)
 	{

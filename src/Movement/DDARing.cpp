@@ -682,18 +682,27 @@ void DDARing::Diagnostics(const StringRef& reply, unsigned int ringNumber) noexc
 // Manage the laser power. Return the number of ticks until we should be called again, or portMAX_DELAY to be called at the start of the next move.
 uint32_t DDARing::ManageLaserPower() noexcept
 {
-	SetBasePriority(NvicPriorityStep);							// lock out step interrupts
-	const DDA *_ecv_null const cdda = GetCurrentDDA();					// capture volatile variable
-	if (cdda != nullptr)
+	Platform& platform = reprap.GetPlatform();
+	BasePriorityBooster booster(NvicPriorityStep);											// lock out step interrupts
+	const DDA *cdda = getPointer;
+	const uint32_t now = StepTimer::GetMovementTimerTicks();
+	while (cdda->IsCommitted())
 	{
-		const uint32_t ret = cdda->ManageLaserPower();
-		SetBasePriority(0);
-		return ret;
+		const int32_t timeToMoveStart = (int32_t)(cdda->GetMoveStartTime() - now);			// get the time to the start of the move, negative if the move has started
+		if (timeToMoveStart > 0)															// if the move has not started yet
+		{
+			return ((uint32_t)timeToMoveStart + StepClockRate/1000u - 1u)/(StepClockRate/1000u);	// convert step clock to milliseconds, wake up when the move starts
+		}
+		const int32_t timeToMoveEnd = timeToMoveStart + (int32_t)cdda->GetClocksNeeded();	// get the time to the move ended, negative if the move has ended
+		if (timeToMoveEnd > 0)																// if the move is current
+		{
+			return cdda->ManageLaserPower(platform);
+		}
+		cdda = cdda->GetNext();
 	}
 
 	// If we get here then there is no active laser move
-	SetBasePriority(0);
-	reprap.GetPlatform().SetLaserPwm(0);						// turn off the laser
+	platform.SetLaserPwm(0);																// turn off the laser
 	return portMAX_DELAY;
 }
 
@@ -709,68 +718,70 @@ uint32_t DDARing::ManageIOBitsAndFeedForward() noexcept
 	bool doneFeedForward = false;
 	bool setFeedForward = false;
 	uint32_t nextWakeupDelay = StepClockRate;
-
-	SetBasePriority(NvicPriorityStep);
-	DDA *cdda = getPointer;
-	const uint32_t now = StepTimer::GetMovementTimerTicks();
 	const Tool *_ecv_null feedForwardTool;
 	float feedForwardAverageExtrusionSpeed = 0.0;
 
-	while (cdda->IsCommitted())
+	// This next block runs with boosted base priority
 	{
-		const int32_t timeToMoveStart = (int32_t)(cdda->GetMoveStartTime() - now);				// get the time to the start of the move, negative if the move has started
-		const int32_t timeToMoveEnd = timeToMoveStart + (int32_t)cdda->GetClocksNeeded();		// get the time to the move ended, negative if the move has ended
+		BasePriorityBooster booster(NvicPriorityStep);
+
+		DDA *cdda = getPointer;
+		const uint32_t now = StepTimer::GetMovementTimerTicks();
+
+		while (cdda->IsCommitted())
+		{
+			const int32_t timeToMoveStart = (int32_t)(cdda->GetMoveStartTime() - now);				// get the time to the start of the move, negative if the move has started
+			const int32_t timeToMoveEnd = timeToMoveStart + (int32_t)cdda->GetClocksNeeded();		// get the time to the move ended, negative if the move has ended
 #if SUPPORT_IOBITS
-		if (!doneIoBits && timeToMoveStart < (int32_t)pc.GetAdvanceClocks() && timeToMoveEnd > (int32_t)pc.GetAdvanceClocks())
-		{
-			// This move is current from the perspective of IOBits
-			if (!cdda->HaveDoneIoBits())
+			if (!doneIoBits && timeToMoveStart < (int32_t)pc.GetAdvanceClocks() && timeToMoveEnd > (int32_t)pc.GetAdvanceClocks())
 			{
-				pc.UpdatePorts(cdda->GetIoBits());
-				cdda->SetDoneIoBits();
-			}
-			nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd - pc.GetAdvanceClocks());
-			doneIoBits = true;
-			if (doneFeedForward)
-			{
-				break;
-			}
-		}
-		if (!doneFeedForward)
-#endif
-		{
-			feedForwardTool = cdda->GetTool();
-			if (feedForwardTool != nullptr && timeToMoveStart < (int32_t)feedForwardTool->GetFeedForwardAdvanceClocks() && timeToMoveEnd > (int32_t)feedForwardTool->GetFeedForwardAdvanceClocks())
-			{
-				// This move is current from the perspective of feedforward
-				if (!cdda->HaveDoneFeedForward())
+				// This move is current from the perspective of IOBits
+				if (!cdda->HaveDoneIoBits())
 				{
-					// Don't set feedforward here because we have set a very high base priority and we may need to send CAN messages. Just record that we need to set it.
-					cdda->SetDoneFeedForward();
-					feedForwardAverageExtrusionSpeed = cdda->GetAverageExtrusionSpeed();
-					setFeedForward = true;
+					pc.UpdatePorts(cdda->GetIoBits());
+					cdda->SetDoneIoBits();
 				}
-				nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd > feedForwardTool->GetFeedForwardAdvanceClocks());
-				doneFeedForward = true;
-#if SUPPORT_IOBITS
-				if (doneIoBits)
-#endif
+				nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd - pc.GetAdvanceClocks());
+				doneIoBits = true;
+				if (doneFeedForward)
 				{
 					break;
 				}
 			}
+			if (!doneFeedForward)
+#endif
+			{
+				feedForwardTool = cdda->GetTool();
+				if (feedForwardTool != nullptr && timeToMoveStart < (int32_t)feedForwardTool->GetFeedForwardAdvanceClocks() && timeToMoveEnd > (int32_t)feedForwardTool->GetFeedForwardAdvanceClocks())
+				{
+					// This move is current from the perspective of feedforward
+					if (!cdda->HaveDoneFeedForward())
+					{
+						// Don't set feedforward here because we have set a very high base priority and we may need to send CAN messages. Just record that we need to set it.
+						cdda->SetDoneFeedForward();
+						feedForwardAverageExtrusionSpeed = cdda->GetAverageExtrusionSpeed();
+						setFeedForward = true;
+					}
+					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd > feedForwardTool->GetFeedForwardAdvanceClocks());
+					doneFeedForward = true;
+#if SUPPORT_IOBITS
+					if (doneIoBits)
+#endif
+					{
+						break;
+					}
+				}
+			}
+			cdda = cdda->GetNext();
 		}
-		cdda = cdda->GetNext();
-	}
 
 #if SUPPORT_IOBITS
-	if (!doneIoBits)
-	{
-		pc.UpdatePorts(0);															// no move active so turn off all IOBITS ports
-	}
+		if (!doneIoBits)
+		{
+			pc.UpdatePorts(0);														// no move active so turn off all IOBITS ports
+		}
 #endif
-
-	SetBasePriority(0);
+	}																				// end base pririty boosted scope
 
 	if (setFeedForward)
 	{

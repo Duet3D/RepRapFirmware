@@ -1745,7 +1745,7 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 	{
 		MoveSegment *_ecv_null prev = nullptr;
 
-		const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);					// shut out the step interrupt
+		BasePriorityBooster booster(NvicPriorityStep);					// shut out the step interrupt
 
 		tail = dm.segments;
 		while (tail != nullptr)
@@ -1764,7 +1764,6 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 					dbgRef.cat('\n');
 					Platform::shouldTurnOffHeaters = true;
 					Platform::hasGenericDebug = true;
-					RestoreBasePriority(oldPrio);
 					StepErrorHalt();
 					return;
 				}
@@ -1794,8 +1793,6 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 			prev = tail;
 			tail = tail->GetNext();
 		}
-
-		RestoreBasePriority(oldPrio);
 	}
 
 	// Now it's safe to insert/merge new segments into 'tail'
@@ -1947,7 +1944,7 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 	// If there were no segments attached to this DM initially, we need to schedule the interrupt for the new segment at the start of the list.
 	// Don't do this until we have added all the segments for this move, because the first segment we added may have been modified and/or split when we added further segments to implement input shaping
 	{
-		const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);					// shut out the step interrupt
+		BasePriorityBooster booster(NvicPriorityStep);								// shut out the step interrupt
 
 		// Join the tail back to the end of the segment list
 		{
@@ -1987,7 +1984,6 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 				}
 			}
 		}
-		RestoreBasePriority(oldPrio);
 	}
 }
 
@@ -3478,9 +3474,11 @@ void Move::TurnSmartDriversOff() noexcept
 // In time we may use it to help implement interrupt-driven local endstops too, but for now those are checked in the step ISR by a direct call to CheckEndstops().
 void Move::OnEndstopOrZProbeStatesChanged() noexcept
 {
-	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
-	const bool wakeAsyncSender = CheckEndstops(true);
-	RestoreBasePriority(oldPrio);										// allow step interrupts again
+	bool wakeAsyncSender;
+	{
+		BasePriorityBooster booster(NvicPriorityStep);		// shut out the step interrupt
+		wakeAsyncSender = CheckEndstops(true);
+	}
 	if (wakeAsyncSender) { CanInterface::WakeAsyncSender(); }
 }
 
