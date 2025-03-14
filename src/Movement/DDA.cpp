@@ -1492,18 +1492,19 @@ float DDA::GetTotalExtrusionRate() const noexcept
 // Manage the laser power. Return the number of ticks until we should be called again, or portMAX_DELAY to be called at the start of the next move.
 uint32_t DDA::ManageLaserPower(Platform& p) const noexcept
 {
-	if (!flags.controlLaser || laserPwmOrIoBits.laserPwm == 0)
-	{
-		p.SetLaserPwm(0);
-		return portMAX_DELAY;
-	}
-
 	const uint32_t clocksMoving = StepTimer::GetMovementTimerTicks() - afterPrepare.moveStartTime;
 	if (clocksMoving >= clocksNeeded)			// this also covers the case of now < startTime
 	{
 		// Something has gone wrong with the timing. Set zero laser power, but try again soon.
 		p.SetLaserPwm(0);
 		return LaserPwmIntervalMillis;
+	}
+
+	const uint32_t clocksLeft = clocksNeeded - clocksMoving;
+	if (!flags.controlLaser || laserPwmOrIoBits.laserPwm == 0)
+	{
+		p.SetLaserPwm(0);
+		return (uint32_t)lrintf((float)clocksLeft * StepClocksToMillis);
 	}
 
 	const float accelSpeed = startSpeed + maxAcceleration * clocksMoving;
@@ -1515,7 +1516,6 @@ uint32_t DDA::ManageLaserPower(Platform& p) const noexcept
 		return LaserPwmIntervalMillis;
 	}
 
-	const uint32_t clocksLeft = clocksNeeded - clocksMoving;
 	const float decelSpeed = endSpeed + maxDeceleration * clocksLeft;
 	if (decelSpeed < topSpeed)
 	{
