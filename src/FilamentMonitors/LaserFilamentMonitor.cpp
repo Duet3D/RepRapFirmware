@@ -44,7 +44,6 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 													self->dataReceived && self->HaveCalibrationData(), self, 1),					ObjectModelEntryFlags::liveNotPanelDue },
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 #ifdef DUET3_ATE
-	{ "position",			OBJECT_MODEL_FUNC((int32_t)self->sensorValue),															ObjectModelEntryFlags::live },
 	{ "shutter",			OBJECT_MODEL_FUNC((int32_t)self->shutter),																ObjectModelEntryFlags::live },
 #endif
 
@@ -66,7 +65,7 @@ constexpr uint8_t LaserFilamentMonitor::objectModelTableDescriptor[] =
 {
 	3,
 #ifdef DUET3_ATE
-	5,
+	4,
 #else
 	2,
 #endif
