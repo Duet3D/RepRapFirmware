@@ -35,7 +35,7 @@ void PortControl::Exit() noexcept
 GCodeResult PortControl::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	bool seen = false;
-	if (gb.Seen('C'))
+	if (gb.Seen('P'))
 	{
 		seen = true;
 		UpdatePorts(0);
