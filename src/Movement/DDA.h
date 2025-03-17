@@ -237,6 +237,9 @@ private:
 #if SUPPORT_SCANNING_PROBES
 					 , scanningProbeMove : 1 	 	// True if this is a scanning Z probe move
 #endif
+#if SUPPORT_S_CURVE
+					 , useScurve : 1				// set if this move uses S-curve acceleration
+#endif
 					 ;
 		};
 		uint16_t all;								// so that we can print all the flags at once for debugging

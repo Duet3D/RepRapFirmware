@@ -294,7 +294,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				directionVector[axisOrDrive] = positionDelta;
 				if (positionDelta != 0.0)
 				{
-					if (reprap.GetMove().IsAxisRotational(axisOrDrive))
+					if (move.IsAxisRotational(axisOrDrive))
 					{
 						if (nextMove.rotationalAxesMentioned)
 						{
@@ -340,7 +340,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				directionVector[drive] = (float)delta/move.DriveStepsPerMm(drive);
 				if (delta != 0)
 				{
-					if (reprap.GetMove().IsAxisRotational(drive))
+					if (move.IsAxisRotational(drive))
 					{
 						rotationalAxesMoving = true;
 					}
@@ -377,7 +377,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 
 	// Deal with extruder movement
 	float accelerations[MaxAxesPlusExtruders];
-	memcpyf(accelerations, reprap.GetMove().Accelerations(nextMove.reduceAcceleration), MaxAxesPlusExtruders);
+	memcpyf(accelerations, move.Accelerations(nextMove.reduceAcceleration), MaxAxesPlusExtruders);
 	bool extrudersMoving = false;
 	bool forwardExtruding = false;
 
@@ -400,11 +400,11 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				}
 				if (flags.xyMoving && nextMove.usePressureAdvance)
 				{
-					const float compensationClocks = reprap.GetMove().GetPressureAdvanceClocksForLogicalDrive(drive);
+					const float compensationClocks = move.GetPressureAdvanceClocksForLogicalDrive(drive);
 					if (compensationClocks > 0.0)
 					{
 						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
-						accelerations[drive] = min<float>(accelerations[drive], reprap.GetMove().GetMaxInstantDv(drive)/compensationClocks);
+						accelerations[drive] = min<float>(accelerations[drive], move.GetMaxInstantDv(drive)/compensationClocks);
 					}
 				}
 			}
@@ -476,12 +476,12 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 		// This means that the user gets the feed rate that he asked for. It also makes the delta calculations simpler.
 		// First do the bed tilt compensation for deltas.
 		directionVector[Z_AXIS] += (directionVector[X_AXIS] * k.GetTiltCorrection(X_AXIS)) + (directionVector[Y_AXIS] * k.GetTiltCorrection(Y_AXIS));
-		totalDistance = NormaliseLinearMotion(reprap.GetMove().GetLinearAxes());
+		totalDistance = NormaliseLinearMotion(move.GetLinearAxes());
 	}
 	else if (rotationalAxesMoving)
 	{
 		// Some axes are moving, but not axes that X or Y are mapped to. Normalise the movement to the vector sum of the axes that are moving.
-		totalDistance = Normalise(directionVector, reprap.GetMove().GetRotationalAxes());
+		totalDistance = Normalise(directionVector, move.GetRotationalAxes());
 	}
 	else
 	{
@@ -508,6 +508,14 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	}
 	maxDeceleration = maxAcceleration;
 
+#if SUPPORT_S_CURVE
+	if (move.UsingSCurveAcceleration())
+	{
+		jerk = VectorBoxIntersection(normalisedDirectionVector, move.Jerks());
+		flags.useScurve = true;
+	}
+#endif
+
 	// 6. Set the speed to the smaller of the requested and maximum speed.
 	// Also enforce a minimum speed of 0.5mm/sec. We need a minimum speed to avoid overflow in the movement calculations.
 	float reqSpeed = (nextMove.inverseTimeMode) ? totalDistance/nextMove.feedRate : nextMove.feedRate;
@@ -532,8 +540,8 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 
 	// Don't use the constrain function in the following, because if we have a very small XY movement and a lot of extrusion, we may have to make the
 	// speed lower than the configured minimum movement speed. We must apply the minimum speed first and then limit it if necessary after that.
-	requestedSpeed = min<float>(max<float>(reqSpeed, reprap.GetMove().MinMovementSpeed()),
-								VectorBoxIntersection(normalisedDirectionVector, reprap.GetMove().MaxFeedrates()));
+	requestedSpeed = min<float>(max<float>(reqSpeed, move.MinMovementSpeed()),
+								VectorBoxIntersection(normalisedDirectionVector, move.MaxFeedrates()));
 
 	// On a Cartesian printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
 	// for diagonal moves. On other architectures, this is not OK and any movement in the XY plane should be limited on other ways.
@@ -560,9 +568,9 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	{
 		// Try to meld this move to the previous move to avoid stop/start
 #if SUPPORT_S_CURVE
-		if (useScurve)
+		if (flags.useScurve)
 		{
-			// Assuming that this move ends with zero speed, calculate the maximum possible starting speed and deceleration: u^3 = v^2 - 2as
+			// Assuming that this move ends with zero speed, calculate the maximum possible starting speed and deceleration: u^3 = v^2 - 2as qq???
 			prev->beforePrepare.targetNextSpeed = qq;
 			DoLookahead(ring, prev);
 			startSpeed = qq;
@@ -602,10 +610,11 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 		directionVector[drive] = 0.0;
 	}
 
+	const Move& move = reprap.GetMove();
 	for (size_t driver = 0; driver < MaxDriversPerAxis; ++driver)
 	{
 		directionVector[driver] = adjustments[driver];			// for leadscrew adjustment moves, store the adjustment needed in directionVector
-		const int32_t delta = lrintf(adjustments[driver] * reprap.GetMove().DriveStepsPerMm(Z_AXIS));
+		const int32_t delta = lrintf(adjustments[driver] * move.DriveStepsPerMm(Z_AXIS));
 		if (delta != 0)
 		{
 			realMove = true;
@@ -625,7 +634,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	virtualExtruderPosition = prev->virtualExtruderPosition;
 	tool = nullptr;
 	filePos = prev->filePos;
-	maxAcceleration = maxDeceleration = reprap.GetMove().NormalAcceleration(Z_AXIS);
+	maxAcceleration = maxDeceleration = move.NormalAcceleration(Z_AXIS);
 
 #if SUPPORT_LASER && SUPPORT_IOBITS
 	if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
@@ -666,15 +675,16 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 	// 1. Compute the new endpoints and the movement vector
 	bool realMove = false;
 
+	const Move& move = reprap.GetMove();
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
 		// Note, the correspondence between endCoordinates and endPoint will not be exact because of rounding error.
 		// This doesn't matter for the current application because we don't use either of these fields.
 
 		// If it's a delta then we can only do async tower moves in the Z direction and on any additional linear axes
-		const size_t axisToUse = (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta && drive <= Z_AXIS) ? Z_AXIS : drive;
+		const size_t axisToUse = (move.GetKinematics().GetKinematicsType() == KinematicsType::linearDelta && drive <= Z_AXIS) ? Z_AXIS : drive;
 		directionVector[drive] = nextMove.movements[axisToUse];
-		const int32_t delta = lrintf(nextMove.movements[axisToUse] * reprap.GetMove().DriveStepsPerMm(drive));
+		const int32_t delta = lrintf(nextMove.movements[axisToUse] * move.DriveStepsPerMm(drive));
 		endPoint[drive] = prev->endPoint[drive] + delta;
 		if (delta != 0)
 		{

@@ -21,6 +21,41 @@
 # include <CanMessageGenericTables.h>
 #endif
 
+void Move::SetAcceleration(size_t drive, float value, bool reduced) noexcept
+{
+	const float val = max<float>(value, ConvertAcceleration(MinimumAcceleration));						// don't allow zero or negative acceleration
+	if (reduced)
+	{
+		reducedAccelerations[drive] = val;
+	}
+	else
+	{
+		normalAccelerations[drive] = val;
+#if SUPPORT_S_CURVE
+		if (accelerationTime > 0.0)
+		{
+			jerks[drive] = val / accelerationTime;
+		}
+#endif
+	}
+}
+
+#if SUPPORT_S_CURVE
+
+void Move::SetAccelerationTime(float value) noexcept
+{
+	accelerationTime = value * (float)StepClockRate;
+	if (accelerationTime > 0.0)
+	{
+		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
+		{
+			jerks[drive] = normalAccelerations[drive] / accelerationTime;
+		}
+	}
+}
+
+#endif
+
 // Set the microstepping for local drivers, returning true if successful. All drivers for the same axis must use the same microstepping.
 // Caller must deal with remote drivers.
 bool Move::SetMicrostepping(size_t drive, unsigned int microsteps, bool interp, const StringRef& reply) noexcept
