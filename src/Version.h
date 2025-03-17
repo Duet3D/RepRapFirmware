@@ -8,6 +8,8 @@
 #ifndef SRC_VERSION_H_
 #define SRC_VERSION_H_
 
+#include <ecv_duet3d.h>
+
 #ifndef VERSION
 // Note: the complete VERSION string must be in standard version number format and must not contain spaces! This is so that DWC can parse it.
 # define MAIN_VERSION	"3.6.0-rc.1+2"
@@ -19,8 +21,8 @@
 # define VERSION MAIN_VERSION VERSION_SUFFIX
 #endif
 
-extern const char *const DATE;
-extern const char *const TIME_SUFFIX;
+extern const char *_ecv_array const DateText;
+extern const char *_ecv_array const TIME_SUFFIX;
 
 #define AUTHORS "reprappro, dc42, chrishamm, t3p3, dnewman, printm3d"
 

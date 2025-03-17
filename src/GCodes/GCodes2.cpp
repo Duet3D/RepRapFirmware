@@ -1933,7 +1933,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if defined(DUET3_ATE)
 				reply.lcatf("ATE firmware version %s date %s %s", Duet3Ate::GetFirmwareVersionString(), Duet3Ate::GetFirmwareDateString(), Duet3Ate::GetFirmwareTimeString());
 #else
-				reply.catf(" FIRMWARE_DATE: %s%s", DATE, TIME_SUFFIX);
+				reply.catf(" FIRMWARE_DATE: %s%s", DateText, TIME_SUFFIX);
 #endif
 				break;
 
@@ -2425,6 +2425,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
+#if SUPPORT_S_CURVE
+					if (gb.Seen('T'))
+					{
+						move.SetAccelerationTime(gb.GetNonNegativeFValue());
+						seen = true;
+					}
+#endif
 					if (seen)
 					{
 						reprap.MoveUpdated();

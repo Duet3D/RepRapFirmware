@@ -217,7 +217,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "directDisplay",		OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetDisplay().IsPresent(), &reprap.GetDisplay()),					ObjectModelEntryFlags::none },
 #endif
 	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(0),																			ObjectModelEntryFlags::liveNotPanelDue },
-	{ "firmwareDate",		OBJECT_MODEL_FUNC_NOSELF(DATE),																		ObjectModelEntryFlags::none },
+	{ "firmwareDate",		OBJECT_MODEL_FUNC_NOSELF(DateText),																	ObjectModelEntryFlags::none },
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),														ObjectModelEntryFlags::none },
 	{ "firmwareName",		OBJECT_MODEL_FUNC_NOSELF(FIRMWARE_NAME),															ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(VERSION),																	ObjectModelEntryFlags::none },
