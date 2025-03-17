@@ -1786,63 +1786,115 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 	case (unsigned int)DiagnosticTestType::TimeCalculations:	// Show the square root calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
 			constexpr uint32_t iterations = 100;				// use a value that divides into one million
-			bool ok1 = true;
-			uint32_t tim1 = 0;
-			for (uint32_t i = 0; i < iterations; ++i)
 			{
-				const uint32_t num1 = 0x7fffffff - (67 * i);
-				const uint64_t sq = (uint64_t)num1 * num1;
-				const uint32_t num1a = TimedSqrt(sq, tim1);
-				if (num1a != num1)
+				bool ok1 = true;
+				uint32_t tim1 = 0;
+				for (uint32_t i = 0; i < iterations; ++i)
 				{
-					ok1 = false;
-				}
-			}
-
-			bool ok2 = true;
-			uint32_t tim2 = 0;
-			for (uint32_t i = 0; i < iterations; ++i)
-			{
-				const uint32_t num2 = 0x0000ffff - (67 * i);
-				const uint64_t sq = (uint64_t)num2 * num2;
-				const uint32_t num2a = TimedSqrt(sq, tim2);
-				if (num2a != num2)
-				{
-					ok2 = false;
-				}
-			}
-
-			// We also time floating point square root so we can compare it with sine/cosine in order to consider various optimisations
-			bool ok3 = true;
-			uint32_t tim3 = 0;
-			float val = 10000.0;
-			for (unsigned int i = 0; i < iterations; ++i)
-			{
-				IrqDisable();
-				asm volatile("":::"memory");
-				uint32_t now1 = SysTick->VAL;
-				const float nval = fastSqrtf(val);
-				uint32_t now2 = SysTick->VAL;
-				asm volatile("":::"memory");
-				IrqEnable();
-				now1 &= 0x00FFFFFF;
-				now2 &= 0x00FFFFFF;
-				tim3 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
-				if (nval != sqrtf(val))
-				{
-					ok3 = false;
-					if (reprap.Debug(Module::Platform))
+					const uint32_t num1 = 0x7fffffff - (67 * i);
+					const uint64_t sq = (uint64_t)num1 * num1;
+					const uint32_t num1a = TimedSqrt(sq, tim1);
+					if (num1a != num1)
 					{
-						debugPrintf("val=%.7e sq=%.7e sqrtf=%.7e\n", (double)val, (double)nval, (double)sqrtf(val));
+						ok1 = false;
 					}
 				}
-				val = nval;
+
+				bool ok2 = true;
+				uint32_t tim2 = 0;
+				for (uint32_t i = 0; i < iterations; ++i)
+				{
+					const uint32_t num2 = 0x0000ffff - (67 * i);
+					const uint64_t sq = (uint64_t)num2 * num2;
+					const uint32_t num2a = TimedSqrt(sq, tim2);
+					if (num2a != num2)
+					{
+						ok2 = false;
+					}
+				}
+
+				// We also time floating point square root so we can compare it with sine/cosine in order to consider various optimisations
+				bool ok3 = true;
+				uint32_t tim3 = 0;
+				float val = 10000.0;
+				for (unsigned int i = 0; i < iterations; ++i)
+				{
+					IrqDisable();
+					asm volatile("":::"memory");
+					uint32_t now1 = SysTick->VAL;
+					const float nval = fastSqrtf(val);
+					uint32_t now2 = SysTick->VAL;
+					asm volatile("":::"memory");
+					IrqEnable();
+					now1 &= 0x00FFFFFF;
+					now2 &= 0x00FFFFFF;
+					tim3 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+					const float checkVal = sqrtf(val);
+					if (nval != checkVal)
+					{
+						ok3 = false;
+						if (reprap.Debug(Module::Platform))
+						{
+							debugPrintf("val=%.7e sq=%.7e sqrtf=%.7e\n", (double)val, (double)nval, (double)checkVal);
+						}
+					}
+					val = nval;
+				}
+
+				reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s, float %.2fus %s",
+							(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (ok1) ? "ok" : "ERROR",
+								(double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock), (ok2) ? "ok" : "ERROR",
+									(double)((float)(tim3 * (1'000'000/iterations))/SystemCoreClock), (ok3) ? "ok" : "ERROR");
 			}
 
-			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s, float %.2fus %s",
-						(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (ok1) ? "ok" : "ERROR",
-							(double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock), (ok2) ? "ok" : "ERROR",
-								(double)((float)(tim3 * (1'000'000/iterations))/SystemCoreClock), (ok3) ? "ok" : "ERROR");
+#if SUPPORT_S_CURVE
+			// Time and check floating point cube root
+			{
+				bool ok = true;
+				uint32_t tim = 0;
+				for (unsigned int i = 0; i < iterations; ++i)
+				{
+					float val = 0.5 + (float)i * 3.5 / 1000.0;
+					if (i == 0) { val = 0; }
+					else if (i & 1) { val = -val; }
+
+					IrqDisable();
+					asm volatile("":::"memory");
+					uint32_t now1 = SysTick->VAL;
+					const float nval = fastCubeRootf(val);
+					uint32_t now2 = SysTick->VAL;
+					asm volatile("":::"memory");
+					IrqEnable();
+
+					now1 &= 0x00FFFFFF;
+					now2 &= 0x00FFFFFF;
+					tim += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+					bool thisOneOk = true;
+					if (val == 0.0)
+					{
+						thisOneOk = (nval == 0.0);
+					}
+					else if (val > 0.0)
+					{
+						thisOneOk = fcube(std::nextafter(nval, nval * 2)) >= val && fcube(std::nextafter(nval, 0.0)) <= val;
+					}
+					else
+					{
+						thisOneOk = fcube(std::nextafter(nval, nval * 2)) <= val && fcube(std::nextafter(nval, 0.0)) >= val;
+					}
+					if (!thisOneOk)
+					{
+						ok = false;
+						if (reprap.Debug(Module::Platform))
+						{
+							debugPrintf("val=%.7e fcr=%.7e\n", (double)val, (double)nval);
+						}
+					}
+				}
+
+				reply.lcatf("Cube roots: float %.2fus %s", (double)((float)(tim * (1'000'000/iterations))/SystemCoreClock), (ok) ? "ok" : "ERROR");
+			}
+#endif
 		}
 
 		// We now also time sine and cosine in the same test
