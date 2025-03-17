@@ -136,12 +136,13 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	peakDeceleration = dda.peakDeceleration;
 	finalDeceleration = dda.endDeceleration;
 
-	accelStartClocks = qq;
-	accelConstantClocks = qq;
-	accelEndClocks = qq;
-	decelStartClocks = qq;
-	decelConstantClocks = qq;
-	decelEndClocks = qq;
+	accelStartClocks = phase1Time;
+	accelConstantClocks = phase2Time;
+	accelEndClocks = phase3Time;
+	steadyClocks = phase4Clocks;			//??? setting steadyClocks twice!!!
+	decelStartClocks = phase5Time;
+	decelConstantClocks = phase6Time;
+	decelEndClocks = phase7Time;
 #else
 	acceleration = dda.maxAcceleration;
 	deceleration = dda.maxDeceleration;
@@ -574,6 +575,9 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 			prev->beforePrepare.targetNextSpeed = qq;
 			DoLookahead(ring, prev);
 			startSpeed = qq;
+#if SUPPORT_S_CURVE
+			RecalculateSCurveMove(ring);
+#endif
 		}
 		else
 #endif
@@ -582,6 +586,9 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 			prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(maxDeceleration * totalDistance * 2.0), requestedSpeed);
 			DoLookahead(ring, prev);
 			startSpeed = prev->endSpeed;
+#if SUPPORT_S_CURVE
+			RecalculateMove(ring);
+#endif
 		}
 	}
 	else
@@ -589,10 +596,20 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 		startSpeed = 0.0;														// there is no previous move that we can adjust, so start at zero speed.
 #if SUPPORT_S_CURVE
 		startAcceleration = 0.0;												// and zero acceleration
+		if (flags.useScurve)
+		{
+			CalculateInitialSCurveMove(ring);
+		}
+		else
+		{
+			RecalculateMove(ring);
+		}
 #endif
 	}
 
+#if !SUPPORT_S_CURVE
 	RecalculateMove(ring);
+#endif
 
 	state = provisional;
 	return true;
@@ -1031,6 +1048,75 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 							+ (totalDistance - beforePrepare.accelDistance - beforePrepare.decelDistance)/topSpeed;
 	clocksNeeded = (uint32_t)totalTime;
 }
+
+#if SUPPORT_S_CURVE
+
+void DDA::RecalculateSCurveMove(DDARing& ring) noexcept
+{
+	qq;
+}
+
+// Calculate the move to be added to the ring when the start speed and acceleration and the end speed and acceleration are all zero
+void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
+{
+	// Determine whether the requested speed or the maximum acceleration is more limiting
+	if (fsquare(maxAcceleration) > requestedSpeed * jerk)
+	{
+		// We can reach the requested speed without exceeding the maximum acceleration even without a constant acceleration segment
+		phase2Time = phase6Time = 0.0;
+		const float halfTimeToReqSpeed = fastSqrtf(requestedSpeed/jerk);
+		const float distanceToReqSpeed = requestedSpeed * halfTimeToReqSpeed;
+		if (2 * distanceToReqSpeed <= totalDistance)
+		{
+			// We need a constant speed segment too
+			phase1Time = phase3Time = phase5Time = phase7Time = halfTimeToReqSpeed;
+			phase4Time = (totalDistance - 2 * distanceToReqSpeed)/requestedSpeed;
+			phase2Time = phase6Time = 0.0;
+			topSpeed = requestedSpeed;
+			return;
+		}
+	}
+	else
+	{
+		// We can't reach the requested speed without inserting a constant acceleration segment
+		const float basicDistance = 2 * fcube(maxAcceleration)/fsquare(jerk);	// distance if we reach max acceleration but have no constant acceleration segment
+		if (basicDistance < totalDistance)
+		{
+			// We need to insert a constant acceleration segment. We may also need to limit the top speed.
+			const float timeToMaxAcceleration = maxAcceleration/jerk;
+			const float topSpeedWithoutConstantAcceleration = timeToMaxAcceleration * maxAcceleration;
+			float constantAccelerationTime = -1.5 * timeToMaxAcceleration + fastSqrtf(0.25 * fsquare(timeToMaxAcceleration + 5 * totalDistance/maxAcceleration));
+			phase1Time = phase3Time = phase5Time = phase7Time = timeToMaxAcceleration;
+			const float newTopSpeed = jerk * timeToMaxAcceleration * (timeToMaxAcceleration + constantAccelerationTime);
+			if (newTopSpeed <= requestedSpeed)
+			{
+				topSpeed = newTopSpeed;
+				phase4Time = 0.0;
+			}
+			else
+			{
+				// We need to limit the constant acceleration time and add a constant speed phase
+				topSpeed = requestedSpeed;
+				constantAccelerationTime = requestedSpeed/(jerk * timeToMaxAcceleration) - timeToMaxAcceleration;
+				const float revisedBasicDistance = jerk * (  fcube(timeToMaxAcceleration)
+														   + 1.5 * fsquare(timeToMaxAcceleration) * constantAccelerationTime
+														   + 0.5 * timeToMaxAcceleration * fsquare(constantAccelerationTime)
+														  );
+				phase4Time = (totalDistance - 2 * revisedBasicDistance)/requestedSpeed;
+			}
+			phase2Time = phase6Time = constantAccelerationTime;
+			return;
+		}
+	}
+
+	// If we get here then we can reach neither requestedSpeed nor maxAcceleration without exceeding totalDistance
+	const float halfTimeToTopSpeed = fastCubeRootf(totalDistance * 0.5 / jerk);
+	phase1Time = phase3Time = phase5Time = phase7Time = halfTimeToTopSpeed;
+	phase2Time = phase6Time = phase4Time = 0.0;
+	topSpeed = jerk * fsquare(halfTimeToTopSpeed);
+}
+
+#endif
 
 // Decide what speed we would really like this move to end at and the next move to start at, assuming we want to use the same speed for both.
 // On entry, targetNextSpeed is the speed we would like the next move after this one to start at and this one to end at
