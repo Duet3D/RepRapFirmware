@@ -162,6 +162,11 @@ public:
 	float Acceleration(size_t axisOrExtruder, bool reduced) const noexcept;
 	const float *_ecv_array Accelerations(bool reduced) const noexcept { return (reduced) ? reducedAccelerations : normalAccelerations; }
 	void SetAcceleration(size_t axisOrExtruder, float value, bool reduced) noexcept;
+#if SUPPORT_S_CURVE
+	const float *_ecv_array Jerks() const noexcept { return jerks; }
+	void SetAccelerationTime(float value) noexcept;
+	bool UsingSCurveAcceleration() const noexcept { return accelerationTime > 0.0; }
+#endif
 	float MaxFeedrate(size_t axisOrExtruder) const noexcept;
 	const float *_ecv_array MaxFeedrates() const noexcept { return maxFeedrates; }
 	void SetMaxFeedrate(size_t axisOrExtruder, float value) noexcept;
@@ -490,7 +495,7 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
-	size_t GetMaxElementsToReturn(const ObjectModelArrayTableEntry *entry) const noexcept override;
+	size_t GetMaxElementsToReturn(const ObjectModelArrayTableEntry *entry, const ObjectExplorationContext& context) const noexcept override;
 
 private:
 	enum class MoveState : uint8_t
@@ -722,7 +727,12 @@ private:
 	float normalAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for normal moves
 	float reducedAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for probing and stall detection moves
 	float printingInstantDvs[MaxAxesPlusExtruders];			// current max jerk in mm per step clock (changed by M205 and M206)
-	float maxInstantDvs[MaxAxesPlusExtruders];				// max jerk in mm per step clock (changed by M206 only)
+	float maxInstantDvs[MaxAxesPlusExtruders];				// max instant velocity change in mm per step clock (changed by M206 only)
+
+#if SUPPORT_S_CURVE
+	float accelerationTime;									// time taken to each max acceleration in step clocks, single value used for all axes.
+	float jerks[MaxAxesPlusExtruders];						// max rate of change of acceleration, calculated from accelerationTime and normalAccelerations. Only used if accelerationTime > 0.0.
+#endif
 
 	AxisDriversConfig axisDrivers[MaxAxes];					// the driver numbers assigned to each axis
 	AxesBitmap linearAxes;									// axes that behave like linear axes w.r.t. feedrate handling
@@ -794,11 +804,6 @@ inline float Move::NormalAcceleration(size_t drive) const noexcept
 inline float Move::Acceleration(size_t drive, bool useReduced) const noexcept
 {
 	return (useReduced) ? min<float>(reducedAccelerations[drive], normalAccelerations[drive]) : normalAccelerations[drive];
-}
-
-inline void Move::SetAcceleration(size_t drive, float value, bool reduced) noexcept
-{
-	((reduced) ? reducedAccelerations : normalAccelerations)[drive] = max<float>(value, ConvertAcceleration(MinimumAcceleration));	// don't allow zero or negative
 }
 
 inline float Move::MaxFeedrate(size_t drive) const noexcept

@@ -1081,9 +1081,9 @@ void ObjectModel::ReportObjectModelArrayAsJson(OutputBuffer *buf, ObjectExplorat
 
 	buf->cat('[');
 	size_t count = entry->GetNumElements(this, context);
-	if (!isRootArray && context.ShouldTruncateArrays())
+	if (!isRootArray)
 	{
-		const size_t maxCount = GetMaxElementsToReturn(entry);
+		const size_t maxCount = GetMaxElementsToReturn(entry, context);
 		if (maxCount != 0 && maxCount < count)
 		{
 			count = maxCount;

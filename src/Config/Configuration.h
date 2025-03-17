@@ -182,7 +182,8 @@ constexpr size_t MinimumBuffersForObjectModel = 20;		// Minimum number of free b
 # error Unsupported processor
 #endif
 
-constexpr size_t MaxReportedAxes = 6;					// This used to be fixed at 9 but that's too big for some Duet 2 configurations
+constexpr size_t MaxReportedAxes = 5;					// This used to be fixed at 9 but even 6 is too much for some Duet 2 configurations in RRF 3.6.0-rc.1
+constexpr size_t MaxReportedAxesForPanelDue = 6;		// If the requester is PanelDue then we can return more axes because fewer fields are included
 constexpr size_t maxQueuedCodes = 16;					// How many codes can be queued?
 
 #if SAME70 || SAME5x

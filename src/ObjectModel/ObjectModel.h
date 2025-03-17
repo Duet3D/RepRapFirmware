@@ -245,6 +245,7 @@ public:
 	bool ShouldIncludeNulls() const noexcept { return includeNulls; }
 	bool ShouldIncludeImportant() const noexcept { return includeImportant; }
 	bool ShouldTruncateArrays() const noexcept { return includeNonLive; }
+	bool ForPanelDue() const noexcept { return ((uint8_t)excludedFlags & (uint8_t)ObjectModelEntryFlags::notPanelDue) != 0; }
 	uint64_t GetStartMillis() const { return startMillis; }
 	size_t GetInitialBufferOffset() const noexcept { return initialBufOffset; }
 
@@ -273,7 +274,6 @@ private:
 				wantExists : 1,
 				includeNonLive : 1,
 				includeImportant : 1,
-				includePanelDue : 1,
 				includeNulls : 1,
 				obsoleteFieldQueried : 1;
 	ObjectModelEntryFlags excludedFlags;			// don't report fields with any of these flags set
@@ -342,7 +342,7 @@ protected:
 
 	// Return the maximum number of elements to return from the specified array, with 0 meaning unlimited
 	// Override this in classes that have large arrays.
-	virtual size_t GetMaxElementsToReturn(const ObjectModelArrayTableEntry *entry) const noexcept { return 0; }
+	virtual size_t GetMaxElementsToReturn(const ObjectModelArrayTableEntry *entry, const ObjectExplorationContext& context) const noexcept { return 0; }
 
 private:
 	// These functions have been separated from ReportItemAsJson to avoid high stack usage in the recursive functions, therefore they must not be inlined
