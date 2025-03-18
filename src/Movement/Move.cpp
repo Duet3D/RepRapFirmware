@@ -1463,14 +1463,12 @@ void Move::SetupNextScanningProbeReading() noexcept
 
 void Move::LaserTaskRun() noexcept
 {
-	uint32_t ticks = portMAX_DELAY;
+#if SUPPORT_SCANNING_PROBES || SUPPORT_LASER
+	GCodes& gcodes = reprap.GetGCodes();
+#endif
 	for (;;)
 	{
-		// Sleep until we are woken up by the start of a move
-		(void)TaskBase::TakeIndexed(NotifyIndices::Laser, ticks);
-#if SUPPORT_SCANNING_PROBES || SUPPORT_LASER
-		GCodes& gcodes = reprap.GetGCodes();
-#endif
+		uint32_t ticks = portMAX_DELAY;
 #if SUPPORT_SCANNING_PROBES
 		if (probeControl.readingNeeded)
 		{
@@ -1493,6 +1491,9 @@ void Move::LaserTaskRun() noexcept
 			// Manage the feedforward and IOBits
 			ticks = rings[0].ManageIOBitsAndFeedForward();
 		}
+
+		// Sleep until it is time to wake up again
+		(void)TaskBase::TakeIndexed(NotifyIndices::Laser, ticks);
 	}
 }
 
