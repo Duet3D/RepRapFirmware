@@ -718,7 +718,7 @@ uint32_t DDARing::ManageIOBitsAndFeedForward() noexcept
 	bool doneFeedForward = false;
 	bool setFeedForward = false;
 	uint32_t nextWakeupDelay = StepClockRate;
-	const Tool *_ecv_null feedForwardTool;
+	const Tool *_ecv_null feedForwardTool = nullptr;
 	float feedForwardAverageExtrusionSpeed = 0.0;
 
 	// This next block runs with boosted base priority
@@ -752,7 +752,9 @@ uint32_t DDARing::ManageIOBitsAndFeedForward() noexcept
 #endif
 			{
 				feedForwardTool = cdda->GetTool();
-				if (feedForwardTool != nullptr && timeToMoveStart < (int32_t)feedForwardTool->GetFeedForwardAdvanceClocks() && timeToMoveEnd > (int32_t)feedForwardTool->GetFeedForwardAdvanceClocks())
+				// Even if there is no current tool we still need to cancel any previous feedforward temperature boost and get ready to wake up when the move ends
+				const int32_t advanceClocks = (feedForwardTool == nullptr) ? 0 : (int32_t)feedForwardTool->GetFeedForwardAdvanceClocks();
+				if (timeToMoveStart < advanceClocks && timeToMoveEnd > advanceClocks)
 				{
 					// This move is current from the perspective of feedforward
 					if (!cdda->HaveDoneFeedForward())
@@ -762,7 +764,7 @@ uint32_t DDARing::ManageIOBitsAndFeedForward() noexcept
 						feedForwardAverageExtrusionSpeed = cdda->GetAverageExtrusionSpeed();
 						setFeedForward = true;
 					}
-					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd - feedForwardTool->GetFeedForwardAdvanceClocks());
+					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd - advanceClocks);
 					doneFeedForward = true;
 #if SUPPORT_IOBITS
 					if (doneIoBits)
@@ -781,9 +783,20 @@ uint32_t DDARing::ManageIOBitsAndFeedForward() noexcept
 			pc.UpdatePorts(0);														// no move active so turn off all IOBITS ports
 		}
 #endif
-	}																				// end base pririty boosted scope
+	}																				// end base priority boosted scope
 
-	if (setFeedForward)
+	// Check if we need to cancel previous feedforward because of a tool change or running out of moves
+	if (   lastFeedForwardTool != nullptr
+		&& feedForwardTool != lastFeedForwardTool
+		&& lastAverageExtrusionSpeed != 0.0
+	   )
+	{
+		lastFeedForwardTool->StopExtrusionFeedForward();							// cancel the last feedforward we commanded
+		lastFeedForwardTool = nullptr;
+		lastAverageExtrusionSpeed = 0.0;
+	}
+
+	if (setFeedForward && feedForwardTool != nullptr)
 	{
 		if (feedForwardTool != lastFeedForwardTool || fabsf(feedForwardAverageExtrusionSpeed - lastAverageExtrusionSpeed) > lastAverageExtrusionSpeed * 0.05)
 		{
@@ -791,12 +804,6 @@ uint32_t DDARing::ManageIOBitsAndFeedForward() noexcept
 			lastFeedForwardTool = feedForwardTool;
 			lastAverageExtrusionSpeed = feedForwardAverageExtrusionSpeed;
 		}
-	}
-	else if (!doneFeedForward && lastFeedForwardTool != nullptr && lastAverageExtrusionSpeed != 0.0)
-	{
-		lastFeedForwardTool->StopExtrusionFeedForward();							// no move with a tool active so cancel the last feedforward we commanded
-		lastFeedForwardTool = nullptr;
-		lastAverageExtrusionSpeed = 0.0;
 	}
 
 	return (nextWakeupDelay + StepClockRate/1000 - 1)/(StepClockRate/1000);			// convert step clocks to milliseconds, rounding up

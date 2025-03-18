@@ -974,7 +974,7 @@ GCodeResult Tool::GetSetFeedForward(GCodeBuffer& gb, const StringRef& reply) THR
 	return GCodeResult::ok;
 }
 
-// Apply feedforward to the current tool. Called from an ISR context or with BASEPRI set high.
+// Apply feedforward to the current tool. Called from the Laser task.
 void Tool::ApplyExtrusionFeedForward(float extrusionSpeed) const noexcept
 {
 	Heat& heat = reprap.GetHeat();

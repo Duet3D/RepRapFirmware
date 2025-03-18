@@ -581,16 +581,15 @@ void LocalHeater::SetFanFeedForwardPwm(float pwm) noexcept
 }
 
 // Set extrusion feedforward
-void LocalHeater::SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept
+void LocalHeater::ApplyExtrusionFeedForward() noexcept
 {
 	if (mode == HeaterMode::stable)
 	{
-		const float pwmChange = pwmBoost - lastExtrusionPwmBoost;
-		lastExtrusionPwmBoost = pwmBoost;
+		const float pwmChange = extrusionPwmBoost - previousExtrusionPwmBoost;
+		previousExtrusionPwmBoost = extrusionPwmBoost;
 		InterruptCriticalSectionLocker lock;
 		iAccumulator += pwmChange;
 	}
-	extrusionTemperatureBoost = tempBoost;
 }
 
 /* Notes on the auto tune algorithm
@@ -995,8 +994,8 @@ GCodeResult LocalHeater::ApplyFeedForward(const CanMessageHeaterFeedForwardNew& 
 {
 	if (mode == HeaterMode::stable)
 	{
-		float pwmBoost = msg.extrusionPwmBoost - lastExtrusionPwmBoost;
-		lastExtrusionPwmBoost = msg.extrusionPwmBoost;
+		float pwmBoost = msg.extrusionPwmBoost - previousExtrusionPwmBoost;
+		previousExtrusionPwmBoost = msg.extrusionPwmBoost;
 		if (msg.fanPwmFraction != lastFanPwm)
 		{
 			const float pwmChange = msg.fanPwmFraction - lastFanPwm;

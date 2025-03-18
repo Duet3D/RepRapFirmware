@@ -44,6 +44,8 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 	{ "active",				OBJECT_MODEL_FUNC(self->GetActiveTemperature(), 1), 									ObjectModelEntryFlags::live },
 	{ "avgPwm",				OBJECT_MODEL_FUNC(self->GetAveragePWM(), 3), 											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "current",			OBJECT_MODEL_FUNC(self->GetTemperature(), 2), 											ObjectModelEntryFlags::live },
+	{ "extrPwmBoost",		OBJECT_MODEL_FUNC_IF(self->usingFeedForward, self->extrusionPwmBoost, 2), 				ObjectModelEntryFlags::liveNotPanelDue },
+	{ "extrTempBoost",		OBJECT_MODEL_FUNC_IF(self->usingFeedForward, self->extrusionTemperatureBoost, 2), 		ObjectModelEntryFlags::liveNotPanelDue },
 	{ "max",				OBJECT_MODEL_FUNC(self->GetHighestTemperatureLimit(), 1), 								ObjectModelEntryFlags::none },
 	{ "maxBadReadings",		OBJECT_MODEL_FUNC((int32_t)self->maxBadTemperatureCount), 								ObjectModelEntryFlags::none },
 	{ "maxHeatingFaultTime", OBJECT_MODEL_FUNC(self->maxHeatingFaultTime, 1), 										ObjectModelEntryFlags::none },
@@ -64,7 +66,7 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 	{ "sensor",			OBJECT_MODEL_FUNC((int32_t)self->monitors[context.GetLastIndex()].GetSensorNumber()), 		ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 13, 4 };
+constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 15, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
 
@@ -114,7 +116,7 @@ Heater::Heater(unsigned int num) noexcept
 	: tuned(false), heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
 	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime), maxBadTemperatureCount(DefaultMaxBadTemperatureCount),
 	  isBedOrChamber(false),
-	  active(false), modelSetByUser(false), monitorsSetByUser(false)
+	  active(false), usingFeedForward(false), modelSetByUser(false), monitorsSetByUser(false)
 {
 	Heater::ResetHeater();
 }
@@ -129,15 +131,13 @@ Heater::~Heater() noexcept
 
 void Heater::ResetHeater() noexcept
 {
-	lastExtrusionPwmBoost = 0.0;
-	extrusionTemperatureBoost = 0.0;
+	previousExtrusionPwmBoost = extrusionTemperatureBoost = extrusionPwmBoost = 0.0;
 	lastFanPwm = 0.0;
 }
 
 void Heater::SwitchOff() noexcept
 {
-	lastExtrusionPwmBoost = 0.0;
-	extrusionTemperatureBoost = 0.0;
+	previousExtrusionPwmBoost = extrusionTemperatureBoost = extrusionPwmBoost = 0.0;
 }
 
 void Heater::SetSensorNumber(int sn) noexcept
@@ -146,6 +146,14 @@ void Heater::SetSensorNumber(int sn) noexcept
 	{
 		sensorNumber = sn;
 	}
+}
+
+void Heater::SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept
+{
+	usingFeedForward = true;
+	extrusionPwmBoost = pwmBoost;
+	extrusionTemperatureBoost = tempBoost;
+	ApplyExtrusionFeedForward();
 }
 
 GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
