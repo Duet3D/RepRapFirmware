@@ -30,13 +30,13 @@
  * These modifications happen as other DDAs are added to the ring and the DDAs are adjusted to give a smooth transition between them.
  *
  * Shortly before a move is due to be executed, DDA::Prepare is called. This causes the move parameters to be frozen.
- * Move segments are generated, and/or the move details are sent to CAN-connected expansion boards. The DDA state is set to "scheduled".
+ * Move segments are generated, and/or the move details are sent to CAN-connected expansion boards. The DDA state is set to "committed".
  *
  * The scheduled DDA remains in the ring until the time for it to finish executing has passed, in order that we can report on
  * the parameters of the currently-executing move, e.g. requested and top speeds, extrusion rate, and extrusion amount for the filament monitor.
  *
  * When a move requires that endstops and/or Z probes are active, all other moves are completed before starting it, and no new moves are allowed
- * to be added to the ring until it completes. So it is the only move in the ring with state 'scheduled'.
+ * to be added to the ring until it completes. So it is the only move in the ring with state 'committed'.
  */
 
 constexpr uint32_t MoveStartPollInterval = 10;					// delay in milliseconds between checking whether we should start moves
