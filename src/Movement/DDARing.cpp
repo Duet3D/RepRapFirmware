@@ -733,21 +733,29 @@ uint32_t DDARing::ManageIOBitsAndFeedForward() noexcept
 			const int32_t timeToMoveStart = (int32_t)(cdda->GetMoveStartTime() - now);				// get the time to the start of the move, negative if the move has started
 			const int32_t timeToMoveEnd = timeToMoveStart + (int32_t)cdda->GetClocksNeeded();		// get the time to the move ended, negative if the move has ended
 #if SUPPORT_IOBITS
-			if (!doneIoBits && timeToMoveStart < (int32_t)pc.GetAdvanceClocks() && timeToMoveEnd > (int32_t)pc.GetAdvanceClocks())
+			if (!doneIoBits)
 			{
-				// This move is current from the perspective of IOBits
-				if (!cdda->HaveDoneIoBits())
+				if (timeToMoveStart > (int32_t)pc.GetAdvanceClocks())								// if the move hasn't started yet and we are not within the advance time
 				{
-					pc.UpdatePorts(cdda->GetIoBits());
-					cdda->SetDoneIoBits();
+					pc.UpdatePorts(0);																// no move active so turn off all IOBITS ports
+					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveStart - pc.GetAdvanceClocks());	// wake up again when we need to
+					doneIoBits = true;
+					if (doneFeedForward) { break; }
 				}
-				nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd - pc.GetAdvanceClocks());
-				doneIoBits = true;
-				if (doneFeedForward)
+				else if (timeToMoveStart <= (int32_t)pc.GetAdvanceClocks() && timeToMoveEnd > (int32_t)pc.GetAdvanceClocks())
 				{
-					break;
+					// This move is current from the perspective of IOBits
+					if (!cdda->HaveDoneIoBits())
+					{
+						pc.UpdatePorts(cdda->GetIoBits());
+						cdda->SetDoneIoBits();
+					}
+					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd - pc.GetAdvanceClocks());
+					doneIoBits = true;
+					if (doneFeedForward) { break; }
 				}
 			}
+
 			if (!doneFeedForward)
 #endif
 			{
