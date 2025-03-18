@@ -63,18 +63,7 @@ GCodeResult PortControl::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	if (gb.TryGetLimitedUIValue('T', advanceMillis, seen, MaxAdvanceMillis + 1))
 	{
-		if constexpr (StepClockRate % 1000 == 0)
-		{
-			advanceClocks = advanceMillis * (StepClockRate/1000);				// this works for Duet 3, step clock rate is 750kHz
-		}
-		else if constexpr (StepClockRate % 500 == 0)
-		{
-			advanceClocks = (advanceMillis * (StepClockRate/500))/2;			// this works for Duet 2, step clock rate is 937500Hz
-		}
-		else
-		{
-			advanceClocks = (advanceMillis * (uint64_t)StepClockRate)/1000;		// catch-all in case of using other step clock rates
-		}
+		advanceClocks = MillisToStepClocks(advanceMillis);
 	}
 
 	if (!seen)

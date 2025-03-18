@@ -954,7 +954,7 @@ GCodeResult Tool::GetSetFeedForward(GCodeBuffer& gb, const StringRef& reply) THR
 	uint32_t advance;
 	if (gb.TryGetLimitedUIValue('A', advance, seen, MaxAdvanceMillis + 1))
 	{
-		feedForwardAdvanceClocks = advance * StepClockRate/1000;
+		feedForwardAdvanceClocks = MillisToStepClocks(advance);
 	}
 
 	if (seen)

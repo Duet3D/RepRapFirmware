@@ -657,6 +657,20 @@ constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2, PCCB 
 constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
 constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
 
+// Convert milliseconds to step clocks
+static inline constexpr uint32_t MillisToStepClocks(uint32_t numMills) noexcept
+{
+	if constexpr (StepClockRate % 1000 == 0)
+	{
+		return numMills * (StepClockRate/1000);				// this works for Duet 3, step clock rate is 750kHz
+	}
+	if constexpr (StepClockRate % 500 == 0)
+	{
+		return (numMills * (StepClockRate/500))/2;			// this works for Duet 2, step clock rate is 937500Hz
+	}
+	return (numMills * (uint64_t)StepClockRate)/1000;		// catch-all in case of using other step clock rates
+}
+
 // Convert microseconds to step clocks, rounding up to the next step clock
 static inline constexpr uint32_t MicrosecondsToStepClocks(float us) noexcept
 {

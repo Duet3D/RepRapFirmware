@@ -287,7 +287,7 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 				{
 					sl->sentRevertRequest = true;
 					revertMsg->whichDrives = driversToRevert;
-					revertMsg->clocksAllowed = (StepClockRate * BasicDriverPositionRevertMillis)/1000;
+					revertMsg->clocksAllowed = MillisToStepClocks(BasicDriverPositionRevertMillis);
 					urgentMessageBuffer.dataLength = revertMsg->GetActualDataLength(numDriversReverted);
 					//debugPrintf("Reverting drivers %u by %" PRIi32 " on board %u\n", driversToRevert,revertMsg->finalStepCounts[0], sl->boardAddress);
 					return &urgentMessageBuffer;
