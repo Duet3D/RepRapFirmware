@@ -61,7 +61,7 @@ GCodeResult PortControl::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 		numConfiguredPorts = nports;
 	}
 
-	if (gb.TryGetLimitedUIValue('T', advanceMillis, seen, 51))					// maximum allowed is 50ms
+	if (gb.TryGetLimitedUIValue('T', advanceMillis, seen, MaxAdvanceMillis + 1))
 	{
 		if constexpr (StepClockRate % 1000 == 0)
 		{
