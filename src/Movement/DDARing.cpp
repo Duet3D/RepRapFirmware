@@ -762,7 +762,7 @@ uint32_t DDARing::ManageIOBitsAndFeedForward() noexcept
 						feedForwardAverageExtrusionSpeed = cdda->GetAverageExtrusionSpeed();
 						setFeedForward = true;
 					}
-					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd > feedForwardTool->GetFeedForwardAdvanceClocks());
+					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd - feedForwardTool->GetFeedForwardAdvanceClocks());
 					doneFeedForward = true;
 #if SUPPORT_IOBITS
 					if (doneIoBits)
