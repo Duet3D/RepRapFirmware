@@ -2426,8 +2426,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 
 #if SUPPORT_S_CURVE
-					if (gb.Seen('T'))
+					if (frac == 0 && gb.Seen('T'))
 					{
+						if (!LockAllMovementSystemsAndWaitForStandstill(gb))
+						{
+							return false;
+						}
 						move.SetAccelerationTime(gb.GetNonNegativeFValue());
 						seen = true;
 					}
@@ -2450,7 +2454,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(move.Acceleration(ExtruderToLogicalDrive(extruder), frac == 1)));
 							sep = ':';
 						}
+#if SUPPORT_S_CURVE
+						reply.catf(", acceleration time %.2f sec", (double)move.AccelerationTime());
+#endif
 					}
+
+#if SUPPORT_S_CURVE
+					if (frac == 0 && move.AccelerationTime() != 0.0 && !move.IsUsingSCurve())
+					{
+						reply.lcat("Acceleration time (S-curve acceleration) is disabled because phase stepping is not enabled");
+						result = GCodeResult::warning;
+					}
+#endif
 				}
 				break;
 
@@ -4487,12 +4502,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_PHASE_STEPPING
 			case 970:	// configure step mode (phase stepping)
 				result = ConfigureStepMode(gb, reply);
-				break;
-#endif
-
-#if SUPPORT_S_CURVE
-			case 971:	// configure s curve acceleration
-				result = ConfigureSCurve(gb, reply);
 				break;
 #endif
 

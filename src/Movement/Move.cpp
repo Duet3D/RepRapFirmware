@@ -2058,7 +2058,7 @@ void Move::ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepC
 	}
 }
 
-PhaseStepParams Move::GetPhaseStepParams(size_t axisOrExtruder)
+PhaseStepParams Move::GetPhaseStepParams(size_t axisOrExtruder) const noexcept
 {
 	PhaseStepParams params;
 	params.Kv = dms[axisOrExtruder].phaseStepControl.GetKv();
@@ -2122,7 +2122,7 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& re
 		// If we are going from phase step to step dir, we need to send some fake steps to the driver to update MSCNT to avoid a jitter when disabling direct_mode
 		// This is suboptimal but it is a configuration command that is unlikely to be run so a few ms delay is unlikely to cause much harm.
 		// If the delay is an issue then all the drivers for the axis could be stepped together and each loop check if each drivers MSCNT has reached the target.
-		else if(SmartDrivers::IsPhaseSteppingEnabled(driver) && mode == StepMode::stepDir)
+		else if (SmartDrivers::IsPhaseSteppingEnabled(driver) && mode == StepMode::stepDir)
 		{
 			const uint16_t targetPhase = dm->phaseStepControl.CalculateStepPhase(driver) / 4;
 			uint16_t mscnt = SmartDrivers::GetMicrostepPosition(driver);
@@ -2176,7 +2176,7 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& re
 	return ret;
 }
 
-StepMode Move::GetStepMode(size_t axisOrExtruder) noexcept
+StepMode Move::GetStepMode(size_t axisOrExtruder) const noexcept
 {
 	if (axisOrExtruder >= MaxAxesPlusExtruders)
 	{

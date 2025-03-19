@@ -510,7 +510,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	maxDeceleration = maxAcceleration;
 
 #if SUPPORT_S_CURVE
-	if (move.UsingSCurveAcceleration())
+	if (move.IsUsingSCurve())
 	{
 		jerk = VectorBoxIntersection(normalisedDirectionVector, move.Jerks());
 		flags.useScurve = true;
@@ -1084,7 +1084,6 @@ void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 		{
 			// We need to insert a constant acceleration segment. We may also need to limit the top speed.
 			const float timeToMaxAcceleration = maxAcceleration/jerk;
-			const float topSpeedWithoutConstantAcceleration = timeToMaxAcceleration * maxAcceleration;
 			float constantAccelerationTime = -1.5 * timeToMaxAcceleration + fastSqrtf(0.25 * fsquare(timeToMaxAcceleration + 5 * totalDistance/maxAcceleration));
 			phase1Time = phase3Time = phase5Time = phase7Time = timeToMaxAcceleration;
 			const float newTopSpeed = jerk * timeToMaxAcceleration * (timeToMaxAcceleration + constantAccelerationTime);

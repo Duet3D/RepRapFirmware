@@ -47,10 +47,31 @@ void Move::SetAccelerationTime(float value) noexcept
 	accelerationTime = value * (float)StepClockRate;
 	if (accelerationTime > 0.0)
 	{
-		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
+		// Enable S-curve acceleration if all drives are using phase stepping
+		bool allUsingPhaseStepping = true;
+		for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); axis++)
 		{
-			jerks[drive] = normalAccelerations[drive] / accelerationTime;
+			jerks[axis] = normalAccelerations[axis] / accelerationTime;
+			if (GetStepMode(axis) != StepMode::phase)
+			{
+				allUsingPhaseStepping = false;
+			}
 		}
+
+		for (size_t extruder = 0; extruder < reprap.GetGCodes().GetNumExtruders(); extruder++)
+		{
+			const size_t drive = ExtruderToLogicalDrive(extruder);
+			jerks[drive] = normalAccelerations[drive] / accelerationTime;
+			if (GetStepMode(drive) != StepMode::phase)
+			{
+				allUsingPhaseStepping = false;
+			}
+		}
+		UseSCurve(allUsingPhaseStepping);
+	}
+	else
+	{
+		UseSCurve(false);
 	}
 }
 
