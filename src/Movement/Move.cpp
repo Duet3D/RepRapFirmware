@@ -1413,12 +1413,20 @@ void Move::PrepareScanningProbeDataCollection(const DDA& dda, const PrepParams& 
 	{
 		probeControl.accelClocks = params.TotalAccelClocks();
 #if SUPPORT_S_CURVE
-		// The following is only approximate but should be good enough
-		probeControl.acceleration = (params.peakAcceleration * params.TotalAccelClocks() - 0.5 * params.jerk * (fsquare(params.accelStartClocks) + fsquare(params.accelEndClocks)))/params.TotalAccelClocks();
-		probeControl.deceleration = (params.peakDeceleration * params.TotalDecelClocks() - 0.5 * params.jerk * (fsquare(params.decelStartClocks) + fsquare(params.decelEndClocks)))/params.TotalDecelClocks();
+		if (dda.flags.useScurve)
+		{
+			// The following is only approximate but should be good enough
+			probeControl.acceleration = (params.peakAcceleration * params.TotalAccelClocks() - 0.5 * params.jerk * (fsquare(params.accelStartClocks) + fsquare(params.accelEndClocks)))/params.TotalAccelClocks();
+			probeControl.deceleration = (params.peakDeceleration * params.TotalDecelClocks() - 0.5 * params.jerk * (fsquare(params.decelStartClocks) + fsquare(params.decelEndClocks)))/params.TotalDecelClocks();
+		}
+		else
+		{
+			probeControl.acceleration = params.peakAcceleration;
+			probeControl.deceleration = params.peakDeceleration;
+		}
 #else
-		probeControl.acceleration = dda.maxAcceleration;
-		probeControl.deceleration = dda.maxDeceleration;
+		probeControl.acceleration = params.acceleration;
+		probeControl.deceleration = params.deceleration;
 #endif
 		probeControl.initialSpeed = dda.startSpeed;
 		probeControl.topSpeed = dda.topSpeed;
@@ -2093,16 +2101,16 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& re
 		return false;
 	}
 
-	bool ret = true;
-	DriveMovement* dm = &dms[axisOrExtruder];
-	const uint32_t now = StepTimer::GetTimerTicks();
-
 #if SUPPORT_S_CURVE
 	if (mode != StepMode::phase)
 	{
 		UseSCurve(false);
 	}
 #endif
+
+	bool ret = true;
+	DriveMovement* dm = &dms[axisOrExtruder];
+	const uint32_t now = StepTimer::GetTimerTicks();
 
 	bool interpolation;
 	unsigned int microsteps = GetMicrostepping(axisOrExtruder, interpolation);

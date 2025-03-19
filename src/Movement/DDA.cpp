@@ -591,17 +591,17 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 #if SUPPORT_S_CURVE
 		if (flags.useScurve)
 		{
-#if 1
+# if 1
 			//TODO this is temporary code until we implement S-curve lookahead
 			startSpeed = startAcceleration = 0.0;
 			CalculateInitialSCurveMove(ring);
-#else
+# else
 			// Assuming that this move ends with zero speed, calculate the maximum possible starting speed and deceleration: u^3 = v^2 - 2as qq???
 			prev->beforePrepare.targetNextSpeed = qq;
 			DoSCurveLookahead(ring, prev);
 			startSpeed = qq;
 			RecalculateSCurveMove(ring);
-#endif
+# endif
 		}
 		else
 #endif
