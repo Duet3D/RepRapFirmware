@@ -203,6 +203,9 @@ private:
 #endif
 
 	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
+#if SUPPORT_S_CURVE
+	static void DoSCurveLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
+#endif
     static float Normalise(float v[], AxesBitmap unitLengthAxes) noexcept;  // Normalise a vector to unit length over the specified axes
     static float Normalise(float v[]) noexcept; 							// Normalise a vector to unit length over all axes
 	float NormaliseLinearMotion(AxesBitmap linearAxes) noexcept;			// Make the direction vector unit-normal in XYZ
@@ -290,6 +293,8 @@ private:
 			float targetNextSpeed;					// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
 #if SUPPORT_S_CURVE
 			float targetNextAcceleration;			// The acceleration that the next move would like to start at
+			//TODO we may not need all of the following, or we may be able to remove accelDistance and decelDistance when using S-curve acceleration
+		    float phase1Time, phase2Time, phase3Time, phase4Time, phase5Time, phase6Time, phase7Time;
 #endif
 		} beforePrepare;
 

@@ -118,6 +118,12 @@ void DDA::LogProbePosition() noexcept
 
 #endif
 
+// Convert a float to a uint32_t, with negative values converted to zero
+inline uint32_t floatToU32(float f) noexcept
+{
+	return (std::signbit(f)) ? 0 : (uint32_t)f;
+}
+
 // Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
 void PrepParams::SetFromDDA(const DDA& dda) noexcept
 {
@@ -126,28 +132,40 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	// Due to rounding error, for an accelerate-decelerate move we may have accelDistance+decelDistance slightly greater than totalDistance.
 	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
 	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
-	const float steadyDistance = decelStartDistance - accelDistance;
-	steadyClocks = (steadyDistance <= 0.0) ? 0 : lrintf(steadyDistance/dda.topSpeed);
 #if SUPPORT_S_CURVE
-	initialAcceleration = dda.startAcceleration;
 	peakAcceleration = dda.peakAcceleration;
-	finalAcceleration = dda.finalAcceleration;
-	initialDeceleration = dda.initialDeceleration;
 	peakDeceleration = dda.peakDeceleration;
-	finalDeceleration = dda.endDeceleration;
+	if (dda.flags.useScurve)
+	{
+		initialAcceleration = dda.startAcceleration;
+		finalAcceleration = dda.finalAcceleration;
+		initialDeceleration = dda.initialDeceleration;
+		finalDeceleration = dda.endDeceleration;
 
-	accelStartClocks = phase1Time;
-	accelConstantClocks = phase2Time;
-	accelEndClocks = phase3Time;
-	steadyClocks = phase4Clocks;			//??? setting steadyClocks twice!!!
-	decelStartClocks = phase5Time;
-	decelConstantClocks = phase6Time;
-	decelEndClocks = phase7Time;
+		// Rounding error might have made some of the timings slightly negative, so allow for that
+		accelStartClocks = floatToU32(dda.beforePrepare.phase1Time);
+		accelConstantClocks = floatToU32(dda.beforePrepare.phase2Time);
+		accelEndClocks = floatToU32(dda.beforePrepare.phase3Time);
+		steadyClocks = floatToU32(dda.beforePrepare.phase4Time);
+		decelStartClocks = floatToU32(dda.beforePrepare.phase5Time);
+		decelConstantClocks = floatToU32(dda.beforePrepare.phase6Time);
+		decelEndClocks = floatToU32(dda.beforePrepare.phase7Time);
+	}
+	else
+	{
+		accelStartClocks = accelEndClocks = decelStartClocks = decelEndClocks = 0;
+		accelConstantClocks = lrintf((dda.topSpeed - dda.startSpeed)/dda.maxAcceleration);
+		decelConstantClocks = lrintf((dda.topSpeed - dda.endSpeed)/dda.maxDeceleration);
+		const float steadyDistance = decelStartDistance - accelDistance;
+		steadyClocks = (steadyDistance <= 0.0) ? 0 : lrintf(steadyDistance/dda.topSpeed);
+	}
 #else
 	acceleration = dda.maxAcceleration;
 	deceleration = dda.maxDeceleration;
 	accelClocks = lrintf((dda.topSpeed - dda.startSpeed)/dda.maxAcceleration);
 	decelClocks = lrintf((dda.topSpeed - dda.endSpeed)/dda.maxDeceleration);
+	const float steadyDistance = decelStartDistance - accelDistance;
+	steadyClocks = (steadyDistance <= 0.0) ? 0 : lrintf(steadyDistance/dda.topSpeed);
 #endif
 	useInputShaping = dda.flags.xyMoving
 					&& !(dda.flags.isolatedMove || dda.flags.isLeadscrewAdjustmentMove
@@ -571,11 +589,15 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 #if SUPPORT_S_CURVE
 		if (flags.useScurve)
 		{
+#if 1
+			//TODO this is temporary code until we implement S-curve lookahead
+			startSpeed = startAcceleration = 0.0;
+			CalculateInitialSCurveMove(ring);
+#else
 			// Assuming that this move ends with zero speed, calculate the maximum possible starting speed and deceleration: u^3 = v^2 - 2as qq???
 			prev->beforePrepare.targetNextSpeed = qq;
-			DoLookahead(ring, prev);
+			DoSCurveLookahead(ring, prev);
 			startSpeed = qq;
-#if SUPPORT_S_CURVE
 			RecalculateSCurveMove(ring);
 #endif
 		}
@@ -1053,7 +1075,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 
 void DDA::RecalculateSCurveMove(DDARing& ring) noexcept
 {
-	qq;
+	//TODO
 }
 
 // Calculate the move to be added to the ring when the start speed and acceleration and the end speed and acceleration are all zero
@@ -1063,15 +1085,15 @@ void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 	if (fsquare(maxAcceleration) > requestedSpeed * jerk)
 	{
 		// We can reach the requested speed without exceeding the maximum acceleration even without a constant acceleration segment
-		phase2Time = phase6Time = 0.0;
+		beforePrepare.phase2Time = beforePrepare.phase6Time = 0.0;
 		const float halfTimeToReqSpeed = fastSqrtf(requestedSpeed/jerk);
 		const float distanceToReqSpeed = requestedSpeed * halfTimeToReqSpeed;
 		if (2 * distanceToReqSpeed <= totalDistance)
 		{
 			// We need a constant speed segment too
-			phase1Time = phase3Time = phase5Time = phase7Time = halfTimeToReqSpeed;
-			phase4Time = (totalDistance - 2 * distanceToReqSpeed)/requestedSpeed;
-			phase2Time = phase6Time = 0.0;
+			beforePrepare.phase1Time = beforePrepare.phase3Time = beforePrepare.phase5Time = beforePrepare.phase7Time = halfTimeToReqSpeed;
+			beforePrepare.phase4Time = (totalDistance - 2 * distanceToReqSpeed)/requestedSpeed;
+			beforePrepare.phase2Time = beforePrepare.phase6Time = 0.0;
 			topSpeed = requestedSpeed;
 			return;
 		}
@@ -1085,12 +1107,12 @@ void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 			// We need to insert a constant acceleration segment. We may also need to limit the top speed.
 			const float timeToMaxAcceleration = maxAcceleration/jerk;
 			float constantAccelerationTime = -1.5 * timeToMaxAcceleration + fastSqrtf(0.25 * fsquare(timeToMaxAcceleration + 5 * totalDistance/maxAcceleration));
-			phase1Time = phase3Time = phase5Time = phase7Time = timeToMaxAcceleration;
+			beforePrepare.phase1Time = beforePrepare.phase3Time = beforePrepare.phase5Time = beforePrepare.phase7Time = timeToMaxAcceleration;
 			const float newTopSpeed = jerk * timeToMaxAcceleration * (timeToMaxAcceleration + constantAccelerationTime);
 			if (newTopSpeed <= requestedSpeed)
 			{
 				topSpeed = newTopSpeed;
-				phase4Time = 0.0;
+				beforePrepare.phase4Time = 0.0;
 			}
 			else
 			{
@@ -1101,17 +1123,17 @@ void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 														   + 1.5 * fsquare(timeToMaxAcceleration) * constantAccelerationTime
 														   + 0.5 * timeToMaxAcceleration * fsquare(constantAccelerationTime)
 														  );
-				phase4Time = (totalDistance - 2 * revisedBasicDistance)/requestedSpeed;
+				beforePrepare.phase4Time = (totalDistance - 2 * revisedBasicDistance)/requestedSpeed;
 			}
-			phase2Time = phase6Time = constantAccelerationTime;
+			beforePrepare.phase2Time = beforePrepare.phase6Time = constantAccelerationTime;
 			return;
 		}
 	}
 
 	// If we get here then we can reach neither requestedSpeed nor maxAcceleration without exceeding totalDistance
 	const float halfTimeToTopSpeed = fastCubeRootf(totalDistance * 0.5 / jerk);
-	phase1Time = phase3Time = phase5Time = phase7Time = halfTimeToTopSpeed;
-	phase2Time = phase6Time = phase4Time = 0.0;
+	beforePrepare.phase1Time = beforePrepare.phase3Time = beforePrepare.phase5Time = beforePrepare.phase7Time = halfTimeToTopSpeed;
+	beforePrepare.phase2Time = beforePrepare.phase6Time = beforePrepare.phase4Time = 0.0;
 	topSpeed = jerk * fsquare(halfTimeToTopSpeed);
 }
 
@@ -1127,11 +1149,11 @@ void DDA::MatchSpeeds() noexcept
 		if (directionVector[drive] != 0.0 || next->directionVector[drive] != 0.0)
 		{
 			const float totalFraction = fabsf(directionVector[drive] - next->directionVector[drive]);
-			const float jerk = totalFraction * beforePrepare.targetNextSpeed;
-			const float allowedJerk = reprap.GetMove().GetPrintingInstantDv(drive);
-			if (jerk > allowedJerk)
+			const float instantDv = totalFraction * beforePrepare.targetNextSpeed;
+			const float allowedInstantDv = reprap.GetMove().GetPrintingInstantDv(drive);
+			if (instantDv > allowedInstantDv)
 			{
-				beforePrepare.targetNextSpeed = allowedJerk/totalFraction;
+				beforePrepare.targetNextSpeed = allowedInstantDv/totalFraction;
 			}
 		}
 	}
