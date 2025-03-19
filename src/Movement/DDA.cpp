@@ -133,10 +133,10 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
 	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
 #if SUPPORT_S_CURVE
-	peakAcceleration = dda.peakAcceleration;
-	peakDeceleration = dda.peakDeceleration;
 	if (dda.flags.useScurve)
 	{
+		peakAcceleration = dda.peakAcceleration;
+		peakDeceleration = dda.peakDeceleration;
 		initialAcceleration = dda.startAcceleration;
 		finalAcceleration = dda.finalAcceleration;
 		initialDeceleration = dda.initialDeceleration;
@@ -153,9 +153,11 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	}
 	else
 	{
+		peakAcceleration = dda.maxAcceleration;
+		peakDeceleration = dda.maxDeceleration;
 		accelStartClocks = accelEndClocks = decelStartClocks = decelEndClocks = 0;
-		accelConstantClocks = lrintf((dda.topSpeed - dda.startSpeed)/dda.maxAcceleration);
-		decelConstantClocks = lrintf((dda.topSpeed - dda.endSpeed)/dda.maxDeceleration);
+		accelConstantClocks = lrintf((dda.topSpeed - dda.startSpeed)/peakAcceleration);
+		decelConstantClocks = lrintf((dda.topSpeed - dda.endSpeed)/peakDeceleration);
 		const float steadyDistance = decelStartDistance - accelDistance;
 		steadyClocks = (steadyDistance <= 0.0) ? 0 : lrintf(steadyDistance/dda.topSpeed);
 	}

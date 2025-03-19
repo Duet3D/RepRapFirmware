@@ -2426,7 +2426,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 
 #if SUPPORT_S_CURVE
-					if (frac == 0 && gb.Seen('T'))
+					if (frac < 1 && gb.Seen('T'))
 					{
 						if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 						{
@@ -2455,12 +2455,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							sep = ':';
 						}
 #if SUPPORT_S_CURVE
-						reply.catf(", acceleration time %.2f sec", (double)move.AccelerationTime());
+						if (frac < 1)
+						{
+							reply.catf(", acceleration time %.2f sec", (double)(move.AccelerationTime() * (1.0/StepClockRate)));
+						}
 #endif
 					}
 
 #if SUPPORT_S_CURVE
-					if (frac == 0 && move.AccelerationTime() != 0.0 && !move.IsUsingSCurve())
+					if (frac < 1 && move.AccelerationTime() != 0.0 && !move.IsUsingSCurve())
 					{
 						reply.lcat("Acceleration time (S-curve acceleration) is disabled because phase stepping is not enabled");
 						result = GCodeResult::warning;
