@@ -184,7 +184,9 @@ GCodeResult GpOutputPort::WriteAnalog(uint32_t gpioPortNumber, bool isServo, flo
 
 void GpOutputPort::WriteAnalog(float pwm) noexcept
 {
+#if SUPPORT_CAN_EXPANSION
 	if (boardAddress == CanInterface::GetCanAddress())
+#endif
 	{
 		lastPwm = pwm;
 		port.WriteAnalog(pwm);

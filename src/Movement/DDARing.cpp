@@ -6,6 +6,7 @@
  */
 
 #include "DDARing.h"
+#include "DDA.h"
 #include <Platform/RepRap.h>
 #include "Move.h"
 #include "MoveDebugFlags.h"
@@ -680,9 +681,8 @@ void DDARing::Diagnostics(const StringRef& reply, unsigned int ringNumber) noexc
 #if SUPPORT_LASER
 
 // Manage the laser power. Return the number of ticks until we should be called again, or portMAX_DELAY to be called at the start of the next move.
-uint32_t DDARing::ManageLaserPower() noexcept
+uint32_t DDARing::ManageLaserPower(Platform& platform) noexcept
 {
-	Platform& platform = reprap.GetPlatform();
 	BasePriorityBooster booster(NvicPriorityStep);											// lock out step interrupts
 	const DDA *cdda = getPointer;
 	const uint32_t now = StepTimer::GetMovementTimerTicks();
@@ -709,13 +709,26 @@ uint32_t DDARing::ManageLaserPower() noexcept
 #endif
 
 // Manage the IOBITS (G1 P parameter) and extruder heater feedforward. Called by the Laser task. Return the number of ticks until we should be called again, up to portMAX_DELAY.
-uint32_t DDARing::ManageIOBitsAndFeedForward() noexcept
+uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 {
+	const unsigned int FeedForwardBit = 0x01;
+	const unsigned int OutputOnExtrudeBit = 0x02;
+	const unsigned int IoBitsBit = 0x04;
+
+	unsigned int bitsLeftToDo = FeedForwardBit;
+	if (platform.IsOutputOnExtrudeActive())
+	{
+		bitsLeftToDo |= OutputOnExtrudeBit;
+	}
+
 #if SUPPORT_IOBITS
 	PortControl& pc = reprap.GetPortControl();
-	bool doneIoBits = !pc.IsConfigured();
+	if (pc.IsConfigured())
+	{
+		bitsLeftToDo |= IoBitsBit;
+	}
 #endif
-	bool doneFeedForward = false;
+
 	bool setFeedForward = false;
 	uint32_t nextWakeupDelay = StepClockRate;
 	const Tool *_ecv_null feedForwardTool = nullptr;
@@ -733,14 +746,13 @@ uint32_t DDARing::ManageIOBitsAndFeedForward() noexcept
 			const int32_t timeToMoveStart = (int32_t)(cdda->GetMoveStartTime() - now);				// get the time to the start of the move, negative if the move has started
 			const int32_t timeToMoveEnd = timeToMoveStart + (int32_t)cdda->GetClocksNeeded();		// get the time to the move ended, negative if the move has ended
 #if SUPPORT_IOBITS
-			if (!doneIoBits)
+			if (bitsLeftToDo & IoBitsBit)
 			{
 				if (timeToMoveStart > (int32_t)pc.GetAdvanceClocks())								// if the move hasn't started yet and we are not within the advance time
 				{
 					pc.UpdatePorts(0);																// no move active so turn off all IOBITS ports
 					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveStart - pc.GetAdvanceClocks());	// wake up again when we need to
-					doneIoBits = true;
-					if (doneFeedForward) { break; }
+					bitsLeftToDo &= ~IoBitsBit;
 				}
 				else if (timeToMoveStart <= (int32_t)pc.GetAdvanceClocks() && timeToMoveEnd > (int32_t)pc.GetAdvanceClocks())
 				{
@@ -751,13 +763,11 @@ uint32_t DDARing::ManageIOBitsAndFeedForward() noexcept
 						cdda->SetDoneIoBits();
 					}
 					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd - pc.GetAdvanceClocks());
-					doneIoBits = true;
-					if (doneFeedForward) { break; }
+					bitsLeftToDo &= ~IoBitsBit;
 				}
 			}
-
-			if (!doneFeedForward)
 #endif
+			if (bitsLeftToDo & FeedForwardBit)
 			{
 				feedForwardTool = cdda->GetTool();
 				// Even if there is no current tool we still need to cancel any previous feedforward temperature boost and get ready to wake up when the move ends
@@ -773,24 +783,50 @@ uint32_t DDARing::ManageIOBitsAndFeedForward() noexcept
 						setFeedForward = true;
 					}
 					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd - advanceClocks);
-					doneFeedForward = true;
-#if SUPPORT_IOBITS
-					if (doneIoBits)
-#endif
-					{
-						break;
-					}
+					bitsLeftToDo &= ~FeedForwardBit;
 				}
 			}
+
+			if (bitsLeftToDo & OutputOnExtrudeBit)
+			{
+				if (timeToMoveStart > 0)								// if the move hasn't started yet
+				{
+					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveStart);	// wake up again when we need to
+					bitsLeftToDo &= ~OutputOnExtrudeBit;
+				}
+				else if (timeToMoveStart <= 0 && timeToMoveEnd > 0)
+				{
+					// This move is current from the perspective of output on extrude
+					if (!cdda->HaveDoneOutputOnExtrude())
+					{
+						cdda->SetDoneOutputOnExtrude();
+						if (cdda->GetAverageExtrusionSpeed() != 0.0)
+						{
+							platform.ExtrudeOn();
+						}
+						else
+						{
+							platform.ExtrudeOff();
+						}
+					}
+					bitsLeftToDo &= ~OutputOnExtrudeBit;
+				}
+			}
+
+			if (bitsLeftToDo == 0) { break; }
 			cdda = cdda->GetNext();
 		}
 
 #if SUPPORT_IOBITS
-		if (!doneIoBits)
+		if (bitsLeftToDo & IoBitsBit)
 		{
 			pc.UpdatePorts(0);														// no move active so turn off all IOBITS ports
 		}
 #endif
+		if (bitsLeftToDo & OutputOnExtrudeBit)
+		{
+			platform.ExtrudeOff();													// no move active so turn off output on extrude
+		}
 	}																				// end base priority boosted scope
 
 	// Check if we need to cancel previous feedforward because of a tool change or running out of moves

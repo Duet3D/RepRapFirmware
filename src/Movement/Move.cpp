@@ -1479,6 +1479,7 @@ void Move::LaserTaskRun() noexcept
 #if SUPPORT_SCANNING_PROBES || SUPPORT_LASER
 	GCodes& gcodes = reprap.GetGCodes();
 #endif
+	Platform& platform = reprap.GetPlatform();
 	for (;;)
 	{
 		uint32_t ticks = portMAX_DELAY;
@@ -1496,13 +1497,13 @@ void Move::LaserTaskRun() noexcept
 			if (gcodes.GetMachineType() == MachineType::laser)
 		{
 			// Manage the laser power
-			ticks = rings[0].ManageLaserPower();
+			ticks = rings[0].ManageLaserPower(platform);
 		}
 		else
 #endif
 		{
-			// Manage the feedforward and IOBits
-			ticks = rings[0].ManageIOBitsAndFeedForward();
+			// Manage the feedforward, output on extrude, and IOBits
+			ticks = rings[0].ManageIOBitsAndFeedForward(platform);
 		}
 
 		// Sleep until it is time to wake up again

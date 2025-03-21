@@ -405,6 +405,7 @@ public:
 
 	// Ancillary PWM
 	GCodeResult GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	bool IsOutputOnExtrudeActive() const noexcept { return extrusionAncilliaryPwmGpOutNumber >= 0; }
 	void ExtrudeOn() noexcept;
 	void ExtrudeOff() noexcept;
 

@@ -66,9 +66,9 @@ public:
 #endif
 
 #if SUPPORT_LASER
-	uint32_t ManageLaserPower() noexcept;												// Manage the laser power
+	uint32_t ManageLaserPower(Platform& platform) noexcept;								// Manage the laser power
 #endif
-	uint32_t ManageIOBitsAndFeedForward() noexcept;										// Manage the IOBITS (G1 P parameter) and extruder heater feedforward
+	uint32_t ManageIOBitsAndFeedForward(Platform& platform) noexcept;					// Manage the IOBITS (G1 P parameter) and extruder heater feedforward
 
 	void RecordLookaheadError() noexcept { ++numLookaheadErrors; }						// Record a lookahead error
 	void Diagnostics(const StringRef& reply, unsigned int ringNumber) noexcept;

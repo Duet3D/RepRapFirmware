@@ -159,8 +159,10 @@ public:
 	float GetAverageExtrusionSpeed() const noexcept pre(IsCommitted()) { return afterPrepare.averageExtrusionSpeed; }
 	bool HaveDoneIoBits() const noexcept { return flags.doneIoBits; }
 	bool HaveDoneFeedForward() const noexcept { return flags.doneFeedForward; }
+	bool HaveDoneOutputOnExtrude() const noexcept { return flags.doneOutputOnExtrude; }
 	void SetDoneIoBits() noexcept { flags.doneIoBits = true; }
 	void SetDoneFeedForward() noexcept { flags.doneFeedForward = true; }
+	void SetDoneOutputOnExtrude() noexcept { flags.doneOutputOnExtrude = true; }
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }
@@ -221,13 +223,17 @@ private:
     DDA *_ecv_null next;							// The next one in the ring
 	DDA *_ecv_null prev;							// The previous one in the ring
 
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	LaserPwmOrIoBits laserPwmOrIoBits;				// laser PWM required or port state required during this move (here because it is currently 16 bits)
+#endif
+
 	volatile DDAState state;						// What state this DDA is in
 
 	union
 	{
 		struct
 		{
-			uint16_t canPauseAfter : 1,				// True if we can pause at the end of this move
+			uint32_t canPauseAfter : 1,				// True if we can pause at the end of this move
 					 isPrintingMove : 1,			// True if this move includes XY movement and extrusion
 					 usePressureAdvance : 1,		// True if pressure advance should be applied to any forward extrusion
 					 hadLookaheadUnderrun : 1,		// True if the lookahead queue was not long enough to optimise this move
@@ -240,7 +246,8 @@ private:
 					 controlLaser : 1,				// True if this move controls the laser or iobits
 					 isolatedMove : 1,				// set if we disable input shaping for this move and wait for it to finish e.g. for a G1 H2 move
 					 doneIoBits : 1,				// set if we have written the IOBITS ports for this move
-					 doneFeedForward : 1			// set if we have commanded feedforward for this move
+					 doneFeedForward : 1,			// set if we have commanded feedforward for this move
+					 doneOutputOnExtrude: 1			// set if we have set/cleared output on extrude for ths move
 #if SUPPORT_SCANNING_PROBES
 					 , scanningProbeMove : 1 	 	// True if this is a scanning Z probe move
 #endif
@@ -249,12 +256,8 @@ private:
 #endif
 					 ;
 		};
-		uint16_t all;								// so that we can print all the flags at once for debugging
+		uint32_t all;								// so that we can print all the flags at once for debugging
 	} flags;
-
-#if SUPPORT_LASER || SUPPORT_IOBITS
-	LaserPwmOrIoBits laserPwmOrIoBits;				// laser PWM required or port state required during this move (here because it is currently 16 bits)
-#endif
 
 	const Tool *_ecv_null tool;						// which tool (if any) is active
 
