@@ -15,6 +15,8 @@
 # define MAIN_VERSION	"3.6.0-rc.1+2"
 # ifdef USE_CAN0
 #  define VERSION_SUFFIX	"(CAN0)"
+# elif defined(SUPPORT_S_CURVE) && SUPPORT_S_CURVE
+#  define VERSION_SUFFIX	"(S-curve)"
 # else
 #  define VERSION_SUFFIX	""
 # endif

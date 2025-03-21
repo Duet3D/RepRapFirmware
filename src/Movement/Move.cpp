@@ -1431,9 +1431,14 @@ void Move::PrepareScanningProbeDataCollection(const DDA& dda, const PrepParams& 
 		probeControl.initialSpeed = dda.startSpeed;
 		probeControl.topSpeed = dda.topSpeed;
 		probeControl.steadyClocks = params.steadyClocks;
-		probeControl.distancePerReading = dda.totalDistance/(float)probeControl.numReadingsNeeded;
+		probeControl.distancePerReading = params.totalDistance/(float)probeControl.numReadingsNeeded;
+#if SUPPORT_S_CURVE
+		probeControl.accelDistance = params.TotalAccelDistance();
+		probeControl.decelStartDistance = params.totalDistance - params.TotalDecelDistance();
+#else
 		probeControl.accelDistance = params.accelDistance;
 		probeControl.decelStartDistance = params.decelStartDistance;
+#endif
 		probeControl.startTime = dda.afterPrepare.moveStartTime;
 		probeControl.timer.SetCallback(ScanningProbeGlobalTimerCallback, CallbackParameter(this));
 		SetupNextScanningProbeReading();
@@ -1822,7 +1827,6 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 	// When using input shaping we can save some FP multiplications by multiplying the acceleration or deceleration time by the pressure advance just once instead of once per impulse
 #if SUPPORT_S_CURVE
 	const motioncalc_t pressureAdvanceClocks = (moveFlags.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)dm.extruderShaper.GetKclocks() : (motioncalc_t)0.0;
-	const motioncalc_t steadyDistance = (params.steadyClocks == 0) ? (motioncalc_t)0.0 : params.decelStartDistance - params.TotalAccelDistance();
 #else
 	motioncalc_t accelDistance, accelPressureAdvance;
 	if (params.accelClocks == 0)
@@ -1876,7 +1880,7 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 		}
 		if (params.steadyClocks != 0)
 		{
-			tail = AddSegment(tail, steadyStartTime, params.steadyClocks, steadyDistance * stepsPerMm, (motioncalc_t)0.0, (motioncalc_t)0.0, moveFlags, (motioncalc_t)0.0);
+			tail = AddSegment(tail, steadyStartTime, params.steadyClocks, params.steadyDistance * stepsPerMm, (motioncalc_t)0.0, (motioncalc_t)0.0, moveFlags, (motioncalc_t)0.0);
 		}
 		if (params.decelStartClocks != 0)
 		{
@@ -1927,7 +1931,7 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 			}
 			if (params.steadyClocks != 0)
 			{
-				tail = AddSegment(tail, steadyStartTime + startDelay, params.steadyClocks, steadyDistance * factor, (motioncalc_t)0.0, (motioncalc_t)0.0, moveFlags, (motioncalc_t)0.0);
+				tail = AddSegment(tail, steadyStartTime + startDelay, params.steadyClocks, params.steadyDistance * factor, (motioncalc_t)0.0, (motioncalc_t)0.0, moveFlags, (motioncalc_t)0.0);
 			}
 			if (params.decelStartClocks != 0)
 			{

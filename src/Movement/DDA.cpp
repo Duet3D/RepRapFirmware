@@ -128,10 +128,8 @@ inline uint32_t floatToU32(float f) noexcept
 void PrepParams::SetFromDDA(const DDA& dda) noexcept
 {
 	totalDistance = dda.totalDistance;
-	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
 	// Due to rounding error, for an accelerate-decelerate move we may have accelDistance+decelDistance slightly greater than totalDistance.
 	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
-	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
 #if SUPPORT_S_CURVE
 	if (dda.flags.useScurve)
 	{
@@ -150,6 +148,35 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		decelStartClocks = floatToU32(dda.beforePrepare.phase5Time);
 		decelConstantClocks = floatToU32(dda.beforePrepare.phase6Time);
 		decelEndClocks = floatToU32(dda.beforePrepare.phase7Time);
+
+		accelInitialDistance = (accelStartClocks == 0) ? 0.0 : (dda.startSpeed * (0.5 * dda.startAcceleration + (1.0/6.0) * dda.jerk * accelStartClocks) * accelStartClocks) * accelStartClocks;
+		const float accelPeakInitialSpeed = dda.startSpeed + (initialAcceleration + 0.5 * dda.jerk * accelStartClocks) * accelStartClocks;
+		accelPeakDistance = (accelConstantClocks == 0) ? 0.0 : (accelPeakInitialSpeed + 0.5 * peakAcceleration * accelConstantClocks) * accelConstantClocks;
+		accelEndDistance = (accelEndClocks == 0) ? 0.0 : (dda.topSpeed - (1.0/6.0) * dda.jerk * fsquare(accelEndClocks)) * accelEndClocks;
+		decelInitialDistance = (decelStartClocks == 0) ? 0.0 : (dda.topSpeed - (1.0/6.0) * dda.jerk * fsquare(decelEndClocks)) * decelEndClocks;
+		const float decelPeakEndSpeed = dda.endSpeed + (finalDeceleration + 0.5 * dda.jerk * decelStartClocks) * decelStartClocks;
+		decelPeakDistance = (decelConstantClocks == 0) ? 0.0 : (decelPeakEndSpeed + 0.5 * peakDeceleration * decelConstantClocks) * decelConstantClocks;
+		decelEndDistance = (decelEndClocks == 0) ? 0.0 : (dda.endSpeed + (0.5 * finalDeceleration + (1.0/6.0) * dda.jerk * decelEndClocks) * decelEndClocks) * decelEndClocks;
+		const float totalAccelDecelDistance = accelInitialDistance + accelPeakDistance + accelEndDistance + decelInitialDistance + decelPeakDistance + decelEndDistance;
+		const float residualDistance = totalDistance - totalAccelDecelDistance;
+		if (residualDistance < 0.0)
+		{
+			steadyClocks = 0.0;
+		}
+		if (steadyClocks == 0.0)
+		{
+			// We may have a residual distance because of rounding error.
+			// We want zero residual distance so that the move has he correct length, so add the residual distance to one of the phases that is present
+			if (residualDistance != 0.0)
+			{
+				debugPrintf("totalDistance=%.4e residual=%.4e\n", (double)dda.totalDistance, (double)residualDistance);
+				//TODO qq;
+			}
+		}
+		else
+		{
+			steadyDistance = residualDistance;
+		}
 	}
 	else
 	{
@@ -158,14 +185,20 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		accelStartClocks = accelEndClocks = decelStartClocks = decelEndClocks = 0;
 		accelConstantClocks = lrintf((dda.topSpeed - dda.startSpeed)/peakAcceleration);
 		decelConstantClocks = lrintf((dda.topSpeed - dda.endSpeed)/peakDeceleration);
-		const float steadyDistance = decelStartDistance - accelDistance;
+		accelInitialDistance = accelEndDistance = decelInitialDistance = decelEndDistance = 0.0;
+		decelPeakDistance = dda.beforePrepare.decelDistance;
+		const float decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
+		accelPeakDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
+		steadyDistance = decelStartDistance - accelPeakDistance;
 		steadyClocks = (steadyDistance <= 0.0) ? 0 : lrintf(steadyDistance/dda.topSpeed);
 	}
 #else
+	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
+	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
 	acceleration = dda.maxAcceleration;
 	deceleration = dda.maxDeceleration;
-	accelClocks = lrintf((dda.topSpeed - dda.startSpeed)/dda.maxAcceleration);
-	decelClocks = lrintf((dda.topSpeed - dda.endSpeed)/dda.maxDeceleration);
+	accelClocks = lrintf((dda.topSpeed - dda.startSpeed)/acceleration);
+	decelClocks = lrintf((dda.topSpeed - dda.endSpeed)/deceleration);
 	const float steadyDistance = decelStartDistance - accelDistance;
 	steadyClocks = (steadyDistance <= 0.0) ? 0 : lrintf(steadyDistance/dda.topSpeed);
 #endif
@@ -179,19 +212,22 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 
 void PrepParams::DebugPrint() const noexcept
 {
-	debugPrintf("pp: td=%.3g ad=%.3g dsd=%.3g"
+	debugPrintf("pp: td=%.3g"
 #if SUPPORT_S_CURVE
-				"a=[%.3g %.3g %.3g] d=[%.3g %.3g %.3g] ac=[%" PRIu32 " %" PRIu32 " %" PRIu32 "] sc=%" PRIu32 " dc=[%" PRIu32 " %" PRIu32 " %" PRIu32 "]"
+				" ad=[%.3g %.3g %.3g] dd=[%.3g %.3g %.3g] a=[%.3g %.3g %.3g] d=[%.3g %.3g %.3g] ac=[%" PRIu32 " %" PRIu32 " %" PRIu32 "] sc=%" PRIu32 " dc=[%" PRIu32 " %" PRIu32 " %" PRIu32 "]"
 #else
-				"a=%.3g d=%.3g ac=%" PRIu32 " sc=%" PRIu32 " dc=%" PRIu32
+				" ad=%.3g dsd=%.3g a=%.3g d=%.3g ac=%" PRIu32 " sc=%" PRIu32 " dc=%" PRIu32
 #endif
 				"\n",
-					(double)totalDistance, (double)accelDistance, (double)decelStartDistance,
+					(double)totalDistance,
 #if SUPPORT_S_CURVE
+					(double)accelInitialDistance, (double)accelPeakDistance, (double)accelEndDistance,
+					(double)decelInitialDistance, (double)decelPeakDistance, (double)decelEndDistance,
 					(double)initialAcceleration, (double)peakAcceleration, (double)finalAcceleration,
 					(double)initialDeceleration, (double)peakDeceleration, (double)finalDeceleration,
 					accelStartClocks, accelConstantClocks, accelEndClocks, steadyClocks, decelStartClocks, decelConstantClocks, decelEndClocks
 #else
+					(double)accelDistance, (double)decelStartDistance,
 					(double)acceleration, (double)deceleration,
 					accelClocks, steadyClocks, decelClocks
 #endif

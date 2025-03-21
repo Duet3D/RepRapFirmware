@@ -31,23 +31,25 @@ struct PrepParams
     float initialDeceleration, peakDeceleration, finalDeceleration;
     float accelInitialDistance, accelPeakDistance, accelEndDistance;
     float decelInitialDistance, decelPeakDistance, decelEndDistance;
+    float steadyDistance;
 	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive
 #else
 	uint32_t accelClocks, steadyClocks, decelClocks;
 	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
 # define peakAcceleration	acceleration
 # define peakDeceleration	deceleration
-#endif
-	float totalDistance;
 	float accelDistance;
 	float decelStartDistance;
-	float topSpeed;									// the top speed, may be modified by the input shaper
+#endif
+	float totalDistance;
+	float topSpeed;									// the top speed reached
 	bool useInputShaping;
 
 #if SUPPORT_S_CURVE
 	uint32_t TotalAccelClocks() const noexcept { return accelStartClocks + accelConstantClocks + accelEndClocks; }
 	uint32_t TotalDecelClocks() const noexcept { return decelStartClocks + decelConstantClocks + decelEndClocks; }
 	float TotalAccelDistance() const noexcept { return accelInitialDistance + accelPeakDistance + accelEndDistance; }
+	float TotalDecelDistance() const noexcept { return decelInitialDistance + decelPeakDistance + decelEndDistance; }
 #else
 	uint32_t TotalAccelClocks() const noexcept { return accelClocks; }
 	uint32_t TotalDecelClocks() const noexcept { return decelClocks; }
