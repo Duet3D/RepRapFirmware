@@ -653,8 +653,8 @@ private:
 
 	// CNC and laser support
 	Spindle spindles[MaxSpindles];
-	float extrusionAncilliaryPwmValue;
-	PwmPort extrusionAncilliaryPwmPort;
+	float extrusionAncilliaryPwmValue = 0.0;
+	int32_t extrusionAncilliaryPwmGpOutNumber = -1;		// the GpOut port number used for ancillary extrusion PWM, or -1 if not configured
 
 #if SUPPORT_LASER
 	PwmPort laserPort;
@@ -702,9 +702,9 @@ inline const char *_ecv_array Platform::GetMacroDir() noexcept
 // Caution: this is often called from an ISR, or with interrupts disabled!
 inline void Platform::ExtrudeOn() noexcept
 {
-	if (extrusionAncilliaryPwmValue > 0.0)
+	if (extrusionAncilliaryPwmGpOutNumber >= 0 && extrusionAncilliaryPwmValue > 0.0)
 	{
-		extrusionAncilliaryPwmPort.WriteAnalog(extrusionAncilliaryPwmValue);
+		GetGpOutPort(extrusionAncilliaryPwmGpOutNumber).WriteAnalog(extrusionAncilliaryPwmValue);
 	}
 }
 
@@ -713,9 +713,9 @@ inline void Platform::ExtrudeOn() noexcept
 // Caution: this is often called from an ISR, or with interrupts disabled!
 inline void Platform::ExtrudeOff() noexcept
 {
-	if (extrusionAncilliaryPwmValue > 0.0)
+	if (extrusionAncilliaryPwmGpOutNumber >= 0 && extrusionAncilliaryPwmValue > 0.0)
 	{
-		extrusionAncilliaryPwmPort.WriteAnalog(0.0);
+		GetGpOutPort(extrusionAncilliaryPwmGpOutNumber).WriteAnalog(0.0);
 	}
 }
 

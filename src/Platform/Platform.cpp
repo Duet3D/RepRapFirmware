@@ -553,8 +553,6 @@ void Platform::Init() noexcept
 	warnDriversNotPowered = false;
 #endif
 
-	extrusionAncilliaryPwmValue = 0.0;
-
 #if SUPPORT_SPI_SENSORS
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
 	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
@@ -1335,10 +1333,6 @@ void Platform::InitialiseInterrupts() noexcept
 	return resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos];
 #endif
 }
-
-#if CORE_USES_TINYUSB	//debug
-extern uint32_t numUsbInterrupts;
-#endif
 
 // Return diagnostic information. Each part must fit in a buffer of length GCodeReplyLength.
 void Platform::Diagnostics(unsigned int part, const StringRef& reply) noexcept
@@ -4037,16 +4031,24 @@ void Platform::OnProcessingCanMessage() noexcept
 // Configure the ancillary PWM
 GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	bool seen = false;
-	if (gb.Seen('P'))
+	int32_t tempPort;
+	bool seen = gb.TryGetLimitedIValue('P', tempPort, seen, -1, MaxGpOutPorts - 1);
+	if (seen)
 	{
-		seen = true;
-		if (!extrusionAncilliaryPwmPort.AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::pwm))
+		if (   tempPort >= 0
+			&& (   GetGpOutPort(tempPort).IsUnused()
+#if SUPPORT_CAN_EXPANSION
+				|| !GetGpOutPort(tempPort).IsLocal()
+#endif
+			   )
+		   )
 		{
+			reply.printf("GpOut port %" PRIu32 " is not valid", tempPort);
 			return GCodeResult::error;
 		}
-		const PwmFrequency freq = (gb.Seen('Q') || gb.Seen('F')) ? gb.GetPwmFrequency() : DefaultPinWritePwmFreq;
-		extrusionAncilliaryPwmPort.SetFrequency(freq);
+
+		extrusionAncilliaryPwmGpOutNumber = tempPort;
+		Move::CreateLaserTask();									// we use the laser task to manage ancillary PWM
 	}
 	if (gb.Seen('S'))
 	{
@@ -4056,8 +4058,14 @@ GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply
 
 	if (!seen)
 	{
-		reply.copy("Extrusion ancillary PWM");
-		extrusionAncilliaryPwmPort.AppendFullDetails(reply);
+		if (extrusionAncilliaryPwmGpOutNumber < 0)
+		{
+			reply.copy("Extrusion ancillary PWM is not configured");
+		}
+		else
+		{
+			reply.printf("Extrusion ancillary PWM port %" PRIu32 ", PWM value %.2f", extrusionAncilliaryPwmGpOutNumber, (double)extrusionAncilliaryPwmValue);
+		}
 	}
 	return GCodeResult::ok;
 }

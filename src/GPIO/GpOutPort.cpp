@@ -182,6 +182,15 @@ GCodeResult GpOutputPort::WriteAnalog(uint32_t gpioPortNumber, bool isServo, flo
 	return GCodeResult::ok;
 }
 
+void GpOutputPort::WriteAnalog(float pwm) noexcept
+{
+	if (boardAddress == CanInterface::GetCanAddress())
+	{
+		lastPwm = pwm;
+		port.WriteAnalog(pwm);
+	}
+}
+
 // Set the output low or high. Called by PortControl, only supported on local ports.
 void GpOutputPort::WriteDigital(bool value) noexcept
 {
@@ -243,15 +252,6 @@ GCodeResult GpOutputPort::AssignFromRemote(uint32_t gpioPortNumber, const CanMes
 			port.AppendFullDetails(reply);
 		}
 		return GCodeResult::ok;
-	}
-}
-
-void GpOutputPort::WriteAnalog(float pwm) noexcept
-{
-	if (boardAddress == CanInterface::GetCanAddress())
-	{
-		lastPwm = pwm;
-		port.WriteAnalog(pwm);
 	}
 }
 

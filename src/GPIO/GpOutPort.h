@@ -34,10 +34,10 @@ public:
 	void WriteDigital(bool value) noexcept;
 	GCodeResult Configure(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	PwmFrequency GetPwmFrequency() const noexcept { return port.GetFrequency(); }
+	void WriteAnalog(float pwm) noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult AssignFromRemote(uint32_t gpioPortNumber, const CanMessageGenericParser& parser, const StringRef& reply) noexcept;
-	void WriteAnalog(float pwm) noexcept;
 #endif
 
 #ifdef PCCB
