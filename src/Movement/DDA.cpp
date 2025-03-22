@@ -139,6 +139,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		finalAcceleration = dda.finalAcceleration;
 		initialDeceleration = dda.initialDeceleration;
 		finalDeceleration = dda.endDeceleration;
+		jerk = dda.jerk;
 
 		// Rounding error might have made some of the timings slightly negative, so allow for that
 		accelStartClocks = floatToU32(dda.beforePrepare.phase1Time);
@@ -166,7 +167,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		if (steadyClocks == 0.0)
 		{
 			// We may have a residual distance because of rounding error.
-			// We want zero residual distance so that the move has he correct length, so add the residual distance to one of the phases that is present
+			// We want zero residual distance so that the move has the correct length, so add the residual distance to one of the phases that is present
 			if (residualDistance != 0.0)
 			{
 				debugPrintf("totalDistance=%.4e residual=%.4e\n", (double)dda.totalDistance, (double)residualDistance);
@@ -191,6 +192,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		accelPeakDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
 		steadyDistance = decelStartDistance - accelPeakDistance;
 		steadyClocks = (steadyDistance <= 0.0) ? 0 : lrintf(steadyDistance/dda.topSpeed);
+		jerk = 0.0;							// this signals that we are not using S-curve acceleration
 	}
 #else
 	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;

@@ -32,7 +32,7 @@ struct PrepParams
     float accelInitialDistance, accelPeakDistance, accelEndDistance;
     float decelInitialDistance, decelPeakDistance, decelEndDistance;
     float steadyDistance;
-	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive
+	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive; or zero if not using S-curce acceleration
 #else
 	uint32_t accelClocks, steadyClocks, decelClocks;
 	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
