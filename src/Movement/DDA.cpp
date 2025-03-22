@@ -1088,6 +1088,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 		}
 	}
 
+	// Set up flags.canPauseAfter
 	if (flags.canPauseAfter && endSpeed != 0.0)
 	{
 		const Move& m = reprap.GetMove();
@@ -1118,60 +1119,66 @@ void DDA::RecalculateSCurveMove(DDARing& ring) noexcept
 // Calculate the move to be added to the ring when the start speed and acceleration and the end speed and acceleration are all zero
 void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 {
-	// Determine whether the requested speed or the maximum acceleration is more limiting
-	if (fsquare(maxAcceleration) > requestedSpeed * jerk)
+	do
 	{
-		// We can reach the requested speed without exceeding the maximum acceleration even without a constant acceleration segment
-		beforePrepare.phase2Time = beforePrepare.phase6Time = 0.0;
-		const float halfTimeToReqSpeed = fastSqrtf(requestedSpeed/jerk);
-		const float distanceToReqSpeed = requestedSpeed * halfTimeToReqSpeed;
-		if (2 * distanceToReqSpeed <= totalDistance)
+		// Determine whether the requested speed or the maximum acceleration is more limiting
+		if (fsquare(maxAcceleration) > requestedSpeed * jerk)
 		{
-			// We need a constant speed segment too
-			beforePrepare.phase1Time = beforePrepare.phase3Time = beforePrepare.phase5Time = beforePrepare.phase7Time = halfTimeToReqSpeed;
-			beforePrepare.phase4Time = (totalDistance - 2 * distanceToReqSpeed)/requestedSpeed;
+			// We can reach the requested speed without exceeding the maximum acceleration even without a constant acceleration segment
 			beforePrepare.phase2Time = beforePrepare.phase6Time = 0.0;
-			topSpeed = requestedSpeed;
-			return;
-		}
-	}
-	else
-	{
-		// We can't reach the requested speed without inserting a constant acceleration segment
-		const float basicDistance = 2 * fcube(maxAcceleration)/fsquare(jerk);	// distance if we reach max acceleration but have no constant acceleration segment
-		if (basicDistance < totalDistance)
-		{
-			// We need to insert a constant acceleration segment. We may also need to limit the top speed.
-			const float timeToMaxAcceleration = maxAcceleration/jerk;
-			float constantAccelerationTime = -1.5 * timeToMaxAcceleration + fastSqrtf(0.25 * fsquare(timeToMaxAcceleration + 5 * totalDistance/maxAcceleration));
-			beforePrepare.phase1Time = beforePrepare.phase3Time = beforePrepare.phase5Time = beforePrepare.phase7Time = timeToMaxAcceleration;
-			const float newTopSpeed = jerk * timeToMaxAcceleration * (timeToMaxAcceleration + constantAccelerationTime);
-			if (newTopSpeed <= requestedSpeed)
+			const float halfTimeToReqSpeed = fastSqrtf(requestedSpeed/jerk);
+			const float distanceToReqSpeed = requestedSpeed * halfTimeToReqSpeed;
+			if (2 * distanceToReqSpeed <= totalDistance)
 			{
-				topSpeed = newTopSpeed;
-				beforePrepare.phase4Time = 0.0;
-			}
-			else
-			{
-				// We need to limit the constant acceleration time and add a constant speed phase
+				// We need a constant speed segment too
+				beforePrepare.phase1Time = beforePrepare.phase3Time = beforePrepare.phase5Time = beforePrepare.phase7Time = halfTimeToReqSpeed;
+				beforePrepare.phase4Time = (totalDistance - 2 * distanceToReqSpeed)/requestedSpeed;
+				beforePrepare.phase2Time = beforePrepare.phase6Time = 0.0;
 				topSpeed = requestedSpeed;
-				constantAccelerationTime = requestedSpeed/(jerk * timeToMaxAcceleration) - timeToMaxAcceleration;
-				const float revisedBasicDistance = jerk * (  fcube(timeToMaxAcceleration)
-														   + 1.5 * fsquare(timeToMaxAcceleration) * constantAccelerationTime
-														   + 0.5 * timeToMaxAcceleration * fsquare(constantAccelerationTime)
-														  );
-				beforePrepare.phase4Time = (totalDistance - 2 * revisedBasicDistance)/requestedSpeed;
+				break;
 			}
-			beforePrepare.phase2Time = beforePrepare.phase6Time = constantAccelerationTime;
-			return;
 		}
-	}
+		else
+		{
+			// We can't reach the requested speed without inserting a constant acceleration segment
+			const float basicDistance = 2 * fcube(maxAcceleration)/fsquare(jerk);	// distance if we reach max acceleration but have no constant acceleration segment
+			if (basicDistance < totalDistance)
+			{
+				// We need to insert a constant acceleration segment. We may also need to limit the top speed.
+				const float timeToMaxAcceleration = maxAcceleration/jerk;
+				float constantAccelerationTime = -1.5 * timeToMaxAcceleration + fastSqrtf(0.25 * fsquare(timeToMaxAcceleration + 5 * totalDistance/maxAcceleration));
+				beforePrepare.phase1Time = beforePrepare.phase3Time = beforePrepare.phase5Time = beforePrepare.phase7Time = timeToMaxAcceleration;
+				const float newTopSpeed = jerk * timeToMaxAcceleration * (timeToMaxAcceleration + constantAccelerationTime);
+				if (newTopSpeed <= requestedSpeed)
+				{
+					topSpeed = newTopSpeed;
+					beforePrepare.phase4Time = 0.0;
+				}
+				else
+				{
+					// We need to limit the constant acceleration time and add a constant speed phase
+					topSpeed = requestedSpeed;
+					constantAccelerationTime = requestedSpeed/(jerk * timeToMaxAcceleration) - timeToMaxAcceleration;
+					const float revisedBasicDistance = jerk * (  fcube(timeToMaxAcceleration)
+															   + 1.5 * fsquare(timeToMaxAcceleration) * constantAccelerationTime
+															   + 0.5 * timeToMaxAcceleration * fsquare(constantAccelerationTime)
+															  );
+					beforePrepare.phase4Time = (totalDistance - 2 * revisedBasicDistance)/requestedSpeed;
+				}
+				beforePrepare.phase2Time = beforePrepare.phase6Time = constantAccelerationTime;
+				break;
+			}
+		}
 
-	// If we get here then we can reach neither requestedSpeed nor maxAcceleration without exceeding totalDistance
-	const float halfTimeToTopSpeed = fastCubeRootf(totalDistance * 0.5 / jerk);
-	beforePrepare.phase1Time = beforePrepare.phase3Time = beforePrepare.phase5Time = beforePrepare.phase7Time = halfTimeToTopSpeed;
-	beforePrepare.phase2Time = beforePrepare.phase6Time = beforePrepare.phase4Time = 0.0;
-	topSpeed = jerk * fsquare(halfTimeToTopSpeed);
+		// If we get here then we can reach neither requestedSpeed nor maxAcceleration without exceeding totalDistance
+		const float halfTimeToTopSpeed = fastCubeRootf(totalDistance * 0.5 / jerk);
+		beforePrepare.phase1Time = beforePrepare.phase3Time = beforePrepare.phase5Time = beforePrepare.phase7Time = halfTimeToTopSpeed;
+		beforePrepare.phase2Time = beforePrepare.phase6Time = beforePrepare.phase4Time = 0.0;
+		topSpeed = jerk * fsquare(halfTimeToTopSpeed);
+	} while (false);
+
+	flags.canPauseAfter = true;
+	clocksNeeded = beforePrepare.phase1Time + beforePrepare.phase2Time + beforePrepare.phase3Time + beforePrepare.phase4Time + beforePrepare.phase5Time + beforePrepare.phase6Time + beforePrepare.phase7Time;
 }
 
 #endif
