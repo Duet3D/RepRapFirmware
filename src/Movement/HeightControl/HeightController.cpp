@@ -194,7 +194,7 @@ void HeightController::Stop() noexcept
 					move->movements[Z_AXIS] = adjustment;
 					move->startSpeed = move->endSpeed = startSpeed;
 					move->requestedSpeed = reprap.GetMove().MaxFeedrate(Z_AXIS);
-					move->acceleration = move->deceleration = acceleration;
+					move->accelDecel = acceleration;
 					reprap.GetMove().ReleaseAuxMove(true);
 				}
 

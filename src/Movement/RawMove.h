@@ -263,7 +263,7 @@ struct AsyncMove
 {
 	float movements[MaxAxesPlusExtruders];
 	float startSpeed, endSpeed, requestedSpeed;
-	float acceleration, deceleration;
+	float accelDecel;
 
 	void SetDefaults() noexcept;
 };

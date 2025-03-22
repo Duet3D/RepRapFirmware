@@ -784,8 +784,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 	startSpeed = nextMove.startSpeed;
 	endSpeed = nextMove.endSpeed;
 	requestedSpeed = nextMove.requestedSpeed;
-	maxAcceleration = nextMove.acceleration;
-	maxDeceleration = nextMove.deceleration;
+	maxAcceleration = maxDeceleration = nextMove.accelDecel;
 
 # if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();

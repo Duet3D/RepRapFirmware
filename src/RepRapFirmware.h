@@ -494,7 +494,7 @@ union LaserPwmOrIoBits
 
 #if SUPPORT_LASER
 
-// Data stored in the MovemetState and in a RestorePoint to handle laser pixel clusters
+// Data stored in the MovementState and in a RestorePoint to handle laser pixel clusters
 struct LaserPixelData
 {
 	size_t numPixels;
