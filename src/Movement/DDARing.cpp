@@ -713,7 +713,9 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 {
 	const unsigned int FeedForwardBit = 0x01;
 	const unsigned int OutputOnExtrudeBit = 0x02;
+#if SUPPORT_IOBITS
 	const unsigned int IoBitsBit = 0x04;
+#endif
 
 	unsigned int bitsLeftToDo = FeedForwardBit;
 	if (platform.IsOutputOnExtrudeActive())
