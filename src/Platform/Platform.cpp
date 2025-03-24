@@ -1845,7 +1845,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			// Time and check floating point cube root
 			{
 				bool ok = true;
-				uint32_t tim = 0;
+				uint32_t tim1 = 0, tim2 = 0;
 				for (unsigned int i = 0; i < iterations; ++i)
 				{
 					float val = 0.5 + (float)i * 3.5 / 1000.0;
@@ -1855,38 +1855,51 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 					IrqDisable();
 					asm volatile("":::"memory");
 					uint32_t now1 = SysTick->VAL;
-					const float nval = fastCubeRootf(val);
+					const float nval1 = fastCubeRootf(val);
 					uint32_t now2 = SysTick->VAL;
 					asm volatile("":::"memory");
 					IrqEnable();
 
 					now1 &= 0x00FFFFFF;
 					now2 &= 0x00FFFFFF;
-					tim += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+					tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+
+					IrqDisable();
+					asm volatile("":::"memory");
+					uint32_t now3 = SysTick->VAL;
+					const float nval2 = cbrt(val);
+					uint32_t now4 = SysTick->VAL;
+					asm volatile("":::"memory");
+					IrqEnable();
+
+					now3 &= 0x00FFFFFF;
+					now4 &= 0x00FFFFFF;
+					tim2 += ((now3 > now4) ? now3 : now3 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now4;
+
 					bool thisOneOk = true;
 					if (val == 0.0)
 					{
-						thisOneOk = (nval == 0.0);
+						thisOneOk = (nval1 == 0.0);
 					}
 					else if (val > 0.0)
 					{
-						thisOneOk = fcube(std::nextafter(nval, nval * 2)) >= val && fcube(std::nextafter(nval, 0.0)) <= val;
+						thisOneOk = fcube(std::nextafter(nval1, nval1 * 2)) >= val && fcube(std::nextafter(nval1, 0.0)) <= val;
 					}
 					else
 					{
-						thisOneOk = fcube(std::nextafter(nval, nval * 2)) <= val && fcube(std::nextafter(nval, 0.0)) >= val;
+						thisOneOk = fcube(std::nextafter(nval1, nval1 * 2)) <= val && fcube(std::nextafter(nval1, 0.0)) >= val;
 					}
-					if (!thisOneOk)
+					if (!thisOneOk || nval1 != nval2)
 					{
 						ok = false;
 						if (reprap.Debug(Module::Platform))
 						{
-							debugPrintf("val=%.7e fcr=%.7e\n", (double)val, (double)nval);
+							debugPrintf("val=%.7e fcr=%.7e cbrt=%.7e\n", (double)val, (double)nval1, (double)nval2);
 						}
 					}
 				}
 
-				reply.lcatf("Cube roots: float %.2fus %s", (double)((float)(tim * (1'000'000/iterations))/SystemCoreClock), (ok) ? "ok" : "ERROR");
+				reply.lcatf("Cube roots: fcbrt %.2f cbrt %.2fus %s", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock), (ok) ? "ok" : "ERROR");
 			}
 #endif
 		}
