@@ -402,19 +402,20 @@ void MovementState::ReleaseAllOwnedAxesAndExtruders() noexcept
 	ReleaseAxesAndExtruders(axesAndExtrudersOwned);
 }
 
-// Release some of the axes that we own. We must also clear the cache of owned axis letters.
+// Release some of the axe/extruders that we own. We must also clear the cache of owned axis letters.
 // Called when we release a tool and when we release all axes and extruders.
 void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
 {
 	SaveOwnDriveCoordinates();										// save the positions of the drives we own before we release them, otherwise we will get the wrong positions when we allocate them again
 	Move& move = reprap.GetMove();
-	const LogicalDrivesBitmap drivesStillOwned = move.GetKinematics().GetAllDrivesUsed(axesAndExtrudersOwned);
+	const LogicalDrivesBitmap axesAndExtrudersToRetain = axesAndExtrudersOwned & ~axesToRelease;
+	const LogicalDrivesBitmap drivesStillOwned = move.GetKinematics().GetAllDrivesUsed(axesAndExtrudersToRetain);
 	const LogicalDrivesBitmap drivesToRelease = logicalDrivesOwned & ~drivesStillOwned;
 	logicalDrivesOwned = drivesStillOwned;
 
 	// We must not release any axes that are affected by the logical drives that we still own
 	const AxesBitmap additionalAxesOwned = move.GetKinematics().GetAffectedAxes(drivesStillOwned, reprap.GetGCodes().GetVisibleAxes());
-	axesAndExtrudersOwned = (axesAndExtrudersOwned & ~axesToRelease) | additionalAxesOwned;	// clear the axes/extruders we have been released
+	axesAndExtrudersOwned = axesAndExtrudersToRetain | additionalAxesOwned;	// clear the axes/extruders we have been released
 	allLogicalDrivesOwned.ClearBits(drivesToRelease);
 	ownedAxisLetters.Clear();										// clear the cache of owned axis letters
 }
