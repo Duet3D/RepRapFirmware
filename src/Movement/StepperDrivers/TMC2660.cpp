@@ -740,7 +740,7 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const noexcep
 // Check that stall detection can occur at the specified speed
 const char *_ecv_array _ecv_null TmcDriverState::CheckStallDetectionEnabled(float speed) noexcept
 {
-	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor) * 1.2)
+	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor))
 	{
 		return "move is too slow for driver %u to detect stall (increase speed or reduce M915 H parameter)";
 	}
