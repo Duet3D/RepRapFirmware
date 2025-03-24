@@ -991,16 +991,10 @@ void Move::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 				TickPeriodToFreq(maxPSControlLoopCallInterval), TickPeriodToFreq(minPSControlLoopCallInterval));
 		ResetPhaseStepMonitoringVariables();
 #endif
-
-#if SUPPORT_REMOTE_COMMANDS
-		if (inExpansionMode)
-#endif
+		// Show the status of each DDA ring
+		for (size_t i = 0; i < ARRAY_SIZE(rings); ++i)
 		{
-			// Show the status of each DDA ring
-			for (size_t i = 0; i < ARRAY_SIZE(rings); ++i)
-			{
-				rings[i].Diagnostics(reply, i);
-			}
+			rings[i].Diagnostics(reply, i);
 		}
 		break;
 	}
