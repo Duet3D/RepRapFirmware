@@ -1887,7 +1887,7 @@ void GCodes::LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPr
 }
 
 // Set up the extrusion of a move for the Move class
-// 'moveBuffer.moveType' and 'moveBuffer.isCoordinated' must be set up before calling this
+// 'moveBuffer.moveType', 'moveBuffer.isCoordinated', ms.moveType and ms.feedRate must be set up before calling this
 // 'isPrintingMove' is true if there is any axis movement
 void GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException)
 {
@@ -1898,10 +1898,6 @@ void GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool isP
 	}
 	ms.hasPositiveExtrusion = false;
 	ms.moveStartVirtualExtruderPosition = ms.latestVirtualExtruderPosition;	// save this before we update it
-	ExtrudersBitmap extrudersMoving;
-#if SUPPORT_ASYNC_MOVES && !PREALLOCATE_TOOL_AXES
-	AxesBitmap logicalDrivesMoving;
-#endif
 
 	// Check if we are extruding
 	if (gb.Seen(extrudeLetter))												// DC 2018-08-07: at E3D's request, extrusion is now recognised even on uncoordinated moves
@@ -1914,8 +1910,12 @@ void GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool isP
 			return;
 		}
 
-		const size_t eMoveCount = tool->DriveCount();
+		ExtrudersBitmap extrudersMoving;
+#if SUPPORT_ASYNC_MOVES && !PREALLOCATE_TOOL_AXES
+		AxesBitmap logicalDrivesMoving;
+#endif
 		float cookedTotalExtrusion = 0.0;
+		const size_t eMoveCount = tool->DriveCount();
 		if (eMoveCount != 0)
 		{
 			// Set the drive values for this tool

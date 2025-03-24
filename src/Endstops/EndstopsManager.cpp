@@ -222,7 +222,7 @@ void EndstopsManager::EnableAxisEndstops(AxesBitmap axes, const float speeds[Max
 	}
 }
 
-// Enable extruder endstops. This adds to any existing axis endstops, so you must call EnableAxisEndstops before calling this.
+// Enable extruder endstops. This adds to any existing axis endstops, so if you want to enable axis endstops too then you must call EnableAxisEndstops before calling this.
 void EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders, const float speeds[MaxExtruders], bool& reduceAcceleration) THROWS(GCodeException)
 {
 	if (extruders.IsNonEmpty())
