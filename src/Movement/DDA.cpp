@@ -304,7 +304,7 @@ void DDA::DebugPrint(const char *_ecv_array tag) const noexcept
 #else
 				"a=%.4e d=%.4e"
 #endif
-				" reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=%04" PRIx32 "\n",
+				" reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=x%04" PRIx32 "\n",
 #if SUPPORT_S_CURVE
 				(double)startAcceleration, (double)peakAcceleration, (double)finalAcceleration, (double)initialDeceleration, (double)peakDeceleration, (double)endDeceleration, (double)jerk,
 #else
@@ -570,8 +570,8 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 #if SUPPORT_S_CURVE
 	if (move.IsUsingSCurve())
 	{
-		jerk = VectorBoxIntersection(normalisedDirectionVector, move.Jerks());
 		flags.useScurve = true;
+		jerk = VectorBoxIntersection(normalisedDirectionVector, move.Jerks());
 	}
 #endif
 

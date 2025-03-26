@@ -31,12 +31,6 @@ void Move::SetAcceleration(size_t drive, float value, bool reduced) noexcept
 	else
 	{
 		normalAccelerations[drive] = val;
-#if SUPPORT_S_CURVE
-		if (accelerationTime > 0.0)
-		{
-			jerks[drive] = val / accelerationTime;
-		}
-#endif
 	}
 }
 
@@ -46,7 +40,7 @@ void Move::SetAcceleration(size_t drive, float value, bool reduced) noexcept
 // It determines whether we should use S-curve acceleration and if so it recalculates the axis and extruder jerk values in case the accelerations or acceleration time has changed.
 // After calling this, call reprap.moveUpdated in case usingSCurve has changed. Callers normally need to do this anyway to account for other changes they make, so we don't do it here.
 // We now allow S-curve to be enabled even if there are some remote drivers, even though we don't support S-curve over CAN. We just require that all local drivers use phase stepping.
-// This is primarily so that I (DC) can test S-curve acceleration on my toolchanger, which has some extruders and the Z probe driven from CAN-connected boards.
+// This is primarily so that I (DC) can test S-curve acceleration on my toolchanger, which has some extruders and the Z axis driven from CAN-connected boards.
 void Move::UpdateSCurveFlagAndJerk() noexcept
 {
 	if (accelerationTime > 0.0)
