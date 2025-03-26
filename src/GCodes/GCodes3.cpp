@@ -571,6 +571,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	if (seen || seenExtrude)
 	{
+#if SUPPORT_S_CURVE
+		move.UpdateSCurveFlagAndJerk();
+#endif
 		reprap.MoveUpdated();
 #if SUPPORT_CAN_EXPANSION
 		rslt = max(rslt, move.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply));
@@ -837,23 +840,23 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 			switch (commandFraction)
 			{
 			case -1:
-			{
-				const StepMode mode = (StepMode)gb.GetLimitedUIValue(axisLetters[axis], (uint32_t) StepMode::unknown);
-				const bool ret = move.SetStepMode(axis, mode, reply);
-				if (!ret)
 				{
-					reply.printf("Could not set step mode for axis %c to mode %u", axisLetters[axis], (uint16_t)mode);
-					return GCodeResult::error;
+					const StepMode mode = (StepMode)gb.GetLimitedUIValue(axisLetters[axis], (uint32_t) StepMode::unknown);
+					const bool ret = move.SetStepMode(axis, mode, reply);
+					if (!ret)
+					{
+						reply.printf("Could not set step mode for axis %c to mode %u", axisLetters[axis], (uint16_t)mode);
+						return GCodeResult::error;
+					}
+					break;
 				}
-				break;
-			}
 			case kvSubCommand:
 			case kaSubCommand:
-			{
-				const float value = gb.GetLimitedFValue(axisLetters[axis], 0, FLT_MAX);
-				move.ConfigurePhaseStepping(axis, value, commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
-				break;
-			}
+				{
+					const float value = gb.GetLimitedFValue(axisLetters[axis], 0, FLT_MAX);
+					move.ConfigurePhaseStepping(axis, value, commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
+					break;
+				}
 			}
 		}
 	}
@@ -864,49 +867,56 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 		switch (commandFraction)
 		{
 		case -1:
-		{
-			uint32_t eVals[MaxExtruders];
-			size_t eCount = numExtruders;
-			gb.GetUnsignedArray(eVals, eCount, true);
-
-			for (size_t e = 0; e < eCount; e++)
 			{
-				if (eVals[e] >= (uint32_t)StepMode::unknown)
+				uint32_t eVals[MaxExtruders];
+				size_t eCount = numExtruders;
+				gb.GetUnsignedArray(eVals, eCount, true);
+
+				for (size_t e = 0; e < eCount; e++)
 				{
-					reply.printf("Unknown mode %lu", eVals[e]);
-					return GCodeResult::error;
+					if (eVals[e] >= (uint32_t)StepMode::unknown)
+					{
+						reply.printf("Unknown mode %lu", eVals[e]);
+						return GCodeResult::error;
+					}
+					const bool ret = move.SetStepMode(ExtruderToLogicalDrive(e), (StepMode)eVals[e], reply);
+					if (!ret)
+					{
+						reply.printf("Could not set step mode for extruder %u to mode %lu", e, eVals[e]);
+						return GCodeResult::error;
+					}
 				}
-				const bool ret = move.SetStepMode(ExtruderToLogicalDrive(e), (StepMode)eVals[e], reply);
-				if (!ret)
-				{
-					reply.printf("Could not set step mode for extruder %u to mode %lu", e, eVals[e]);
-					return GCodeResult::error;
-				}
+				break;
 			}
-			break;
-		}
 		case kvSubCommand:
 		case kaSubCommand:
-		{
-			float eVals[MaxExtruders];
-			size_t eCount = numExtruders;
-			gb.GetFloatArray(eVals, eCount, true);
-
-			for (size_t e = 0; e < eCount; e++)
 			{
-				if (eVals[e] >= FLT_MAX || eVals[e] < 0)
+				float eVals[MaxExtruders];
+				size_t eCount = numExtruders;
+				gb.GetFloatArray(eVals, eCount, true);
+
+				for (size_t e = 0; e < eCount; e++)
 				{
-					reply.printf("Invalid K%c %f", commandFraction == kvSubCommand ? 'v' : 'a', (double)eVals[e]);
-					return GCodeResult::error;
+					if (eVals[e] >= FLT_MAX || eVals[e] < 0)
+					{
+						reply.printf("Invalid K%c %f", commandFraction == kvSubCommand ? 'v' : 'a', (double)eVals[e]);
+						return GCodeResult::error;
+					}
+					move.ConfigurePhaseStepping(ExtruderToLogicalDrive(e), eVals[e], commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
 				}
-				move.ConfigurePhaseStepping(ExtruderToLogicalDrive(e), eVals[e], commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
+				break;
 			}
-			break;
-		}
 		}
 	}
 
-	if (!seen)
+	if (seen)
+	{
+#if SUPPORT_S_CURVE
+		move.UpdateSCurveFlagAndJerk();
+#endif
+		reprap.MoveUpdated();
+	}
+	else
 	{
 		switch (commandFraction)
 		{

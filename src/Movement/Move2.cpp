@@ -42,19 +42,28 @@ void Move::SetAcceleration(size_t drive, float value, bool reduced) noexcept
 
 #if SUPPORT_S_CURVE
 
-void Move::SetAccelerationTime(float value) noexcept
+// This is called whenever M201 changes normal accelerations or acceleration time, when changing axis/extruder driver assignment (in case new axes/extruders are created), and when changing the step mode.
+// It determines whether we should use S-curve acceleration and if so it recalculates the axis and extruder jerk values in case the accelerations or acceleration time has changed.
+// After calling this, call reprap.moveUpdated in case usingSCurve has changed. Callers normally need to do this anyway to account for other changes they make, so we don't do it here.
+// We now allow S-curve to be enabled even if there are some remote drivers, even though we don't support S-curve over CAN. We just require that all local drivers use phase stepping.
+// This is primarily so that I (DC) can test S-curve acceleration on my toolchanger, which has some extruders and the Z probe driven from CAN-connected boards.
+void Move::UpdateSCurveFlagAndJerk() noexcept
 {
-	accelerationTime = value * (float)StepClockRate;
 	if (accelerationTime > 0.0)
 	{
 		// Enable S-curve acceleration if all drives are using phase stepping
-		bool allUsingPhaseStepping = true;
+		bool allLocalDrivesUsingPhaseStepping = true;
 		for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); axis++)
 		{
 			jerks[axis] = normalAccelerations[axis] / accelerationTime;
-			if (GetStepMode(axis) != StepMode::phase)
+			if (
+# if SUPPORT_CAN_EXPANSION
+				AxisHasLocalDriver(axis) &&
+# endif
+				GetStepMode(axis) != StepMode::phase
+			   )
 			{
-				allUsingPhaseStepping = false;
+				allLocalDrivesUsingPhaseStepping = false;
 			}
 		}
 
@@ -62,17 +71,44 @@ void Move::SetAccelerationTime(float value) noexcept
 		{
 			const size_t drive = ExtruderToLogicalDrive(extruder);
 			jerks[drive] = normalAccelerations[drive] / accelerationTime;
-			if (GetStepMode(drive) != StepMode::phase)
+			if (
+# if SUPPORT_CAN_EXPANSION
+				ExtruderHasLocalDriver(extruder) &&
+# endif
+				GetStepMode(drive) != StepMode::phase
+			   )
 			{
-				allUsingPhaseStepping = false;
+				allLocalDrivesUsingPhaseStepping = false;
 			}
 		}
-		UseSCurve(allUsingPhaseStepping);
+		usingSCurve = allLocalDrivesUsingPhaseStepping;
 	}
 	else
 	{
-		UseSCurve(false);
+		usingSCurve = false;
 	}
+}
+
+#endif
+
+#if SUPPORT_S_CURVE && SUPPORT_CAN_EXPANSION
+
+bool Move::AxisHasLocalDriver(size_t axis) const noexcept
+{
+	for (size_t i = 0; i < axisDrivers[axis].numDrivers; ++i)
+	{
+		const DriverId id = axisDrivers[axis].driverNumbers[i];
+		if (id.IsLocal())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool Move::ExtruderHasLocalDriver(size_t extruder) const noexcept
+{
+	return extruderDrivers[extruder].IsLocal();
 }
 
 #endif

@@ -166,7 +166,7 @@ public:
 	const float *_ecv_array Jerks() const noexcept { return jerks; }
 	void SetAccelerationTime(float value) noexcept;
 	float AccelerationTime() const noexcept { return accelerationTime; }
-	void UseSCurve(bool enable) noexcept { usingSCurve = enable; }
+	void UpdateSCurveFlagAndJerk() noexcept;
 	bool IsUsingSCurve() const noexcept { return usingSCurve; }
 #endif
 
@@ -572,6 +572,11 @@ private:
 #else
 	void IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc) noexcept;
 	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func); }
+#endif
+
+#if SUPPORT_S_CURVE && SUPPORT_CAN_EXPANSION
+	bool AxisHasLocalDriver(size_t axis) const noexcept;
+	bool ExtruderHasLocalDriver(size_t extruder) const noexcept;
 #endif
 
 	void InternalDisableDriver(size_t driver) noexcept;
@@ -994,6 +999,16 @@ inline __attribute__((always_inline)) uint32_t Move::GetStepInterval(size_t driv
 inline void Move::InvertCurrentMotorSteps(size_t driver) noexcept
 {
 	dms[driver].currentMotorPosition = -dms[driver].currentMotorPosition;
+}
+
+#endif
+
+#if SUPPORT_S_CURVE
+
+// Set the acceleration time
+inline void Move::SetAccelerationTime(float value) noexcept
+{
+	accelerationTime = value * (float)StepClockRate;
 }
 
 #endif
