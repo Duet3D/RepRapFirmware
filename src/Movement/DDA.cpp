@@ -150,7 +150,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		decelConstantClocks = floatToU32(dda.beforePrepare.phase6Time);
 		decelEndClocks = floatToU32(dda.beforePrepare.phase7Time);
 
-		accelInitialDistance = (accelStartClocks == 0) ? 0.0 : (dda.startSpeed * (0.5 * dda.startAcceleration + (1.0/6.0) * dda.jerk * accelStartClocks) * accelStartClocks) * accelStartClocks;
+		accelInitialDistance = (accelStartClocks == 0) ? 0.0 : (dda.startSpeed + (0.5 * dda.startAcceleration + (1.0/6.0) * dda.jerk * accelStartClocks) * accelStartClocks) * accelStartClocks;
 		const float accelPeakInitialSpeed = dda.startSpeed + (initialAcceleration + 0.5 * dda.jerk * accelStartClocks) * accelStartClocks;
 		accelPeakDistance = (accelConstantClocks == 0) ? 0.0 : (accelPeakInitialSpeed + 0.5 * peakAcceleration * accelConstantClocks) * accelConstantClocks;
 		accelEndDistance = (accelEndClocks == 0) ? 0.0 : (dda.topSpeed - (1.0/6.0) * dda.jerk * fsquare(accelEndClocks)) * accelEndClocks;
@@ -1121,6 +1121,7 @@ void DDA::RecalculateSCurveMove(DDARing& ring) noexcept
 // Calculate the move to be added to the ring when the start speed and acceleration and the end speed and acceleration are all zero
 void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 {
+	finalAcceleration = initialDeceleration = 0.0;
 	do
 	{
 		// Determine whether the requested speed or the maximum acceleration is more limiting
@@ -1137,12 +1138,14 @@ void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 				beforePrepare.phase4Time = (totalDistance - 2 * distanceToReqSpeed)/requestedSpeed;
 				beforePrepare.phase2Time = beforePrepare.phase6Time = 0.0;
 				topSpeed = requestedSpeed;
+				peakAcceleration = peakDeceleration = jerk * halfTimeToReqSpeed;
 				break;
 			}
 		}
 		else
 		{
 			// We can't reach the requested speed without inserting a constant acceleration segment
+			peakAcceleration = peakDeceleration = maxAcceleration;
 			const float basicDistance = 2 * fcube(maxAcceleration)/fsquare(jerk);	// distance if we reach max acceleration but have no constant acceleration segment
 			if (basicDistance < totalDistance)
 			{
@@ -1177,6 +1180,7 @@ void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 		beforePrepare.phase1Time = beforePrepare.phase3Time = beforePrepare.phase5Time = beforePrepare.phase7Time = halfTimeToTopSpeed;
 		beforePrepare.phase2Time = beforePrepare.phase6Time = beforePrepare.phase4Time = 0.0;
 		topSpeed = jerk * fsquare(halfTimeToTopSpeed);
+		peakAcceleration = peakDeceleration = jerk * halfTimeToTopSpeed;
 	} while (false);
 
 	flags.canPauseAfter = true;
