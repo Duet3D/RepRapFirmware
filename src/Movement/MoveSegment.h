@@ -42,10 +42,12 @@
 #define SEGMENT_DEBUG	(0)
 #define CHECK_SEGMENTS	(0)
 
+constexpr motioncalc_t OneHalf = (motioncalc_t)0.5;
+
 #if SUPPORT_S_CURVE
+constexpr motioncalc_t OneSixth = (motioncalc_t)1.0/(motioncalc_t)6.0;
 # define J_FORMAL_PARAMETER(_name)	, motioncalc_t _name
 # define J_ACTUAL_PARAMETER(_expr)	, _expr
-const motioncalc_t OneSixth = (motioncalc_t)1.0/(motioncalc_t)6.0;
 #else
 # define J_FORMAL_PARAMETER(_name)
 # define J_ACTUAL_PARAMETER(_name)
@@ -216,9 +218,9 @@ inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
 inline motioncalc_t MoveSegment::CalcU() const noexcept
 {
 #if SUPPORT_S_CURVE
-	return distance/(motioncalc_t)duration - (0.5 * a + OneSixth * j * (motioncalc_t)duration) * (motioncalc_t)duration;
+	return distance/(motioncalc_t)duration - (OneHalf * a + OneSixth * j * (motioncalc_t)duration) * (motioncalc_t)duration;
 #else
-	return distance/(motioncalc_t)duration - 0.5 * a * (motioncalc_t)duration;
+	return distance/(motioncalc_t)duration - OneHalf * a * (motioncalc_t)duration;
 #endif
 }
 
@@ -246,7 +248,7 @@ inline bool MoveSegment::NormaliseAndCheckLinear(motioncalc_t distanceCarriedFor
 		// so approximately when (p*N)^4 < 8*q^3, or very roughly when p*N << q
 		// However, using the Maclaurin expansion requires an extra division in each step calculation, which we would prefer to avoid.
 		// 2. We can convert the segment to a constant-speed segment, on the assumption that the speed won't change much during it. This is what we currently do.
-		const motioncalc_t provisionalT0 = (motioncalc_t)0.5 * (motioncalc_t)duration - distance/(a * (motioncalc_t)duration);
+		const motioncalc_t provisionalT0 = OneHalf * (motioncalc_t)duration - distance/(a * (motioncalc_t)duration);
 		if (likely(fabsm(provisionalT0) <= 4 * (motioncalc_t)16777216.0))
 		{
 			t0 = provisionalT0;
@@ -301,10 +303,10 @@ inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 {
 	MoveSegment *const secondSeg = Allocate(next);
 #if SUPPORT_S_CURVE
-	const motioncalc_t firstDistance = (CalcU() + ((motioncalc_t)0.5 * a + OneSixth * j * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
+	const motioncalc_t firstDistance = (CalcU() + (OneHalf * a + OneSixth * j * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
 	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, a, j, flags);
 #else
-	const motioncalc_t firstDistance = (CalcU() + (motioncalc_t)0.5 * a * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
+	const motioncalc_t firstDistance = (CalcU() + OneHalf * a * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
 	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, a, flags);
 #endif
 #if SEGMENT_DEBUG

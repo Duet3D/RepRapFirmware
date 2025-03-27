@@ -1572,11 +1572,23 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 	return ret + adjustment;
 }
 
+#if SUPPORT_S_CURVE
+
+// Calculate the initial speed given the duration, distance, acceleration and jerk
+static inline motioncalc_t CalcInitialSpeed(uint32_t duration, motioncalc_t distance, motioncalc_t a, motioncalc_t j) noexcept
+{
+	return distance/(motioncalc_t)duration - (OneHalf * a + OneSixth * j * (motioncalc_t)duration) * (motioncalc_t)duration;
+}
+
+#else
+
 // Calculate the initial speed given the duration, distance and acceleration
 static inline motioncalc_t CalcInitialSpeed(uint32_t duration, motioncalc_t distance, motioncalc_t a) noexcept
 {
-	return distance/(motioncalc_t)duration - (motioncalc_t)0.5 * a * (motioncalc_t)duration;
+	return distance/(motioncalc_t)duration - OneHalf * a * (motioncalc_t)duration;
 }
+
+#endif
 
 // Add a segment into a segment list, which may be empty.
 // If the list is not empty then the new segment may overlap segments already in the list.
@@ -1607,9 +1619,11 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 #endif
 	{
 #if SUPPORT_S_CURVE
-		debugPrintf("Add seg: st=%" PRIu32 " t=%7" PRIu32 " dist=%9.2f u=%10.3e a=%10.3e j=%10.3e f=x%02" PRIx32 "\n", startTime, duration, (double)distance, (double)CalcInitialSpeed(duration, distance, a), (double)j, (double)a, moveFlags.all);
+		debugPrintf("Add seg: st=%" PRIu32 " t=%7" PRIu32 " dist=%9.2f u=%10.3e a=%10.3e j=%10.3e f=x%02" PRIx32 "\n",
+					startTime, duration, (double)distance, (double)CalcInitialSpeed(duration, distance, a, j), (double)a, (double)j, moveFlags.all);
 #else
-		debugPrintf("Add seg: st=%" PRIu32 " t=%7" PRIu32 " dist=%9.2f u=%10.3e a=%10.3e f=x%02" PRIx32 "\n", startTime, duration, (double)distance, (double)CalcInitialSpeed(duration, distance, a), (double)a, moveFlags.all);
+		debugPrintf("Add seg: st=%" PRIu32 " t=%7" PRIu32 " dist=%9.2f u=%10.3e a=%10.3e f=x%02" PRIx32 "\n",
+					startTime, duration, (double)distance, (double)CalcInitialSpeed(duration, distance, a), (double)a, moveFlags.all);
 #endif
 	}
 
@@ -1641,7 +1655,12 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 			{
 				// Insert part of the new segment before the existing one, then merge the rest
 				const uint32_t firstDuration = -offset;
-				const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + (motioncalc_t)0.5 * a * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
+				const motioncalc_t mFirstDuration = (motioncalc_t)firstDuration;
+#if SUPPORT_S_CURVE
+				const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a, j) + (OneHalf * a + OneSixth * j * mFirstDuration) * mFirstDuration) * mFirstDuration;
+#else
+				const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + OneHalf * a * mFirstDuration) * mFirstDuration;
+#endif
 				seg = MoveSegment::Allocate(seg);
 				seg->SetParameters(startTime, firstDuration, firstDistance, a J_ACTUAL_PARAMETER(j), moveFlags);
 				if (prev == nullptr)
@@ -1719,7 +1738,12 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 				if (timeDifference > 0)
 				{
 					// The existing segment is shorter in time than the new one, so add the new segment in two or more parts
-					const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + (motioncalc_t)0.5 * a * (motioncalc_t)seg->GetDuration()) * (motioncalc_t)seg->GetDuration();	// distance moved by the first part of the new segment
+					const motioncalc_t segDuration = (motioncalc_t)seg->GetDuration();
+#if SUPPORT_S_CURVE
+					const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a, j) + (OneHalf * a + OneSixth * j * segDuration) * segDuration) * segDuration;	// distance moved by the first part of the new segment
+#else
+					const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + OneHalf * a * segDuration) * segDuration;		// distance moved by the first part of the new segment
+#endif
 #if SEGMENT_DEBUG
 					debugPrintf("merge1: ");
 #endif
