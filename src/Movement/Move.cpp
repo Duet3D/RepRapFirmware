@@ -157,7 +157,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Move members
 #if SUPPORT_S_CURVE
-	{ "accelerationTime",		OBJECT_MODEL_FUNC(self->accelerationTime, 3),													ObjectModelEntryFlags::notPanelDue },
+	{ "accelerationTime",		OBJECT_MODEL_FUNC(self->accelerationTime * StepClocksToSeconds, 3),								ObjectModelEntryFlags::notPanelDue },
 #endif
 	{ "axes",					OBJECT_MODEL_FUNC_ARRAY(0), 																	ObjectModelEntryFlags::live },
 	{ "backlashFactor",			OBJECT_MODEL_FUNC((int32_t)self->GetBacklashCorrectionDistanceFactor()),						ObjectModelEntryFlags::none },
@@ -1418,11 +1418,12 @@ void Move::ScanningProbeTimerCallback() noexcept
 	}
 }
 
-// This is called by DDA::Prepare when committing a scanning probe reading
+// This is called by DDA::Prepare when committing a scanning probe reading.
+// The first reading has already been taken and axis0index has been incremented or decremented to account for this.
 void Move::PrepareScanningProbeDataCollection(const DDA& dda, const PrepParams& params) noexcept
 {
-	probeControl.numReadingsNeeded = reprap.GetGCodes().GetNumScanningProbeReadingsToTake();
-	probeControl.nextReadingNeeded = 1;
+	probeControl.numReadingsNeeded = reprap.GetGCodes().GetNumScanningProbeReadingsLeftToTake();
+	probeControl.nextReadingNeeded = 1;							// we already took the first reading
 	if (probeControl.numReadingsNeeded != 0)
 	{
 		probeControl.accelClocks = params.TotalAccelClocks();
@@ -1431,7 +1432,7 @@ void Move::PrepareScanningProbeDataCollection(const DDA& dda, const PrepParams& 
 		{
 			// The following is only approximate but should be good enough
 			probeControl.acceleration = (params.peakAcceleration * params.TotalAccelClocks() - 0.5 * params.jerk * (fsquare(params.accelStartClocks) + fsquare(params.accelEndClocks)))/params.TotalAccelClocks();
-			probeControl.deceleration = (params.peakDeceleration * params.TotalDecelClocks() - 0.5 * params.jerk * (fsquare(params.decelStartClocks) + fsquare(params.decelEndClocks)))/params.TotalDecelClocks();
+			probeControl.deceleration = (params.peakDeceleration * params.TotalDecelClocks() + 0.5 * params.jerk * (fsquare(params.decelStartClocks) + fsquare(params.decelEndClocks)))/params.TotalDecelClocks();
 		}
 		else
 		{
@@ -1455,8 +1456,19 @@ void Move::PrepareScanningProbeDataCollection(const DDA& dda, const PrepParams& 
 #endif
 		probeControl.startTime = dda.afterPrepare.moveStartTime;
 		probeControl.timer.SetCallback(ScanningProbeGlobalTimerCallback, CallbackParameter(this));
+#if 0
+		debugPrintf("nrn=%u ac=%" PRIu32 " sc=%" PRIu32 " is=%.3e ts=%.3e a=%.3e d=%.3e dpr=%.3f ad=%.3f dsd=%.3f\n",
+					probeControl.numReadingsNeeded, probeControl.accelClocks, probeControl.steadyClocks,
+					(double)probeControl.initialSpeed, (double)probeControl.topSpeed, (double)probeControl.acceleration, (double)probeControl.deceleration,
+					(double)probeControl.distancePerReading, (double)probeControl.accelDistance, (double)probeControl.decelStartDistance);
+#endif
 		SetupNextScanningProbeReading();
 	}
+}
+
+inline float fastLimSqrtf(float f) noexcept
+{
+	return (f > 0.0) ? fastSqrtf(f) : 0.0;
 }
 
 // Set up a laser task wakeup for the next reading we need to take
@@ -1468,7 +1480,9 @@ void Move::SetupNextScanningProbeReading() noexcept
 		uint32_t wakeupTime;
 		if (distance < probeControl.accelDistance)
 		{
-			wakeupTime = (fastSqrtf(fsquare(probeControl.initialSpeed) - 2 * probeControl.acceleration * distance) - probeControl.initialSpeed)/probeControl.acceleration;
+			// 0.5*a*t^2 + ut - s = 0
+			// so t = -u + sqrt(u^2 + 2*a*s)/a
+			wakeupTime = (uint32_t)((fastLimSqrtf(fsquare(probeControl.initialSpeed) + 2 * probeControl.acceleration * distance) - probeControl.initialSpeed)/probeControl.acceleration);
 		}
 		else if (distance <= probeControl.decelStartDistance)
 		{
@@ -1476,8 +1490,13 @@ void Move::SetupNextScanningProbeReading() noexcept
 		}
 		else
 		{
-			wakeupTime = (probeControl.topSpeed - fastSqrtf(fsquare(probeControl.topSpeed) - 2 * probeControl.deceleration * (distance - probeControl.decelStartDistance)))/probeControl.deceleration + probeControl.accelClocks + probeControl.steadyClocks;
+			// 0.5*a*t^2 + ut - s = 0
+			// so t = -u + sqrt(u^2 + 2*a*s)/a
+			// However the operand of the square root may be slightly negative for the final point because of rounding error, so we need to limit it
+			wakeupTime = (uint32_t)((fastLimSqrtf(fsquare(probeControl.topSpeed) + 2 * probeControl.deceleration * (distance - probeControl.decelStartDistance)) - probeControl.topSpeed)/probeControl.deceleration)
+							+ probeControl.accelClocks + probeControl.steadyClocks;
 		}
+//		debugPrintf("nr=%u, wt=%" PRIu32 ", dec=%.3e\n", probeControl.nextReadingNeeded, wakeupTime, (double)probeControl.deceleration);
 		++probeControl.nextReadingNeeded;
 		if (probeControl.timer.ScheduleMovementCallbackFromIsr(wakeupTime + probeControl.startTime))
 		{
@@ -1912,15 +1931,15 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 		}
 		if (params.decelStartClocks != 0)
 		{
-			tail = AddSegment(tail, decelStartTime, params.decelStartClocks, params.decelInitialDistance * stepsPerMm, -((motioncalc_t)params.initialDeceleration * stepsPerMm), -scaledJerk, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, decelStartTime, params.decelStartClocks, params.decelInitialDistance * stepsPerMm, (motioncalc_t)params.initialDeceleration * stepsPerMm, -scaledJerk, moveFlags, pressureAdvanceClocks);
 		}
 		if (params.decelConstantClocks != 0)
 		{
-			tail = AddSegment(tail, decelConstantStartTime, params.decelConstantClocks, params.decelPeakDistance * stepsPerMm, -((motioncalc_t)params.peakDeceleration * stepsPerMm), (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, decelConstantStartTime, params.decelConstantClocks, params.decelPeakDistance * stepsPerMm, (motioncalc_t)params.peakDeceleration * stepsPerMm, (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
 		}
 		if (params.decelEndClocks != 0)
 		{
-			tail = AddSegment(tail, decelEndStartTime, params.decelEndClocks, params.decelEndDistance * stepsPerMm, -((motioncalc_t)params.peakDeceleration * stepsPerMm), scaledJerk, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, decelEndStartTime, params.decelEndClocks, params.decelEndDistance * stepsPerMm, (motioncalc_t)params.peakDeceleration * stepsPerMm, scaledJerk, moveFlags, pressureAdvanceClocks);
 		}
 #else
 		if (params.accelClocks != 0)
@@ -1933,7 +1952,7 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 		}
 		if (params.decelClocks != 0)
 		{
-			tail = AddSegment(tail, decelStartTime, params.decelClocks, decelDistance * stepsPerMm, -((motioncalc_t)params.deceleration * stepsPerMm) J_ACTUAL_PARAMETER(j * stepsPerMm), moveFlags, decelPressureAdvance);
+			tail = AddSegment(tail, decelStartTime, params.decelClocks, decelDistance * stepsPerMm, (motioncalc_t)params.deceleration * stepsPerMm J_ACTUAL_PARAMETER(j * stepsPerMm), moveFlags, decelPressureAdvance);
 		}
 #endif
 	}
@@ -1963,15 +1982,15 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 			}
 			if (params.decelStartClocks != 0)
 			{
-				tail = AddSegment(tail, decelStartTime + startDelay, params.decelStartClocks, params.decelInitialDistance * factor, -((motioncalc_t)params.initialDeceleration * factor), -scaledJerk, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, decelStartTime + startDelay, params.decelStartClocks, params.decelInitialDistance * factor, (motioncalc_t)params.initialDeceleration * factor, -scaledJerk, moveFlags, pressureAdvanceClocks);
 			}
 			if (params.decelConstantClocks != 0)
 			{
-				tail = AddSegment(tail, decelConstantStartTime + startDelay, params.decelConstantClocks, params.decelPeakDistance * factor, -((motioncalc_t)params.peakDeceleration * factor), (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, decelConstantStartTime + startDelay, params.decelConstantClocks, params.decelPeakDistance * factor, (motioncalc_t)params.peakDeceleration * factor, (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
 			}
 			if (params.decelEndClocks != 0)
 			{
-				tail = AddSegment(tail, decelEndStartTime + startDelay, params.decelEndClocks, params.decelEndDistance * factor, -((motioncalc_t)params.peakDeceleration * factor), scaledJerk, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, decelEndStartTime + startDelay, params.decelEndClocks, params.decelEndDistance * factor, (motioncalc_t)params.peakDeceleration * factor, scaledJerk, moveFlags, pressureAdvanceClocks);
 			}
 #else
 			if (params.accelClocks != 0)
@@ -1984,7 +2003,7 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 			}
 			if (params.decelClocks != 0)
 			{
-				tail = AddSegment(tail, decelStartTime + startDelay, params.decelClocks, decelDistance * factor, -((motioncalc_t)params.deceleration * factor) J_ACTUAL_PARAMETER(j * factor), moveFlags, decelPressureAdvance);
+				tail = AddSegment(tail, decelStartTime + startDelay, params.decelClocks, decelDistance * factor, (motioncalc_t)params.deceleration * factor J_ACTUAL_PARAMETER(j * factor), moveFlags, decelPressureAdvance);
 			}
 #endif
 		}

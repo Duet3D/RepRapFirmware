@@ -656,6 +656,7 @@ constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2, PCCB 
 
 constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
 constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
+constexpr float StepClocksToSeconds = 1.0/(float)StepClockRate;
 
 // Convert milliseconds to step clocks
 static inline constexpr uint32_t MillisToStepClocks(uint32_t numMills) noexcept

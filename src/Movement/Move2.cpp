@@ -1296,7 +1296,7 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	// Normalise the move to unit distance
 	params.totalDistance = 1.0;
 	params.acceleration = msg.acceleration;
-	params.deceleration = msg.deceleration;
+	params.deceleration = -msg.deceleration;
 	params.accelClocks = msg.accelerationClocks;
 	params.steadyClocks = msg.steadyClocks;
 	params.decelClocks = msg.decelClocks;
@@ -1309,7 +1309,7 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	}
 
 	const float accelDistanceExTopSpeed = -0.5 * params.acceleration * fsquare((float)params.accelClocks);
-	const float decelDistanceExTopSpeed = -0.5 * params.deceleration * fsquare((float)params.decelClocks);
+	const float decelDistanceExTopSpeed = 0.5 * params.deceleration * fsquare((float)params.decelClocks);
 	const float topSpeed = (params.totalDistance - accelDistanceExTopSpeed - decelDistanceExTopSpeed)/clocksNeeded;
 
 	params.accelDistance =      accelDistanceExTopSpeed + topSpeed * params.accelClocks;

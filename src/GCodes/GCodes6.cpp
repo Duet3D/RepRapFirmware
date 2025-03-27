@@ -205,8 +205,9 @@ void GCodes::TakeScanningProbeReading() noexcept
 	}
 }
 
-// Return the number of scanning probe readings that we need to take while scanning a line
-size_t GCodes::GetNumScanningProbeReadingsToTake() const noexcept
+// Return the number of scanning probe readings that we need to take while scanning a line.
+// This is normally called after the first reading has already been taken.
+size_t GCodes::GetNumScanningProbeReadingsLeftToTake() const noexcept
 {
 	return abs((int)gridAxis0Index - (int)lastAxis0Index) + 1;
 }

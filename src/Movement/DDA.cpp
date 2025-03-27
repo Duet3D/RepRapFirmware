@@ -182,10 +182,10 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	else
 	{
 		peakAcceleration = dda.maxAcceleration;
-		peakDeceleration = dda.maxDeceleration;
+		peakDeceleration = -dda.maxDeceleration;
 		accelStartClocks = accelEndClocks = decelStartClocks = decelEndClocks = 0;
 		accelConstantClocks = lrintf((dda.topSpeed - dda.startSpeed)/peakAcceleration);
-		decelConstantClocks = lrintf((dda.topSpeed - dda.endSpeed)/peakDeceleration);
+		decelConstantClocks = lrintf((dda.endSpeed - dda.topSpeed)/peakDeceleration);
 		accelInitialDistance = accelEndDistance = decelInitialDistance = decelEndDistance = 0.0;
 		decelPeakDistance = dda.beforePrepare.decelDistance;
 		const float decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
@@ -198,9 +198,9 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
 	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
 	acceleration = dda.maxAcceleration;
-	deceleration = dda.maxDeceleration;
+	deceleration = -dda.maxDeceleration;
 	accelClocks = lrintf((dda.topSpeed - dda.startSpeed)/acceleration);
-	decelClocks = lrintf((dda.topSpeed - dda.endSpeed)/deceleration);
+	decelClocks = lrintf((dda.endSpeed - dda.topSpeed)/deceleration);
 	const float steadyDistance = decelStartDistance - accelDistance;
 	steadyClocks = (steadyDistance <= 0.0) ? 0 : lrintf(steadyDistance/dda.topSpeed);
 #endif
@@ -1138,14 +1138,14 @@ void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 				beforePrepare.phase4Time = (totalDistance - 2 * distanceToReqSpeed)/requestedSpeed;
 				beforePrepare.phase2Time = beforePrepare.phase6Time = 0.0;
 				topSpeed = requestedSpeed;
-				peakAcceleration = peakDeceleration = jerk * halfTimeToReqSpeed;
+				peakAcceleration = jerk * halfTimeToReqSpeed;
 				break;
 			}
 		}
 		else
 		{
 			// We can't reach the requested speed without inserting a constant acceleration segment
-			peakAcceleration = peakDeceleration = maxAcceleration;
+			peakAcceleration = maxAcceleration;
 			const float basicDistance = 2 * fcube(maxAcceleration)/fsquare(jerk);	// distance if we reach max acceleration but have no constant acceleration segment
 			if (basicDistance < totalDistance)
 			{
@@ -1180,9 +1180,10 @@ void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 		beforePrepare.phase1Time = beforePrepare.phase3Time = beforePrepare.phase5Time = beforePrepare.phase7Time = halfTimeToTopSpeed;
 		beforePrepare.phase2Time = beforePrepare.phase6Time = beforePrepare.phase4Time = 0.0;
 		topSpeed = jerk * fsquare(halfTimeToTopSpeed);
-		peakAcceleration = peakDeceleration = jerk * halfTimeToTopSpeed;
+		peakAcceleration = jerk * halfTimeToTopSpeed;
 	} while (false);
 
+	peakDeceleration = -peakAcceleration;
 	flags.canPauseAfter = true;
 	clocksNeeded = beforePrepare.phase1Time + beforePrepare.phase2Time + beforePrepare.phase3Time + beforePrepare.phase4Time + beforePrepare.phase5Time + beforePrepare.phase6Time + beforePrepare.phase7Time;
 }

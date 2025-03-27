@@ -521,8 +521,8 @@ private:
 		float distancePerReading;
 		float accelDistance;
 		float decelStartDistance;
-		float acceleration;
-		float deceleration;
+		float acceleration;			// the acceleration at the start of this move, always positive
+		float deceleration;			// the acceleration at the end of this move, always negative
 		float initialSpeed;
 		float topSpeed;
 		uint32_t accelClocks;

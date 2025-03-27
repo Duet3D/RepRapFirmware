@@ -27,15 +27,16 @@ struct PrepParams
 {
 #if SUPPORT_S_CURVE
 	uint32_t accelStartClocks, accelConstantClocks, accelEndClocks, steadyClocks, decelStartClocks, decelConstantClocks, decelEndClocks;
-    float initialAcceleration, peakAcceleration, finalAcceleration;
-    float initialDeceleration, peakDeceleration, finalDeceleration;
+    float initialAcceleration, peakAcceleration, finalAcceleration;			// the accelerations, always positive
+    float initialDeceleration, peakDeceleration, finalDeceleration;			// the decelerations, always negative
     float accelInitialDistance, accelPeakDistance, accelEndDistance;
     float decelInitialDistance, decelPeakDistance, decelEndDistance;
     float steadyDistance;
 	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive; or zero if not using S-curce acceleration
 #else
 	uint32_t accelClocks, steadyClocks, decelClocks;
-	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
+	float acceleration;								// the acceleration to use, always positive
+	float deceleration;								// the deceleration to use, always negative
 # define peakAcceleration	acceleration
 # define peakDeceleration	deceleration
 	float accelDistance;
@@ -268,8 +269,8 @@ private:
     float totalDistance;							// How long is the move in hypercuboid space
     float maxAcceleration, maxDeceleration;			// The maximum acceleration and deceleration to use, always positive
 #if SUPPORT_S_CURVE
-    float startAcceleration, peakAcceleration, finalAcceleration;
-    float initialDeceleration, peakDeceleration, endDeceleration;
+    float startAcceleration, peakAcceleration, finalAcceleration;	// accelerations, always positive or zero
+    float initialDeceleration, peakDeceleration, endDeceleration;	// decelerations, always negative or zero
 	float jerk;										// The magnitude of the rate of change of acceleration or deceleration, always positive
 #endif
     float requestedSpeed;							// The speed that the user asked for
