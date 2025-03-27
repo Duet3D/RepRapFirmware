@@ -156,7 +156,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		accelEndDistance = (accelEndClocks == 0) ? 0.0 : (dda.topSpeed - (1.0/6.0) * dda.jerk * fsquare(accelEndClocks)) * accelEndClocks;
 		decelInitialDistance = (decelStartClocks == 0) ? 0.0 : (dda.topSpeed - (1.0/6.0) * dda.jerk * fsquare(decelEndClocks)) * decelEndClocks;
 		const float decelPeakEndSpeed = dda.endSpeed + (finalDeceleration + 0.5 * dda.jerk * decelStartClocks) * decelStartClocks;
-		decelPeakDistance = (decelConstantClocks == 0) ? 0.0 : (decelPeakEndSpeed + 0.5 * peakDeceleration * decelConstantClocks) * decelConstantClocks;
+		decelPeakDistance = (decelConstantClocks == 0) ? 0.0 : (decelPeakEndSpeed - 0.5 * peakDeceleration * decelConstantClocks) * decelConstantClocks;
 		decelEndDistance = (decelEndClocks == 0) ? 0.0 : (dda.endSpeed + (0.5 * finalDeceleration + (1.0/6.0) * dda.jerk * decelEndClocks) * decelEndClocks) * decelEndClocks;
 		const float totalAccelDecelDistance = accelInitialDistance + accelPeakDistance + accelEndDistance + decelInitialDistance + decelPeakDistance + decelEndDistance;
 		const float residualDistance = totalDistance - totalAccelDecelDistance;
@@ -1119,15 +1119,15 @@ void DDA::RecalculateSCurveMove(DDARing& ring) noexcept
 }
 
 // Calculate the move to be added to the ring when the start speed and acceleration and the end speed and acceleration are all zero
-// For an S-curve acceleration phase which starts at speed u and acceleration a0, spends time t1 accelerating with jerk j to peak acceleration ap, then spends time t2 at constant acceleration ap, then spends time t1 reducing acceleration back to a0:
-//	s = u * (2 * t1 + t2) + a0(2 * t1^2 + 2 * t1 * t2 + ½ * t2^2) + j * (t1^3 + (3/2) * t1^2 * t2 + ½ * t1 * t2^2)
-//	v = u + a0 * (2 * t1 + t2) + j * (t1 * t2 + t1^2)
-//	ap = a0 + j * t1
-// Given u = 0 and a0 = 0 for the move we are constructing:
+// For an S-curve acceleration phase which starts at speed u and acceleration a, spends time t1 accelerating with jerk j to peak acceleration ap, then spends time t2 at constant acceleration ap, then spends time t1 reducing acceleration back to a:
+//	s = u * (2 * t1 + t2) + a * (2 * t1^2 + 2 * t1 * t2 + ½ * t2^2) + j * (t1^3 + (3/2) * t1^2 * t2 + ½ * t1 * t2^2)
+//	v = u + a * (2 * t1 + t2) + j * (t1 * t2 + t1^2)
+//	ap = a + j * t1
+// Given u = 0 and a = 0 for the move we are constructing:
 //	s = j * (t1^3 + (3/2) * t1^2 * t2 + ½ * t1 * t2^2)
 //	v = j * (t1 * t2 + t1^2) = j * t1 * (t1 + t2)
 //	ap = j * t1
-// The deceleration phase is a mirror image f the acceleration phase. We add a steady speed phase between acceleration and deceleration if we need more distance.
+// The deceleration phase is a mirror image of the acceleration phase. We add a steady speed phase between acceleration and deceleration if we need more distance.
 void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 {
 	finalAcceleration = initialDeceleration = 0.0;
@@ -1166,7 +1166,7 @@ void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 				// Calculate t1 in the above equations
 				const float timeToMaxAcceleration = maxAcceleration/jerk;
 				// From the above equations:	t2^2 * (0.5 * t1) + t2 * (1.5 * t1^2) + (t1^3 - s/j) = 0
-				// Solve for t2 to get:			t2 = [-1.5 * t1^2 +/- sqrt(2.25 * t1^4 - 4 * 0.5 * t1 * (t1^3 - s/j)]/t1
+				// Solve for t2 to get:			t2 = [-1.5 * t1^2 +/- sqrt(2.25 * t1^4 - 4 * 0.5 * t1 * (t1^3 - s/j))]/t1
 				// Rearrange:					t2 = -1.5 * t1 +/- sqrt(2.25 * t1^2 - 2 * (t1^2 - s/(j*t1))
 				// Simplify:					t2 = -1.5 * t1 +/- sqrt(0.25 * t1^2 + 2 * s/(j*t1))
 				// But j * t1 = ap, therefore:	t2 = -1.5 * t1 +/- sqrt(0.25 * t1^2 + 2 * s/ap)
@@ -1184,6 +1184,7 @@ void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 				{
 					// We need to limit the constant acceleration time in order to limit the top speed, and add a constant speed phase. Generate a 7-phase move.
 					topSpeed = requestedSpeed;
+					//	v = j * t1 * (t1 + t2) therefore t2 = v/(j * t1) - t1
 					constantAccelerationTime = requestedSpeed/(jerk * timeToMaxAcceleration) - timeToMaxAcceleration;
 					const float revisedBasicDistance = jerk * (  fcube(timeToMaxAcceleration)
 															   + 1.5 * fsquare(timeToMaxAcceleration) * constantAccelerationTime
