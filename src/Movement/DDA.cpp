@@ -1119,21 +1119,33 @@ void DDA::RecalculateSCurveMove(DDARing& ring) noexcept
 }
 
 // Calculate the move to be added to the ring when the start speed and acceleration and the end speed and acceleration are all zero
+// For an S-curve acceleration phase which starts at speed u and acceleration a0, spends time t1 accelerating with jerk j to peak acceleration ap, then spends time t2 at constant acceleration ap, then spends time t1 reducing acceleration back to a0:
+//	s = u * (2 * t1 + t2) + a0(2 * t1^2 + 2 * t1 * t2 + ½ * t2^2) + j * (t1^3 + (3/2) * t1^2 * t2 + ½ * t1 * t2^2)
+//	v = u + a0 * (2 * t1 + t2) + j * (t1 * t2 + t1^2)
+//	ap = a0 + j * t1
+// Given u = 0 and a0 = 0 for the move we are constructing:
+//	s = j * (t1^3 + (3/2) * t1^2 * t2 + ½ * t1 * t2^2)
+//	v = j * (t1 * t2 + t1^2) = j * t1 * (t1 + t2)
+//	ap = j * t1
+// The deceleration phase is a mirror image f the acceleration phase. We add a steady speed phase between acceleration and deceleration if we need more distance.
 void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 {
 	finalAcceleration = initialDeceleration = 0.0;
 	do
 	{
 		// Determine whether the requested speed or the maximum acceleration is more limiting
+		// The acceleration reached from a standing start is a = j * t and the speed reached is v = 0.5 * j * t^2.
+		// So a^2 = j^2 * t^2 = 2 * v * j
+		// The phase in which the acceleration is reducing will increase the speed by the same amount. Therefore we can reach acceleration a without exceeding speed v if a^2 >= v * j.
 		if (fsquare(maxAcceleration) > requestedSpeed * jerk)
 		{
-			// We can reach the requested speed without exceeding the maximum acceleration even without a constant acceleration segment
+			// In principle we can reach the requested speed without exceeding the maximum acceleration, without having to include a constant acceleration segment
 			beforePrepare.phase2Time = beforePrepare.phase6Time = 0.0;
 			const float halfTimeToReqSpeed = fastSqrtf(requestedSpeed/jerk);
 			const float distanceToReqSpeed = requestedSpeed * halfTimeToReqSpeed;
-			if (2 * distanceToReqSpeed <= totalDistance)
+			if (2 * distanceToReqSpeed < totalDistance)
 			{
-				// We need a constant speed segment too
+				// We can reach the requested speed and decelerate to zero again without exceeding the required distance. Generate a 5-phase move.
 				beforePrepare.phase1Time = beforePrepare.phase3Time = beforePrepare.phase5Time = beforePrepare.phase7Time = halfTimeToReqSpeed;
 				beforePrepare.phase4Time = (totalDistance - 2 * distanceToReqSpeed)/requestedSpeed;
 				beforePrepare.phase2Time = beforePrepare.phase6Time = 0.0;
@@ -1141,27 +1153,36 @@ void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 				peakAcceleration = jerk * halfTimeToReqSpeed;
 				break;
 			}
+			// Else we can't reach the requested speed without exceeding required distance, or we can only just reach it and then we need to start decelerating immediately. Fall through to beyond the else-part of this if-statement.
 		}
 		else
 		{
-			// We can't reach the requested speed without inserting a constant acceleration segment
+			// We can't reach the requested speed without inserting a constant acceleration segment to avoid exceeding maximum acceleration
 			peakAcceleration = maxAcceleration;
 			const float basicDistance = 2 * fcube(maxAcceleration)/fsquare(jerk);	// distance if we reach max acceleration but have no constant acceleration segment
 			if (basicDistance < totalDistance)
 			{
 				// We need to insert a constant acceleration segment. We may also need to limit the top speed.
+				// Calculate t1 in the above equations
 				const float timeToMaxAcceleration = maxAcceleration/jerk;
-				float constantAccelerationTime = -1.5 * timeToMaxAcceleration + fastSqrtf(0.25 * fsquare(timeToMaxAcceleration + 5 * totalDistance/maxAcceleration));
+				// From the above equations:	t2^2 * (0.5 * t1) + t2 * (1.5 * t1^2) + (t1^3 - s/j) = 0
+				// Solve for t2 to get:			t2 = [-1.5 * t1^2 +/- sqrt(2.25 * t1^4 - 4 * 0.5 * t1 * (t1^3 - s/j)]/t1
+				// Rearrange:					t2 = -1.5 * t1 +/- sqrt(2.25 * t1^2 - 2 * (t1^2 - s/(j*t1))
+				// Simplify:					t2 = -1.5 * t1 +/- sqrt(0.25 * t1^2 + 2 * s/(j*t1))
+				// But j * t1 = ap, therefore:	t2 = -1.5 * t1 +/- sqrt(0.25 * t1^2 + 2 * s/ap)
+				// s is half the total distance because we accelerate and decelerate again.
+				float constantAccelerationTime = -1.5 * timeToMaxAcceleration + fastSqrtf(0.25 * fsquare(timeToMaxAcceleration) + totalDistance/maxAcceleration);
 				beforePrepare.phase1Time = beforePrepare.phase3Time = beforePrepare.phase5Time = beforePrepare.phase7Time = timeToMaxAcceleration;
 				const float newTopSpeed = jerk * timeToMaxAcceleration * (timeToMaxAcceleration + constantAccelerationTime);
 				if (newTopSpeed <= requestedSpeed)
 				{
+					// Generate a 6-phase move. The middle 2 phases could be combined.
 					topSpeed = newTopSpeed;
 					beforePrepare.phase4Time = 0.0;
 				}
 				else
 				{
-					// We need to limit the constant acceleration time and add a constant speed phase
+					// We need to limit the constant acceleration time in order to limit the top speed, and add a constant speed phase. Generate a 7-phase move.
 					topSpeed = requestedSpeed;
 					constantAccelerationTime = requestedSpeed/(jerk * timeToMaxAcceleration) - timeToMaxAcceleration;
 					const float revisedBasicDistance = jerk * (  fcube(timeToMaxAcceleration)
@@ -1173,12 +1194,13 @@ void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 				beforePrepare.phase2Time = beforePrepare.phase6Time = constantAccelerationTime;
 				break;
 			}
+			// Else fall through
 		}
 
-		// If we get here then we can reach neither requestedSpeed nor maxAcceleration without exceeding totalDistance
+		// If we get here then we can reach neither requestedSpeed nor maxAcceleration without exceeding totalDistance. Generate a 4-phase move. The middle 2 phases could be combined.
 		const float halfTimeToTopSpeed = fastCubeRootf(totalDistance * 0.5 / jerk);
 		beforePrepare.phase1Time = beforePrepare.phase3Time = beforePrepare.phase5Time = beforePrepare.phase7Time = halfTimeToTopSpeed;
-		beforePrepare.phase2Time = beforePrepare.phase6Time = beforePrepare.phase4Time = 0.0;
+		beforePrepare.phase2Time = beforePrepare.phase4Time = beforePrepare.phase6Time = 0.0;
 		topSpeed = jerk * fsquare(halfTimeToTopSpeed);
 		peakAcceleration = jerk * halfTimeToTopSpeed;
 	} while (false);
