@@ -1603,7 +1603,9 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 {
 	if ((int32_t)duration <= 0)
 	{
-		debugPrintf("Adding zero duration segment: d=%3e a=%.3e\n", (double)distance, (double)a);
+		const StringRef& dbgRef = Platform::genericDebugBuffer.GetRef();
+		dbgRef.printf("Adding zero or negative duration segment: d=%3e a=%.3e\n", (double)distance, (double)a);
+		Platform::hasGenericDebug = true;
 	}
 
 	// Adjust the distance (and implicitly the initial speed) to account for pressure advance
@@ -1619,10 +1621,10 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 #endif
 	{
 #if SUPPORT_S_CURVE
-		debugPrintf("Add seg: st=%" PRIu32 " t=%7" PRIu32 " dist=%9.2f u=%10.3e a=%10.3e j=%10.3e f=x%02" PRIx32 "\n",
+		debugPrintf("Add seg: st=%" PRIu32 " t=%7" PRIu32 " dist=%9.3f u=%10.4e a=%10.4e j=%10.4e f=x%02" PRIx32 "\n",
 					startTime, duration, (double)distance, (double)CalcInitialSpeed(duration, distance, a, j), (double)a, (double)j, moveFlags.all);
 #else
-		debugPrintf("Add seg: st=%" PRIu32 " t=%7" PRIu32 " dist=%9.2f u=%10.3e a=%10.3e f=x%02" PRIx32 "\n",
+		debugPrintf("Add seg: st=%" PRIu32 " t=%7" PRIu32 " dist=%9.3f u=%10.4e a=%10.4e f=x%02" PRIx32 "\n",
 					startTime, duration, (double)distance, (double)CalcInitialSpeed(duration, distance, a), (double)a, moveFlags.all);
 #endif
 	}

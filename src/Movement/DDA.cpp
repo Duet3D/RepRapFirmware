@@ -166,12 +166,37 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		}
 		if (steadyClocks == 0.0)
 		{
+			// We have no steady speed phase (phase 4) so we can combine phases 3 and 5 because they must have the same jerk and acceleration is zero at the transition between them
+			accelEndClocks += decelStartClocks;
+			decelStartClocks = 0;
+			accelEndDistance += decelInitialDistance;
+			decelInitialDistance = 0.0;
+
 			// We may have a residual distance because of rounding error.
 			// We want zero residual distance so that the move has the correct length, so add the residual distance to one of the phases that is present
 			if (residualDistance != 0.0)
 			{
 				debugPrintf("totalDistance=%.4e residual=%.4e\n", (double)dda.totalDistance, (double)residualDistance);
-				//TODO qq;
+				if (accelEndClocks != 0)
+				{
+					accelEndDistance += residualDistance;
+				}
+				else if (accelConstantClocks != 0 && accelConstantClocks >= decelConstantClocks)
+				{
+					accelPeakDistance += residualDistance;
+				}
+				else if (decelConstantClocks != 0)
+				{
+					decelPeakDistance += residualDistance;
+				}
+				else if (accelStartClocks != 0 && accelStartClocks >= decelEndClocks)
+				{
+					accelInitialDistance += residualDistance;
+				}
+				else
+				{
+					decelEndDistance += residualDistance;
+				}
 			}
 		}
 		else
