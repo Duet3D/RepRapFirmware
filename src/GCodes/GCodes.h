@@ -385,7 +385,8 @@ private:
 	bool DoFileMacro(GCodeBuffer& gb, const char *_ecv_array fileName, bool reportMissing, int codeRunning) noexcept;	// Run a GCode macro file, optionally report error if not found
 	bool DoFileMacroWithParameters(GCodeBuffer& gb, const char *_ecv_array fileName, bool reportMissing, int codeRunning) THROWS(GCodeException);
 
-	void FileMacroCyclesReturn(GCodeBuffer& gb) noexcept;								// End a macro
+	void FileMacroCyclesReturn(GCodeBuffer& gb) noexcept;														  // End a macro
+	void FileMacroReturnValue(GCodeBuffer& gb, const StringRef& varName, ExpressionValue& returnValue) noexcept; // Return a value from a macro
 
 	bool ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept;					// Do a G, M or T Code
 	bool HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Do a G code

@@ -3650,6 +3650,24 @@ bool GCodes::GetMacroRestarted() const noexcept
 	return ms.doingFileMacro && ms.GetPrevious() != nullptr && ms.GetPrevious()->firstCommandAfterRestart;
 }
 
+void GCodes::FileMacroReturnValue(GCodeBuffer& gb, const StringRef& varName, ExpressionValue& returnValue) noexcept
+{
+	if (gb.IsDoingFileMacro() && gb.GetStackDepth() > 0)
+	{
+		GCodeMachineState * const ps = gb.CurrentFileMachineState().GetPrevious();
+		auto vset = WriteLockedPointer<VariableSet>(nullptr, &ps->variables);
+		Variable *_ecv_null v = vset->Lookup(varName.c_str(), false);
+		if (v == nullptr)
+		{
+			vset->InsertNew(varName.c_str(), returnValue, ps->GetBlockNesting());
+		}
+		else
+		{
+			v->Assign(returnValue);
+		}
+	}
+}
+
 void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb) noexcept
 {
 	//const int retValue = (gb.Seen('P')) ? gb.GetIValue() : 0;		// for when we allow M99 to return 'result'
