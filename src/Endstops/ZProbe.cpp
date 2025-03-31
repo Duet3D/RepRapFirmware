@@ -574,7 +574,7 @@ GCodeResult ZProbe::SetTouchModeParameters(GCodeBuffer& gb, const StringRef& rep
 	bool seen = false;
 	gb.TryGetBValue('S', useTouchMode, seen);
 	gb.TryGetFValue('H', touchModeTriggerHeight, seen);
-	gb.TryGetLimitedFValue('V', touchModeThreshold, seen, 0.0, 5.0);
+	gb.TryGetLimitedFValue('V', touchModeThreshold, seen, 0.0, TouchModeMaxThreshold);
 	{
 		float speed;
 		if (gb.TryGetPositiveFValue('F', speed, seen))

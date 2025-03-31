@@ -72,7 +72,7 @@ bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 		{
 			// Send the sensitivity as a 16-bit integer in the lower half of the 32-bit parameter in the ChangeInputHandle message.
 			// We keep the upper bits free for future touch mode parameters.
-			rslt = CanInterface::ChangeHandleSetTouchMode(boardAddress, handle, (uint32_t)((uint16_t)(touchModeThreshold * (65535.0/5.0))), reply.GetRef());
+			rslt = CanInterface::ChangeHandleSetTouchMode(boardAddress, handle, (uint32_t)((uint16_t)(touchModeThreshold * (65535.0/TouchModeMaxThreshold))), reply.GetRef());
 		}
 	}
 	else
