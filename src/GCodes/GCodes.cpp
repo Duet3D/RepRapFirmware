@@ -4394,6 +4394,10 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS
 		return GCodeResult::error;
 	}
 
+	bool seen = false;
+	bool runMacro = true;
+	gb.TryGetBValue('P', runMacro, seen);
+
 	if (gb.Seen('S'))
 	{
 		String<FilamentNameLength> filamentName;
@@ -4422,7 +4426,10 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS
 
 		String<StringLength256> scratchString;
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName.c_str(), LOAD_FILAMENT_G);
-		DoFileMacro(gb, scratchString.c_str(), true, SystemHelperMacroCode);
+		if (runMacro)
+		{
+			DoFileMacro(gb, scratchString.c_str(), true, SystemHelperMacroCode);
+		}
 	}
 	else if (tool->GetFilament()->IsLoaded())
 	{
@@ -4451,12 +4458,19 @@ GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply) THRO
 		return GCodeResult::error;
 	}
 
+	bool seen = false;
+	bool runMacro = true;
+	gb.TryGetBValue('P', runMacro, seen);
+
 	if (tool->GetFilament()->IsLoaded())			// if no filament is loaded, nothing to do
 	{
 		gb.SetState(GCodeState::unloadingFilament);
 		String<StringLength256> scratchString;
 		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, tool->GetFilament()->GetName(), UNLOAD_FILAMENT_G);
-		DoFileMacro(gb, scratchString.c_str(), true, SystemHelperMacroCode);
+		if (runMacro)
+		{
+			DoFileMacro(gb, scratchString.c_str(), true, SystemHelperMacroCode);
+		}
 	}
 	return GCodeResult::ok;
 }
