@@ -74,7 +74,6 @@ constexpr uint16_t MaxTimeSyncDelay = (uint16_t)MicrosecondsToStepClocks((42 + 6
 static_assert(MaxTimeSyncDelay >= 400 && MaxTimeSyncDelay <= 1000);			// check it's in the right ball park
 
 #define USE_BIT_RATE_SWITCH		0
-#define USE_TX_FIFO				1
 
 constexpr uint32_t MinBitRate = 15;											// MCP2542 has a minimum bite rate of 14.4kbps
 constexpr uint32_t MaxBitRate = 5000;
@@ -130,13 +129,8 @@ static bool mainBoardAcknowledgedAnnounce = false;
 constexpr CanDevice::Config Can0Config =
 {
 	.dataSize = 64,
-#if USE_TX_FIFO
 	.numTxBuffers = 5,
 	.txFifoSize = 16,
-#else
-	.numTxBuffers = 6,
-	.txFifoSize = 2,
-#endif
 	.numRxBuffers =  0,
 	.rxFifo0Size = 32,				// increased from 16 to help with accelerometer and closed loop data collection
 	.rxFifo1Size = 16,
@@ -189,12 +183,7 @@ constexpr auto TxBufferIndexTimeSync = CanDevice::TxBufferNumber::buffer1;
 constexpr auto TxBufferIndexRequest = CanDevice::TxBufferNumber::buffer2;
 constexpr auto TxBufferIndexResponse = CanDevice::TxBufferNumber::buffer3;
 constexpr auto TxBufferIndexBroadcast = CanDevice::TxBufferNumber::buffer4;
-
-#if USE_TX_FIFO
 constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::fifo;				// we send lots of movement messages so use the FIFO for them
-#else
-constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::buffer5;
-#endif
 
 // Receive buffer/FIFO usage. All dedicated buffer numbers must be < Can0Config.numRxBuffers.
 constexpr auto RxBufferIndexBroadcast = CanDevice::RxBufferNumber::fifo0;
@@ -212,7 +201,7 @@ constexpr size_t CanClockTaskStackWords = 400;			// used to be 300 but RD had a 
 static Task<CanSenderTaskStackWords> canClockTask;
 
 static CanMessageBuffer * volatile pendingMotionBuffers = nullptr;
-static CanMessageBuffer * volatile lastMotionBuffer;			// only valid when pendingBuffers != nullptr
+static CanMessageBuffer * volatile lastMotionBuffer;	// only valid when pendingBuffers != nullptr
 
 #if 0	//unused
 static unsigned int numPendingMotionBuffers = 0;
