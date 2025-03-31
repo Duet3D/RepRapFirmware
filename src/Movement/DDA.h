@@ -196,8 +196,11 @@ private:
 	static constexpr float MinimumAccelOrDecelClocks = 10.0;				// Minimum number of acceleration or deceleration clocks we try to ensure
 
 	void RecalculateMove(DDARing& ring) noexcept SPEED_CRITICAL;
+#if SUPPORT_S_CURVE
 	void RecalculateSCurveMove(DDARing& ring) noexcept SPEED_CRITICAL;
-	void CalculateInitialSCurveMove(DDARing& ring) noexcept SPEED_CRITICAL;
+	void CalculateInitialSCurveMove() noexcept SPEED_CRITICAL;
+	void CalculateEndingSCurveMove() noexcept SPEED_CRITICAL;
+#endif
 	void MatchSpeeds() noexcept SPEED_CRITICAL;
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be an acceleration-only move

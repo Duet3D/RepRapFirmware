@@ -657,10 +657,14 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 # if 1
 			//TODO this is temporary code until we implement S-curve lookahead
 			startSpeed = startAcceleration = 0.0;
-			CalculateInitialSCurveMove(ring);
+			CalculateInitialSCurveMove();
 # else
-			// Assuming that this move ends with zero speed, calculate the maximum possible starting speed and deceleration: u^3 = v^2 - 2as qq???
-			prev->beforePrepare.targetNextSpeed = qq;
+			// Work out what speed and acceleration we would ideally like to start this move at, so that we can request the previous move to end with that speed an acceleration
+			CalculateEndingSCurveMove();
+//			const float timefromMaxDeceleration = maxDeceleration/jerk;
+//			const float distanceFromMaxDeceleration
+//			// Assuming that this move ends with zero speed, calculate the maximum possible starting speed and deceleration: u^3 = v^2 - 2as qq???
+//			prev->beforePrepare.targetNextSpeed = qq;
 			DoSCurveLookahead(ring, prev);
 			startSpeed = qq;
 			RecalculateSCurveMove(ring);
@@ -685,7 +689,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 		startAcceleration = 0.0;												// and zero acceleration
 		if (flags.useScurve)
 		{
-			CalculateInitialSCurveMove(ring);
+			CalculateInitialSCurveMove();
 		}
 		else
 		{
@@ -1153,7 +1157,7 @@ void DDA::RecalculateSCurveMove(DDARing& ring) noexcept
 //	v = j * (t1 * t2 + t1^2) = j * t1 * (t1 + t2)
 //	ap = j * t1
 // The deceleration phase is a mirror image of the acceleration phase. We add a steady speed phase between acceleration and deceleration if we need more distance.
-void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
+void DDA::CalculateInitialSCurveMove() noexcept
 {
 	finalAcceleration = initialDeceleration = 0.0;
 	do
@@ -1235,6 +1239,84 @@ void DDA::CalculateInitialSCurveMove(DDARing& ring) noexcept
 	flags.canPauseAfter = true;
 	clocksNeeded = beforePrepare.phase1Time + beforePrepare.phase2Time + beforePrepare.phase3Time + beforePrepare.phase4Time + beforePrepare.phase5Time + beforePrepare.phase6Time + beforePrepare.phase7Time;
 }
+
+// Calculate the ideal starting speed and acceleration for a move that ends with zero speed and acceleration and may be melded into the previous move.
+// Here are some of the cases:
+// 1. Typical case: the previous move has the same requested speed as this one.
+//    In that case, calculate a movement profile that starts at that speed with zero acceleration and ends with zero speed and acceleration.
+//    If the distance for such a move is no greater than the distance we need to cover, use that deceleration profile preceded by a constant speed segment to make up the distance.
+//	  If we can't achieve that because it would cover too much distance, plan to do as much of it as we can, then tell the next move what start speed and acceleration we need to achieve that.
+// 2. Previous move has a higher requested speed than this one. Calculate a profile to decelerate from that speed and zero deceleration to zero speed and acceleration.
+//    If the distance we need to cover intersects that profile not above our maximum speed, use that intersection as the speed/acceleration that we want the previous move to end at.
+//    Otherwise, calculate a movement profile that ends at our requested speed and whatever acceleration that gives.
+// 3. Previous move has a lower requested sped than this one.
+//    We need to end this move no faster than he requested speed of the next one, either at zero acceleration (which is good if the next move can accommodate a constant speed segment)
+//    or at some deceleration that fits in with the next move.
+//    Ideally the next move will signal to us the speed/deceleration profile that it can accept.
+// Considering the move in reverse: given u = 0 and a = 0:
+//	s = j * (t1^3 + (3/2) * t1^2 * t2 + ½ * t1 * t2^2)
+//	v = j * (t1 * t2 + t1^2) = j * t1 * (t1 + t2)
+//	ap = j * t1
+void DDA::CalculateEndingSCurveMove() noexcept
+{
+	// Assume that we want this move to decelerate from the requested speed of the following move.
+	const float reqSpeed = prev->requestedSpeed;
+	// The acceleration reached from a standing start is a = j * t and the speed reached is v = 0.5 * j * t^2.
+	// So a^2 = j^2 * t^2 = 2 * v * j
+	// The phase in which the deceleration is reducing will reduce the speed by the same amount. Therefore we can reach deceleration a without exceeding speed v if a^2 >= v * j.
+	if (fsquare(maxDeceleration) > reqSpeed * jerk)
+	{
+		// In principle we can decelerate from the requested speed of the next move without exceeding the maximum deceleration, without having to include a constant deceleration segment
+		beforePrepare.phase2Time = beforePrepare.phase6Time = 0.0;
+		const float halfTimeToReqSpeed = fastSqrtf(reqSpeed/jerk);
+		const float distanceToReqSpeed = reqSpeed * halfTimeToReqSpeed;
+		if (distanceToReqSpeed < totalDistance && reqSpeed <= requestedSpeed)
+		{
+			// We can decelerate from the requested speed of the next move to zero again without exceeding the required distance.
+			prev->beforePrepare.targetNextSpeed = reqSpeed;
+			prev->beforePrepare.targetNextAcceleration = 0.0;
+			return;
+
+			// This is the 3-phase move we can generate if the proposal is accepted:
+			//beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase6Time = 0;
+			//beforePrepare.phase5Time = beforePrepare.phase7Time = halfTimeToReqSpeed;
+			//beforePrepare.phase4Time = (totalDistance - distanceToReqSpeed)/requestedSpeed;
+			//topSpeed = reqSpeed;
+			//peakDeceleration = jerk * halfTimeToReqSpeed;
+			//TODO if our requested speed is significantly higher than the next move requested speed, we may be able to accelerate to (or part way to) our own requested speed and then decelerate
+		}
+
+		// Else we can't decelerate from the requested speed of the next move without exceeding required distance.
+		// See what speed/acceleration we can decelerate to
+		const float distanceFromPeakDeceleration = OneSixth * jerk * fcube(halfTimeToReqSpeed);
+		if (distanceFromPeakDeceleration > totalDistance)
+		{
+			const float timeToReachDistance = fastCubeRootf(6.0 * totalDistance/jerk);
+			const float tempPeakDeceleration = -jerk * timeToReachDistance;
+			const float tempPeakSpeed = 0.5 * tempPeakDeceleration * timeToReachDistance;
+			if (tempPeakSpeed <= requestedSpeed)
+			{
+				prev->beforePrepare.targetNextAcceleration = -tempPeakDeceleration;
+				prev->beforePrepare.targetNextSpeed = tempPeakSpeed;
+				return;
+
+				// This is the 1-phase move we can generate if the proposal is accepted:
+				//beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase4Time = beforePrepare.phase5Time = beforePrepare.phase6Time = 0;
+				//beforePrepare.phase7Time = timeToReachDistance;
+				//topSpeed = tempPeakSpeed;
+				//peakDeceleration = -tempPeakDeceleration;
+			}
+
+			// Else that type of move would exceed our own requested speed
+			//TODO
+		}
+
+		// Else we can
+		//TODO
+	}
+	//TODO
+}
+
 
 #endif
 
