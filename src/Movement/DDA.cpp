@@ -662,7 +662,19 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 			startSpeed = startAcceleration = 0.0;
 			CalculateIsolatedSCurveMove();
 # else
-			CalculateNewSCurveMove();
+			const int failingLine = CalculateNewSCurveMove();
+			if (failingLine == 0)
+			{
+				DoSCurveLookahead(ring, prev);
+			}
+			else
+			{
+				const StringRef& dbgRef = Platform::genericDebugBuffer.GetRef();
+				dbgRef.printf("3rd order planning error at line %u\n: ", failingLine);
+				Platform::hasGenericDebug = true;
+				startSpeed = startAcceleration = 0.0;
+				CalculateIsolatedSCurveMove();
+			}
 # endif
 		}
 		else
@@ -1260,7 +1272,8 @@ void DDA::CalculateIsolatedSCurveMove() noexcept
 }
 
 // Add a new S-curve move to the ring when there is already at least one move there and we would like to meld them
-void DDA::CalculateNewSCurveMove() noexcept
+// Returns 0 if successful and we are ready to do lookahead, else the line number at wich a problem was detected
+int DDA::CalculateNewSCurveMove() noexcept
 {
 	// Calculate the ideal speed to transition from this move to the next. This may be limited by the following:
 	// - our own requested speed
@@ -1300,12 +1313,12 @@ void DDA::CalculateNewSCurveMove() noexcept
 			prev->beforePrepare.targetNextSpeed = idealStartSpeed;
 			prev->beforePrepare.targetNextAcceleration = 0.0;
 
-			// This is the 3-phase move we can generate if the proposal is accepted
-			//beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase6Time = 0;
-			//beforePrepare.phase5Time = beforePrepare.phase7Time = t1;
-			//beforePrepare.phase4Time = (totalDistance - distanceFromIdealStartSpeed)/idealStartSpeed;
-			//topSpeed = reqSpeed;
-			//peakDeceleration = jerk * halfTimeToReqSpeed;
+			// This is the 3-phase move we will generate if the proposal is accepted
+			beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase6Time = 0;
+			beforePrepare.phase5Time = beforePrepare.phase7Time = t1;
+			beforePrepare.phase4Time = (totalDistance - distanceFromIdealStartSpeed)/idealStartSpeed;
+			topSpeed = idealStartSpeed;
+			peakDeceleration = jerk * t1;
 		}
 		else
 		{
@@ -1318,18 +1331,21 @@ void DDA::CalculateNewSCurveMove() noexcept
 				const float residualDistance = totalDistance = distanceFromPeakDeceleration;
 				const float speedBeforeReducingDeceleration = 0.5 * idealStartSpeed;
 				const float decelBeforeReducingDeceleration = t1 * jerk;
-				float rslt[3];
 				const float t2 = SmallestNonNegativeCubicSolution(-OneSixth * jerk, OneHalf * decelBeforeReducingDeceleration, speedBeforeReducingDeceleration, -residualDistance);
 				if (std::isnan(t2))
 				{
-					qq;
+					return __LINE__;
 				}
 				else
 				{
 					prev->beforePrepare.targetNextSpeed = speedBeforeReducingDeceleration + (decelBeforeReducingDeceleration - 0.5 * jerk * t2) * t2;
 					prev->beforePrepare.targetNextAcceleration = -(decelBeforeReducingDeceleration + jerk * t2);
+
+					// This is the 2-phase move we will generate if the proposal is accepted. Save the values to avoid solving the equations again.
+					beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase4Time = beforePrepare.phase6Time = 0;
+					beforePrepare.phase5Time = t2;
+					beforePrepare.phase7Time = t1;
 				}
-//				qq;
 			}
 			else
 			{
@@ -1337,14 +1353,13 @@ void DDA::CalculateNewSCurveMove() noexcept
 				const float timeToReachDistance = fastCubeRootf(6.0 * totalDistance/jerk);
 				const float tempPeakDeceleration = jerk * timeToReachDistance;
 				const float tempPeakSpeed = 0.5 * tempPeakDeceleration * timeToReachDistance;
-				//TODO solve cubic here
 				prev->beforePrepare.targetNextAcceleration = -tempPeakDeceleration;
 				prev->beforePrepare.targetNextSpeed = tempPeakSpeed;
 
-				// This is the 1-phase move we can generate if the proposal is accepted:
-				//beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase4Time = beforePrepare.phase5Time = beforePrepare.phase6Time = 0;
-				//beforePrepare.phase7Time = timeToReachDistance;
-				//topSpeed = tempPeakSpeed;
+				// This is the 1-phase move we will generate if the proposal is accepted. Save the values to avoid solving the equations again.
+				beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase4Time = beforePrepare.phase5Time = beforePrepare.phase6Time = 0;
+				beforePrepare.phase7Time = timeToReachDistance;
+				topSpeed = tempPeakSpeed;
 			}
 		}
 	}
@@ -1363,13 +1378,13 @@ void DDA::CalculateNewSCurveMove() noexcept
 			prev->beforePrepare.targetNextSpeed = idealStartSpeed;
 			prev->beforePrepare.targetNextAcceleration = 0.0;
 
-			// This is the 4-phase move we can generate if the proposal is accepted
-			//beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = 0;
-			//beforePrepare.phase5Time = beforePrepare.phase7Time = t1;
-			//beforePrepare.phase7Time = t2;
-			//beforePrepare.phase4Time = (totalDistance - distanceFromIdealStartSpeed)/idealStartSpeed;
-			//topSpeed = reqSpeed;
-			//peakDeceleration = jerk * halfTimeToReqSpeed;
+			// This is the 4-phase move we can generate if the proposal is accepted. Save the values to avoid solving the equations again.
+			beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = 0;
+			beforePrepare.phase5Time = beforePrepare.phase7Time = t1;
+			beforePrepare.phase6Time = t2;
+			beforePrepare.phase4Time = (totalDistance - distanceFromIdealStartSpeed)/idealStartSpeed;
+			topSpeed = idealStartSpeed;
+			peakDeceleration = jerk * t1;
 		}
 		else
 		{
@@ -1379,26 +1394,70 @@ void DDA::CalculateNewSCurveMove() noexcept
 			if (totalDistance < distanceFromPeakDeceleration)
 			{
 				// We can't execute the whole of the final part of the S
-				qq;
+				const float timeToReachDistance = fastCubeRootf(6.0 * totalDistance/jerk);
+				const float tempPeakDeceleration = jerk * timeToReachDistance;
+				const float tempPeakSpeed = 0.5 * tempPeakDeceleration * timeToReachDistance;
+				prev->beforePrepare.targetNextAcceleration = -tempPeakDeceleration;
+				prev->beforePrepare.targetNextSpeed = tempPeakSpeed;
+
+				// This is the 1-phase move we will generate if the proposal is accepted. Save the values to avoid solving the equations again.
+				beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase4Time = beforePrepare.phase5Time = beforePrepare.phase6Time = 0;
+				beforePrepare.phase7Time = timeToReachDistance;
+				topSpeed = tempPeakSpeed;
 			}
 			else
 			{
+				// We can execute all of the final part of the S. Can we execute all of the constant speed segment too?
 				const float speedBeforeReducingDeceleration = 0.5 * maxDeceleration * t1;
 				const float distanceAtPeakDeceleration = (speedBeforeReducingDeceleration + 0.5 * maxDeceleration * t2) * t2;
 				const float distanceLeft = totalDistance - distanceFromPeakDeceleration - distanceAtPeakDeceleration;
 				if (distanceLeft < 0.0)
 				{
-					qq;
+					// We can't execute all of the constant speed segment.
+					const float distanceAvailable = totalDistance - distanceFromPeakDeceleration;
+					const float t2a = (-speedBeforeReducingDeceleration + fastSqrtf(fsquare(speedBeforeReducingDeceleration) + 2 * maxDeceleration * distanceAvailable))/maxDeceleration;
+					prev->beforePrepare.targetNextAcceleration = -maxDeceleration;
+					prev->beforePrepare.targetNextSpeed = speedBeforeReducingDeceleration + maxDeceleration * t2a;
+
+					// This is the 2-phase move we can generate of the proposal is accepted. Save the values to avoid solving the equations again.
+					beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase4Time = beforePrepare.phase5Time = 0;
+					beforePrepare.phase6Time = t2a;
+					beforePrepare.phase7Time = t1;
 				}
 				else
 				{
-					qq;
+					// We can execute all of the constant speed segment. See how much of the increasing-deceleration segment we can generate.
+					const float speedAtStartOfConstantDeceleration = speedBeforeReducingDeceleration + t2 * maxDeceleration;
+					const float t3 = SmallestNonNegativeCubicSolution(-OneSixth * jerk, -OneHalf * maxDeceleration, speedAtStartOfConstantDeceleration, -distanceLeft);
+					if (std::isnan(t3))
+					{
+						return __LINE__;
+					}
+					else
+					{
+						prev->beforePrepare.targetNextAcceleration = -maxDeceleration + jerk * t3;
+						prev->beforePrepare.targetNextSpeed = speedAtStartOfConstantDeceleration + (maxDeceleration - OneHalf * jerk * t3) * t3;
+
+						// This is the 3-phase move we can generate of the proposal is accepted. Save the values to avoid solving the equations again.
+						beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase4Time = 0;
+						beforePrepare.phase5Time = t3;
+						beforePrepare.phase6Time = t2;
+						beforePrepare.phase7Time = t1;
+					}
 				}
 			}
 		}
 	}
+	return 0;
 }
 
+// Try to smooth out moves in the queue.
+//laDDA is the move that we want to adjust. We have already set laDDA->beforePrepare.targetNextSpeed and laDDA->beforePrepare.targetNextAcceleration to the values that the next move would like to start at.
+/*static*/ void DDA::DoSCurveLookahead(DDARing& ring, DDA *laDDA) noexcept
+{
+	//TODO
+	debugPrintf("TNS %.3e, TNA %.3e\n", (double)laDDA->beforePrepare.targetNextSpeed, (double)laDDA->beforePrepare.targetNextAcceleration);
+}
 
 #endif
 
