@@ -27,8 +27,8 @@ struct PrepParams
 {
 #if SUPPORT_S_CURVE
 	uint32_t accelStartClocks, accelConstantClocks, accelEndClocks, steadyClocks, decelStartClocks, decelConstantClocks, decelEndClocks;
-    float initialAcceleration, peakAcceleration, finalAcceleration;			// the accelerations, always positive
-    float initialDeceleration, peakDeceleration, finalDeceleration;			// the decelerations, always negative
+    float initialAcceleration, peakAcceleration;	// the accelerations, always positive
+    float initialDeceleration, peakDeceleration;	// the decelerations, always negative
     float accelInitialDistance, accelPeakDistance, accelEndDistance;
     float decelInitialDistance, decelPeakDistance, decelEndDistance;
     float steadyDistance;
