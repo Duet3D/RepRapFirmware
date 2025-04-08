@@ -1177,6 +1177,7 @@ void DDA::RecalculateSCurveMove(DDARing& ring) noexcept
 }
 
 // Calculate the move to be added to the ring when the start speed and acceleration and the end speed and acceleration are all zero
+// Caller has already set endSpeed and endDeceleration to zero
 // For an S-curve acceleration phase which starts at speed u and acceleration a, spends time t1 accelerating with jerk j to peak acceleration ap, then spends time t2 at constant acceleration ap, then spends time t1 reducing acceleration back to a:
 //	s = u * (2 * t1 + t2) + a * (2 * t1^2 + 2 * t1 * t2 + ½ * t2^2) + j * (t1^3 + (3/2) * t1^2 * t2 + ½ * t1 * t2^2)
 //	v = u + a * (2 * t1 + t2) + j * (t1 * t2 + t1^2)
@@ -1271,6 +1272,7 @@ void DDA::CalculateIsolatedSCurveMove() noexcept
 
 // Add a new S-curve move to the ring when there is already at least one move there and we would like to meld them
 // Returns 0 if successful and we are ready to do lookahead, else the line number at wich a problem was detected
+// Caller has already set endSpeed and endDeceleration to zero
 int DDA::CalculateNewSCurveMove() noexcept
 {
 	// Calculate the ideal speed to transition from this move to the next. This may be limited by the following:
@@ -1279,7 +1281,7 @@ int DDA::CalculateNewSCurveMove() noexcept
 	// - if the direction is changing, the instantaneous speed change limits of the axes involved
 	float idealStartSpeed = min<float>(requestedSpeed, prev->requestedSpeed);
 
-	// The following loop is similar to MatchSpeeds but it works on the previous move instead of the next. We already checked that the extrusion speed match.
+	// The following loop is similar to MatchSpeeds but it works on the previous move instead of the next. We already checked that the extrusion speeds match.
 	for (size_t drive = 0; drive < reprap.GetGCodes().GetTotalAxes(); ++drive)
 	{
 		if (directionVector[drive] != 0.0 || next->directionVector[drive] != 0.0)
@@ -1293,6 +1295,8 @@ int DDA::CalculateNewSCurveMove() noexcept
 			}
 		}
 	}
+
+	startAcceleration = peakAcceleration = finalAcceleration = 0.0;				// we are not expecting an acceleration phase
 
 	// Can we decelerate from idealEndSpeed and zero acceleration to standstill without exceeding distance?
 	// First check whether we would need to include a constant deceleration segment in order to avoid exceeding the acceleration limit.
@@ -1308,14 +1312,13 @@ int DDA::CalculateNewSCurveMove() noexcept
 		if (distanceFromIdealStartSpeed <= totalDistance)
 		{
 			// We can decelerate from the ideal start speed and zero acceleration to zero/zero without exceeding the required distance.
-			prev->beforePrepare.targetNextSpeed = idealStartSpeed;
-			prev->beforePrepare.targetNextAcceleration = 0.0;
+			prev->beforePrepare.targetNextSpeed = startSpeed = topSpeed = idealStartSpeed;
+			prev->beforePrepare.targetNextAcceleration = initialDeceleration = 0.0;
 
 			// This is the 3-phase move we will generate if the proposal is accepted
 			beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase6Time = 0;
 			beforePrepare.phase5Time = beforePrepare.phase7Time = t1;
 			beforePrepare.phase4Time = (totalDistance - distanceFromIdealStartSpeed)/idealStartSpeed;
-			topSpeed = idealStartSpeed;
 			peakDeceleration = jerk * t1;
 		}
 		else
@@ -1336,13 +1339,14 @@ int DDA::CalculateNewSCurveMove() noexcept
 				}
 				else
 				{
-					prev->beforePrepare.targetNextSpeed = speedBeforeReducingDeceleration + (decelBeforeReducingDeceleration - 0.5 * jerk * t2) * t2;
-					prev->beforePrepare.targetNextAcceleration = -(decelBeforeReducingDeceleration + jerk * t2);
+					prev->beforePrepare.targetNextSpeed = startSpeed = topSpeed = speedBeforeReducingDeceleration + (decelBeforeReducingDeceleration - 0.5 * jerk * t2) * t2;
+					prev->beforePrepare.targetNextAcceleration = initialDeceleration = -(decelBeforeReducingDeceleration + jerk * t2);
 
 					// This is the 2-phase move we will generate if the proposal is accepted. Save the values to avoid solving the equations again.
 					beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase4Time = beforePrepare.phase6Time = 0;
 					beforePrepare.phase5Time = t2;
 					beforePrepare.phase7Time = t1;
+					peakDeceleration = -decelBeforeReducingDeceleration;
 				}
 			}
 			else
@@ -1351,13 +1355,12 @@ int DDA::CalculateNewSCurveMove() noexcept
 				const float timeToReachDistance = fastCubeRootf(6.0 * totalDistance/jerk);
 				const float tempPeakDeceleration = jerk * timeToReachDistance;
 				const float tempPeakSpeed = 0.5 * tempPeakDeceleration * timeToReachDistance;
-				prev->beforePrepare.targetNextAcceleration = -tempPeakDeceleration;
-				prev->beforePrepare.targetNextSpeed = tempPeakSpeed;
+				prev->beforePrepare.targetNextSpeed = startSpeed = topSpeed = tempPeakSpeed;
+				prev->beforePrepare.targetNextAcceleration = initialDeceleration = peakDeceleration = -tempPeakDeceleration;
 
 				// This is the 1-phase move we will generate if the proposal is accepted. Save the values to avoid solving the equations again.
 				beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase4Time = beforePrepare.phase5Time = beforePrepare.phase6Time = 0;
 				beforePrepare.phase7Time = timeToReachDistance;
-				topSpeed = tempPeakSpeed;
 			}
 		}
 	}
@@ -1373,16 +1376,15 @@ int DDA::CalculateNewSCurveMove() noexcept
 		if (distanceFromIdealStartSpeed <= totalDistance)
 		{
 			// We can decelerate from the ideal start speed and zero acceleration to zero/zero without exceeding the required distance.
-			prev->beforePrepare.targetNextSpeed = idealStartSpeed;
-			prev->beforePrepare.targetNextAcceleration = 0.0;
+			prev->beforePrepare.targetNextSpeed = startSpeed = topSpeed = idealStartSpeed;
+			prev->beforePrepare.targetNextAcceleration = initialDeceleration = 0.0;
 
 			// This is the 4-phase move we can generate if the proposal is accepted. Save the values to avoid solving the equations again.
 			beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = 0;
 			beforePrepare.phase5Time = beforePrepare.phase7Time = t1;
 			beforePrepare.phase6Time = t2;
 			beforePrepare.phase4Time = (totalDistance - distanceFromIdealStartSpeed)/idealStartSpeed;
-			topSpeed = idealStartSpeed;
-			peakDeceleration = jerk * t1;
+			peakDeceleration = maxDeceleration;
 		}
 		else
 		{
@@ -1395,13 +1397,12 @@ int DDA::CalculateNewSCurveMove() noexcept
 				const float timeToReachDistance = fastCubeRootf(6.0 * totalDistance/jerk);
 				const float tempPeakDeceleration = jerk * timeToReachDistance;
 				const float tempPeakSpeed = 0.5 * tempPeakDeceleration * timeToReachDistance;
-				prev->beforePrepare.targetNextAcceleration = -tempPeakDeceleration;
-				prev->beforePrepare.targetNextSpeed = tempPeakSpeed;
+				prev->beforePrepare.targetNextSpeed = startSpeed = topSpeed = tempPeakSpeed;
+				prev->beforePrepare.targetNextAcceleration = initialDeceleration = peakDeceleration = -tempPeakDeceleration;
 
 				// This is the 1-phase move we will generate if the proposal is accepted. Save the values to avoid solving the equations again.
 				beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase4Time = beforePrepare.phase5Time = beforePrepare.phase6Time = 0;
 				beforePrepare.phase7Time = timeToReachDistance;
-				topSpeed = tempPeakSpeed;
 			}
 			else
 			{
@@ -1414,8 +1415,8 @@ int DDA::CalculateNewSCurveMove() noexcept
 					// We can't execute all of the constant speed segment.
 					const float distanceAvailable = totalDistance - distanceFromPeakDeceleration;
 					const float t2a = (-speedBeforeReducingDeceleration + fastSqrtf(fsquare(speedBeforeReducingDeceleration) + 2 * maxDeceleration * distanceAvailable))/maxDeceleration;
-					prev->beforePrepare.targetNextAcceleration = -maxDeceleration;
-					prev->beforePrepare.targetNextSpeed = speedBeforeReducingDeceleration + maxDeceleration * t2a;
+					prev->beforePrepare.targetNextSpeed = startSpeed = topSpeed = speedBeforeReducingDeceleration + maxDeceleration * t2a;
+					prev->beforePrepare.targetNextAcceleration = initialDeceleration = peakDeceleration = -maxDeceleration;
 
 					// This is the 2-phase move we can generate of the proposal is accepted. Save the values to avoid solving the equations again.
 					beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase4Time = beforePrepare.phase5Time = 0;
@@ -1433,14 +1434,15 @@ int DDA::CalculateNewSCurveMove() noexcept
 					}
 					else
 					{
-						prev->beforePrepare.targetNextAcceleration = -maxDeceleration + jerk * t3;
-						prev->beforePrepare.targetNextSpeed = speedAtStartOfConstantDeceleration + (maxDeceleration - OneHalf * jerk * t3) * t3;
+						prev->beforePrepare.targetNextSpeed = startSpeed = topSpeed = speedAtStartOfConstantDeceleration + (maxDeceleration - OneHalf * jerk * t3) * t3;
+						prev->beforePrepare.targetNextAcceleration = initialDeceleration = -maxDeceleration + jerk * t3;
 
 						// This is the 3-phase move we can generate of the proposal is accepted. Save the values to avoid solving the equations again.
 						beforePrepare.phase1Time = beforePrepare.phase2Time = beforePrepare.phase3Time = beforePrepare.phase4Time = 0;
 						beforePrepare.phase5Time = t3;
 						beforePrepare.phase6Time = t2;
 						beforePrepare.phase7Time = t1;
+						peakDeceleration = -maxDeceleration;
 					}
 				}
 			}

@@ -200,8 +200,8 @@ private:
 
 #if SUPPORT_S_CURVE
 	void RecalculateSCurveMove(DDARing& ring) noexcept SPEED_CRITICAL;
-	void CalculateIsolatedSCurveMove() noexcept SPEED_CRITICAL;
-	int CalculateNewSCurveMove() noexcept SPEED_CRITICAL;
+	void CalculateIsolatedSCurveMove() noexcept SPEED_CRITICAL pre(endSpeed == 0.0; endDeceleration == 0.0);
+	int CalculateNewSCurveMove() noexcept SPEED_CRITICAL pre(endSpeed == 0.0; endDeceleration == 0.0);
 	static void DoSCurveLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
 	bool ExtrusionSpeedMatchesPrevious() const noexcept;
 #endif
