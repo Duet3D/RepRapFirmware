@@ -351,6 +351,15 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 		}
 	}
 
+	// If the axis letters were given as U and Y then the parser will find Y before it finds U. Swap them so that IDEX machines behave as the user expects, i.e. U behaves like X.
+	if (axesLetters[0] == 'Y' && axesLetters[1] == 'U')
+	{
+		std::swap(axesLetters[0], axesLetters[1]);
+		std::swap(axis0Values[0], axis1Values[0]);
+		std::swap(axis0Values[1], axis1Values[1]);
+		std::swap(spacings[0], spacings[1]);
+	}
+
 	const bool ok = defaultGrid.Set(axesLetters, axis0Values, axis1Values, radius, spacings);
 	reprap.MoveUpdated();
 	if (ok)
