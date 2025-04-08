@@ -142,6 +142,7 @@ public:
 	void ReportInternalError(c_string file, c_string func, int line) const noexcept;	// report an internal error
 
 	static uint32_t DoDivide(uint32_t a, uint32_t b) noexcept;			// helper function for diagnostic tests
+	static void DoMemoryLeak() noexcept;								// helper function for diagnostic tests
 	static void GenerateBusFault() noexcept;							// helper function for diagnostic tests
 	static float SinfCosf(float angle) noexcept;						// helper function for diagnostic tests
 	static float FastSqrtf(float f) noexcept;							// helper function for diagnostic tests

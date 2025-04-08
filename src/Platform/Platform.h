@@ -169,7 +169,8 @@ enum class DiagnosticTestType : unsigned int
 	DivideByZero = 1004,			// do an integer divide by zero to test exception handling
 	UnalignedMemoryAccess = 1005,	// do an unaligned memory access to test exception handling
 	BusFault = 1006,				// generate a bus fault
-	AccessMemory = 1007				// read or write  memory
+	AccessMemory = 1007,			// read or write  memory
+	MemoryLeak = 1008				// cause an out of memory fault
 };
 
 /***************************************************************************************************************/

@@ -2778,6 +2778,17 @@ void RepRap::StartIap(c_string _ecv_null filename) noexcept
 	return a/b;
 }
 
+// Helper function for diagnostic tests in Platform.cpp, to cause a deliberate OOM fault
+/*static*/ void RepRap::DoMemoryLeak() noexcept
+{
+	void * leak;
+	while (true)
+	{
+		leak = Tasks::AllocPermanent(1024); 	// Allocate memory continuously
+		(void)leak;								// Prevent unused variable warning
+	}
+}
+
 // Helper function for diagnostic tests in Platform.cpp, to cause a deliberate bus fault or memory protection error
 /*static*/ void RepRap::GenerateBusFault() noexcept
 {
