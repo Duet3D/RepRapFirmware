@@ -1728,6 +1728,15 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		// We don't actually generate a fault any more, instead we let this function identify existing unaligned accesses in the code
 		break;
 
+	case (unsigned int)DiagnosticTestType::MemoryLeak:			// allocate memory until OOM fault occurs
+		if (!gb.DoDwellTime(1000))								// wait a second to allow the response to be sent back to the web server, otherwise it may retry
+		{
+			return GCodeResult::notFinished;
+		}
+		deliberateError = true;
+		(void)RepRap::DoMemoryLeak();
+		break;
+
 	case (unsigned int)DiagnosticTestType::BusFault:
 #if SAME70 && !USE_MPU
 		Message(WarningMessage, "There is no abort area on the SAME70 with MPU disabled");
