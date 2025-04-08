@@ -198,8 +198,9 @@ private:
 	void RecalculateMove(DDARing& ring) noexcept SPEED_CRITICAL;
 #if SUPPORT_S_CURVE
 	void RecalculateSCurveMove(DDARing& ring) noexcept SPEED_CRITICAL;
-	void CalculateInitialSCurveMove() noexcept SPEED_CRITICAL;
-	void CalculateEndingSCurveMove() noexcept SPEED_CRITICAL;
+	void CalculateIsolatedSCurveMove() noexcept SPEED_CRITICAL;
+	void CalculateNewSCurveMove() noexcept SPEED_CRITICAL;
+	bool ExtrusionSpeedMatchesPrevious() const noexcept;
 #endif
 	void MatchSpeeds() noexcept SPEED_CRITICAL;
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
@@ -256,7 +257,8 @@ private:
 					 , scanningProbeMove : 1 	 	// True if this is a scanning Z probe move
 #endif
 #if SUPPORT_S_CURVE
-					 , useScurve : 1				// set if this move uses S-curve acceleration
+					 , useScurve : 1,				// set if this move uses S-curve acceleration
+					 usingMaxAccceleration : 1		// set if this move and all previous contiguous moves acccelerate at the maximum rate, so there is no point asking them to accelerate faster
 #endif
 					 ;
 		};
