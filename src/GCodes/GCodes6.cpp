@@ -352,6 +352,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 	}
 
 	// If the axis letters were given as U and Y then the parser will find Y before it finds U. Swap them so that IDEX machines behave as the user expects, i.e. U behaves like X.
+	// An alternative would be to add a function to GCodeBuffer to report the position at which a letter was seen, then we could make it sensitive to the order of parameters in the command
 	if (axesLetters[0] == 'Y' && axesLetters[1] == 'U')
 	{
 		std::swap(axesLetters[0], axesLetters[1]);
