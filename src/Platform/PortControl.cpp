@@ -40,8 +40,8 @@ GCodeResult PortControl::Configure(GCodeBuffer& gb, const StringRef& reply) THRO
 		seen = true;
 		UpdatePorts(0);
 		numConfiguredPorts = 0;
-		uint32_t tempPorts[MaxPorts];
-		size_t nports = MaxPorts;
+		uint32_t tempPorts[MaxIoBitsPorts];
+		size_t nports = MaxIoBitsPorts;
 		gb.GetUnsignedArray(tempPorts, nports, false);
 		Platform& platform = reprap.GetPlatform();
 		for (size_t i = 0; i < nports; ++i)

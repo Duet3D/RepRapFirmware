@@ -532,13 +532,13 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 #if SUPPORT_SCANNING_PROBES
 	flags.scanningProbeMove = nextMove.scanningProbeMove;
 #endif
-	flags.controlLaser = nextMove.isCoordinated && nextMove.checkEndstops == 0;
+	flags.controlLaserOrIoBits = nextMove.isCoordinated && !nextMove.checkEndstops;
 
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a raw motor move
 	flags.continuousRotationShortcut = (nextMove.moveType == 0);
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
-	if (flags.controlLaser)
+	if (flags.controlLaserOrIoBits)
 	{
 		laserPwmOrIoBits = nextMove.laserPwmOrIoBits;
 	}
@@ -1452,11 +1452,44 @@ int DDA::CalculateNewSCurveMove() noexcept
 }
 
 // Try to smooth out moves in the queue.
-//laDDA is the move that we want to adjust. We have already set laDDA->beforePrepare.targetNextSpeed and laDDA->beforePrepare.targetNextAcceleration to the values that the next move would like to start at.
+// laDDA is the move that we want to adjust. We have already set laDDA->beforePrepare.targetNextSpeed and laDDA->beforePrepare.targetNextAcceleration to the values that the following move would like to start at.
 /*static*/ void DDA::DoSCurveLookahead(DDARing& ring, DDA *laDDA) noexcept
 {
 	//TODO
-	debugPrintf("TNS %.3e, TNA %.3e\n", (double)laDDA->beforePrepare.targetNextSpeed, (double)laDDA->beforePrepare.targetNextAcceleration);
+	laDDA->next->DebugPrint("DDA: ");
+	debugPrintf(" TNS %.3e, TNA %.3e\n", (double)laDDA->beforePrepare.targetNextSpeed, (double)laDDA->beforePrepare.targetNextAcceleration);
+
+	unsigned int laDepth = 0;
+	bool goingUp = true;
+	for (;;)
+	{
+		if (goingUp)
+		{
+			// See whether we can adjust this move to end at the speed and acceleration requested by the following move.
+			// That requested speed won't be higher than our own requestedSpeed.
+			// Check that the acceleration is within limits
+			if (beforePrepare.targetNextAcceleration > 0.0)
+			{
+				if (beforePrepare.targetNextAcceleration > maxAcceleration)
+				{
+					beforePrepare.targetNextAcceleration = maxAcceleration;
+					flags.haveReducedAcceleration = true;								// tell the following move that we need to reduce acceleration
+				}
+			}
+			else if (-beforePrepare.targetNextAcceleration > maxDeceleration)
+			{
+				beforePrepare.targetNextAcceleration = -maxDeceleration;
+				flags.haveReducedAcceleration = true;									// tell the following move that we need to reduce acceleration
+			}
+
+			qq;
+		}
+		else
+		{
+			qq;
+			if (laDepth == 0) { return; }
+		}
+	}
 }
 
 #endif
@@ -1940,7 +1973,7 @@ uint32_t DDA::ManageLaserPower(Platform& p) const noexcept
 	}
 
 	const uint32_t clocksLeft = clocksNeeded - clocksMoving;
-	if (!flags.controlLaser || laserPwmOrIoBits.laserPwm == 0)
+	if (!flags.controlLaserOrIoBits || laserPwmOrIoBits.laserPwm == 0)
 	{
 		p.SetLaserPwm(0);
 		return (uint32_t)lrintf((float)clocksLeft * StepClocksToMillis);

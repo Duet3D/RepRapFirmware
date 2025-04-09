@@ -167,7 +167,6 @@ public:
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }
-	bool ControlLaser() const noexcept { return flags.controlLaser; }
 #endif
 
 #if SUPPORT_LASER
@@ -248,7 +247,7 @@ private:
 					 isNonPrintingExtruderMove : 1,	// True if this move is an extruder-only move, or involves reverse extrusion (and possibly axis movement too)
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
 					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
-					 controlLaser : 1,				// True if this move controls the laser or iobits
+					 controlLaserOrIoBits : 1,				// True if this move controls the laser or iobits
 					 isolatedMove : 1,				// set if we disable input shaping for this move and wait for it to finish e.g. for a G1 H2 move
 					 doneIoBits : 1,				// set if we have written the IOBITS ports for this move
 					 doneFeedForward : 1,			// set if we have commanded feedforward for this move
@@ -258,7 +257,9 @@ private:
 #endif
 #if SUPPORT_S_CURVE
 					 , useScurve : 1,				// set if this move uses S-curve acceleration
-					 usingMaxAccceleration : 1		// set if this move and all previous contiguous moves acccelerate at the maximum rate, so there is no point asking them to accelerate faster
+					 usingMaxAccceleration : 1,		// set if this move and all previous contiguous moves accelerate at the maximum rate, so there is no point asking them to accelerate faster
+					 haveReducedSpeed: 1,
+					 haveReducedAcceleration: 1
 #endif
 					 ;
 		};

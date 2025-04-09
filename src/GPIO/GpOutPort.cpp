@@ -203,7 +203,7 @@ void GpOutputPort::WriteDigital(bool value) noexcept
 		return;
 	}
 #endif
-	port.WriteDigital(value);
+	port.WriteAnalog(lastPwm);				// we must use WriteAnalog here because WriteDigital doesn't work on Duet 2 PWM ports
 }
 
 #if SUPPORT_REMOTE_COMMANDS

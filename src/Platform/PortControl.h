@@ -30,9 +30,9 @@ public:
 
 private:
 
-	static const size_t MaxPorts = 16;		// the port bitmap is currently a 16-bit word
+	static const size_t MaxIoBitsPorts = 16;		// the port bitmap is currently a 16-bit word
 
-	uint8_t gpOutPortNumbers[MaxPorts];
+	uint8_t gpOutPortNumbers[MaxIoBitsPorts];
 	size_t numConfiguredPorts;
 	uint32_t advanceMillis;
 	uint32_t advanceClocks;

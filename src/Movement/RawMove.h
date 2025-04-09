@@ -54,12 +54,10 @@ struct RawMove
 #endif
 			;
 
+	// Note that this point is an odd multiple of 2 bytes from the start of the struct in all configurations
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
-# if !defined(DUET3) && !defined(DUET3MINI)
-	uint16_t padding;												// pad to make the length a multiple of 4 bytes
-# endif
-#elif defined(DUET3) || defined(DUET3MINI)
+#else
 	uint16_t padding;												// pad to make the length a multiple of 4 bytes
 #endif
 
