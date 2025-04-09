@@ -1466,19 +1466,58 @@ int DDA::CalculateNewSCurveMove() noexcept
 		{
 			// See whether we can adjust this move to end at the speed and acceleration requested by the following move.
 			// That requested speed won't be higher than our own requestedSpeed.
-			// Check that the acceleration is within limits
-			if (beforePrepare.targetNextAcceleration > 0.0)
+			// Check that the acceleration is within limits. TODO: should we have the following move ensure this in advance?
+			if (laDDA->beforePrepare.targetNextAcceleration > 0.0)
 			{
-				if (beforePrepare.targetNextAcceleration > maxAcceleration)
+				if (laDDA->beforePrepare.targetNextAcceleration > laDDA->maxAcceleration)
 				{
-					beforePrepare.targetNextAcceleration = maxAcceleration;
-					flags.haveReducedAcceleration = true;								// tell the following move that we need to reduce acceleration
+					laDDA->beforePrepare.targetNextAcceleration = laDDA->maxAcceleration;
+					laDDA->flags.haveReducedAcceleration = true;								// tell the following move that we need to reduce acceleration
+					goingUp = false;
+					continue;
 				}
 			}
-			else if (-beforePrepare.targetNextAcceleration > maxDeceleration)
+			else if (-laDDA->beforePrepare.targetNextAcceleration > laDDA->maxDeceleration)
 			{
-				beforePrepare.targetNextAcceleration = -maxDeceleration;
-				flags.haveReducedAcceleration = true;									// tell the following move that we need to reduce acceleration
+				laDDA->beforePrepare.targetNextAcceleration = -laDDA->maxDeceleration;
+				laDDA->flags.haveReducedAcceleration = true;									// tell the following move that we need to reduce acceleration
+				goingUp = false;
+				continue;
+			}
+
+			// If we already reach our requested speed then see if we can reach the requested end speed and acceleration from it
+			if (laDDA->topSpeed == laDDA->requestedSpeed)
+			{
+				// Can we go from top speed and zero acceleration to the requested speed and acceleration without exceeding jerk?
+				if ((laDDA->topSpeed - laDDA->beforePrepare.targetNextSpeed) * laDDA->jerk * 2 > fsquare(laDDA->beforePrepare.targetNextAcceleration))
+				{
+					// No, so we need to end at a lower speed or a lower acceleration. Ask for a lower acceleration.
+					laDDA->beforePrepare.targetNextAcceleration = fastSqrtf((laDDA->topSpeed - laDDA->beforePrepare.targetNextSpeed)/(2 * laDDA->jerk));
+					laDDA->flags.haveReducedAcceleration = true;
+					goingUp = false;
+					continue;
+				}
+
+				// We must be at our top speed at the end of phase 3, during the whole of phase 4, and at the start of phase 5
+				// Calculate the total distance remaining after any acceleration segments
+				float distanceAvailable = laDDA->totalDistance;
+				if (laDDA->beforePrepare.phase1Time != 0)
+				{
+					distanceAvailable -= (laDDA->startSpeed + (OneHalf * laDDA->startAcceleration + OneSixth * laDDA->jerk* laDDA->beforePrepare.phase1Time) * laDDA->beforePrepare.phase1Time) * laDDA->beforePrepare.phase1Time;
+				}
+				if (laDDA->beforePrepare.phase2Time != 0)
+				{
+					distanceAvailable -= (laDDA->startSpeed + (laDDA->startAcceleration + OneHalf * (laDDA->maxAcceleration + laDDA->jerk * laDDA->beforePrepare.phase2Time) * laDDA->beforePrepare.phase2Time)) * laDDA->beforePrepare.phase2Time;
+				}
+
+				// Phase 3 must end with zero acceleration. It may be absent if phases 1 and 2 are also absent.
+				if (laDDA->beforePrepare.phase3Time != 0)
+				{
+					distanceAvailable -= (laDDA->topSpeed - OneSixth * laDDA->jerk * fsquare(laDDA->beforePrepare.phase3Time)) * laDDA->beforePrepare.phase3Time;
+				}
+
+				// Do we have enough distance available to decelerate to the requested values?
+				qq;
 			}
 
 			qq;
