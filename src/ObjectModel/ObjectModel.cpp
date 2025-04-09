@@ -497,7 +497,7 @@ ObjectModel::ObjectModel() noexcept
 
 // Constructor used when reporting the OM as JSON
 ObjectExplorationContext::ObjectExplorationContext(const GCodeBuffer *_ecv_null gbp, bool wal, const char *_ecv_array reportFlags, unsigned int initialMaxDepth, size_t initialBufferOffset) noexcept
-	: startMillis(millis()), initialBufOffset(initialBufferOffset), maxDepth(initialMaxDepth), currentDepth(0), startElement(0), nextElement(-1), numIndicesProvided(0), numIndicesCounted(0),
+	: startMillis(millis64()), initialBufOffset(initialBufferOffset), maxDepth(initialMaxDepth), currentDepth(0), startElement(0), nextElement(-1), numIndicesProvided(0), numIndicesCounted(0),
 	  line(-1), column(-1), gb(gbp),
 	  shortForm(false), wantArrayLength(wal), wantExists(false),
 	  includeNonLive(true), includeImportant(false), includeNulls(false),
@@ -559,7 +559,7 @@ ObjectExplorationContext::ObjectExplorationContext(const GCodeBuffer *_ecv_null 
 
 // Constructor when evaluating expressions
 ObjectExplorationContext::ObjectExplorationContext(const GCodeBuffer *_ecv_null gbp, bool wal, bool wex, int p_line, int p_col) noexcept
-	: startMillis(millis()), initialBufOffset(0), maxDepth(99), currentDepth(0), startElement(0), nextElement(-1), numIndicesProvided(0), numIndicesCounted(0),
+	: startMillis(millis64()), initialBufOffset(0), maxDepth(99), currentDepth(0), startElement(0), nextElement(-1), numIndicesProvided(0), numIndicesCounted(0),
 	  line(p_line), column(p_col), gb(gbp),
 	  shortForm(false), wantArrayLength(wal), wantExists(wex),
 	  includeNonLive(true), includeImportant(false), includeNulls(false),
