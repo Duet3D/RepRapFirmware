@@ -4267,7 +4267,7 @@ void Platform::Tick() noexcept
 			highestVin = currentVin;
 			reprap.BoardsUpdated();
 		}
-		if (currentVin < lowestVin)
+		if (currentVin < lowestVin || millis64() < 1000)			// don't record the lowest VIN voltage while we are still powering up
 		{
 			lowestVin = currentVin;
 			reprap.BoardsUpdated();
@@ -4281,7 +4281,7 @@ void Platform::Tick() noexcept
 			highestV12 = currentV12;
 			reprap.BoardsUpdated();
 		}
-		if (currentV12 < lowestV12)
+		if (currentV12 < lowestV12 || millis64() < 1000)			// don't record the lowest V12 voltage while we are still powering up
 		{
 			lowestV12 = currentV12;
 			reprap.BoardsUpdated();
