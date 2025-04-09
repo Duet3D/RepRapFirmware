@@ -12,7 +12,6 @@
 #include "Move.h"
 #include "StepTimer.h"
 #include <Endstops/EndstopsManager.h>
-#include "Kinematics/LinearDeltaKinematics.h"
 #include <Tools/Tool.h>
 #include <GCodes/GCodes.h>
 
