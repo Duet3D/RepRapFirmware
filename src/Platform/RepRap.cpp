@@ -907,6 +907,11 @@ void RepRap::GetDiagnosticsPart(unsigned int partNumber, const StringRef& reply)
 	case 3:
 	case 4:
 	case 5:
+	case 6:
+	case 7:
+	case 8:
+	case 9:
+		static_assert(Platform::NumPlatformDiagnosticParts == 9 - 3 + 1);
 		platform->Diagnostics(partNumber - 3, reply);
 		break;
 
@@ -915,7 +920,7 @@ void RepRap::GetDiagnosticsPart(unsigned int partNumber, const StringRef& reply)
 		MassStorage::Diagnostics(reply);
 #endif
 #ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
-		// Print and clear any disgnostic messages we have accumulated
+		// Print and clear any diagnostic messages we have accumulated
 		for (DebugLogRecord& r : debugRecords)
 		{
 			if (r.msg != nullptr)
