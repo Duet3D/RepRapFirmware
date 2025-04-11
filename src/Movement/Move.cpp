@@ -706,7 +706,12 @@ void Move::Exit() noexcept
 		}
 
 		// Let ring 0 process moves
-		uint32_t nextPrepareDelay = rings[0].Spin(simulationMode, !canAddRing0Move, millis() - whenLastMoveAdded[0] >= rings[0].GetGracePeriod());
+		// When there is a gap between moves it can be that we try to prepare the second move while a segment of the first move that has been delayed by input shaping is still executing.
+		// To avoid this we must ensure that we prepare moves at least half an input shaper period in advance. This avoids the problem because any delayed segment of the first move
+		// will be half a shaper period long. In order to handle CAN delays etc. we prepare moves [half a shaper period plus MoveTiming::AbsoluteMinimumPreparedTime] in advance,
+		// with a minimum of MoveTiming::UsualMinimumPreparedTime.
+		const uint32_t prepareAdvanceTime = max<uint32_t>(axisShaper.GetImpulseDelay(0) + MoveTiming::AbsoluteMinimumPreparedTime, MoveTiming::UsualMinimumPreparedTime);
+		uint32_t nextPrepareDelay = rings[0].Spin(prepareAdvanceTime, simulationMode, !canAddRing0Move, millis() - whenLastMoveAdded[0] >= rings[0].GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
 		const bool canAddRing1Move = rings[1].CanAddMove();
@@ -758,7 +763,7 @@ void Move::Exit() noexcept
 			}
 		}
 
-		const uint32_t auxPrepareDelay = rings[1].Spin(simulationMode, !canAddRing1Move,  millis() - whenLastMoveAdded[1] >= rings[1].GetGracePeriod());
+		const uint32_t auxPrepareDelay = rings[1].Spin(prepareAdvanceTime, simulationMode, !canAddRing1Move,  millis() - whenLastMoveAdded[1] >= rings[1].GetGracePeriod());
 		if (auxPrepareDelay < nextPrepareDelay)
 		{
 			nextPrepareDelay = auxPrepareDelay;

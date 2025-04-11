@@ -1567,7 +1567,7 @@ void DDA::GetEndCoordinates(float returnedCoords[MaxAxes]) noexcept
 
 // Dispatch this DDA to the move segment queue for execution.
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
-void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
+void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode simMode) noexcept
 {
 #if SUPPORT_LASER
 	if (topSpeed < requestedSpeed && reprap.GetGCodes().GetMachineType() == MachineType::laser)
@@ -1594,7 +1594,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		}
 		else if (startSpeed == 0.0)
 		{
-			afterPrepare.moveStartTime = now + MoveTiming::UsualMinimumPreparedTime;
+			afterPrepare.moveStartTime = now + prepareAdvanceTime;
 		}
 		else
 		{
@@ -1604,7 +1604,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 	}
 	else
 	{
-		afterPrepare.moveStartTime = now + MoveTiming::UsualMinimumPreparedTime;
+		afterPrepare.moveStartTime = now + prepareAdvanceTime;
 	}
 
 	if (simMode < SimulationMode::normal)

@@ -223,7 +223,7 @@ bool DDARing::AddAsyncMove(const AsyncMove& nextMove) noexcept
 
 // Try to process moves in the ring. Called by the Move task.
 // Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or MoveTiming::StandardMoveWakeupInterval if there are no unprepared moves left.
-uint32_t DDARing::Spin(SimulationMode simulationMode, bool signalMoveCompletion, bool shouldStartMove) noexcept
+uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMode, bool signalMoveCompletion, bool shouldStartMove) noexcept
 {
 	DDA *cdda = getPointer;											// capture volatile variable
 
@@ -273,7 +273,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool signalMoveCompletion,
 		}
 
 		const uint32_t ret = (cdda->GetState() == DDA::provisional)
-						? PrepareMoves(cdda, preparedTime, preparedCount, simulationMode)
+						? PrepareMoves(cdda, prepareAdvanceTime, preparedTime, preparedCount, simulationMode)
 							: MoveTiming::StandardMoveWakeupInterval;
 
 		if (simulationMode != SimulationMode::off)
@@ -306,7 +306,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool signalMoveCompletion,
 		|| cdda->IsIsolatedMove()									// ...or checking endstops or another isolated move, so we can't schedule the following move
 	   )
 	{
-		const uint32_t ret = PrepareMoves(cdda, 0, 0, simulationMode);
+		const uint32_t ret = PrepareMoves(cdda, prepareAdvanceTime, 0, 0, simulationMode);
 		if (cdda->IsCommitted())
 		{
 			if (simulationMode != SimulationMode::off)
@@ -341,19 +341,19 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool signalMoveCompletion,
 
 // Prepare some moves. moveTimeLeft is the total length remaining of moves that are already executing or prepared.
 // Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or MoveTiming::StandardMoveWakeupInterval if there are no unprepared moves left.
-uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept
+uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept
 {
 	// If the already-prepared moves will execute in less than the minimum time, prepare another move.
 	// Try to avoid preparing deceleration-only moves too early
 	while (	  firstUnpreparedMove->GetState() == DDA::provisional
-		   && moveTimeLeft < MoveTiming::UsualMinimumPreparedTime	// prepare moves one tenth of a second ahead of when they will be needed
+		   && moveTimeLeft < prepareAdvanceTime	// prepare moves one tenth of a second ahead of when they will be needed
 		   && alreadyPrepared * 2 < numDdasInRing					// but don't prepare more than half the ring, to handle accelerate/decelerate moves in small segments
 #if SUPPORT_CAN_EXPANSION
 		   && CanMotion::CanPrepareMove()
 #endif
 		  )
 	{
-		firstUnpreparedMove->Prepare(*this, simulationMode);
+		firstUnpreparedMove->Prepare(*this, prepareAdvanceTime, simulationMode);
 		moveTimeLeft += firstUnpreparedMove->GetTimeLeft();
 		++alreadyPrepared;
 		firstUnpreparedMove = firstUnpreparedMove->GetNext();
@@ -368,7 +368,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t moveTimeLeft, 
 			return 1;
 		}
 
-		const int32_t clocksTillWakeup = (int32_t)(moveTimeLeft - MoveTiming::UsualMinimumPreparedTime);			// calculate how long before we run out of prepared moves, less the usual advance prepare time
+		const int32_t clocksTillWakeup = (int32_t)(moveTimeLeft - prepareAdvanceTime);			// calculate how long before we run out of prepared moves, less the usual advance prepare time
 		return (clocksTillWakeup <= 0) ? 2 : max<uint32_t>((uint32_t)clocksTillWakeup/(StepClockRate/1000), 2);		// wake up at that time, but delay for at least 2 ticks
 	}
 

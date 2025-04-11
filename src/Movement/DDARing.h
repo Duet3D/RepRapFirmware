@@ -30,7 +30,7 @@ public:
 	bool AddAsyncMove(const AsyncMove& nextMove) noexcept;
 #endif
 
-	uint32_t Spin(SimulationMode simulationMode, bool signalMoveCompletion, bool shouldStartMove) noexcept SPEED_CRITICAL;	// Try to process moves in the ring
+	uint32_t Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMode, bool signalMoveCompletion, bool shouldStartMove) noexcept SPEED_CRITICAL;	// Try to process moves in the ring
 	bool IsIdle() const noexcept;														// Return true if this DDA ring is idle
 	uint32_t GetGracePeriod() const noexcept { return gracePeriod; }					// Return the minimum idle time, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
@@ -81,7 +81,7 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept;
+	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept;
 
 	DDA* addPointer;															// Pointer to the next DDA that we can use to add a new move, if this DDA is free
 	DDA* volatile getPointer;													// Pointer to the oldest committed or provisional move, if not equal to addPointer

@@ -93,13 +93,13 @@ public:
 	bool InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) noexcept SPEED_CRITICAL;	// Set up a new move, returning true if it represents real movement
 	bool InitLeadscrewMove(DDARing& ring, float feedrate, const float amounts[MaxDriversPerAxis]) noexcept;		// Set up a leadscrew motor move
 #if SUPPORT_ASYNC_MOVES
-	bool InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept;			// Set up an async move
+	bool InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept;							// Set up an async move
 #endif
 
 	void SetNext(DDA *n) noexcept { next = n; }
 	void SetPrevious(DDA *p) noexcept { prev = p; }
 	bool Free() noexcept;
-	void Prepare(DDARing& ring, SimulationMode simMode) noexcept SPEED_CRITICAL;					// Calculate all the values and freeze this DDA
+	void Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode simMode) noexcept SPEED_CRITICAL;	// Calculate all the values and freeze this DDA
 	bool CanPauseAfter() const noexcept;
 	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }							// Return true if this involves both XY movement and extrusion
 	bool UsingStandardFeedrate() const noexcept { return flags.usingStandardFeedrate; }
