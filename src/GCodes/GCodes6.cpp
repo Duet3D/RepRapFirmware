@@ -604,6 +604,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 	float userPositionTarget[MaxAxes];
 	MovementState& ms = GetMovementState(gb);
 	memcpyf(userPositionTarget, ms.currentUserPosition, numVisibleAxes);
+	memcpyf(straightProbeSettings.GetTarget(), ms.coords, numVisibleAxes);		// this is needed in case there are mapped axes, see ToolOffsetTransform
 
 	bool seen = false;
 	bool doesMove = false;
@@ -666,7 +667,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 	// Convert target user position to machine coordinates and save them in StraightProbeSettings
 	ToolOffsetTransform(ms, userPositionTarget, straightProbeSettings.GetTarget());
 
-	// See whether we are using a user-defined Z probe or just current one
+	// Find which probe we are using
 	const size_t probeToUse = (gb.Seen('K') || gb.Seen('P')) ? gb.GetUIValue() : 0;
 
 	// Check if this probe exists to not run into a nullptr dereference later
