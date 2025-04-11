@@ -396,8 +396,8 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 #if SUPPORT_ASYNC_MOVES
 	// We allocate the axes we are going to move before doing anything else so that we can abort cleanly if they are in use by another motion system.
 	// However, this assumes that deploying the probe can't release axes. See issue 978.
-	constexpr AxesBitmap XyzAxes = AxesBitmap::MakeFromBits(X_AXIS, Y_AXIS) | AxesBitmap::MakeFromBits(Z_AXIS);
-	AllocateAxes(gb, GetMovementState(gb), XyzAxes, ParameterLetterToBitmap('Z'));		// don't cache axis letters X and Y because they may be mapped
+	const AxesBitmap axesUsed = AxesBitmap::MakeFromBits(defaultGrid.GetAxisNumber(0), defaultGrid.GetAxisNumber(1), Z_AXIS);
+	AllocateAxes(gb, GetMovementState(gb), axesUsed, ParameterLetterToBitmap('Z'));		// don't cache the other axis letters because they may be mapped
 #endif
 
 #if SUPPORT_PROBE_POINTS_FILE
