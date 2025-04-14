@@ -146,12 +146,12 @@ void StepTimer::Init() noexcept
 
 #if SAM4S || SAME70 || SAME5x
 
-// Get the interrupt clock count
+// Get the step timer clock count
 /*static*/ uint32_t StepTimer::GetTimerTicks() noexcept
 {
 	// Get the current timer value into 'rslt'
 	// If we don't disable interrupts here then maxInterval ends up at -3. Presumably, this means we get an interrupt while we are within this code and the ISR calls it again.
-	const auto flags = IrqSave();
+	AtomicCriticalSectionLocker lock;
 # if SAME5x
 	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
 	// On the SAME5x it isn't enough just to wait for SYNCBUSY.COUNT here, nor is it enough just to use a DSB instruction first
@@ -174,8 +174,6 @@ void StepTimer::Init() noexcept
 		highWord = highWordAgain;
 	} while (true);
 # endif
-
-	IrqRestore(flags);
 	return rslt;
 }
 

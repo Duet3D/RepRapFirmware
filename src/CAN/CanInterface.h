@@ -61,7 +61,7 @@ namespace CanInterface
 #endif
 
 #if !SAME70
-	uint16_t GetTimeStampPeriod() noexcept;
+	uint16_t GetTimeStampPeriod() noexcept;					// return the period of the time stamp counter in units of 48MHz CAN clocks
 #endif
 
 	// Info functions

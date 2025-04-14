@@ -88,7 +88,6 @@ constexpr float DefaultJumpWidth = 0.25;
 
 static Mutex transactionMutex;
 
-static uint32_t lastTimeSent = 0;
 static uint32_t longestWaitTime = 0;
 static uint16_t longestWaitMessageType = 0;
 
@@ -102,10 +101,6 @@ static unsigned int timeSyncMessagesSent = 0;
 
 static volatile uint16_t timeSyncTxTimeStamp;
 static volatile bool gotTimeSyncTxTimeStamp = false;
-
-#if !SAME70
-static uint16_t lastTimeSyncTxPreparedStamp;
-#endif
 
 static CanAddress myAddress =
 #ifdef DUET3_ATE
@@ -140,7 +135,7 @@ constexpr CanDevice::Config Can0Config =
 # else
 	.numExtendedFilterElements = 3,
 # endif
-	.txEventFifoSize = 16
+	.txEventFifoSize = 8
 };
 
 static_assert(Can0Config.IsValid());
@@ -576,7 +571,11 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 {
 	CanMessageBuffer buf;
 	uint32_t lastWakeTime = xTaskGetTickCount();
+	uint32_t lastTimeSent = 0;
 	uint32_t lastRealTimeSent = 0;
+#if !SAME70
+	uint16_t lastTimeSyncTxPreparedStamp = 0;
+#endif
 
 	for (;;)
 	{
@@ -590,12 +589,13 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 
 		if (gotTimeSyncTxTimeStamp)
 		{
+			// Calculate the delay in sending the last time sync message, in step clocks
 # if SAME70
 			// On the SAME70 the step clock is also the external time stamp counter
 			const uint32_t timeSyncTxDelay = (timeSyncTxTimeStamp - (uint16_t)lastTimeSent) & 0xFFFF;
 # else
-			// On the SAME5x the time stamp counter counts CAN bit times divided by 64
-			const uint32_t timeSyncTxDelay = (((timeSyncTxTimeStamp - lastTimeSyncTxPreparedStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
+			// On the SAME5x the time stamp counter counts CAN bit times. The step clock is the CAN clock divided by 64.
+			const uint32_t timeSyncTxDelay = ((uint32_t)((timeSyncTxTimeStamp - lastTimeSyncTxPreparedStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
 # endif
 			if (timeSyncTxDelay > peakTimeSyncTxDelay)
 			{
@@ -658,13 +658,13 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 #endif
 
 		// Check that the message was sent and get the time stamp
-		if (can0dev->IsSpaceAvailable((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, 0))		// if the buffer is free already then the message was sent
+		if (can0dev->IsSpaceAvailable(TxBufferIndexTimeSync, 0))			// if the buffer is free already then the message was sent
 		{
 			can0dev->PollTxEventFifo(TxCallback);
 		}
 		else
 		{
-			(void)can0dev->IsSpaceAvailable((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, MaxTimeSyncSendWait);		// free the buffer
+			(void)can0dev->IsSpaceAvailable(TxBufferIndexTimeSync, MaxTimeSyncSendWait);		// free the buffer
 			can0dev->PollTxEventFifo(TxCallback);							// empty the fifo
 			gotTimeSyncTxTimeStamp = false;									// ignore any values read from it
 		}
