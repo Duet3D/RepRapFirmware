@@ -2302,8 +2302,13 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			&& newMode != AuxMode::device
 		   )
 		{
-			gbp->Enable(val);						// enable I/O and set the CRC and checksum requirements, also sets Marlin or PanelDue compatibility
+			gbp->Enable(val);						// enable I/O and set the CRC and checksum requirements
+			if (auxModes[chan] == AuxMode::panelDue)
+			{
+				gbp->LatestMachineState().compatibility.Assign(Compatibility::RepRapFirmware);
+			}
 		}
+		reprap.InputsUpdated();
 	}
 #if HAS_AUX_DEVICES
 	else if (baudRate != 0)
@@ -2312,6 +2317,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 		{
 			auxDevices[chan - FirstAuxChannel].SetBaudRate(baudRate);
 			ResetChannel(chan);
+			reprap.InputsUpdated();
 		}
 	}
 #endif
@@ -3189,7 +3195,7 @@ void Platform::Message(MessageType type, OutputBuffer *buffer) noexcept
 
 		if ((type & (UsbMessage | BlockingUsbMessage)) != 0)
 		{
-			AppendUsbReply(buffer, (type & RawMessageFlag) != 0);
+			AppendUsbReply(buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
 
 #if HAS_SBC_INTERFACE
