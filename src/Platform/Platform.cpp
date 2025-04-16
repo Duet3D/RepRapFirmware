@@ -2081,7 +2081,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			do
 			{
 				--i;
-				(void)StepTimer::GetTimerTicks();
+				(void)StepTimer::GetTimerTicksWhenInterruptsDisabled();
 			} while (i != 0);
 			uint32_t now2 = SysTick->VAL;
 			asm volatile("":::"memory");
@@ -2099,13 +2099,13 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			uint16_t startTimeStamp, endTimeStamp;
 			{
 				AtomicCriticalSectionLocker lock;
-				startClocks = StepTimer::GetTimerTicks();
+				startClocks = StepTimer::GetTimerTicksWhenInterruptsDisabled();
 				startTimeStamp = CanInterface::GetTimeStampCounter();
 			}
 			delay(2);
 			{
 				AtomicCriticalSectionLocker lock;
-				endClocks = StepTimer::GetTimerTicks();
+				endClocks = StepTimer::GetTimerTicksWhenInterruptsDisabled();
 				endTimeStamp = CanInterface::GetTimeStampCounter();
 			}
 # if SAME70
