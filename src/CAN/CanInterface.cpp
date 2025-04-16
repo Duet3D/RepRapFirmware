@@ -130,17 +130,17 @@ constexpr CanDevice::Config Can0Config =
 	.rxFifo0Size = 32,				// increased from 16 to help with accelerometer and closed loop data collection
 	.rxFifo1Size = 16,
 	.numShortFilterElements = 0,
-# ifdef DUET3_ATE
+#ifdef DUET3_ATE
 	.numExtendedFilterElements = 4,
-# else
+#else
 	.numExtendedFilterElements = 3,
-# endif
-	.txEventFifoSize = 8
+#endif
+	.txEventFifoSize = 16
 };
 
 static_assert(Can0Config.IsValid());
 
-// CAN buffer memory must be in the first 64Kb of RAM (SAME5x) or in non-cached RAM (SAME70), so put it in its own segment
+// CAN buffer memory must be in the first 64Kb of RAM (SAME5x) or in non-cached RAM (SAME70), so put it in its own memory section
 static uint32_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (".CanMessage")));
 
 static CanDevice *can0dev = nullptr;
@@ -637,7 +637,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 #else
 		{
 			AtomicCriticalSectionLocker lock;
-			lastTimeSent = StepTimer::GetTimerTicks();
+			lastTimeSent = StepTimer::GetTimerTicksWhenInterruptsDisabled();
 			lastTimeSyncTxPreparedStamp = CanInterface::GetTimeStampCounter();
 		}
 #endif
@@ -1312,6 +1312,13 @@ GCodeResult CanInterface::RemoteM408(uint32_t boardAddress, unsigned int type, G
 GCodeResult CanInterface::GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	return GetRemoteInfo(CanMessageReturnInfo::typeFirmwareVersion, boardAddress, 0, gb, reply);
+}
+
+GCodeResult CanInterface::HandleM111(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	CanMessageGenericConstructor cons(M111Params);
+	cons.PopulateFromCommand(gb);
+	return cons.SendAndGetResponse(CanMessageType::m111, boardAddress, reply);
 }
 
 void CanInterface::WakeAsyncSender() noexcept

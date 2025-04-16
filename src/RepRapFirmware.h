@@ -333,11 +333,10 @@ NamedEnum(Module, uint8_t,
 			SbcInterface,
 			CAN,					// uppercase to avoid eCv clash with type Can in Microchip driver file
 			Expansion,
-			none					// make this one last so that it is the number of real modules, one greater than the last real module number
+			numModules				// this is one greater than the last real module number and also serves as 'none'
 		 );
 
 static_assert(Module::NumValues < 32);
-constexpr size_t NumRealModules = Module::NumValues - 1;
 
 // Warn of what's to come, so we can use pointers and references to classes without including the entire header files
 class Network;

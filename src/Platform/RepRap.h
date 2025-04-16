@@ -78,6 +78,7 @@ public:
 	FansManager& GetFansManager() const noexcept { return *fansManager; }
 
 	GCodeResult ProcessM111(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	void ReportDebugSettings(const StringRef& reply) noexcept;
 
 	// Message box functions
 	uint32_t SendAlert(MessageType mt, c_string p_message, c_string title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits = nullptr) noexcept;
@@ -103,6 +104,7 @@ public:
 #if SUPPORT_REMOTE_COMMANDS
  	void ScheduleReset() noexcept { whenDeferredCommandScheduled = millis(); deferredCommand = DeferredCommand::reboot; }
  	void ScheduleFirmwareUpdateOverCan() noexcept { whenDeferredCommandScheduled = millis(); deferredCommand = DeferredCommand::updateFirmware; }
+	GCodeResult ProcessRemoteM111(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 #endif
 
 	void Tick() noexcept;
@@ -250,7 +252,7 @@ private:
 	uint16_t heatTaskIdleTicks;
 	uint32_t fastLoop, slowLoop;
 
-	DebugFlags debugMaps[NumRealModules];
+	DebugFlags debugMaps[Module::numModules];
 
 #ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
 	DebugLogRecord debugRecords[NumDebugRecords];
