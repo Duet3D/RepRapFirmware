@@ -102,7 +102,7 @@ struct DriverInterface
 	bool (*wait_end_of_read_blocks)(void) noexcept;
 	bool (*start_write_blocks)(const void *src, uint16_t nb_block) noexcept;
 	bool (*wait_end_of_write_blocks)(void) noexcept;
-	uint32_t (*getInterfaceSpeed)(void) noexcept;
+	uint32_t (*getInterfaceSpeed)(uint32_t *reqSpeed) noexcept;
 	driverIdleFunc_t (*set_idle_func)(driverIdleFunc_t);
 	bool is_spi;			// true if the interface is SPI, false if it is HSMCI
 };
@@ -1925,9 +1925,9 @@ void sd_mmc_unmount(uint8_t slot) noexcept
 }
 
 // Get the interface speed in bytes/sec
-uint32_t sd_mmc_get_interface_speed(uint8_t slot) noexcept
+uint32_t sd_mmc_get_interface_speed(uint8_t slot, uint32_t *reqSpeed) noexcept
 {
-	return sd_mmc_cards[slot].iface->getInterfaceSpeed();
+	return sd_mmc_cards[slot].iface->getInterfaceSpeed(reqSpeed);
 }
 
 #endif

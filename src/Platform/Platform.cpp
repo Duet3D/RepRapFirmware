@@ -1509,7 +1509,11 @@ GCodeResult Platform::PrintTestReport(GCodeBuffer& gb, const StringRef& reply, O
 	}
 
 	bool testFailed = false;
+
 #if HAS_MASS_STORAGE
+# if HAS_HIGH_SPEED_SD
+	uint32_t speed;
+# endif
 	// Check the SD card detect and speed
 	if (!MassStorage::IsCardDetected(0))
 	{
@@ -1517,9 +1521,9 @@ GCodeResult Platform::PrintTestReport(GCodeBuffer& gb, const StringRef& reply, O
 		testFailed = true;
 	}
 # if HAS_HIGH_SPEED_SD
-	else if (sd_mmc_get_interface_speed(0) != ExpectedSdCardSpeed)
+	else if ((speed = sd_mmc_get_interface_speed(0, nullptr)) != ExpectedSdCardSpeed)
 	{
-		buf->printf("SD card speed %.2fMbytes/sec is unexpected", (double)((float)sd_mmc_get_interface_speed(0) * 0.000001));
+		buf->printf("SD card speed %.2fMbytes/sec is unexpected", (double)((float)speed * 0.000001));
 		testFailed = true;
 	}
 # endif
