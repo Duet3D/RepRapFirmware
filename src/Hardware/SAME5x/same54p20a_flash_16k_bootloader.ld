@@ -118,7 +118,7 @@ SECTIONS
         _eCanMessage = . ;
     } > ram
 
-    /* DMA programming and write-back memory, here because they are volatile so we must't CRC them when we check for data corruption */
+    /* DMA programming and write-back memory, here because they are volatile so we mustn't CRC them when we check for data corruption */
     .dmaBuffers ALIGN(16) (NOLOAD) :
     {
     	_sDmaBuffers = . ;
