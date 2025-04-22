@@ -424,13 +424,10 @@ void LocalHeater::Spin() noexcept
 					}
 					else
 					{
-						const float errorToUse = error;
-						{
-							TaskCriticalSectionLocker lock;					// avoid a race with tasks that implement feedforward
-							iAccumulator = constrain<float>
-											(iAccumulator + (errorToUse * params.kP * params.recipTi * (HeatSampleIntervalMillis * MillisToSeconds)),
-												0.0, GetModel().GetMaxPwm());
-						}
+						TaskCriticalSectionLocker lock;					// avoid a race with tasks that implement feedforward
+						iAccumulator = constrain<float>
+										(iAccumulator + (error * params.kP * params.recipTi * (HeatSampleIntervalMillis * MillisToSeconds)),
+											0.0, GetModel().GetMaxPwm());
 						lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, GetModel().GetMaxPwm());
 					}
 #if HAS_VOLTAGE_MONITOR
