@@ -273,7 +273,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 			{
 				bool monitorState;
 				{
-					InterruptCriticalSectionLocker ilock;
+					AtomicCriticalSectionLocker ilock;
 					p->sendDue = false;
 					monitorState = p->state;
 				}

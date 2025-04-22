@@ -3596,7 +3596,7 @@ GCodeResult Move::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndExtru
 // The caller must not attempt to lock the aux buffer more than once, and must call ReleaseAuxMove to release the buffer.
 AsyncMove *Move::LockAuxMove() noexcept
 {
-	InterruptCriticalSectionLocker lock;
+	AtomicCriticalSectionLocker lock;
 	if (!auxMoveLocked && !auxMoveAvailable)
 	{
 		auxMoveLocked = true;
