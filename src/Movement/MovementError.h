@@ -20,4 +20,6 @@ enum class MovementError : uint8_t
 	move_duration_too_long					// the move would take more than about 2^31 step clocks
 };
 
+const char *_ecv_array GetMovementErrorText(MovementError err) noexcept;
+
 #endif /* SRC_MOVEMENT_MOVEMENTERROR_H_ */

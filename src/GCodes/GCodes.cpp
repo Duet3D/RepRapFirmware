@@ -484,6 +484,14 @@ void GCodes::Spin() noexcept
 	}
 #endif
 
+	// Check if we have had a serious movement error
+	const MovementError err = GetLastMovementError();
+	if (err != MovementError::ok)
+	{
+		platform.MessageF(ErrorMessage, "Operation halted due to movement error: %s\n", GetMovementErrorText(err));
+		StopPrint(nullptr, StopPrintReason::abort);
+	}
+
 	// Check if we need to display a warning
 	const uint32_t now = millis();
 	if (now - lastWarningMillis >= MinimumWarningInterval)
