@@ -573,6 +573,22 @@ void SbcInterface::ExchangeData() noexcept
 								packetAcknowledged = false;
 							}
 						}
+						else if (val.GetType() == TypeCode::ObjectModelArray)
+						{
+							// Object model arrays need to be output differently
+							OutputBuffer *json;
+							if (OutputBuffer::Allocate(json))
+							{
+								ObjectExplorationContext context;
+								context.AddIndex(val.param >> 8);
+								val.omVal->ReportItemAsJsonFull(json, context, nullptr, val, "");
+								packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), json);
+							}
+							else
+							{
+								packetAcknowledged = false;
+							}
+						}
 						else
 						{
 							// Write plain result
@@ -847,6 +863,22 @@ void SbcInterface::ExchangeData() noexcept
 						ObjectExplorationContext context;
 						ReportHeapArrayAsJson(json, context, nullptr, ev.ahVal, "");
 						packetAcknowledged = transfer.WriteSetVariableResult(varName.c_str(), json);
+					}
+					else
+					{
+						packetAcknowledged = false;
+					}
+				}
+				else if (ev.GetType() == TypeCode::ObjectModelArray)
+				{
+					// Object model arrays need to be output differently
+					OutputBuffer *json;
+					if (OutputBuffer::Allocate(json))
+					{
+						ObjectExplorationContext context;
+						context.AddIndex(ev.param >> 8);
+						ev.omVal->ReportItemAsJsonFull(json, context, nullptr, ev, "");
+						packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), json);
 					}
 					else
 					{

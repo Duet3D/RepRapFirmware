@@ -310,6 +310,10 @@ public:
 	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor,
 							const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException);
 
+	// Report an item as full JSON. This is only called externally by the SBC interface to evaluate specific object model arrays, e.g. using the echo command
+	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor,
+															const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException);
+
 	// Skip the current element in the ID or filter string
 	static const char *_ecv_array GetNextElement(const char *_ecv_array id) noexcept;
 
@@ -347,8 +351,6 @@ protected:
 private:
 	// These functions have been separated from ReportItemAsJson to avoid high stack usage in the recursive functions, therefore they must not be inlined
 	// Report on a single item
-	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor,
-															const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException);
 	__attribute__ ((noinline)) void ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ExpressionValue& val) const noexcept;
 	__attribute__ ((noinline)) static void ReportDateTime(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 	__attribute__ ((noinline)) static void ReportFloat(OutputBuffer *buf, const ExpressionValue& val) noexcept;
