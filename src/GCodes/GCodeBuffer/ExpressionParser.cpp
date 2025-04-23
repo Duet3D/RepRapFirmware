@@ -111,7 +111,7 @@ void ExpressionParser::ApplyObjectModelArrayIndex(ExpressionValue& rslt, int ind
 		THROW_INTERNAL_ERROR;
 	}
 	ObjectExplorationContext context;
-	context.AddIndex(rslt.param >> 16);
+	context.AddIndex(rslt.param >> 8);
 	ReadLocker lock(entry->lockPointer);
 	const size_t numElements = entry->GetNumElements(rslt.omVal, context);
 	if (indexValue < numElements)
@@ -1331,7 +1331,7 @@ void ExpressionParser::ApplyLengthOperator(ExpressionValue& val, bool evaluate) 
 				THROW_INTERNAL_ERROR;
 			}
 			ObjectExplorationContext context;
-			context.AddIndex(val.param >> 16);
+			context.AddIndex(val.param >> 8);
 			ReadLocker lock(entry->lockPointer);
 			val.SetInt(entry->GetNumElements(val.omVal, context));
 			context.RemoveIndex();
