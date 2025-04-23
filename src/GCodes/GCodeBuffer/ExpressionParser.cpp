@@ -72,7 +72,7 @@ void LineReader::SkipTabsAndSpaces() noexcept
 
 // These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true, input);
-NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, ceil, cos, datetime, degrees, drop, exists, exp, fileexists, fileread, find, floor, isnan, log, max, min, mod, pow, radians, random, sin, sqrt, square, take, tan, vector);
+NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, ceil, cos, datetime, degrees, drop, exists, exp, fileexists, fileread, find, floor, isnan, log, max, min, mod, pow, radians, random, round, sin, sqrt, square, take, tan, vector);
 
 const char *_ecv_array const InvalidExistsMessage = "invalid 'exists' expression";
 const char *_ecv_array const ExpectedNonNegativeIntMessage = "expected non-negative integer";
@@ -1699,9 +1699,10 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 			case Function::floor:
 			case Function::ceil:
+			case Function::round:
 				{
 					ConvertToFloat(rslt, evaluate);
-					const float f = ((func.RawValue() == Function::floor) ? floorf : ceilf)(rslt.fVal);
+					const float f = ((func.RawValue() == Function::floor) ? floorf : (func.RawValue() == Function::ceil) ? ceilf : rintf)(rslt.fVal);
 					if (f <= (float)std::numeric_limits<int32_t>::max() && f >= (float)std::numeric_limits<int32_t>::min())
 					{
 						rslt.SetInt((int32_t)f);
