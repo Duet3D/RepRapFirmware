@@ -69,6 +69,7 @@ private:
 	void DoTuningStep() noexcept;							// Called on each temperature sample when auto tuning
 	float GetExpectedHeatingRate() const noexcept;			// Get the minimum heating rate we expect
 	void RaiseHeaterFault(HeaterFaultType type, const char *_ecv_array format, ...) noexcept;
+	void UpdateHeaterMode(float targetTemperature) noexcept;	// Determine and if necessary change the current heater mode
 
 	PwmPort ports[MaxPortsPerHeater];						// The port(s) that drive the heater
 	float temperature;										// The current temperature
