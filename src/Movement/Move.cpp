@@ -673,7 +673,8 @@ void Move::Exit() noexcept
 			{
 				// If there's a G Code move available, add it to the DDA ring for processing.
 				RawMove nextMove;
-				if (reprap.GetGCodes().ReadMove(0, nextMove))				// if we have a new move
+				GCodes& gcodes = reprap.GetGCodes();
+				if (gcodes.ReadMove(0, nextMove))							// if we have a new move
 				{
 					moveRead = true;
 					if (simulationMode < SimulationMode::partial)			// in simulation mode partial, we don't process incoming moves beyond this point
@@ -689,7 +690,8 @@ void Move::Exit() noexcept
 													);
 						}
 
-						if (rings[0].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)) == MovementError::ok)	//TODO report the error code
+						const MovementError err = rings[0].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType));
+						if (err == MovementError::ok)
 						{
 							const uint32_t now = millis();
 							const uint32_t timeWaiting = now - whenLastMoveAdded[0];
@@ -699,6 +701,10 @@ void Move::Exit() noexcept
 							}
 							whenLastMoveAdded[0] = now;
 							moveState = MoveState::collecting;
+						}
+						else if (err != MovementError::noMovement)
+						{
+							gcodes.ReportMovementError(err);
 						}
 					}
 				}
@@ -737,7 +743,8 @@ void Move::Exit() noexcept
 			{
 				// If there's a G Code move available, add it to the DDA ring for processing.
 				RawMove nextMove;
-				if (reprap.GetGCodes().ReadMove(1, nextMove))				// if we have a new move
+				GCodes& gcodes = reprap.GetGCodes();
+				if (gcodes.ReadMove(1, nextMove))							// if we have a new move
 				{
 					moveRead = true;
 					if (simulationMode < SimulationMode::partial)			// in simulation mode partial, we don't process incoming moves beyond this point
@@ -747,7 +754,8 @@ void Move::Exit() noexcept
 							AxisAndBedTransform(nextMove.coords, nextMove.movementTool, true);
 						}
 
-						if (rings[1].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)) == MovementError::ok)	//TODO report the error code
+						const MovementError err = rings[1].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType));
+						if (err == MovementError::ok)
 						{
 							const uint32_t now = millis();
 							const uint32_t timeWaiting = now - whenLastMoveAdded[1];
@@ -757,6 +765,10 @@ void Move::Exit() noexcept
 							}
 							whenLastMoveAdded[1] = now;
 							moveState = MoveState::collecting;
+						}
+						else if (err != MovementError::noMovement)
+						{
+							gcodes.ReportMovementError(err);
 						}
 					}
 				}

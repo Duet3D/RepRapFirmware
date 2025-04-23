@@ -41,6 +41,7 @@ Licence: GPL
 #include "SimulationMode.h"
 #include <Movement/BedProbing/Grid.h>
 #include <Movement/HomingMode.h>
+#include <Movement/MovementError.h>
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 # include <Storage/CRC32.h>
@@ -104,7 +105,8 @@ public:
 	void Exit() noexcept;														// Shut it down
 	void Reset() noexcept;														// Reset some parameter to defaults
 	bool ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
-		pre(queueNumber < ARRAY_SIZE(moveStates));								// Called by the Move class to get a movement set by the last G Code
+		pre(queueNumber < ARRAY_SIZE(moveStates));								// Called by the Move task to get a movement set by the last G Code
+	void ReportMovementError(MovementError err) noexcept;						// Called by the Move task to report that a move could not be queued
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	bool QueueFileToPrint(const char *_ecv_array fileName, const StringRef& reply) noexcept;	// Open a file of G Codes to run
 #endif
@@ -371,6 +373,8 @@ private:
 
 	void SetInitialAxisAndDrivePositions() noexcept;							// Called at initialisation and when new axes are added
 	void AdjustEndpoint(size_t drive, float ratio) const noexcept;				// Adjust an endpoint following a change to steps/mm
+
+	MovementError GetLastMovementError() noexcept;								// Get and clear the most recent movement error
 
 	bool SpinGCodeBuffer(GCodeBuffer& gb) noexcept;								// Do some work on an input channel
 	bool StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Fetch a new or old GCode and process it
@@ -763,6 +767,7 @@ private:
 
 	// Misc
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
+	std::atomic<MovementError> lastMovementError = MovementError::ok;
 
 #if SUPPORT_ASYNC_MOVES
 	CollisionAvoider collisionChecker;			// currently we support just one collision avoider
@@ -794,6 +799,18 @@ private:
 
 	static constexpr int8_t ObjectModelAuxStatusReportType = 100;		// A non-negative value distinct from any M408 report type
 };
+
+// Called by the Move task to report that a move could not be queued
+inline void GCodes::ReportMovementError(MovementError err) noexcept
+{
+	lastMovementError.store(err);
+}
+
+// Get and clear the most recent movement error
+inline MovementError GCodes::GetLastMovementError() noexcept
+{
+	return lastMovementError.exchange(MovementError::ok);
+}
 
 // Get the total baby stepping offset for an axis
 inline float GCodes::GetTotalBabyStepOffset(size_t axis) const noexcept

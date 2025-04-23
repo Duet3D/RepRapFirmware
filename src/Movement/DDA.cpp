@@ -642,6 +642,8 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	endDeceleration = 0.0;														// end deceleration is zero until we have a following move
 #endif
 
+	MovementError rslt;															// this will hold the return value
+
 	// See if we can meld this with the end of the previous one (which must currently have the end speed set to zero)
 	if (   prev->state == provisional											// if previous move has not started yet
 		&& (   move.GetJerkPolicy() != 0										// and melding is allowed
@@ -662,12 +664,12 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 # if 0
 			//TODO this is temporary code until we implement S-curve lookahead
 			startSpeed = startAcceleration = 0.0;
-			CalculateIsolatedSCurveMove();
+			rslt = CalculateIsolatedSCurveMove();
 # else
 			const int failingLine = CalculateNewSCurveMove();
 			if (failingLine == 0)
 			{
-				DoSCurveLookahead(ring, prev);
+				rslt = DoSCurveLookahead(ring, prev);
 			}
 			else
 			{
@@ -675,7 +677,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 				dbgRef.printf("3rd order planning error at line %u\n: ", failingLine);
 				Platform::hasGenericDebug = true;
 				startSpeed = startAcceleration = 0.0;
-				CalculateIsolatedSCurveMove();
+				rslt = CalculateIsolatedSCurveMove();
 			}
 # endif
 		}
@@ -687,7 +689,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 			DoLookahead(ring, prev);
 			startSpeed = prev->endSpeed;
 #if SUPPORT_S_CURVE
-			RecalculateMove(ring);
+			rslt = RecalculateMove(ring);
 #endif
 		}
 	}
@@ -698,21 +700,24 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 		startAcceleration = 0.0;												// and zero acceleration
 		if (flags.useScurve)
 		{
-			CalculateIsolatedSCurveMove();
+			rslt = CalculateIsolatedSCurveMove();
 		}
 		else
 		{
-			RecalculateMove(ring);
+			rslt = RecalculateMove(ring);
 		}
 #endif
 	}
 
 #if !SUPPORT_S_CURVE
-	RecalculateMove(ring);
+	rslt = RecalculateMove(ring);
 #endif
 
-	state = provisional;
-	return MovementError::ok;
+	if (rslt == MovementError::ok)
+	{
+		state = provisional;
+	}
+	return rslt;
 }
 
 // Set up a leadscrew motor move returning true if the move does anything
@@ -1035,7 +1040,8 @@ float DDA::AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcep
 
 // Recalculate the top speed, acceleration distance and deceleration distance, and whether we can pause after this move
 // This may cause a move that we intended to be a deceleration-only move to have a tiny acceleration segment at the start
-void DDA::RecalculateMove(DDARing& ring) noexcept
+// Check that the move will execute in less than 2^31 step clocks and return MovementError::ok if so
+MovementError DDA::RecalculateMove(DDARing& ring) noexcept
 {
 	const float twoA = 2 * maxAcceleration;
 	const float twoD = 2 * maxDeceleration;
@@ -1147,6 +1153,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 							+ (topSpeed - endSpeed)/maxDeceleration
 							+ (totalDistance - beforePrepare.accelDistance - beforePrepare.decelDistance)/topSpeed;
 	clocksNeeded = (uint32_t)totalTime;
+	return (totalTime < std::numeric_limits<int32_t>::max() - 100) ? MovementError::ok : MovementError::move_duration_too_long;
 }
 
 #if SUPPORT_S_CURVE
@@ -1191,7 +1198,7 @@ void DDA::RecalculateSCurveMove(DDARing& ring) noexcept
 //	v = j * (t1 * t2 + t1^2) = j * t1 * (t1 + t2)
 //	ap = j * t1
 // The deceleration phase is a mirror image of the acceleration phase. We add a steady speed phase between acceleration and deceleration if we need more distance.
-void DDA::CalculateIsolatedSCurveMove() noexcept
+MovementError DDA::CalculateIsolatedSCurveMove() noexcept
 {
 	finalAcceleration = initialDeceleration = 0.0;
 	do
@@ -1271,7 +1278,9 @@ void DDA::CalculateIsolatedSCurveMove() noexcept
 
 	peakDeceleration = -peakAcceleration;
 	flags.canPauseAfter = true;
-	clocksNeeded = beforePrepare.phase1Time + beforePrepare.phase2Time + beforePrepare.phase3Time + beforePrepare.phase4Time + beforePrepare.phase5Time + beforePrepare.phase6Time + beforePrepare.phase7Time;
+	const float totalClocks = beforePrepare.phase1Time + beforePrepare.phase2Time + beforePrepare.phase3Time + beforePrepare.phase4Time + beforePrepare.phase5Time + beforePrepare.phase6Time + beforePrepare.phase7Time;
+	clocksNeeded = (int32_t)totalClocks;
+	return (totalClocks < std::numeric_limits<int32_t>::max() - 100) ? MovementError::ok : MovementError::move_duration_too_long;
 }
 
 // Add a new S-curve move to the ring when there is already at least one move there and we would like to meld them
@@ -1457,7 +1466,7 @@ int DDA::CalculateNewSCurveMove() noexcept
 
 // Try to smooth out moves in the queue.
 // laDDA is the move that we want to adjust. We have already set laDDA->beforePrepare.targetNextSpeed and laDDA->beforePrepare.targetNextAcceleration to the values that the following move would like to start at.
-/*static*/ void DDA::DoSCurveLookahead(DDARing& ring, DDA *laDDA) noexcept
+/*static*/ MovementError DDA::DoSCurveLookahead(DDARing& ring, DDA *laDDA) noexcept
 {
 	//TODO
 	laDDA->next->DebugPrint("DDA: ");
@@ -1530,7 +1539,7 @@ int DDA::CalculateNewSCurveMove() noexcept
 		else
 		{
 			qq;
-			if (laDepth == 0) { return; }
+			if (laDepth == 0) { return MovementError::ok; }		//TODO check move duration
 		}
 	}
 }
