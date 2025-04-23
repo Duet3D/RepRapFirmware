@@ -337,9 +337,10 @@ bool CoreKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const String
 // Convert Cartesian coordinates to motor coordinates returning true if successful.
 // This is called frequently, so try to keep it efficient.
 // If a motor has no visible axes that affect it, leave the old motor coordinate unchanged.
-bool CoreKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes,
+MovementError CoreKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes,
 											int32_t motorPos[], bool isCoordinated) const noexcept
 {
+	MovementError rslt = MovementError::ok;
 	for (size_t motor = 0; motor < numTotalAxes; ++motor)
 	{
 		const size_t axisLimit = min<size_t>(numVisibleAxes, lastAxis[motor] + 1);
@@ -353,10 +354,10 @@ bool CoreKinematics::CartesianToMotorSteps(const float machinePos[], const float
 				movement += inverseMatrix(axis, motor) * machinePos[axis];
 				++axis;
 			}
-			motorPos[motor] = lrintf(movement * stepsPerMm[motor]);
+			RoundToInt32(rslt, movement * stepsPerMm[motor], motorPos[motor]);
 		}
 	}
-	return true;
+	return rslt;
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.

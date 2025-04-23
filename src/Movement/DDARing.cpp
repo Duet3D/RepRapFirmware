@@ -182,15 +182,15 @@ bool DDARing::CanAddMove() const noexcept
 }
 
 // Add a new move, returning true if it represents real movement
-bool DDARing::AddStandardMove(const RawMove &nextMove, bool doMotorMapping) noexcept
+MovementError DDARing::AddStandardMove(const RawMove &nextMove, bool doMotorMapping) noexcept
 {
-	if (addPointer->InitStandardMove(*this, nextMove, doMotorMapping))
+	const MovementError err = addPointer->InitStandardMove(*this, nextMove, doMotorMapping);
+	if (err == MovementError::ok)
 	{
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
-		return true;
 	}
-	return false;
+	return err;
 }
 
 // Add a leadscrew levelling motor move

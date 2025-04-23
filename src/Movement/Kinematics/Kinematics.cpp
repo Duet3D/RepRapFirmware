@@ -388,4 +388,19 @@ void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *_ecv_array nor
 	debugPrintf("\n");
 }
 
+
+// Round a float value to int32_t and return the original error code if it will fit, else return a microstep position too large error
+/*static*/ void Kinematics::RoundToInt32(MovementError& errorCode, float pos, int32_t& whereToStore) noexcept
+{
+	constexpr float limit = std::numeric_limits<int32_t>::max() - 10;
+	if (fabsf(pos) <= limit)
+	{
+		whereToStore = lrintf(pos);
+	}
+	else if (errorCode == MovementError::ok)
+	{
+		errorCode = MovementError::microstep_position_too_large;
+	}
+}
+
 // End

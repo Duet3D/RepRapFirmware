@@ -360,8 +360,8 @@ public:
 	// Kinematics and related functions
 	Kinematics &_ecv_from GetKinematics() const noexcept { return *kinematics; }
 	bool SetKinematics(KinematicsType k) noexcept;											// Set kinematics, return true if successful
-	bool CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const noexcept;
-																							// Convert Cartesian coordinates to delta motor coordinates, return true if successful
+	MovementError CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const noexcept;
+																							// Convert Cartesian coordinates to motor coordinates, return true if successful
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept;
 																							// Convert motor coordinates to machine coordinates
 	const char *_ecv_array GetGeometryString() const noexcept { return kinematics->GetName(true); }
@@ -466,7 +466,7 @@ public:
 	void CheckEndstops(bool executingMove) noexcept;
 #endif
 
-	int32_t MotorMovementToSteps(size_t drive, float coord) const noexcept;					// Convert a single motor position to number of steps
+	MovementError MotorMovementToSteps(size_t drive, float coord, int32_t& whereToStore) const noexcept;	// Convert a single motor position to number of steps
 	float MotorStepsToMovement(size_t drive, int32_t endpoint) const noexcept;				// Convert number of motor steps to motor position
 
 	void DeactivateDM(DriveMovement *dmToRemove) noexcept;									// remove a DM from the active list

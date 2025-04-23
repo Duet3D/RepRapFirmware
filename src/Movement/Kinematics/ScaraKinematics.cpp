@@ -170,7 +170,7 @@ bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoor
 
 // Convert Cartesian coordinates to motor coordinates, returning true if successful
 // In the following, theta is the proximal arm angle relative to the X axis, psi is the distal arm angle relative to the proximal arm
-bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
+MovementError ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
 	float theta, psi;
 	if (machinePos[0] == cachedX && machinePos[1] == cachedY)
@@ -184,23 +184,24 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 		bool armMode = currentArmMode;
 		if (!CalculateThetaAndPsi(machinePos, isCoordinated, theta, psi, armMode))
 		{
-			return false;
+			return MovementError::unreachable_position;
 		}
 		currentArmMode = armMode;
 	}
 
 //debugPrintf("psi = %.2f, theta = %.2f\n", psi * RadiansToDegrees, theta * RadiansToDegrees);
 
-	motorPos[X_AXIS] = lrintf(theta * stepsPerMm[X_AXIS]);
-	motorPos[Y_AXIS] = lrintf((psi - (crosstalk[0] * theta)) * stepsPerMm[Y_AXIS]);
-	motorPos[Z_AXIS] = lrintf((machinePos[Z_AXIS] - (crosstalk[1] * theta) - (crosstalk[2] * psi)) * stepsPerMm[Z_AXIS]);
+	MovementError rslt = MovementError::ok;
+	RoundToInt32(rslt, theta * stepsPerMm[X_AXIS], motorPos[X_AXIS]);
+	RoundToInt32(rslt, (psi - (crosstalk[0] * theta)) * stepsPerMm[Y_AXIS], motorPos[Y_AXIS]);
+	RoundToInt32(rslt, (machinePos[Z_AXIS] - (crosstalk[1] * theta) - (crosstalk[2] * psi)) * stepsPerMm[Z_AXIS], motorPos[Z_AXIS]);
 
 	// Transform any additional axes linearly
 	for (size_t axis = XYZ_AXES; axis < numVisibleAxes; ++axis)
 	{
-		motorPos[axis] = lrintf(machinePos[axis] * stepsPerMm[axis]);
+		RoundToInt32(rslt, machinePos[axis] * stepsPerMm[axis], motorPos[axis]);
 	}
-	return true;
+	return rslt;
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.

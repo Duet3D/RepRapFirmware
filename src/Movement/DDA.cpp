@@ -337,7 +337,7 @@ void DDA::DebugPrint(const char *_ecv_array tag) const noexcept
 
 // Set up a real move. Return true if it represents real movement, else false.
 // Either way, return the amount of extrusion we didn't do in the extruder coordinates of nextMove
-bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) noexcept
+MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) noexcept
 {
 	// 0. If there are more total axes than visible axes, then we must ignore any movement data in nextMove for the invisible axes.
 	// Likewise we must ignore any movement data in nextMove for unowned axes.
@@ -351,16 +351,17 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	ownedDrives = nextMove.logicalDrivesOwned;
 #endif
 
-	flags.all = 0;														// set all flags false
+	flags.all = 0;												// set all flags false
 	bool linearAxesMoving = false;
 	bool rotationalAxesMoving = false;
 
 	// Deal with axis movement
 	if (doMotorMapping)
 	{
-		if (!move.CartesianToMotorSteps(nextMove.coords, endPoint, nextMove.isCoordinated))		// transform the axis coordinates to motor endpoints
+		const MovementError err = move.CartesianToMotorSteps(nextMove.coords, endPoint, nextMove.isCoordinated);	// transform the axis coordinates to motor endpoints
+		if (err != MovementError::ok)
 		{
-			return false;												// throw away the move if it couldn't be transformed
+			return err;											// throw away the move if it couldn't be transformed
 		}
 
 		// Note, the following loop iterates over both axes and logical drives
@@ -416,7 +417,11 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 #endif
 			{
 				// Raw motor move on a visible axis
-				endPoint[drive] = move.MotorMovementToSteps(drive, nextMove.coords[drive]);
+				const MovementError err = move.MotorMovementToSteps(drive, nextMove.coords[drive], endPoint[drive]);
+				if (err != MovementError::ok)
+				{
+					return err;
+				}
 				const int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				directionVector[drive] = (float)delta/move.DriveStepsPerMm(drive);
 				if (delta != 0)
@@ -510,7 +515,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				ring.SetStartCoordinate(drive, nextMove.coords[drive]);
 			}
 		}
-		return false;
+		return MovementError::noMovement;
 	}
 
 	// 3. Store some values
@@ -707,7 +712,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 #endif
 
 	state = provisional;
-	return true;
+	return MovementError::ok;
 }
 
 // Set up a leadscrew motor move returning true if the move does anything

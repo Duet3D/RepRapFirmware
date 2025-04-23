@@ -130,17 +130,25 @@ bool PolarKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 // 'numAxes' is the number of machine axes to convert, which will always be at least 3
 // 'motorPos' is the output vector of motor positions
 // Return true if successful, false if we were unable to convert
-bool PolarKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
+MovementError PolarKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
-	motorPos[0] = lrintf(fastSqrtf(fsquare(machinePos[0]) + fsquare(machinePos[1])) * stepsPerMm[0]);
-	motorPos[1] = (motorPos[0] == 0) ? 0 : lrintf(atan2f(machinePos[1], machinePos[0]) * RadiansToDegrees * stepsPerMm[1]);
+	MovementError rslt = MovementError::ok;
+	RoundToInt32(rslt, fastSqrtf(fsquare(machinePos[0]) + fsquare(machinePos[1])) * stepsPerMm[0], motorPos[0]);
+	if (motorPos[0] == 0)
+	{
+		motorPos[1] = 0;
+	}
+	else
+	{
+		RoundToInt32(rslt, atan2f(machinePos[1], machinePos[0]) * RadiansToDegrees * stepsPerMm[1], motorPos[1]);
+	}
 
 	// Transform remaining axes linearly
 	for (size_t axis = Z_AXIS; axis < numVisibleAxes; ++axis)
 	{
-		motorPos[axis] = lrintf(machinePos[axis] * stepsPerMm[axis]);
+		RoundToInt32(rslt, machinePos[axis] * stepsPerMm[axis], motorPos[axis]);
 	}
-	return true;
+	return rslt;
 }
 
 // Convert motor positions (measured in steps from reference position) to Cartesian coordinates

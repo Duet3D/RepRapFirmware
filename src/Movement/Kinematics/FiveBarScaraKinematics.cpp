@@ -744,7 +744,7 @@ LimitPositionResult FiveBarScaraKinematics::LimitPosition(float coords[], const 
 
 // Convert Cartesian coordinates to motor coordinates, returning true if successful
 // In the following, theta is the proximal arm angle relative to the X axis, psi is the distal arm angle relative to the proximal arm
-bool FiveBarScaraKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[],
+MovementError FiveBarScaraKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[],
 													size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
 	float coords[2] = { machinePos[0], machinePos[1] };
@@ -752,20 +752,20 @@ bool FiveBarScaraKinematics::CartesianToMotorSteps(const float machinePos[], con
 
 	if (!constraintsOk(coords))
 	{
-		return false;
+		return MovementError::unreachable_position;
 	}
 
-	motorPos[X_AXIS] = lrintf(cachedThetaL * stepsPerMm[X_AXIS]);
-	motorPos[Y_AXIS] = lrintf(cachedThetaR * stepsPerMm[Y_AXIS]);
-	motorPos[Z_AXIS] = lrintf(machinePos[Z_AXIS] * stepsPerMm[Z_AXIS]);
+	MovementError rslt = MovementError::ok;
+	RoundToInt32(rslt, cachedThetaL * stepsPerMm[X_AXIS], motorPos[X_AXIS]);
+	RoundToInt32(rslt, cachedThetaR * stepsPerMm[Y_AXIS], motorPos[Y_AXIS]);
 
-	// Transform any additional axes linearly
-	for (size_t axis = XYZ_AXES; axis < numVisibleAxes; ++axis)
+	// Transform Z and any additional axes linearly
+	for (size_t axis = Z_AXIS; axis < numVisibleAxes; ++axis)
 	{
-		motorPos[axis] = lrintf(machinePos[axis] * stepsPerMm[axis]);
+		RoundToInt32(rslt, machinePos[axis] * stepsPerMm[axis], motorPos[axis]);
 	}
 
-	return true;
+	return rslt;
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.

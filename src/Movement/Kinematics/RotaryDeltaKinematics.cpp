@@ -182,29 +182,29 @@ bool RotaryDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 // 'numAxes' is the number of machine axes to convert, which will always be at least 3
 // 'motorPos' is the output vector of motor positions
 // Return true if successful, false if we were unable to convert
-bool RotaryDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[],
+MovementError RotaryDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[],
 													size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
-	bool ok = true;
+	MovementError rslt = MovementError::ok;
 	for (size_t axis = 0; axis < min<size_t>(numVisibleAxes, DELTA_AXES); ++axis)
 	{
 		const float pos = Transform(machinePos, axis);
 		if (std::isnan(pos) || std::isinf(pos))
 		{
-			ok = false;
+			rslt = MovementError::unreachable_position;
 		}
 		else
 		{
-			motorPos[axis] = lrintf(pos * stepsPerMm[axis]);
+			RoundToInt32(rslt, pos * stepsPerMm[axis], motorPos[axis]);
 		}
 	}
 
 	// Transform any additional axes linearly
 	for (size_t axis = DELTA_AXES; axis < numVisibleAxes; ++axis)
 	{
-		motorPos[axis] = lrintf(machinePos[axis] * stepsPerMm[axis]);
+		RoundToInt32(rslt, machinePos[axis] * stepsPerMm[axis], motorPos[axis]);
 	}
-	return ok;
+	return rslt;
 }
 
 // Convert motor positions (measured in steps from reference position) to Cartesian coordinates
