@@ -147,7 +147,6 @@ public:
 	static void DoMemoryLeak() noexcept;								// helper function for diagnostic tests
 	static void GenerateBusFault() noexcept;							// helper function for diagnostic tests
 	static float SinfCosf(float angle) noexcept;						// helper function for diagnostic tests
-	static float FastSqrtf(float f) noexcept;							// helper function for diagnostic tests
 
 	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
 

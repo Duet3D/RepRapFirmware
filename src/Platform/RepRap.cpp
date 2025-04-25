@@ -2764,6 +2764,7 @@ void RepRap::PrepareToLoadIap() noexcept
 #endif
 }
 
+// Run the IAP. We have already disabled the cache and MPU and loaded the IAP into RAM.
 void RepRap::StartIap(c_string _ecv_null filename) noexcept
 {
 	// Disable all interrupts, then reallocate the vector table and program entry point to the new IAP binary
@@ -2882,12 +2883,6 @@ void RepRap::StartIap(c_string _ecv_null filename) noexcept
 /*static*/ float RepRap::SinfCosf(float angle) noexcept
 {
 	return sinf(angle) + cosf(angle);
-}
-
-// Helper function for diagnostic tests in Platform.cpp, to calculate square root
-/*static*/ float RepRap::FastSqrtf(float f) noexcept
-{
-	return ::fastSqrtf(f);
 }
 
 // Report an internal error
