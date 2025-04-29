@@ -99,7 +99,7 @@ constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper driv
 constexpr size_t MaxExtruders = 8;					// The maximum number of extruders
 constexpr size_t MaxAxesPlusExtruders = 12;
 
-constexpr size_t MaxHeatersPerTool = 2;
+constexpr size_t MaxHeatersPerTool = 8;
 constexpr size_t MaxExtrudersPerTool = 8;
 
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
