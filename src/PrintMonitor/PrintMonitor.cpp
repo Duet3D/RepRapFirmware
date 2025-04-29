@@ -108,9 +108,10 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "filament",			OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(filamentBased)),												ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(fileBased)),													ObjectModelEntryFlags::live },
 	{ "slicer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(slicerBased)),													ObjectModelEntryFlags::live },
+	{ "toPause",			OBJECT_MODEL_FUNC(self->EstimateTimeToPause()),																		ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 13, 12, 5, 3 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 13, 12, 5, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 
@@ -189,6 +190,10 @@ GCodeResult PrintMonitor::ProcessM73(GCodeBuffer& gb, const StringRef& reply) TH
 	{
 		SetSlicerTimeLeft(gb.GetFValue() * MinutesToSeconds);
 	}
+	if (gb.Seen('C'))
+	{
+		SetSlicerTimeToPause(gb.GetFValue() * MinutesToSeconds);
+	}
 	// M73 without P Q R or S parameters reports print progress in some implementations, but we don't currently do that
 	return GCodeResult::ok;
 }
@@ -197,6 +202,12 @@ void PrintMonitor::SetSlicerTimeLeft(float seconds) noexcept
 {
 	slicerTimeLeft = seconds;
 	whenSlicerTimeLeftSet = millis64();
+}
+
+void PrintMonitor::SetSlicerTimeToPause(float seconds) noexcept
+{
+	slicerTimeToPause = seconds;
+	whenSlicerTimeToPauseSet = millis64();
 }
 
 void PrintMonitor::Spin() noexcept
@@ -324,6 +335,7 @@ void PrintMonitor::StartingPrint(const char *_ecv_array filename) noexcept
 		{
 			totalFilamentNeeded = 0.0;
 			slicerTimeLeft = 0.0;
+			slicerTimeToPause = 0.0;
 		}
 	}
 	reprap.JobUpdated();
@@ -426,7 +438,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 			break;
 
 		case slicerBased:
-			if (slicerTimeLeft > 0.0 && !gCodes.IsSimulating())				// don't report slicer time if we are simulating
+			if (slicerTimeLeft > 0.0 && !gCodes.IsSimulating())							// don't report slicer time if we are simulating
 			{
 				const uint64_t now = millis64();
 				int64_t adjustment = (int64_t)(now - whenSlicerTimeLeftSet);			// add the time since we stored the slicer time left
@@ -453,6 +465,21 @@ ExpressionValue PrintMonitor::EstimateTimeLeftAsExpression(PrintEstimationMethod
 {
 	const float timeLeft = EstimateTimeLeft(method);
 	return (timeLeft > 0.0) ? ExpressionValue(lrintf(timeLeft)) : ExpressionValue(nullptr);
+}
+
+// Return the estimated time until user interaction is required e.g. to change filament
+ExpressionValue PrintMonitor::EstimateTimeToPause() const noexcept
+{
+	ExpressionValue ret(nullptr);
+	if (isPrinting && !gCodes.IsSimulating() && slicerTimeToPause > 0.0)
+	{
+		const float timeToPause = slicerTimeToPause - (millis64() - whenSlicerTimeToPauseSet) * MillisToSeconds;
+		if (timeToPause > 0.0)
+		{
+			ret.SetInt(lrintf(timeToPause));
+		}
+	}
+	return ret;
 }
 
 #endif

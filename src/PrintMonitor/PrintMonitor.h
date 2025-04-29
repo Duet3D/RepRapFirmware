@@ -64,6 +64,7 @@ public:
 
 	GCodeResult ProcessM73(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void SetSlicerTimeLeft(float seconds) noexcept;
+	void SetSlicerTimeToPause(float seconds) noexcept;
 
 	ReadLockedPointer<const VariableSet> GetCustomInfoForReading() noexcept { return customInfo.GetForReading(); }
 
@@ -81,6 +82,7 @@ private:
 
 #if SUPPORT_OBJECT_MODEL
 	ExpressionValue EstimateTimeLeftAsExpression(PrintEstimationMethod method) const noexcept;
+	ExpressionValue EstimateTimeToPause() const noexcept;
 	int32_t GetPrintOrSimulatedDuration() const noexcept;
 #endif
 
@@ -97,6 +99,7 @@ private:
 	uint64_t lastLayerChangeTime;
 	uint64_t lastLayerChangeNonPrintingTime;
 	uint64_t whenSlicerTimeLeftSet;
+	uint64_t whenSlicerTimeToPauseSet;
 
 	uint32_t lastUpdateTime;
 	uint32_t lastLayerDuration;
@@ -107,6 +110,7 @@ private:
 	float fileProgressRate, filamentProgressRate;
 	float totalFilamentNeeded;
 	float slicerTimeLeft;						// time left in seconds as reported by slicer
+	float slicerTimeToPause;					// time to the next pause as reported by slicer
 
 	unsigned int lastLayerNumberNotified;
 	float lastLayerStartHeightNotified;
