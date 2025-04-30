@@ -878,7 +878,7 @@ void SbcInterface::ExchangeData() noexcept
 						ObjectExplorationContext context;
 						context.AddIndex(ev.param >> 8);
 						ev.omVal->ReportItemAsJsonFull(json, context, nullptr, ev, "");
-						packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), json);
+						packetAcknowledged = transfer.WriteSetVariableResult(varName.c_str(), json);
 					}
 					else
 					{
