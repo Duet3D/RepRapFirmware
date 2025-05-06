@@ -58,10 +58,9 @@ constexpr ObjectModelTableEntry CoreKinematics::objectModelTable[] =
 	// 0. kinematics members
 	{ "forwardMatrix",		OBJECT_MODEL_FUNC_ARRAY(22), 									ObjectModelEntryFlags::none },
 	{ "inverseMatrix",		OBJECT_MODEL_FUNC_ARRAY(23), 									ObjectModelEntryFlags::none },
-	{ "name",				OBJECT_MODEL_FUNC(self->GetName(true)), 						ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t CoreKinematics::objectModelTableDescriptor[] = { 1, 3 };
+constexpr uint8_t CoreKinematics::objectModelTableDescriptor[] = { 1, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(CoreKinematics, ZLeadscrewKinematics)
 
@@ -245,13 +244,6 @@ CoreKinematics::CoreKinematics(KinematicsType k) noexcept : ZLeadscrewKinematics
 	}
 
 	Recalc();
-}
-
-// Return the name of the current kinematics
-const char *_ecv_array CoreKinematics::GetName(bool forStatusReport) const noexcept
-{
-	// This reports the original kinematics that was requested. It doesn't allow for the matrix having been patched to change the kinematics.
-	return KinematicsType::ToString(GetLegacyType().RawValue());
 }
 
 // Set the parameters from a M665, M666, M667 or M669 command

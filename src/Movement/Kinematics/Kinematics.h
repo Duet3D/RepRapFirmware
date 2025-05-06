@@ -88,10 +88,7 @@ public:
 	// Functions that must be defined in each derived class that implements a kinematics
 
 	// Return the name of the current kinematics.
-	// If 'forStatusReport' is true then the string must be the one for that kinematics expected by DuetWebControl and PanelDue.
-	// Otherwise it should be in a format suitable for printing.
-	// For any new kinematics, the same string can be returned regardless of the parameter.
-	virtual const char *_ecv_array GetName(bool forStatusReport = false) const noexcept = 0;
+	virtual const char *_ecv_array GetName() const noexcept;
 
 	// Set or report the parameters from a M665, M666 or M669 command
 	// If 'mCode' is an M-code used to set parameters for the current kinematics (which should only ever be 665, 666, 667 or 669)
@@ -259,7 +256,7 @@ private:
 	float reciprocalMinSegmentLength;		// if we are using segmentation, the reciprocal of minimum segment size
 
 	SegmentationType segmentationType;		// the type of segmentation we are using
-	KinematicsType legacyType;
+	KinematicsType::RawType legacyType;		// for older kinematics types, the type code. Newer kinematics types do not have type codes.
 };
 
 #endif /* SRC_MOVEMENT_KINEMATICS_H_ */

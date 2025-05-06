@@ -26,7 +26,6 @@ constexpr ObjectModelTableEntry PolarKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "name",				OBJECT_MODEL_FUNC(self->GetName(true)), 				ObjectModelEntryFlags::none },
 	{ "radiusHomed",		OBJECT_MODEL_FUNC(self->homedRadius), 					ObjectModelEntryFlags::none },
 	{ "radiusMax",			OBJECT_MODEL_FUNC(self->maxRadius), 					ObjectModelEntryFlags::none },
 	{ "radiusMin",			OBJECT_MODEL_FUNC(self->minRadius), 					ObjectModelEntryFlags::none },
@@ -34,7 +33,7 @@ constexpr ObjectModelTableEntry PolarKinematics::objectModelTable[] =
 	{ "ttSpeedMax",			OBJECT_MODEL_FUNC(self->maxTurntableSpeed, 1), 			ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t PolarKinematics::objectModelTableDescriptor[] = { 1, 6 };
+constexpr uint8_t PolarKinematics::objectModelTableDescriptor[] = { 1, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(PolarKinematics, Kinematics)
 
@@ -56,15 +55,6 @@ PolarKinematics::PolarKinematics() noexcept
 	  maxTurntableSpeed(ConvertSpeedFromMmPerSec(DefaultMaxTurntableSpeed)), maxTurntableAcceleration(ConvertAcceleration(DefaultMaxTurntableAcceleration))
 {
 	Recalc();
-}
-
-// Return the name of the current kinematics.
-// If 'forStatusReport' is true then the string must be the one for that kinematics expected by DuetWebControl and PanelDue.
-// Otherwise it should be in a format suitable for printing.
-// For any new kinematics, the same string can be returned regardless of the parameter.
-const char *_ecv_array PolarKinematics::GetName(bool forStatusReport) const noexcept
-{
-	return "Polar";
 }
 
 // Set or report the parameters from a M665, M666 or M669 command

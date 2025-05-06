@@ -34,6 +34,7 @@ constexpr ObjectModelTableEntry Kinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
+	{ "name",				OBJECT_MODEL_FUNC(self->GetName()), 									ObjectModelEntryFlags::none },
 	{ "segmentation",		OBJECT_MODEL_FUNC_IF(self->segmentationType.useSegmentation, self, 1), 	ObjectModelEntryFlags::none },
 
 	// 1. segmentation members
@@ -41,7 +42,7 @@ constexpr ObjectModelTableEntry Kinematics::objectModelTable[] =
 	{ "segmentsPerSec",		OBJECT_MODEL_FUNC(self->segmentsPerSecond, 1), 							ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Kinematics::objectModelTableDescriptor[] = { 2, 1, 2 };
+constexpr uint8_t Kinematics::objectModelTableDescriptor[] = { 2, 2, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Kinematics)
 
@@ -59,7 +60,7 @@ Kinematics::KinematicsTypeDescriptor::KinematicsTypeDescriptor(CreationFunction 
 // Constructor. Pass segsPerSecond <= 0.0 to get non-segmented kinematics.
 Kinematics::Kinematics(KinematicsType t, SegmentationType segType) noexcept
 	: segmentsPerSecond(DefaultSegmentsPerSecond), minSegmentLength(DefaultMinSegmentLength), reciprocalMinSegmentLength(1.0/DefaultMinSegmentLength),
-	  segmentationType(segType), legacyType(t)
+	  segmentationType(segType), legacyType(t.RawValue())
 {
 }
 
@@ -371,6 +372,13 @@ void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *_ecv_array nor
 	{
 		errorCode = MovementError::microstep_position_too_large;
 	}
+}
+
+// Return the name of the current kinematics
+// This default implementation will only work for legacy kinematics types. It must be overridden in new kinematics classes that do not have type codes.
+const char *_ecv_array Kinematics::GetName() const noexcept
+{
+	return KinematicsType::ToString(legacyType);
 }
 
 // Check whether a requested name or code number matches a particular legacy type

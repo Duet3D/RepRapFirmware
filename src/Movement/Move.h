@@ -364,7 +364,7 @@ public:
 																							// Convert Cartesian coordinates to motor coordinates, return true if successful
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept;
 																							// Convert motor coordinates to machine coordinates
-	const char *_ecv_array GetGeometryString() const noexcept { return kinematics->GetName(true); }
+	const char *_ecv_array GetGeometryString() const noexcept { return kinematics->GetName(); }
 	bool IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
 
 	bool IsRawMotorMove(uint8_t moveType) const noexcept;									// Return true if this is a raw motor move
