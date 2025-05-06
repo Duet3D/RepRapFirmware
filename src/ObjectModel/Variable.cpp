@@ -164,7 +164,7 @@ void VariableSet::EndScope(uint8_t blockNesting) noexcept
 	LinkedVariable *prev = nullptr;
 	for (LinkedVariable *lv = root; lv != nullptr; )
 	{
-		if (lv->v.GetScope() > blockNesting)
+		if (lv->v.GetScope() > (int16_t)blockNesting)
 		{
 			LinkedVariable *temp = lv;
 			lv = lv->next;

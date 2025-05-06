@@ -26,7 +26,7 @@ public:
 
 	ReadLockedPointer<const char> GetName() const noexcept { return name.Get(); }
 	ExpressionValue GetValue() const noexcept { return val; }
-	int8_t GetScope() const noexcept { return scope; }
+	int16_t GetScope() const noexcept { return scope; }
 	void Assign(ExpressionValue& ev) THROWS(GCodeException);
 	void AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *_ecv_array indices) THROWS(GCodeException) pre(numIndices != 0; indices.lim >= numIndices);
 	void AssignArray(size_t numElements, function_ref<ExpressionValue(size_t)>) noexcept;
