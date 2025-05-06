@@ -19,8 +19,6 @@
 
 #include <limits>
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -73,7 +71,16 @@ constexpr uint8_t ScaraKinematics::objectModelTableDescriptor[] = { 1, 9 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(ScaraKinematics, ZLeadscrewKinematics)
 
-#endif
+Kinematics::KinematicsTypeDescriptor scaraKinematicsDescriptor(ScaraKinematics::Create);
+
+/*static*/ Kinematics *_ecv_from _ecv_null ScaraKinematics::Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept
+{
+	if (MatchesLegacyType(name, legacyNumber, KinematicsType::scara))
+	{
+		return new ScaraKinematics();
+	}
+	return nullptr;
+}
 
 ScaraKinematics::ScaraKinematics() noexcept
 	: ZLeadscrewKinematics(KinematicsType::scara, SegmentationType(true, false, false)),

@@ -24,8 +24,7 @@ enum class Arm : uint8_t
 class FiveBarScaraKinematics : public ZLeadscrewKinematics
 {
 public:
-	// Constructors
-	FiveBarScaraKinematics() noexcept;
+	static Kinematics *_ecv_from _ecv_null Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept;
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
 	const char *GetName(bool forStatusReport) const noexcept override;
@@ -50,6 +49,9 @@ private:
 	static KinematicsTypeDescriptor fiveBarScaraKinematicsDescriptor;
 
 	static constexpr const char *Home5BarScaraFileName = "home5barscara.g";
+
+	// Constructors
+	FiveBarScaraKinematics() noexcept;
 
 	void Recalc() noexcept;
 	int getQuadrant(float x, float y) const noexcept;

@@ -15,8 +15,7 @@
 class RotaryDeltaKinematics : public RoundBedKinematics
 {
 public:
-	// Constructors
-	RotaryDeltaKinematics() noexcept;
+	static Kinematics *_ecv_from _ecv_null Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept;
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
 	const char *GetName(bool forStatusReport) const noexcept override;
@@ -47,6 +46,9 @@ protected:
 
 private:
 	static KinematicsTypeDescriptor rotaryDeltaKinematicsDescriptor;
+
+	// Constructors
+	RotaryDeltaKinematics() noexcept;
 
 	void Init() noexcept;
 	void Recalc() noexcept;

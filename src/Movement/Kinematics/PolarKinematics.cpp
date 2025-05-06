@@ -15,8 +15,6 @@
 #include <Movement/DDA.h>
 #include <Movement/Move.h>
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -40,7 +38,16 @@ constexpr uint8_t PolarKinematics::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(PolarKinematics, Kinematics)
 
-#endif
+Kinematics::KinematicsTypeDescriptor polarKinematicsDescriptor(PolarKinematics::Create);
+
+/*static*/ Kinematics *_ecv_from _ecv_null PolarKinematics::Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept
+{
+	if (MatchesLegacyType(name, legacyNumber, KinematicsType::polar))
+	{
+		return new PolarKinematics();
+	}
+	return nullptr;
+}
 
 // Constructor
 PolarKinematics::PolarKinematics() noexcept
