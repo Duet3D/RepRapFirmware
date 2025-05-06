@@ -47,6 +47,8 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
+	static KinematicsTypeDescriptor fiveBarScaraKinematicsDescriptor;
+
 	static constexpr const char *Home5BarScaraFileName = "home5barscara.g";
 
 	void Recalc() noexcept;

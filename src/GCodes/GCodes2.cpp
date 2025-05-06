@@ -3937,11 +3937,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					Move& move = reprap.GetMove();
 
 					bool changedMode = false;
-					if ((gb.Seen('L') || gb.Seen('D')) && move.GetKinematics().GetKinematicsType() != KinematicsType::linearDelta)
+					if ((gb.Seen('L') || gb.Seen('D')) && move.GetKinematics().GetLegacyType() != KinematicsType::linearDelta)
 					{
 						// Not in delta mode, so switch to it
 						changedMode = true;
-						move.SetKinematics(KinematicsType::linearDelta);
+						move.SetKinematics(nullptr, (int)KinematicsType::linearDelta);
 					}
 					bool error = false;
 					const bool changed = move.GetKinematics().Configure(code, gb, reply, error);
@@ -3986,19 +3986,68 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					return false;
 				}
 				{
-					Move& move = reprap.GetMove();
-					const KinematicsType oldK = move.GetKinematics().GetKinematicsType();		// get the current kinematics type so we can tell whether it changed
-
 					bool seen = false;
+					bool kinematicsChanged = false;
+					Move& move = reprap.GetMove();
+
+					// Try to get the requested kinematics from the K parameter
+					int32_t kn = -1;
+					String<StringLength50> ks;
+					const char *_ecv_array _ecv_null kp = nullptr;
 					if (gb.Seen('K'))
 					{
-						const unsigned int nk = gb.GetUIValue();
-						if (nk >= (unsigned int)KinematicsType::unknown || !move.SetKinematics(static_cast<KinematicsType>(nk)))
+						const ExpressionValue ev = gb.GetExpression();
+						switch (ev.GetType())
 						{
-							reply.printf("Unknown kinematics type %d", nk);
+						case TypeCode::Int32:
+							kn = ev.iVal;
+							break;
+
+						case TypeCode::CString:
+							kp = ev.sVal;
+							break;
+
+						case TypeCode::HeapString:
+							{
+								ReadLockedPointer<const char> p = ev.shVal.Get();
+								ks.copy(p.Ptr());
+								kp = ks.c_str();
+							}
+							break;
+
+						default:
+							break;
+						}
+
+						bool ok;
+						if (kp != nullptr)
+						{
+							kinematicsChanged = !ReducedStringEquals(kp,  move.GetKinematics().GetName());
+							ok = true;
+						}
+						else if (kn >= 0 && kn < (int32_t)KinematicsType::unknown)
+						{
+							kinematicsChanged = (kn != (int32_t)move.GetKinematics().GetLegacyType().ToBaseType());
+							ok = true;
+						}
+						else
+						{
+							ok = false;
+						}
+
+						if (kinematicsChanged)
+						{
+							ok = move.SetKinematics(kp, kn);
+						}
+
+						if (!ok)
+						{
+							reply.copy("Unknown kinematics type ");
+							ev.AppendAsString(reply);
 							result = GCodeResult::error;
 							break;
 						}
+
 						seen = true;
 					}
 					bool error = false;
@@ -4012,7 +4061,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						// We changed something significant, so reset the positions and set all axes not homed
 						SetAllAxesNotHomed();
-						if (move.GetKinematics().GetKinematicsType() != oldK)
+						if (kinematicsChanged)
 						{
 							SetInitialAxisAndDrivePositions();
 						}

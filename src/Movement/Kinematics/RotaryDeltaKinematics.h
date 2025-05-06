@@ -46,6 +46,8 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
+	static KinematicsTypeDescriptor rotaryDeltaKinematicsDescriptor;
+
 	void Init() noexcept;
 	void Recalc() noexcept;
     float Transform(const float headPos[], size_t axis) const noexcept;								// Calculate the motor position for a single tower from a Cartesian coordinate

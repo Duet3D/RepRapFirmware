@@ -22,9 +22,8 @@ inline floatc_t fcsquare(floatc_t a) noexcept
 
 // Different types of kinematics we support. Each of these has a class to represent it.
 // These must have the same numeric assignments as the K parameter of the M669 command, as documented in the GCodes wiki page
-enum class KinematicsType : uint8_t
-{
-	cartesian = 0,
+NamedEnum(KinematicsType, uint8_t,
+	cartesian,
 	coreXY,
 	coreXZ,
 	linearDelta,
@@ -33,15 +32,11 @@ enum class KinematicsType : uint8_t
 	hangprinter,
 	polar,
 	coreXYUV,
-	fiveBarScara,		// was previously reserved for @sga, see https://forum.duet3d.com/topic/5775/aditional-carterian-z-axis-on-delta-printer
+	fiveBarScara,
 	rotaryDelta,
 	markForged,
-	collinearTriperon,	// reserved for @oliof, see https://forum.duet3d.com/topic/11646/kinematics-type-number-allocation-for-colinear-tripteron
-	robot5axis,			// reserved for @joergS5, see https://forum.duet3d.com/post/172204
-	sixAxisDelta,		// reserved for @tkln, see https://forum.duet3d.com/post/314950
-
 	unknown				// this one must be last!
-};
+);
 
 // Return value from limitPosition
 enum class LimitPositionResult : uint8_t
@@ -68,6 +63,28 @@ struct SegmentationType
 class Kinematics INHERIT_OBJECT_MODEL
 {
 public:
+	// Machinery for automatically linking new kinematics into the kinematics classes list
+	struct KinematicsTypeDescriptor
+	{
+	public:
+		typedef Kinematics *_ecv_from _ecv_null (*CreationFunction)(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept;
+
+		KinematicsTypeDescriptor(CreationFunction p_creationFunction) noexcept;
+
+		const KinematicsTypeDescriptor *_ecv_null GetNext() const noexcept { return next; }
+		Kinematics *_ecv_from Create(const char *_ecv_array _ecv_null name, unsigned int legacyNumber) const noexcept { return createFunction(name, legacyNumber); }
+
+		static const KinematicsTypeDescriptor *_ecv_null GetRoot() noexcept { return kinematicsTypeListRoot; }
+
+	private:
+		// Root of the sensor types list
+		static KinematicsTypeDescriptor *_ecv_null kinematicsTypeListRoot;
+
+		KinematicsTypeDescriptor *_ecv_null next;
+		const char *_ecv_array kinematicsName;
+		CreationFunction createFunction;
+	};
+
 	// Functions that must be defined in each derived class that implements a kinematics
 
 	// Return the name of the current kinematics.
@@ -187,12 +204,11 @@ public:
 	// Override this virtual destructor if your constructor allocates any dynamic memory
 	virtual ~Kinematics() override { }
 
-	// Factory function to create a particular kinematics object and return a pointer to it.
-	// When adding new kinematics, you will need to extend this function to handle your new kinematics type.
-	static Kinematics *_ecv_from Create(KinematicsType k) noexcept;
+	// Factory function to create a particular kinematics object and return a pointer to it, or nullptr if no matching kinematics was found
+	static Kinematics *_ecv_from _ecv_null Create(const char *_ecv_array name, int legacyTypeNumber) noexcept;
 
 	// Functions that return information held in this base class
-	KinematicsType GetKinematicsType() const noexcept { return type; }
+	KinematicsType GetLegacyType() const noexcept { return legacyType; }
 
 	SegmentationType GetSegmentationType() const noexcept { return segmentationType; }
 	float GetSegmentsPerSecond() const noexcept pre(GetSegmentationType().useSegmentation) { return segmentsPerSecond; }
@@ -222,6 +238,9 @@ protected:
 	// Round a float value to int32_t if it will fit, else set update a movement error code
 	static void RoundToInt32(MovementError& ErrorCode, float pos, int32_t& whereToStore) noexcept;
 
+	// Check whether a requested name or code number matches a particular legacy type
+	static bool MatchesLegacyType(const char *_ecv_array _ecv_null name, int requestedLegacyType, KinematicsType::RawType t) noexcept;
+
 	// Debugging functions
 	static void PrintMatrix(const char *_ecv_array s, const MathMatrix<float>& m, size_t numRows = 0, size_t maxCols = 0) noexcept;
 	static void PrintMatrix(const char *_ecv_array s, const MathMatrix<double>& m, size_t numRows = 0, size_t maxCols = 0) noexcept;
@@ -240,7 +259,7 @@ private:
 	float reciprocalMinSegmentLength;		// if we are using segmentation, the reciprocal of minimum segment size
 
 	SegmentationType segmentationType;		// the type of segmentation we are using
-	KinematicsType type;
+	KinematicsType legacyType;
 };
 
 #endif /* SRC_MOVEMENT_KINEMATICS_H_ */

@@ -16,8 +16,6 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Math/Deviation.h>
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -63,7 +61,16 @@ constexpr uint8_t LinearDeltaKinematics::objectModelTableDescriptor[] = { 2, 7, 
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(LinearDeltaKinematics, RoundBedKinematics)
 
-#endif
+Kinematics::KinematicsTypeDescriptor linearDeltaKinematicsDescriptor(LinearDeltaKinematics::Create);
+
+/*static*/ Kinematics *_ecv_from _ecv_null LinearDeltaKinematics::Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept
+{
+	if (MatchesLegacyType(name, legacyNumber, KinematicsType::linearDelta))
+	{
+		return new LinearDeltaKinematics();
+	}
+	return nullptr;
+}
 
 LinearDeltaKinematics::LinearDeltaKinematics() noexcept : RoundBedKinematics(KinematicsType::linearDelta, SegmentationType(true, false, true)), numTowers(UsualNumTowers)
 {
@@ -73,7 +80,7 @@ LinearDeltaKinematics::LinearDeltaKinematics() noexcept : RoundBedKinematics(Kin
 // Return the name of the current kinematics
 const char *_ecv_array LinearDeltaKinematics::GetName(bool forStatusReport) const noexcept
 {
-	return (forStatusReport) ? "delta" : "Linear delta";
+	return KinematicsType::ToString(KinematicsType::linearDelta);
 }
 
 void LinearDeltaKinematics::Init() noexcept

@@ -613,7 +613,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 		float maxDistance = 0.0;
 		for (size_t axis = 0; axis < numTotalAxes; ++axis)
 		{
-			if (k.GetKinematicsType() == KinematicsType::linearDelta && normalisedDirectionVector[axis] > maxDistance)
+			if (k.GetLegacyType() == KinematicsType::linearDelta && normalisedDirectionVector[axis] > maxDistance)
 			{
 				maxDistance = normalisedDirectionVector[axis];
 			}
@@ -804,7 +804,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 		// This doesn't matter for the current application because we don't use either of these fields.
 
 		// If it's a delta then we can only do async tower moves in the Z direction and on any additional linear axes
-		const size_t axisToUse = (move.GetKinematics().GetKinematicsType() == KinematicsType::linearDelta && drive <= Z_AXIS) ? Z_AXIS : drive;
+		const size_t axisToUse = (move.GetKinematics().GetLegacyType() == KinematicsType::linearDelta && drive <= Z_AXIS) ? Z_AXIS : drive;
 		directionVector[drive] = nextMove.movements[axisToUse];
 		const int32_t delta = lrintf(nextMove.movements[axisToUse] * move.DriveStepsPerMm(drive));
 		endPoint[drive] = prev->endPoint[drive] + delta;

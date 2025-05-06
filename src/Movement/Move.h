@@ -359,7 +359,7 @@ public:
 
 	// Kinematics and related functions
 	Kinematics &_ecv_from GetKinematics() const noexcept { return *kinematics; }
-	bool SetKinematics(KinematicsType k) noexcept;											// Set kinematics, return true if successful
+	bool SetKinematics(const char *_ecv_array _ecv_null name, int legacyType) noexcept;		// Set kinematics, return true if successful
 	MovementError CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const noexcept;
 																							// Convert Cartesian coordinates to motor coordinates, return true if successful
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept;

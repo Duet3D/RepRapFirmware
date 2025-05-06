@@ -2251,7 +2251,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		if (gb.Seen(axisLetters[axis]))
 		{
 			// If it is a special move on a delta, movement must be relative.
-			if (ms.moveType != 0 && !gb.LatestMachineState().axesRelative && reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta)
+			if (ms.moveType != 0 && !gb.LatestMachineState().axesRelative && reprap.GetMove().GetKinematics().GetLegacyType() == KinematicsType::linearDelta)
 			{
 				gb.ThrowGCodeException("attempt to move individual motors of a delta machine to absolute positions");
 			}

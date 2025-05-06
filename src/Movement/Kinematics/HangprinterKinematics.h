@@ -65,6 +65,8 @@ protected:
 	bool IsInsidePrismSides(float const coords[3], unsigned const discount_last) const noexcept;
 
 private:
+	static KinematicsTypeDescriptor hangprinterKinematicsDescriptor;
+
 	// Basic facts about movement system
 	static constexpr const char*_ecv_array ANCHOR_CHARS = "ABCDIJKLO";
 	static constexpr size_t HANGPRINTER_MAX_ANCHORS = 5;

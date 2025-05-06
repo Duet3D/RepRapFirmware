@@ -14,7 +14,7 @@
 class CoreKinematics : public ZLeadscrewKinematics
 {
 public:
-	CoreKinematics(KinematicsType k) noexcept;
+	static Kinematics *_ecv_from _ecv_null Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept;
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
 	const char *_ecv_array GetName(bool forStatusReport) const noexcept override;
@@ -30,6 +30,10 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
+	static KinematicsTypeDescriptor coreKinematicsDescriptor;
+
+	CoreKinematics(KinematicsType k) noexcept;
+
 	void Recalc() noexcept;									// recalculate internal variables following a configuration change
 	bool HasSharedMotor(size_t axis) const noexcept;		// return true if the axis doesn't have a single dedicated motor
 

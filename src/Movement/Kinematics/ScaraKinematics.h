@@ -47,6 +47,8 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
+	static KinematicsTypeDescriptor scaraKinematicsDescriptor;
+
 	static constexpr float DefaultProximalArmLength = 100.0;
 	static constexpr float DefaultDistalArmLength = 100.0;
 	static constexpr float DefaultMinTheta = -90.0;					// minimum proximal joint angle

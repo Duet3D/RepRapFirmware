@@ -19,8 +19,7 @@
 class LinearDeltaKinematics : public RoundBedKinematics
 {
 public:
-	// Constructors
-	LinearDeltaKinematics() noexcept;
+	static Kinematics *_ecv_from _ecv_null Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept;
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
 	const char *_ecv_array GetName(bool forStatusReport) const noexcept override;
@@ -54,6 +53,11 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
+	static KinematicsTypeDescriptor linearDeltaKinematicsDescriptor;
+
+	// Constructors
+	LinearDeltaKinematics() noexcept;
+
 	void Init() noexcept;
 	void Recalc() noexcept;
 	void NormaliseEndstopAdjustments() noexcept;													// Make the average of the endstop adjustments zero

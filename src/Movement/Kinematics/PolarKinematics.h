@@ -38,6 +38,8 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
+	static KinematicsTypeDescriptor polarKinematicsDescriptor;
+
 	static constexpr float DefaultMaxRadius = 150.0;
 	static constexpr float DefaultMaxTurntableSpeed = 30.0;				// degrees per second
 	static constexpr float DefaultMaxTurntableAcceleration = 30.0;		// degrees per second per second
