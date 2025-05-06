@@ -1474,10 +1474,11 @@ int DDA::CalculateNewSCurveMove() noexcept
 
 	unsigned int laDepth = 0;
 	bool goingUp = true;
-	for (;;)
+	while (true)
 	{
 		if (goingUp)
 		{
+			// We are iterating in the direction of older moves
 			// See whether we can adjust this move to end at the speed and acceleration requested by the following move.
 			// That requested speed won't be higher than our own requestedSpeed.
 			// Check that the acceleration is within limits. TODO: should we have the following move ensure this in advance?
@@ -1531,13 +1532,37 @@ int DDA::CalculateNewSCurveMove() noexcept
 				}
 
 				// Do we have enough distance available to decelerate to the requested values?
+				// To reach the requested acceleration, t = requested_acc/max_jerk
+				const float phase5Time = laDDA->beforePrepare.targetNextAcceleration/(-laDDA->jerk);
+				const float phase5Distance = (laDDA->topSpeed + OneSixth * (laDDA->beforePrepare.targetNextAcceleration * phase5Time)) * phase5Time;
+				if (phase5Distance <= distanceAvailable)
+				{
+					const float phase5EndSpeed = laDDA->topSpeed + OneHalf * (laDDA->beforePrepare.targetNextAcceleration * phase5Time);
+					const float phase6Time = max<float>(0.0, (laDDA->beforePrepare.targetNextSpeed - phase5EndSpeed)/laDDA->beforePrepare.targetNextAcceleration);
+					const float phase6Distance = (phase5EndSpeed + OneHalf * (laDDA->beforePrepare.targetNextSpeed - phase5EndSpeed)) * phase6Time;
+					const float phase4Distance = distanceAvailable - (phase5Distance + phase6Distance);
+					if (phase4Distance >= 0)
+					{
+						// We do have enough distance
+						laDDA->beforePrepare.phase5Time = phase5Time;
+						laDDA->beforePrepare.phase6Time = phase6Time;
+						laDDA->beforePrepare.phase4Time = phase4Distance/laDDA->topSpeed;
+						goingUp = false;
+						continue;
+					}
+				}
+
+				// Not enough distance to decelerate to the requested values, so we need to reduce laDDA->topSpeed
+				// This should only occur if we reduce the requested start acceleration and/or start speed of the next move, which should not normally happen (but might when we introduce feed hold)
 				qq;
 			}
 
+			// Currently, laDDA does not reach its requested speed. We may be able to increase its top speed if that would be helpful, but to do that we may need to adjust the previous move.
 			qq;
 		}
 		else
 		{
+			// We are iterating towards newer moves
 			qq;
 			if (laDepth == 0) { return MovementError::ok; }		//TODO check move duration
 		}
