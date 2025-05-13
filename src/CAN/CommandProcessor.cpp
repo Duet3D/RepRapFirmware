@@ -168,7 +168,7 @@ static void HandleInputStateChanged(const CanMessageInputChangedNew& msg, CanAdd
 	Platform& p = reprap.GetPlatform();
 	for (unsigned int i = 0; i < msg.numHandles; ++i)
 	{
-		const RemoteInputHandle handle(msg.results[i].handle);
+		const RemoteInputHandle handle(msg.GetEntryHandle(i));
 		const bool state = (msg.states & (1u << i)) != 0;
 		switch (handle.parts.type)
 		{
@@ -178,7 +178,7 @@ static void HandleInputStateChanged(const CanMessageInputChangedNew& msg, CanAdd
 			break;
 
 		case RemoteInputHandle::typeZprobe:
-			p.GetEndstops().HandleRemoteZProbeChange(src, handle.parts.major, handle.parts.minor, state, LoadLEU32(&msg.results[i].reading));
+			p.GetEndstops().HandleRemoteZProbeChange(src, handle.parts.major, handle.parts.minor, state, msg.GetEntryReading(i));
 			endstopStatesChanged = true;
 			break;
 
@@ -188,7 +188,7 @@ static void HandleInputStateChanged(const CanMessageInputChangedNew& msg, CanAdd
 
 		case RemoteInputHandle::typeStallEndstop:
 			// In this case there should be exactly one handle and the 'reading' is a bitmap of stalled drivers
-			p.GetEndstops().HandleStalledRemoteDrivers(src, LocalDriversBitmap((LocalDriversBitmap::BaseType)msg.results[i].reading));
+			p.GetEndstops().HandleStalledRemoteDrivers(src, LocalDriversBitmap((LocalDriversBitmap::BaseType)msg.GetEntryReading(i)));
 			break;
 
 		default:
