@@ -65,7 +65,7 @@ AxisShaper::AxisShaper() noexcept
 	: type(InputShaperType::none),
 	  frequency(DefaultFrequency),
 	  zeta(DefaultDamping),
-	  numImpulses(1)
+	  numImpulses(1), longestSegment(0)
 {
 	coefficients[0] = 1.0;
 	delays[0] = 0;
@@ -256,10 +256,17 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		}
 
 		// The sum of the coefficients must total 1, use this to fill in the last coefficient
+		// Also calculate the longest interval between adjacent impulses
 		motioncalc_t sum = 0.0;
+		longestSegment = 0;
 		for (size_t i = 0; i + 1 < numImpulses; ++i)
 		{
 			sum += coefficients[i];
+			const uint32_t thisInterval = delays[i + 1] - delays[1];
+			if (thisInterval > longestSegment)
+			{
+				longestSegment = thisInterval;
+			}
 		}
 		coefficients[numImpulses - 1] = (motioncalc_t)1.0 - sum;
 
