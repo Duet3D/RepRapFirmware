@@ -24,7 +24,7 @@
 #endif
 
 extern const char *_ecv_array const DateText;
-extern const char *_ecv_array const TIME_SUFFIX;
+extern const char *_ecv_array const TimeSuffix;
 
 #define AUTHORS "reprappro, dc42, chrishamm, t3p3, dnewman, printm3d"
 

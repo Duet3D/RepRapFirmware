@@ -209,7 +209,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 	switch (msg.type)
 	{
 	case CanMessageReturnInfo::typeFirmwareVersion:
-		reply.printf("%s firmware version " VERSION " (%s%s)", reprap.GetPlatform().GetElectronicsString(), DateText, TIME_SUFFIX);
+		reply.printf("%s firmware version " VERSION " (%s%s)", reprap.GetPlatform().GetElectronicsString(), DateText, TimeSuffix);
 		break;
 
 	case CanMessageReturnInfo::typeBoardName:
