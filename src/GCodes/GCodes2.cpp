@@ -260,6 +260,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 4: // Dwell
+			BREAK_IF_NOT_EXECUTING
 			result = DoDwell(gb);
 			break;
 
@@ -271,7 +272,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					switch (ival)
 					{
 					case 1:
-						BREAK_IF_NOT_EXECUTING
+						BREAK_IF_NOT_EXECUTING								// this will only break from the local switch statement but that's OK in this case
 						result = SetOrReportOffsets(gb, reply, 10);			// same as G10 with offsets and no L parameter
 						break;
 
