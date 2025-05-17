@@ -1333,6 +1333,11 @@ void CanInterface::WakeAsyncSender() noexcept
 	}
 }
 
+void CanInterface::WakeAsyncSenderFromIsr() noexcept
+{
+	canSenderTask.GiveFromISR(NotifyIndices::CanSender);
+}
+
 // Remote handle functions
 GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *_ecv_array pinName, uint16_t threshold, uint16_t minInterval,
 										bool *_ecv_null currentState, const StringRef& reply) noexcept
