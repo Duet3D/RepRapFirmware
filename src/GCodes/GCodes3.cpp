@@ -116,10 +116,8 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 		{
 			ToolOffsetInverseTransform(ms);					// make sure the limits are reflected in the user position
 		}
-		float ncoords[MaxAxes];
-		memcpyf(ncoords, ms.coords, ARRAY_SIZE(ncoords));
-		move.AxisAndBedTransform(ncoords, ms.currentTool, true);
-		ms.SetNewPositionOfOwnedAxes(ncoords);
+
+		ms.SetNewPositionOfOwnedAxes();
 		if (!IsSimulating())
 		{
 			axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);

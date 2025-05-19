@@ -82,10 +82,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ToolOffsetInverseTransform(ms);
 
 					// Update the endpoints and start coordinates
-					move.AxisAndBedTransform(ms.coords, ms.currentTool, true);
-					move.UpdateStartCoordinates(ms.GetNumber(), ms.coords);
+					float ncoords[MaxAxes];
+					memcpyf(ncoords, ms.coords, ARRAY_SIZE(ncoords));
+					move.AxisAndBedTransform(ncoords, ms.currentTool, true);
+					move.UpdateStartCoordinates(ms.GetNumber(), ncoords);
 					int32_t endpoints[MaxAxes];
-					move.CartesianToMotorSteps(ms.coords, endpoints, false);
+					move.CartesianToMotorSteps(ncoords, endpoints, false);
 					// Only pass axis (not extruder) drives in the following, we don't want to modify extruder positions
 					ms.ChangeEndpointsAfterHoming(ms.logicalDrivesOwned & LogicalDrivesBitmap::MakeLowestNBits(numTotalAxes), endpoints);
 				}
@@ -1406,7 +1408,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// Successful probing
 					float m[MaxAxes];
-					move.GetCurrentMachinePosition(m, ms.GetNumber());		// get height without bed compensation
+					move.GetCurrentMachinePosition(m, ms.GetNumber());			// get height without bed compensation
 					const float g30zStoppedHeight = m[Z_AXIS] - g30HValue;		// save for later
 					zp->SetLastStoppedHeight(g30zStoppedHeight);
 					if (tapsDone > 0)											// don't accumulate the result if we are doing fast-then-slow probing and this was the fast probe
@@ -1432,15 +1434,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// Reset the Z axis origin according to the height error so that we can move back up to the dive height
 					ms.coords[Z_AXIS] = zp->GetActiveModeTriggerHeight();
-					ms.SetNewPositionOfOwnedAxes(ms.coords);
-
-					// Find the coordinates of the Z probe to pass to SetZeroHeightError
-					float tempCoords[MaxAxes];
-					memcpyf(tempCoords, ms.coords, ARRAY_SIZE(tempCoords));
-					tempCoords[X_AXIS] += zp->GetOffset(X_AXIS);
-					tempCoords[Y_AXIS] += zp->GetOffset(Y_AXIS);
-					move.SetZeroHeightError(tempCoords);
 					ToolOffsetInverseTransform(ms);
+					ms.SetNewPositionOfOwnedAxes();
+					move.SetZeroHeightError(ms.coords, zp.Ptr());
 
 					g30zHeightErrorSum = g30zHeightError = 0.0;					// there is no longer any height error from this probe
 					SetAxisIsHomed(Z_AXIS);										// this is only correct if the Z axis is Cartesian-like, but other architectures must be homed before probing anyway
@@ -1495,15 +1491,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				// Setting the Z height with G30
 				ms.coords[Z_AXIS] -= g30zHeightError;
-				ms.SetNewPositionOfOwnedAxes(ms.coords);
-
-				// Find the coordinates of the Z probe to pass to SetZeroHeightError
-				float tempCoords[MaxAxes];
-				memcpyf(tempCoords, ms.coords, ARRAY_SIZE(tempCoords));
-				tempCoords[X_AXIS] += zp->GetOffset(X_AXIS);
-				tempCoords[Y_AXIS] += zp->GetOffset(Y_AXIS);
-				move.SetZeroHeightError(tempCoords);
 				ToolOffsetInverseTransform(ms);
+				ms.SetNewPositionOfOwnedAxes();
+				move.SetZeroHeightError(ms.coords, zp.Ptr());
 			}
 			gb.AdvanceState();
 			if (zp->GetProbeType() != ZProbeType::blTouch)			// if it's a BLTouch then we have already retracted it
@@ -1522,8 +1512,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// G30 with a silly Z value and S=1 is equivalent to G30 with no parameters in that it sets the current Z height
 				// This is useful because it adjusts the XY position to account for the probe offset.
 				ms.coords[Z_AXIS] -= g30zHeightError;
-				ms.SetNewPositionOfOwnedAxes(ms.coords);
 				ToolOffsetInverseTransform(ms);
+				ms.SetNewPositionOfOwnedAxes();
+				const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+				move.SetZeroHeightError(ms.coords, zp.Ptr());
 			}
 			else if (g30SValue >= -1)
 			{

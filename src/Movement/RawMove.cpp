@@ -313,15 +313,26 @@ void MovementState::InitObjectCancellation() noexcept
 	currentObjectCancelled = printingJustResumed = false;
 }
 
-void MovementState::SetNewPositionOfOwnedAxes(float ncoords[MaxAxes]) noexcept
+// Set the motor positions to where the machine coordinates say they should be
+void MovementState::SetNewPositionOfOwnedAxes() noexcept
 {
+	// First apply any skew compensation
+	float ncoords[MaxAxes];
+	memcpyf(ncoords, coords, ARRAY_SIZE(ncoords));
+	Move& move = reprap.GetMove();
+	move.AxisAndBedTransform(ncoords, currentTool, true);
+
+	// Now convert those coordinates to motor positions
 	int32_t endpoints[MaxAxesPlusExtruders];
 	memcpyi32(endpoints, lastKnownEndpoints, ARRAY_SIZE(endpoints));
-	Move& move = reprap.GetMove();
 	move.CartesianToMotorSteps(ncoords, endpoints, false);
-	move.SetLastEndpoints(msNumber, logicalDrivesOwned, endpoints);
-	move.SetMotorPositions(logicalDrivesOwned, endpoints);
+
+	// Update the start coordinates and the endpoints in the DDA ring
 	move.UpdateStartCoordinates(msNumber, ncoords);
+	move.SetLastEndpoints(msNumber, logicalDrivesOwned, endpoints);
+
+	// Update the motor endpoints
+	move.SetMotorPositions(logicalDrivesOwned, endpoints);
 }
 
 // Fetch lastKnownEndpoints from the motors for our owned drives and update the endpoints in our DDA ring
