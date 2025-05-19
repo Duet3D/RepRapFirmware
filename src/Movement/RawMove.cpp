@@ -327,12 +327,11 @@ void MovementState::SetNewPositionOfOwnedAxes() noexcept
 	memcpyi32(endpoints, lastKnownEndpoints, ARRAY_SIZE(endpoints));
 	move.CartesianToMotorSteps(ncoords, endpoints, false);
 
-	// Update the start coordinates and the endpoints in the DDA ring
+	// Update the start coordinates in the DDA ring
 	move.UpdateStartCoordinates(msNumber, ncoords);
-	move.SetLastEndpoints(msNumber, logicalDrivesOwned, endpoints);
 
-	// Update the motor endpoints
-	move.SetMotorPositions(logicalDrivesOwned, endpoints);
+	// Update the motor endpoints in the DDA ring, in the DMs, and in lastKnownEndpoints
+	ChangeEndpointsAfterHoming(logicalDrivesOwned, endpoints);
 }
 
 // Fetch lastKnownEndpoints from the motors for our owned drives and update the endpoints in our DDA ring
