@@ -260,6 +260,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "printingJerk",		OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetPrintingInstantDv(context.GetLastIndex())), 1),		ObjectModelEntryFlags::none },
 	{ "reducedAcceleration", OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(context.GetLastIndex(), true)), 1),			ObjectModelEntryFlags::none },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
+	{ "stepPos",			OBJECT_MODEL_FUNC(self->GetLiveMotorPosition(context.GetLastIndex())),											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->DriveStepsPerMm(context.GetLastIndex()), 2),											ObjectModelEntryFlags::none },
 	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(reprap.GetGCodes().GetCurrentMovementState(context), context.GetLastIndex()), 3), ObjectModelEntryFlags::live },
 	{ "visible",			OBJECT_MODEL_FUNC_NOSELF(context.GetLastIndex() < (int32_t)reprap.GetGCodes().GetVisibleAxes()),				ObjectModelEntryFlags::none },
@@ -325,10 +326,10 @@ constexpr uint8_t Move::objectModelTableDescriptor[] =
 	2,
 	4,
 #ifdef DUET_NG	// Duet WiFi/Ethernet doesn't have settable standstill current and doesn't support phase stepping
-	22,																		// section 9: move.axes[]
+	23,																		// section 9: move.axes[]
 	16,																		// section 10: move.extruders[]
 #else
-	23 + SUPPORT_PHASE_STEPPING,											// section 9: move.axes[]
+	24 + SUPPORT_PHASE_STEPPING,											// section 9: move.axes[]
 	17 + SUPPORT_PHASE_STEPPING,											// section 10: move.extruders[]
 #endif
 	3,																		// section 11: move.extruders[].nonlinear
