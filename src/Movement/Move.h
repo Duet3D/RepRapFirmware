@@ -301,7 +301,7 @@ public:
 																			// Take a position and apply the bed and the axis-angle compensations
 	void InverseAxisAndBedTransform(float move[], const Tool *_ecv_null tool) const noexcept;
 																			// Go from a transformed point back to user coordinates
-	void SetZeroHeightError(const float coords[MaxAxes]) noexcept;			// Set zero height error at these bed coordinates
+	void SetZeroHeightError(const float coords[MaxAxes], const ZProbe *zp) noexcept;	// Set zero height error at these bed coordinates
 	float GetTaperHeight() const noexcept { return (useTaper) ? taperHeight : 0.0; }
 	void SetTaperHeight(float h) noexcept;
 	bool UseMesh(bool b) noexcept;											// Try to enable mesh bed compensation and report the final state

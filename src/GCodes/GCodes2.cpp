@@ -157,10 +157,16 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 // Handle G-command returning true if the command completed, false if this function needs to be called again to complete it
 bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	const int code = gb.GetCommandNumber();
 	if (stopped)
 	{
 		HandleResult(gb, GCodeResult::stopped, reply, nullptr);
+		return true;
+	}
+
+	const int code = gb.GetCommandNumber();
+	if (code != 1 && gb.LatestMachineState().waitingForAcknowledgement)		// when doing manual probing we have to allow G1 commands
+	{
+		HandleResult(gb, GCodeResult::waitingForAckSoIgnored, reply, nullptr);
 		return true;
 	}
 
@@ -260,6 +266,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 4: // Dwell
+			BREAK_IF_NOT_EXECUTING
 			result = DoDwell(gb);
 			break;
 
@@ -271,7 +278,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					switch (ival)
 					{
 					case 1:
-						BREAK_IF_NOT_EXECUTING
+						BREAK_IF_NOT_EXECUTING								// this will only break from the local switch statement but that's OK in this case
 						result = SetOrReportOffsets(gb, reply, 10);			// same as G10 with offsets and no L parameter
 						break;
 
@@ -591,23 +598,34 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	return HandleResult(gb, result, reply, nullptr);
 }
 
+// Return true if the M-code number passed is a request for status
+static bool IsStatusRequestMCode(int code) noexcept
+{
+	return code == 105 || code == 109 || code == 114 || code == 115 || code == 122 || code == 408 || code == 409;
+}
+
 bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const int code = gb.GetCommandNumber();
-	if (stopped && code != 105 && code != 112 && code != 115 && code != 122 && code != 408 && code != 409 && code != 999)
+	if (stopped && !IsStatusRequestMCode(code) && code != 112 && code != 999)
 	{
 		HandleResult(gb, GCodeResult::stopped, reply, nullptr);
+		return true;
+	}
+	if (gb.LatestMachineState().waitingForAcknowledgement && !IsStatusRequestMCode(code) && code != 292)
+	{
+		HandleResult(gb, GCodeResult::waitingForAckSoIgnored, reply, nullptr);
 		return true;
 	}
 
 	// In simulation mode we don't execute most M-commands
 	if (   IsSimulating()
+		&& !IsStatusRequestMCode(code)
 		&& (code < 20 || code > 37)													// allow file operations while simulating
 		&& code != 0 && code != 1 && code != 82 && code != 83
 		&& code != 98 && code != 99													// allow macro calls when simulating
-		&& code != 105 && code != 109 && code != 111 && code != 112 && code != 115 && code != 120 && code != 121 && code != 122
+		&& code != 111 && code != 112 && code != 120 && code != 121
 		&& code != 200 && code != 204 && code != 205 && code != 207
-		&& code != 408 && code != 409 && code != 486
 		&& code != 572 && code != 593												// allow changes to PA and IS while simulating
 		&& code != 997 && code != 999												// allow reset and firmware update while simulating
 	   )
@@ -1933,7 +1951,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if defined(DUET3_ATE)
 				reply.lcatf("ATE firmware version %s date %s %s", Duet3Ate::GetFirmwareVersionString(), Duet3Ate::GetFirmwareDateString(), Duet3Ate::GetFirmwareTimeString());
 #else
-				reply.catf(" FIRMWARE_DATE: %s%s", DateText, TIME_SUFFIX);
+				reply.catf(" FIRMWARE_DATE: %s%s", DateText, TimeSuffix);
 #endif
 				break;
 
@@ -4697,6 +4715,11 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		HandleResult(gb, GCodeResult::stopped, reply, nullptr);
 		return true;
 	}
+	if (gb.LatestMachineState().waitingForAcknowledgement)
+	{
+		HandleResult(gb, GCodeResult::waitingForAckSoIgnored, reply, nullptr);
+		return true;
+	}
 
 	if (gb.LatestMachineState().runningM502)
 	{
@@ -4874,6 +4897,12 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		gb.PrintCommand(reply);
 		reply.cat(": Machine is halted");
 		rslt = GCodeResult::error;
+		break;
+
+	case GCodeResult::waitingForAckSoIgnored:
+		gb.PrintCommand(reply);
+		reply.cat(": Awaiting input, command ignored");
+		rslt = GCodeResult::warning;
 		break;
 
 #if SUPPORT_CAN_EXPANSION

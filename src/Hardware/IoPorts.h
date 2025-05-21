@@ -40,6 +40,22 @@ public:
 	bool GetTotalInvert() const noexcept { return totalInvert; }
 
 	bool ReadDigital() const noexcept;
+
+#if SAME5x
+	// Read the pin through the EIC debouncer. Only valid if an interrupt has been attached to the pin with debouncing enabled.
+	// On the SAME5x there is no debouncing on the pin itself, but the EI can deglitch or debounce before it generated an interrupt.
+	// The problem with this scheme is that if we read the pin inside the ISR, the state we read may not be the same as the state that caused the interrupt.
+	// This is a particular problem when the interrupt mode is 'change'. It can cause lost state changes for endstops or Z probes, because if e.g. the
+	// probe makes contact but bounces a bit, the contact may generate an interrupt but the ISR could read the pin as not triggered because of a bounce.
+	// If that bounce is too short to pass through the debouncer/deglitcher then we don't detect that the probe has triggered.
+	// We can mitigate this when using the debouncer if we read the pin state via the debounce register instead.
+	bool ReadDebouncedDigital() const noexcept
+	{
+		const bool b = ReadDebouncedPin(logicalPin);
+		return (totalInvert) ? !b : b;
+	}
+#endif
+
 	bool AttachInterrupt(StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param) const noexcept;
 	void DetachInterrupt() const noexcept;
 #if SAME5x

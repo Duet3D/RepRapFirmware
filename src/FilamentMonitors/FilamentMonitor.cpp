@@ -467,6 +467,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 					}
 					fs.lastRemoteStatus = newStatus;
 					fs.UpdateLiveData(slot);
+					break;
 				}
 			}
 		}

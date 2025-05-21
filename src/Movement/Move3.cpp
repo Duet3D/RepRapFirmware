@@ -150,12 +150,14 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null to
 }
 
 // Normalise the bed transform to have zero height error at these bed coordinates
-void Move::SetZeroHeightError(const float coords[MaxAxes]) noexcept
+void Move::SetZeroHeightError(const float coords[MaxAxes], const ZProbe *zp) noexcept
 {
 	if (usingMesh)
 	{
 		float tempCoords[MaxAxes];
 		memcpyf(tempCoords, coords, ARRAY_SIZE(tempCoords));
+		tempCoords[X_AXIS] += zp->GetOffset(X_AXIS);
+		tempCoords[Y_AXIS] += zp->GetOffset(Y_AXIS);
 		AxisTransform(tempCoords, nullptr);
 		const GridDefinition& grid = GetGrid();
 		zShift = -heightMap.GetInterpolatedHeightError(tempCoords[grid.GetAxisNumber(0)], tempCoords[grid.GetAxisNumber(1)]);

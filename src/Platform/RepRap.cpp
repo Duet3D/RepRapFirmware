@@ -867,7 +867,7 @@ void RepRap::GetDiagnosticsPart(unsigned int partNumber, const StringRef& reply)
 
 				// Parameters to match format string
 				FIRMWARE_NAME,
-				VERSION, DateText, TIME_SUFFIX, platform->GetElectronicsString()
+				VERSION, DateText, TimeSuffix, platform->GetElectronicsString()
 #ifdef DUET_NG
 				, ((expansionName == nullptr) ? "" : " + ")
 				, ((expansionName == nullptr) ? "" : expansionName)
