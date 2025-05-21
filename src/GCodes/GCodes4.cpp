@@ -61,35 +61,40 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				if (move.GetKinematics().GetHomingMode() == HomingMode::homeCartesianAxes)
 				{
-					// Now change the machine coordinates corresponding to endpoints that triggered
+					// The call to LockCurrentMovementSystemAndWaitForStandstill has already converted the motor endpoints to machine coordinates,
+					// however it has applied the inverse axis transform. We want to set the position after axis transform. So re-apply the transform.
+					float ncoords[MaxAxes];
+					memcpyf(ncoords, ms.coords, ARRAY_SIZE(ncoords));
+					move.AxisAndBedTransform(ncoords, ms.currentTool, true);
+
+					// Now change the coordinates after axis transform corresponding to the endstops that triggered
 					(ms.axesToHome & ms.endstopsTriggered)
-						.Iterate([this, &move, &ms](unsigned int axis, unsigned int) noexcept
+						.Iterate([this, &move, &ncoords](unsigned int axis, unsigned int) noexcept
 									{
 										const EndStopPosition stopType = platform.GetEndstops().GetEndStopPosition(axis);
 										if (stopType == EndStopPosition::highEndStop)
 										{
-											ms.coords[axis] = move.AxisMaximum(axis);
+											ncoords[axis] = move.AxisMaximum(axis);
 										}
 										else if (stopType == EndStopPosition::lowEndStop)
 										{
-											ms.coords[axis] = move.AxisMinimum(axis);
+											ncoords[axis] = move.AxisMinimum(axis);
 										}
 										SetAxisIsHomed(axis);
 									}
 								);
 
-					// Update the user coordinates
-					ToolOffsetInverseTransform(ms);
-
 					// Update the endpoints and start coordinates
-					float ncoords[MaxAxes];
-					memcpyf(ncoords, ms.coords, ARRAY_SIZE(ncoords));
-					move.AxisAndBedTransform(ncoords, ms.currentTool, true);
 					move.UpdateStartCoordinates(ms.GetNumber(), ncoords);
 					int32_t endpoints[MaxAxes];
 					move.CartesianToMotorSteps(ncoords, endpoints, false);
 					// Only pass axis (not extruder) drives in the following, we don't want to modify extruder positions
 					ms.ChangeEndpointsAfterHoming(ms.logicalDrivesOwned & LogicalDrivesBitmap::MakeLowestNBits(numTotalAxes), endpoints);
+
+					// Update the machine and user coordinates
+					move.InverseAxisAndBedTransform(ncoords, ms.currentTool);
+					memcpyf(ms.coords, ncoords,  ARRAY_SIZE(ncoords));
+					ToolOffsetInverseTransform(ms);
 				}
 				else
 				{
