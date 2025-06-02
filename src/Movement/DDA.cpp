@@ -1468,7 +1468,6 @@ int DDA::CalculateNewSCurveMove() noexcept
 // laDDA is the move that we want to adjust. We have already set laDDA->beforePrepare.targetNextSpeed and laDDA->beforePrepare.targetNextAcceleration to the values that the following move would like to start at.
 /*static*/ MovementError DDA::DoSCurveLookahead(DDARing& ring, DDA *laDDA) noexcept
 {
-	//TODO
 	laDDA->next->DebugPrint("DDA: ");
 	debugPrintf(" TNS %.3e, TNA %.3e\n", (double)laDDA->beforePrepare.targetNextSpeed, (double)laDDA->beforePrepare.targetNextAcceleration);
 
@@ -1558,6 +1557,12 @@ int DDA::CalculateNewSCurveMove() noexcept
 			}
 
 			// Currently, laDDA does not reach its requested speed. We may be able to increase its top speed if that would be helpful, but to do that we may need to adjust the previous move.
+			// Calculate the top speed that we would like to start the deceleration from.
+			// There are at least the following cases:
+			// 1. If the previous move is already committed, we can't ask it to change its ending speed or acceleration anyway.
+			// 2. Starting from targetNextSpeed and targetNextAcceleration, if we start reducing deceleration immediately then we will exceed our requested speed before we run out of distance.
+			// 3. Starting from targetNextSpeed and targetNextAcceleration, if we start reducing deceleration immediately then we will run out of distance before we reach our requested speed.
+			// 4. Starting from targetNextSpeed and targetNextAcceleration, if we start reducing deceleration immediately then we won't reach our requested speed, so we may need to introduce a constant acceleration segment
 			qq;
 		}
 		else
