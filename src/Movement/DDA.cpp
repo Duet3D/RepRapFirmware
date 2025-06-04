@@ -475,8 +475,8 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 		{
 			// It's an extruder drive. We defer calculating the steps because they may be affected by nonlinear extrusion, which we can't calculate until we
 			// know the speed of the move, and because extruder movement is relative so we need to accumulate fractions of a whole step between moves.
-			const float movement = nextMove.coords[drive];
-			directionVector[drive] = movement;							// for an extruder, endCoordinates is the amount of movement
+			const float movement = nextMove.coords[drive];				// for an extruder, endCoordinates is the amount of movement
+			directionVector[drive] = movement;
 			if (movement != 0.0)
 			{
 				extrudersMoving = true;
@@ -1162,7 +1162,6 @@ MovementError DDA::RecalculateMove(DDARing& ring) noexcept
 bool DDA::ExtrusionSpeedMatchesPrevious() const noexcept
 {
 	constexpr float maxProportionDifferent = 0.002;			// allow the difference to be up to 0.2% of the average
-	//const DDA *previous = prev;
 	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
 	{
 		const float thisExtrusion = directionVector[drive];
@@ -1553,7 +1552,7 @@ int DDA::CalculateNewSCurveMove() noexcept
 
 				// Not enough distance to decelerate to the requested values, so we need to reduce laDDA->topSpeed
 				// This should only occur if we reduce the requested start acceleration and/or start speed of the next move, which should not normally happen (but might when we introduce feed hold)
-				qq;
+				return MovementError::move_speed_reduced;
 			}
 
 			// Currently, laDDA does not reach its requested speed. We may be able to increase its top speed if that would be helpful, but to do that we may need to adjust the previous move.
@@ -1563,7 +1562,42 @@ int DDA::CalculateNewSCurveMove() noexcept
 			// 2. Starting from targetNextSpeed and targetNextAcceleration, if we start reducing deceleration immediately then we will exceed our requested speed before we run out of distance.
 			// 3. Starting from targetNextSpeed and targetNextAcceleration, if we start reducing deceleration immediately then we will run out of distance before we reach our requested speed.
 			// 4. Starting from targetNextSpeed and targetNextAcceleration, if we start reducing deceleration immediately then we won't reach our requested speed, so we may need to introduce a constant acceleration segment
-			qq;
+			if (laDDA->prev->state != DDA::provisional)
+			{
+				// We can't adjust the previous move
+				// Assuming we have been asked to increase our ending speed, calculate the time to max acceleration and the corresponding final speed, acceleration and distance
+				float timeToMaxAcceleration;
+				float distanceToMaxAcceleration;
+				float speedToMaxAcceleration;
+				if (laDDA->maxAcceleration - laDDA->startAcceleration > 0.0)
+				{
+					timeToMaxAcceleration = (laDDA->maxAcceleration - laDDA->startAcceleration)/laDDA->jerk;
+					distanceToMaxAcceleration = (laDDA->startSpeed + (OneHalf * laDDA->startAcceleration + OneSixth * (laDDA->maxAcceleration - laDDA->startAcceleration)) * timeToMaxAcceleration) * timeToMaxAcceleration;
+					if (distanceToMaxAcceleration > laDDA->totalDistance)
+					{
+						// We can't reach maximum acceleration in the distance available. Solve a cubic to calculate what we can do.
+						timeToMaxAcceleration = SmallestNonNegativeCubicSolution(OneSixth* laDDA->jerk, OneHalf * laDDA->startAcceleration, laDDA->startSpeed, -laDDA->totalDistance);
+						distanceToMaxAcceleration = (laDDA->startSpeed + (OneHalf * laDDA->startAcceleration + (OneSixth * jerk * timeToMaxAcceleration)) * timeToMaxAcceleration) * timeToMaxAcceleration;
+						speedToMaxAcceleration = laDDA->startSpeed + (laDDA->startAcceleration + OneHalf * (laDDA->maxAcceleration - laDDA->startAcceleration)) * timeToMaxAcceleration;
+					}
+					else
+					{
+						speedToMaxAcceleration = laDDA->startSpeed + (laDDA->startAcceleration + OneHalf * laDDA->jerk * timeToMaxAcceleration) * timeToMaxAcceleration;
+					}
+				}
+				else
+				{
+					timeToMaxAcceleration = 0.0;
+					distanceToMaxAcceleration = 0.0;
+					speedToMaxAcceleration = laDDA->startSpeed;
+				}
+				qq;
+			}
+			else
+			{
+				// We may be able to adjust the previous move
+				qq;
+			}
 		}
 		else
 		{
