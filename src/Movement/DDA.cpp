@@ -637,79 +637,88 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	}
 
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
-	endSpeed = 0.0;																// until we have a following move
 #if SUPPORT_S_CURVE
-	endDeceleration = 0.0;														// end deceleration is zero until we have a following move
+	if (   prev->state == provisional												// if previous move is queued but has not started yet
+		&& flags.isPrintingMove == prev->flags.isPrintingMove
+		&& flags.xyMoving == prev->flags.xyMoving
+		&& flags.isNonPrintingExtruderMove == prev->flags.isNonPrintingExtruderMove	// this is to prevent extruder-only move being melded with Z-axis moves (issue 990)
+	   )
+	{
+		// We may be able to meld this move with the previous one
+		if (flags.isPrintingMove)
+		{
+			SetSpeedRatioForPrintingMoves(move);
+		}
+		else
+		{
+			startSpeedRatio = 1.0;
+			maxPrevEndSpeed = min<float>(requestedSpeed, prev->requestedSpeed);
+		}
+	}
+	else
+	{
+		// This will be the first move after standstill
+		endDeceleration = 0.0;														// end deceleration is zero until we have a following move
+		startSpeedRatio = 1.0;
+		maxPrevEndSpeed = 0.0;
+	}
 #endif
 
-	MovementError rslt;															// this will hold the return value
+	endSpeed = 0.0;																	// until we have a following move
+
+	MovementError rslt;																// this will hold the return value
 
 	// See if we can meld this with the end of the previous one (which must currently have the end speed set to zero)
-	if (   prev->state == provisional											// if previous move has not started yet
-		&& (   move.GetJerkPolicy() != 0										// and melding is allowed
+#if SUPPORT_S_CURVE
+	if (maxPrevEndSpeed > 0.0)
+	{
+		if (flags.useScurve)
+		{
+			qq;
+		}
+		else
+		{
+			// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = -2as limited to the requested speed
+			prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(maxDeceleration * totalDistance * 2.0), maxPrevEndSpeed);
+			DoLookahead(ring, prev);
+			startSpeed = prev->endSpeed * startSpeedRatio;
+			rslt = RecalculateMove(ring);
+		}
+	}
+	else
+	{
+		startSpeed = 0.0;
+		if (flags.useScurve)
+		{
+			startAcceleration = 0.0;
+			rslt = CalculateIsolatedSCurveMove();
+		}
+		else
+		{
+			rslt = RecalculateMove(ring);
+		}
+	}
+#else
+	if (   prev->state == provisional												// if previous move has not started yet
+		&& (   move.GetJerkPolicy() != 0											// and melding is allowed
 			|| (   flags.isPrintingMove == prev->flags.isPrintingMove
 				&& flags.xyMoving == prev->flags.xyMoving
 				&& flags.isNonPrintingExtruderMove == prev->flags.isNonPrintingExtruderMove		// this is to prevent extruder-only move being melded with Z-axis moves (issue 990)
-#if SUPPORT_S_CURVE
-				&& ExtrusionSpeedMatchesPrevious()
-#endif
 			   )
 		   )
 	   )
 	{
 		// Try to meld this move to the previous move to avoid stop/start
-#if SUPPORT_S_CURVE
-		if (flags.useScurve)
-		{
-# if 0
-			//TODO this is temporary code until we implement S-curve lookahead
-			startSpeed = startAcceleration = 0.0;
-			rslt = CalculateIsolatedSCurveMove();
-# else
-			const int failingLine = CalculateNewSCurveMove();
-			if (failingLine == 0)
-			{
-				rslt = DoSCurveLookahead(ring, prev);
-			}
-			else
-			{
-				const StringRef& dbgRef = Platform::genericDebugBuffer.GetRef();
-				dbgRef.printf("3rd order planning error at line %u\n: ", failingLine);
-				Platform::hasGenericDebug = true;
-				startSpeed = startAcceleration = 0.0;
-				rslt = CalculateIsolatedSCurveMove();
-			}
-# endif
-		}
-		else
-#endif
-		{
-			// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = -2as limited to the requested speed
-			prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(maxDeceleration * totalDistance * 2.0), requestedSpeed);
-			DoLookahead(ring, prev);
-			startSpeed = prev->endSpeed;
-#if SUPPORT_S_CURVE
-			rslt = RecalculateMove(ring);
-#endif
-		}
+		// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = -2as limited to the requested speed
+		prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(maxDeceleration * totalDistance * 2.0), requestedSpeed);
+		DoLookahead(ring, prev);
+		startSpeed = prev->endSpeed;
 	}
 	else
 	{
 		startSpeed = 0.0;														// there is no previous move that we can adjust, so start at zero speed.
-#if SUPPORT_S_CURVE
-		startAcceleration = 0.0;												// and zero acceleration
-		if (flags.useScurve)
-		{
-			rslt = CalculateIsolatedSCurveMove();
-		}
-		else
-		{
-			rslt = RecalculateMove(ring);
-		}
-#endif
 	}
 
-#if !SUPPORT_S_CURVE
 	rslt = RecalculateMove(ring);
 #endif
 
@@ -719,6 +728,65 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	}
 	return rslt;
 }
+
+#if SUPPORT_S_CURVE
+
+// If the extrusion mix hasn't changed, calculate the feed rate ratio needed to maintain constant extrusion speed and the maximum end speed of the previous move
+void DDA::SetSpeedRatioForPrintingMoves(const Move& move) noexcept
+{
+	float extrusionRatio;
+	bool found = false;
+	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
+	{
+		if (directionVector[drive] < 0.0 || prev->directionVector[drive] < 0.0)
+		{
+			startSpeedRatio = maxPrevEndSpeed = 0.0;
+			return;
+		}
+		else if (prev->directionVector[drive] != 0.0)
+		{
+			const float tempRatio = directionVector[drive]/prev->directionVector[drive];
+			if (tempRatio < 0.2)
+			{
+				startSpeedRatio = maxPrevEndSpeed = 0.0;
+				return;
+			}
+
+			if (!found)
+			{
+				extrusionRatio = tempRatio;
+				found = true;
+			}
+			else if (fabsf(tempRatio - extrusionRatio) > extrusionRatio * 0.01)		// require the mix to be unchanged between extruders to within 1%
+			{
+				startSpeedRatio = maxPrevEndSpeed = 0.0;
+				return;
+			}
+		}
+		else if (directionVector[drive] != 0.0)
+		{
+			startSpeedRatio = maxPrevEndSpeed = 0.0;
+			return;
+		}
+	}
+
+	// If we get here then the extrusion ratio hasn't changed significantly
+	startSpeedRatio = extrusionRatio;
+
+	// Now calculate the maximum previous move end speed that doesn't exceed the jerk limit for any axis
+	float provisionalMaxEndSpeed = min<float>(requestedSpeed/startSpeedRatio, prev->requestedSpeed);
+	for (size_t axis = 0; axis < reprap.GetGCodes().GetVisibleAxes(); ++axis)
+	{
+		const float axisDv = startSpeedRatio * directionVector[axis] - prev->directionVector[axis];
+		if (fabsf(provisionalMaxEndSpeed * axisDv) > move.GetMaxInstantDv(axis))
+		{
+			provisionalMaxEndSpeed = move.GetMaxInstantDv(axis)/axisDv;
+		}
+	}
+	maxPrevEndSpeed = provisionalMaxEndSpeed;
+}
+
+#endif
 
 // Set up a leadscrew motor move returning true if the move does anything
 bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustments[MaxDriversPerAxis]) noexcept
@@ -1157,30 +1225,6 @@ MovementError DDA::RecalculateMove(DDARing& ring) noexcept
 }
 
 #if SUPPORT_S_CURVE
-
-// Return true if the extrusion speed of this move closely matches the previous move
-bool DDA::ExtrusionSpeedMatchesPrevious() const noexcept
-{
-	constexpr float maxProportionDifferent = 0.002;			// allow the difference to be up to 0.2% of the average
-	//const DDA *previous = prev;
-	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
-	{
-		const float thisExtrusion = directionVector[drive];
-		const float prevExtrusion = prev->directionVector[drive];
-		if (thisExtrusion != 0.0)
-		{
-			if (fabsf(thisExtrusion - prevExtrusion) > (thisExtrusion + prevExtrusion) * (2 * maxProportionDifferent))
-			{
-				return false;
-			}
-		}
-		else if (prevExtrusion != 0.0)
-		{
-			return false;
-		}
-	}
-	return true;
-}
 
 void DDA::RecalculateSCurveMove(DDARing& ring) noexcept
 {

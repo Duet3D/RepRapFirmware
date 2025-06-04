@@ -166,6 +166,10 @@ public:
 	void SetDoneFeedForward() noexcept { flags.doneFeedForward = true; }
 	void SetDoneOutputOnExtrude() noexcept { flags.doneOutputOnExtrude = true; }
 
+#if SUPPORT_S_CURVE
+	void SetSpeedRatioForPrintingMoves(const Move& move) noexcept;
+#endif
+
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }
 #endif
@@ -248,7 +252,7 @@ private:
 					 isNonPrintingExtruderMove : 1,	// True if this move is an extruder-only move, or involves reverse extrusion (and possibly axis movement too)
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
 					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
-					 controlLaserOrIoBits : 1,				// True if this move controls the laser or iobits
+					 controlLaserOrIoBits : 1,		// True if this move controls the laser or iobits
 					 isolatedMove : 1,				// set if we disable input shaping for this move and wait for it to finish e.g. for a G1 H2 move
 					 doneIoBits : 1,				// set if we have written the IOBITS ports for this move
 					 doneFeedForward : 1,			// set if we have commanded feedforward for this move
@@ -279,6 +283,8 @@ private:
     float startAcceleration, peakAcceleration, finalAcceleration;	// accelerations, always positive or zero
     float initialDeceleration, peakDeceleration, endDeceleration;	// decelerations, always negative or zero
 	float jerk;										// The magnitude of the rate of change of acceleration or deceleration, always positive
+	float startSpeedRatio;							// the ratio of start speed of this move to the end speed of the previous move needed to maintain the same extrusion speed across the boundary
+	float maxPrevEndSpeed;							// the maximum end speed we can have for the previous move to remain within the instantaneous speed change limits
 #endif
     float requestedSpeed;							// The speed that the user asked for
     float virtualExtruderPosition;					// the virtual extruder position at the end of this move, used for pause/resume
