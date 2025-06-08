@@ -164,7 +164,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	}
 
 	const int code = gb.GetCommandNumber();
-	if (code != 1 && gb.LatestMachineState().waitingForAcknowledgement)		// when doing manual probing we have to allow G1 commands
+	if (code != 1 && code != 90 && code != 91 && gb.LatestMachineState().waitingForAcknowledgement)		// when doing manual probing we have to allow G91 and G1 commands. For consistency allow G90 too.
 	{
 		HandleResult(gb, GCodeResult::waitingForAckSoIgnored, reply, nullptr);
 		return true;
@@ -612,7 +612,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		HandleResult(gb, GCodeResult::stopped, reply, nullptr);
 		return true;
 	}
-	if (gb.LatestMachineState().waitingForAcknowledgement && !IsStatusRequestMCode(code) && code != 292)
+	if (gb.LatestMachineState().waitingForAcknowledgement && !IsStatusRequestMCode(code) && code != 120 && code != 121 && code != 292)	// DWC sends M120 G91 G1 ... M121 to jog axes
 	{
 		HandleResult(gb, GCodeResult::waitingForAckSoIgnored, reply, nullptr);
 		return true;
