@@ -80,6 +80,7 @@ public:
 	enum DDAState : uint8_t
 	{
 		empty,				// empty or being filled in
+		unplanned,			// filled in but not yet planned
 		provisional,		// ready, but could be subject to modifications
 		committed			// has been converted into move segments already
 	};
@@ -175,25 +176,21 @@ public:
 #endif
 
 #if SUPPORT_LASER
-	uint32_t ManageLaserPower(Platform& p) const noexcept;							// Manage the laser power
+	uint32_t ManageLaserPower(Platform& p) const noexcept;					// Manage the laser power
 #endif
 
 #if SUPPORT_IOBITS
 	IoBits_t GetIoBits() const noexcept { return laserPwmOrIoBits.ioBits; }
 #endif
 
-	void DebugPrint(const char *_ecv_array tag) const noexcept;						// print the DDA only
+	void DebugPrint(const char *_ecv_array tag) const noexcept;				// print the DDA only
 
-	static void PrintMoves() noexcept;												// print saved moves for debugging
+	static void PrintMoves() noexcept;										// print saved moves for debugging
 
 #if DDA_LOG_PROBE_CHANGES
 	static const size_t MaxLoggedProbePositions = 40;
 	static size_t numLoggedProbePositions;
 	static int32_t loggedProbePositions[XYZ_AXES * MaxLoggedProbePositions];
-#endif
-
-#if 0	// debug only
-	static uint32_t stepsRequested[NumDirectDrivers], stepsDone[NumDirectDrivers];
 #endif
 
 private:
@@ -203,11 +200,7 @@ private:
 	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
 
 #if SUPPORT_S_CURVE
-	void RecalculateSCurveMove(DDARing& ring) noexcept SPEED_CRITICAL;
 	MovementError CalculateIsolatedSCurveMove() noexcept SPEED_CRITICAL pre(endSpeed == 0.0; endDeceleration == 0.0);
-	int CalculateNewSCurveMove() noexcept SPEED_CRITICAL pre(endSpeed == 0.0; endDeceleration == 0.0);
-	static MovementError DoSCurveLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
-	bool ExtrusionSpeedMatchesPrevious() const noexcept;
 #endif
 
 	void MatchSpeeds() noexcept SPEED_CRITICAL;

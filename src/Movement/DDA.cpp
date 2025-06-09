@@ -674,7 +674,8 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	{
 		if (flags.useScurve)
 		{
-			qq;
+			state = DDAState::unplanned;											// postpone planning this move until preparation
+			return MovementError::ok;
 		}
 		else
 		{
@@ -734,7 +735,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 // If the extrusion mix hasn't changed, calculate the feed rate ratio needed to maintain constant extrusion speed and the maximum end speed of the previous move
 void DDA::SetSpeedRatioForPrintingMoves(const Move& move) noexcept
 {
-	float extrusionRatio;
+	float extrusionRatio = 1.0;
 	bool found = false;
 	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
 	{
@@ -1226,11 +1227,6 @@ MovementError DDA::RecalculateMove(DDARing& ring) noexcept
 
 #if SUPPORT_S_CURVE
 
-void DDA::RecalculateSCurveMove(DDARing& ring) noexcept
-{
-	//TODO
-}
-
 // Calculate the move to be added to the ring when the start speed and acceleration and the end speed and acceleration are all zero
 // Caller has already set endSpeed and endDeceleration to zero
 // For an S-curve acceleration phase which starts at speed u and acceleration a, spends time t1 accelerating with jerk j to peak acceleration ap, then spends time t2 at constant acceleration ap, then spends time t1 reducing acceleration back to a:
@@ -1326,6 +1322,8 @@ MovementError DDA::CalculateIsolatedSCurveMove() noexcept
 	clocksNeeded = (int32_t)totalClocks;
 	return (totalClocks < std::numeric_limits<int32_t>::max() - 100) ? MovementError::ok : MovementError::move_duration_too_long;
 }
+
+#if 0	// we are probably not going to use this
 
 // Add a new S-curve move to the ring when there is already at least one move there and we would like to meld them
 // Returns 0 if successful and we are ready to do lookahead, else the line number at wich a problem was detected
@@ -1618,6 +1616,7 @@ int DDA::CalculateNewSCurveMove() noexcept
 	}
 }
 
+#endif
 #endif
 
 // Decide what speed we would really like this move to end at and the next move to start at, assuming we want to use the same speed for both.
