@@ -23,6 +23,16 @@
 class DDARing;
 class CanMessageMovementLinearShaped;
 
+struct MoveProfile
+{
+	float startSpeed, endSpeed, topSpeed;
+#if SUPPORT_S_CURVE
+	float startAcceleration, peakAcceleration, finalAcceleration;	// accelerations, always positive or zero
+    float initialDeceleration, peakDeceleration, endDeceleration;	// decelerations, always negative or zero
+    float phase1Time, phase2Time, phase3Time, phase4Time, phase5Time, phase6Time, phase7Time;
+#endif
+};
+
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
 struct PrepParams
 {
@@ -127,21 +137,26 @@ public:
 	FilePosition GetFilePosition() const noexcept { return filePos; }
 	float GetRequestedSpeedMmPerClock() const noexcept { return requestedSpeed; }
 	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(requestedSpeed); }
-	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(topSpeed); }
+	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(profile.topSpeed); }
 	float GetAccelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
 #if SUPPORT_S_CURVE
-		{ return InverseConvertAcceleration(peakAcceleration); }
+		{ return InverseConvertAcceleration(profile.peakAcceleration); }
 #else
 		{ return InverseConvertAcceleration(maxAcceleration); }
 #endif
 	float GetDecelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
 #if SUPPORT_S_CURVE
-		{ return InverseConvertAcceleration(peakDeceleration); }
+		{ return InverseConvertAcceleration(profile.peakDeceleration); }
 #else
 		{ return InverseConvertAcceleration(maxDeceleration); }
 #endif
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float GetTotalExtrusionRate() const noexcept;
+
+#if SUPPORT_S_CURVE
+	bool IsSCurveMove() const noexcept { return flags.useScurve; }
+	bool IsFullyPlanned() const noexcept { return flags.fullyPlanned; }
+#endif
 
 	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcept;	// Try to push babystepping earlier in the move queue
 	const Tool *_ecv_null GetTool() const noexcept { return tool; }
@@ -169,6 +184,7 @@ public:
 
 #if SUPPORT_S_CURVE
 	void SetSpeedRatioForPrintingMoves(const Move& move) noexcept;
+	static void PlanMoves(DDA *firstUnpreparedMove, bool stopping) noexcept;
 #endif
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
@@ -249,15 +265,13 @@ private:
 					 isolatedMove : 1,				// set if we disable input shaping for this move and wait for it to finish e.g. for a G1 H2 move
 					 doneIoBits : 1,				// set if we have written the IOBITS ports for this move
 					 doneFeedForward : 1,			// set if we have commanded feedforward for this move
-					 doneOutputOnExtrude: 1			// set if we have set/cleared output on extrude for ths move
+					 doneOutputOnExtrude: 1			// set if we have set/cleared output on extrude for this move
 #if SUPPORT_SCANNING_PROBES
 					 , scanningProbeMove : 1 	 	// True if this is a scanning Z probe move
 #endif
 #if SUPPORT_S_CURVE
 					 , useScurve : 1,				// set if this move uses S-curve acceleration
-					 usingMaxAccceleration : 1,		// set if this move and all previous contiguous moves accelerate at the maximum rate, so there is no point asking them to accelerate faster
-					 haveReducedSpeed: 1,
-					 haveReducedAcceleration: 1
+					 fullyPlanned : 1				// set if this move can't be made to go any faster even if we add more moves to the ring
 #endif
 					 ;
 		};
@@ -273,19 +287,13 @@ private:
     float totalDistance;							// How long is the move in hypercuboid space
     float maxAcceleration, maxDeceleration;			// The maximum acceleration and deceleration to use, always positive
 #if SUPPORT_S_CURVE
-    float startAcceleration, peakAcceleration, finalAcceleration;	// accelerations, always positive or zero
-    float initialDeceleration, peakDeceleration, endDeceleration;	// decelerations, always negative or zero
 	float jerk;										// The magnitude of the rate of change of acceleration or deceleration, always positive
-	float startSpeedRatio;							// the ratio of start speed of this move to the end speed of the previous move needed to maintain the same extrusion speed across the boundary
-	float maxPrevEndSpeed;							// the maximum end speed we can have for the previous move to remain within the instantaneous speed change limits
 #endif
     float requestedSpeed;							// The speed that the user asked for
     float virtualExtruderPosition;					// the virtual extruder position at the end of this move, used for pause/resume
 
     // These vary depending on how we connect the move with its predecessor and successor, but remain constant while the move is being executed
-	float startSpeed;
-	float endSpeed;
-	float topSpeed;
+    MoveProfile profile;
 
 	float proportionDone;							// what proportion of the extrusion in the G1 or G0 move of which this is a part has been done after this segment is complete
 	float initialUserC0, initialUserC1;				// if this is a segment of an arc move, the user X and Y coordinates at the start
@@ -304,9 +312,8 @@ private:
 			float decelDistance;
 			float targetNextSpeed;					// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
 #if SUPPORT_S_CURVE
-			float targetNextAcceleration;			// The acceleration that the next move would like to start at
-			//TODO we may not need all of the following, or we may be able to remove accelDistance and decelDistance when using S-curve acceleration
-		    float phase1Time, phase2Time, phase3Time, phase4Time, phase5Time, phase6Time, phase7Time;
+			float startSpeedRatio;					// the ratio of start speed of this move to the end speed of the previous move needed to maintain the same extrusion speed across the boundary
+			float maxPrevEndSpeed;					// the maximum end speed we can have for the previous move to remain within the instantaneous speed change limits
 #endif
 		} beforePrepare;
 

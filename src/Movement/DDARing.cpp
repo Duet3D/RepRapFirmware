@@ -344,7 +344,6 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept
 {
 	// If the already-prepared moves will execute in less than the minimum time, prepare another move.
-	// Try to avoid preparing deceleration-only moves too early
 	while (	  firstUnpreparedMove->GetState() == DDA::provisional
 		   && moveTimeLeft < prepareAdvanceTime	// prepare moves one tenth of a second ahead of when they will be needed
 		   && alreadyPrepared * 2 < numDdasInRing					// but don't prepare more than half the ring, to handle accelerate/decelerate moves in small segments
@@ -353,6 +352,12 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 #endif
 		  )
 	{
+#if SUPPORT_S_CURVE
+		if (firstUnpreparedMove->IsSCurveMove() && !firstUnpreparedMove->IsFullyPlanned())
+		{
+			DDA::PlanMoves(firstUnpreparedMove, false);
+		}
+#endif
 		firstUnpreparedMove->Prepare(*this, prepareAdvanceTime, simulationMode);
 		moveTimeLeft += firstUnpreparedMove->GetTimeLeft();
 		++alreadyPrepared;
