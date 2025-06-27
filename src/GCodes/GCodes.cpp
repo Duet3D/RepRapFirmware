@@ -3592,6 +3592,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 
 		FileGCode()->LatestMachineState().volumetricExtrusion = false;		// default to non-volumetric extrusion
 		FileGCode()->LatestMachineState().selectedPlane = 0;				// default G2 and G3 moves to XY plane
+		FileGCode()->LatestMachineState().inverseTimeMode = false;			// default to standard feedrate mode
 #if SUPPORT_ASYNC_MOVES
 		FileGCode()->ExecuteAll();											// execute commands for all movement systems initially
 #endif
