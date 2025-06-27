@@ -849,7 +849,8 @@ void TmcDriverState::SetStallDetectFilter(bool sgFilter) noexcept
 
 void TmcDriverState::SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept
 {
-	maxStallStepInterval = StepClockRate/max<unsigned int>(stepsPerSecond, 1u);
+	if (stepsPerSecond == 0) { stepsPerSecond = 1; }					// avoid divide-by-zero errors
+	maxStallStepInterval = StepClockRate/stepsPerSecond;
 	UpdateRegister(WriteTcoolthrs, (TmcClockSpeed + (128 * stepsPerSecond))/(256 * stepsPerSecond));
 }
 
