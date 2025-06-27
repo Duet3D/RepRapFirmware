@@ -246,6 +246,8 @@ private:
 	ParameterLettersBitmap ownedAxisLetters;						// cache of letters denoting user axes for which the corresponding machine axes for the current tool are definitely owned
 
 	static LogicalDrivesBitmap allLogicalDrivesOwned;				// logical drives owned by any movement system
+
+	void FormClosure(AxesBitmap &axes, LogicalDrivesBitmap &drives) noexcept;
 #endif
 };
 
