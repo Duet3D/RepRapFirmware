@@ -334,11 +334,9 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 #else
 			reinterpret_cast<const char *_ecv_array>(IRAM_ADDR);
 #endif
-		reply.lcatf("Static ram: %d", (const char *_ecv_array)&_end - ramstart);
-
 		const struct mallinfo mi = mallinfo();
-		reply.lcatf("Dynamic ram: %d of which %d recycled", mi.uordblks, mi.fordblks);
-		reply.lcatf("Never used RAM %d, free system stack %d words", GetNeverUsedRam(), GetHandlerFreeStack()/4);
+		reply.lcatf("RAM: static %d, dynamic %d (%d recycled), never used %d, free sys stack %d",
+					(const char *_ecv_array)&_end - ramstart, mi.uordblks, mi.fordblks, GetNeverUsedRam(), GetHandlerFreeStack()/4);
 	}	// end memory stats scope
 
 	const uint64_t timeSinceLastCall = TaskResetRunTimeCounter();
@@ -353,7 +351,7 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 		switch (taskDetails.eCurrentState)
 		{
 		case esRunning:
-			stateText = "running";
+			stateText = "run";
 			break;
 		case esReady:
 			stateText = "ready";
@@ -365,10 +363,10 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 			stateText = "rWait:";
 			break;
 		case esDelaying:
-			stateText = "delaying";
+			stateText = "delay";
 			break;
 		case esSuspended:
-			stateText = "suspended";
+			stateText = "susp";
 			break;
 		case esBlocked:
 			stateText = "blocked";
@@ -407,7 +405,7 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 		}
 		reply.catf(",%.1f%%,%u)", (double)cpuPercent, (unsigned int)taskDetails.usStackHighWaterMark);
 	}
-	reply.catf(", total %.1f%%\nOwned mutexes:", (double)totalCpuPercent);
+	reply.catf(", total %.1f%%\nMutexes:", (double)totalCpuPercent);
 
 	for (const Mutex *_ecv_null m = Mutex::GetMutexList(); m != nullptr; m = m->GetNext())
 	{
