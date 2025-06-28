@@ -254,7 +254,6 @@ public:
 	const KeepoutZone *GetKeepoutZone(size_t) const noexcept { return &keepoutZone; }
 #endif
 
-#if SUPPORT_OBJECT_MODEL
 	float GetWorkplaceOffset(size_t axis, size_t workplaceNumber) const noexcept
 	{
 		return workplaceCoordinates[workplaceNumber][axis];
@@ -262,10 +261,10 @@ public:
 	float GetPrimaryMaxPrintingAcceleration() const noexcept { return moveStates[0].maxPrintingAcceleration; }
 	float GetPrimaryMaxTravelAcceleration() const noexcept { return moveStates[0].maxTravelAcceleration; }
 
-# if SUPPORT_COORDINATE_ROTATION
+#if SUPPORT_COORDINATE_ROTATION
 	float GetRotationAngle() const noexcept { return g68Angle; }
 	float GetRotationCentre(size_t index) const noexcept pre(index < 2) { return g68Centre[index]; }
-# endif
+#endif
 
 	size_t GetNumInputs() const noexcept { return NumGCodeChannels; }
 	const GCodeBuffer *_ecv_null GetInput(size_t n) const noexcept { return gcodeSources[n]; }
@@ -284,17 +283,16 @@ public:
 	bool IsHeaterUsedByDifferentCurrentTool(int heaterNumber, const Tool *tool) const noexcept;	// Check if the specified heater is used by a current tool other than the specified one
 	void MessageBoxClosed(bool cancelled, bool shouldAbort, bool m292, uint32_t seq, ExpressionValue rslt) noexcept;
 
-# if HAS_VOLTAGE_MONITOR
+#if HAS_VOLTAGE_MONITOR
 	const char *_ecv_array null GetPowerFailScript() const noexcept { return powerFailScript; }
-# endif
+#endif
 
-# if SUPPORT_LASER
+#if SUPPORT_LASER
 	// Return laser PWM in 0..1. Only the primary movement queue is permitted to control the laser.
 	float GetLaserPwm() const noexcept
 	{
 		return (float)moveStates[0].laserPwmOrIoBits.laserPwm * (1.0/65535.0);
 	}
-# endif
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS

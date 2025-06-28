@@ -9,8 +9,6 @@
 #include <Platform/RepRap.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -44,8 +42,6 @@ constexpr ObjectModelTableEntry Fan::objectModelTable[] =
 constexpr uint8_t Fan::objectModelTableDescriptor[] = { 2, 10, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Fan)
-
-#endif
 
 Fan::Fan(unsigned int fanNum) noexcept
 	: fanNumber(fanNum),

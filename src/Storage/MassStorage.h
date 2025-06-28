@@ -166,13 +166,9 @@ namespace MassStorage
 	GCodeResult ConfigureSdCard(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Configure additional SD card slots
 # endif
 
-# if SUPPORT_OBJECT_MODEL
 	const ObjectModel *_ecv_from GetVolume(size_t vol) noexcept;
-# endif
-
 #endif
 
 }
-
 
 #endif
