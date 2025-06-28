@@ -1375,11 +1375,6 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, SdCardReturnedInfo
 	return InfoResult::ok;
 }
 
-Mutex& MassStorage::GetVolumeMutex(size_t vol) noexcept
-{
-	return info[vol].volMutex;
-}
-
 const ObjectModel *_ecv_from MassStorage::GetVolume(size_t vol) noexcept
 {
 	return &info[vol];
