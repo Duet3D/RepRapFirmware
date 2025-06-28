@@ -1242,6 +1242,8 @@ MovementError DDA::RecalculateMove(DDARing& ring) noexcept
 		// Calculate a profile for this collection of moves that accelerates to the peak speed and then decelerates to zero
 		// The constraints are:
 		// - the start speed and start acceleration
+		// - the maximum allowed acceleration and deceleration
+		// - the allowed jerk (rate of change of acceleration)
 		// - the peak allowed speed
 		// - the end speed and acceleration must be zero
 		// This is easier if we can constrain the XY max acceleration and jerk to be constant and isotropic (not necessarily true when bed compensation is in use)
