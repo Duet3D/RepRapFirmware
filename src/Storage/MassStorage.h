@@ -140,7 +140,6 @@ namespace MassStorage
 	bool IsCardDetected(size_t card) noexcept;
 	unsigned int InvalidateFiles(const FATFS *fs) noexcept;									// Invalidate all open files on the specified file system, returning the number of files invalidated
 	bool AnyFileOpen(const FATFS *fs) noexcept;												// Return true if any files are open on the file system
-	Mutex& GetVolumeMutex(size_t vol) noexcept;
 	void RecordSimulationTime(const char *_ecv_array printingFilePath, uint32_t simSeconds) noexcept;	// Append the simulated printing time to the end of the file
 	uint16_t GetVolumeSeq(unsigned int volume) noexcept;
 
