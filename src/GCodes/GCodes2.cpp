@@ -3081,7 +3081,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if SUPPORT_OBJECT_MODEL
 			case 409: // Get object model values in JSON format
 				{
 					String<StringLength100> key;
@@ -3135,7 +3134,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
-#endif
 
 			case 425: // Backlash compensation
 				result = reprap.GetMove().ConfigureBacklashCompensation(gb, reply);

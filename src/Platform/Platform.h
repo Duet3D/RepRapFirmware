@@ -234,10 +234,8 @@ public:
 	const char *_ecv_array GetElectronicsString() const noexcept;
 	const char *_ecv_array GetBoardString() const noexcept;
 
-#if SUPPORT_OBJECT_MODEL
 	size_t GetNumGpInputsToReport() const noexcept;
 	size_t GetNumGpOutputsToReport() const noexcept;
-#endif
 
 #if defined(DUET_NG) || defined(DUET3MINI)
 	bool IsDuetWiFi() const noexcept;
