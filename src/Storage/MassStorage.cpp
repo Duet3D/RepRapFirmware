@@ -8,6 +8,10 @@
 # include <Libraries/sd_mmc/sd_mmc.h>
 # include <Libraries/sd_mmc/conf_sd_mmc.h>
 
+# if FF_LRU
+#  include <Platform/Tasks.h>			// for AllocPermanent
+# endif
+
 // Check that the LFN configuration in FatFS is sufficient
 static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
 
@@ -35,9 +39,22 @@ static_assert(SD_MMC_MEM_CNT == NumSdCards);
 
 // Private data and methods
 
+# if FF_LRU
+DiskBuffer sdCardBuffers[NumLruBuffers];
+# endif
+
 # if SAME70
-alignas(4) static __nocache uint8_t sectorBuffers[NumSdCards][512];
+
+#  if FF_LRU
+alignas(4) static __nocache uint8_t sectorBuffers[NumLruBuffers][FF_MAX_SS];
+#  else
+alignas(4) static __nocache uint8_t sectorBuffers[NumSdCards][FF_MAX_SS];
+#  endif
 alignas(4) static __nocache char writeBufferStorage[NumFileWriteBuffers][FileWriteBufLen];
+
+# elif FF_LRU
+alignas(4) static uint8_t sectorBuffers[NumLruBuffers][FF_MAX_SS];
+
 # endif
 
 enum class CardDetectState : uint8_t
@@ -69,9 +86,8 @@ protected:
 void SdCardInfo::Clear(unsigned int card) noexcept
 {
 	memset(&fileSystem, 0, sizeof(fileSystem));
-# if SAME70
-	fileSystem.win = sectorBuffers[card];
-	memset(sectorBuffers[card], 0, sizeof(sectorBuffers[card]));
+# if SAME70 && !FF_LRU
+	SetWin(&fileSystem, sectorBuffers[card]);
 # endif
 }
 
@@ -367,6 +383,16 @@ void MassStorage::Init() noexcept
 		inf.cardState = (inf.cdPin == NoPin) ? CardDetectState::present : CardDetectState::notPresent;
 		inf.volMutex.Create(VolMutexNames[card]);
 	}
+
+#  if FF_LRU
+	// Allocate the SD card buffers
+	for (unsigned int i = 0; i < NumLruBuffers; ++i)
+	{
+		DiskBuffer *const buf = &sdCardBuffers[i];
+		buf->data = sectorBuffers[i];
+		ff_add_buffer_to_freelist(buf);
+	}
+#  endif
 
 	sd_mmc_init(SdWriteProtectPins, SdSpiCSPins);		// initialize SD MMC stack
 

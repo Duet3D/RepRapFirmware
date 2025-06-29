@@ -126,7 +126,17 @@ extern const char* VolumeStr[FF_VOLUMES];	/* User defied volume ID */
 #endif
 #endif
 
+#if FF_LRU
 
+typedef struct _DiskBuffer {
+	BYTE *data;					// Pointer to data in suitable memory with suitable alignment
+	struct _DiskBuffer *next;	// Link to next buffer in free buffer list
+	LBA_t sector;				// the sector number in the buffer, if the volume is valid
+	BYTE volume;				// the number of the volume in the buffer, or no_volume (defined in ff.c to avoid multiple definitions) if it contains no useful data
+	bool dirty;					// true if the buffer is dirty and needs to be written back
+} DiskBuffer;
+
+#endif
 
 /* Filesystem object structure (FATFS) */
 
@@ -170,15 +180,31 @@ typedef struct {
 #if FF_FS_EXFAT
 	LBA_t	bitbase;		/* Allocation bitmap base sector */
 #endif
-	LBA_t	winsect;		/* Current sector appearing in the win[] */
-#if SAME70
-	BYTE	*win;			// pointer to the sector buffer, which is in non-cached memory
+#if FF_LRU
+	DiskBuffer *sector_buffer;	/* pointer to the disk buffer we are using, or null */
 #else
-	BYTE	win[FF_MAX_SS];	/* Disk access window for Directory, FAT (and file data at tiny cfg) */
+	LBA_t	winsect_act;		/* Current sector appearing in the win[] */
+# if SAME70
+	BYTE	*win_act;			/* pointer to the sector buffer, which is in non-cached memory */
+# else
+	BYTE	win_act[FF_MAX_SS];	/* Disk access window for Directory, FAT (and file data at tiny cfg) */
+# endif
 #endif
 } FATFS;
 
-
+#if FF_LRU
+static inline BYTE *get_win(FATFS *fs) noexcept { return fs->sector_buffer->data; }
+static inline LBA_t get_winsect(const FATFS *fs) noexcept { return fs->sector_buffer->sector; }
+static inline void set_winsect(FATFS *fs, LBA_t sect) noexcept { fs->sector_buffer->sector = sect; }
+extern void ff_add_buffer_to_freelist(DiskBuffer *buf) noexcept;
+#else
+static inline BYTE *get_win(FATFS *fs) noexcept { return fs->win_act; }
+# if SAME70
+static inline void SetWin(FATFS *fs, BYTE *buf) noexcept { fs->win_act = buf; }
+# endif
+static inline LBA_t get_winsect(const FATFS *fs) noexcept { return fs->winsect_act; }
+static inline void set_winsect(FATFS *fs, LBA_t sect) noexcept { fs->winsect_act = sect; }
+#endif
 
 /* Object ID and allocation information (FFOBJID) */
 
