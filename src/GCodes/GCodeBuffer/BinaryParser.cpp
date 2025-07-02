@@ -630,6 +630,67 @@ ExpressionValue BinaryParser::GetExpression() THROWS(GCodeException)
 	throw ConstructParseException("expected an expression inside { }");
 }
 
+// Get an unsigned integer or a string after a key letter. Return true if a string was found, false if an unsigned integer; else throw,
+bool BinaryParser::GetStringOrUIValue(uint32_t& uival, const StringRef& str) THROWS(GCodeException)
+{
+	if (seenParameter == nullptr)
+	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	switch (seenParameter->type)
+	{
+	case DataType::Float:
+		uival = (uint32_t)seenParameter->floatValue;
+		return false;
+	case DataType::Int:
+		uival = (uint32_t)seenParameter->intValue;
+		return false;
+	case DataType::UInt:
+		uival = seenParameter->uintValue;
+		return false;
+	case DataType::String:
+		str.copy(seenParameterValue, seenParameter->intValue);
+		return true;
+	case DataType::Expression:
+		{
+			ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			const ExpressionValue e = parser.Parse();
+			switch (e.GetType())
+			{
+			case TypeCode::CString:
+				str.copy(e.sVal);
+				return true;
+
+			case TypeCode::HeapString:
+				{
+					ReadLockedPointer<const char> p = e.shVal.Get();				str.copy(p.Ptr());
+					str.copy(p.Ptr());
+				}
+				return true;
+
+			case TypeCode::Uint32:
+				uival = e.uVal;
+				return false;
+
+			case TypeCode::Int32:
+				if (e.iVal >= 0)
+				{
+					uival = (uint32_t)e.iVal;
+					return false;
+				}
+				break;
+			default:
+				break;
+			}
+		}
+		break;
+	default:
+		break;
+	}
+	throw ConstructParseException("expected a string or unsigned integer");
+}
+
 void BinaryParser::SetFinished() noexcept
 {
 	gb.LatestMachineState().g53Active = false;		// G53 does not persist beyond the current command

@@ -51,6 +51,7 @@ public:
 	void GetUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCodeException);				// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);				// Get a :-separated list of drivers after a key letter
 	ExpressionValue GetExpression() THROWS(GCodeException);										// Get an expression after a key letter
+	bool GetStringOrUIValue(uint32_t& uival, const StringRef& str) THROWS(GCodeException);		// Get an unsigned integer or nonempty string after a key letter
 
 	void SetFinished() noexcept;									// Set the G Code finished
 

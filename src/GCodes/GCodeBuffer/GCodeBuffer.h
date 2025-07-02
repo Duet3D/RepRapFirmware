@@ -106,7 +106,7 @@ public:
 		pre(minValue <= maxValue)
 		post(minValue <= _ecv_result; _ecv_result <= maxValue);						// Get an integer after a key letter
 	uint32_t GetUIValue() THROWS(GCodeException);									// Get an unsigned integer value
-	uint32_t GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException)		// Get an unsigned integer value, throw if outside limits
+	uint32_t GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException)	// Get an unsigned integer value, throw if outside limits
 		pre(maxValuePlusOne > minValue)												// Get an unsigned integer value, throw if outside limits
 		post(_ecv_result >= minValue; _ecv_result < maxValuePlusOne);
 	uint32_t GetLimitedUIValue(char c, uint32_t maxValuePlusOne) THROWS(GCodeException)
@@ -127,7 +127,8 @@ public:
 	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);		// Get a :-separated list of ints after a key letter
 	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);	// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);	// Get a :-separated list of drivers after a key letter
-	ExpressionValue GetExpression() THROWS(GCodeException);							// Get a general expression after a key letter
+	ExpressionValue GetExpression() THROWS(GCodeException);							// Get a general expression enclosed in { } after a key letter
+	bool GetStringOrUIValue(uint32_t& ival, const StringRef& str) THROWS(GCodeException);	// Get an unsigned integer or nonempty string after a key letter
 
 	bool TryGetFValue(char c, float& val, bool& seen) THROWS(GCodeException);
 	bool TryGetIValue(char c, int32_t& val, bool& seen) THROWS(GCodeException);

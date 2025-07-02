@@ -1455,6 +1455,56 @@ ExpressionValue StringParser::GetExpression() THROWS(GCodeException)
 	throw ConstructParseException("expected an expression inside { }");
 }
 
+// Get an unsigned integer or a string after a key letter. Return true if a string was found, false if an unsigned integer; else throw,
+bool StringParser::GetStringOrUIValue(uint32_t& uival, const StringRef& str) THROWS(GCodeException)
+{
+	if (gb.buffer[readPointer] == '{')
+	{
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		const ExpressionValue e = parser.Parse();
+		switch (e.GetType())
+		{
+		case TypeCode::CString:
+			str.copy(e.sVal);
+			return true;
+
+		case TypeCode::HeapString:
+			{
+				ReadLockedPointer<const char> p = e.shVal.Get();				str.copy(p.Ptr());
+				str.copy(p.Ptr());
+			}
+			return true;
+
+		case TypeCode::Uint32:
+			uival = e.uVal;
+			return false;
+
+		case TypeCode::Int32:
+			if (e.iVal >= 0)
+			{
+				uival = (uint32_t)e.iVal;
+				return false;
+			}
+			break;
+
+		default:
+			break;
+		}
+	}
+	else if (gb.buffer[readPointer] == '"')
+	{
+		GetQuotedString(str, false);
+		return true;
+	}
+	else if (isDigit(gb.buffer[readPointer]) || gb.buffer[readPointer] == '+')
+	{
+		uival = GetUIValue();
+		return false;
+	}
+
+	throw ConstructParseException("expected a string or unsigned integer");
+}
+
 void StringParser::CheckArrayLength(size_t actualLength, size_t maxLength) THROWS(GCodeException)
 {
 	if (actualLength >= maxLength)
