@@ -77,7 +77,9 @@ bool StringParser::Put(char c) noexcept
 {
 	if (gb.buffer == nullptr)
 	{
-		gb.buffer = static_cast<char *>(Tasks::AllocPermanent(MaxGCodeStringLength, std::align_val_t(4)));
+		// Allocate more memory if we're in SBC mode, because binary codes have slightly more overhead.
+		// If USB/AUX channels request very long codes via macros, this will avoid bottlenecks from macros
+		gb.buffer = static_cast<char *>(Tasks::AllocPermanent(reprap.UsingSbcInterface() ? MaxGCodeBinaryLength : MaxGCodeStringLength, std::align_val_t(4)));
 		gb.bufferLength = MaxGCodeStringLength;
 	}
 
@@ -1460,7 +1462,7 @@ bool StringParser::GetStringOrUIValue(uint32_t& uival, const StringRef& str) THR
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 		const ExpressionValue e = parser.Parse();
 		switch (e.GetType())
 		{
