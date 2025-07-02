@@ -439,7 +439,7 @@ inline bool GCodeBuffer::CanQueueCodes() const noexcept
 inline bool GCodeBuffer::IsDoingFile() const noexcept
 {
 #if HAS_SBC_INTERFACE
-	return machineState->DoingFile() || IsMacroRequestPending();
+	return machineState->DoingFile() || IsMacroRequestPending() || macroFileClosed;
 #else
 	return machineState->DoingFile();
 #endif
