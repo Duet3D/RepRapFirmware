@@ -214,7 +214,6 @@ int32_t BinaryParser::GetIValue() THROWS(GCodeException)
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
-		return 0;
 	}
 
 	int32_t value;
@@ -249,7 +248,6 @@ uint32_t BinaryParser::GetUIValue() THROWS(GCodeException)
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
-		return 0;
 	}
 
 	uint32_t value;
@@ -319,7 +317,6 @@ DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
-		return DriverId();
 	}
 
 	DriverId value;
@@ -357,7 +354,6 @@ void BinaryParser::GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException)
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
-		return;
 	}
 
 	switch (seenParameter->type)
@@ -412,7 +408,6 @@ void BinaryParser::GetMacAddress(MacAddress& mac) THROWS(GCodeException)
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
-		return;
 	}
 
 	switch (seenParameter->type)
@@ -477,7 +472,6 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
-		return;
 	}
 
 	switch (seenParameter->type)
@@ -512,8 +506,6 @@ void BinaryParser::GetFloatArray(float arr[], size_t& length) THROWS(GCodeExcept
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
-		length = 0;
-		return;
 	}
 
 	if (seenParameter->type == DataType::Expression)
@@ -532,8 +524,6 @@ void BinaryParser::GetIntArray(int32_t arr[], size_t& length) THROWS(GCodeExcept
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
-		length = 0;
-		return;
 	}
 
 	if (seenParameter->type == DataType::Expression)
@@ -552,8 +542,6 @@ void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCode
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
-		length = 0;
-		return;
 	}
 
 	if (seenParameter->type == DataType::Expression)
@@ -573,8 +561,6 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
-		length = 0;
-		return;
 	}
 
 	switch (seenParameter->type)
@@ -617,7 +603,6 @@ ExpressionValue BinaryParser::GetExpression() THROWS(GCodeException)
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
-		return ExpressionValue();
 	}
 
 	if (seenParameter->type == DataType::Expression)
