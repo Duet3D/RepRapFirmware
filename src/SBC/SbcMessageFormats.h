@@ -28,6 +28,7 @@ static_assert(SbcTransferBufferSize % sizeof(uint32_t) == 0, "SbcTransferBufferS
 
 constexpr size_t MaxGCodeBinaryLength = 384;			// maximum length of a G/M/T-code in binary encoding
 static_assert(MaxGCodeBinaryLength % sizeof(uint32_t) == 0, "MaxGCodeBinaryLength must be a whole number of dwords");
+static_assert(MaxGCodeBinaryLength >= MaxGCodeStringLength, "MaxGCodeBinaryLength must be at least as big as MAxGCodeStringLength");
 
 constexpr size_t MaxSbcExpressionLength = 256;		// maximum length for incoming expressions
 
