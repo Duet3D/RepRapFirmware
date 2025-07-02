@@ -684,6 +684,12 @@ ExpressionValue GCodeBuffer::GetExpression() THROWS(GCodeException)
 	return PARSER_OPERATION(GetExpression());
 }
 
+// Get an unsigned integer or a string after a key letter
+bool GCodeBuffer::GetStringOrUIValue(uint32_t& ival, const StringRef& str) THROWS(GCodeException)
+{
+	return PARSER_OPERATION(GetStringOrUIValue(ival, str));
+}
+
 // Get a :-separated list of drivers after a key letter
 void GCodeBuffer::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException)
 {

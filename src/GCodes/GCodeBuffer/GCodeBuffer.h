@@ -65,8 +65,8 @@ public:
 #if HAS_SBC_INTERFACE
 	void PutBinary(const uint32_t *data, size_t len) noexcept;					// Add an entire binary G-Code, overwriting any existing content
 #endif
-	void PutAndDecode(const char *_ecv_array data, size_t len) noexcept;					// Add an entire G-Code, overwriting any existing content
-	void PutAndDecode(const char *_ecv_array str) noexcept;								// Add a null-terminated string, overwriting any existing content
+	void PutAndDecode(const char *_ecv_array data, size_t len) noexcept;		// Add an entire G-Code, overwriting any existing content
+	void PutAndDecode(const char *_ecv_array str) noexcept;						// Add a null-terminated string, overwriting any existing content
 	void StartNewFile() noexcept;												// Called when we start a new file
 	bool FileEnded() noexcept;													// Called when we reach the end of the file we are reading from
 	void DecodeCommand() noexcept;												// Decode the command in the buffer when it is complete
@@ -103,16 +103,16 @@ public:
 	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get an integer after a key letter
 	int32_t GetLimitedIValue(char c, int32_t minValue, int32_t maxValue) THROWS(GCodeException)
 		pre(minValue <= maxValue)
-		post(minValue <= _ecv_result; _ecv_result <= maxValue);								// Get an integer after a key letter
+		post(minValue <= _ecv_result; _ecv_result <= maxValue);						// Get an integer after a key letter
 	uint32_t GetUIValue() THROWS(GCodeException);									// Get an unsigned integer value
-	uint32_t GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException)		// Get an unsigned integer value, throw if outside limits
+	uint32_t GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException)	// Get an unsigned integer value, throw if outside limits
 		pre(maxValuePlusOne > minValue)												// Get an unsigned integer value, throw if outside limits
 		post(_ecv_result >= minValue; _ecv_result < maxValuePlusOne);
 	uint32_t GetLimitedUIValue(char c, uint32_t maxValuePlusOne) THROWS(GCodeException)
 		post(_ecv_result < maxValuePlusOne) { return GetLimitedUIValue(c, 0, maxValuePlusOne); }
 	float GetLimitedFValue(char c, float minValue, float maxValue) THROWS(GCodeException)
 		pre(minValue <= maxValue)
-		post(minValue <= _ecv_result; _ecv_result <= maxValue);								// Get a float after a key letter
+		post(minValue <= _ecv_result; _ecv_result <= maxValue);						// Get a float after a key letter
 	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);				// Get an IP address quad after a key letter
 	void GetMacAddress(MacAddress& mac) THROWS(GCodeException);						// Get a MAC address sextet after a key letter
 	PwmFrequency GetPwmFrequency() THROWS(GCodeException);							// Get a PWM frequency
@@ -126,7 +126,8 @@ public:
 	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);		// Get a :-separated list of ints after a key letter
 	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);	// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);	// Get a :-separated list of drivers after a key letter
-	ExpressionValue GetExpression() THROWS(GCodeException);							// Get a general expression after a key letter
+	ExpressionValue GetExpression() THROWS(GCodeException);							// Get a general expression enclosed in { } after a key letter
+	bool GetStringOrUIValue(uint32_t& ival, const StringRef& str) THROWS(GCodeException);	// Get an unsigned integer or nonempty string after a key letter
 
 	bool TryGetFValue(char c, float& val, bool& seen) THROWS(GCodeException);
 	bool TryGetIValue(char c, int32_t& val, bool& seen) THROWS(GCodeException);
