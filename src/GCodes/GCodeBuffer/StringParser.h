@@ -165,7 +165,6 @@ private:
 	bool seenLeadingTab;
 	bool seenMetaCommand;
 	bool warnedAboutMixedSpacesAndTabs;
-	bool overflowed;
 	bool seenExpression;
 
 	bool checksumRequired;								// True if we only accept commands with a valid checksum

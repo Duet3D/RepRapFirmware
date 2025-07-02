@@ -57,7 +57,7 @@ public:
 	FilePosition GetFilePosition() const noexcept;					// Get the file position at the start of the current command
 	void SetFilePosition(FilePosition fpos) noexcept;				// Overwrite the file position, e.g. when a macro finishes
 
-	const char* DataStart() const noexcept;							// Get the start of the current command
+	const char* _ecv_array _ecv_null DataStart() const noexcept;	// Get the start of the current command
 	size_t DataLength() const noexcept;								// Get the length of the current command
 
 	void PrintCommand(const StringRef& s) const noexcept;

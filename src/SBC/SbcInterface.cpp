@@ -526,7 +526,7 @@ void SbcInterface::ExchangeData() noexcept
 		// Evaluate an expression
 		case SbcRequest::EvaluateExpression:
 		{
-			String<MaxGCodeLength> expression;
+			String<MaxSbcExpressionLength> expression;
 			const GCodeChannel channel = transfer.ReadEvaluateExpression(packet->length, expression.GetRef());
 			if (channel.IsValid())
 			{
@@ -728,7 +728,7 @@ void SbcInterface::ExchangeData() noexcept
 		{
 			bool createVariable;
 			String<MaxVariableNameLength> varName;
-			String<MaxGCodeLength> expression;
+			String<MaxGCodeStringLength> expression;
 			const GCodeChannel channel = transfer.ReadSetVariable(createVariable, varName.GetRef(), expression.GetRef());
 
 			// Make sure we can access the gb safely...

@@ -13,12 +13,12 @@
 #include "ExpressionParser.h"
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
+#include <Platform/Tasks.h>
 #include <ObjectModel/Variable.h>
 #include <Networking/NetworkDefs.h>
 
-BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer)
+BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer), bufferLength(0), header(nullptr)
 {
-	header = reinterpret_cast<CodeHeader *>(gcodeBuffer.buffer);
 }
 
 void BinaryParser::Init() noexcept
@@ -32,11 +32,37 @@ void BinaryParser::Init() noexcept
 // CAUTION! This may be called with the task scheduler suspended, so don't do anything that might block or take more than a few microseconds to execute
 void BinaryParser::Put(const uint32_t *data, size_t len) noexcept
 {
-	memcpyu32(reinterpret_cast<uint32_t *>(gb.buffer), data, len);
-	bufferLength = len * sizeof(uint32_t);
-	gb.bufferState = GCodeBufferState::parsingGCode;
-	gb.LatestMachineState().g53Active = (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
-	gb.CurrentFileMachineState().lineNumber = header->lineNumber;
+	// Buffer allocation happens dynamically when the GB is used for the first time.
+	// Hence, in theory, it is possible for different GBs to have different buffer sizes
+	if (header == nullptr)
+	{
+		if (gb.buffer == nullptr)
+		{
+			gb.buffer = static_cast<char *>(Tasks::AllocPermanent(MaxCodeBufferSize, std::align_val_t(4)));
+			gb.bufferLength = MaxCodeBufferSize;
+		}
+		header = reinterpret_cast<CodeHeader *>(gb.buffer);
+	}
+
+	// Make sure we can store the incoming chunk. If it doesn't fit, report an error later
+	const size_t codeLength = len * sizeof(uint32_t);
+	if (codeLength > gb.bufferLength)
+	{
+		bufferLength = 0;
+		gb.bufferState = GCodeBufferState::executing;
+		gb.overflowed = true;
+	}
+	else
+	{
+		memcpyu32(reinterpret_cast<uint32_t *>(gb.buffer), data, len);
+		bufferLength = codeLength;
+		gb.bufferState = GCodeBufferState::parsingGCode;
+		gb.overflowed = false;
+	}
+
+	// Copy G-code data
+	gb.LatestMachineState().g53Active = (bufferLength != 0) && (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
+	gb.CurrentFileMachineState().lineNumber = (bufferLength != 0) ? header->lineNumber : 0;
 #if SUPPORT_ASYNC_MOVES
 	gb.CurrentFileMachineState().fpos = GetFilePosition();
 #endif
@@ -48,7 +74,7 @@ void BinaryParser::DecodeCommand() noexcept
 	{
 		if (reprap.GetDebugFlags(Module::Gcodes).IsBitSet(gb.GetChannel().ToBaseType()))
 		{
-			String<MaxCodeBufferSize> buf;
+			String<MaxGCodeStringLength> buf;
 			AppendFullCommand(buf.GetRef());
 			debugPrintf("%s: %s\n", gb.GetIdentity(), buf.c_str());
 		}
@@ -188,6 +214,7 @@ int32_t BinaryParser::GetIValue() THROWS(GCodeException)
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
+		return 0;
 	}
 
 	int32_t value;
@@ -222,6 +249,7 @@ uint32_t BinaryParser::GetUIValue() THROWS(GCodeException)
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
+		return 0;
 	}
 
 	uint32_t value;
@@ -291,6 +319,7 @@ DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
+		return DriverId();
 	}
 
 	DriverId value;
@@ -328,6 +357,7 @@ void BinaryParser::GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException)
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
+		return;
 	}
 
 	switch (seenParameter->type)
@@ -382,6 +412,7 @@ void BinaryParser::GetMacAddress(MacAddress& mac) THROWS(GCodeException)
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
+		return;
 	}
 
 	switch (seenParameter->type)
@@ -446,6 +477,7 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
+		return;
 	}
 
 	switch (seenParameter->type)
@@ -480,6 +512,8 @@ void BinaryParser::GetFloatArray(float arr[], size_t& length) THROWS(GCodeExcept
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
+		length = 0;
+		return;
 	}
 
 	if (seenParameter->type == DataType::Expression)
@@ -498,6 +532,8 @@ void BinaryParser::GetIntArray(int32_t arr[], size_t& length) THROWS(GCodeExcept
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
+		length = 0;
+		return;
 	}
 
 	if (seenParameter->type == DataType::Expression)
@@ -516,6 +552,8 @@ void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCode
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
+		length = 0;
+		return;
 	}
 
 	if (seenParameter->type == DataType::Expression)
@@ -535,6 +573,8 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
+		length = 0;
+		return;
 	}
 
 	switch (seenParameter->type)
@@ -577,6 +617,7 @@ ExpressionValue BinaryParser::GetExpression() THROWS(GCodeException)
 	if (seenParameter == nullptr)
 	{
 		THROW_INTERNAL_ERROR;
+		return ExpressionValue();
 	}
 
 	if (seenParameter->type == DataType::Expression)
@@ -597,25 +638,28 @@ void BinaryParser::SetFinished() noexcept
 
 FilePosition BinaryParser::GetFilePosition() const noexcept
 {
-	return ((header->flags & CodeFlags::HasFilePosition) != 0) ? header->filePosition : noFilePosition;
+	return (bufferLength != 0) && ((header->flags & CodeFlags::HasFilePosition) != 0) ? header->filePosition : noFilePosition;
 }
 
 void BinaryParser::SetFilePosition(FilePosition fpos) noexcept
 {
-	if (fpos == noFilePosition)
+	if (bufferLength != 0)
 	{
-		header->flags = (CodeFlags)(header->flags & ~CodeFlags::HasFilePosition);
-	}
-	else
-	{
-		header->filePosition = fpos;
-		header->flags = (CodeFlags)(header->flags | CodeFlags::HasFilePosition);
+		if (fpos == noFilePosition)
+		{
+			header->flags = (CodeFlags)(header->flags & ~CodeFlags::HasFilePosition);
+		}
+		else
+		{
+			header->filePosition = fpos;
+			header->flags = (CodeFlags)(header->flags | CodeFlags::HasFilePosition);
+		}
 	}
 }
 
 const char* BinaryParser::DataStart() const noexcept
 {
-	return gb.buffer;
+	return (bufferLength != 0) ? gb.buffer : nullptr;
 }
 
 size_t BinaryParser::DataLength() const noexcept
