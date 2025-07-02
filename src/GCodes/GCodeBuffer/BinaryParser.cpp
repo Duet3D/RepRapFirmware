@@ -38,8 +38,8 @@ void BinaryParser::Put(const uint32_t *data, size_t len) noexcept
 	{
 		if (gb.buffer == nullptr)
 		{
-			gb.buffer = static_cast<char *>(Tasks::AllocPermanent(MaxCodeBufferSize, std::align_val_t(4)));
-			gb.bufferLength = MaxCodeBufferSize;
+			gb.buffer = static_cast<char *>(Tasks::AllocPermanent(MaxGCodeBinaryLength, std::align_val_t(4)));
+			gb.bufferLength = MaxGCodeBinaryLength;
 		}
 		header = reinterpret_cast<CodeHeader *>(gb.buffer);
 	}

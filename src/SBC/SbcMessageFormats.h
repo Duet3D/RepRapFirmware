@@ -26,8 +26,8 @@ constexpr uint16_t SbcProtocolVersion = 6;
 constexpr size_t SbcTransferBufferSize = 8192;		// maximum length of a data transfer. Must be a multiple of 4 and kept in sync with Duet Control Server!
 static_assert(SbcTransferBufferSize % sizeof(uint32_t) == 0, "SbcTransferBufferSize must be a whole number of dwords");
 
-constexpr size_t MaxCodeBufferSize = 384;			// maximum length of a G/M/T-code in binary encoding
-static_assert(MaxCodeBufferSize % sizeof(uint32_t) == 0, "MaxCodeBufferSize must be a whole number of dwords");
+constexpr size_t MaxGCodeBinaryLength = 384;			// maximum length of a G/M/T-code in binary encoding
+static_assert(MaxGCodeBinaryLength % sizeof(uint32_t) == 0, "MaxGCodeBinaryLength must be a whole number of dwords");
 
 constexpr size_t MaxSbcExpressionLength = 256;		// maximum length for incoming expressions
 
