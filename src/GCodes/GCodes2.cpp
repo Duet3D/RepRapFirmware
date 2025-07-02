@@ -4007,65 +4007,38 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					Move& move = reprap.GetMove();
 
 					// Try to get the requested kinematics from the K parameter
-					int32_t kn = -1;
+					uint32_t kn = (uint32_t)-1;
 					String<StringLength50> ks;
-					const char *_ecv_array _ecv_null kp = nullptr;
 					if (gb.Seen('K'))
 					{
-						const ExpressionValue ev = gb.GetExpression();
-						switch (ev.GetType())
+						bool ok = false;
+						if (gb.GetStringOrUIValue(kn, ks.GetRef()))				// if string value found
 						{
-						case TypeCode::Int32:
-							kn = ev.iVal;
-							break;
-
-						case TypeCode::CString:
-							kp = ev.sVal;
-							break;
-
-						case TypeCode::HeapString:
-							{
-								ReadLockedPointer<const char> p = ev.shVal.Get();
-								ks.copy(p.Ptr());
-								kp = ks.c_str();
-							}
-							break;
-
-						default:
-							break;
-						}
-
-						bool ok;
-						if (kp != nullptr)
-						{
-							kinematicsChanged = !ReducedStringEquals(kp,  move.GetKinematics().GetName());
 							ok = true;
+							kinematicsChanged = !ReducedStringEquals(ks.c_str(),  move.GetKinematics().GetName());
 						}
-						else if (kn >= 0 && kn < (int32_t)KinematicsType::unknown)
+						else 													// else unsigned value found
 						{
+							ok = true;
 							kinematicsChanged = (kn != (int32_t)move.GetKinematics().GetLegacyType().ToBaseType());
-							ok = true;
-						}
-						else
-						{
-							ok = false;
 						}
 
 						if (kinematicsChanged)
 						{
-							ok = move.SetKinematics(kp, kn);
+							ok = move.SetKinematics(ks.c_str(), kn);
 						}
 
 						if (!ok)
 						{
-							reply.copy("Unknown kinematics type ");
-							ev.AppendAsString(reply);
+							reply.copy("Unknown kinematics type");
 							result = GCodeResult::error;
 							break;
 						}
 
 						seen = true;
 					}
+
+					// Now try to configure the parameters of the selected kinematics
 					bool error = false;
 					if (move.GetKinematics().Configure(code, gb, reply, error))
 					{
