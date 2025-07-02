@@ -38,7 +38,7 @@ enum class GCodeBufferState : uint8_t
 	executing										// we have a complete gcode and have started executing it
 };
 
-// Type of a status repor
+// Type of a status report
 enum class StatusReportType : uint8_t
 {
 	none = 0,
