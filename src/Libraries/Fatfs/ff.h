@@ -136,6 +136,8 @@ typedef struct _DiskBuffer {
 	bool dirty;					// true if the buffer is dirty and needs to be written back
 } DiskBuffer;
 
+extern void ff_add_buffer_to_freelist(DiskBuffer *buf) noexcept;
+
 #endif
 
 /* Filesystem object structure (FATFS) */
@@ -145,7 +147,9 @@ typedef struct {
 	BYTE	pdrv;			/* Volume hosting physical drive */
 	BYTE	ldrv;			/* Logical drive number (used only when FF_FS_REENTRANT) */
 	BYTE	n_fats;			/* Number of FATs (1 or 2) */
+#if !FF_LRU
 	BYTE	wflag;			/* win[] status (b0:dirty) */
+#endif
 	BYTE	fsi_flag;		/* FSINFO status (b7:disabled, b0:dirty) */
 	WORD	id;				/* Volume mount ID */
 	WORD	n_rootdir;		/* Number of root directory entries (FAT12/16) */
@@ -192,19 +196,9 @@ typedef struct {
 #endif
 } FATFS;
 
-#if FF_LRU
-static inline BYTE *get_win(FATFS *fs) noexcept { return fs->sector_buffer->data; }
-static inline LBA_t get_winsect(const FATFS *fs) noexcept { return fs->sector_buffer->sector; }
-static inline void set_winsect(FATFS *fs, LBA_t sect) noexcept { fs->sector_buffer->sector = sect; }
-extern void ff_add_buffer_to_freelist(DiskBuffer *buf) noexcept;
-#else
-static inline BYTE *get_win(FATFS *fs) noexcept { return fs->win_act; }
-# if SAME70
-static inline void SetWin(FATFS *fs, BYTE *buf) noexcept { fs->win_act = buf; }
+# if SAME70 && !FF_LRU
+static inline void ff_set_win(FATFS *fs, BYTE *buf) noexcept { fs->win_act = buf; }
 # endif
-static inline LBA_t get_winsect(const FATFS *fs) noexcept { return fs->winsect_act; }
-static inline void set_winsect(FATFS *fs, LBA_t sect) noexcept { fs->winsect_act = sect; }
-#endif
 
 /* Object ID and allocation information (FFOBJID) */
 
@@ -368,7 +362,7 @@ int f_puts (const TCHAR* str, FIL* cp) noexcept;							/* Put a string to the fi
 int f_printf (FIL* fp, const TCHAR* str, ...) noexcept;						/* Put a formatted string to the file */
 TCHAR* f_gets (TCHAR* buff, int len, FIL* fp) noexcept;						/* Get a string from the file */
 
-/* Some API fucntions are implemented as macro */
+/* Some API functions are implemented as macro */
 
 #define f_eof(fp) ((int)((fp)->fptr == (fp)->obj.objsize))
 #define f_error(fp) ((fp)->err)

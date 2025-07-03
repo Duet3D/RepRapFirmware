@@ -87,7 +87,7 @@ void SdCardInfo::Clear(unsigned int card) noexcept
 {
 	memset(&fileSystem, 0, sizeof(fileSystem));
 # if SAME70 && !FF_LRU
-	SetWin(&fileSystem, sectorBuffers[card]);
+	ff_set_win(&fileSystem, sectorBuffers[card]);
 # endif
 }
 
