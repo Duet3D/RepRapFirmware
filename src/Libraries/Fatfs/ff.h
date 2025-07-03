@@ -132,7 +132,7 @@ typedef struct _DiskBuffer {
 	BYTE *data;					// Pointer to data in suitable memory with suitable alignment
 	struct _DiskBuffer *next;	// Link to next buffer in free buffer list
 	LBA_t sector;				// the sector number in the buffer, if the volume is valid
-	BYTE volume;				// the number of the volume in the buffer, or no_volume (defined in ff.c to avoid multiple definitions) if it contains no useful data
+	BYTE volume;				// the number of the volume in the buffer
 	bool dirty;					// true if the buffer is dirty and needs to be written back
 } DiskBuffer;
 

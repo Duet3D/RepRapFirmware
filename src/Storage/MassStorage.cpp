@@ -27,20 +27,27 @@ static_assert(SD_MMC_MEM_CNT == NumSdCards);
 # include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #endif
 
-// A note on using mutexes:
-// Each SD card volume has its own mutex. There is also one for the file table, and one for the find first/find next buffer.
-// The FatFS subsystem locks and releases the appropriate volume mutex when it is called.
-// Any function that needs to acquire both the file table mutex and a volume mutex MUST take the file table mutex first, to avoid deadlocks.
-// Any function that needs to acquire both the find buffer mutex and a volume mutex MUST take the find buffer mutex first, to avoid deadlocks.
-// No function should need to take both the file table mutex and the find buffer mutex.
-// No function in here should be called when the caller already owns the shared SPI mutex.
+// A note on the use of mutexes within the module and FatFs:
+// - There is  a mutex for the file table (fsMutex) and another for the find first/find next buffer (dirMutex).
+// When FF_LRU in ff_conf.h is not set:
+// - Each SD card volume also has its own mutex
+// - The FatFs subsystem locks and releases the appropriate volume mutex when any of its functions is called
+// - Any function that needs to acquire both the file table mutex and a volume mutex MUST take the file table mutex first to avoid deadlocks.
+// - Any function that needs to acquire both the find first/next mutex and a volume mutex MUST take the find first/next mutex first, to avoid deadlocks
+// When FF_LRU in ff_conf.h is set:
+// - There is a shared volume mutex because the LRU buffers are shared between volumes
+// - The FatFs subsystem locks and releases this shared volume mutex when any of its functions is called
+//   This means that we can't concurrently access different volumes from different tasks; however we don't expect this to be requested often, so the performance drop should be unimportant
+// In both cases:
+// - No function should need to take both the file table mutex and the find first/next buffer mutex.
+// - No function in here should be called when the caller already owns the shared SPI mutex.
 
 #if HAS_MASS_STORAGE
 
 // Private data and methods
 
 # if FF_LRU
-DiskBuffer sdCardBuffers[NumLruBuffers];
+static DiskBuffer sdCardBuffers[NumLruBuffers];
 # endif
 
 # if SAME70
@@ -70,7 +77,9 @@ struct SdCardInfo INHERIT_OBJECT_MODEL
 	FATFS fileSystem;
 	uint32_t cdChangedTime;
 	uint32_t mountStartTime;
+#if !FF_LRU
 	Mutex volMutex;
+#endif
 	uint16_t seq;
 	Pin cdPin;
 	bool mounting;
@@ -161,6 +170,10 @@ static FileWriteBuffer *_ecv_null freeWriteBuffers;
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 static Mutex fsMutex;
 static FileStore files[MAX_FILES];
+#endif
+
+#if HAS_MASS_STORAGE && FF_LRU
+static Mutex sharedVolMutex;
 #endif
 
 // Construct a full path name from a path and a filename. Returns false if error i.e. filename too long
@@ -275,7 +288,11 @@ static unsigned int InternalUnmount(size_t card) noexcept
 {
 	SdCardInfo& inf = info[card];
 	MutexLocker lock1(fsMutex);
+#if FF_LRU
+	MutexLocker lock2(sharedVolMutex);
+#else
 	MutexLocker lock2(inf.volMutex);
+#endif
 	const unsigned int invalidated = MassStorage::InvalidateFiles(&inf.fileSystem);
 	const char path[3] = { (char)('0' + card), ':', 0 };
 	f_mount(nullptr, path, 0);
@@ -356,6 +373,10 @@ void MassStorage::Init() noexcept
 	dirMutex.Create("DirSearch");
 #endif
 
+#if HAS_MASS_STORAGE && FF_LRU
+	sharedVolMutex.Create("SDall");
+#endif
+
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	freeWriteBuffers = nullptr;
 	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
@@ -381,7 +402,9 @@ void MassStorage::Init() noexcept
 		inf.seq = 0;
 		inf.cdPin = SdCardDetectPins[card];
 		inf.cardState = (inf.cdPin == NoPin) ? CardDetectState::present : CardDetectState::notPresent;
+#if !FF_LRU
 		inf.volMutex.Create(VolMutexNames[card]);
+#endif
 	}
 
 #  if FF_LRU
@@ -1149,7 +1172,11 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 # if HAS_MASS_STORAGE
 	SdCardInfo& inf = info[card];
 	MutexLocker lock1(fsMutex);
+# if FF_LRU
+	MutexLocker lock2(sharedVolMutex);
+# else
 	MutexLocker lock2(inf.volMutex);
+# endif
 	if (!inf.mounting)
 	{
 		if (inf.isMounted)
@@ -1418,14 +1445,22 @@ extern "C"
 	// Lock sync object
 	int ff_mutex_take (int vol) noexcept
 	{
+#if FF_LRU
+		sharedVolMutex.Take();
+#else
 		info[vol].volMutex.Take();
+#endif
 		return 1;
 	}
 
 	// Unlock sync object
 	void ff_mutex_give (int vol) noexcept
 	{
+#if FF_LRU
+		sharedVolMutex.Release();
+#else
 		info[vol].volMutex.Release();
+#endif
 	}
 
 	// Delete a sync object

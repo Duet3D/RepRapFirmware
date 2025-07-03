@@ -1084,6 +1084,8 @@ static void clear_share (	/* Clear all lock entries of the volume */
 
 // Disk buffer management functions
 
+static const BYTE no_volume = 0xFF;
+
 // Get a pointer to the data in the buffer we own
 static inline BYTE *get_win(FATFS *fs) noexcept { return fs->sector_buffer->data; }
 
@@ -1093,20 +1095,55 @@ static inline LBA_t get_winsect(const FATFS *fs) noexcept { return (fs->sector_b
 // Set the data buffer we own dirty
 static inline void set_window_dirty(FATFS *fs) noexcept { fs->sector_buffer->dirty = true; }
 
-// Release the data buffer we own, optionally forcing a write if it is dirty
-static FRESULT release_buffer(FATFS *fs, bool writeIfDirty) noexcept
+// Add an empty buffer to the head of the freelist and flag it as empty
+// CAUTION! this code is not thread-safe so it relies on a shared volume mutex being used
+void ff_add_buffer_to_freelist(DiskBuffer *buf)
 {
-	if (fs->sector_buffer != NULL) {
-		if (writeIfDirty && fs->sector_buffer->dirty) {
-			//TODO
+	buf->volume = no_volume;
+	buf->dirty = false;
+	buf->next = freeBuffersRoot;
+	freeBuffersRoot = buf;
+}
+
+// Flush a sector buffer if it is dirty
+// CAUTION! this code is not thread-safe so it relies on a shared volume mutex being used
+static FRESULT flush_if_dirty(DiskBuffer *dbuf) noexcept
+{
+	if (dbuf->dirty) {
+		if (disk_write(dbuf->volume, dbuf->data, dbuf->sector, 1) == RES_OK) {					// Write it back into the volume
+			dbuf->dirty = false;																// Clear window dirty flag
+			FATFS *const fs = FatFs[dbuf->volume];
+			if (fs != NULL) {
+				if (dbuf->sector - fs->fatbase < fs->fsize && fs->n_fats == 2) {				// Is it in the 1st FAT?
+					(void)disk_write(dbuf->volume, dbuf->data, dbuf->sector + fs->fsize, 1);	// Reflect it to 2nd FAT if needed
+				}
+			}
+		} else {
+			return FR_DISK_ERR;
 		}
-		IrqDisable();
-		fs->sector_buffer->next = usedBuffersRoot;
-		usedBuffersRoot = fs->sector_buffer;
-		IrqEnable();
-		fs->sector_buffer = NULL;
 	}
 	return FR_OK;
+}
+
+// Release the data buffer we own, optionally forcing a write if it is dirty
+// CAUTION! this code is not thread-safe so it relies on a shared volume mutex being used
+static FRESULT release_buffer(FATFS *fs, bool writeIfDirty) noexcept
+{
+	FRESULT res = FR_OK;
+	if (fs->sector_buffer != NULL) {
+		if (fs->sector_buffer->volume == no_volume) {
+			fs->sector_buffer->next = freeBuffersRoot;
+			freeBuffersRoot = fs->sector_buffer;
+		} else {
+			if (writeIfDirty) {
+				res = flush_if_dirty(fs->sector_buffer);
+			}
+			fs->sector_buffer->next = usedBuffersRoot;
+			usedBuffersRoot = fs->sector_buffer;
+		}
+		fs->sector_buffer = NULL;
+	}
+	return res;
 }
 
 // Get a data buffer to hold the specified sector of the current volume.
@@ -1114,30 +1151,97 @@ static FRESULT release_buffer(FATFS *fs, bool writeIfDirty) noexcept
 // If readMode == 0 then we don't care about the existing data, so don't read it, and clear the dirty flag is we found an existing buffer holding it with dirty data
 // If readMode == 1 then read the data from the sector unless we found a buffer that already contains it
 // If readMode == 2 then always force the data to be read, ignoring all data already in the buffer and clearing the dirty flag
+// CAUTION! this code is not thread-safe so it relies on a shared volume mutex being used
 static FRESULT get_buffer(FATFS *fs, LBA_t sect, int readMode) noexcept
 {
 	if (fs->sector_buffer != NULL && fs->sector_buffer->sector == sect && readMode != 2) {	// if we have the correct buffer already
 		if (readMode == 0) { fs->sector_buffer->dirty = false; }							// if we are going to write the whole sector, clear the dirty flag
 	} else {
 		release_buffer(fs, false);															// release any existing buffer, don't write it if it is dirty
-		//TODO
+
+		// Search for a used buffer containing the correct data
+		DiskBuffer *buf;
+		for (DiskBuffer **prev = &usedBuffersRoot; ; ) {
+			buf = *prev;
+			if (buf == NULL) { break; }
+			if (buf->volume == fs->pdrv && buf->sector == sect) {							// if found a buffer containing the required volume and sector
+				*prev = buf->next;															// unlink it from the used list
+				buf->next = NULL;
+				switch (readMode)
+				{
+				case 0:
+					buf->dirty = false;
+					fs->sector_buffer = buf;
+					return FR_OK;
+				case 1:
+					fs->sector_buffer = buf;
+					return FR_OK;
+				case 2:
+					buf->dirty = false;
+					break;
+				}
+			}
+		}
+
+		if (buf == NULL) {
+			// Didn't find a buffer containing the correct data. Use a free buffer if there is one, else the least recently used buffer.
+			if (freeBuffersRoot != NULL) {				// if there is a free buffer
+				buf = freeBuffersRoot;
+				freeBuffersRoot = buf->next;
+				buf->next = NULL;
+			}
+			else {										// allocate the least recently used buffer
+				for (DiskBuffer **prev = &usedBuffersRoot; ;) {
+					buf = *prev;
+					if (buf->next == NULL) {
+						*prev = NULL;
+						break;
+					}
+					prev = &buf->next;
+				}
+				const FRESULT res = flush_if_dirty(buf);
+				if (res != FR_OK) {
+					ff_add_buffer_to_freelist(buf);
+					return FR_DISK_ERR;
+				}
+			}
+			buf->volume = fs->pdrv;
+			buf->sector = sect;
+		}
+
+		// Read the data into the buffer
+		if (disk_read(fs->pdrv, buf->data, buf->sector, 1) != RES_OK) {
+			ff_add_buffer_to_freelist(buf);
+			return FR_DISK_ERR;
+		}
+
+		fs->sector_buffer = buf;
 	}
 	return FR_OK;
 }
 
 // Release the current buffer and write all dirty buffers holding data for the current volume
+// CAUTION! this code is not thread-safe so it relies on a shared volume mutex being used
 static FRESULT write_buffers(FATFS *fs) noexcept
 {
 	release_buffer(fs, false);
-	//TODO
-	return FR_OK;
+	FRESULT res = FR_OK;
+	for (DiskBuffer *buf = usedBuffersRoot; buf != NULL; buf = buf->next) {
+		if (buf->volume == fs->pdrv) {
+			const FRESULT locres = flush_if_dirty(fs->sector_buffer);
+			if (locres > res) { res = locres; }
+		}
+	}
+	return res;
 }
 
 // This is called after we have done a direct write of 'cc' sectors starting at 'sect' using the data in 'wbuff'.
 // Update any existing buffers in that sector range with the new data, or alternatively invalidate any such buffers.
+// CAUTION! this code is not thread-safe so it relies on a shared volume mutex being used
 static void update_after_direct_write(FATFS *fs, LBA_t sect, UINT cc, const BYTE *wbuff) noexcept
 {
 	//TODO
+	qq;
 }
 
 // This is done after we have done a direct read of 'cc' sectors starting at 'sect' using the data in 'rbuff'.
@@ -1145,37 +1249,27 @@ static void update_after_direct_write(FATFS *fs, LBA_t sect, UINT cc, const BYTE
 static void update_after_direct_read(FATFS *fs, LBA_t sect, UINT cc, BYTE *rbuff) noexcept
 {
 	//TODO
+	qq;
 }
 
 // Invalidate all buffers for the current volume. Called when a media change is detected.
+// CAUTION! this code is not thread-safe so it relies on a shared volume mutex being used
 static void invalidate_buffers(FATFS *fs) noexcept
 {
 	release_buffer(fs, false);
-	IrqDisable();
 	for (DiskBuffer **prev = &usedBuffersRoot; ; ) {
 		DiskBuffer *const buf = *prev;
 		if (buf == NULL) { break; }
 		if (buf->volume == fs->volbase) {
 			*prev = buf->next;
-			buf->next = freeBuffersRoot;
-			freeBuffersRoot = buf;
+			ff_add_buffer_to_freelist(buf);
 		} else {
 			prev = &buf->next;
 		}
 	}
-	IrqEnable();
 }
 
-// Add an empty buffer to the head of the freelist and flag it as empty
-// Only called during initialisation, so we don't need to worry about task switching while in it
-void ff_add_buffer_to_freelist(DiskBuffer *buf)
-{
-	buf->dirty = false;
-	buf->next = freeBuffersRoot;
-	freeBuffersRoot = buf;
-}
-
-// move_window is equivalent to finding a buffer that holds the required sector or allocating a buffer for it and reading it from storage
+// move_window with LRU buffering is equivalent to finding a buffer that holds the required sector, or allocating a buffer for it and reading it from storage
 static inline FRESULT move_window (	/* Returns FR_OK or FR_DISK_ERR */
 	FATFS* fs,			/* Filesystem object */
 	LBA_t sect			/* Sector LBA to make appearance in the fs->win[] */
