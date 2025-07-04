@@ -1258,7 +1258,7 @@ static FRESULT write_buffers(FATFS *fs) noexcept
 	FRESULT res = FR_OK;
 	for (DiskBuffer *buf = usedBuffersRoot; buf != NULL; buf = buf->next) {
 		if (buf->volume == fs->pdrv) {
-			const FRESULT locres = flush_if_dirty(fs->sector_buffer);
+			const FRESULT locres = flush_if_dirty(buf);
 			if (locres > res) { res = locres; }
 		}
 	}
