@@ -4266,7 +4266,7 @@ FRESULT f_open (
 			if (mode & FA_CREATE_ALWAYS) mode |= FA_MODIFIED;	/* Set file change flag if created or overwritten */
 			fp->dir_sect = get_winsect(fs);		/* Pointer to the directory entry */
 #if FF_LRU
-			fp->dir_ptr = get_win(fs) + dj.dir_ofs;
+			fp->dir_ofs = dj.dir_ofs;
 #else
 			fp->dir_ptr = dj.dir;
 #endif
@@ -4673,7 +4673,11 @@ FRESULT f_sync (
 			{
 				res = move_window(fs, fp->dir_sect);
 				if (res == FR_OK) {
+#if FF_LRU
+					dir = get_win(fs) + fp->dir_ofs;
+#else
 					dir = fp->dir_ptr;
+#endif
 					dir[DIR_Attr] |= AM_ARC;						/* Set archive attribute to indicate that the file has been changed */
 					st_clust(fp->obj.fs, dir, fp->obj.sclust);		/* Update file allocation information  */
 					st_dword(dir + DIR_FileSize, (DWORD)fp->obj.objsize);	/* Update file size */

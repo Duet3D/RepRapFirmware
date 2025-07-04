@@ -234,7 +234,11 @@ typedef struct {
 	LBA_t	sect;			/* Sector number appearing in buf[] (0:invalid) */
 #if !FF_FS_READONLY
 	LBA_t	dir_sect;		/* Sector number containing the directory entry (not used at exFAT) */
+# if FF_LRU
+	DWORD	dir_ofs;		// offset within sector of directory entry
+# else
 	BYTE*	dir_ptr;		/* Pointer to the directory entry in the win[] (not used at exFAT) */
+# endif
 #endif
 #if FF_USE_FASTSEEK
 	DWORD*	cltbl;			/* Pointer to the cluster link map table (nulled on open, set by application) */
