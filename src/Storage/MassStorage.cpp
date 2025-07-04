@@ -1332,9 +1332,7 @@ void MassStorage::Diagnostics(const StringRef& reply) noexcept
 	reply.lcatf("SD card 0 %s", (MassStorage::IsCardDetected(0) ? "detected" : "not detected"));
 #  endif
 
-	// Show the longest SD card write time
-	reply.lcatf("SD card longest read time %.1fms, write time %.1fms, max retries %u",
-								(double)DiskioGetAndClearLongestReadTime(), (double)DiskioGetAndClearLongestWriteTime(), DiskioGetAndClearMaxRetryCount());
+	DiskioAppendStats(reply);				// show SD card stats
 # endif
 }
 
