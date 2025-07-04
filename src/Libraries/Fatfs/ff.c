@@ -236,12 +236,20 @@
 
 /* Re-entrancy related */
 #if FF_FS_REENTRANT
-#if FF_USE_LFN == 1
-#error Static LFN work area cannot be used in thread-safe configuration
-#endif
-#define LEAVE_FF(fs, res)	{ unlock_volume(fs, res); return res; }
+# if FF_USE_LFN == 1
+#  error Static LFN work area cannot be used in thread-safe configuration
+# endif
+# if FF_LRU
+#  define LEAVE_FF(fs, res)	{ release_buffer(fs, false); unlock_volume(fs, res); return res; }
+# else
+#  define LEAVE_FF(fs, res)	{ unlock_volume(fs, res); return res; }
+# endif
 #else
-#define LEAVE_FF(fs, res)	return res
+# if FF_LRU
+#  define LEAVE_FF(fs, res)	{ release_buffer(fs, false); return res; }
+# else
+#  define LEAVE_FF(fs, res)	return res
+# endif
 #endif
 
 
@@ -1151,72 +1159,78 @@ static FRESULT release_buffer(FATFS *fs, bool writeIfDirty) noexcept
 // If readMode == 0 then we don't care about the existing data, so don't read it, and clear the dirty flag is we found an existing buffer holding it with dirty data
 // If readMode == 1 then read the data from the sector unless we found a buffer that already contains it
 // If readMode == 2 then always force the data to be read, ignoring all data already in the buffer and clearing the dirty flag
+// If readMode == 3 then if there is no buffer that already contains the data, return FR_NOT_IN_BUFFER
 // CAUTION! this code is not thread-safe so it relies on a shared volume mutex being used
 static FRESULT get_buffer(FATFS *fs, LBA_t sect, int readMode) noexcept
 {
 	if (fs->sector_buffer != NULL && fs->sector_buffer->sector == sect && readMode != 2) {	// if we have the correct buffer already
 		if (readMode == 0) { fs->sector_buffer->dirty = false; }							// if we are going to write the whole sector, clear the dirty flag
-	} else {
-		release_buffer(fs, false);															// release any existing buffer, don't write it if it is dirty
+		return FR_OK;
+	}
 
-		// Search for a used buffer containing the correct data
-		DiskBuffer *buf;
-		for (DiskBuffer **prev = &usedBuffersRoot; ; ) {
-			buf = *prev;
-			if (buf == NULL) { break; }
-			if (buf->volume == fs->pdrv && buf->sector == sect) {							// if found a buffer containing the required volume and sector
-				*prev = buf->next;															// unlink it from the used list
-				buf->next = NULL;
-				switch (readMode)
-				{
-				case 0:
-					buf->dirty = false;
-					fs->sector_buffer = buf;
-					return FR_OK;
-				case 1:
-					fs->sector_buffer = buf;
-					return FR_OK;
-				case 2:
-					buf->dirty = false;
+	release_buffer(fs, false);																// release any existing buffer, don't write it if it is dirty
+
+	// Search for a used buffer containing the correct data
+	DiskBuffer *buf;
+	for (DiskBuffer **prev = &usedBuffersRoot; ; prev = &buf->next) {
+		buf = *prev;
+		if (buf == NULL) { break; }
+		if (buf->volume == fs->pdrv && buf->sector == sect) {								// if found a buffer containing the required volume and sector
+			*prev = buf->next;																// unlink it from the used list
+			buf->next = NULL;
+			switch (readMode)
+			{
+			case 0:
+				buf->dirty = false;
+				fs->sector_buffer = buf;
+				return FR_OK;
+			case 1:
+			case 3:
+				fs->sector_buffer = buf;
+				return FR_OK;
+			case 2:
+				buf->dirty = false;
+				break;
+			}
+		}
+	}
+
+	// We get here if we didn't find a buffer containing the sector, or if readMode == 2 and we did find a buffer
+	if (readMode == 3) { return FR_NOT_IN_BUFFER; }
+
+	if (buf == NULL) {
+		// Didn't find a buffer containing the correct data. Use a free buffer if there is one, else the least recently used buffer.
+		if (freeBuffersRoot != NULL) {				// if there is a free buffer
+			buf = freeBuffersRoot;
+			freeBuffersRoot = buf->next;
+			buf->next = NULL;
+		}
+		else {										// allocate the least recently used buffer
+			for (DiskBuffer **prev = &usedBuffersRoot; ;) {
+				buf = *prev;
+				if (buf->next == NULL) {
+					*prev = NULL;
 					break;
 				}
+				prev = &buf->next;
+			}
+			const FRESULT res = flush_if_dirty(buf);
+			if (res != FR_OK) {
+				ff_add_buffer_to_freelist(buf);
+				return FR_DISK_ERR;
 			}
 		}
-
-		if (buf == NULL) {
-			// Didn't find a buffer containing the correct data. Use a free buffer if there is one, else the least recently used buffer.
-			if (freeBuffersRoot != NULL) {				// if there is a free buffer
-				buf = freeBuffersRoot;
-				freeBuffersRoot = buf->next;
-				buf->next = NULL;
-			}
-			else {										// allocate the least recently used buffer
-				for (DiskBuffer **prev = &usedBuffersRoot; ;) {
-					buf = *prev;
-					if (buf->next == NULL) {
-						*prev = NULL;
-						break;
-					}
-					prev = &buf->next;
-				}
-				const FRESULT res = flush_if_dirty(buf);
-				if (res != FR_OK) {
-					ff_add_buffer_to_freelist(buf);
-					return FR_DISK_ERR;
-				}
-			}
-			buf->volume = fs->pdrv;
-			buf->sector = sect;
-		}
-
-		// Read the data into the buffer
-		if (disk_read(fs->pdrv, buf->data, buf->sector, 1) != RES_OK) {
-			ff_add_buffer_to_freelist(buf);
-			return FR_DISK_ERR;
-		}
-
-		fs->sector_buffer = buf;
+		buf->volume = fs->pdrv;
+		buf->sector = sect;
 	}
+
+	// Read the data into the buffer
+	if (disk_read(fs->pdrv, buf->data, buf->sector, 1) != RES_OK) {
+		ff_add_buffer_to_freelist(buf);
+		return FR_DISK_ERR;
+	}
+
+	fs->sector_buffer = buf;
 	return FR_OK;
 }
 
@@ -1240,16 +1254,32 @@ static FRESULT write_buffers(FATFS *fs) noexcept
 // CAUTION! this code is not thread-safe so it relies on a shared volume mutex being used
 static void update_after_direct_write(FATFS *fs, LBA_t sect, UINT cc, const BYTE *wbuff) noexcept
 {
-	//TODO
-	qq;
+	DiskBuffer *buf = fs->sector_buffer;
+	if (buf != NULL && buf->sector - sect < cc) {	/* Refill sector cache if it gets invalidated by the direct write */
+		memcpy(buf->data, wbuff + ((buf->sector - sect) * SS(fs)), SS(fs));
+		buf->dirty = false;
+	}
+	for (buf = usedBuffersRoot; buf != NULL; buf = buf->next) {
+		if (buf->volume == fs->pdrv && buf->sector - sect < cc) {	/* Refill sector cache if it gets invalidated by the direct write */
+			memcpy(buf->data, wbuff + ((buf->sector - sect) * SS(fs)), SS(fs));
+			buf->dirty = false;
+		}
+	}
 }
 
 // This is done after we have done a direct read of 'cc' sectors starting at 'sect' using the data in 'rbuff'.
 // If we have any buffers containing dirty data for sectors in that range, update rbuff with that data.
 static void update_after_direct_read(FATFS *fs, LBA_t sect, UINT cc, BYTE *rbuff) noexcept
 {
-	//TODO
-	qq;
+	DiskBuffer *buf = fs->sector_buffer;
+	if (buf != NULL && buf->dirty && buf->sector - sect < cc) {
+		memcpy(rbuff + ((buf->sector - sect) * SS(fs)), buf->data, SS(fs));
+	}
+	for (buf = usedBuffersRoot; buf != NULL; buf = buf->next) {
+		if (buf->dirty && buf->volume == fs->pdrv && buf->sector - sect < cc) {
+			memcpy(rbuff + ((buf->sector - sect) * SS(fs)), buf->data, SS(fs));
+		}
+	}
 }
 
 // Invalidate all buffers for the current volume. Called when a media change is detected.
@@ -1368,7 +1398,7 @@ static FRESULT sync_fs (	/* Returns FR_OK or FR_DISK_ERR */
 			st_dword(get_win(fs) + FSI_LeadSig, 0x41615252);		/* Leading signature */
 			st_dword(get_win(fs) + FSI_StrucSig, 0x61417272);		/* Structure signature */
 			st_dword(get_win(fs) + FSI_Free_Count, fs->free_clst);	/* Number of free clusters */
-			st_dword(get_win(fs) + FSI_Nxt_Free, fs->last_clst);	/* Last allocated culuster */
+			st_dword(get_win(fs) + FSI_Nxt_Free, fs->last_clst);	/* Last allocated cluster */
 #if !FF_LRU
 			set_winsect(fs, fs->volbase + 1);					/* Write it into the FSInfo sector (Next to VBR) */
 #endif
@@ -4228,6 +4258,14 @@ FRESULT f_read (
 			if (sect == 0) ABORT(fs, FR_INT_ERR);
 			sect += csect;
 			cc = btr / SS(fs);					/* When remaining bytes >= sector size, */
+#if FF_LRU
+			// Check whether the first (and possibly only) sector required is already present in a buffer
+			if (cc != 0 && get_buffer(fs, sect, 3) == FR_OK) {
+				memcpy(rbuff, get_win(fs), SS(fs));	/* Extract full sector */
+				rcnt = SS(fs);
+				continue;
+			}
+#endif
 #if 1	//dc42
 			if (cc != 0 && isAligned(rbuff)) {	/* Read maximum contiguous sectors directly */
 #else

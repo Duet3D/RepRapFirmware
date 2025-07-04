@@ -319,6 +319,9 @@ typedef enum {
 #if 1	//dc42
 	, FR_NOT_EMPTY			/* (20) Can't delete directory because it is not empty */
 #endif
+#if FF_LRU
+	, FR_NOT_IN_BUFFER		// the requested sector was not found in a buffer
+#endif
 } FRESULT;
 
 
