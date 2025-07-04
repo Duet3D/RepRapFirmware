@@ -122,7 +122,7 @@ extern PARTITION VolToPart[];	/* Volume - Partition mapping table */
 
 #if FF_STR_VOLUME_ID
 #ifndef FF_VOLUME_STRS
-extern const char* VolumeStr[FF_VOLUMES];	/* User defied volume ID */
+extern const char* VolumeStr[FF_VOLUMES];	/* User defined volume ID */
 #endif
 #endif
 
@@ -253,7 +253,11 @@ typedef struct {
 	DWORD	dptr;			/* Current read/write offset */
 	DWORD	clust;			/* Current cluster */
 	LBA_t	sect;			/* Current sector (0:Read operation has terminated) */
+#if FF_LRU
+	DWORD	dir_ofs;		// offset of the directory entry in the sector buffer
+#else
 	BYTE*	dir;			/* Pointer to the directory item in the win[] */
+#endif
 	BYTE	fn[12];			/* SFN (in/out) {body[8],ext[3],status[1]} */
 #if FF_USE_LFN
 	DWORD	blk_ofs;		/* Offset of current entry block being processed (0xFFFFFFFF:Invalid) */

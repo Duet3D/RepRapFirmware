@@ -57,9 +57,11 @@ alignas(4) static __nocache uint8_t sectorBuffers[NumLruBuffers][FF_MAX_SS];
 #  else
 alignas(4) static __nocache uint8_t sectorBuffers[NumSdCards][FF_MAX_SS];
 #  endif
+
 alignas(4) static __nocache char writeBufferStorage[NumFileWriteBuffers][FileWriteBufLen];
 
 # elif FF_LRU
+
 alignas(4) static uint8_t sectorBuffers[NumLruBuffers][FF_MAX_SS];
 
 # endif
