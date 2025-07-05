@@ -79,7 +79,11 @@ bool StringParser::Put(char c) noexcept
 	{
 		// Allocate more memory if we're in SBC mode, because binary codes have slightly more overhead.
 		// If USB/AUX channels request very long codes via macros, this will avoid bottlenecks from macros
+#if HAS_SBC_INTERFACE
 		gb.buffer = static_cast<char *>(Tasks::AllocPermanent(reprap.UsingSbcInterface() ? MaxGCodeBinaryLength : MaxGCodeStringLength, std::align_val_t(4)));
+#else
+		gb.buffer = static_cast<char *>(Tasks::AllocPermanent(MaxGCodeStringLength, std::align_val_t(4)));
+#endif
 		gb.bufferLength = MaxGCodeStringLength;
 	}
 
