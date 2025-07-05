@@ -1138,9 +1138,9 @@ static FRESULT flush_if_dirty(DiskBuffer *dbuf) noexcept
 	return FR_OK;
 }
 
-// Release the data buffer we own, optionally forcing a write if it is dirty
-// CAUTION! this code is not thread-safe so it relies on a shared volume mutex being used
+// If we are passed a file system that owns a disk buffer, release it, optionally forcing a write if it is dirty
 // This may be called via LEAVE_FF with fs == NULL so we must check for that
+// CAUTION! this code is not thread-safe so it relies on a shared volume mutex being used
 static FRESULT release_buffer(FATFS *fs, bool writeIfDirty) noexcept
 {
 	FRESULT res = FR_OK;
@@ -1160,9 +1160,23 @@ static FRESULT release_buffer(FATFS *fs, bool writeIfDirty) noexcept
 	return res;
 }
 
+// Release the data buffer owned by the file system, making it the LRU buffer. Called when we have just read or written to the end of a sector.
+// CAUTION! this code is not thread-safe so it relies on a shared volume mutex being used
+static void release_buffer_lru(FATFS *fs) noexcept
+{
+	DiskBuffer *const buf = fs->sector_buffer;
+	fs->sector_buffer = NULL;
+	buf->next = NULL;
+	DiskBuffer **prev = &usedBuffersRoot;
+	while (*prev != NULL) {
+		prev = &(*prev)->next;
+	}
+	*prev = buf;
+}
+
 // Get a data buffer to hold the specified sector of the current volume.
 // If we already own a buffer for another sector, release it first without writing it if it is dirty
-// If readMode == 0 then we don't care about the existing data, so don't read it, and clear the dirty flag is we found an existing buffer holding it with dirty data
+// If readMode == 0 then we don't care about the existing data and the caller may want it clear, so clear it instead of reading it, and clear the dirty flag is we found an existing buffer holding it with dirty data
 // If readMode == 1 then read the data from the sector unless we found a buffer that already contains it
 // If readMode == 2 then always force the data to be read, ignoring all data already in the buffer and clearing the dirty flag
 // If readMode == 3 then if there is no buffer that already contains the data, return FR_NOT_IN_BUFFER
@@ -1189,6 +1203,7 @@ static FRESULT get_buffer(FATFS *fs, LBA_t sect, int readMode) noexcept
 			switch (readMode)
 			{
 			case 0:
+				memset(buf->data, 0, FF_MAX_SS);
 				buf->dirty = false;
 				// no break
 			case 1:
@@ -1237,7 +1252,9 @@ static FRESULT get_buffer(FATFS *fs, LBA_t sect, int readMode) noexcept
 	}
 
 	// Read the data into the buffer
-	if (readMode != 0) {
+	if (readMode == 0) {
+		memset(buf->data, 0, FF_MAX_SS);
+	} else {
 		if (disk_read(fs->pdrv, buf->data, buf->sector, 1) != RES_OK) {
 			ff_add_buffer_to_freelist(buf);
 			debugPrintf("read error\n");
@@ -1404,11 +1421,12 @@ static FRESULT sync_fs (	/* Returns FR_OK or FR_DISK_ERR */
 			/* Create FSInfo structure */
 #if FF_LRU
 			get_buffer(fs, fs->volbase + 1, 0);						// allocate a buffer but don't read it because we are going to write all of it
-#endif
-#if 1	//dc
-			memset(get_win(fs), 0, FF_MAX_SS);						/* get_win(fs) may be a pointer to a buffer instead of the actual buffer */
 #else
+# if 1	//dc
+			memset(get_win(fs), 0, FF_MAX_SS);						/* get_win(fs) may be a pointer to a buffer instead of the actual buffer */
+# else
 			memset(get_win(fs), 0, sizeof fs->win);
+# endif
 #endif
 			st_word(get_win(fs) + BS_55AA, 0xAA55);					/* Boot signature */
 			st_dword(get_win(fs) + FSI_LeadSig, 0x41615252);		/* Leading signature */
@@ -1969,11 +1987,11 @@ static FRESULT dir_clear (	/* Returns FR_OK or FR_DISK_ERR */
 	get_buffer(fs, sect, 0);			// allocate a buffer for the sector but don't bother reading the data
 #else
 	set_winsect(fs, sect);				/* Set window to top of the cluster */
-#endif
-#if 1	// dc
+# if 1	// dc
 	memset(get_win(fs), 0, FF_MAX_SS);	/* Clear window buffer */
-#else
+# else
 	memset(get_win(fs), 0, sizeof fs->win);	/* Clear window buffer */
+# endif
 #endif
 #if FF_USE_LFN == 3		/* Quick table clear by using multi-secter write */
 	/* Allocate a temporary buffer */
@@ -4461,7 +4479,15 @@ FRESULT f_read (
 		if (rcnt > btr) rcnt = btr;					/* Clip it by btr if needed */
 #if FF_FS_TINY
 		if (move_window(fs, fp->sect) != FR_OK) ABORT(fs, FR_DISK_ERR);	/* Move sector window */
+# if FF_LRU
+		const DWORD sectorOffset = fp->fptr % SS(fs);
+		memcpy(rbuff, get_win(fs) + sectorOffset, rcnt);	/* Extract partial sector */
+		if (sectorOffset + rcnt == SS(fs)) {				// if we have just read to the end of the sector
+			release_buffer_lru(fs);							// it's unlikely we will need this sector again very soon, so treat it as least recently used
+		}
+# else
 		memcpy(rbuff, get_win(fs) + fp->fptr % SS(fs), rcnt);	/* Extract partial sector */
+# endif
 #else
 		memcpy(rbuff, fp->buf + fp->fptr % SS(fs), rcnt);	/* Extract partial sector */
 #endif
@@ -4570,8 +4596,7 @@ FRESULT f_write (
 				continue;
 			}
 #if FF_LRU
-			if (release_buffer(fs, true) != FR_OK) ABORT(fs, FR_DISK_ERR);
-			if (get_buffer(fs, fp->sect, (fp->fptr >= fp->obj.objsize) ? 0 : 1) != FR_OK) ABORT(fs, FR_DISK_ERR);
+			if (get_buffer(fs, sect, (fp->fptr >= fp->obj.objsize) ? 0 : 1) != FR_OK) ABORT(fs, FR_DISK_ERR);
 #elif FF_FS_TINY
 			if (fp->fptr >= fp->obj.objsize) {	/* Avoid silly cache filling on the growing edge */
 				if (sync_window(fs) != FR_OK) ABORT(fs, FR_DISK_ERR);
@@ -4594,8 +4619,12 @@ FRESULT f_write (
 		wcnt = SS(fs) - (UINT)fp->fptr % SS(fs);	/* Number of bytes remains in the sector */
 		if (wcnt > btw) wcnt = btw;					/* Clip it by btw if needed */
 #if FF_LRU
-		memcpy(get_win(fs) + fp->fptr % SS(fs), wbuff, wcnt);	/* Fit data to the sector */
+		const DWORD sectorOffset = fp->fptr % SS(fs);
+		memcpy(get_win(fs) + sectorOffset, wbuff, wcnt);	/* Fit data to the sector */
 		set_window_dirty(fs);
+		if (sectorOffset + wcnt == SS(fs)) {		// if we have written to the end of the sector
+			release_buffer_lru(fs);					// it's unlikely we will need this buffer again soon so make it the LRU buffer
+		}
 #elif FF_FS_TINY
 		if (move_window(fs, fp->sect) != FR_OK) ABORT(fs, FR_DISK_ERR);	/* Move sector window */
 		memcpy(get_win(fs) + fp->fptr % SS(fs), wbuff, wcnt);	/* Fit data to the sector */
