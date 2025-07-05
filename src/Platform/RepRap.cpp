@@ -555,6 +555,13 @@ void RepRap::Init() noexcept
 	delay(100);											// give the tick ISR time to collect voltage readings
 	platform->ResetVoltageMonitors();					// get rid of the spurious zero minimum voltage readings
 
+#if 0	//DEBUG
+# if !SAME70
+	SCnSCB->ACTLR |= SCnSCB_ACTLR_DISDEFWBUF_Msk;		// disable write buffer
+# endif
+	delay(5000);										// give me time to connect YAT before much else happens
+#endif
+
 	platform->MessageF(UsbMessage, "%s\n", VersionText);
 
 #if HAS_SBC_INTERFACE && !HAS_MASS_STORAGE

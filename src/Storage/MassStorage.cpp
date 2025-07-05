@@ -8,6 +8,10 @@
 # include <Libraries/sd_mmc/sd_mmc.h>
 # include <Libraries/sd_mmc/conf_sd_mmc.h>
 
+# if FF_LRU
+#  include <Platform/Tasks.h>			// for AllocPermanent
+# endif
+
 // Check that the LFN configuration in FatFS is sufficient
 static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
 
@@ -23,21 +27,43 @@ static_assert(SD_MMC_MEM_CNT == NumSdCards);
 # include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #endif
 
-// A note on using mutexes:
-// Each SD card volume has its own mutex. There is also one for the file table, and one for the find first/find next buffer.
-// The FatFS subsystem locks and releases the appropriate volume mutex when it is called.
-// Any function that needs to acquire both the file table mutex and a volume mutex MUST take the file table mutex first, to avoid deadlocks.
-// Any function that needs to acquire both the find buffer mutex and a volume mutex MUST take the find buffer mutex first, to avoid deadlocks.
-// No function should need to take both the file table mutex and the find buffer mutex.
-// No function in here should be called when the caller already owns the shared SPI mutex.
+// A note on the use of mutexes within the module and FatFs:
+// - There is  a mutex for the file table (fsMutex) and another for the find first/find next buffer (dirMutex).
+// When FF_LRU in ff_conf.h is not set:
+// - Each SD card volume also has its own mutex
+// - The FatFs subsystem locks and releases the appropriate volume mutex when any of its functions is called
+// - Any function that needs to acquire both the file table mutex and a volume mutex MUST take the file table mutex first to avoid deadlocks.
+// - Any function that needs to acquire both the find first/next mutex and a volume mutex MUST take the find first/next mutex first, to avoid deadlocks
+// When FF_LRU in ff_conf.h is set:
+// - There is a shared volume mutex because the LRU buffers are shared between volumes
+// - The FatFs subsystem locks and releases this shared volume mutex when any of its functions is called
+//   This means that we can't concurrently access different volumes from different tasks; however we don't expect this to be requested often, so the performance drop should be unimportant
+// In both cases:
+// - No function should need to take both the file table mutex and the find first/next buffer mutex.
+// - No function in here should be called when the caller already owns the shared SPI mutex.
 
 #if HAS_MASS_STORAGE
 
 // Private data and methods
 
+# if FF_LRU
+static DiskBuffer sdCardBuffers[NumLruBuffers];
+# endif
+
 # if SAME70
-alignas(4) static __nocache uint8_t sectorBuffers[NumSdCards][512];
+
+#  if FF_LRU
+alignas(4) static __nocache uint8_t sectorBuffers[NumLruBuffers][FF_MAX_SS];
+#  else
+alignas(4) static __nocache uint8_t sectorBuffers[NumSdCards][FF_MAX_SS];
+#  endif
+
 alignas(4) static __nocache char writeBufferStorage[NumFileWriteBuffers][FileWriteBufLen];
+
+# elif FF_LRU
+
+alignas(4) static uint8_t sectorBuffers[NumLruBuffers][FF_MAX_SS];
+
 # endif
 
 enum class CardDetectState : uint8_t
@@ -53,7 +79,9 @@ struct SdCardInfo INHERIT_OBJECT_MODEL
 	FATFS fileSystem;
 	uint32_t cdChangedTime;
 	uint32_t mountStartTime;
+#if !FF_LRU
 	Mutex volMutex;
+#endif
 	uint16_t seq;
 	Pin cdPin;
 	bool mounting;
@@ -69,9 +97,8 @@ protected:
 void SdCardInfo::Clear(unsigned int card) noexcept
 {
 	memset(&fileSystem, 0, sizeof(fileSystem));
-# if SAME70
-	fileSystem.win = sectorBuffers[card];
-	memset(sectorBuffers[card], 0, sizeof(sectorBuffers[card]));
+# if SAME70 && !FF_LRU
+	ff_set_win(&fileSystem, sectorBuffers[card]);
 # endif
 }
 
@@ -145,6 +172,10 @@ static FileWriteBuffer *_ecv_null freeWriteBuffers;
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 static Mutex fsMutex;
 static FileStore files[MAX_FILES];
+#endif
+
+#if HAS_MASS_STORAGE && FF_LRU
+static Mutex sharedVolMutex;
 #endif
 
 // Construct a full path name from a path and a filename. Returns false if error i.e. filename too long
@@ -259,7 +290,11 @@ static unsigned int InternalUnmount(size_t card) noexcept
 {
 	SdCardInfo& inf = info[card];
 	MutexLocker lock1(fsMutex);
+#if FF_LRU
+	MutexLocker lock2(sharedVolMutex);
+#else
 	MutexLocker lock2(inf.volMutex);
+#endif
 	const unsigned int invalidated = MassStorage::InvalidateFiles(&inf.fileSystem);
 	const char path[3] = { (char)('0' + card), ':', 0 };
 	f_mount(nullptr, path, 0);
@@ -340,6 +375,10 @@ void MassStorage::Init() noexcept
 	dirMutex.Create("DirSearch");
 #endif
 
+#if HAS_MASS_STORAGE && FF_LRU
+	sharedVolMutex.Create("SDall");
+#endif
+
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	freeWriteBuffers = nullptr;
 	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
@@ -365,8 +404,20 @@ void MassStorage::Init() noexcept
 		inf.seq = 0;
 		inf.cdPin = SdCardDetectPins[card];
 		inf.cardState = (inf.cdPin == NoPin) ? CardDetectState::present : CardDetectState::notPresent;
+#if !FF_LRU
 		inf.volMutex.Create(VolMutexNames[card]);
+#endif
 	}
+
+#  if FF_LRU
+	// Allocate the SD card buffers
+	for (unsigned int i = 0; i < NumLruBuffers; ++i)
+	{
+		DiskBuffer *const buf = &sdCardBuffers[i];
+		buf->data = sectorBuffers[i];
+		ff_add_buffer_to_freelist(buf);
+	}
+#  endif
 
 	sd_mmc_init(SdWriteProtectPins, SdSpiCSPins);		// initialize SD MMC stack
 
@@ -1123,7 +1174,11 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 # if HAS_MASS_STORAGE
 	SdCardInfo& inf = info[card];
 	MutexLocker lock1(fsMutex);
+# if FF_LRU
+	MutexLocker lock2(sharedVolMutex);
+# else
 	MutexLocker lock2(inf.volMutex);
+# endif
 	if (!inf.mounting)
 	{
 		if (inf.isMounted)
@@ -1277,9 +1332,7 @@ void MassStorage::Diagnostics(const StringRef& reply) noexcept
 	reply.lcatf("SD card 0 %s", (MassStorage::IsCardDetected(0) ? "detected" : "not detected"));
 #  endif
 
-	// Show the longest SD card write time
-	reply.lcatf("SD card longest read time %.1fms, write time %.1fms, max retries %u",
-								(double)DiskioGetAndClearLongestReadTime(), (double)DiskioGetAndClearLongestWriteTime(), DiskioGetAndClearMaxRetryCount());
+	DiskioAppendStats(reply);				// show SD card stats
 # endif
 }
 
@@ -1392,14 +1445,22 @@ extern "C"
 	// Lock sync object
 	int ff_mutex_take (int vol) noexcept
 	{
+#if FF_LRU
+		sharedVolMutex.Take();
+#else
 		info[vol].volMutex.Take();
+#endif
 		return 1;
 	}
 
 	// Unlock sync object
 	void ff_mutex_give (int vol) noexcept
 	{
+#if FF_LRU
+		sharedVolMutex.Release();
+#else
 		info[vol].volMutex.Release();
+#endif
 	}
 
 	// Delete a sync object

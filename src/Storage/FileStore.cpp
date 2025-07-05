@@ -726,7 +726,11 @@ bool FileStore::IsOpenOn(const FATFS *fs) const noexcept
 // Return true if the passed file is the same as ours
 bool FileStore::IsSameFile(const FIL& otherFile) const noexcept
 {
+#if FF_LRU
+	return file.obj.fs == otherFile.obj.fs && file.dir_sect == otherFile.dir_sect && file.dir_ofs == otherFile.dir_ofs;
+#else
 	return file.obj.fs == otherFile.obj.fs && file.dir_sect == otherFile.dir_sect && file.dir_ptr == otherFile.dir_ptr;
+#endif
 }
 
 uint32_t FileStore::ClusterSize() const noexcept

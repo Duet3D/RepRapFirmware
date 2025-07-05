@@ -7,9 +7,7 @@
 
 #ifdef __cplusplus
 
-unsigned int DiskioGetAndClearMaxRetryCount() noexcept;
-float DiskioGetAndClearLongestReadTime() noexcept;
-float DiskioGetAndClearLongestWriteTime() noexcept;
+void DiskioAppendStats(const StringRef& reply) noexcept;
 
 extern "C" {
 
