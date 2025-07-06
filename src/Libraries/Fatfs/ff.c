@@ -1633,7 +1633,7 @@ static DWORD find_bitmap (	/* 0:Not found, 2..:Cluster block found, 0xFFFFFFFF:D
 		i = val / 8 % SS(fs); bm = 1 << (val % 8);
 		do {
 			do {
-				bv = fs->win[i] & bm; bm <<= 1;		/* Get bit value */
+				bv = get_win(fs)[i] & bm; bm <<= 1;		/* Get bit value */
 				if (++val >= fs->n_fatent - 2) {	/* Next cluster (with wrap-around) */
 					val = 0; bm = 0; i = SS(fs);
 				}
@@ -1674,8 +1674,8 @@ static FRESULT change_bitmap (
 		if (move_window(fs, sect++) != FR_OK) return FR_DISK_ERR;
 		do {
 			do {
-				if (bv == (int)((fs->win[i] & bm) != 0)) return FR_INT_ERR;	/* Is the bit expected value? */
-				fs->win[i] ^= bm;	/* Flip the bit */
+				if (bv == (int)((get_win(fs)[i] & bm) != 0)) return FR_INT_ERR;	/* Is the bit expected value? */
+				get_win(fs)[i] ^= bm;	/* Flip the bit */
 				set_window_dirty(fs);
 				if (--ncl == 0) return FR_OK;	/* All bits processed? */
 			} while (bm <<= 1);		/* Next bit */
@@ -2151,12 +2151,16 @@ static FRESULT dir_alloc (	/* FR_OK(0):succeeded, !=0:error */
 		do {
 			res = move_window(fs, dp->sect);
 			if (res != FR_OK) break;
-#if FF_FS_EXFAT
-			if ((fs->fs_type == FS_EXFAT) ? (int)((dp->dir[XDIR_Type] & 0x80) == 0) : (int)(dp->dir[DIR_Name] == DDEM || dp->dir[DIR_Name] == 0)) {	/* Is the entry free? */
-#else
-# if FF_LRU
+#if FF_LRU
 			BYTE *const dpdir = get_win(fs) + dp->dir_ofs;
+# if FF_FS_EXFAT
+			if ((fs->fs_type == FS_EXFAT) ? (int)((dpdir[XDIR_Type] & 0x80) == 0) : (int)(dpdir[DIR_Name] == DDEM || dpdir[DIR_Name] == 0)) {	/* Is the entry free? */
+# else
 			if (dpdir[DIR_Name] == DDEM || dpdir[DIR_Name] == 0) {	/* Is the entry free? */
+# endif
+#else
+# if FF_FS_EXFAT
+			if ((fs->fs_type == FS_EXFAT) ? (int)((dp->dir[XDIR_Type] & 0x80) == 0) : (int)(dp->dir[DIR_Name] == DDEM || dp->dir[DIR_Name] == 0)) {	/* Is the entry free? */
 # else
 			if (dp->dir[DIR_Name] == DDEM || dp->dir[DIR_Name] == 0) {	/* Is the entry free? */
 # endif
@@ -2480,8 +2484,16 @@ static FRESULT load_xdir (	/* FR_INT_ERR: invalid entry block */
 	/* Load file directory entry */
 	res = move_window(dp->obj.fs, dp->sect);
 	if (res != FR_OK) return res;
+#if FF_LRU
+	{
+		BYTE *const dpdir = get_win(dp->obj.fs) + dp->dir_ofs;
+		if (dpdir[XDIR_Type] != ET_FILEDIR) return FR_INT_ERR;	/* Invalid order */
+		memcpy(dirb + 0 * SZDIRE, dpdir, SZDIRE);
+	}
+#else
 	if (dp->dir[XDIR_Type] != ET_FILEDIR) return FR_INT_ERR;	/* Invalid order */
 	memcpy(dirb + 0 * SZDIRE, dp->dir, SZDIRE);
+#endif
 	sz_ent = (dirb[XDIR_NumSec] + 1) * SZDIRE;
 	if (sz_ent < 3 * SZDIRE || sz_ent > 19 * SZDIRE) return FR_INT_ERR;
 
@@ -2491,8 +2503,16 @@ static FRESULT load_xdir (	/* FR_INT_ERR: invalid entry block */
 	if (res != FR_OK) return res;
 	res = move_window(dp->obj.fs, dp->sect);
 	if (res != FR_OK) return res;
+#if FF_LRU
+	{
+		BYTE *const dpdir = get_win(dp->obj.fs) + dp->dir_ofs;
+		if (dpdir[XDIR_Type] != ET_STREAM) return FR_INT_ERR;	/* Invalid order */
+		memcpy(dirb + 1 * SZDIRE, dpdir, SZDIRE);
+	}
+#else
 	if (dp->dir[XDIR_Type] != ET_STREAM) return FR_INT_ERR;	/* Invalid order */
 	memcpy(dirb + 1 * SZDIRE, dp->dir, SZDIRE);
+#endif
 	if (MAXDIRB(dirb[XDIR_NumName]) > sz_ent) return FR_INT_ERR;
 
 	/* Load file name entries */
@@ -2503,8 +2523,14 @@ static FRESULT load_xdir (	/* FR_INT_ERR: invalid entry block */
 		if (res != FR_OK) return res;
 		res = move_window(dp->obj.fs, dp->sect);
 		if (res != FR_OK) return res;
+#if FF_LRU
+		BYTE *const dpdir = get_win(dp->obj.fs) + dp->dir_ofs;
+		if (dpdir[XDIR_Type] != ET_FILENAME) return FR_INT_ERR;	/* Invalid order */
+		if (i < MAXDIRB(FF_MAX_LFN)) memcpy(dirb + i, dpdir, SZDIRE);
+#else
 		if (dp->dir[XDIR_Type] != ET_FILENAME) return FR_INT_ERR;	/* Invalid order */
 		if (i < MAXDIRB(FF_MAX_LFN)) memcpy(dirb + i, dp->dir, SZDIRE);
+#endif
 	} while ((i += SZDIRE) < sz_ent);
 
 	/* Sanity check (do it for only accessible object) */
@@ -2583,7 +2609,11 @@ static FRESULT store_xdir (
 	while (res == FR_OK) {
 		res = move_window(dp->obj.fs, dp->sect);
 		if (res != FR_OK) break;
+#if FF_LRU
+		memcpy(get_win(dp->obj.fs) + dp->dir_ofs, dirb, SZDIRE);
+#else
 		memcpy(dp->dir, dirb, SZDIRE);
+#endif
 		set_window_dirty(dp->obj.fs);
 		if (--nent == 0) break;
 		dirb += SZDIRE;
@@ -3895,7 +3925,7 @@ static FRESULT mount_volume (	/* FR_OK(0): successful, !=0: an error occurred */
 		QWORD maxlba;
 		DWORD so, cv, bcl, i;
 
-		for (i = BPB_ZeroedEx; i < BPB_ZeroedEx + 53 && fs->win[i] == 0; i++) ;	/* Check zero filler */
+		for (i = BPB_ZeroedEx; i < BPB_ZeroedEx + 53 && get_win(fs)[i] == 0; i++) ;	/* Check zero filler */
 		if (i < BPB_ZeroedEx + 53) return FR_NO_FILESYSTEM;
 
 		if (ld_word(get_win(fs) + BPB_FSVerEx) != 0x100) return FR_NO_FILESYSTEM;	/* Check exFAT version (must be version 1.0) */
@@ -5381,12 +5411,12 @@ FRESULT f_getfree (
 					clst = fs->n_fatent - 2;	/* Number of clusters */
 					sect = fs->bitbase;			/* Bitmap sector */
 					i = 0;						/* Offset in the sector */
-					do {	/* Counts numbuer of bits with zero in the bitmap */
+					do {	/* Counts number of bits with zero in the bitmap */
 						if (i == 0) {	/* New sector? */
 							res = move_window(fs, sect++);
 							if (res != FR_OK) break;
 						}
-						for (b = 8, bm = ~fs->win[i]; b && clst; b--, clst--) {
+						for (b = 8, bm = ~get_win(fs)[i]; b && clst; b--, clst--) {
 							nfree += bm & 1;
 							bm >>= 1;
 						}
