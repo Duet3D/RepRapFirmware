@@ -641,7 +641,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	if (   prev->state == provisional												// if previous move is queued but has not started yet
 		&& flags.isPrintingMove == prev->flags.isPrintingMove
 		&& flags.xyMoving == prev->flags.xyMoving
-		&& flags.isNonPrintingExtruderMove == prev->flags.isNonPrintingExtruderMove	// this is to prevent extruder-only move being melded with Z-axis moves (issue 990)
+		&& flags.isNonPrintingExtruderMove == prev->flags.isNonPrintingExtruderMove	// this is to prevent extruder-only moves being melded with Z-axis moves (issue 990)
 	   )
 	{
 		// We may be able to meld this move with the previous one
@@ -658,13 +658,13 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	else
 	{
 		// This will be the first move after standstill
-		profile.endDeceleration = 0.0;														// end deceleration is zero until we have a following move
+		profile.endDeceleration = 0.0;												// end deceleration is zero until we have a following move
 		beforePrepare.startSpeedRatio = 1.0;
 		beforePrepare.maxPrevEndSpeed = 0.0;
 	}
 #endif
 
-	profile.endSpeed = 0.0;																	// until we have a following move
+	profile.endSpeed = 0.0;															// until we have a following move
 
 	MovementError rslt;																// this will hold the return value
 
@@ -672,7 +672,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 #if SUPPORT_S_CURVE
 	if (flags.useScurve)
 	{
-		profile.startSpeed = profile.startAcceleration = 0.0;										// in case there is no previous move
+		profile.startSpeed = profile.startAcceleration = 0.0;						// in case there is no previous move
 		state = DDAState::unplanned;												// postpone planning this move until preparation
 		return MovementError::ok;
 	}
@@ -717,65 +717,6 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	}
 	return rslt;
 }
-
-#if SUPPORT_S_CURVE
-
-// If the extrusion mix hasn't changed, calculate the feed rate ratio needed to maintain constant extrusion speed and the maximum end speed of the previous move
-void DDA::SetSpeedRatioForPrintingMoves(const Move& move) noexcept
-{
-	float extrusionRatio = 1.0;
-	bool found = false;
-	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
-	{
-		if (directionVector[drive] < 0.0 || prev->directionVector[drive] < 0.0)
-		{
-			beforePrepare.startSpeedRatio = beforePrepare.maxPrevEndSpeed = 0.0;
-			return;
-		}
-		else if (prev->directionVector[drive] != 0.0)
-		{
-			const float tempRatio = directionVector[drive]/prev->directionVector[drive];
-			if (tempRatio < 0.2)
-			{
-				beforePrepare.startSpeedRatio = beforePrepare.maxPrevEndSpeed = 0.0;
-				return;
-			}
-
-			if (!found)
-			{
-				extrusionRatio = tempRatio;
-				found = true;
-			}
-			else if (fabsf(tempRatio - extrusionRatio) > extrusionRatio * 0.01)		// require the mix to be unchanged between extruders to within 1%
-			{
-				beforePrepare.startSpeedRatio = beforePrepare.maxPrevEndSpeed = 0.0;
-				return;
-			}
-		}
-		else if (directionVector[drive] != 0.0)
-		{
-			beforePrepare.startSpeedRatio = beforePrepare.maxPrevEndSpeed = 0.0;
-			return;
-		}
-	}
-
-	// If we get here then the extrusion ratio hasn't changed significantly
-	beforePrepare.startSpeedRatio = extrusionRatio;
-
-	// Now calculate the maximum previous move end speed that doesn't exceed the jerk limit for any axis
-	float provisionalMaxEndSpeed = min<float>(requestedSpeed/beforePrepare.startSpeedRatio, prev->requestedSpeed);
-	for (size_t axis = 0; axis < reprap.GetGCodes().GetVisibleAxes(); ++axis)
-	{
-		const float axisDv = beforePrepare.startSpeedRatio * directionVector[axis] - prev->directionVector[axis];
-		if (fabsf(provisionalMaxEndSpeed * axisDv) > move.GetMaxInstantDv(axis))
-		{
-			provisionalMaxEndSpeed = move.GetMaxInstantDv(axis)/axisDv;
-		}
-	}
-	beforePrepare.maxPrevEndSpeed = provisionalMaxEndSpeed;
-}
-
-#endif
 
 // Set up a leadscrew motor move returning true if the move does anything
 bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustments[MaxDriversPerAxis]) noexcept
@@ -1215,13 +1156,128 @@ MovementError DDA::RecalculateMove(DDARing& ring) noexcept
 
 #if SUPPORT_S_CURVE
 
+// If the extrusion mix hasn't changed, calculate the feed rate ratio needed to maintain constant extrusion speed and the maximum end speed of the previous move
+void DDA::SetSpeedRatioForPrintingMoves(const Move& move) noexcept
+{
+	float extrusionRatio = 1.0;
+	bool found = false;
+	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
+	{
+		if (directionVector[drive] < 0.0 || prev->directionVector[drive] < 0.0)
+		{
+			beforePrepare.startSpeedRatio = beforePrepare.maxPrevEndSpeed = 0.0;
+			return;
+		}
+		else if (prev->directionVector[drive] != 0.0)
+		{
+			const float tempRatio = directionVector[drive]/prev->directionVector[drive];
+			if (tempRatio < 0.2)
+			{
+				beforePrepare.startSpeedRatio = beforePrepare.maxPrevEndSpeed = 0.0;
+				return;
+			}
+
+			if (!found)
+			{
+				extrusionRatio = tempRatio;
+				found = true;
+			}
+			else if (fabsf(tempRatio - extrusionRatio) > extrusionRatio * 0.01)		// require the mix to be unchanged between extruders to within 1%
+			{
+				beforePrepare.startSpeedRatio = beforePrepare.maxPrevEndSpeed = 0.0;
+				return;
+			}
+		}
+		else if (directionVector[drive] != 0.0)
+		{
+			beforePrepare.startSpeedRatio = beforePrepare.maxPrevEndSpeed = 0.0;
+			return;
+		}
+	}
+
+	// If we get here then the extrusion ratio hasn't changed significantly
+	beforePrepare.startSpeedRatio = extrusionRatio;
+
+	// Now calculate the maximum previous move end speed that doesn't exceed the jerk limit for any axis
+	float provisionalMaxEndSpeed = min<float>(requestedSpeed/beforePrepare.startSpeedRatio, prev->requestedSpeed);
+	for (size_t axis = 0; axis < reprap.GetGCodes().GetVisibleAxes(); ++axis)
+	{
+		const float axisDv = beforePrepare.startSpeedRatio * directionVector[axis] - prev->directionVector[axis];
+		if (fabsf(provisionalMaxEndSpeed * axisDv) > move.GetMaxInstantDv(axis))
+		{
+			provisionalMaxEndSpeed = move.GetMaxInstantDv(axis)/axisDv;
+		}
+	}
+	beforePrepare.maxPrevEndSpeed = provisionalMaxEndSpeed;
+}
+
+// Calculate the minimum distance covered to increase the speed from one value to another, starting and ending with zero acceleration.
+// Requires endSpeed > startSpeed; jerk > 0; maxAcceleration > 0
+static float CalcDistanceCovered(float startSpeed, float endSpeed, float jerk, float maxAcceleration, float& peakAcceleration, float& t1, float& t2) noexcept
+{
+	// In the increasing acceleration phase:
+	//	- the acceleration reached is a = j * t1
+	//	- the speed reached is v1 = u + (1/2) * j * t1^2 = u + (1/2) * a * t1
+	// In the constant acceleration phase:
+	//	- v2 = v1 + a * t2
+	//		 = u + (1/2) a * t1 + a * t2
+	//		 = v1 + j * t1 * t2
+	// In the reducing acceleration phase:
+	//	- the acceleration reduces to 0 again, so t is the same as t1 in the increasing acceleration phase
+	//	- the final speed is v3 = v2 + a * t1 - (1/2) * j * t1^2
+	// Therefore:
+	//	- v3 = u + (1/2) * j * t1^2 + j * t1 * t2 + j * t1^2 - (1/2) * j * t1^2
+	//		 = u + j * (t1^2 + t1 * t2)
+	// or in terms of a:
+	//	- v1 = u + (1/2) * a * t1
+	//	- v2 = u + (1/2) * a * t1 + a * t2
+	//	- v3 = u + (1/2) * a * t1 + a * t2 + a * t1 - (1/2) * a * t1
+	//		 = u + a * (t1 + t2)
+	//		 = u + a^2/j + a * t2
+	// Distance covered is:
+	//	- s =   u * t1 + (1/6) * j * t1^3
+	//		 + (u + (1/2) * a * t1) * t2 + (1/2) * a * t2^2
+	//		 + (u + (1/2) * a * t1 + a * t2) * t1 - (1/6) * j * t1^3
+	//		= 2 * u * t1 + u * t2 + (1/2) * a * t1 * t2 + (1/2) * a * t2^2 + (1/2) * a * t1^2 + a * t1 * t2
+	//		= 2 * u * t1 + u * t2 + (3/2) * a * t1 * t2 + (1/2) * a * t2^2 + (1/2) * a * t1^2
+	// or:
+	//	- s =  u * t1 + (1/6) * j * t1^3
+	//		 + (u + (1/2) * a * t1) * t2 + (1/2) * a * t2^2
+	//		  + v3 * t1 - (1/6) * j * t1^3
+	//		= (u + v3) * t1 + (u + (1/2) * a * t1) * t2 + (1/2) * a * t2^2
+	//		= (u + v3) * t1 + ((u + (1/2) * a * t1) + (1/2) * a * t2) * t2
+	//		= (u + v3) * t1 + ((u + (1/2) * a * (t1 + t2)) * t2
+	//		= (u + v3) * t1 + (1/2)(u + v3) * t2
+	//		= (u + v3) * (t1 + (1/2) * t2)
+
+	// First, determine whether the maximum acceleration is more limiting
+	if ((endSpeed - startSpeed) * jerk > fsquare(maxAcceleration))
+	{
+		// We need a constant acceleration phase
+		peakAcceleration = maxAcceleration;
+		t1 = maxAcceleration/jerk;
+		t2 = (endSpeed - startSpeed)/maxAcceleration - t1;;
+		return (endSpeed + startSpeed) * (t1 + 0.5 * t2);
+	}
+	else
+	{
+		// We don't need a constant acceleration phase
+		peakAcceleration = fastSqrtf((endSpeed - startSpeed) * jerk);
+		t1 = peakAcceleration/jerk;
+		t2 = 0.0;
+		return (endSpeed + startSpeed) * t1;
+	}
+}
+
+// Try to generate a move of up to 7 phases that starts and finishes at specified speeds, with zero start and end acceleration, and a specified distance and maximum speed.
+
 // Plan some moves that haven't yet been committed.
 // 'firstUnpreparedMove' is the oldest uncommitted move.
 // 'stopping' is true if we want to stop in a controlled manner as quickly as possible; else we have added one or more moves so we may be able to increase the speed of already-planned moves.
 /*static*/ void DDA::PlanMoves(DDA *firstUnpreparedMove, bool stopping) noexcept
 {
 	// For now we ignore 'stopping'. Need to implement it when we add support for feed hold.
-	// Find a sequence of moves that must end at zero speed
+	// Find a sequence of moves that have approximately the same requestedSpeed and maxEndSpeed, apart from the last one which may have a lower of zero maxPrevEndSpeed
 	DDA *lastMoveToPlan = firstUnpreparedMove;
 	DDA *nextMove;
 	float distanceToPlan = firstUnpreparedMove->totalDistance;
