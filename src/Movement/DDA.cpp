@@ -204,7 +204,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	else
 	{
 		peakAcceleration = dda.maxAcceleration;
-		peakDeceleration = -dda.maxDeceleration;
+		peakDeceleration = -dda.maxAcceleration;
 		accelStartClocks = accelEndClocks = decelStartClocks = decelEndClocks = 0;
 		accelConstantClocks = lrintf((dda.profile.topSpeed - dda.profile.startSpeed)/peakAcceleration);
 		decelConstantClocks = lrintf((dda.profile.endSpeed - dda.profile.topSpeed)/peakDeceleration);
@@ -592,7 +592,6 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	{
 		maxAcceleration = min<float>(maxAcceleration, (flags.isPrintingMove) ? nextMove.maxPrintingAcceleration : nextMove.maxTravelAcceleration);
 	}
-	maxDeceleration = maxAcceleration;
 
 #if SUPPORT_S_CURVE
 	if (move.IsUsingSCurve())
@@ -679,7 +678,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	else if (beforePrepare.maxPrevEndSpeed > 0.0)
 	{
 		// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = -2as limited to the requested speed
-		prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(maxDeceleration * totalDistance * 2.0), beforePrepare.maxPrevEndSpeed);
+		prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(maxAcceleration * totalDistance * 2.0), beforePrepare.maxPrevEndSpeed);
 		DoLookahead(ring, prev);
 		profile.startSpeed = prev->profile.endSpeed * beforePrepare.startSpeedRatio;
 	}
@@ -754,7 +753,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	virtualExtruderPosition = prev->virtualExtruderPosition;
 	tool = nullptr;
 	filePos = prev->filePos;
-	maxAcceleration = maxDeceleration = move.NormalAcceleration(Z_AXIS);
+	maxAcceleration = move.NormalAcceleration(Z_AXIS);
 
 #if SUPPORT_LASER && SUPPORT_IOBITS
 	if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
@@ -827,7 +826,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 	profile.startSpeed = nextMove.startSpeed;
 	profile.endSpeed = nextMove.endSpeed;
 	requestedSpeed = nextMove.requestedSpeed;
-	maxAcceleration = maxDeceleration = nextMove.accelDecel;
+	maxAcceleration = nextMove.accelDecel;
 
 # if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();
@@ -912,7 +911,7 @@ bool DDA::IsAccelerationMove() const noexcept
 			   )
 			{
 				laDDA->MatchSpeeds();
-				const float maxStartSpeed = fastSqrtf(fsquare(laDDA->beforePrepare.targetNextSpeed) + (2 * laDDA->maxDeceleration * laDDA->totalDistance));
+				const float maxStartSpeed = fastSqrtf(fsquare(laDDA->beforePrepare.targetNextSpeed) + (2 * laDDA->maxAcceleration * laDDA->totalDistance));
 				laDDA->prev->beforePrepare.targetNextSpeed = min<float>(maxStartSpeed, laDDA->requestedSpeed);
 
 				// Still going up
@@ -1042,9 +1041,8 @@ float DDA::AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcep
 MovementError DDA::RecalculateMove(DDARing& ring) noexcept
 {
 	const float twoA = 2 * maxAcceleration;
-	const float twoD = 2 * maxDeceleration;
 	beforePrepare.accelDistance = (fsquare(requestedSpeed) - fsquare(profile.startSpeed))/twoA;
-	beforePrepare.decelDistance = (fsquare(requestedSpeed) - fsquare(profile.endSpeed))/twoD;
+	beforePrepare.decelDistance = (fsquare(requestedSpeed) - fsquare(profile.endSpeed))/twoA;
 	if (beforePrepare.accelDistance + beforePrepare.decelDistance < totalDistance)
 	{
 		// This move reaches its top speed
@@ -1064,7 +1062,7 @@ MovementError DDA::RecalculateMove(DDARing& ring) noexcept
 		}
 		else
 		{
-			if (profile.endSpeed + maxDeceleration * MinimumAccelOrDecelClocks > requestedSpeed && profile.endSpeed >= requestedSpeed * 0.9)
+			if (profile.endSpeed + maxAcceleration * MinimumAccelOrDecelClocks > requestedSpeed && profile.endSpeed >= requestedSpeed * 0.9)
 			{
 				profile.topSpeed = profile.endSpeed;
 				beforePrepare.decelDistance = 0.0;
@@ -1081,18 +1079,20 @@ MovementError DDA::RecalculateMove(DDARing& ring) noexcept
 		// If V is the peak speed, then (V^2 - u^2)/2a + (V^2 - v^2)/2d = dist
 		// So V^2(2a + 2d) = 2a.2d.dist + 2a.v^2 + 2d.u^2
 		// So V^2 = (2a.2d.dist + 2a.v^2 + 2d.u^2)/(2a + 2d)
-		const float vsquared = ((twoA * twoD * totalDistance) + (twoA * fsquare(profile.endSpeed)) + twoD * fsquare(profile.startSpeed))/(twoA + twoD);
+		// We now always set a == d so the above reduces to: V^2 = (2a.dist + v^2 + u^2)/2
+		const float vsquared = ((twoA * totalDistance) + fsquare(profile.endSpeed) + fsquare(profile.startSpeed)) * 0.5;
 		if (vsquared > fsquare(profile.startSpeed) && vsquared > fsquare(profile.endSpeed))
 		{
 			// It's an accelerate-decelerate move. Calculate accelerate distance from: V^2 = u^2 + 2as.
 			beforePrepare.accelDistance = (vsquared - fsquare(profile.startSpeed))/twoA;
-			beforePrepare.decelDistance = (vsquared - fsquare(profile.endSpeed))/twoD;
+			beforePrepare.decelDistance = (vsquared - fsquare(profile.endSpeed))/twoA;
 			profile.topSpeed = fastSqrtf(vsquared);
 		}
 		else
 		{
 			// It's an accelerate-only or decelerate-only move.
 			// Due to rounding errors and babystepping adjustments, we may have to adjust the acceleration or deceleration slightly.
+			// It's OK to adjust maxAcceleration because if we get here then we have either an acceleration or a deceleration segment, not both
 			if (profile.startSpeed < profile.endSpeed)
 			{
 				beforePrepare.accelDistance = totalDistance;
@@ -1117,7 +1117,7 @@ MovementError DDA::RecalculateMove(DDARing& ring) noexcept
 				beforePrepare.decelDistance = totalDistance;
 				profile.topSpeed = profile.startSpeed;
 				const float newDeceleration = (fsquare(profile.startSpeed) - fsquare(profile.endSpeed))/(2 * totalDistance);
-				if (newDeceleration > 1.02 * maxDeceleration)
+				if (newDeceleration > 1.02 * maxAcceleration)
 				{
 					// The deceleration increase is greater than we expect from rounding error, so record an error
 					ring.RecordLookaheadError();
@@ -1127,7 +1127,7 @@ MovementError DDA::RecalculateMove(DDARing& ring) noexcept
 						DebugPrint("rm");
 					}
 				}
-				maxDeceleration = newDeceleration;
+				maxAcceleration = newDeceleration;
 			}
 		}
 	}
@@ -1147,8 +1147,7 @@ MovementError DDA::RecalculateMove(DDARing& ring) noexcept
 	}
 
 	// We need to set the number of clocks needed here because we use it before the move has been frozen
-	const float totalTime = (profile.topSpeed - profile.startSpeed)/maxAcceleration
-							+ (profile.topSpeed - profile.endSpeed)/maxDeceleration
+	const float totalTime = (2 * profile.topSpeed - profile.startSpeed - profile.endSpeed)/maxAcceleration
 							+ (totalDistance - beforePrepare.accelDistance - beforePrepare.decelDistance)/profile.topSpeed;
 	clocksNeeded = (uint32_t)totalTime;
 	return (totalTime < std::numeric_limits<int32_t>::max() - 100) ? MovementError::ok : MovementError::move_duration_too_long;
@@ -1250,7 +1249,7 @@ static float CalcDistanceCovered(float startSpeed, float endSpeed, float jerk, f
 	//		= (u + v3) * t1 + (1/2)(u + v3) * t2
 	//		= (u + v3) * (t1 + (1/2) * t2)
 
-	// First, determine whether the maximum acceleration is more limiting
+	// First, determine whether the maximum acceleration is limiting
 	if ((endSpeed - startSpeed) * jerk > fsquare(maxAcceleration))
 	{
 		// We need a constant acceleration phase
@@ -1281,11 +1280,15 @@ static float CalcDistanceCovered(float startSpeed, float endSpeed, float jerk, f
 	DDA *lastMoveToPlan = firstUnpreparedMove;
 	DDA *nextMove;
 	float distanceToPlan = firstUnpreparedMove->totalDistance;
-	float peakSpeed = firstUnpreparedMove->requestedSpeed;
+	float maxReqSpeed = firstUnpreparedMove->requestedSpeed;
+	float minJerk = firstUnpreparedMove->jerk;
+	float minMaxAcc = firstUnpreparedMove->maxAcceleration;
 	while ((nextMove = lastMoveToPlan->next)->GetState() != DDA::empty && nextMove->beforePrepare.maxPrevEndSpeed != 0.0)
 	{
 		distanceToPlan += nextMove->totalDistance;
-		peakSpeed += nextMove->requestedSpeed;
+		if (nextMove->jerk < minJerk) { minJerk = nextMove->jerk; }
+		if (nextMove->maxAcceleration < minMaxAcc) { minMaxAcc = nextMove->maxAcceleration; }
+		if (nextMove->requestedSpeed > maxReqSpeed) { maxReqSpeed = nextMove->requestedSpeed; }
 		lastMoveToPlan = nextMove;
 	}
 	lastMoveToPlan->profile.endSpeed = lastMoveToPlan->profile.finalAcceleration = 0.0;
@@ -2153,10 +2156,6 @@ void DDA::LimitSpeedAndAcceleration(float maxSpeed, float maxAllowedAcceleration
 	{
 		maxAcceleration = maxAllowedAcceleration;
 	}
-	if (maxDeceleration > maxAllowedAcceleration)
-	{
-		maxDeceleration = maxAllowedAcceleration;
-	}
 }
 
 float DDA::GetTotalExtrusionRate() const noexcept
@@ -2198,7 +2197,7 @@ uint32_t DDA::ManageLaserPower(Platform& p) const noexcept
 		return LaserPwmIntervalMillis;
 	}
 
-	const float decelSpeed = profile.endSpeed + maxDeceleration * clocksLeft;
+	const float decelSpeed = profile.endSpeed + maxAcceleration * clocksLeft;
 	if (decelSpeed < profile.topSpeed)
 	{
 		// Deceleration phase
@@ -2209,7 +2208,7 @@ uint32_t DDA::ManageLaserPower(Platform& p) const noexcept
 
 	// We must be in the constant speed phase
 	p.SetLaserPwm(laserPwmOrIoBits.laserPwm);
-	const uint32_t decelClocks = (uint32_t)((profile.topSpeed - profile.endSpeed)/maxDeceleration);
+	const uint32_t decelClocks = (uint32_t)((profile.topSpeed - profile.endSpeed)/maxAcceleration);
 	if (clocksLeft <= decelClocks)
 	{
 		return LaserPwmIntervalMillis;

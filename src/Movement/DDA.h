@@ -285,7 +285,7 @@ private:
 	int32_t endPoint[MaxAxesPlusExtruders];  		// Machine coordinates of the endpoint
 	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;							// How long is the move in hypercuboid space
-    float maxAcceleration, maxDeceleration;			// The maximum acceleration and deceleration to use, always positive
+    float maxAcceleration;							// The maximum acceleration and deceleration to use, always positive
 #if SUPPORT_S_CURVE
 	float jerk;										// The magnitude of the rate of change of acceleration or deceleration, always positive
 #endif
