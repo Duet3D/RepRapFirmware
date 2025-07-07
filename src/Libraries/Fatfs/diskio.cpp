@@ -59,26 +59,15 @@
 static unsigned int highestSdRetriesDone = 0;
 static uint32_t longestWriteTime = 0;
 static uint32_t longestReadTime = 0;
+static uint32_t sectorsRead = 0, sectorsWritten = 0;
 
-unsigned int DiskioGetAndClearMaxRetryCount() noexcept
+void DiskioAppendStats(const StringRef& reply) noexcept
 {
-	const unsigned int ret = highestSdRetriesDone;
+	reply.lcatf("SD card longest read time %.1fms, write time %.1fms, max retries %u, sectors read/written %" PRIu32 "/%" PRIu32,
+					(double)((float)longestReadTime * StepClocksToMillis), (double)((float)longestWriteTime * StepClocksToMillis), highestSdRetriesDone, sectorsRead, sectorsWritten);
+	longestReadTime = longestWriteTime = 0;
 	highestSdRetriesDone = 0;
-	return ret;
-}
-
-float DiskioGetAndClearLongestReadTime() noexcept
-{
-	const float ret = (float)longestReadTime * StepClocksToMillis;
-	longestReadTime = 0;
-	return ret;
-}
-
-float DiskioGetAndClearLongestWriteTime() noexcept
-{
-	const float ret = (float)longestWriteTime * StepClocksToMillis;
-	longestWriteTime = 0;
-	return ret;
+	sectorsRead = sectorsWritten = 0;
 }
 
 //void debugPrintf(const char*, ...);
@@ -231,6 +220,7 @@ DRESULT disk_read(BYTE drv, BYTE *buff, LBA_t sector, UINT count) noexcept
 		highestSdRetriesDone = retryNumber;
 	}
 
+	sectorsRead += count;
 	return RES_OK;
 }
 
@@ -310,6 +300,7 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, LBA_t sector, UINT count) noexcep
 		highestSdRetriesDone = retryNumber;
 	}
 
+	sectorsWritten += count;
 	return RES_OK;
 }
 

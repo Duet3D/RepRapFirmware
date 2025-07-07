@@ -313,7 +313,7 @@ void MqttClient::ConnectionLost() noexcept
 		return GCodeResult::error;
 	}
 
-	String<MaxGCodeLength> param;
+	String<MaxGCodeStringLength> param;
 
 	auto clearMemb = [](char *&field)
 	{

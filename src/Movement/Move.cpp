@@ -644,6 +644,19 @@ void Move::Exit() noexcept
 			moveTask.TerminateAndUnlink();
 		}
 
+#if SUPPORT_REMOTE_COMMANDS
+		if (CanInterface::InExpansionMode())
+		{
+			// In expansion mode we don't need the Move task to do anything, and in particular we must not perform udle detection.
+			// We could terminate the Move task here but currently we don't because:
+			// (a) if we do then we must make sure that any attempts to wake it up are benign
+			// (b) in future we may wish to use the Move task to queue movement commands
+			// So for now we just delay.
+			delay(10000);
+			continue;
+		}
+#endif
+
 		bool moveRead = false;
 
 		// See if we can add another move to ring 0
