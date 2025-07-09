@@ -1266,6 +1266,7 @@ bool GCodes::DoEmergencyPause() noexcept
 		{
 			PrintPausedReason reason = platform.IsPowerOk() ? PrintPausedReason::stall : PrintPausedReason::lowVoltage;
 			reprap.GetSbcInterface().SetEmergencyPauseReason(ms.GetPauseRestorePoint().filePos, reason);
+			reprap.GetSbcInterface().EventOccurred(true);
 		}
 #endif
 
