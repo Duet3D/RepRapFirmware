@@ -196,7 +196,7 @@
 // This means that the PBUF pool must be large enough to accommodate those buffers, which currently need 16384 bytes.
 // The non-cached RAM size is set in file Cache.cpp in project CoreN2G. Currently it is set to 80kb.
 // We may as well use the remainder of the non-cached RAM block for additional pbufs, so we allocate a few more here.
-# define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 8)
+# define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 14)
 #else
 # define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 4)
 #endif
