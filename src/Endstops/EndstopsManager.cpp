@@ -751,7 +751,7 @@ void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMa
 {
 	if (handleMajor < ARRAY_SIZE(axisEndstops))
 	{
-		TaskCriticalSectionLocker lock;						// make sure endstops are not changed or deleted while we operate on them
+		TaskCriticalSectionLocker lock;					// make sure endstops are not changed or deleted while we operate on them
 		Endstop * const es = axisEndstops[handleMajor];
 		if (es != nullptr)
 		{
@@ -765,7 +765,7 @@ void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMaj
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
-		ReadLocker lock(zProbesLock);					// make sure Z peobes are not changed or deleted while we operate on them
+		ReadLocker lock(zProbesLock);					// make sure Z probes are not changed or deleted while we operate on them
 		ZProbe * const zp = zProbes[handleMajor];
 		if (zp != nullptr)
 		{
@@ -778,7 +778,7 @@ void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
-		ReadLocker lock(zProbesLock);					// make sure Z peobes are not changed or deleted while we operate on them
+		ReadLocker lock(zProbesLock);					// make sure Z probes are not changed or deleted while we operate on them
 		ZProbe * const zp = zProbes[handleMajor];
 		if (zp != nullptr)
 		{

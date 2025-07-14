@@ -38,7 +38,6 @@
 
 #endif
 
-#if SUPPORT_OBJECT_MODEL
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
@@ -91,14 +90,12 @@ const char *_ecv_array GCodeBuffer::GetStateText() const noexcept
 
 	switch (bufferState)
 	{
-	case GCodeBufferState::parseNotStarted:		return "idle";
+	case GCodeBufferState::parseNotStarted:		return (buffer != nullptr) ? "idle" : "unused";
 	case GCodeBufferState::ready:				return "executing";
 	case GCodeBufferState::executing:			return "waiting";
 	default:									return "reading";
 	}
 }
-
-#endif
 
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *_ecv_null fileIn, MessageType mt, Compatibility::RawType c) noexcept
@@ -115,7 +112,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from no
 	  stringParser(*this),
 	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()), lastStatusReportType(StatusReportType::none),
 	  codeChannel(channel), lastResult(GCodeResult::ok),
-	  disabled(false), timerRunning(false), motionCommanded(false)
+	  disabled(false), timerRunning(false), motionCommanded(false), buffer(nullptr), bufferLength(0)
 
 #if HAS_SBC_INTERFACE
 	  , isWaitingForMacro(false), isBinaryBuffer(false), invalidated(false)
@@ -157,7 +154,7 @@ void GCodeBuffer::Init() noexcept
 	binaryParser.Init();
 #endif
 	stringParser.Init();
-	timerRunning = false;
+	overflowed = timerRunning = false;
 #if SUPPORT_ASYNC_MOVES
 	syncState = SyncState::running;
 #endif
@@ -227,7 +224,7 @@ void GCodeBuffer::Diagnostics(const StringRef& reply) noexcept
 	switch (bufferState)
 	{
 	case GCodeBufferState::parseNotStarted:
-		reply.cat("is idle");
+		reply.cat((buffer != nullptr) ? "is idle" : "is unused");
 		break;
 
 	case GCodeBufferState::ready:
@@ -685,6 +682,12 @@ void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) T
 ExpressionValue GCodeBuffer::GetExpression() THROWS(GCodeException)
 {
 	return PARSER_OPERATION(GetExpression());
+}
+
+// Get an unsigned integer or a string after a key letter
+bool GCodeBuffer::GetStringOrUIValue(uint32_t& ival, const StringRef& str) THROWS(GCodeException)
+{
+	return PARSER_OPERATION(GetStringOrUIValue(ival, str));
 }
 
 // Get a :-separated list of drivers after a key letter

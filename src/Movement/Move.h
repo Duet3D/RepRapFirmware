@@ -301,7 +301,7 @@ public:
 																			// Take a position and apply the bed and the axis-angle compensations
 	void InverseAxisAndBedTransform(float move[], const Tool *_ecv_null tool) const noexcept;
 																			// Go from a transformed point back to user coordinates
-	void SetZeroHeightError(const float coords[MaxAxes]) noexcept;			// Set zero height error at these bed coordinates
+	void SetZeroHeightError(const float coords[MaxAxes], const ZProbe *zp) noexcept;	// Set zero height error at these bed coordinates
 	float GetTaperHeight() const noexcept { return (useTaper) ? taperHeight : 0.0; }
 	void SetTaperHeight(float h) noexcept;
 	bool UseMesh(bool b) noexcept;											// Try to enable mesh bed compensation and report the final state
@@ -364,7 +364,7 @@ public:
 																							// Convert Cartesian coordinates to motor coordinates, return true if successful
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept;
 																							// Convert motor coordinates to machine coordinates
-	const char *_ecv_array GetGeometryString() const noexcept { return kinematics->GetName(true); }
+	const char *_ecv_array GetGeometryString() const noexcept { return kinematics->GetName(); }
 	bool IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
 
 	bool IsRawMotorMove(uint8_t moveType) const noexcept;									// Return true if this is a raw motor move

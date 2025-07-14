@@ -15,10 +15,9 @@
 class PolarKinematics : public Kinematics
 {
 public:
-	PolarKinematics() noexcept;
+	static Kinematics *_ecv_from _ecv_null Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept;
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
-	const char *_ecv_array GetName(bool forStatusReport) const noexcept override;
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException) override;
 	MovementError CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
@@ -45,6 +44,8 @@ private:
 	static constexpr float DefaultMaxTurntableAcceleration = 30.0;		// degrees per second per second
 	static constexpr const char *_ecv_array HomeRadiusFileName = "homeradius.g";
 	static constexpr const char *_ecv_array HomeBedFileName = "homebed.g";
+
+	PolarKinematics() noexcept;
 
 	void Recalc();
 

@@ -50,8 +50,6 @@ constexpr size_t LargeFontNumber = 0;
 constexpr uint32_t NormalRefreshMillis = 250;
 constexpr uint32_t FastRefreshMillis = 50;
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -73,8 +71,6 @@ constexpr ObjectModelTableEntry Display::objectModelTable[] =
 constexpr uint8_t Display::objectModelTableDescriptor[] = { 1, 1 + SUPPORT_ROTARY_ENCODER };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Display)
-
-#endif
 
 Display::Display() noexcept
 	: lcd(nullptr), menu(nullptr),

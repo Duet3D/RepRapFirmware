@@ -260,6 +260,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "printingJerk",		OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetPrintingInstantDv(context.GetLastIndex())), 1),		ObjectModelEntryFlags::none },
 	{ "reducedAcceleration", OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(context.GetLastIndex(), true)), 1),			ObjectModelEntryFlags::none },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
+	{ "stepPos",			OBJECT_MODEL_FUNC(self->GetLiveMotorPosition(context.GetLastIndex())),											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->DriveStepsPerMm(context.GetLastIndex()), 2),											ObjectModelEntryFlags::none },
 	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(reprap.GetGCodes().GetCurrentMovementState(context), context.GetLastIndex()), 3), ObjectModelEntryFlags::live },
 	{ "visible",			OBJECT_MODEL_FUNC_NOSELF(context.GetLastIndex() < (int32_t)reprap.GetGCodes().GetVisibleAxes()),				ObjectModelEntryFlags::none },
@@ -325,10 +326,10 @@ constexpr uint8_t Move::objectModelTableDescriptor[] =
 	2,
 	4,
 #ifdef DUET_NG	// Duet WiFi/Ethernet doesn't have settable standstill current and doesn't support phase stepping
-	22,																		// section 9: move.axes[]
+	23,																		// section 9: move.axes[]
 	16,																		// section 10: move.extruders[]
 #else
-	23 + SUPPORT_PHASE_STEPPING,											// section 9: move.axes[]
+	24 + SUPPORT_PHASE_STEPPING,											// section 9: move.axes[]
 	17 + SUPPORT_PHASE_STEPPING,											// section 10: move.extruders[]
 #endif
 	3,																		// section 11: move.extruders[].nonlinear
@@ -643,6 +644,19 @@ void Move::Exit() noexcept
 			moveTask.TerminateAndUnlink();
 		}
 
+#if SUPPORT_REMOTE_COMMANDS
+		if (CanInterface::InExpansionMode())
+		{
+			// In expansion mode we don't need the Move task to do anything, and in particular we must not perform udle detection.
+			// We could terminate the Move task here but currently we don't because:
+			// (a) if we do then we must make sure that any attempts to wake it up are benign
+			// (b) in future we may wish to use the Move task to queue movement commands
+			// So for now we just delay.
+			delay(10000);
+			continue;
+		}
+#endif
+
 		bool moveRead = false;
 
 		// See if we can add another move to ring 0
@@ -716,7 +730,7 @@ void Move::Exit() noexcept
 		// To avoid this we must ensure that we prepare moves at least half an input shaper period in advance. This avoids the problem because any delayed segment of the first move
 		// will be half a shaper period long. In order to handle CAN delays etc. we prepare moves [half a shaper period plus MoveTiming::AbsoluteMinimumPreparedTime] in advance,
 		// with a minimum of MoveTiming::UsualMinimumPreparedTime.
-		const uint32_t prepareAdvanceTime = max<uint32_t>(axisShaper.GetImpulseDelay(0) + MoveTiming::AbsoluteMinimumPreparedTime, MoveTiming::UsualMinimumPreparedTime);
+		const uint32_t prepareAdvanceTime = max<uint32_t>(axisShaper.GetLongestSegment() + MoveTiming::AbsoluteMinimumPreparedTime, MoveTiming::UsualMinimumPreparedTime);
 		uint32_t nextPrepareDelay = rings[0].Spin(prepareAdvanceTime, simulationMode, !canAddRing0Move, millis() - whenLastMoveAdded[0] >= rings[0].GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES

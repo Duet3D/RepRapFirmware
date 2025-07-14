@@ -55,10 +55,9 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_BME280			1
 #define SUPPORT_ADS131A02		1
-#define SUPPORT_OBJECT_MODEL	1
 
 #ifdef USE_EMBEDDED_FILES
-#define SUPPORT_ACCELEROMETERS	0
+# define SUPPORT_ACCELEROMETERS	0
 # define SUPPORT_FTP			0
 # define SUPPORT_MULTICAST_DISCOVERY	0
 # define SUPPORT_REMOTE_COMMANDS		0
@@ -319,7 +318,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC03 driver 4 dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC04 driver 4 step
 	{ TcOutput::tioa6,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out5"				},	// PC05 OUT5
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC06 EthernetPhyInterrupt (up to v1.1), USB_PWR_EN (v1.2)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"ate.usbpwren"		},	// PC06 EthernetPhyInterrupt (up to v1.1), USB_PWR_EN (v1.2)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out4.tach"			},	// PC07 OUT4_TACH
 	{ TcOutput::tioa7,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out8"				},	// PC08 OUT8
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC09 driver 5 step

@@ -19,8 +19,6 @@
 
 #include <limits>
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -61,7 +59,6 @@ constexpr ObjectModelTableEntry ScaraKinematics::objectModelTable[] =
 	{ "crosstalk",		OBJECT_MODEL_FUNC_ARRAY(22),					ObjectModelEntryFlags::none },
 	{ "distalLength",	OBJECT_MODEL_FUNC(self->distalArmLength, 2),	ObjectModelEntryFlags::none },
 	{ "minRadius",		OBJECT_MODEL_FUNC(self->requestedMinRadius, 1),	ObjectModelEntryFlags::none },
-	{ "name",			OBJECT_MODEL_FUNC(self->GetName(true)), 		ObjectModelEntryFlags::none },
 	{ "proximalLength",	OBJECT_MODEL_FUNC(self->proximalArmLength, 2),	ObjectModelEntryFlags::none },
 	{ "psiLimits",		OBJECT_MODEL_FUNC_ARRAY(21),					ObjectModelEntryFlags::none },
 	{ "thetaLimits",	OBJECT_MODEL_FUNC_ARRAY(20),					ObjectModelEntryFlags::none },
@@ -69,11 +66,20 @@ constexpr ObjectModelTableEntry ScaraKinematics::objectModelTable[] =
 	{ "yOffset",		OBJECT_MODEL_FUNC(self->yOffset, 1),			ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t ScaraKinematics::objectModelTableDescriptor[] = { 1, 9 };
+constexpr uint8_t ScaraKinematics::objectModelTableDescriptor[] = { 1, 8 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(ScaraKinematics, ZLeadscrewKinematics)
 
-#endif
+Kinematics::KinematicsTypeDescriptor scaraKinematicsDescriptor(ScaraKinematics::Create);
+
+/*static*/ Kinematics *_ecv_from _ecv_null ScaraKinematics::Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept
+{
+	if (MatchesLegacyType(name, legacyNumber, KinematicsType::scara))
+	{
+		return new ScaraKinematics();
+	}
+	return nullptr;
+}
 
 ScaraKinematics::ScaraKinematics() noexcept
 	: ZLeadscrewKinematics(KinematicsType::scara, SegmentationType(true, false, false)),
@@ -85,12 +91,6 @@ ScaraKinematics::ScaraKinematics() noexcept
 	psiLimits[1] = DefaultMaxPsi;
 	crosstalk[0] = crosstalk[1] = crosstalk[2] = requestedMinRadius = 0.0;
 	Recalc();
-}
-
-// Return the name of the current kinematics
-const char *_ecv_array ScaraKinematics::GetName(bool forStatusReport) const noexcept
-{
-	return "Scara";
 }
 
 // Calculate theta, psi and the new arm mode from a target position.

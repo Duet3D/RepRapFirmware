@@ -47,6 +47,7 @@ public:
 	size_t GetNumImpulses() const noexcept { return numImpulses; }
 	motioncalc_t GetImpulseSize(size_t n) const noexcept { return coefficients[n]; }
 	uint32_t GetImpulseDelay(size_t n) const noexcept { return delays[n]; }
+	uint32_t GetLongestSegment() const noexcept { return longestSegment; }
 
 #if SUPPORT_REMOTE_COMMANDS
 	// Handle a request from the master board to set input shaping parameters
@@ -77,6 +78,7 @@ private:
 	unsigned int numImpulses;							// the number of impulses
 	motioncalc_t coefficients[MaxImpulses];				// the coefficients of all the impulses, must add up to 1.0
 	uint32_t delays[MaxImpulses];						// the start delay in step clocks of each impulse, first one is normally zero
+	uint32_t longestSegment;							// the longest interval between a pair of adjacent impulses. Must be set to 0 if input shaping is not in use.
 };
 
 #endif /* SRC_MOVEMENT_AXISSHAPER_H_ */

@@ -9,6 +9,6 @@
 #include <General/IsoDate.h>
 
 const char *_ecv_array const DateText = IsoDate;
-const char *_ecv_array const TIME_SUFFIX = " " __TIME__;
+const char *_ecv_array const TimeSuffix = " " __TIME__;
 
 // End

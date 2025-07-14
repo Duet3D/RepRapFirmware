@@ -21,8 +21,6 @@
 
 //#define debugPrintf if(0) debugPrintf
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -34,7 +32,7 @@ constexpr ObjectModelTableEntry FiveBarScaraKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "name",	OBJECT_MODEL_FUNC(self->GetName(true)), 	ObjectModelEntryFlags::none },
+	{ "dummy",	OBJECT_MODEL_FUNC_NOSELF(false), 	ObjectModelEntryFlags::none },		// this is just a placeholder
 	//TODO lots more to be added here
 };
 
@@ -42,18 +40,21 @@ constexpr uint8_t FiveBarScaraKinematics::objectModelTableDescriptor[] = { 1, 1 
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(FiveBarScaraKinematics, ZLeadscrewKinematics)
 
-#endif
+Kinematics::KinematicsTypeDescriptor fiveBarScaraKinematicsDescriptor(FiveBarScaraKinematics::Create);
+
+/*static*/ Kinematics *_ecv_from _ecv_null FiveBarScaraKinematics::Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept
+{
+	if (MatchesLegacyType(name, legacyNumber, KinematicsType::fiveBarScara))
+	{
+		return new FiveBarScaraKinematics();
+	}
+	return nullptr;
+}
 
 FiveBarScaraKinematics::FiveBarScaraKinematics() noexcept
 	: ZLeadscrewKinematics(KinematicsType::scara, SegmentationType(true, false, false))
 {
 	Recalc();
-}
-
-// Return the name of the current kinematics
-const char *FiveBarScaraKinematics::GetName(bool forStatusReport) const noexcept
-{
-	return "FiveBarScara";
 }
 
 //////////////////////// private functions /////////////////////////

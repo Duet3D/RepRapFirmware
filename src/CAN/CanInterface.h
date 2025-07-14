@@ -90,6 +90,7 @@ namespace CanInterface
 	unsigned int GetNumPendingMotionMessages() noexcept;
 #endif
 	void WakeAsyncSender() noexcept;
+	void WakeAsyncSenderFromIsr() noexcept;
 
 	// Remote handle functions
 	GCodeResult CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *_ecv_array pinName, uint16_t threshold, uint16_t minInterval, bool *_ecv_null currentState, const StringRef& reply) noexcept;

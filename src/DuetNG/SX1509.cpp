@@ -200,6 +200,7 @@ void SX1509::ledDriverInit(uint8_t pin, bool log, bool openDrain) noexcept
 
 #endif
 
+// Caller should own the I2C mutex when calling this
 void SX1509::ledDriverInitMultiple(uint16_t pins, bool log, bool openDrain) noexcept
 {
 	if (openDrain)

@@ -22,11 +22,9 @@ enum class HangprinterAnchorMode {
 class HangprinterKinematics : public RoundBedKinematics
 {
 public:
-	// Constructors
-	HangprinterKinematics() noexcept;
+	static Kinematics *_ecv_from _ecv_null Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept;
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
-	const char *_ecv_array GetName(bool forStatusReport) const noexcept override;
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException) override;
 	MovementError CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
@@ -71,6 +69,9 @@ private:
 	static constexpr const char*_ecv_array ANCHOR_CHARS = "ABCDIJKLO";
 	static constexpr size_t HANGPRINTER_MAX_ANCHORS = 5;
 	static constexpr size_t DefaultNumAnchors = 4;
+
+	// Constructors
+	HangprinterKinematics() noexcept;
 
 	void Init() noexcept;
 	void Recalc() noexcept;

@@ -403,7 +403,7 @@ void CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
 		memcpy(msg->uniqueId, reprap.GetPlatform().GetUniqueId().GetRaw(), sizeof(msg->uniqueId));
 		// Note, board type name, firmware version, firmware date and firmware time are limited to 43 characters in the new
 		// We use vertical-bar to separate the three fields: board type, firmware version, date/time
-		SafeSnprintf(msg->boardTypeAndFirmwareVersion, ARRAY_SIZE(msg->boardTypeAndFirmwareVersion), "%s|%s|%s%.6s", BOARD_SHORT_NAME, VERSION, DateText, TIME_SUFFIX);
+		SafeSnprintf(msg->boardTypeAndFirmwareVersion, ARRAY_SIZE(msg->boardTypeAndFirmwareVersion), "%s|%s|%s%.6s", BOARD_SHORT_NAME, VERSION, DateText, TimeSuffix);
 		buf->dataLength = msg->GetActualDataLength();
 		SendMessageNoReplyNoFree(buf);
 	}
@@ -1331,6 +1331,11 @@ void CanInterface::WakeAsyncSender() noexcept
 	{
 		canSenderTask.Give(NotifyIndices::CanSender);
 	}
+}
+
+void CanInterface::WakeAsyncSenderFromIsr() noexcept
+{
+	canSenderTask.GiveFromISR(NotifyIndices::CanSender);
 }
 
 // Remote handle functions

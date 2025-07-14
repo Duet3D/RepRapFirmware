@@ -1143,13 +1143,7 @@ void Platform::DisableAutoSave() noexcept
 
 bool Platform::IsPowerOk() const noexcept
 {
-	// FIXME Implement auto-save for the SBC
-	return (   !autoSaveEnabled
-#if HAS_SBC_INTERFACE
-			|| reprap.UsingSbcInterface()
-#endif
-		   )
-		|| currentVin > autoPauseReading;
+	return !autoSaveEnabled || currentVin > autoPauseReading;
 }
 
 void Platform::EnableAutoSave(float saveVoltage, float resumeVoltage) noexcept
@@ -2940,12 +2934,12 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 						break;
 					}
 				}
-				else
+				else if (resultVar == nullptr) // Only report comm error if not storing result in variable
 				{
 					reply.copy("no or bad response from Modbus device");
 				}
 			}
-			else
+			else if (resultVar == nullptr)
 			{
 				reply.copy("couldn't initiate Modbus transaction");
 			}

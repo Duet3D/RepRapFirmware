@@ -103,7 +103,7 @@ public:
 #endif
 
 	void SaveOwnDriveCoordinates() const noexcept;											// fetch and save the endpoints of logical drives we own to lastKnownEndpoints
-	void SetNewPositionOfOwnedAxes(float ncoords[MaxAxes]) noexcept;
+	void SetNewPositionOfOwnedAxes() noexcept;
 	void ChangeEndpointsAfterHoming(LogicalDrivesBitmap drives, const int32_t endpoints[MaxAxes]) noexcept;
 	void ChangeSingleEndpointAfterHoming(size_t drive, int32_t ep) noexcept;
 	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;			// adjust the endpoints following delta calibration
@@ -246,6 +246,8 @@ private:
 	ParameterLettersBitmap ownedAxisLetters;						// cache of letters denoting user axes for which the corresponding machine axes for the current tool are definitely owned
 
 	static LogicalDrivesBitmap allLogicalDrivesOwned;				// logical drives owned by any movement system
+
+	void FormClosure(AxesBitmap &axes, LogicalDrivesBitmap &drives) noexcept;
 #endif
 };
 
