@@ -1214,40 +1214,94 @@ void DDA::SetSpeedRatioForPrintingMoves(const Move& move) noexcept
 // Requires endSpeed > startSpeed; jerk > 0; maxAcceleration > 0
 static float CalcDistanceCovered(float startSpeed, float endSpeed, float jerk, float maxAcceleration, float& peakAcceleration, float& t1, float& t2) noexcept
 {
+	// If the starting and ending accelerations are zero:
 	// In the increasing acceleration phase:
-	//	- the acceleration reached is a = j * t1
-	//	- the speed reached is v1 = u + (1/2) * j * t1^2 = u + (1/2) * a * t1
-	// In the constant acceleration phase:
-	//	- v2 = v1 + a * t2
-	//		 = u + (1/2) a * t1 + a * t2
-	//		 = v1 + j * t1 * t2
+	//	- the acceleration reached is:
+	//		a = j * t1
+	//	- the speed reached is:
+	//		v1 = u + OneHalf * j * t1^2
+	//		   = u + OneHalf * a * t1
+	// In the constant acceleration phase the speed reached is:
+	//		v2 = v1 + a * t2
+	//		   = u + OneHalf * a * t1 + a * t2
+	//		   = u + OneHalf * a * t1 + j * t1 * t2
 	// In the reducing acceleration phase:
 	//	- the acceleration reduces to 0 again, so t is the same as t1 in the increasing acceleration phase
-	//	- the final speed is v3 = v2 + a * t1 - (1/2) * j * t1^2
-	// Therefore:
-	//	- v3 = u + (1/2) * j * t1^2 + j * t1 * t2 + j * t1^2 - (1/2) * j * t1^2
-	//		 = u + j * (t1^2 + t1 * t2)
+	//	- the final speed is:
+	//		v3 = v2 + a * t1 - OneHalf * j * t1^2
+	//		   = u + OneHalf * j * t1^2 + j * t1 * t2 + j * t1^2 - OneHalf * j * t1^2
+	//		   = u + j * (t1^2 + t1 * t2)
 	// or in terms of a:
-	//	- v1 = u + (1/2) * a * t1
-	//	- v2 = u + (1/2) * a * t1 + a * t2
-	//	- v3 = u + (1/2) * a * t1 + a * t2 + a * t1 - (1/2) * a * t1
-	//		 = u + a * (t1 + t2)
-	//		 = u + a^2/j + a * t2
+	//		v1 = u + OneHalf * a * t1
+	//		v2 = u + OneHalf * a * t1 + a * t2
+	//		v3 = u + OneHalf * a * t1 + a * t2 + a * t1 - OneHalf * a * t1
+	//		   = u + a * (t1 + t2)
+	//		   = u + a^2/j + a * t2
 	// Distance covered is:
-	//	- s =   u * t1 + (1/6) * j * t1^3
-	//		 + (u + (1/2) * a * t1) * t2 + (1/2) * a * t2^2
-	//		 + (u + (1/2) * a * t1 + a * t2) * t1 - (1/6) * j * t1^3
-	//		= 2 * u * t1 + u * t2 + (1/2) * a * t1 * t2 + (1/2) * a * t2^2 + (1/2) * a * t1^2 + a * t1 * t2
-	//		= 2 * u * t1 + u * t2 + (3/2) * a * t1 * t2 + (1/2) * a * t2^2 + (1/2) * a * t1^2
+	//		s =    u * t1 + OneSixth * j * t1^3
+	//			 + (u + OneHalf * a * t1) * t2 + OneHalf * a * t2^2
+	//			 + (u + OneHalf * a * t1 + a * t2) * t1 - OneSixth * j * t1^3
+	//		  = 2 * u * t1 + u * t2 + OneHalf * a * t1 * t2 + OneHalf * a * t2^2 + OneHalf * a * t1^2 + a * t1 * t2
+	//		  = 2 * u * t1 + u * t2 + (3/2) * a * t1 * t2 + OneHalf * a * t2^2 + OneHalf * a * t1^2
 	// or:
-	//	- s =  u * t1 + (1/6) * j * t1^3
-	//		 + (u + (1/2) * a * t1) * t2 + (1/2) * a * t2^2
-	//		  + v3 * t1 - (1/6) * j * t1^3
-	//		= (u + v3) * t1 + (u + (1/2) * a * t1) * t2 + (1/2) * a * t2^2
-	//		= (u + v3) * t1 + ((u + (1/2) * a * t1) + (1/2) * a * t2) * t2
-	//		= (u + v3) * t1 + ((u + (1/2) * a * (t1 + t2)) * t2
-	//		= (u + v3) * t1 + (1/2)(u + v3) * t2
-	//		= (u + v3) * (t1 + (1/2) * t2)
+	//		s =  u * t1 + OneSixth * j * t1^3
+	//			+ (u + OneHalf * a * t1) * t2 + OneHalf * a * t2^2
+	//			+ v3 * t1 - OneSixth * j * t1^3
+	//		  = (u + v3) * t1 + (u + OneHalf * a * t1) * t2 + OneHalf * a * t2^2
+	//		  = (u + v3) * t1 + ((u + OneHalf * a * t1) + OneHalf * a * t2) * t2
+	//		  = (u + v3) * t1 + ((u + OneHalf * a * (t1 + t2)) * t2
+	//		  = (u + v3) * t1 + OneHalf(u + v3) * t2
+	//		  = (u + v3) * (t1 + OneHalf * t2)
+
+	// If the starting acceleration is nonzero but the ending acceleration is zero:
+	//	- the acceleration reached is:
+	//		a = a0 + j * t1
+	//	- the speed reached is:
+	//		v1 = u + OneHalf * j * t1^2
+	//		   = u + a0 * t1 + OneHalf * (a - a0) * t1
+	//		   = u + OneHalf * (a0 + a) * t1
+	// In the constant acceleration phase the speed reached is:
+	//		v2 = v1 + a * t2
+	//		   = u + OneHalf * (a0 + a) * t1 + a * t2
+	//		   = u + a0 * t1 + OneHalf * a * t1 + j * t1 * t2
+	// In the reducing acceleration phase:
+	//		a = t3 * j
+	//		v3 = v2 + a * t1 - OneHalf * j * t1^2
+	//		   = u + OneHalf * (a0 + a) * t1 + a * t2 + a * t3 - OneHalf * j * t3^2
+	//		   = u + OneHalf * (a0 + a) * t1 + a * t2 + a * t3 - OneHalf * a * t3
+	//		   = u + OneHalf * (a0 + a) * t1 + a * t2 + OneHalf * a * t3
+	//		   = u + OneHalf * a0 * t1 + OneHalf * a * (t1 + t3) + a * t2
+
+	// Distance covered is:
+	//		s =   u * t1 + OneHalf * a0 * t1^2 + OneSixth * j * t1^3
+	//			+ (u + a0 * t1 + OneHalf * a * t1) * t2 + OneHalf * a * t2^2
+	//			+ (u + a0 * t1 + OneHalf * a * t1 + a * t2) * t3 - OneSixth * j * t3^3
+	//		  =   u * (t1 + t2 + t3)
+	//			+ a0 * t1 * (OneHalf * t1 + t2 + t3)
+	//			+ a * t2 * t3
+	//			+ OneHalf * a * t1 * (t2 + t3)
+	//			+ OneHalf * a * t2^2
+	//			+ OneSixth * j * (t1^3 - t3^3)
+
+	// If the final acceleration is nonzero as well:
+	// In the reducing acceleration phase:
+	//		a - af = t3 * j
+	//		v3 = v2 + a * t1 - OneHalf * j * t1^2
+	//		   = u + OneHalf * (a0 + a) * t1 + a * t2 + a * t3 - OneHalf * j * t3^2
+	//		   = u + OneHalf * (a0 + a) * t1 + a * t2 + a * t3 - OneHalf * (a - af) * t3
+	//		   = u + OneHalf * (a0 + a) * t1 + a * t2 + OneHalf * (a - af) * t3
+	//		   = u + OneHalf * a0 * t1 + OneHalf * a * (t1 + t3) + a * t2 - OneHalf * af * t3
+
+	// Distance covered is:
+	//		s =   u * t1 + OneHalf * a0 * t1^2 + OneSixth * j * t1^3
+	//			+ (u + a0 * t1 + OneHalf * a * t1) * t2 + OneHalf * a * t2^2
+	//			+ (u + a0 * t1 + OneHalf * a * t1 + a * t2) * t3 - OneSixth * j * t3^3
+	//		  =   u * (t1 + t2 + t3)
+	//			+ a0 * t1 * (OneHalf * t1 + t2 + t3)
+	//			+ a * t2 * t3
+	//			+ OneHalf * a * t1 * (t2 + t3)
+	//			+ OneHalf * a * t2^2
+	//			+ OneSixth * j * (t1^3 - t3^3)
 
 	// First, determine whether the maximum acceleration is limiting
 	if ((endSpeed - startSpeed) * jerk > fsquare(maxAcceleration))
@@ -1301,8 +1355,8 @@ static float CalcDistanceCovered(float startSpeed, float endSpeed, float jerk, f
 		// Calculate a profile for this collection of moves that accelerates to the peak speed and then decelerates to zero
 		// The constraints are:
 		// - the start speed and start acceleration
-		// - the maximum allowed acceleration and deceleration
-		// - the allowed jerk (rate of change of acceleration)
+		// - the maximum allowed acceleration and deceleration. We use the minimum value we found in this collection of moves.
+		// - the allowed jerk (rate of change of acceleration). We use the minimum value we found in this collection of moves.
 		// - the peak allowed speed
 		// - the end speed and acceleration must be zero
 		// This is easier if we can constrain the XY max acceleration and jerk to be constant and isotropic (not necessarily true when bed compensation is in use)
