@@ -36,7 +36,7 @@ class HeaterMonitor;
 class GCodeBuffer;
 class CanMessageSensorTemperatures;
 class CanMessageHeatersStatus;
-class CanMessageHeaterFeedForwardNew;
+class CanMessageHeaterFeedForwardV1;
 
 class Heat INHERIT_OBJECT_MODEL
 {
@@ -143,13 +143,13 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
-	GCodeResult ProcessM307New(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept;
+	GCodeResult ProcessM307V1(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
 	GCodeResult ProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	GCodeResult SetFaultDetection(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept;
 	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;
 	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
 	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept;
-	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept;
+	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept;
 #endif
 
 	static TaskHandle GetHeatTask() noexcept;

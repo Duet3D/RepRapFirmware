@@ -34,7 +34,7 @@ class FileStore;
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-struct CanMessageHeaterModelNewNew;
+struct CanMessageHeaterModelV2;
 #endif
 
 class FopDt INHERIT_OBJECT_MODEL
@@ -47,7 +47,7 @@ public:
 	void SetDefaultToolParameters() noexcept;
 	void SetDefaultBedOrChamberParameters() noexcept;
 #if SUPPORT_REMOTE_COMMANDS
-	bool SetParameters(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept;
+	bool SetParameters(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
 #endif
 
 	// Stored parameters
@@ -89,7 +89,7 @@ public:
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void SetupCanMessage(unsigned int heater, CanMessageHeaterModelNewNew& msg) const noexcept;
+	void SetupCanMessage(unsigned int heater, CanMessageHeaterModelV2& msg) const noexcept;
 #endif
 
 protected:

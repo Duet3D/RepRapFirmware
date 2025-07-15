@@ -23,20 +23,20 @@ RemoteSensor::RemoteSensor(unsigned int sensorNum, CanAddress pBoardAddress) noe
 
 RemoteSensor::~RemoteSensor()
 {
-	CanMessageGenericConstructor cons(M308NewParams);
+	CanMessageGenericConstructor cons(M308V1Params);
 	cons.AddUParam('S', GetSensorNumber());
 	cons.AddStringParam('P', NoPinName);
 	String<StringLength50> dummy;
-	(void)cons.SendAndGetResponse(CanMessageType::m308New, boardAddress, dummy.GetRef());
+	(void)cons.SendAndGetResponse(CanMessageType::m308V1, boardAddress, dummy.GetRef());
 }
 
 GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
 	ConfigureCommonParameters(gb, changed);
 	ClearAdjustments();											// clear the local offset and slope adjustments because the remote sensor will apply them
-	CanMessageGenericConstructor cons(M308NewParams);
+	CanMessageGenericConstructor cons(M308V1Params);
 	cons.PopulateFromCommand(gb);
-	const GCodeResult ret = cons.SendAndGetResponse(CanMessageType::m308New, boardAddress, reply);
+	const GCodeResult ret = cons.SendAndGetResponse(CanMessageType::m308V1, boardAddress, reply);
 	if ((ret == GCodeResult::ok || ret == GCodeResult::warning) && StringStartsWith(reply.c_str(), "type "))
 	{
 		// It's just a query for the sensor parameters, so prefix the sensor number and name

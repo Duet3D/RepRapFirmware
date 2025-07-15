@@ -47,7 +47,7 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept override;
-	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept override;
+	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept override;
 
 	static bool GetTuningCycleData(CanMessageHeaterTuningReport& msg) noexcept;	// get a heater tuning cycle report, if we have one
 #endif

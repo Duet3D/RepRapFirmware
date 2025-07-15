@@ -36,7 +36,7 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept override;
-	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept override { return GCodeResult::error; }	// this should never be called on a remote heater
+	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept override { return GCodeResult::error; }	// this should never be called on a remote heater
 #endif
 
 protected:

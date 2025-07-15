@@ -355,7 +355,7 @@ void RemoteHeater::ApplyExtrusionFeedForward() noexcept
 void RemoteHeater::UpdateFeedForward() noexcept
 {
 	CanMessageBuffer buf;
-	auto msg = buf.SetupRequestMessageNoRid<CanMessageHeaterFeedForwardNew>(CanInterface::GetCanAddress(), boardAddress);
+	auto msg = buf.SetupRequestMessageNoRid<CanMessageHeaterFeedForwardV1>(CanInterface::GetCanAddress(), boardAddress);
 	msg->heaterNumber = GetHeaterNumber();
 	msg->fanPwmFraction = lastFanPwm;
 	msg->extrusionPwmBoost = extrusionPwmBoost;
@@ -419,7 +419,7 @@ GCodeResult RemoteHeater::UpdateModel(const StringRef& reply) noexcept
 	if (buf != nullptr)
 	{
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
-		CanMessageHeaterModelNewNew * const msg = buf->SetupRequestMessage<CanMessageHeaterModelNewNew>(rid, CanInterface::GetCanAddress(), boardAddress);
+		CanMessageHeaterModelV2 * const msg = buf->SetupRequestMessage<CanMessageHeaterModelV2>(rid, CanInterface::GetCanAddress(), boardAddress);
 		GetModel().SetupCanMessage(GetHeaterNumber(), *msg);
 		return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 	}

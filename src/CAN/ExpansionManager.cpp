@@ -178,11 +178,11 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 			String<StringLength100> boardTypeAndFirmwareVersion;
 			if (isNewFormat)
 			{
-				boardTypeAndFirmwareVersion.copy(buf->msg.announceNew.boardTypeAndFirmwareVersion, CanMessageAnnounceNew::GetMaxTextLength(buf->dataLength));
+				boardTypeAndFirmwareVersion.copy(buf->msg.announceV1.boardTypeAndFirmwareVersion, CanMessageAnnounceV1::GetMaxTextLength(buf->dataLength));
 			}
 			else
 			{
-				boardTypeAndFirmwareVersion.copy(buf->msg.announceOld.boardTypeAndFirmwareVersion, CanMessageAnnounceOld::GetMaxTextLength(buf->dataLength));
+				boardTypeAndFirmwareVersion.copy(buf->msg.announceV0.boardTypeAndFirmwareVersion, CanMessageAnnounceV0::GetMaxTextLength(buf->dataLength));
 			}
 			UpdateBoardState(src, BoardState::unknown);
 			if (board.typeName == nullptr || strcmp(board.typeName, boardTypeAndFirmwareVersion.c_str()) != 0)
@@ -209,13 +209,13 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 				DeleteArray(board.driverData);
 				if (isNewFormat)
 				{
-					board.numDrivers = buf->msg.announceNew.numDrivers;
-					board.usesUf2Binary = buf->msg.announceNew.usesUf2Binary;
-					board.uniqueId.SetFromRemote(buf->msg.announceNew.uniqueId);
+					board.numDrivers = buf->msg.announceV1.numDrivers;
+					board.usesUf2Binary = buf->msg.announceV1.usesUf2Binary;
+					board.uniqueId.SetFromRemote(buf->msg.announceV1.uniqueId);
 				}
 				else
 				{
-					board.numDrivers = buf->msg.announceOld.numDrivers;
+					board.numDrivers = buf->msg.announceV0.numDrivers;
 					board.usesUf2Binary = false;
 					board.uniqueId.Clear();
 				}
@@ -242,7 +242,7 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 		UpdateBoardState(address, BoardState::running);
 	}
 
-	const CanMessageBoardStatus& msg = buf->msg.boardStatus;
+	const CanMessageBoardStatusV0& msg = buf->msg.boardStatusV0;
 	if (msg.hasMovementDelay)
 	{
 		StepTimer::ProcessMovementDelayRequest(msg.movementDelay);
@@ -275,11 +275,11 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 	board.hasInductiveSensor = msg.hasInductiveSensor;
 
 	size_t offset = msg.GetAnalogHandlesOffset();
-	for (unsigned int i = 0; i < msg.numAnalogHandles && offset + sizeof(AnalogHandleData) < buf->dataLength; ++i)
+	for (unsigned int i = 0; i < msg.numAnalogHandles && offset + sizeof(AnalogHandleDataV0) < buf->dataLength; ++i)
 	{
-		AnalogHandleData data;
-		memcpy(&data, (const uint8_t*)&msg + offset, sizeof(AnalogHandleData));
-		offset += sizeof(AnalogHandleData);
+		AnalogHandleDataV0 data;
+		memcpy(&data, (const uint8_t*)&msg + offset, sizeof(AnalogHandleDataV0));
+		offset += sizeof(AnalogHandleDataV0);
 		// Currently only Z probes use analog handles, so ask the EndstopsManager to deal with it
 		if (data.handle.parts.type == RemoteInputHandle::typeZprobe)
 		{

@@ -27,12 +27,12 @@ struct CanMessageHeaterTuningReport;
 struct CanHeaterReport;
 
 #if SUPPORT_REMOTE_COMMANDS
-struct CanMessageHeaterModelNewNew;
+struct CanMessageHeaterModelV2;
 struct CanMessageSetHeaterTemperature;
 struct CanMessageSetHeaterMonitors;
 struct CanMessageHeaterTuningCommand;
 struct CanMessageSetHeaterFaultDetectionParameters;
-struct CanMessageHeaterFeedForwardNew;
+struct CanMessageHeaterFeedForwardV1;
 #endif
 
 // Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
@@ -86,11 +86,11 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	virtual GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept = 0;
-	GCodeResult SetModel(unsigned int heater, const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept;
+	GCodeResult SetModel(unsigned int heater, const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
 	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
 	GCodeResult SetFaultDetectionParameters(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept;
 	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;
-	virtual GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept = 0;
+	virtual GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept = 0;
 	uint8_t GetModeByte() const { return (uint8_t)GetMode(); }
 #endif
 

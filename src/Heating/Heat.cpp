@@ -499,7 +499,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 
 				// Send a board health message
 				{
-					CanMessageBoardStatus * const boardStatusMsg = buf.SetupRequestMessageNoRid<CanMessageBoardStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+					CanMessageBoardStatusV0 * const boardStatusMsg = buf.SetupRequestMessageNoRid<CanMessageBoardStatusV0>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 					boardStatusMsg->Clear();
 
 					const StepTimer::Ticks movementDelayNeeded = StepTimer::CheckMovementDelayIncreasedNoClear();
@@ -528,7 +528,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 					boardStatusMsg->hasMcuTemp = true;
 #endif
 					// Add the analog handle data
-					boardStatusMsg->numAnalogHandles = InputMonitor::AddAnalogHandleData((uint8_t*)boardStatusMsg + boardStatusMsg->GetAnalogHandlesOffset(), boardStatusMsg->GetMaxAnalogHandleSpace());
+					boardStatusMsg->numAnalogHandles = InputMonitor::AddAnalogHandleDataV0((uint8_t*)boardStatusMsg + boardStatusMsg->GetAnalogHandlesOffset(), boardStatusMsg->GetMaxAnalogHandleSpace());
 					buf.dataLength = boardStatusMsg->GetActualDataLength();
 					CanInterface::SendMessageNoReplyNoFree(&buf);
 				}
@@ -1459,7 +1459,7 @@ GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef&
 	return h->ReportDetails(reply);
 }
 
-GCodeResult Heat::ProcessM307New(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept
+GCodeResult Heat::ProcessM307V1(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heater);
 	return (h.IsNotNull()) ? h->SetModel(msg.heater, msg, reply) : UnknownHeater(msg.heater, reply);
@@ -1501,7 +1501,7 @@ GCodeResult Heat::TuningCommand(const CanMessageHeaterTuningCommand& msg, const 
 	return h->TuningCommand(msg, reply);
 }
 
-GCodeResult Heat::ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept
+GCodeResult Heat::ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heaterNumber);
 	if (h.IsNull())
@@ -1514,7 +1514,7 @@ GCodeResult Heat::ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, co
 
 GCodeResult Heat::ProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept
 {
-	CanMessageGenericParser parser(msg, M308NewParams);
+	CanMessageGenericParser parser(msg, M308V1Params);
 	uint16_t sensorNum;
 	if (parser.GetUintParam('S', sensorNum))
 	{
