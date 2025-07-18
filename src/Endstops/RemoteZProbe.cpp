@@ -223,19 +223,19 @@ GCodeResult RemoteZProbe::CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& 
 		const int32_t driveLevel = gb.GetLimitedIValue('S', -1, 31);
 		if (driveLevel < 0)
 		{
-			param = CanMessageChangeInputMonitorNew::paramAutoCalibrateDriveLevelAndReport;
+			param = CanMessageChangeInputMonitorV1::paramAutoCalibrateDriveLevelAndReport;
 		}
 		else
 		{
 			uint32_t offset = 0;
 			bool dummy = false;
-			gb.TryGetLimitedUIValue('R', offset, dummy, CanMessageChangeInputMonitorNew::maxParamOffset + 1);
-			param = (offset << CanMessageChangeInputMonitorNew::paramOffsetShift) | (uint32_t)driveLevel;
+			gb.TryGetLimitedUIValue('R', offset, dummy, CanMessageChangeInputMonitorV1::maxParamOffset + 1);
+			param = (offset << CanMessageChangeInputMonitorV1::paramOffsetShift) | (uint32_t)driveLevel;
 		}
 	}
 	else
 	{
-		param = CanMessageChangeInputMonitorNew::paramReportDriveLevel;
+		param = CanMessageChangeInputMonitorV1::paramReportDriveLevel;
 	}
 	uint8_t returnedDriveLevel;
 	return CanInterface::SetHandleDriveLevel(boardAddress, handle, param, returnedDriveLevel, reply);

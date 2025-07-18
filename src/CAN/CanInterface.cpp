@@ -395,7 +395,7 @@ void CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
 {
 	if (inExpansionMode && !mainBoardAcknowledgedAnnounce)
 	{
-		auto msg = buf->SetupBroadcastMessage<CanMessageAnnounceNew>(myAddress);
+		auto msg = buf->SetupBroadcastMessage<CanMessageAnnounceV1>(myAddress);
 		msg->timeSinceStarted = millis();
 		msg->numDrivers = NumDirectDrivers;
 		msg->usesUf2Binary = BOARD_USES_UF2_BINARY;
@@ -496,7 +496,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 		{
 			// In expansion mode this task just send notifications when the states of input handles change
 			CanMessageBuffer buf;
-			auto msg = buf.SetupRequestMessageNoRid<CanMessageInputChangedNew>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+			auto msg = buf.SetupRequestMessageNoRid<CanMessageInputChangedV1>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 			msg->states = 0;
 			msg->numHandles = 0;
 
@@ -1349,7 +1349,7 @@ GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandl
 	}
 
 	const CanRequestId rid = AllocateRequestId(boardAddress, buf);
-	auto msg = buf->SetupRequestMessage<CanMessageCreateInputMonitorNew>(rid, GetCanAddress(), boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageCreateInputMonitorV1>(rid, GetCanAddress(), boardAddress);
 	msg->handle = h;
 	msg->threshold = threshold;
 	msg->minInterval = minInterval;
@@ -1380,7 +1380,7 @@ static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle
 	}
 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
-	auto msg = buf->SetupRequestMessage<CanMessageChangeInputMonitorNew>(rid, CanInterface::GetCanAddress(), boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageChangeInputMonitorV1>(rid, CanInterface::GetCanAddress(), boardAddress);
 	msg->handle = h;
 	msg->action = action;
 	msg->param = param;
@@ -1395,13 +1395,13 @@ static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle
 
 GCodeResult CanInterface::DeleteHandle(CanAddress boardAddress, RemoteInputHandle h, const StringRef &reply) noexcept
 {
-	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorNew::actionDelete, 0, nullptr, reply);
+	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionDelete, 0, nullptr, reply);
 }
 
 GCodeResult CanInterface::GetHandlePinName(CanAddress boardAddress, RemoteInputHandle h, bool *_ecv_null currentState, const StringRef &reply) noexcept
 {
 	uint8_t rVal;
-	const GCodeResult ret = ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorNew::actionReturnPinName, 0, &rVal, reply);
+	const GCodeResult ret = ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionReturnPinName, 0, &rVal, reply);
 	if (ret < GCodeResult::error && currentState != nullptr)
 	{
 		*currentState = (rVal != 0);
@@ -1412,7 +1412,7 @@ GCodeResult CanInterface::GetHandlePinName(CanAddress boardAddress, RemoteInputH
 GCodeResult CanInterface::EnableHandle(CanAddress boardAddress, RemoteInputHandle h, bool enable, bool *_ecv_null currentState, const StringRef &reply) noexcept
 {
 	uint8_t rVal;
-	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, (enable) ? CanMessageChangeInputMonitorNew::actionDoMonitor : CanMessageChangeInputMonitorNew::actionDontMonitor, 0, &rVal, reply);
+	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, (enable) ? CanMessageChangeInputMonitorV1::actionDoMonitor : CanMessageChangeInputMonitorV1::actionDontMonitor, 0, &rVal, reply);
 	if (ret < GCodeResult::error && currentState != nullptr)
 	{
 		*currentState = (rVal != 0);
@@ -1423,7 +1423,7 @@ GCodeResult CanInterface::EnableHandle(CanAddress boardAddress, RemoteInputHandl
 GCodeResult CanInterface::ChangeHandleResponseTime(CanAddress boardAddress, RemoteInputHandle h, uint32_t responseMillis, bool *_ecv_null currentState, const StringRef &reply) noexcept
 {
 	uint8_t rVal;
-	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorNew::actionChangeMinInterval, responseMillis, &rVal, reply);
+	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionChangeMinInterval, responseMillis, &rVal, reply);
 	if (ret < GCodeResult::error && currentState != nullptr)
 	{
 		*currentState = (rVal != 0);
@@ -1434,7 +1434,7 @@ GCodeResult CanInterface::ChangeHandleResponseTime(CanAddress boardAddress, Remo
 GCodeResult CanInterface::ChangeHandleThreshold(CanAddress boardAddress, RemoteInputHandle h, uint32_t threshold, bool *_ecv_null currentState, const StringRef &reply) noexcept
 {
 	uint8_t rVal;
-	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorNew::actionChangeThreshold, threshold, &rVal, reply);
+	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionChangeThreshold, threshold, &rVal, reply);
 	if (ret < GCodeResult::error && currentState != nullptr)
 	{
 		*currentState = (rVal != 0);
@@ -1444,12 +1444,12 @@ GCodeResult CanInterface::ChangeHandleThreshold(CanAddress boardAddress, RemoteI
 
 GCodeResult CanInterface::ChangeHandleSetTouchMode(CanAddress boardAddress, RemoteInputHandle h, uint32_t sensitivity, const StringRef &reply) noexcept
 {
-	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorNew::actionSelectTouchMode, sensitivity, nullptr, reply);
+	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionSelectTouchMode, sensitivity, nullptr, reply);
 }
 
 GCodeResult CanInterface::SetHandleDriveLevel(CanAddress boardAddress, RemoteInputHandle h, uint32_t driveLevel, uint8_t &returnedDriveLevel, const StringRef &reply) noexcept
 {
-	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorNew::actionSetDriveLevel, driveLevel, &returnedDriveLevel, reply);
+	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionSetDriveLevel, driveLevel, &returnedDriveLevel, reply);
 }
 
 GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInputHandle mask, RemoteInputHandle pattern, ReadHandlesCallbackFunction callback, CallbackParameter param, const StringRef &reply) noexcept
@@ -1464,10 +1464,10 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 	auto msg = buf->SetupRequestMessage<CanMessageReadInputsRequest>(rid, GetCanAddress(), boardAddress);
 	msg->mask = mask;
 	msg->pattern = pattern;
-	const GCodeResult rslt = SendRequestAndGetCustomReply(buf, rid, reply, nullptr, CanMessageType::readInputsReply,
+	const GCodeResult rslt = SendRequestAndGetCustomReply(buf, rid, reply, nullptr, CanMessageType::readInputsReplyV0,
 															[callback, param](const CanMessageBuffer *buf)
 																{
-																	auto response = buf->msg.readInputsReply;
+																	auto response = buf->msg.readInputsReplyV0;
 																	for (unsigned int i = 0; i < response.numReported; ++i)
 																	{
 																		callback(param, response.results[i].handle, LoadLEU32(&response.results[i].reading));

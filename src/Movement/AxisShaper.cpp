@@ -331,7 +331,7 @@ GCodeResult AxisShaper::UpdateRemoteInputShaping(const StringRef& reply) const n
 				{
 					CanMessageBuffer *const buf = CanMessageBuffer::BlockingAllocate();
 					const CanRequestId rid = CanInterface::AllocateRequestId(addr, buf);
-					auto msg = buf->SetupRequestMessage<CanMessageSetInputShapingNew>(rid, CanInterface::GetCanAddress(), addr);
+					auto msg = buf->SetupRequestMessage<CanMessageSetInputShapingV1>(rid, CanInterface::GetCanAddress(), addr);
 					msg->numImpulses = numImpulses;
 					for (unsigned int i = 0; i < numImpulses; ++i)
 					{
@@ -357,7 +357,7 @@ GCodeResult AxisShaper::UpdateRemoteInputShaping(const StringRef& reply) const n
 #if SUPPORT_REMOTE_COMMANDS
 
 // Handle a request from the master board to set input shaping parameters
-GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShapingNew& msg, size_t dataLength, const StringRef& reply) noexcept
+GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShapingV1& msg, size_t dataLength, const StringRef& reply) noexcept
 {
 	if (msg.numImpulses <= MaxImpulses && dataLength >= msg.GetActualDataLength())
 	{

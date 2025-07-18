@@ -22,10 +22,10 @@ protected:
 	bool Interrupt() noexcept override;
 
 #if SUPPORT_CAN_EXPANSION
-	void UpdateLiveData(const FilamentMonitorDataNew2& data) noexcept override;
+	void UpdateLiveData(const FilamentMonitorDataV2& data) noexcept override;
 #endif
 #if SUPPORT_REMOTE_COMMANDS
-	void GetLiveData(FilamentMonitorDataNew2& data) const noexcept override;
+	void GetLiveData(FilamentMonitorDataV2& data) const noexcept override;
 #endif
 
 	void InitReceiveBuffer() noexcept;

@@ -985,7 +985,7 @@ GCodeResult LocalHeater::TuningCommand(const CanMessageHeaterTuningCommand& msg,
 }
 
 // Update heater feedforward
-GCodeResult LocalHeater::ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept
+GCodeResult LocalHeater::ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept
 {
 	if (mode == HeaterMode::stable)
 	{

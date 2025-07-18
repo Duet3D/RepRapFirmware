@@ -275,7 +275,7 @@ bool Duet3DFilamentMonitor::IsWaitingForStartBit() const noexcept
 
 #if SUPPORT_CAN_EXPANSION
 
-void Duet3DFilamentMonitor::UpdateLiveData(const FilamentMonitorDataNew2& data) noexcept
+void Duet3DFilamentMonitor::UpdateLiveData(const FilamentMonitorDataV2& data) noexcept
 {
 	hasLiveData = data.hasLiveData;
 	lastKnownPosition = data.position;
@@ -294,7 +294,7 @@ void Duet3DFilamentMonitor::UpdateLiveData(const FilamentMonitorDataNew2& data) 
 #if SUPPORT_REMOTE_COMMANDS
 
 // Store collected data in a CAN message slot
-void Duet3DFilamentMonitor::GetLiveData(FilamentMonitorDataNew2& data) const noexcept
+void Duet3DFilamentMonitor::GetLiveData(FilamentMonitorDataV2& data) const noexcept
 {
 	data.ClearReservedFields();
 	data.position = lastKnownPosition;

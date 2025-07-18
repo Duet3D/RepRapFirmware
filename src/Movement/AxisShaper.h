@@ -33,7 +33,7 @@ namespace InputShapingDebugFlags
 }
 
 #if SUPPORT_REMOTE_COMMANDS
-struct CanMessageSetInputShapingNew;
+struct CanMessageSetInputShapingV1;
 #endif
 
 class AxisShaper INHERIT_OBJECT_MODEL
@@ -51,7 +51,7 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	// Handle a request from the master board to set input shaping parameters
-	GCodeResult EutSetInputShaping(const CanMessageSetInputShapingNew& msg, size_t dataLength, const StringRef& reply) noexcept;
+	GCodeResult EutSetInputShaping(const CanMessageSetInputShapingV1& msg, size_t dataLength, const StringRef& reply) noexcept;
 #endif
 
 protected:
