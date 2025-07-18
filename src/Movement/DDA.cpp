@@ -1283,7 +1283,7 @@ MovementError DDA::CalculateIsolatedSCurveMove() noexcept
 }
 
 // Add a new S-curve move to the ring when there is already at least one move there and we would like to meld them
-// Returns 0 if successful and we are ready to do lookahead, else the line number at wich a problem was detected
+// Returns 0 if successful and we are ready to do lookahead, else the line number at which a problem was detected
 // Caller has already set endSpeed and endDeceleration to zero
 int DDA::CalculateNewSCurveMove() noexcept
 {
@@ -1577,7 +1577,7 @@ int DDA::CalculateNewSCurveMove() noexcept
 					{
 						// We can't reach maximum acceleration in the distance available. Solve a cubic to calculate what we can do.
 						timeToMaxAcceleration = SmallestNonNegativeCubicSolution(OneSixth* laDDA->jerk, OneHalf * laDDA->startAcceleration, laDDA->startSpeed, -laDDA->totalDistance);
-						distanceToMaxAcceleration = (laDDA->startSpeed + (OneHalf * laDDA->startAcceleration + (OneSixth * jerk * timeToMaxAcceleration)) * timeToMaxAcceleration) * timeToMaxAcceleration;
+						distanceToMaxAcceleration = (laDDA->startSpeed + (OneHalf * laDDA->startAcceleration + (OneSixth * laDDA->jerk * timeToMaxAcceleration)) * timeToMaxAcceleration) * timeToMaxAcceleration;
 						speedToMaxAcceleration = laDDA->startSpeed + (laDDA->startAcceleration + OneHalf * (laDDA->maxAcceleration - laDDA->startAcceleration)) * timeToMaxAcceleration;
 					}
 					else
