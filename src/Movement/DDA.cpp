@@ -1210,119 +1210,75 @@ void DDA::SetSpeedRatioForPrintingMoves(const Move& move) noexcept
 	beforePrepare.maxPrevEndSpeed = provisionalMaxEndSpeed;
 }
 
-// Calculate the minimum distance covered to increase the speed from one value to another, starting and ending with zero acceleration.
-// Requires endSpeed > startSpeed; jerk > 0; maxAcceleration > 0
-static float CalcDistanceCovered(float startSpeed, float endSpeed, float jerk, float maxAcceleration, float& peakAcceleration, float& t1, float& t2) noexcept
+// Struct used by the next two functions
+struct MultipleMoveParameters
 {
-	// If the starting and ending accelerations are zero:
-	// In the increasing acceleration phase:
-	//	- the acceleration reached is:
-	//		a = j * t1
-	//	- the speed reached is:
-	//		v1 = u + OneHalf * j * t1^2
-	//		   = u + OneHalf * a * t1
-	// In the constant acceleration phase the speed reached is:
-	//		v2 = v1 + a * t2
-	//		   = u + OneHalf * a * t1 + a * t2
-	//		   = u + OneHalf * a * t1 + j * t1 * t2
-	// In the reducing acceleration phase:
-	//	- the acceleration reduces to 0 again, so t is the same as t1 in the increasing acceleration phase
-	//	- the final speed is:
-	//		v3 = v2 + a * t1 - OneHalf * j * t1^2
-	//		   = u + OneHalf * j * t1^2 + j * t1 * t2 + j * t1^2 - OneHalf * j * t1^2
-	//		   = u + j * (t1^2 + t1 * t2)
-	// or in terms of a:
-	//		v1 = u + OneHalf * a * t1
-	//		v2 = u + OneHalf * a * t1 + a * t2
-	//		v3 = u + OneHalf * a * t1 + a * t2 + a * t1 - OneHalf * a * t1
-	//		   = u + a * (t1 + t2)
-	//		   = u + a^2/j + a * t2
-	// Distance covered is:
-	//		s =    u * t1 + OneSixth * j * t1^3
-	//			 + (u + OneHalf * a * t1) * t2 + OneHalf * a * t2^2
-	//			 + (u + OneHalf * a * t1 + a * t2) * t1 - OneSixth * j * t1^3
-	//		  = 2 * u * t1 + u * t2 + OneHalf * a * t1 * t2 + OneHalf * a * t2^2 + OneHalf * a * t1^2 + a * t1 * t2
-	//		  = 2 * u * t1 + u * t2 + (3/2) * a * t1 * t2 + OneHalf * a * t2^2 + OneHalf * a * t1^2
-	// or:
-	//		s =  u * t1 + OneSixth * j * t1^3
-	//			+ (u + OneHalf * a * t1) * t2 + OneHalf * a * t2^2
-	//			+ v3 * t1 - OneSixth * j * t1^3
-	//		  = (u + v3) * t1 + (u + OneHalf * a * t1) * t2 + OneHalf * a * t2^2
-	//		  = (u + v3) * t1 + ((u + OneHalf * a * t1) + OneHalf * a * t2) * t2
-	//		  = (u + v3) * t1 + ((u + OneHalf * a * (t1 + t2)) * t2
-	//		  = (u + v3) * t1 + OneHalf(u + v3) * t2
-	//		  = (u + v3) * (t1 + OneHalf * t2)
+	float peakAcceleration;
+	float t0;
+	float t1;
+	float distance;
+};
 
-	// If the starting acceleration is nonzero but the ending acceleration is zero:
-	//	- the acceleration reached is:
-	//		a = a0 + j * t1
-	//	- the speed reached is:
-	//		v1 = u + OneHalf * j * t1^2
-	//		   = u + a0 * t1 + OneHalf * (a - a0) * t1
-	//		   = u + OneHalf * (a0 + a) * t1
-	// In the constant acceleration phase the speed reached is:
-	//		v2 = v1 + a * t2
-	//		   = u + OneHalf * (a0 + a) * t1 + a * t2
-	//		   = u + a0 * t1 + OneHalf * a * t1 + j * t1 * t2
-	// In the reducing acceleration phase:
-	//		a = t3 * j
-	//		v3 = v2 + a * t1 - OneHalf * j * t1^2
-	//		   = u + OneHalf * (a0 + a) * t1 + a * t2 + a * t3 - OneHalf * j * t3^2
-	//		   = u + OneHalf * (a0 + a) * t1 + a * t2 + a * t3 - OneHalf * a * t3
-	//		   = u + OneHalf * (a0 + a) * t1 + a * t2 + OneHalf * a * t3
-	//		   = u + OneHalf * a0 * t1 + OneHalf * a * (t1 + t3) + a * t2
-
-	// Distance covered is:
-	//		s =   u * t1 + OneHalf * a0 * t1^2 + OneSixth * j * t1^3
-	//			+ (u + a0 * t1 + OneHalf * a * t1) * t2 + OneHalf * a * t2^2
-	//			+ (u + a0 * t1 + OneHalf * a * t1 + a * t2) * t3 - OneSixth * j * t3^3
-	//		  =   u * (t1 + t2 + t3)
-	//			+ a0 * t1 * (OneHalf * t1 + t2 + t3)
-	//			+ a * t2 * t3
-	//			+ OneHalf * a * t1 * (t2 + t3)
-	//			+ OneHalf * a * t2^2
-	//			+ OneSixth * j * (t1^3 - t3^3)
-
-	// If the final acceleration is nonzero as well:
-	// In the reducing acceleration phase:
-	//		a - af = t3 * j
-	//		v3 = v2 + a * t1 - OneHalf * j * t1^2
-	//		   = u + OneHalf * (a0 + a) * t1 + a * t2 + a * t3 - OneHalf * j * t3^2
-	//		   = u + OneHalf * (a0 + a) * t1 + a * t2 + a * t3 - OneHalf * (a - af) * t3
-	//		   = u + OneHalf * (a0 + a) * t1 + a * t2 + OneHalf * (a - af) * t3
-	//		   = u + OneHalf * a0 * t1 + OneHalf * a * (t1 + t3) + a * t2 - OneHalf * af * t3
-
-	// Distance covered is:
-	//		s =   u * t1 + OneHalf * a0 * t1^2 + OneSixth * j * t1^3
-	//			+ (u + a0 * t1 + OneHalf * a * t1) * t2 + OneHalf * a * t2^2
-	//			+ (u + a0 * t1 + OneHalf * a * t1 + a * t2) * t3 - OneSixth * j * t3^3
-	//		  =   u * (t1 + t2 + t3)
-	//			+ a0 * t1 * (OneHalf * t1 + t2 + t3)
-	//			+ a * t2 * t3
-	//			+ OneHalf * a * t1 * (t2 + t3)
-	//			+ OneHalf * a * t2^2
-	//			+ OneSixth * j * (t1^3 - t3^3)
-
+// Calculate the desired profile of a series of moves that starts from a given start speed and start acceleration and finishes at a higher end speed and zero acceleration
+// Returns true if the move is feasible, false if we can't slow down to the requested speed and zero acceleration from the starting conditions.
+// Outputs are peakAcceleration (which is <= maxAcceleration), the durations of the increasing acceleration and steady acceleration phases, and the distance covered
+// The duration of the decreasing acceleration phase if needed can be calculated by the caller as peakAcceleration/jerk
+//
+// From the wxMaxima worksheet:
+// 	v = u + ap * t1 + ap^2/j - a0^2/(2*j)
+// where u = initial speed, v = final speed, a0 = initial acceleration, ap = peak acceleration, j = jerk, t1 = time spent at peak acceleration
+//
+// If t1 == 0 this reduces to:
+// 	v = u + ap^2/j - a0^2/(2*j)
+// so:
+//	(v - u) * j = ap^2 - a0^2/2
+// so:
+//	ap = sqrt((v - u) * j + a0^2/2)
+//
+// 	s =  t1 * (u + OneHalf * ap * t1)
+//	   + (u * (2 * ap - a0) + t1 * (ThreeHalves * ap^2 - OneHalf * a0^2))/j
+//	   + (a1^3 - a0^2 * ap + OneThird * a0^3)/j^2
+//
+// if t1 == 0 this reduces to:
+// 	s =  (u * (2 * ap - a0))/j
+//	   + (a1^3 - a0^2 * ap + OneThird * a0^3)/j^2
+//
+static bool CalculateMultipleMoveProfile(float startSpeed, float endSpeed, float startAcceleration, float maxAcceleration, float jerk, MultipleMoveParameters rslt) noexcept
+pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0; startAcceleration <= maxAcceleration)
+{
 	// First, determine whether the maximum acceleration is limiting
-	if ((endSpeed - startSpeed) * jerk > fsquare(maxAcceleration))
+	if ((endSpeed - startSpeed) * jerk > fsquare(maxAcceleration) - 0.5 * fsquare(startAcceleration))
 	{
 		// We need a constant acceleration phase
-		peakAcceleration = maxAcceleration;
-		t1 = maxAcceleration/jerk;
-		t2 = (endSpeed - startSpeed)/maxAcceleration - t1;;
-		return (endSpeed + startSpeed) * (t1 + 0.5 * t2);
+		rslt.peakAcceleration = maxAcceleration;
+		rslt.t0 = (maxAcceleration - startAcceleration)/jerk;
+		rslt.t1 = ((endSpeed - startSpeed) * jerk - fsquare(maxAcceleration) + 0.5 * fsquare(startAcceleration))/(maxAcceleration * jerk);
+		rslt.distance = rslt.t1 * (startSpeed + 0.5 * maxAcceleration * rslt.t1)
+				+ (startSpeed * (2 * maxAcceleration - startAcceleration) + rslt.t1 * (1.5 * fsquare(maxAcceleration) - 0.5 * fsquare(startAcceleration)))/jerk
+				+ (3.0 * maxAcceleration * (fsquare(maxAcceleration) - fsquare(startAcceleration)) + fcube(startAcceleration))/(3.0 * fsquare(jerk));
+		return true;
 	}
 	else
 	{
 		// We don't need a constant acceleration phase
-		peakAcceleration = fastSqrtf((endSpeed - startSpeed) * jerk);
-		t1 = peakAcceleration/jerk;
-		t2 = 0.0;
-		return (endSpeed + startSpeed) * t1;
+		rslt.peakAcceleration = fastSqrtf((endSpeed - startSpeed) * jerk + 0.5 * fsquare(startAcceleration));
+		if (rslt.peakAcceleration < startAcceleration)
+		{
+			return false;
+		}
+		rslt.t0 = (rslt.peakAcceleration - startAcceleration)/jerk;
+		rslt.t1 = 0.0;
+		rslt.distance = startSpeed * (2 * rslt.peakAcceleration - startAcceleration)/jerk
+				+ (3.0 * rslt.peakAcceleration * (fsquare(rslt.peakAcceleration) - fsquare(startAcceleration)) + fcube(startAcceleration))/(3.0 * fsquare(jerk));
+		return true;
 	}
 }
 
-// Try to generate a move of up to 7 phases that starts and finishes at specified speeds, with zero start and end acceleration, and a specified distance and maximum speed.
+
+void DistributePlanOverMoves(DDA& firstUnpreparedMove, DDA& lastMoveToPlan, float peakSpeed, float actualJerk, const MultipleMoveParameters& accelParams, const MultipleMoveParameters& decelParams) noexcept
+{
+	qq;
+}
 
 // Plan some moves that haven't yet been committed.
 // 'firstUnpreparedMove' is the oldest uncommitted move.
@@ -1330,7 +1286,7 @@ static float CalcDistanceCovered(float startSpeed, float endSpeed, float jerk, f
 /*static*/ void DDA::PlanMoves(DDA *firstUnpreparedMove, bool stopping) noexcept
 {
 	// For now we ignore 'stopping'. Need to implement it when we add support for feed hold.
-	// Find a sequence of moves that have approximately the same requestedSpeed and maxEndSpeed, apart from the last one which may have a lower of zero maxPrevEndSpeed
+	// Find a sequence of moves that have approximately the same requestedSpeed and maxEndSpeed, apart from the last one which may have a lower or zero maxPrevEndSpeed
 	DDA *lastMoveToPlan = firstUnpreparedMove;
 	DDA *nextMove;
 	float distanceToPlan = firstUnpreparedMove->totalDistance;
@@ -1346,9 +1302,11 @@ static float CalcDistanceCovered(float startSpeed, float endSpeed, float jerk, f
 		lastMoveToPlan = nextMove;
 	}
 	lastMoveToPlan->profile.endSpeed = lastMoveToPlan->profile.finalAcceleration = 0.0;
+
+	// If the sequence comprises a single move and the start speed and acceleration are both zero (e.g. we are adding the first move), this is the simplest case
 	if (lastMoveToPlan == firstUnpreparedMove && firstUnpreparedMove->profile.startSpeed == 0.0 && firstUnpreparedMove->profile.startAcceleration == 0.0)
 	{
-		firstUnpreparedMove->CalculateIsolatedSCurveMove();			// a symmetrical isolated move is the simplest case
+		firstUnpreparedMove->CalculateIsolatedSCurveMove();
 	}
 	else
 	{
@@ -1358,14 +1316,95 @@ static float CalcDistanceCovered(float startSpeed, float endSpeed, float jerk, f
 		// - the maximum allowed acceleration and deceleration. We use the minimum value we found in this collection of moves.
 		// - the allowed jerk (rate of change of acceleration). We use the minimum value we found in this collection of moves.
 		// - the peak allowed speed
-		// - the end speed and acceleration must be zero
+		// - the end speed and end acceleration must be zero
 		// This is easier if we can constrain the XY max acceleration and jerk to be constant and isotropic (not necessarily true when bed compensation is in use)
 		// The parameters we can adjust are:
 		// - the duration we increase acceleration (up to max acceleration)
 		// - if we reach max acceleration, he duration we maintain it
 		// - the duration we maintain the peak speed
-		qq;
-		// If that mo
+		// Start by seeing how much distance we use up if we accelerate to the peak requested speed
+		float viablePeakSpeed, unviablePeakSpeed, peakSpeedToTry = maxReqSpeed;
+		float viableDistanceNeeded, unviableDistanceNeeded;
+		unsigned int numIterations = 0;
+		int errorLine;
+		while (true)
+		{
+			MultipleMoveParameters accelParams;
+			if (!CalculateMultipleMoveProfile(firstUnpreparedMove->profile.startSpeed, peakSpeedToTry, firstUnpreparedMove->profile.startAcceleration, minMaxAcc, minJerk, accelParams))
+			{
+				errorLine = __LINE__;
+				break;
+			}
+
+			MultipleMoveParameters decelParams;
+			if (!CalculateMultipleMoveProfile(lastMoveToPlan->profile.endSpeed, peakSpeedToTry, lastMoveToPlan->profile.finalAcceleration, minMaxAcc, minJerk, decelParams))
+			{
+				errorLine = __LINE__;
+				break;
+			}
+
+			const float distanceNeeded = accelParams.distance + decelParams.distance;
+			if (distanceNeeded <= distanceToPlan)
+			{
+				// This plan is viable
+				if (numIterations == 0 || peakSpeedToTry >= unviablePeakSpeed * 0.95)
+				{
+					debugPrintf("Solved in %u iterations, match = %.2f\n", numIterations, (double)((numIterations == 0) ? 1.0 : peakSpeedToTry/unviablePeakSpeed));
+					DistributePlanOverMoves(*firstUnpreparedMove, *lastMoveToPlan, peakSpeedToTry, minJerk, accelParams, decelParams);
+					return;
+				}
+				else
+				{
+					viablePeakSpeed = peakSpeedToTry;
+					viableDistanceNeeded = distanceNeeded;
+				}
+			}
+			else
+			{
+				// Here if we have insufficient distance to reach the requested speed
+				unviableDistanceNeeded = distanceNeeded;
+				if (numIterations == 0)
+				{
+					const float minViableSpeedAccel = firstUnpreparedMove->profile.startSpeed + 0.5 * fsquare(firstUnpreparedMove->profile.startAcceleration)/minJerk;
+					const float minViableSpeedDecel = lastMoveToPlan->profile.endSpeed + 0.5 * fsquare(lastMoveToPlan->profile.finalAcceleration)/minJerk;
+					viablePeakSpeed = max<float>(minViableSpeedAccel, minViableSpeedDecel);
+					if (viablePeakSpeed > 0.0)
+					{
+						if (!CalculateMultipleMoveProfile(lastMoveToPlan->profile.endSpeed, viablePeakSpeed, lastMoveToPlan->profile.finalAcceleration, minMaxAcc, minJerk, decelParams))
+						{
+							errorLine = __LINE__;
+							break;
+						}
+						if (!CalculateMultipleMoveProfile(firstUnpreparedMove->profile.startSpeed, viablePeakSpeed, firstUnpreparedMove->profile.startAcceleration, minMaxAcc, minJerk, accelParams))
+						{
+							errorLine = __LINE__;
+							break;
+						}
+						viableDistanceNeeded = accelParams.distance + decelParams.distance;
+						if (viableDistanceNeeded > distanceToPlan)
+						{
+							errorLine = __LINE__;
+							break;
+						}
+					}
+					else
+					{
+						viableDistanceNeeded = 0.0;
+					}
+				}
+
+				// Try a speed somewhere between the known viable and unviable peak speeds
+				//TODO instead of doing a simple binary chop, use the distances needed and available to make a better guess
+				unviablePeakSpeed = peakSpeedToTry;
+			}
+			peakSpeedToTry = 0.5 * (viablePeakSpeed + unviablePeakSpeed);
+			debugPrintf("Distances: viable %.3g unviable %.3g available %.3g, speeds: viable %.3e unviable %.3e trying %.3e\n",
+							(double)viableDistanceNeeded, (double)unviableDistanceNeeded, (double)distanceToPlan, (double)viablePeakSpeed, (double)unviablePeakSpeed, (double)peakSpeedToTry);
+			++numIterations;
+		}
+
+		// Here if there is no viable movement profile that satisfies the constraints
+		debugPrintf("Move profile calc failed at line %d\n", errorLine);
 	}
 }
 
@@ -1468,7 +1507,7 @@ MovementError DDA::CalculateIsolatedSCurveMove() noexcept
 #if 0	// we are probably not going to use this
 
 // Add a new S-curve move to the ring when there is already at least one move there and we would like to meld them
-// Returns 0 if successful and we are ready to do lookahead, else the line number at wich a problem was detected
+// Returns 0 if successful and we are ready to do lookahead, else the line number at which a problem was detected
 // Caller has already set endSpeed and endDeceleration to zero
 int DDA::CalculateNewSCurveMove() noexcept
 {
