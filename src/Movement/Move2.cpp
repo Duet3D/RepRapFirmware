@@ -1235,7 +1235,7 @@ void Move::ReportM569Parameters(size_t drive, const StringRef& reply) noexcept
 			const uint8_t iHold = SmartDrivers::GetIHold(drive);
 			const uint32_t gs = SmartDrivers::GetGlobalScaler(drive);
 			const float current = SmartDrivers::GetCalculatedCurrent(drive);
-			reply.catf(", thigh %" PRIu32 " (%.1f mm/sec), gs=%lu, iRun=%u, iHold=%u, current=%.3f", thigh, (double)mmPerSec, gs, iRun, iHold, (double)current);
+			reply.catf(", thigh %" PRIu32 " (%.1f mm/sec), gs %lu, iRun/iHold %u/%u, current %.1f", thigh, (double)mmPerSec, gs, iRun, iHold, (double)current);
 		}
 # endif
 

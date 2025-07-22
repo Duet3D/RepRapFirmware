@@ -401,9 +401,9 @@ public:
 
 	int8_t GetCurrentScaler() const noexcept { return currentScaler; }
 	bool SetCurrentScaler(int8_t cs) noexcept;
-	uint8_t GetIRun() const noexcept { return iRun; }
-	uint8_t GetIHold() const noexcept { return iHold; }
-	uint32_t GetGlobalScaler() const noexcept { return globalScaler; }
+	uint8_t GetIRun() const noexcept { return (writeRegisters[WriteIholdIrun] & IHOLDIRUN_IRUN_MASK) >> IHOLDIRUN_IRUN_SHIFT; }
+	uint8_t GetIHold() const noexcept { return (writeRegisters[WriteIholdIrun] & IHOLDIRUN_IHOLD_MASK) >> IHOLDIRUN_IHOLD_SHIFT; }
+	uint32_t GetGlobalScaler() const noexcept { return writeRegisters[Write5160GlobalScaler]; }
 	float CalculateCurrent() const noexcept;				// calculate what current the driver is actually using based on register values
 
 	static void TransferTimedOut() noexcept { ++numTimeouts; }
@@ -469,7 +469,6 @@ private:
 	std::atomic<uint32_t> newRegistersToUpdate;				// bitmap of register indices whose values need to be sent to the driver chip
 	std::atomic<uint32_t> registersToUpdate;				// bitmap of register indices whose values need to be sent to the driver chip
 	uint32_t motorCurrent;									// the configured motor current in mA
-	uint32_t globalScaler = 0;
 
 #if SUPPORT_CLOSED_LOOP || SUPPORT_PHASE_STEPPING
 	uint32_t phaseToSet;									// phase value to be written to the XDIRECT register, only read/written by the TMC task
@@ -485,8 +484,6 @@ private:
 	uint8_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 
 	int8_t currentScaler = -1;								// CS if manually specified, otherwise -1 to indicate auto calculate
-	uint8_t iRun = 0;
-	uint8_t iHold = 0;
 	uint16_t standstillCurrentFraction;						// divide this by 256 to get the motor current standstill fraction
 	uint8_t regIndexBeingUpdated;							// which register we are sending
 	uint8_t regIndexRequested;								// the register we asked to read in the previous transaction, or 0xFF
@@ -906,8 +903,9 @@ void TmcDriverState::SetCurrent(float current) noexcept
 
 float TmcDriverState::CalculateCurrent() const noexcept
 {
-	const uint32_t gs = globalScaler == 0 ? 256 : globalScaler;
-	return (float)(gs * (iRun + 1)) / (256 * 32 * RecipFullScaleCurrent);
+	const uint32_t globalScaler = GetGlobalScaler();
+	const uint32_t gs = (globalScaler == 0) ? 256 : globalScaler;
+	return (float)(gs * (GetIRun() + 1)) / (256 * 32 * RecipFullScaleCurrent);
 }
 
 void TmcDriverState::UpdateCurrent() noexcept
@@ -923,10 +921,10 @@ void TmcDriverState::UpdateCurrent() noexcept
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRunCsBits << IHOLDIRUN_IRUN_SHIFT) | (iHoldCsBits << IHOLDIRUN_IHOLD_SHIFT));
 #elif TMC_TYPE == 5160
 	// See if we can set IRUN to 31 (or user defined value) and do the current adjustment in the global scaler
-	iRun = (currentScaler < 0) ? 31 : (uint8_t)currentScaler;
+	uint8_t iRun = (currentScaler < 0) ? 31 : (uint8_t)currentScaler;
 
 	const float csRecip = (iRun == 31) ? 1.0f : 32.0f / (float)(iRun + 1);
-	globalScaler = lrintf(motorCurrent * 256 * RecipFullScaleCurrent * csRecip);
+	uint32_t globalScaler = lrintf(motorCurrent * 256 * RecipFullScaleCurrent * csRecip);
 	if (globalScaler >= 256)
 	{
 		const uint32_t prod = globalScaler * (iRun + 1);
@@ -942,22 +940,19 @@ void TmcDriverState::UpdateCurrent() noexcept
 	}
 
 	// At high motor currents, limit the standstill current fraction to avoid overheating particular pairs of mosfets. Avoid dividing by zero if motorCurrent is zero.
+	const uint32_t desiredStandstillCurrentFraction =
 #if SUPPORT_PHASE_STEPPING
-	if (phaseStepEnabled)
-	{
-		iHold = iRun;
-	}
-	else
+				(phaseStepEnabled) ? 256 : standstillCurrentFraction;
+#else
+				standstillCurrentFraction;
 #endif
-	{
-		constexpr uint32_t MaxStandstillCurrentTimes256 = 256 * (uint32_t)MaximumStandstillCurrent;
-		const uint16_t limitedStandstillCurrentFraction = (motorCurrent * standstillCurrentFraction <= MaxStandstillCurrentTimes256)
-															? standstillCurrentFraction
-																: (uint16_t)(MaxStandstillCurrentTimes256/motorCurrent);
-		 iHold = (iRun * limitedStandstillCurrentFraction)/256;
-	}
-	UpdateRegister(WriteIholdIrun,
-					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHold << IHOLDIRUN_IHOLD_SHIFT));
+
+	constexpr uint32_t MaxStandstillCurrentTimes256 = 256 * (uint32_t)MaximumStandstillCurrent;
+	const uint32_t limitedStandstillCurrentFraction = (motorCurrent * desiredStandstillCurrentFraction <= MaxStandstillCurrentTimes256)
+														? desiredStandstillCurrentFraction
+															: MaxStandstillCurrentTimes256/motorCurrent;
+	const uint8_t iHold = (iRun * limitedStandstillCurrentFraction)/256;
+	UpdateRegister(WriteIholdIrun, (writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHold << IHOLDIRUN_IHOLD_SHIFT));
 	UpdateRegister(Write5160GlobalScaler, globalScaler);
 #else
 # error unknown device

@@ -2688,7 +2688,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 #endif
 
 	// Remove those drives from the list, update the direction pins where necessary, and re-insert them so as to keep the list in step-time order.
-	DriveMovement *_ecv_null dmToInsert = activeDMs;							// head of the chain we need to re-insert
+	DriveMovement *_ecv_null dmToInsert = activeDMs;				// head of the chain we need to re-insert
 	activeDMs = dm;													// remove the chain from the list
 	while (dmToInsert != dm)										// note that both of these may be nullptr
 	{
@@ -2707,6 +2707,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 }
 
 // Prepare each DM that we generated a step for for the next step
+// This is called only by the step ISR
 void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint32_t now) noexcept
 {
 	for (DriveMovement *_ecv_null dm2 = activeDMs; dm2 != stopDm; dm2 = dm2->nextDM)
@@ -2731,7 +2732,7 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 				else
 # endif
 				{
-					(void)dm2->CalcNextStepTimeFull(now); // calculate next step time
+					(void)dm2->CalcNextStepTimeFull(now); 			// calculate next step time
 					dm2->directionChanged = true;					// force the direction to be set up
 				}
 			}
