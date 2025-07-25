@@ -148,7 +148,7 @@ public:
 #if SUPPORT_S_CURVE
 		{ return InverseConvertAcceleration(profile.peakDeceleration); }
 #else
-		{ return InverseConvertAcceleration(maxDeceleration); }
+		{ return InverseConvertAcceleration(maxAcceleration); }
 #endif
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float GetTotalExtrusionRate() const noexcept;

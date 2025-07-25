@@ -220,7 +220,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
 	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
 	acceleration = dda.maxAcceleration;
-	deceleration = -dda.maxDeceleration;
+	deceleration = -dda.maxAcceleration;
 	accelClocks = lrintf((dda.profile.topSpeed - dda.profile.startSpeed)/acceleration);
 	decelClocks = lrintf((dda.profile.endSpeed - dda.profile.topSpeed)/deceleration);
 	const float steadyDistance = decelStartDistance - accelDistance;
@@ -324,13 +324,13 @@ void DDA::DebugPrint(const char *_ecv_array tag) const noexcept
 #if SUPPORT_S_CURVE
 				"a=[%.4e, %.4e, %.4e] d=[%.4e, %.4e, %.4e] j=%.4e"
 #else
-				"a=%.4e d=%.4e"
+				"a=%.4e"
 #endif
 				" reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=x%04" PRIx32 "\n",
 #if SUPPORT_S_CURVE
 				(double)profile.startAcceleration, (double)profile.peakAcceleration, (double)profile.finalAcceleration, (double)profile.initialDeceleration, (double)profile.peakDeceleration, (double)profile.endDeceleration, (double)jerk,
 #else
-				(double)maxAcceleration, (double)maxDeceleration,
+				(double)maxAcceleration,
 #endif
 				(double)requestedSpeed, (double)profile.startSpeed, (double)profile.topSpeed, (double)profile.endSpeed, clocksNeeded, (uint32_t)filePos, flags.all);
 }
@@ -698,7 +698,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	{
 		// Try to meld this move to the previous move to avoid stop/start
 		// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = -2as limited to the requested speed
-		prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(maxDeceleration * totalDistance * 2.0), requestedSpeed);
+		prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(maxAcceleration * totalDistance * 2.0), requestedSpeed);
 		DoLookahead(ring, prev);
 		profile.startSpeed = prev->profile.endSpeed;
 	}
@@ -1216,13 +1216,16 @@ struct MultipleMoveParameters
 	float peakAcceleration;
 	float t0;
 	float t1;
-	float distance;
+	float t2;
+	float s0;
+	float s1;
+	float s2;
+	float totalDistance;
 };
 
 // Calculate the desired profile of a series of moves that starts from a given start speed and start acceleration and finishes at a higher end speed and zero acceleration
 // Returns true if the move is feasible, false if we can't slow down to the requested speed and zero acceleration from the starting conditions.
 // Outputs are peakAcceleration (which is <= maxAcceleration), the durations of the increasing acceleration and steady acceleration phases, and the distance covered
-// The duration of the decreasing acceleration phase if needed can be calculated by the caller as peakAcceleration/jerk
 //
 // From the wxMaxima worksheet:
 // 	v = u + ap * t1 + ap^2/j - a0^2/(2*j)
@@ -1253,9 +1256,12 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 		rslt.peakAcceleration = maxAcceleration;
 		rslt.t0 = (maxAcceleration - startAcceleration)/jerk;
 		rslt.t1 = ((endSpeed - startSpeed) * jerk - fsquare(maxAcceleration) + 0.5 * fsquare(startAcceleration))/(maxAcceleration * jerk);
-		rslt.distance = rslt.t1 * (startSpeed + 0.5 * maxAcceleration * rslt.t1)
-				+ (startSpeed * (2 * maxAcceleration - startAcceleration) + rslt.t1 * (1.5 * fsquare(maxAcceleration) - 0.5 * fsquare(startAcceleration)))/jerk
-				+ (3.0 * maxAcceleration * (fsquare(maxAcceleration) - fsquare(startAcceleration)) + fcube(startAcceleration))/(3.0 * fsquare(jerk));
+		rslt.t2 = rslt.peakAcceleration/jerk;
+		rslt.s0 = (maxAcceleration - startAcceleration) * (startSpeed/jerk + (fsquare(maxAcceleration - startAcceleration) + 3 * startAcceleration)/(6 * fsquare(jerk)));
+		rslt.s1 = rslt.t1 * (startSpeed + (maxAcceleration - startAcceleration) * 0.5 * (maxAcceleration + startAcceleration)/jerk + 0.5 * maxAcceleration);
+		rslt.s2 = maxAcceleration * ((startSpeed + maxAcceleration * rslt.t1)/jerk + (5 * fsquare(maxAcceleration) - 3 * fsquare(startAcceleration))/(6 * fsquare(jerk)));
+
+		rslt.totalDistance = rslt.s0 + rslt.s1 + rslt.s2;
 		return true;
 	}
 	else
@@ -1268,15 +1274,83 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 		}
 		rslt.t0 = (rslt.peakAcceleration - startAcceleration)/jerk;
 		rslt.t1 = 0.0;
-		rslt.distance = startSpeed * (2 * rslt.peakAcceleration - startAcceleration)/jerk
-				+ (3.0 * rslt.peakAcceleration * (fsquare(rslt.peakAcceleration) - fsquare(startAcceleration)) + fcube(startAcceleration))/(3.0 * fsquare(jerk));
+		rslt.t2 = rslt.peakAcceleration/jerk;
+		rslt.s0 = (rslt.peakAcceleration - startAcceleration) * (startSpeed/jerk + (fsquare(rslt.peakAcceleration - startAcceleration) + 3 * startAcceleration)/(6 * fsquare(jerk)));
+		rslt.s1 = 0.0;
+		rslt.s2 = rslt.peakAcceleration * (startSpeed/jerk + (5 * fsquare(rslt.peakAcceleration) - 3 * fsquare(startAcceleration))/(6 * fsquare(jerk)));
+
+		rslt.totalDistance = rslt.s0 + rslt.s2;
 		return true;
 	}
 }
 
 
-void DistributePlanOverMoves(DDA& firstUnpreparedMove, DDA& lastMoveToPlan, float peakSpeed, float actualJerk, const MultipleMoveParameters& accelParams, const MultipleMoveParameters& decelParams) noexcept
+// Given a movement profile that is viable, distribute it over the moves
+void DistributePlanOverMoves(DDA *startMove, DDA *endMove, float peakSpeed, float actualJerk, const MultipleMoveParameters& accelParams, const MultipleMoveParameters& decelParams) noexcept
 {
+	// Allocate the t0 acceleration phase
+	float speed = startMove->profile.startSpeed;
+	float distanceLeft;
+	{
+		float t0Left = accelParams.t0;
+		float s0Left = accelParams.s0;
+		float acc = startMove->profile.startAcceleration;
+		while (true)
+		{
+			if (startMove->totalDistance > s0Left)
+			{
+				const float t0 = SmallestNonNegativeCubicSolution(actualJerk, 3.0 * acc, 6 * speed, -6 * s0Left);
+				startMove->profile.phase1Time = t0;
+				distanceLeft = startMove->totalDistance - s0Left;
+				break;
+			}
+
+			// This whole move is part of the t0 segment of the multiple move acceleration phase
+			const float t0 = SmallestNonNegativeCubicSolution(actualJerk, 3.0 * acc, 6 * speed, -6 * startMove->totalDistance);
+			speed += (acc + 0.5 * actualJerk * t0) * t0;
+			acc += t0 * actualJerk;
+			startMove = startMove->next;
+			startMove->profile.startSpeed = speed;
+			startMove->profile.startAcceleration = acc;
+			startMove->profile.phase1Time = t0;
+			startMove->profile.phase2Time = startMove->profile.phase3Time = startMove->profile.phase4Time = startMove->profile.phase5Time = startMove->profile.phase6Time = startMove->profile.phase7Time = 0.0;
+			startMove->flags.fullyPlanned = true;
+			t0Left -= t0;
+			s0Left -= startMove->totalDistance;
+		}
+	}
+
+	// Allocate the t1 acceleration phase
+	float t1Left = accelParams.t1;
+	float s1Left = accelParams.s1;
+	while (true)
+	{
+		startMove->profile.peakAcceleration = accelParams.peakAcceleration;
+		if (distanceLeft > s1Left)
+		{
+			qq;
+			break;
+		}
+
+		// This whole move is part of the t1 segment of the multiple move acceleration phase
+		const float t1 = (fastSqrtf(fsquare(speed) + 2 * accelParams.peakAcceleration * distanceLeft) - speed)/accelParams.peakAcceleration;
+		speed += accelParams.peakAcceleration * t1;
+		startMove
+		startMove = startMove->next;
+		distanceLeft = startMove->totalDistance;
+		startMove->profile.phase1Time = 0.0;
+
+		qq;
+	}
+
+	// Allocate the t2 acceleration phase
+	float accelT2 = accelParams.peakAcceleration/actualJerk;
+	float t2Used = 0.0;
+	while (t2Used < accelT2)
+	{
+		qq;
+	}
+
 	qq;
 }
 
@@ -1350,7 +1424,7 @@ void DistributePlanOverMoves(DDA& firstUnpreparedMove, DDA& lastMoveToPlan, floa
 				if (numIterations == 0 || peakSpeedToTry >= unviablePeakSpeed * 0.95)
 				{
 					debugPrintf("Solved in %u iterations, match = %.2f\n", numIterations, (double)((numIterations == 0) ? 1.0 : peakSpeedToTry/unviablePeakSpeed));
-					DistributePlanOverMoves(*firstUnpreparedMove, *lastMoveToPlan, peakSpeedToTry, minJerk, accelParams, decelParams);
+					DistributePlanOverMoves(firstUnpreparedMove, lastMoveToPlan, peakSpeedToTry, minJerk, accelParams, decelParams);
 					return;
 				}
 				else
@@ -1568,7 +1642,7 @@ int DDA::CalculateNewSCurveMove() noexcept
 				const float residualDistance = totalDistance = distanceFromPeakDeceleration;
 				const float speedBeforeReducingDeceleration = 0.5 * idealStartSpeed;
 				const float decelBeforeReducingDeceleration = t1 * jerk;
-				const float t2 = SmallestNonNegativeCubicSolution(-OneSixth * jerk, OneHalf * decelBeforeReducingDeceleration, speedBeforeReducingDeceleration, -residualDistance);
+				const float t2 = SmallestNonNegativeCubicSolution(-jerk, 3 * decelBeforeReducingDeceleration, 6 * speedBeforeReducingDeceleration, -6 * residualDistance);
 				if (std::isnan(t2))
 				{
 					return __LINE__;
@@ -1663,7 +1737,7 @@ int DDA::CalculateNewSCurveMove() noexcept
 				{
 					// We can execute all of the constant speed segment. See how much of the increasing-deceleration segment we can generate.
 					const float speedAtStartOfConstantDeceleration = speedBeforeReducingDeceleration + t2 * maxDeceleration;
-					const float t3 = SmallestNonNegativeCubicSolution(-OneSixth * jerk, -OneHalf * maxDeceleration, speedAtStartOfConstantDeceleration, -distanceLeft);
+					const float t3 = SmallestNonNegativeCubicSolution(-jerk, -3 * maxDeceleration, 6 * speedAtStartOfConstantDeceleration, -6 * distanceLeft);
 					if (std::isnan(t3))
 					{
 						return __LINE__;
