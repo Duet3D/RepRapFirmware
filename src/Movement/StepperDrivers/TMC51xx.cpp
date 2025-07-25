@@ -435,7 +435,7 @@ private:
 	static constexpr unsigned int WriteChopConf = 5;		// chopper control
 	static constexpr unsigned int WriteCoolConf = 6;		// coolstep control
 	static constexpr unsigned int WritePwmConf = 7;			// stealthchop and freewheel control
-	static constexpr unsigned int WriteGstat = 8;
+	static constexpr unsigned int WriteGstat = 8;			// global status register (writing it resets status bits)
 #if TMC_TYPE == 5160
 	static constexpr unsigned int Write5160ShortConf = 9;	// short circuit detection configuration
 	static constexpr unsigned int Write5160DrvConf = 10;	// driver timing
