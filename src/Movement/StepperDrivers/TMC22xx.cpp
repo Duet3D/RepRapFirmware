@@ -1597,6 +1597,10 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 	{
 		rslt.all = 0;
 		rslt.notPresent = true;
+#ifdef DUET3MINI
+		// The DIAG inputs can be fed from DRIVER_ERROR inputs on the external drivers adapter
+		rslt.externalDriverError = digitalRead(DriverDiagPins[driverNumber]);
+#endif
 	}
 	return rslt;
 }
@@ -2533,16 +2537,6 @@ StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bo
 {
 	if (driver < GetNumTmcDrivers())
 	{
-#ifdef DUET3MINI
-		// Duet 3 Mini supports external drivers connected to the 2-driver expansion header
-		if (!driverStates[driver].DriverAssumedPresent())
-		{
-			StandardDriverStatus rslt2;
-			rslt2.all = 0;
-			rslt2.externalDriverError = digitalRead(DriverDiagPins[driver]);
-			return rslt2;
-		}
-#endif
 		return driverStates[driver].GetStatus(accumulated, clearAccumulated);
 	}
 	StandardDriverStatus rslt;
