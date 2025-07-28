@@ -4060,7 +4060,10 @@ bool GCodes::ChangeMicrostepping(size_t drive, unsigned int microsteps, bool int
 void GCodes::SetMappedFanSpeed(const GCodeBuffer *null gbp, float f) noexcept
 {
 	MovementState& ms = (gbp == nullptr) ? moveStates[0] : GetMovementState(*gbp);
-	ms.virtualFanSpeed = f;
+	if (gbp != nullptr && !gbp->ExecutingTfree())
+	{
+		ms.virtualFanSpeed = f;
+	}
 	if (ms.currentTool == nullptr)
 	{
 		reprap.GetFansManager().SetFanValue(0, f);
