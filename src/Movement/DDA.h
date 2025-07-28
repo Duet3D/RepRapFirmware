@@ -29,7 +29,8 @@ struct MoveProfile
 #if SUPPORT_S_CURVE
 	float startAcceleration, peakAcceleration, finalAcceleration;	// accelerations, always positive or zero
     float initialDeceleration, peakDeceleration, endDeceleration;	// decelerations, always negative or zero
-    float phase1Time, phase2Time, phase3Time, phase4Time, phase5Time, phase6Time, phase7Time;
+    float phase0Time, phase1Time, phase2Time, phase3Time, phase4Time, phase5Time, phase6Time;
+    qq; //TODO only need one pair of start and end acceleration
 #endif
 };
 
@@ -43,7 +44,7 @@ struct PrepParams
     float accelInitialDistance, accelPeakDistance, accelEndDistance;
     float decelInitialDistance, decelPeakDistance, decelEndDistance;
     float steadyDistance;
-	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive; or zero if not using S-curce acceleration
+	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive; or zero if not using S-curve acceleration
 #else
 	uint32_t accelClocks, steadyClocks, decelClocks;
 	float acceleration;								// the acceleration to use, always positive
@@ -76,6 +77,10 @@ struct PrepParams
 
 	void DebugPrint() const noexcept;
 };
+
+#if SUPPORT_S_CURVE
+struct MultipleMoveParameters;
+#endif
 
 // This defines a single coordinated movement of one or several motors
 class DDA final
@@ -217,6 +222,7 @@ private:
 
 #if SUPPORT_S_CURVE
 	MovementError CalculateIsolatedSCurveMove() noexcept SPEED_CRITICAL pre(endSpeed == 0.0; endDeceleration == 0.0);
+	static void DistributePlanOverMoves(DDA *startMove, DDA *endMove, float peakSpeed, float actualJerk, const MultipleMoveParameters& accelParams, const MultipleMoveParameters& decelParams) noexcept;
 #endif
 
 	void MatchSpeeds() noexcept SPEED_CRITICAL;
