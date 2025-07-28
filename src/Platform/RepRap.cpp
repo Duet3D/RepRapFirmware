@@ -2213,7 +2213,7 @@ OutputBuffer *_ecv_null RepRap::GetFileFragment(c_string filename, FilePosition 
 				// Read a line
 				char lineBuffer[MaxGCodeStringLength];
 				const int charsRead = f->ReadLine(lineBuffer, sizeof(lineBuffer));
-				if (charsRead <= 0)
+				if (charsRead < 0 || (isThumbnail && charsRead == 0))
 				{
 					if (isThumbnail) { err = 1; }
 					offset = 0;

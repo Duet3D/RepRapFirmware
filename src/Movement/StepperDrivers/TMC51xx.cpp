@@ -70,8 +70,8 @@ constexpr bool DefaultStallDetectFiltered = false;
 constexpr unsigned int DefaultMinimumStepsPerSecond = 200;	// for stall detection: 1 rev per second assuming 1.8deg/step, as per the TMC5160 datasheet
 constexpr uint32_t DefaultTcoolthrs = 2000;					// max interval between 1/256 microsteps for stall detection to be enabled
 constexpr uint32_t DefaultThigh = 200;
-constexpr uint32_t LowestTmcClockSpeed = 11500000;			// the lowest speed at which the TMC driver is clocked internally
-constexpr uint32_t NominalTmcClockSpeed = 120000000;		// the nominal speed at which the TMC driver is clocked internally
+constexpr uint32_t LowestTmcClockSpeed =  11500000;			// the lowest speed at which the TMC driver is clocked internally
+constexpr uint32_t NominalTmcClockSpeed = 12000000;			// the nominal speed at which the TMC driver is clocked internally
 constexpr uint32_t HighestTmcClockSpeed = 12600000;			// the highest speed at which the TMC driver is clocked internally
 
 #if SUPPORT_CLOSED_LOOP
@@ -149,7 +149,9 @@ constexpr uint32_t DefaultGConfReg = GCONF_5160_RECAL | GCONF_5160_MULTISTEP_FIL
 constexpr uint8_t REGNUM_GSTAT = 0x01;
 constexpr uint32_t GSTAT_RESET = 1 << 0;					// driver has been reset since last read
 constexpr uint32_t GSTAT_DRV_ERR = 1 << 1;					// driver has been shut down due to over temp or short circuit
-constexpr uint32_t GSTAT_UV_CP = 1 << 2;					// undervoltage on charge pump, driver disabled. Not latched so does not need to be cleared.
+constexpr uint32_t GSTAT_UV_CP = 1 << 2;					// undervoltage on charge pump, driver disabled while it persists. This bit is latched for information.
+
+constexpr uint32_t DefaultGstatReg = 0x07;					// this value clear all bits
 
 // IFCOUNT register (0x02, RO) is not used in SPI mode
 // SLAVECONF register (0x03, WO) is not used in SPI mode
@@ -433,14 +435,15 @@ private:
 	static constexpr unsigned int WriteChopConf = 5;		// chopper control
 	static constexpr unsigned int WriteCoolConf = 6;		// coolstep control
 	static constexpr unsigned int WritePwmConf = 7;			// stealthchop and freewheel control
+	static constexpr unsigned int WriteGstat = 8;			// global status register (writing it resets status bits)
 #if TMC_TYPE == 5160
-	static constexpr unsigned int Write5160ShortConf = 8;	// short circuit detection configuration
-	static constexpr unsigned int Write5160DrvConf = 9;		// driver timing
-	static constexpr unsigned int Write5160GlobalScaler = 10; // motor current scaling
+	static constexpr unsigned int Write5160ShortConf = 9;	// short circuit detection configuration
+	static constexpr unsigned int Write5160DrvConf = 10;	// driver timing
+	static constexpr unsigned int Write5160GlobalScaler = 11; // motor current scaling
 
-	static constexpr unsigned int NumWriteRegisters = 11; // the number of registers that we write to
+	static constexpr unsigned int NumWriteRegisters = 12; 	// the number of registers that we write to
 #else
-	static constexpr unsigned int NumWriteRegisters = 8;	// the number of registers that we write to
+	static constexpr unsigned int NumWriteRegisters = 9;	// the number of registers that we write to
 #endif
 	static constexpr unsigned int WriteSpecial = NumWriteRegisters;
 
@@ -509,6 +512,7 @@ const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 	REGNUM_CHOPCONF,
 	REGNUM_COOLCONF,
 	REGNUM_PWMCONF,
+	REGNUM_GSTAT,
 #if TMC_TYPE == 5160
 	REGNUM_5160_SHORTCONF,
 	REGNUM_5160_DRVCONF,
@@ -555,6 +559,7 @@ pre(!driversPowered)
 	UpdateRegister(WriteTpwmthrs, DefaultTpwmthrsReg);
 	UpdateRegister(WriteTcoolthrs, DefaultTcoolthrsReg);
 	UpdateRegister(WriteThigh, DefaultThighReg);
+	UpdateRegister(WriteGstat, DefaultGstatReg);
 	configuredChopConfReg = DefaultChopConfReg;
 	SetMicrostepping(DefaultMicrosteppingShift, DefaultInterpolation);	// this also updates the chopper control register
 	writeRegisters[WriteCoolConf] = DefaultCoolConfReg;
@@ -755,18 +760,18 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 
 GCodeResult TmcDriverState::GetAnyRegister(const StringRef& reply, uint8_t regNum) noexcept
 {
-	if (specialReadRegisterNumber == 0xFE)
+	if (specialReadRegisterNumber == 0xFE)		// this value indicates that the register has been read and the value stored
 	{
 		reply.printf("Register 0x%02x value 0x%08" PRIx32, regNum, readRegisters[ReadSpecial]);
 		specialReadRegisterNumber = 0xFF;
 		return GCodeResult::ok;
 	}
 
-	if (specialReadRegisterNumber == 0xFF)
+	if (specialReadRegisterNumber == 0xFF)		// this value indicates that we are read to accept a read register request
 	{
 		specialReadRegisterNumber = regNum;
 	}
-	return GCodeResult::notFinished;
+	return GCodeResult::notFinished;			// else a read is already in progress
 }
 
 GCodeResult TmcDriverState::SetAnyRegister(const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept

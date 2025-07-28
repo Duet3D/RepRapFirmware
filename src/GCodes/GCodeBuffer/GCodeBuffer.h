@@ -176,7 +176,8 @@ public:
 	GCodeMachineState& OriginalMachineState() const noexcept;
 	GCodeMachineState::BlockState& GetBlockState() const noexcept { return CurrentFileMachineState().CurrentBlockState(); }
 	uint16_t GetBlockIndent() const noexcept { return GetBlockState().GetIndent(); }
-	bool AllStatesNormal() const noexcept;						// Return true if all GCode states on the stack are 'normal'
+	bool AllStatesNormal() const noexcept;									// Return true if all GCode states on the stack are 'normal'
+	bool ExecutingTfree() const noexcept;									// Return true if we are executing tfree#.g
 
 	void UseInches(bool inchesNotMm) noexcept { machineState->usingInches = inchesNotMm; }
 	bool UsingInches() const noexcept { return machineState->usingInches; }

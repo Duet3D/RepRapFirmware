@@ -68,21 +68,21 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					move.AxisAndBedTransform(ncoords, ms.currentTool, true);
 
 					// Now change the coordinates after axis transform corresponding to the endstops that triggered
-					(ms.axesToHome & ms.endstopsTriggered)
-						.Iterate([this, &move, &ncoords](unsigned int axis, unsigned int) noexcept
-									{
-										const EndStopPosition stopType = platform.GetEndstops().GetEndStopPosition(axis);
-										if (stopType == EndStopPosition::highEndStop)
+					const AxesBitmap axesToHome = ms.axesToHome & ms.endstopsTriggered;
+					axesToHome.Iterate([this, &move, &ncoords](unsigned int axis, unsigned int) noexcept
 										{
-											ncoords[axis] = move.AxisMaximum(axis);
+											const EndStopPosition stopType = platform.GetEndstops().GetEndStopPosition(axis);
+											if (stopType == EndStopPosition::highEndStop)
+											{
+												ncoords[axis] = move.AxisMaximum(axis);
+											}
+											else if (stopType == EndStopPosition::lowEndStop)
+											{
+												ncoords[axis] = move.AxisMinimum(axis);
+											}
+											SetAxisIsHomed(axis);
 										}
-										else if (stopType == EndStopPosition::lowEndStop)
-										{
-											ncoords[axis] = move.AxisMinimum(axis);
-										}
-										SetAxisIsHomed(axis);
-									}
-								);
+									);
 
 					// Update the endpoints and start coordinates
 					move.UpdateStartCoordinates(ms.GetNumber(), ncoords);
@@ -95,6 +95,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					move.InverseAxisAndBedTransform(ncoords, ms.currentTool);
 					memcpyf(ms.coords, ncoords,  ARRAY_SIZE(ncoords));
 					ToolOffsetInverseTransform(ms);
+#if SUPPORT_ASYNC_MOVES
+					collisionChecker.ResetPositions(ms.coords, axesToHome);
+#endif
 				}
 				else
 				{
