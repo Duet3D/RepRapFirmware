@@ -1383,51 +1383,56 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 			case 36:	// Return file information
-				switch (gb.GetCommandFraction())
 				{
-				case -1:
-				case 0:		// get regular file information
+					const int8_t frac = gb.GetCommandFraction();
+					switch (frac)
+					{
+					case -1:
+					case 0:		// get regular file information
 # if HAS_SBC_INTERFACE
-					if (reprap.UsingSbcInterface())
-					{
-						reprap.GetFileInfoResponse(nullptr, outBuf, true);
-					}
-					else
-# endif
-					{
-# if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-						if (!LockFileSystem(gb))									// getting file info takes several calls and isn't reentrant
+						if (reprap.UsingSbcInterface())
 						{
-							return false;
+							reprap.GetFileInfoResponse(nullptr, outBuf, true);
 						}
-
-						String<MaxFilenameLength> filename;
-						gb.GetUnprecedentedString(filename.GetRef(), true);
-						result = reprap.GetFileInfoResponse((filename.IsEmpty()) ? nullptr : filename.c_str(), outBuf, false);
+						else
 # endif
-					}
-					break;
+						{
+# if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+							if (!LockFileSystem(gb))									// getting file info takes several calls and isn't reentrant
+							{
+								return false;
+							}
+
+							String<MaxFilenameLength> filename;
+							gb.GetUnprecedentedString(filename.GetRef(), true);
+							result = reprap.GetFileInfoResponse((filename.IsEmpty()) ? nullptr : filename.c_str(), outBuf, false);
+# endif
+						}
+						break;
 
 #if HAS_MASS_STORAGE
-				case 1:		// get thumbnail
-					{
-						String<MaxFilenameLength> filename;
-						gb.MustSee('P');
-						gb.GetQuotedString(filename.GetRef(), false);
-						gb.MustSee('S');
-						const FilePosition offset = gb.GetUIValue();
-						outBuf = reprap.GetThumbnailResponse(filename.c_str(), offset, true);
-						if (outBuf == nullptr)
+					case 1:		// get thumbnail
+					case 2:		// get height map, or another file
 						{
-							return false;											// cannot allocate an output buffer, try again later
+							String<MaxFilenameLength> filename;
+							gb.MustSee('P');
+							gb.GetQuotedString(filename.GetRef(), false);
+							gb.MustSee('S');
+							const FilePosition offset = gb.GetUIValue();
+							outBuf = reprap.GetFileFragment(filename.c_str(), offset, true, frac == 1);
+							if (outBuf == nullptr)
+							{
+								return false;											// cannot allocate an output buffer, try again later
+							}
 						}
-					}
-					break;
+						break;
 #endif
-				default:
-					result = GCodeResult::errorNotSupported;
-					break;
+					default:
+						result = GCodeResult::errorNotSupported;
+						break;
+					}
 				}
+
 				break;
 #endif
 
@@ -1746,7 +1751,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						processed = false;
 					}
 
-					// ConfigureFan only processes S parameters if there were other parameters to process
+					// ConfigureFan only processes S parameters if there were other parameters to process; so process the S parameter if necessary
 					if (!processed && gb.Seen('S'))
 					{
 						// Convert the parameter to an interval in 0.0..1.0 here so that we save the correct value in lastDefaultFanSpeed
@@ -1758,7 +1763,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								if (ms.currentTool != nullptr && ms.currentTool->GetFanMapping().IsBitSet(fanNum))
 								{
-									ms.virtualFanSpeed = f;
+									if (!gb.ExecutingTfree())
+									{
+										ms.virtualFanSpeed = f;
+									}
 									if (ms.currentTool->GetFanMapping().IsOnlyBitSet(fanNum))
 									{
 										ms.currentTool->SetFansPwm(f);
