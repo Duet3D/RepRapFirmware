@@ -1751,7 +1751,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						processed = false;
 					}
 
-					// ConfigureFan only processes S parameters if there were other parameters to process; so process the S parameter if necessary
+					// ConfigureFan only processes S parameters if there were other parameters to process
 					if (!processed && gb.Seen('S'))
 					{
 						// Convert the parameter to an interval in 0.0..1.0 here so that we save the correct value in lastDefaultFanSpeed
@@ -1763,10 +1763,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								if (ms.currentTool != nullptr && ms.currentTool->GetFanMapping().IsBitSet(fanNum))
 								{
-									if (!gb.ExecutingTfree())
-									{
-										ms.virtualFanSpeed = f;
-									}
+									ms.virtualFanSpeed = f;
 									if (ms.currentTool->GetFanMapping().IsOnlyBitSet(fanNum))
 									{
 										ms.currentTool->SetFansPwm(f);
