@@ -961,19 +961,6 @@ bool GCodeBuffer::AllStatesNormal() const noexcept
 	return true;
 }
 
-// Return true if we are executing tfree#.g
-bool GCodeBuffer::ExecutingTfree() const noexcept
-{
-	for (const GCodeMachineState *_ecv_null ms = machineState; ms != nullptr; ms = ms->GetPrevious())
-	{
-		if (ms->GetState() == GCodeState::toolChange0 || ms->GetState() == GCodeState::m109ToolChange0)
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
 // Convert from inches to mm if necessary
 float GCodeBuffer::ConvertDistance(float distance) const noexcept
 {
