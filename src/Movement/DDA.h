@@ -25,12 +25,15 @@ class CanMessageMovementLinearShaped;
 
 struct MoveProfile
 {
-	float startSpeed, endSpeed, topSpeed;
+	float startSpeed;												// the speed at the start of the move. Valid for the first un-commited move in the queue.
+	float topSpeed;													// top speed of the move. Valid???
+	float endSpeed;													// end speed of the move. Valid (and zero) for the last move in the queue
 #if SUPPORT_S_CURVE
-	float startAcceleration, peakAcceleration, finalAcceleration;	// accelerations, always positive or zero
-    float initialDeceleration, peakDeceleration, endDeceleration;	// decelerations, always negative or zero
-    float phase0Time, phase1Time, phase2Time, phase3Time, phase4Time, phase5Time, phase6Time;
-    qq; //TODO only need one pair of start and end acceleration
+	float startAcceleration;										// the acceleration or deceleration at the start of this move, may be positive or negative. Valid for the first un-commited move in the queue.
+	float peakAcceleration;											// the acceleration in the steady acceleration phase, if any. Valid if phase1Distance != 0.
+    float peakDeceleration;											// the deceleration in the steady deceleration phase, if any. This is negative if there is a peak deceleration phase. Valid if phase5Distance != 0.
+    float endAcceleration;											// the acceleration or deceleration at the end of the move. Valid (and zero) for the last move in the queue.
+    float phase0Distance, phase1Distance, phase2Distance, phase3Distance, phase4Distance, phase5Distance, phase6Distance;
 #endif
 };
 
@@ -221,8 +224,8 @@ private:
 	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
 
 #if SUPPORT_S_CURVE
-	MovementError CalculateIsolatedSCurveMove() noexcept SPEED_CRITICAL pre(endSpeed == 0.0; endDeceleration == 0.0);
-	static void DistributePlanOverMoves(DDA *startMove, DDA *endMove, float peakSpeed, float actualJerk, const MultipleMoveParameters& accelParams, const MultipleMoveParameters& decelParams) noexcept;
+	void CalculateIsolatedSCurveMove() noexcept SPEED_CRITICAL pre(endSpeed == 0.0; endDeceleration == 0.0);
+	static void DistributePlanOverMoves(DDA *startMove, DDA *endMove, float distanceToPlan, const MultipleMoveParameters& accelParams, const MultipleMoveParameters& decelParams) noexcept;
 #endif
 
 	void MatchSpeeds() noexcept SPEED_CRITICAL;

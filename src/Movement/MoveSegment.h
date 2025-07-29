@@ -46,6 +46,7 @@ constexpr motioncalc_t OneHalf = (motioncalc_t)0.5;
 
 #if SUPPORT_S_CURVE
 constexpr motioncalc_t OneSixth = (motioncalc_t)1.0/(motioncalc_t)6.0;
+constexpr motioncalc_t OneTwelfth = (motioncalc_t)1.0/(motioncalc_t)12.0;
 # define J_FORMAL_PARAMETER(_name)	, motioncalc_t _name
 # define J_ACTUAL_PARAMETER(_expr)	, _expr
 #else
