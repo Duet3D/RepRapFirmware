@@ -135,97 +135,91 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		peakAcceleration = dda.profile.peakAcceleration;
 		peakDeceleration = dda.profile.peakDeceleration;
 		initialAcceleration = dda.profile.startAcceleration;
-		initialDeceleration = (dda.profile.phase0Distance + dda.profile.phase1Distance + dda.profile.phase2Distance + dda.profile.phase3Distance == 0) ? initialAcceleration : 0.0;
+		initialDeceleration = (dda.profile.distances[0] + dda.profile.distances[1] + dda.profile.distances[2] + dda.profile.distances[3] == 0) ? initialAcceleration : 0.0;
 		jerk = dda.jerk;
 
-		phase0Distance = dda.profile.phase0Distance;
-		phase1Distance = dda.profile.phase1Distance;
-		phase2Distance = dda.profile.phase2Distance;
-		steadyDistance = dda.profile.phase3Distance;
-		phase4Distance = dda.profile.phase4Distance;
-		phase5Distance = dda.profile.phase5Distance;
-		phase6Distance = dda.profile.phase6Distance;
+		memcpyf(distances, dda.profile.distances, ARRAY_SIZE(distances));		//TODO why not use the distances stored in he DDA instead of copying them?
 
 		// Solve for the period of each phase
 		float speed = dda.profile.startSpeed;
 		float acc = dda.profile.startAcceleration;
-		if (phase0Distance == 0.0)
+		if (distances[0] == 0.0)
 		{
 			phase0Clocks = 0;
 		}
 		else
 		{
-			const float t0 = SmallestNonNegativeCubicSolution(jerk, 3.0 * dda.profile.startAcceleration, 6 * speed, -6 * phase0Distance);
+			const float t0 = SmallestNonNegativeCubicSolution(jerk, 3.0 * dda.profile.startAcceleration, 6 * speed, -6 * distances[0]);
 			phase0Clocks = floatToU32(t0);
 			speed += 0.5 * jerk * fsquare(t0);
 			acc += jerk * t0;
 		}
 
-		if (phase1Distance == 0.0)
+		if (distances[1] == 0.0)
 		{
 			phase1Clocks = 0;
 		}
 		else
 		{
-			const float t1 = SmallestNonNegativeQuadraticSolution(0.5 * peakAcceleration, speed, -phase1Distance);
+			const float t1 = SmallestNonNegativeQuadraticSolution(0.5 * peakAcceleration, speed, -distances[1]);
 			phase1Clocks = floatToU32(t1);
 			speed += t1 * peakAcceleration;
 			acc = peakAcceleration;
 		}
 
-		if (phase2Distance == 0.0)
+		if (distances[2] == 0.0)
 		{
 			phase2Clocks = 0.0;
 		}
 		else
 		{
-			const float t2 = SmallestNonNegativeCubicSolution(-jerk, 3 * acc, 6 * speed, -6 * phase2Distance);
+			const float t2 = SmallestNonNegativeCubicSolution(-jerk, 3 * acc, 6 * speed, -6 * distances[2]);
 			phase2Clocks = floatToU32(t2);
 			acc -= jerk * t2;
 		}
 
-		if (steadyDistance == 0.0)
+		if (distances[3] == 0.0)
 		{
 			steadyClocks = 0.0;
 		}
 		else
 		{
-			const float t3 = steadyDistance/speed;
+			const float t3 = distances[3]/speed;
 			steadyClocks = floatToU32(t3);
 			acc = 0.0;
 		}
 
-		if (phase4Distance == 0.0)
+		if (distances[4] == 0.0)
 		{
 			phase4Clocks = 0;
 		}
 		else
 		{
-			const float t4 = SmallestNonNegativeCubicSolution(-jerk, 3 * acc, 6 * speed, -6 * phase4Distance);
+			const float t4 = SmallestNonNegativeCubicSolution(-jerk, 3 * acc, 6 * speed, -6 * distances[4]);
 			phase4Clocks = floatToU32(t4);
 			speed += (acc - 0.5 * jerk * t4) * t4;
 			acc -= jerk * t4;
 		}
 
-		if (phase5Distance == 0.0)
+		if (distances[5] == 0.0)
 		{
 			phase5Clocks = 0;
 		}
 		else
 		{
-			const float t5 = SmallestNonNegativeQuadraticSolution(0.5 * peakDeceleration, speed, -phase5Distance);
+			const float t5 = SmallestNonNegativeQuadraticSolution(0.5 * peakDeceleration, speed, -distances[5]);
 			phase5Clocks = floatToU32(t5);
 			speed += peakDeceleration * t5;
 			acc = peakDeceleration;
 		}
 
-		if (phase6Distance == 0.0)
+		if (distances[6] == 0.0)
 		{
 			phase6Clocks = 0;
 		}
 		else
 		{
-			const float t6 = SmallestNonNegativeCubicSolution(jerk, 3 * acc, 6 * speed, -6 * phase6Distance);
+			const float t6 = SmallestNonNegativeCubicSolution(jerk, 3 * acc, 6 * speed, -6 * distances[6]);
 			phase6Clocks = floatToU32(t6);
 			speed += (acc + 0.5 * jerk * t6) * t6;
 			acc += jerk * t6;
@@ -237,50 +231,33 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 			dda.next->profile.startAcceleration = acc;
 		}
 
-		const float totalAccelDecelDistance = phase0Distance + phase1Distance + phase2Distance + phase4Distance + phase5Distance + phase6Distance;
-		const float residualDistance = totalDistance - totalAccelDecelDistance;
-		if (residualDistance < 0.0)
-		{
-			steadyClocks = 0.0;
-		}
 		if (steadyClocks == 0.0)
 		{
 			// We have no steady speed phase (phase 4) so we can combine phases 3 and 5 because they must have the same jerk and acceleration is zero at the transition between them
 			phase2Clocks += phase4Clocks;
 			phase4Clocks = 0;
-			phase2Distance += phase4Distance;
-			phase4Distance = 0.0;
-
-			// We may have a residual distance because of rounding error.
-			// We want zero residual distance so that the move has the correct length, so add the residual distance to one of the phases that is present
-			if (residualDistance != 0.0)
-			{
-				debugPrintf("totalDistance=%.4e residual=%.4e\n", (double)dda.totalDistance, (double)residualDistance);
-				if (phase2Clocks != 0)
-				{
-					phase2Distance += residualDistance;
-				}
-				else if (phase1Clocks != 0 && phase1Clocks >= phase5Clocks)
-				{
-					phase1Distance += residualDistance;
-				}
-				else if (phase5Clocks != 0)
-				{
-					phase5Distance += residualDistance;
-				}
-				else if (phase0Clocks != 0 && phase0Clocks >= phase6Clocks)
-				{
-					phase0Distance += residualDistance;
-				}
-				else
-				{
-					phase6Distance += residualDistance;
-				}
-			}
+			distances[2] += distances[4];
+			distances[4] = 0.0;
 		}
-		else
+
+		const float residualDistance = totalDistance - (distances[0] + distances[1] + distances[2] + distances[3] + distances[4] + distances[5] + distances[6]);
+
+		// We may have a residual distance because of rounding error.
+		// We want zero residual distance so that the move has the correct length, so add the residual distance to the longest phase that is present
+		if (residualDistance != 0.0)
 		{
-			steadyDistance = residualDistance;
+			debugPrintf("totalDistance=%.4e residual=%.4e\n", (double)dda.totalDistance, (double)residualDistance);
+
+			// Find the longest phase, preferring the steady speed phase if there is one
+			unsigned int bestPhase = 3;
+			if (distances[1] > distances[bestPhase]) { bestPhase = 1; }
+			if (distances[5] > distances[bestPhase]) { bestPhase = 5; }
+			if (distances[0] > distances[bestPhase]) { bestPhase = 0; }
+			if (distances[6] > distances[bestPhase]) { bestPhase = 6; }
+			if (distances[2] > distances[bestPhase]) { bestPhase = 2; }
+			if (distances[4] > distances[bestPhase]) { bestPhase = 4; }
+
+			distances[bestPhase] = max<float>(distances[bestPhase] + residualDistance, 0.0);
 		}
 	}
 	else
@@ -290,12 +267,12 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		phase0Clocks = phase2Clocks = phase4Clocks = phase6Clocks = 0;
 		phase1Clocks = lrintf((dda.profile.topSpeed - dda.profile.startSpeed)/peakAcceleration);
 		phase5Clocks = lrintf((dda.profile.endSpeed - dda.profile.topSpeed)/peakDeceleration);
-		phase0Distance = phase2Distance = phase4Distance = phase6Distance = 0.0;
-		phase5Distance = dda.beforePrepare.decelDistance;
+		distances[0] = distances[2] = distances[4] = distances[6] = 0.0;
+		distances[5] = dda.beforePrepare.decelDistance;
 		const float decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
-		phase1Distance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
-		steadyDistance = decelStartDistance - phase1Distance;
-		steadyClocks = (steadyDistance <= 0.0) ? 0 : lrintf(steadyDistance/dda.profile.topSpeed);
+		distances[1] = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
+		distances[3] = decelStartDistance - distances[1];
+		steadyClocks = (distances[3] <= 0.0) ? 0 : lrintf(distances[3]/dda.profile.topSpeed);
 		jerk = 0.0;							// this signals that we are not using S-curve acceleration
 	}
 #else
@@ -327,8 +304,8 @@ void PrepParams::DebugPrint() const noexcept
 				"\n",
 					(double)totalDistance,
 #if SUPPORT_S_CURVE
-					(double)phase0Distance, (double)phase1Distance, (double)phase2Distance,
-					(double)phase4Distance, (double)phase5Distance, (double)phase6Distance,
+					(double)distances[0], (double)distances[1], (double)distances[2],
+					(double)distances[4], (double)distances[5], (double)distances[6],
 					(double)initialAcceleration, (double)peakAcceleration,
 					(double)initialDeceleration, (double)peakDeceleration,
 					phase0Clocks, phase1Clocks, phase2Clocks, steadyClocks, phase4Clocks, phase5Clocks, phase6Clocks
@@ -1374,13 +1351,13 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 	if (startMove == endMove)
 	{
 		// The simple case - just copy the distances across
-		startMove->profile.phase0Distance = accelParams.s0;
-		startMove->profile.phase1Distance = accelParams.s1;
-		startMove->profile.phase2Distance = accelParams.s2;
-		startMove->profile.phase4Distance = decelParams.s2;
-		startMove->profile.phase5Distance = decelParams.s1;
-		startMove->profile.phase6Distance = decelParams.s0;
-		startMove->profile.phase3Distance = startMove->totalDistance - accelParams.totalDistance - decelParams.totalDistance;
+		startMove->profile.distances[0] = accelParams.s0;
+		startMove->profile.distances[1] = accelParams.s1;
+		startMove->profile.distances[2] = accelParams.s2;
+		startMove->profile.distances[4] = decelParams.s2;
+		startMove->profile.distances[5] = decelParams.s1;
+		startMove->profile.distances[6] = decelParams.s0;
+		startMove->profile.distances[3] = startMove->totalDistance - accelParams.totalDistance - decelParams.totalDistance;
 	}
 	else
 	{
@@ -1392,14 +1369,14 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 			{
 				if (startMove->totalDistance > s0Left)
 				{
-					startMove->profile.phase0Distance = s0Left;
+					startMove->profile.distances[0] = s0Left;
 					distanceLeftAccelerating = startMove->totalDistance - s0Left;
 					break;
 				}
 
 				// This whole move is part of the t0 segment of the multiple move acceleration phase
-				startMove->profile.phase0Distance = startMove->totalDistance;
-				startMove->profile.phase1Distance = startMove->profile.phase2Distance = startMove->profile.phase3Distance = startMove->profile.phase4Distance = startMove->profile.phase5Distance = startMove->profile.phase6Distance = 0.0;
+				startMove->profile.distances[0] = startMove->totalDistance;
+				startMove->profile.distances[1] = startMove->profile.distances[2] = startMove->profile.distances[3] = startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
 				s0Left -= startMove->totalDistance;
 				startMove->flags.fullyPlanned = true;
 				startMove = startMove->next;
@@ -1414,18 +1391,18 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 				startMove->profile.peakAcceleration = accelParams.peakAcceleration;
 				if (distanceLeftAccelerating > s1Left)
 				{
-					startMove->profile.phase1Distance = s1Left;
+					startMove->profile.distances[1] = s1Left;
 					distanceLeftAccelerating -= s1Left;
 					break;
 				}
 
 				// The rest of this move is part of the t1 segment of the multiple move acceleration phase
-				startMove->profile.phase1Distance = distanceLeftAccelerating;
-				startMove->profile.phase2Distance = startMove->profile.phase3Distance = startMove->profile.phase4Distance = startMove->profile.phase5Distance = startMove->profile.phase6Distance = 0.0;
+				startMove->profile.distances[1] = distanceLeftAccelerating;
+				startMove->profile.distances[2] = startMove->profile.distances[3] = startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
 				s1Left -= distanceLeftAccelerating;
 				startMove->flags.fullyPlanned = true;
 				startMove = startMove->next;
-				startMove->profile.phase0Distance = 0.0;
+				startMove->profile.distances[0] = 0.0;
 				distanceLeftAccelerating = startMove->totalDistance;
 			}
 		}
@@ -1437,16 +1414,16 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 			{
 				if (distanceLeftAccelerating > s2Left)
 				{
-					startMove->profile.phase2Distance = s2Left;
+					startMove->profile.distances[2] = s2Left;
 					break;
 				}
 
 				// The rest of this move is part of the t2 segment of the multiple move acceleration phase
-				startMove->profile.phase2Distance = startMove->totalDistance;
-				startMove->profile.phase3Distance = startMove->profile.phase4Distance = startMove->profile.phase5Distance = startMove->profile.phase6Distance = 0.0;
+				startMove->profile.distances[2] = startMove->totalDistance;
+				startMove->profile.distances[3] = startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
 				s2Left -= startMove->totalDistance;
 				startMove = startMove->next;
-				startMove->profile.phase0Distance = startMove->profile.phase1Distance = 0.0;
+				startMove->profile.distances[0] = startMove->profile.distances[1] = 0.0;
 				distanceLeftAccelerating = startMove->totalDistance;
 			}
 		}
@@ -1459,14 +1436,14 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 			{
 				if (endMove->totalDistance > s6Left)
 				{
-					endMove->profile.phase6Distance = s6Left;
+					endMove->profile.distances[6] = s6Left;
 					distanceLeftDecelerating = endMove->totalDistance - s6Left;
 					break;
 				}
 
 				// This whole move is part of the t6 segment of the multiple move deceleration phase
-				endMove->profile.phase6Distance = endMove->totalDistance;
-				endMove->profile.phase0Distance = endMove->profile.phase1Distance = endMove->profile.phase2Distance = endMove->profile.phase3Distance = endMove->profile.phase4Distance = endMove->profile.phase5Distance = 0.0;
+				endMove->profile.distances[6] = endMove->totalDistance;
+				endMove->profile.distances[0] = endMove->profile.distances[1] = endMove->profile.distances[2] = endMove->profile.distances[3] = endMove->profile.distances[4] = endMove->profile.distances[5] = 0.0;
 				s6Left -= endMove->totalDistance;
 				endMove = endMove->prev;
 			}
@@ -1480,17 +1457,17 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 				endMove->profile.peakDeceleration = -decelParams.peakAcceleration;
 				if (distanceLeftDecelerating > s5Left)
 				{
-					endMove->profile.phase5Distance = s5Left;
+					endMove->profile.distances[5] = s5Left;
 					distanceLeftDecelerating -= s5Left;
 					break;
 				}
 
 				// The rest of this move is part of the t5 segment of the multiple move deceleration phase
-				endMove->profile.phase5Distance = s5Left;
-				endMove->profile.phase0Distance = endMove->profile.phase1Distance = endMove->profile.phase2Distance = endMove->profile.phase3Distance = endMove->profile.phase4Distance = 0.0;
+				endMove->profile.distances[5] = s5Left;
+				endMove->profile.distances[0] = endMove->profile.distances[1] = endMove->profile.distances[2] = endMove->profile.distances[3] = endMove->profile.distances[4] = 0.0;
 				s5Left -= endMove->totalDistance;
 				endMove = endMove->prev;
-				endMove->profile.phase6Distance = 0.0;
+				endMove->profile.distances[6] = 0.0;
 				distanceLeftDecelerating = endMove->totalDistance;
 			}
 		}
@@ -1502,22 +1479,22 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 			{
 				if (distanceLeftDecelerating > s4Left)
 				{
-					endMove->profile.phase2Distance = s4Left;
+					endMove->profile.distances[2] = s4Left;
 					break;
 				}
 
 				// The rest of this move is part of the t4 segment of the multiple move deceleration phase
-				endMove->profile.phase4Distance = distanceLeftDecelerating;
+				endMove->profile.distances[4] = distanceLeftDecelerating;
 				if (endMove == startMove)
 				{
 					// I think this situation might arise because of rounding error
 					// TODO do we need to take any other action here?
 					break;
 				}
-				endMove->profile.phase0Distance = endMove->profile.phase1Distance = endMove->profile.phase2Distance = endMove->profile.phase3Distance = 0.0;
+				endMove->profile.distances[0] = endMove->profile.distances[1] = endMove->profile.distances[2] = endMove->profile.distances[3] = 0.0;
 				s4Left -= endMove->totalDistance;
 				endMove = endMove->prev;
-				endMove->profile.phase5Distance = endMove->profile.phase6Distance = 0.0;
+				endMove->profile.distances[5] = endMove->profile.distances[6] = 0.0;
 				distanceLeftDecelerating = endMove->totalDistance;
 			}
 		}
@@ -1526,18 +1503,18 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 		if (startMove == endMove)
 		{
 			// Just add a steady speed segment in the middle to make up the distance.
-			startMove->profile.phase3Distance = startMove->totalDistance
-						- (startMove->profile.phase0Distance + startMove->profile.phase1Distance + startMove->profile.phase2Distance + startMove->profile.phase4Distance + startMove->profile.phase5Distance + startMove->profile.phase6Distance);
+			startMove->profile.distances[3] = startMove->totalDistance
+						- (startMove->profile.distances[0] + startMove->profile.distances[1] + startMove->profile.distances[2] + startMove->profile.distances[4] + startMove->profile.distances[5] + startMove->profile.distances[6]);
 		}
 		else
 		{
-			startMove->profile.phase3Distance = startMove->totalDistance - (startMove->profile.phase0Distance + startMove->profile.phase1Distance + startMove->profile.phase2Distance);
-			endMove->profile.phase3Distance = endMove->totalDistance - (endMove->profile.phase4Distance + endMove->profile.phase5Distance + endMove->profile.phase6Distance);
+			startMove->profile.distances[3] = startMove->totalDistance - (startMove->profile.distances[0] + startMove->profile.distances[1] + startMove->profile.distances[2]);
+			endMove->profile.distances[3] = endMove->totalDistance - (endMove->profile.distances[4] + endMove->profile.distances[5] + endMove->profile.distances[6]);
 			while (startMove->next != endMove)
 			{
 				startMove = startMove->next;
-				startMove->profile.phase3Distance = startMove->totalDistance;
-				startMove->profile.phase0Distance = startMove->profile.phase1Distance = startMove->profile.phase2Distance = startMove->profile.phase4Distance = startMove->profile.phase5Distance = startMove->profile.phase6Distance = 0.0;
+				startMove->profile.distances[3] = startMove->totalDistance;
+				startMove->profile.distances[0] = startMove->profile.distances[1] = startMove->profile.distances[2] = startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
 			}
 		}
 	}
@@ -1694,15 +1671,15 @@ void DDA::CalculateIsolatedSCurveMove() noexcept
 		if (fsquare(maxAcceleration) > requestedSpeed * jerk)
 		{
 			// In principle we can reach the requested speed without exceeding the maximum acceleration, without having to include a constant acceleration segment
-			profile.phase1Distance = profile.phase5Distance = 0.0;
+			profile.distances[1] = profile.distances[5] = 0.0;
 			const motioncalc_t halfTimeToReqSpeed = fastSqrtf(requestedSpeed/jerk);
 			const motioncalc_t distanceToReqSpeed = requestedSpeed * halfTimeToReqSpeed;
 			if (2 * distanceToReqSpeed < totalDistance)
 			{
 				// We can reach the requested speed and decelerate to zero again without exceeding the required distance. Generate a 5-phase move.
-				profile.phase0Distance = profile.phase6Distance = OneSixth * jerk * fcube(halfTimeToReqSpeed);
-				profile.phase2Distance = profile.phase4Distance = (requestedSpeed * halfTimeToReqSpeed) - profile.phase0Distance;
-				profile.phase3Distance = totalDistance - 2 * distanceToReqSpeed;
+				profile.distances[0] = profile.distances[6] = OneSixth * jerk * fcube(halfTimeToReqSpeed);
+				profile.distances[2] = profile.distances[4] = (requestedSpeed * halfTimeToReqSpeed) - profile.distances[0];
+				profile.distances[3] = totalDistance - 2 * distanceToReqSpeed;
 				profile.topSpeed = requestedSpeed;
 				profile.peakAcceleration = jerk * halfTimeToReqSpeed;
 				break;
@@ -1725,16 +1702,16 @@ void DDA::CalculateIsolatedSCurveMove() noexcept
 				// But j * t1 = ap, therefore:	t2 = -1.5 * t1 +/- sqrt(0.25 * t1^2 + 2 * s/ap)
 				// s is half the total distance because we accelerate and decelerate again.
 				const motioncalc_t timeToMaxAcceleration = maxAcceleration/jerk;
-				profile.phase0Distance = profile.phase6Distance = OneSixth * jerk * fcube(timeToMaxAcceleration);
+				profile.distances[0] = profile.distances[6] = OneSixth * jerk * fcube(timeToMaxAcceleration);
 				const float constantAccelerationTime = -1.5 * timeToMaxAcceleration + fastSqrtf(0.25 * fsquare(timeToMaxAcceleration) + totalDistance/maxAcceleration);
 				const float newTopSpeed = jerk * timeToMaxAcceleration * (timeToMaxAcceleration + constantAccelerationTime);
 				if (newTopSpeed <= requestedSpeed)
 				{
 					// Generate a 6-phase move. The middle 2 phases could be combined.
 					profile.topSpeed = newTopSpeed;
-					profile.phase1Distance = profile.phase5Distance = 0.5 * constantAccelerationTime * profile.topSpeed;
-					profile.phase2Distance = profile.phase4Distance = timeToMaxAcceleration * profile.topSpeed - profile.phase0Distance;
-					profile.phase3Distance = 0.0;
+					profile.distances[1] = profile.distances[5] = 0.5 * constantAccelerationTime * profile.topSpeed;
+					profile.distances[2] = profile.distances[4] = timeToMaxAcceleration * profile.topSpeed - profile.distances[0];
+					profile.distances[3] = 0.0;
 				}
 				else
 				{
@@ -1742,9 +1719,9 @@ void DDA::CalculateIsolatedSCurveMove() noexcept
 					profile.topSpeed = requestedSpeed;
 					//	v = j * t1 * (t1 + t2) therefore t2 = v/(j * t1) - t1
 					const motioncalc_t revisedConstantAccelerationTime = requestedSpeed/(jerk * timeToMaxAcceleration) - timeToMaxAcceleration;
-					profile.phase1Distance = profile.phase5Distance = 0.5 * revisedConstantAccelerationTime * profile.topSpeed;
-					profile.phase2Distance = profile.phase4Distance = timeToMaxAcceleration * profile.topSpeed - profile.phase0Distance;
-					profile.phase3Distance = totalDistance - 2 * (profile.phase0Distance + profile.phase2Distance);
+					profile.distances[1] = profile.distances[5] = 0.5 * revisedConstantAccelerationTime * profile.topSpeed;
+					profile.distances[2] = profile.distances[4] = timeToMaxAcceleration * profile.topSpeed - profile.distances[0];
+					profile.distances[3] = totalDistance - 2 * (profile.distances[0] + profile.distances[2]);
 				}
 				break;
 			}
@@ -1753,9 +1730,9 @@ void DDA::CalculateIsolatedSCurveMove() noexcept
 
 		// If we get here then we can reach neither requestedSpeed nor maxAcceleration without exceeding totalDistance. Generate a 4-phase move. The middle 2 phases could be combined.
 		const motioncalc_t halfTimeToTopSpeed = fastCubeRootf(totalDistance * 0.5 / jerk);
-		profile.phase0Distance = profile.phase6Distance = OneTwelfth * totalDistance;
-		profile.phase2Distance = profile.phase4Distance = 0.5 * totalDistance - profile.phase0Distance;
-		profile.phase1Distance = profile.phase3Distance = profile.phase5Distance = 0.0;
+		profile.distances[0] = profile.distances[6] = OneTwelfth * totalDistance;
+		profile.distances[2] = profile.distances[4] = 0.5 * totalDistance - profile.distances[0];
+		profile.distances[1] = profile.distances[3] = profile.distances[5] = 0.0;
 		profile.topSpeed = jerk * fsquare(halfTimeToTopSpeed);
 		profile.peakAcceleration = jerk * halfTimeToTopSpeed;
 	} while (false);
@@ -2016,19 +1993,19 @@ int DDA::CalculateNewSCurveMove() noexcept
 				// Do we have enough distance available to decelerate to the requested values?
 				// To reach the requested acceleration, t = requested_acc/max_jerk
 				const float phase4Time = laDDA->beforePrepare.targetNextAcceleration/(-laDDA->jerk);
-				const float phase5Distance = (laDDA->topSpeed + OneSixth * (laDDA->beforePrepare.targetNextAcceleration * phase4Time)) * phase4Time;
-				if (phase5Distance <= distanceAvailable)
+				const float distances[5] = (laDDA->topSpeed + OneSixth * (laDDA->beforePrepare.targetNextAcceleration * phase4Time)) * phase4Time;
+				if (distances[5] <= distanceAvailable)
 				{
 					const float phase5EndSpeed = laDDA->topSpeed + OneHalf * (laDDA->beforePrepare.targetNextAcceleration * phase4Time);
 					const float phase5Time = max<float>(0.0, (laDDA->beforePrepare.targetNextSpeed - phase5EndSpeed)/laDDA->beforePrepare.targetNextAcceleration);
-					const float phase6Distance = (phase5EndSpeed + OneHalf * (laDDA->beforePrepare.targetNextSpeed - phase5EndSpeed)) * phase5Time;
-					const float phase4Distance = distanceAvailable - (phase5Distance + phase6Distance);
-					if (phase4Distance >= 0)
+					const float distances[6] = (phase5EndSpeed + OneHalf * (laDDA->beforePrepare.targetNextSpeed - phase5EndSpeed)) * phase5Time;
+					const float distances[4] = distanceAvailable - (distances[5] + distances[6]);
+					if (distances[4] >= 0)
 					{
 						// We do have enough distance
 						laDDA->beforePrepare.phase4Time = phase4Time;
 						laDDA->beforePrepare.phase5Time = phase5Time;
-						laDDA->beforePrepare.phase3Time = phase4Distance/laDDA->topSpeed;
+						laDDA->beforePrepare.phase3Time = distances[4]/laDDA->topSpeed;
 						goingUp = false;
 						continue;
 					}

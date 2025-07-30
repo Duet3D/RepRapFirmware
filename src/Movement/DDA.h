@@ -33,7 +33,7 @@ struct MoveProfile
 	float peakAcceleration;											// the acceleration in the steady acceleration phase, if any. Valid if phase1Distance != 0.
     float peakDeceleration;											// the deceleration in the steady deceleration phase, if any. This is negative if there is a peak deceleration phase. Valid if phase5Distance != 0.
     float endAcceleration;											// the acceleration or deceleration at the end of the move. Valid (and zero) for the last move in the queue.
-    float phase0Distance, phase1Distance, phase2Distance, phase3Distance, phase4Distance, phase5Distance, phase6Distance;
+    float distances[7];												// the distances of each phase
 #endif
 };
 
@@ -44,9 +44,7 @@ struct PrepParams
 	uint32_t phase0Clocks, phase1Clocks, phase2Clocks, steadyClocks, phase4Clocks, phase5Clocks, phase6Clocks;
     float initialAcceleration, peakAcceleration;	// the accelerations, always positive
     float initialDeceleration, peakDeceleration;	// the decelerations, always negative
-    float phase0Distance, phase1Distance, phase2Distance;
-    float steadyDistance;
-    float phase4Distance, phase5Distance, phase6Distance;
+    float distances[7];								// the distances of each phase
 	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive; or zero if not using S-curve acceleration
 #else
 	uint32_t accelClocks, steadyClocks, decelClocks;
@@ -64,8 +62,8 @@ struct PrepParams
 #if SUPPORT_S_CURVE
 	uint32_t TotalAccelClocks() const noexcept { return phase0Clocks + phase1Clocks + phase2Clocks; }
 	uint32_t TotalDecelClocks() const noexcept { return phase4Clocks + phase5Clocks + phase6Clocks; }
-	float TotalAccelDistance() const noexcept { return phase0Distance + phase1Distance + phase2Distance; }
-	float TotalDecelDistance() const noexcept { return phase4Distance + phase5Distance + phase6Distance; }
+	float TotalAccelDistance() const noexcept { return distances[0] + distances[1] + distances[2]; }
+	float TotalDecelDistance() const noexcept { return distances[4] + distances[5] + distances[6]; }
 #else
 	uint32_t TotalAccelClocks() const noexcept { return accelClocks; }
 	uint32_t TotalDecelClocks() const noexcept { return decelClocks; }
