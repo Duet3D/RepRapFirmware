@@ -1477,6 +1477,7 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 			float s5Left = decelParams.s1;
 			while (true)
 			{
+				endMove->profile.peakDeceleration = -decelParams.peakAcceleration;
 				if (distanceLeftDecelerating > s5Left)
 				{
 					endMove->profile.phase5Distance = s5Left;
