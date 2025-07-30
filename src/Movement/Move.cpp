@@ -1465,8 +1465,8 @@ void Move::PrepareScanningProbeDataCollection(const DDA& dda, const PrepParams& 
 		if (dda.flags.useScurve)
 		{
 			// The following is only approximate but should be good enough
-			probeControl.acceleration = (params.peakAcceleration * params.TotalAccelClocks() - 0.5 * params.jerk * (fsquare(params.accelStartClocks) + fsquare(params.accelEndClocks)))/params.TotalAccelClocks();
-			probeControl.deceleration = (params.peakDeceleration * params.TotalDecelClocks() + 0.5 * params.jerk * (fsquare(params.decelStartClocks) + fsquare(params.decelEndClocks)))/params.TotalDecelClocks();
+			probeControl.acceleration = (params.peakAcceleration * params.TotalAccelClocks() - 0.5 * params.jerk * (fsquare(params.phase0Clocks) + fsquare(params.phase2Clocks)))/params.TotalAccelClocks();
+			probeControl.deceleration = (params.peakDeceleration * params.TotalDecelClocks() + 0.5 * params.jerk * (fsquare(params.phase4Clocks) + fsquare(params.phase6Clocks)))/params.TotalDecelClocks();
 		}
 		else
 		{
@@ -1917,12 +1917,12 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 
 	// Now it's safe to insert/merge new segments into 'tail'
 #if SUPPORT_S_CURVE
-	const uint32_t accelConstantStartTime = startTime + params.accelStartClocks;
-	const uint32_t accelEndStartTime = accelConstantStartTime + params.accelConstantClocks;
-	const uint32_t steadyStartTime = accelEndStartTime + params.accelEndClocks;
+	const uint32_t accelConstantStartTime = startTime + params.phase0Clocks;
+	const uint32_t accelEndStartTime = accelConstantStartTime + params.phase1Clocks;
+	const uint32_t steadyStartTime = accelEndStartTime + params.phase2Clocks;
 	const uint32_t decelStartTime = steadyStartTime + params.steadyClocks;
-	const uint32_t decelConstantStartTime = decelStartTime + params.decelStartClocks;
-	const uint32_t decelEndStartTime = decelConstantStartTime + params.decelConstantClocks;
+	const uint32_t decelConstantStartTime = decelStartTime + params.phase4Clocks;
+	const uint32_t decelEndStartTime = decelConstantStartTime + params.phase5Clocks;
 #else
 	const uint32_t steadyStartTime = startTime + params.TotalAccelClocks();
 	const uint32_t decelStartTime = steadyStartTime + params.steadyClocks;
@@ -1973,33 +1973,33 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 	{
 #if SUPPORT_S_CURVE
 		const motioncalc_t scaledJerk = params.jerk * stepsPerMm;
-		if (params.accelStartClocks != 0)
+		if (params.phase0Clocks != 0)
 		{
-			tail = AddSegment(tail, startTime, params.accelStartClocks, params.accelInitialDistance * stepsPerMm, (motioncalc_t)params.initialAcceleration * stepsPerMm, scaledJerk, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, startTime, params.phase0Clocks, params.phase0Distance * stepsPerMm, (motioncalc_t)params.initialAcceleration * stepsPerMm, scaledJerk, moveFlags, pressureAdvanceClocks);
 		}
-		if (params.accelConstantClocks != 0)
+		if (params.phase1Clocks != 0)
 		{
-			tail = AddSegment(tail, accelConstantStartTime, params.accelConstantClocks, params.accelPeakDistance * stepsPerMm, (motioncalc_t)params.peakAcceleration * stepsPerMm, (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, accelConstantStartTime, params.phase1Clocks, params.phase1Distance * stepsPerMm, (motioncalc_t)params.peakAcceleration * stepsPerMm, (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
 		}
-		if (params.accelEndClocks != 0)
+		if (params.phase2Clocks != 0)
 		{
-			tail = AddSegment(tail, accelEndStartTime, params.accelEndClocks, params.accelEndDistance * stepsPerMm, (motioncalc_t)params.peakAcceleration * stepsPerMm, -scaledJerk, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, accelEndStartTime, params.phase2Clocks, params.phase2Distance * stepsPerMm, (motioncalc_t)params.peakAcceleration * stepsPerMm, -scaledJerk, moveFlags, pressureAdvanceClocks);
 		}
 		if (params.steadyClocks != 0)
 		{
 			tail = AddSegment(tail, steadyStartTime, params.steadyClocks, params.steadyDistance * stepsPerMm, (motioncalc_t)0.0, (motioncalc_t)0.0, moveFlags, (motioncalc_t)0.0);
 		}
-		if (params.decelStartClocks != 0)
+		if (params.phase4Clocks != 0)
 		{
-			tail = AddSegment(tail, decelStartTime, params.decelStartClocks, params.decelInitialDistance * stepsPerMm, (motioncalc_t)params.initialDeceleration * stepsPerMm, -scaledJerk, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, decelStartTime, params.phase4Clocks, params.phase4Distance * stepsPerMm, (motioncalc_t)params.initialDeceleration * stepsPerMm, -scaledJerk, moveFlags, pressureAdvanceClocks);
 		}
-		if (params.decelConstantClocks != 0)
+		if (params.phase5Clocks != 0)
 		{
-			tail = AddSegment(tail, decelConstantStartTime, params.decelConstantClocks, params.decelPeakDistance * stepsPerMm, (motioncalc_t)params.peakDeceleration * stepsPerMm, (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, decelConstantStartTime, params.phase5Clocks, params.phase5Distance * stepsPerMm, (motioncalc_t)params.peakDeceleration * stepsPerMm, (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
 		}
-		if (params.decelEndClocks != 0)
+		if (params.phase6Clocks != 0)
 		{
-			tail = AddSegment(tail, decelEndStartTime, params.decelEndClocks, params.decelEndDistance * stepsPerMm, (motioncalc_t)params.peakDeceleration * stepsPerMm, scaledJerk, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, decelEndStartTime, params.phase6Clocks, params.phase6Distance * stepsPerMm, (motioncalc_t)params.peakDeceleration * stepsPerMm, scaledJerk, moveFlags, pressureAdvanceClocks);
 		}
 #else
 		if (params.accelClocks != 0)
@@ -2024,33 +2024,33 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 			const uint32_t startDelay = axisShaper.GetImpulseDelay(index);
 #if SUPPORT_S_CURVE
 			const motioncalc_t scaledJerk = params.jerk * factor;
-			if (params.accelStartClocks != 0)
+			if (params.phase0Clocks != 0)
 			{
-				tail = AddSegment(tail, startTime + startDelay, params.accelStartClocks, params.accelInitialDistance * factor, (motioncalc_t)params.initialAcceleration * factor, scaledJerk, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, startTime + startDelay, params.phase0Clocks, params.phase0Distance * factor, (motioncalc_t)params.initialAcceleration * factor, scaledJerk, moveFlags, pressureAdvanceClocks);
 			}
-			if (params.accelConstantClocks != 0)
+			if (params.phase1Clocks != 0)
 			{
-				tail = AddSegment(tail, accelConstantStartTime + startDelay, params.accelConstantClocks, params.accelPeakDistance * factor, (motioncalc_t)params.peakAcceleration * factor, (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, accelConstantStartTime + startDelay, params.phase1Clocks, params.phase1Distance * factor, (motioncalc_t)params.peakAcceleration * factor, (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
 			}
-			if (params.accelEndClocks != 0)
+			if (params.phase2Clocks != 0)
 			{
-				tail = AddSegment(tail, accelEndStartTime + startDelay, params.accelEndClocks, params.accelEndDistance * factor, (motioncalc_t)params.peakAcceleration * factor, -scaledJerk, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, accelEndStartTime + startDelay, params.phase2Clocks, params.phase2Distance * factor, (motioncalc_t)params.peakAcceleration * factor, -scaledJerk, moveFlags, pressureAdvanceClocks);
 			}
 			if (params.steadyClocks != 0)
 			{
 				tail = AddSegment(tail, steadyStartTime + startDelay, params.steadyClocks, params.steadyDistance * factor, (motioncalc_t)0.0, (motioncalc_t)0.0, moveFlags, (motioncalc_t)0.0);
 			}
-			if (params.decelStartClocks != 0)
+			if (params.phase4Clocks != 0)
 			{
-				tail = AddSegment(tail, decelStartTime + startDelay, params.decelStartClocks, params.decelInitialDistance * factor, (motioncalc_t)params.initialDeceleration * factor, -scaledJerk, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, decelStartTime + startDelay, params.phase4Clocks, params.phase4Distance * factor, (motioncalc_t)params.initialDeceleration * factor, -scaledJerk, moveFlags, pressureAdvanceClocks);
 			}
-			if (params.decelConstantClocks != 0)
+			if (params.phase5Clocks != 0)
 			{
-				tail = AddSegment(tail, decelConstantStartTime + startDelay, params.decelConstantClocks, params.decelPeakDistance * factor, (motioncalc_t)params.peakDeceleration * factor, (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, decelConstantStartTime + startDelay, params.phase5Clocks, params.phase5Distance * factor, (motioncalc_t)params.peakDeceleration * factor, (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
 			}
-			if (params.decelEndClocks != 0)
+			if (params.phase6Clocks != 0)
 			{
-				tail = AddSegment(tail, decelEndStartTime + startDelay, params.decelEndClocks, params.decelEndDistance * factor, (motioncalc_t)params.peakDeceleration * factor, scaledJerk, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, decelEndStartTime + startDelay, params.phase6Clocks, params.phase6Distance * factor, (motioncalc_t)params.peakDeceleration * factor, scaledJerk, moveFlags, pressureAdvanceClocks);
 			}
 #else
 			if (params.accelClocks != 0)

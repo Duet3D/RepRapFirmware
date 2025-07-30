@@ -142,8 +142,8 @@ CanMessageBuffer *_ecv_null CanMotion::GetBuffer(const PrepParams& params, Drive
 		if (params.jerk != 0.0)
 		{
 			// We don't support S-curve acceleration on expansion boards, so the best we can do is compute an average acceleration and scale it to unit distance
-			move->acceleration = (params.peakAcceleration * params.TotalAccelClocks() - 0.5 * params.jerk * (fsquare(params.accelStartClocks) + fsquare(params.accelEndClocks)))/(params.TotalAccelClocks() * params.totalDistance);
-			move->deceleration = (-params.peakDeceleration * params.TotalDecelClocks() - 0.5 * params.jerk * (fsquare(params.decelStartClocks) + fsquare(params.decelEndClocks)))/(params.TotalDecelClocks() * params.totalDistance);
+			move->acceleration = (params.peakAcceleration * params.TotalAccelClocks() - 0.5 * params.jerk * (fsquare(params.phase0Clocks) + fsquare(params.phase2Clocks)))/(params.TotalAccelClocks() * params.totalDistance);
+			move->deceleration = (-params.peakDeceleration * params.TotalDecelClocks() - 0.5 * params.jerk * (fsquare(params.phase4Clocks) + fsquare(params.phase6Clocks)))/(params.TotalDecelClocks() * params.totalDistance);
 		}
 		else
 		{

@@ -41,12 +41,12 @@ struct MoveProfile
 struct PrepParams
 {
 #if SUPPORT_S_CURVE
-	uint32_t accelStartClocks, accelConstantClocks, accelEndClocks, steadyClocks, decelStartClocks, decelConstantClocks, decelEndClocks;
+	uint32_t phase0Clocks, phase1Clocks, phase2Clocks, steadyClocks, phase4Clocks, phase5Clocks, phase6Clocks;
     float initialAcceleration, peakAcceleration;	// the accelerations, always positive
     float initialDeceleration, peakDeceleration;	// the decelerations, always negative
-    float accelInitialDistance, accelPeakDistance, accelEndDistance;
-    float decelInitialDistance, decelPeakDistance, decelEndDistance;
+    float phase0Distance, phase1Distance, phase2Distance;
     float steadyDistance;
+    float phase4Distance, phase5Distance, phase6Distance;
 	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive; or zero if not using S-curve acceleration
 #else
 	uint32_t accelClocks, steadyClocks, decelClocks;
@@ -62,10 +62,10 @@ struct PrepParams
 	bool useInputShaping;
 
 #if SUPPORT_S_CURVE
-	uint32_t TotalAccelClocks() const noexcept { return accelStartClocks + accelConstantClocks + accelEndClocks; }
-	uint32_t TotalDecelClocks() const noexcept { return decelStartClocks + decelConstantClocks + decelEndClocks; }
-	float TotalAccelDistance() const noexcept { return accelInitialDistance + accelPeakDistance + accelEndDistance; }
-	float TotalDecelDistance() const noexcept { return decelInitialDistance + decelPeakDistance + decelEndDistance; }
+	uint32_t TotalAccelClocks() const noexcept { return phase0Clocks + phase1Clocks + phase2Clocks; }
+	uint32_t TotalDecelClocks() const noexcept { return phase4Clocks + phase5Clocks + phase6Clocks; }
+	float TotalAccelDistance() const noexcept { return phase0Distance + phase1Distance + phase2Distance; }
+	float TotalDecelDistance() const noexcept { return phase4Distance + phase5Distance + phase6Distance; }
 #else
 	uint32_t TotalAccelClocks() const noexcept { return accelClocks; }
 	uint32_t TotalDecelClocks() const noexcept { return decelClocks; }

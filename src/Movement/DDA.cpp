@@ -138,49 +138,49 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		initialDeceleration = (dda.profile.phase0Distance + dda.profile.phase1Distance + dda.profile.phase2Distance + dda.profile.phase3Distance == 0) ? initialAcceleration : 0.0;
 		jerk = dda.jerk;
 
-		accelInitialDistance = dda.profile.phase0Distance;
-		accelPeakDistance = dda.profile.phase1Distance;
-		accelEndDistance = dda.profile.phase2Distance;
+		phase0Distance = dda.profile.phase0Distance;
+		phase1Distance = dda.profile.phase1Distance;
+		phase2Distance = dda.profile.phase2Distance;
 		steadyDistance = dda.profile.phase3Distance;
-		decelInitialDistance = dda.profile.phase4Distance;
-		decelPeakDistance = dda.profile.phase5Distance;
-		decelEndDistance = dda.profile.phase6Distance;
+		phase4Distance = dda.profile.phase4Distance;
+		phase5Distance = dda.profile.phase5Distance;
+		phase6Distance = dda.profile.phase6Distance;
 
 		// Solve for the period of each phase
 		float speed = dda.profile.startSpeed;
 		float acc = dda.profile.startAcceleration;
-		if (accelInitialDistance == 0.0)
+		if (phase0Distance == 0.0)
 		{
-			accelStartClocks = 0;
+			phase0Clocks = 0;
 		}
 		else
 		{
-			const float t0 = SmallestNonNegativeCubicSolution(jerk, 3.0 * dda.profile.startAcceleration, 6 * speed, -6 * accelInitialDistance);
-			accelStartClocks = floatToU32(t0);
+			const float t0 = SmallestNonNegativeCubicSolution(jerk, 3.0 * dda.profile.startAcceleration, 6 * speed, -6 * phase0Distance);
+			phase0Clocks = floatToU32(t0);
 			speed += 0.5 * jerk * fsquare(t0);
 			acc += jerk * t0;
 		}
 
-		if (accelPeakDistance == 0.0)
+		if (phase1Distance == 0.0)
 		{
-			accelConstantClocks = 0;
+			phase1Clocks = 0;
 		}
 		else
 		{
-			const float t1 = SmallestNonNegativeQuadraticSolution(0.5 * peakAcceleration, speed, -accelPeakDistance);
-			accelConstantClocks = floatToU32(t1);
+			const float t1 = SmallestNonNegativeQuadraticSolution(0.5 * peakAcceleration, speed, -phase1Distance);
+			phase1Clocks = floatToU32(t1);
 			speed += t1 * peakAcceleration;
 			acc = peakAcceleration;
 		}
 
-		if (accelEndDistance == 0.0)
+		if (phase2Distance == 0.0)
 		{
-			accelEndClocks = 0.0;
+			phase2Clocks = 0.0;
 		}
 		else
 		{
-			const float t2 = SmallestNonNegativeCubicSolution(-jerk, 3 * acc, 6 * speed, -6 * accelEndDistance);
-			accelEndClocks = floatToU32(t2);
+			const float t2 = SmallestNonNegativeCubicSolution(-jerk, 3 * acc, 6 * speed, -6 * phase2Distance);
+			phase2Clocks = floatToU32(t2);
 			acc -= jerk * t2;
 		}
 
@@ -195,38 +195,38 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 			acc = 0.0;
 		}
 
-		if (decelInitialDistance == 0.0)
+		if (phase4Distance == 0.0)
 		{
-			decelStartClocks = 0;
+			phase4Clocks = 0;
 		}
 		else
 		{
-			const float t4 = SmallestNonNegativeCubicSolution(-jerk, 3 * acc, 6 * speed, -6 * decelInitialDistance);
-			decelStartClocks = floatToU32(t4);
+			const float t4 = SmallestNonNegativeCubicSolution(-jerk, 3 * acc, 6 * speed, -6 * phase4Distance);
+			phase4Clocks = floatToU32(t4);
 			speed += (acc - 0.5 * jerk * t4) * t4;
 			acc -= jerk * t4;
 		}
 
-		if (decelPeakDistance == 0.0)
+		if (phase5Distance == 0.0)
 		{
-			decelConstantClocks = 0;
+			phase5Clocks = 0;
 		}
 		else
 		{
-			const float t5 = SmallestNonNegativeQuadraticSolution(0.5 * peakDeceleration, speed, -decelPeakDistance);
-			decelConstantClocks = floatToU32(t5);
+			const float t5 = SmallestNonNegativeQuadraticSolution(0.5 * peakDeceleration, speed, -phase5Distance);
+			phase5Clocks = floatToU32(t5);
 			speed += peakDeceleration * t5;
 			acc = peakDeceleration;
 		}
 
-		if (decelEndDistance == 0.0)
+		if (phase6Distance == 0.0)
 		{
-			decelEndClocks = 0;
+			phase6Clocks = 0;
 		}
 		else
 		{
-			const float t6 = SmallestNonNegativeCubicSolution(jerk, 3 * acc, 6 * speed, -6 * decelEndDistance);
-			decelEndClocks = floatToU32(t6);
+			const float t6 = SmallestNonNegativeCubicSolution(jerk, 3 * acc, 6 * speed, -6 * phase6Distance);
+			phase6Clocks = floatToU32(t6);
 			speed += (acc + 0.5 * jerk * t6) * t6;
 			acc += jerk * t6;
 		}
@@ -237,7 +237,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 			dda.next->profile.startAcceleration = acc;
 		}
 
-		const float totalAccelDecelDistance = accelInitialDistance + accelPeakDistance + accelEndDistance + decelInitialDistance + decelPeakDistance + decelEndDistance;
+		const float totalAccelDecelDistance = phase0Distance + phase1Distance + phase2Distance + phase4Distance + phase5Distance + phase6Distance;
 		const float residualDistance = totalDistance - totalAccelDecelDistance;
 		if (residualDistance < 0.0)
 		{
@@ -246,35 +246,35 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		if (steadyClocks == 0.0)
 		{
 			// We have no steady speed phase (phase 4) so we can combine phases 3 and 5 because they must have the same jerk and acceleration is zero at the transition between them
-			accelEndClocks += decelStartClocks;
-			decelStartClocks = 0;
-			accelEndDistance += decelInitialDistance;
-			decelInitialDistance = 0.0;
+			phase2Clocks += phase4Clocks;
+			phase4Clocks = 0;
+			phase2Distance += phase4Distance;
+			phase4Distance = 0.0;
 
 			// We may have a residual distance because of rounding error.
 			// We want zero residual distance so that the move has the correct length, so add the residual distance to one of the phases that is present
 			if (residualDistance != 0.0)
 			{
 				debugPrintf("totalDistance=%.4e residual=%.4e\n", (double)dda.totalDistance, (double)residualDistance);
-				if (accelEndClocks != 0)
+				if (phase2Clocks != 0)
 				{
-					accelEndDistance += residualDistance;
+					phase2Distance += residualDistance;
 				}
-				else if (accelConstantClocks != 0 && accelConstantClocks >= decelConstantClocks)
+				else if (phase1Clocks != 0 && phase1Clocks >= phase5Clocks)
 				{
-					accelPeakDistance += residualDistance;
+					phase1Distance += residualDistance;
 				}
-				else if (decelConstantClocks != 0)
+				else if (phase5Clocks != 0)
 				{
-					decelPeakDistance += residualDistance;
+					phase5Distance += residualDistance;
 				}
-				else if (accelStartClocks != 0 && accelStartClocks >= decelEndClocks)
+				else if (phase0Clocks != 0 && phase0Clocks >= phase6Clocks)
 				{
-					accelInitialDistance += residualDistance;
+					phase0Distance += residualDistance;
 				}
 				else
 				{
-					decelEndDistance += residualDistance;
+					phase6Distance += residualDistance;
 				}
 			}
 		}
@@ -287,14 +287,14 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	{
 		peakAcceleration = dda.maxAcceleration;
 		peakDeceleration = -dda.maxAcceleration;
-		accelStartClocks = accelEndClocks = decelStartClocks = decelEndClocks = 0;
-		accelConstantClocks = lrintf((dda.profile.topSpeed - dda.profile.startSpeed)/peakAcceleration);
-		decelConstantClocks = lrintf((dda.profile.endSpeed - dda.profile.topSpeed)/peakDeceleration);
-		accelInitialDistance = accelEndDistance = decelInitialDistance = decelEndDistance = 0.0;
-		decelPeakDistance = dda.beforePrepare.decelDistance;
+		phase0Clocks = phase2Clocks = phase4Clocks = phase6Clocks = 0;
+		phase1Clocks = lrintf((dda.profile.topSpeed - dda.profile.startSpeed)/peakAcceleration);
+		phase5Clocks = lrintf((dda.profile.endSpeed - dda.profile.topSpeed)/peakDeceleration);
+		phase0Distance = phase2Distance = phase4Distance = phase6Distance = 0.0;
+		phase5Distance = dda.beforePrepare.decelDistance;
 		const float decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
-		accelPeakDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
-		steadyDistance = decelStartDistance - accelPeakDistance;
+		phase1Distance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
+		steadyDistance = decelStartDistance - phase1Distance;
 		steadyClocks = (steadyDistance <= 0.0) ? 0 : lrintf(steadyDistance/dda.profile.topSpeed);
 		jerk = 0.0;							// this signals that we are not using S-curve acceleration
 	}
@@ -327,11 +327,11 @@ void PrepParams::DebugPrint() const noexcept
 				"\n",
 					(double)totalDistance,
 #if SUPPORT_S_CURVE
-					(double)accelInitialDistance, (double)accelPeakDistance, (double)accelEndDistance,
-					(double)decelInitialDistance, (double)decelPeakDistance, (double)decelEndDistance,
+					(double)phase0Distance, (double)phase1Distance, (double)phase2Distance,
+					(double)phase4Distance, (double)phase5Distance, (double)phase6Distance,
 					(double)initialAcceleration, (double)peakAcceleration,
 					(double)initialDeceleration, (double)peakDeceleration,
-					accelStartClocks, accelConstantClocks, accelEndClocks, steadyClocks, decelStartClocks, decelConstantClocks, decelEndClocks
+					phase0Clocks, phase1Clocks, phase2Clocks, steadyClocks, phase4Clocks, phase5Clocks, phase6Clocks
 #else
 					(double)accelDistance, (double)decelStartDistance,
 					(double)acceleration, (double)deceleration,
