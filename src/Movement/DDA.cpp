@@ -225,7 +225,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 			acc += jerk * t6;
 		}
 
-		if (dda.next->state == DDA::provisional)
+		if (dda.next->IsProvisional())
 		{
 			dda.next->profile.startSpeed = speed;
 			dda.next->profile.startAcceleration = acc;
@@ -342,7 +342,7 @@ uint32_t DDA::GetTimeLeft() const noexcept
 {
 	switch (state)
 	{
-	case provisional:
+	case planned:
 		return clocksNeeded;
 	case committed:
 		{
@@ -696,7 +696,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
 #if SUPPORT_S_CURVE
-	if (   prev->state == provisional												// if previous move is queued but has not started yet
+	if (   prev->IsProvisional()													// if previous move is queued but has not started yet
 		&& flags.isPrintingMove == prev->flags.isPrintingMove
 		&& flags.xyMoving == prev->flags.xyMoving
 		&& flags.isNonPrintingExtruderMove == prev->flags.isNonPrintingExtruderMove	// this is to prevent extruder-only moves being melded with Z-axis moves (issue 990)
@@ -731,47 +731,47 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	if (flags.useScurve)
 	{
 		profile.startSpeed = profile.startAcceleration = 0.0;						// in case there is no previous move
-		state = DDAState::unplanned;												// postpone planning this move until preparation
-		return MovementError::ok;
-	}
-	else if (beforePrepare.maxPrevEndSpeed > 0.0)
-	{
-		// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = -2as limited to the requested speed
-		prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(maxAcceleration * totalDistance * 2.0), beforePrepare.maxPrevEndSpeed);
-		DoLookahead(ring, prev);
-		profile.startSpeed = prev->profile.endSpeed * beforePrepare.startSpeedRatio;
+		state = DDAState::created;													// postpone planning this move until preparation
+		rslt = MovementError::ok;
 	}
 	else
 	{
-		profile.startSpeed = 0.0;
-	}
+		if (beforePrepare.maxPrevEndSpeed > 0.0)
+		{
+			// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = -2as limited to the requested speed
+			prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(maxAcceleration * totalDistance * 2.0), beforePrepare.maxPrevEndSpeed);
+			DoLookahead(ring, prev);
+			profile.startSpeed = prev->profile.endSpeed * beforePrepare.startSpeedRatio;
+		}
+		else
+		{
+			profile.startSpeed = 0.0;
+		}
 #else
-	if (   prev->state == provisional												// if previous move has not started yet
-		&& (   move.GetJerkPolicy() != 0											// and melding is allowed
-			|| (   flags.isPrintingMove == prev->flags.isPrintingMove
-				&& flags.xyMoving == prev->flags.xyMoving
-				&& flags.isNonPrintingExtruderMove == prev->flags.isNonPrintingExtruderMove		// this is to prevent extruder-only move being melded with Z-axis moves (issue 990)
+	{
+		if (   prev->IsProvisional()													// if previous move has not started yet
+			&& (   move.GetJerkPolicy() != 0											// and melding is allowed
+				|| (   flags.isPrintingMove == prev->flags.isPrintingMove
+					&& flags.xyMoving == prev->flags.xyMoving
+					&& flags.isNonPrintingExtruderMove == prev->flags.isNonPrintingExtruderMove		// this is to prevent extruder-only move being melded with Z-axis moves (issue 990)
+				   )
 			   )
 		   )
-	   )
-	{
-		// Try to meld this move to the previous move to avoid stop/start
-		// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = -2as limited to the requested speed
-		prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(maxAcceleration * totalDistance * 2.0), requestedSpeed);
-		DoLookahead(ring, prev);
-		profile.startSpeed = prev->profile.endSpeed;
-	}
-	else
-	{
-		profile.startSpeed = 0.0;													// there is no previous move that we can adjust, so start at zero speed.
-	}
-
+		{
+			// Try to meld this move to the previous move to avoid stop/start
+			// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = -2as limited to the requested speed
+			prev->beforePrepare.targetNextSpeed = min<float>(fastSqrtf(maxAcceleration * totalDistance * 2.0), requestedSpeed);
+			DoLookahead(ring, prev);
+			profile.startSpeed = prev->profile.endSpeed;
+		}
+		else
+		{
+			profile.startSpeed = 0.0;													// there is no previous move that we can adjust, so start at zero speed.
+		}
 #endif
 
-	rslt = RecalculateMove(ring);
-	if (rslt == MovementError::ok)
-	{
-		state = provisional;
+		rslt = RecalculateMove(ring);
+		state = planned;
 	}
 	return rslt;
 }
@@ -840,7 +840,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	profile.startSpeed = profile.endSpeed = 0.0;
 
 	RecalculateMove(ring);
-	state = provisional;
+	state = planned;
 	return true;
 }
 
@@ -895,7 +895,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 	totalDistance = Normalise(directionVector);
 
 	RecalculateMove(ring);
-	state = provisional;
+	state = planned;
 	return true;
 }
 
@@ -957,9 +957,8 @@ bool DDA::IsAccelerationMove() const noexcept
 			 && laDDA->prev->beforePrepare.decelDistance > 0.0						// if the previous move has no deceleration phase then no point in adjusting it
 			)
 		{
-			const DDAState st = laDDA->prev->state;
 			// This is a deceleration-only move, and the previous one has a deceleration phase. We may have to adjust the previous move as well to get optimum behaviour.
-			if (   st == provisional
+			if (   laDDA->prev->IsProvisional()
 				&& (   reprap.GetMove().GetJerkPolicy() != 0
 					|| (   laDDA->prev->flags.xyMoving == laDDA->flags.xyMoving
 						&& (   laDDA->prev->flags.isPrintingMove == laDDA->flags.isPrintingMove
@@ -980,7 +979,7 @@ bool DDA::IsAccelerationMove() const noexcept
 			}
 
 			// This move is a deceleration-only move but we can't adjust the previous one
-			if (st == committed)
+			if (laDDA->prev->state == committed)
 			{
 				laDDA->flags.hadLookaheadUnderrun = true;
 			}
@@ -1061,7 +1060,7 @@ float DDA::AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcep
 
 	// Find the oldest un-prepared move
 	DDA *cdda = this;
-	while (cdda->prev->state == DDAState::provisional)
+	while (cdda->prev->IsProvisional())
 	{
 		cdda = _ecv_not_null(cdda->prev);
 	}

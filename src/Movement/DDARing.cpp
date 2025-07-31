@@ -157,7 +157,7 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 bool DDARing::CanAddMove() const noexcept
 {
 	 if (   addPointer->GetState() == DDA::empty
-		 && addPointer->GetNext()->GetState() != DDA::provisional		// function Prepare needs to access the endpoints in the previous move, so don't change them
+		 && !addPointer->GetNext()->IsProvisional()			// function Prepare needs to access the endpoints in the previous move, so don't change them
 		)
 	 {
 			// In order to react faster to speed and extrusion rate changes, only add more moves if the total duration of
@@ -168,7 +168,7 @@ bool DDARing::CanAddMove() const noexcept
 			for(;;)
 			{
 				dda = dda->GetPrevious();
-				if (dda->GetState() != DDA::provisional)
+				if (!dda->IsProvisional())
 				{
 					break;
 				}
@@ -272,7 +272,7 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 			cdda = cdda->GetNext();
 		}
 
-		const uint32_t ret = (cdda->GetState() == DDA::provisional)
+		const uint32_t ret = (cdda->IsProvisional())
 						? PrepareMoves(cdda, prepareAdvanceTime, preparedTime, preparedCount, simulationMode)
 							: MoveTiming::StandardMoveWakeupInterval;
 
@@ -334,7 +334,7 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 		return ret;
 	}
 
-	return (cdda->GetState() == DDA::provisional)
+	return (cdda->IsProvisional())
 			? MoveStartPollInterval									// there are moves in the queue but it is not time to prepare them yet
 				: MoveTiming::StandardMoveWakeupInterval;			// the queue is empty, nothing to do until new moves arrive
 }
@@ -344,7 +344,7 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept
 {
 	// If the already-prepared moves will execute in less than the minimum time, prepare another move.
-	while (	  firstUnpreparedMove->GetState() == DDA::provisional
+	while (	  firstUnpreparedMove->IsProvisional()
 		   && moveTimeLeft < prepareAdvanceTime	// prepare moves one tenth of a second ahead of when they will be needed
 		   && alreadyPrepared * 2 < numDdasInRing					// but don't prepare more than half the ring, to handle accelerate/decelerate moves in small segments
 #if SUPPORT_CAN_EXPANSION
@@ -365,7 +365,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 	}
 
 	// Decide how soon we want to be called again to prepare further moves
-	if (firstUnpreparedMove->GetState() == DDA::provisional)
+	if (firstUnpreparedMove->IsProvisional())
 	{
 		// There are more moves waiting to be prepared, so ask to be woken up early
 		if (simulationMode != SimulationMode::off)

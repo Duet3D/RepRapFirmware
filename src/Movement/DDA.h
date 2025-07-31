@@ -96,8 +96,10 @@ public:
 	enum DDAState : uint8_t
 	{
 		empty,				// empty or being filled in
-		unplanned,			// filled in but not yet planned
-		provisional,		// ready, but could be subject to modifications
+#if SUPPORT_S_CURVE
+		created,			// filled in but not yet planned
+#endif
+		planned,			// ready, but could be subject to modifications
 		committed			// has been converted into move segments already
 	};
 
@@ -131,6 +133,7 @@ public:
 
 	DDAState GetState() const noexcept { return state; }
 	bool IsCommitted() const noexcept { return state == DDA::committed; }
+	bool IsProvisional() const noexcept;
 	DDA* GetNext() const noexcept { return next; }
 	DDA* GetPrevious() const noexcept { return prev; }
 	uint32_t GetTimeLeft() const noexcept;
@@ -346,9 +349,18 @@ inline bool DDA::CanPauseAfter() const noexcept
 	return flags.canPauseAfter
 #if SUPPORT_CAN_EXPANSION
 		// We can't easily cancel moves that have already been sent to CAN expansion boards
-		&& next->state == DDAState::provisional
+		&& next->state != committed
 #endif
 		;
+}
+
+inline bool DDA::IsProvisional() const noexcept
+{
+#if SUPPORT_S_CURVE
+	return state == created || state == planned;
+#else
+	return state == planned;
+#endif
 }
 
 #endif /* DDA_H_ */
