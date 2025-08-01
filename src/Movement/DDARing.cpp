@@ -345,7 +345,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 {
 	// If the already-prepared moves will execute in less than the minimum time, prepare another move.
 	while (	  firstUnpreparedMove->IsProvisional()
-		   && moveTimeLeft < prepareAdvanceTime	// prepare moves one tenth of a second ahead of when they will be needed
+		   && moveTimeLeft < prepareAdvanceTime						// prepare moves one tenth of a second ahead of when they will be needed
 		   && alreadyPrepared * 2 < numDdasInRing					// but don't prepare more than half the ring, to handle accelerate/decelerate moves in small segments
 #if SUPPORT_CAN_EXPANSION
 		   && CanMotion::CanPrepareMove()

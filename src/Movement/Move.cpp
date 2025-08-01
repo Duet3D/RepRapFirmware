@@ -1851,9 +1851,9 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 {
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
 	{
-		debugPrintf("AddLin: st=%" PRIu32 " steps=%.1f\n", startTime, (double)steps);
+//		debugPrintf("AddLin: st=%" PRIu32 " steps=%.1f\n", startTime, (double)steps);
 		//dda.DebugPrint("addlin");
-		params.DebugPrint();
+//		params.DebugPrint();
 	}
 
 	DriveMovement& dm = dms[logicalDrive];

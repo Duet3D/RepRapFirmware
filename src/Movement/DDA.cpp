@@ -149,9 +149,10 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		}
 		else
 		{
-			const float t0 = SmallestNonNegativeCubicSolution(jerk, 3.0 * dda.profile.startAcceleration, 6 * speed, -6 * distances[0]);
+			const float t0 = SmallestNonNegativeCubicSolution(jerk, 3 * acc, 6 * speed, -6 * distances[0]);
 			phase0Clocks = floatToU32(t0);
-			speed += 0.5 * jerk * fsquare(t0);
+			debugPrintf("Phase 0: %.3e %lu %.3e %.3e\n", (double)distances[0], phase0Clocks, (double)speed, (double)acc);
+			speed += (acc + 0.5 * jerk * t0) * t0;
 			acc += jerk * t0;
 		}
 
@@ -163,6 +164,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		{
 			const float t1 = SmallestNonNegativeQuadraticSolution(0.5 * peakAcceleration, speed, -distances[1]);
 			phase1Clocks = floatToU32(t1);
+			debugPrintf("Phase 1: %.3e %lu %.3e %.3e (%.3e)\n", (double)distances[1], phase1Clocks, (double)speed, (double)peakAcceleration, (double)acc);
 			speed += t1 * peakAcceleration;
 			acc = peakAcceleration;
 		}
@@ -175,6 +177,8 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		{
 			const float t2 = SmallestNonNegativeCubicSolution(-jerk, 3 * acc, 6 * speed, -6 * distances[2]);
 			phase2Clocks = floatToU32(t2);
+			debugPrintf("Phase 2: %.3e %lu %.3e %.3e\n", (double)distances[2], phase2Clocks, (double)speed, (double)acc);
+			speed += (acc - 0.5 * jerk * t2) * t2;
 			acc -= jerk * t2;
 		}
 
@@ -186,6 +190,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		{
 			const float t3 = distances[3]/speed;
 			steadyClocks = floatToU32(t3);
+			debugPrintf("Phase 3: %.3e %lu %.3e %.3e (%.3e)\n", (double)distances[3], steadyClocks, (double)speed, (double)0.0, (double)acc);
 			acc = 0.0;
 		}
 
@@ -197,6 +202,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		{
 			const float t4 = SmallestNonNegativeCubicSolution(-jerk, 3 * acc, 6 * speed, -6 * distances[4]);
 			phase4Clocks = floatToU32(t4);
+			debugPrintf("Phase 4: %.3e %lu %.3e %.3e\n", (double)distances[4], phase4Clocks, (double)speed, (double)acc);
 			speed += (acc - 0.5 * jerk * t4) * t4;
 			acc -= jerk * t4;
 		}
@@ -209,6 +215,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		{
 			const float t5 = SmallestNonNegativeQuadraticSolution(0.5 * peakDeceleration, speed, -distances[5]);
 			phase5Clocks = floatToU32(t5);
+			debugPrintf("Phase 5: %.3e %lu %.3e %.3e (%.3e)\n", (double)distances[5], phase5Clocks, (double)speed, (double)peakDeceleration, (double)acc);
 			speed += peakDeceleration * t5;
 			acc = peakDeceleration;
 		}
@@ -219,11 +226,33 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		}
 		else
 		{
-			const float t6 = SmallestNonNegativeCubicSolution(jerk, 3 * acc, 6 * speed, -6 * distances[6]);
+			// If we are ending at zero speed then we only just achieve the distance; and due to rounding error the cubic solution may fail.
+			float t6 = SmallestNonNegativeCubicSolution(jerk, 3 * acc, 6 * speed, -6 * distances[6]);
+			if (std::isnan(t6))
+			{
+				t6 = SmallestNonNegativeQuadraticSolution(0.5 * jerk, acc, speed);
+				if (std::isnan(t6))
+				{
+					debugPrintf("Failed at %d\n", __LINE__);
+					//TODO
+				}
+				else
+				{
+					const float actualDistance = (speed + 0.5 * acc * t6) * t6;
+					if (fabsf(distances[6] - actualDistance) > fabsf(distances[6]) * 0.0001)
+					{
+						debugPrintf("Failed at %d\n", __LINE__);
+						//TODO
+					}
+				}
+			}
 			phase6Clocks = floatToU32(t6);
+			debugPrintf("Phase 6: %.3e %lu %.3e %.3e\n", (double)distances[6], phase6Clocks, (double)speed, (double)acc);
 			speed += (acc + 0.5 * jerk * t6) * t6;
 			acc += jerk * t6;
 		}
+
+		debugPrintf("final speed/acc: %.3e %.3e\n", (double)speed, (double)acc);
 
 		if (dda.next->IsProvisional())
 		{
