@@ -2281,7 +2281,7 @@ OutputBuffer *_ecv_null RepRap::GetFileFragment(c_string filename, FilePosition 
 
 						// Copy the data
 						response->cat(p, charsWrittenFromThisLine);
-						response->cat("\n");
+						response->cat("\\n");				// the two characters "\n" represent newline in the JSON
 						charsWrittenThisCall += charsWrittenFromThisLine;
 					}
 					else
