@@ -1333,44 +1333,52 @@ struct MultipleMoveParameters
 // 	s =  (u * (2 * ap - a0))/j
 //	   + (a1^3 - a0^2 * ap + OneThird * a0^3)/j^2
 //
-static bool CalculateMultipleMoveProfile(float startSpeed, float endSpeed, float startAcceleration, float maxAcceleration, float jerk, MultipleMoveParameters& rslt) noexcept
+static bool CalculateMultipleMoveProfile(float startSpeed, float peakSpeed, float startAcceleration, float maxAcceleration, float jerk, MultipleMoveParameters& rslt) noexcept
 pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0; startAcceleration <= maxAcceleration)
 {
-	// First, determine whether the maximum acceleration is limiting
-	if ((endSpeed - startSpeed) * jerk > fsquare(maxAcceleration) - 0.5 * fsquare(startAcceleration))
+	if (peakSpeed > startSpeed)
 	{
-		// We need a constant acceleration phase
-		rslt.peakAcceleration = maxAcceleration;
-		rslt.t0 = (maxAcceleration - startAcceleration)/jerk;
-		rslt.t1 = ((endSpeed - startSpeed) * jerk - fsquare(maxAcceleration) + 0.5 * fsquare(startAcceleration))/(maxAcceleration * jerk);
-		rslt.t2 = rslt.peakAcceleration/jerk;
-		rslt.s0 = (maxAcceleration - startAcceleration) * (startSpeed/jerk + (fsquare(maxAcceleration - startAcceleration) + 3 * startAcceleration)/(6 * fsquare(jerk)));
-		rslt.s1 = rslt.t1 * (startSpeed + (maxAcceleration - startAcceleration) * 0.5 * (maxAcceleration + startAcceleration)/jerk + 0.5 * maxAcceleration);
-		rslt.s2 = maxAcceleration * ((startSpeed + maxAcceleration * rslt.t1)/jerk + (5 * fsquare(maxAcceleration) - 3 * fsquare(startAcceleration))/(6 * fsquare(jerk)));
-
-		rslt.totalDistance = rslt.s0 + rslt.s1 + rslt.s2;
-		return true;
+		// We need an acceleration phase. First, determine whether the maximum acceleration is limiting.
+		if ((peakSpeed - startSpeed) * jerk > fsquare(maxAcceleration) - 0.5 * fsquare(startAcceleration))
+		{
+			// Maximum acceleration is limiting, so we need a constant acceleration phase
+			rslt.peakAcceleration = maxAcceleration;
+			rslt.t0 = (maxAcceleration - startAcceleration)/jerk;
+			rslt.t1 = ((peakSpeed - startSpeed) * jerk - fsquare(maxAcceleration) + 0.5 * fsquare(startAcceleration))/(maxAcceleration * jerk);
+			rslt.t2 = rslt.peakAcceleration/jerk;
+			rslt.s0 = (maxAcceleration - startAcceleration) * (startSpeed/jerk + (fsquare(maxAcceleration - startAcceleration) + 3 * startAcceleration)/(6 * fsquare(jerk)));
+			rslt.s1 = rslt.t1 * (startSpeed + (maxAcceleration - startAcceleration) * 0.5 * (maxAcceleration + startAcceleration)/jerk + 0.5 * maxAcceleration);
+			rslt.s2 = maxAcceleration * ((startSpeed + maxAcceleration * rslt.t1)/jerk + (5 * fsquare(maxAcceleration) - 3 * fsquare(startAcceleration))/(6 * fsquare(jerk)));
+			rslt.totalDistance = rslt.s0 + rslt.s1 + rslt.s2;
+		}
+		else
+		{
+			// We don't need a constant acceleration phase
+			rslt.peakAcceleration = fastSqrtf((peakSpeed - startSpeed) * jerk + 0.5 * fsquare(startAcceleration));
+			if (rslt.peakAcceleration >= startAcceleration)
+			{
+				rslt.t0 = (rslt.peakAcceleration - startAcceleration)/jerk;
+				rslt.t1 = 0.0;
+				rslt.t2 = rslt.peakAcceleration/jerk;
+				rslt.s0 = (rslt.peakAcceleration - startAcceleration) * (startSpeed/jerk + (fsquare(rslt.peakAcceleration - startAcceleration) + 3 * startAcceleration)/(6 * fsquare(jerk)));
+				rslt.s1 = 0.0;
+				rslt.s2 = rslt.peakAcceleration * (startSpeed/jerk + (5 * fsquare(rslt.peakAcceleration) - 3 * fsquare(startAcceleration))/(6 * fsquare(jerk)));
+				rslt.totalDistance = rslt.s0 + rslt.s2;
+			}
+			else
+			{
+				debugPrintf("CalcMMP failed, sa=%.3e pa=%.3e ss=%.3e ps=%.3e\n", (double)startAcceleration, (double)rslt.peakAcceleration, (double)startSpeed, (double)peakSpeed);
+				return false;
+			}
+		}
 	}
 	else
 	{
-		// We don't need a constant acceleration phase
-		rslt.peakAcceleration = fastSqrtf((endSpeed - startSpeed) * jerk + 0.5 * fsquare(startAcceleration));
-		if (rslt.peakAcceleration >= startAcceleration)
-		{
-			rslt.t0 = (rslt.peakAcceleration - startAcceleration)/jerk;
-			rslt.t1 = 0.0;
-			rslt.t2 = rslt.peakAcceleration/jerk;
-			rslt.s0 = (rslt.peakAcceleration - startAcceleration) * (startSpeed/jerk + (fsquare(rslt.peakAcceleration - startAcceleration) + 3 * startAcceleration)/(6 * fsquare(jerk)));
-			rslt.s1 = 0.0;
-			rslt.s2 = rslt.peakAcceleration * (startSpeed/jerk + (5 * fsquare(rslt.peakAcceleration) - 3 * fsquare(startAcceleration))/(6 * fsquare(jerk)));
-
-			rslt.totalDistance = rslt.s0 + rslt.s2;
-			return true;
-		}
+		// We don't need an acceleration phase
+		rslt.t0 = rslt.t1 = rslt.t2 = 0.0;
+		rslt.s0 = rslt.s1 = rslt.s2 = rslt.totalDistance = 0.0;
 	}
-
-	rslt.totalDistance = 0.0;				// to avoid gcc warning about uninitialised variables
-	return false;
+	return true;
 }
 
 // Given a movement profile that is viable, distribute it over the moves
