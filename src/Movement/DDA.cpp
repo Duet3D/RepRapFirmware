@@ -1507,7 +1507,7 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 			{
 				if (distanceLeftDecelerating > s4Left)
 				{
-					endMove->profile.distances[2] = s4Left;
+					endMove->profile.distances[4] = s4Left;
 					break;
 				}
 
@@ -1537,7 +1537,9 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 		else
 		{
 			startMove->profile.distances[3] = startMove->totalDistance - (startMove->profile.distances[0] + startMove->profile.distances[1] + startMove->profile.distances[2]);
+			startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
 			endMove->profile.distances[3] = endMove->totalDistance - (endMove->profile.distances[4] + endMove->profile.distances[5] + endMove->profile.distances[6]);
+			endMove->profile.distances[0] = endMove->profile.distances[1] = endMove->profile.distances[2] = 0.0;
 			while (startMove->next != endMove)
 			{
 				startMove = startMove->next;
