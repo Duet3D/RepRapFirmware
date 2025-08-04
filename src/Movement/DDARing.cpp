@@ -62,12 +62,12 @@ constexpr uint8_t DDARing::objectModelTableDescriptor[] = { 1, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(DDARing)
 
-DDARing::DDARing() noexcept : gracePeriod(DefaultGracePeriod), scheduledMoves(0), completedMoves(0)
+DDARing::DDARing() noexcept : gracePeriod(DefaultGracePeriod)
 {
 }
 
 // This can be called in the constructor for class Move
-void DDARing::Init1(unsigned int numDdas) noexcept
+void DDARing::Init(unsigned int numDdas) noexcept
 {
 	numDdasInRing = numDdas;
 
@@ -82,18 +82,7 @@ void DDARing::Init1(unsigned int numDdas) noexcept
 	}
 	addPointer->SetNext(dda);
 	dda->SetPrevious(addPointer);
-
 	getPointer = addPointer;
-	lastFeedForwardTool = nullptr;
-	lastAverageExtrusionSpeed = 0.0;
-}
-
-// This must be called from Move::Init, not from the Move constructor, because it indirectly refers to the GCodes module which must therefore be initialised first
-void DDARing::Init2() noexcept
-{
-	numLookaheadUnderruns = numPrepareUnderruns = numNoMoveUnderruns = numLookaheadErrors = 0;
-	waitingForRingToEmpty = false;
-	simulationTime = 0.0;
 }
 
 void DDARing::Exit() noexcept
@@ -345,7 +334,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 {
 	// If the already-prepared moves will execute in less than the minimum time, prepare another move.
 	while (	  firstUnpreparedMove->IsProvisional()
-		   && moveTimeLeft < prepareAdvanceTime						// prepare moves one tenth of a second ahead of when they will be needed
+		   && moveTimeLeft < prepareAdvanceTime						// prepare moves ahead of when they will be needed
 		   && alreadyPrepared * 2 < numDdasInRing					// but don't prepare more than half the ring, to handle accelerate/decelerate moves in small segments
 #if SUPPORT_CAN_EXPANSION
 		   && CanMotion::CanPrepareMove()
@@ -353,7 +342,14 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 		  )
 	{
 #if SUPPORT_S_CURVE
-		if (firstUnpreparedMove->IsSCurveMove() && !firstUnpreparedMove->IsFullyPlanned())
+		// If the move to prepare is an S-curve move than it may not have been planned yet.
+		// If it has been planned then if any moves have been added to the ring we should re-plan it, unless it is flagged as fully planned.
+		if (   firstUnpreparedMove->GetState() == DDA::created
+			|| (   firstUnpreparedMove->IsSCurveMove()
+				&& HaveAddedMove()
+				&& !firstUnpreparedMove->IsFullyPlanned()
+			   )
+		   )
 		{
 			DDA::PlanMoves(firstUnpreparedMove, false);
 		}
@@ -396,7 +392,7 @@ float DDARing::PushBabyStepping(size_t axis, float amount) noexcept
 	return ret;
 }
 
-// Tell the DDA ring that the caller is waiting for it to empty. Returns true if it is already empty.
+// Tell the DDA ring that the caller is waiting for it to empty. Returns true if it is already empty. This is called from the Main task.
 bool DDARing::SetWaitingToEmpty() noexcept
 {
 	waitingForRingToEmpty = true;					// set this first to avoid a possible race condition

@@ -19,8 +19,7 @@ class DDARing final INHERIT_OBJECT_MODEL
 public:
 	DDARing() noexcept;
 
-	void Init1(unsigned int numDdas) noexcept;
-	void Init2() noexcept;
+	void Init(unsigned int numDdas) noexcept;
 	void Exit() noexcept;
 
 	bool CanAddMove() const noexcept;
@@ -82,30 +81,51 @@ protected:
 
 private:
 	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept;
+#if SUPPORT_S_CURVE
+	bool HaveAddedMove() noexcept;
+#endif
 
 	DDA* addPointer;															// Pointer to the next DDA that we can use to add a new move, if this DDA is free
 	DDA* volatile getPointer;													// Pointer to the oldest committed or provisional move, if not equal to addPointer
 
 	unsigned int numDdasInRing;													// The number of DDAs that this ring contains
-	uint32_t gracePeriod;														// The minimum idle time in milliseconds, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
+	uint32_t gracePeriod = DefaultGracePeriod;									// The minimum idle time in milliseconds, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
-	const Tool *_ecv_null lastFeedForwardTool;									// the tool we last applied heater feedforward to
-	float lastAverageExtrusionSpeed;											// the extrusion speed we last set heater feedforward for
+	const Tool *_ecv_null lastFeedForwardTool = nullptr;						// the tool we last applied heater feedforward to
+	float lastAverageExtrusionSpeed = 0.0;										// the extrusion speed we last set heater feedforward for
 
-	uint32_t scheduledMoves;													// Number of moves scheduled in this ring
-	uint32_t completedMoves;													// Number of moves completed in this ring
+	uint32_t scheduledMoves = 0;												// Number of moves scheduled in this ring
+	uint32_t completedMoves = 0;												// Number of moves completed in this ring
+#if SUPPORT_S_CURVE
+	uint32_t prevScheduledMoves = 0;											// Number of moves in the ring last time we called CheckAndClearMoveAdded
+#endif
 
-	unsigned int numLookaheadUnderruns;											// How many times we have run out of moves to adjust during lookahead
-	unsigned int numPrepareUnderruns;											// How many times we wanted a new move but there were only un-prepared moves in the queue
-	unsigned int numNoMoveUnderruns;											// How many times we wanted a new move but there were none
-	unsigned int numLookaheadErrors;											// How many times our lookahead algorithm failed
+	unsigned int numLookaheadUnderruns = 0;										// How many times we have run out of moves to adjust during lookahead
+	unsigned int numPrepareUnderruns = 0;										// How many times we wanted a new move but there were only un-prepared moves in the queue
+	unsigned int numNoMoveUnderruns = 0;										// How many times we wanted a new move but there were none
+	unsigned int numLookaheadErrors = 0;										// How many times our lookahead algorithm failed
 
-	float simulationTime;														// Print time since we started simulating
+	float simulationTime = 0.0;													// Print time since we started simulating
 
 	float startCoordinates[MaxAxes];											// the axis coordinates to start the next move from
 
-	volatile bool waitingForRingToEmpty;										// True if Move has signalled that we are waiting for this ring to empty
+	volatile bool waitingForRingToEmpty = false;								// True if Move has signalled that we are waiting for this ring to empty
 };
+
+#if SUPPORT_S_CURVE
+
+// Test whether a move has been added since we last called this
+inline bool DDARing::HaveAddedMove() noexcept
+{
+	if (prevScheduledMoves == scheduledMoves)
+	{
+		return false;
+	}
+	prevScheduledMoves = scheduledMoves;
+	return true;
+}
+
+#endif
 
 #if 0	//TODO save this code for now to remind us how to start the laser, remove it when we have sorted that out
 // Start the next move. Return true if laser or IO bits need to be active

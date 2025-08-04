@@ -371,7 +371,7 @@ Move::Move() noexcept
 	kinematics = Kinematics::Create(nullptr, KinematicsType::cartesian);	// default to Cartesian
 	for (DDARing& ring : rings)
 	{
-		ring.Init1(InitialDdaRingLength);
+		ring.Init(InitialDdaRingLength);
 	}
 }
 
@@ -568,12 +568,6 @@ void Move::Init() noexcept
 	logOnStallDrivers.Clear();
 	eventOnStallDrivers.Clear();
 #endif
-
-	// DDA rings
-	for (DDARing& ring : rings)
-	{
-		ring.Init2();
-	}
 
 #if SUPPORT_ASYNC_MOVES
 	auxMoveAvailable = false;
@@ -849,7 +843,7 @@ void Move::MoveAvailable() noexcept
 	}
 }
 
-// Tell the lookahead ring we are waiting for it to empty and return true if it is
+// Tell the lookahead ring we are waiting for it to empty and return true if it is. Called from the Main task.
 bool Move::WaitingForAllMovesFinished(MovementSystemNumber msNumber
 #if SUPPORT_ASYNC_MOVES
 										, LogicalDrivesBitmap logicalDrivesOwned
