@@ -1929,13 +1929,13 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			{
 				uint32_t tim1 = 0;
 				size_t numRoots;
-				float rslt[3] = { std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN() };
+				double rslt[3] = { std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN() };
 				for (unsigned int i = 0; i < iterations; ++i)
 				{
 					IrqDisable();
 					asm volatile("":::"memory");
 					uint32_t now1 = SysTick->VAL;
-					numRoots = SolveCubic(1.0, -6.0, 11.0, -6.0, rslt);
+					numRoots = SolveCubic((double)1.0, (double)-6.0, (double)11.0, (double)-6.0, rslt);
 					uint32_t now2 = SysTick->VAL;
 					asm volatile("":::"memory");
 					IrqEnable();

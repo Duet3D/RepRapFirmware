@@ -118,7 +118,7 @@ void DDA::LogProbePosition() noexcept
 #endif
 
 // Convert a float to a uint32_t, with negative values converted to zero
-inline uint32_t floatToU32(float f) noexcept
+inline uint32_t doubleToU32(double f) noexcept
 {
 	return (std::signbit(f)) ? 0 : (uint32_t)f;
 }
@@ -141,19 +141,20 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		memcpyf(distances, dda.profile.distances, ARRAY_SIZE(distances));		//TODO why not use the distances stored in he DDA instead of copying them?
 
 		// Solve for the period of each phase
-		float speed = dda.profile.startSpeed;
-		float acc = dda.profile.startAcceleration;
+		double speed = dda.profile.startSpeed;
+		double acc = dda.profile.startAcceleration;
+		const double djerk = (double)jerk;
 		if (distances[0] == 0.0)
 		{
 			phase0Clocks = 0;
 		}
 		else
 		{
-			const float t0 = SmallestNonNegativeCubicSolution(jerk, 3 * acc, 6 * speed, -6 * distances[0]);
-			phase0Clocks = floatToU32(t0);
-			debugPrintf("Phase 0: %.3e %lu %.3e %.3e\n", (double)distances[0], phase0Clocks, (double)speed, (double)acc);
-			speed += (acc + 0.5 * jerk * t0) * t0;
-			acc += jerk * t0;
+			const double t0 = SmallestNonNegativeCubicSolution(djerk, 3 * acc, 6 * speed, (double)(-6 * distances[0]));
+			phase0Clocks = doubleToU32(t0);
+			debugPrintf("Phase 0: %.3e %lu %.3e %.3e\n", (double)distances[0], phase0Clocks, speed, acc);
+			speed += (acc + (double)0.5 * djerk * t0) * t0;
+			acc += djerk * t0;
 		}
 
 		if (distances[1] == 0.0)
@@ -162,10 +163,10 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		}
 		else
 		{
-			const float t1 = SmallestNonNegativeQuadraticSolution(0.5 * peakAcceleration, speed, -distances[1]);
-			phase1Clocks = floatToU32(t1);
-			debugPrintf("Phase 1: %.3e %lu %.3e %.3e (%.3e)\n", (double)distances[1], phase1Clocks, (double)speed, (double)peakAcceleration, (double)acc);
-			speed += t1 * peakAcceleration;
+			const double t1 = SmallestNonNegativeQuadraticSolution((double)(0.5 * peakAcceleration), speed, (double)-distances[1]);
+			phase1Clocks = doubleToU32(t1);
+			debugPrintf("Phase 1: %.3e %lu %.3e %.3e (%.3e)\n", (double)distances[1], phase1Clocks, speed, (double)peakAcceleration, acc);
+			speed += t1 * (double)peakAcceleration;
 			acc = peakAcceleration;
 		}
 
@@ -175,11 +176,11 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		}
 		else
 		{
-			const float t2 = SmallestNonNegativeCubicSolution(-jerk, 3 * acc, 6 * speed, -6 * distances[2]);
-			phase2Clocks = floatToU32(t2);
-			debugPrintf("Phase 2: %.3e %lu %.3e %.3e\n", (double)distances[2], phase2Clocks, (double)speed, (double)acc);
-			speed += (acc - 0.5 * jerk * t2) * t2;
-			acc -= jerk * t2;
+			const double t2 = SmallestNonNegativeCubicSolution(-djerk, 3 * acc, 6 * speed, (double)(-6 * distances[2]));
+			phase2Clocks = doubleToU32(t2);
+			debugPrintf("Phase 2: %.3e %lu %.3e %.3e\n", (double)distances[2], phase2Clocks, speed, acc);
+			speed += (acc - (double)0.5 * djerk * t2) * t2;
+			acc -= djerk * t2;
 		}
 
 		if (distances[3] == 0.0)
@@ -188,9 +189,9 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		}
 		else
 		{
-			const float t3 = distances[3]/speed;
-			steadyClocks = floatToU32(t3);
-			debugPrintf("Phase 3: %.3e %lu %.3e %.3e (%.3e)\n", (double)distances[3], steadyClocks, (double)speed, (double)0.0, (double)acc);
+			const double t3 = (double)distances[3]/speed;
+			steadyClocks = doubleToU32(t3);
+			debugPrintf("Phase 3: %.3e %lu %.3e %.3e (%.3e)\n", (double)distances[3], steadyClocks, speed, (double)0.0, acc);
 			acc = 0.0;
 		}
 
@@ -200,11 +201,11 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		}
 		else
 		{
-			const float t4 = SmallestNonNegativeCubicSolution(-jerk, 3 * acc, 6 * speed, -6 * distances[4]);
-			phase4Clocks = floatToU32(t4);
-			debugPrintf("Phase 4: %.3e %lu %.3e %.3e\n", (double)distances[4], phase4Clocks, (double)speed, (double)acc);
-			speed += (acc - 0.5 * jerk * t4) * t4;
-			acc -= jerk * t4;
+			const double t4 = SmallestNonNegativeCubicSolution(-djerk, 3 * acc, 6 * speed, (double)(-6 * distances[4]));
+			phase4Clocks = doubleToU32(t4);
+			debugPrintf("Phase 4: %.3e %lu %.3e %.3e\n", (double)distances[4], phase4Clocks, speed, acc);
+			speed += (acc - (double)0.5 * djerk * t4) * t4;
+			acc -= djerk * t4;
 		}
 
 		if (distances[5] == 0.0)
@@ -213,10 +214,10 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		}
 		else
 		{
-			const float t5 = SmallestNonNegativeQuadraticSolution(0.5 * peakDeceleration, speed, -distances[5]);
-			phase5Clocks = floatToU32(t5);
-			debugPrintf("Phase 5: %.3e %lu %.3e %.3e (%.3e)\n", (double)distances[5], phase5Clocks, (double)speed, (double)peakDeceleration, (double)acc);
-			speed += peakDeceleration * t5;
+			const double t5 = SmallestNonNegativeQuadraticSolution((double)(0.5 * peakDeceleration), speed, (double)-distances[5]);
+			phase5Clocks = doubleToU32(t5);
+			debugPrintf("Phase 5: %.3e %lu %.3e %.3e (%.3e)\n", (double)distances[5], phase5Clocks, speed, (double)peakDeceleration, acc);
+			speed += (double)peakDeceleration * t5;
 			acc = peakDeceleration;
 		}
 
@@ -227,10 +228,10 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 		else
 		{
 			// If we are ending at zero speed then we only just achieve the distance; and due to rounding error the cubic solution may fail.
-			float t6 = SmallestNonNegativeCubicSolution(jerk, 3 * acc, 6 * speed, -6 * distances[6]);
+			double t6 = SmallestNonNegativeCubicSolution(djerk, 3 * acc, 6 * speed, (double)(-6 * distances[6]));
 			if (std::isnan(t6))
 			{
-				t6 = SmallestNonNegativeQuadraticSolution(0.5 * jerk, acc, speed);
+				t6 = SmallestNonNegativeQuadraticSolution((double)0.5 * djerk, acc, speed);
 				if (std::isnan(t6))
 				{
 					debugPrintf("Failed at %d\n", __LINE__);
@@ -238,7 +239,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 				}
 				else
 				{
-					const float actualDistance = (speed + 0.5 * acc * t6) * t6;
+					const float actualDistance = (speed + (double)0.5 * acc * t6) * t6;
 					if (fabsf(distances[6] - actualDistance) > fabsf(distances[6]) * 0.0001)
 					{
 						debugPrintf("Failed at %d\n", __LINE__);
@@ -246,18 +247,18 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 					}
 				}
 			}
-			phase6Clocks = floatToU32(t6);
+			phase6Clocks = doubleToU32(t6);
 			debugPrintf("Phase 6: %.3e %lu %.3e %.3e\n", (double)distances[6], phase6Clocks, (double)speed, (double)acc);
-			speed += (acc + 0.5 * jerk * t6) * t6;
-			acc += jerk * t6;
+			speed += (acc + (double)0.5 * djerk * t6) * t6;
+			acc += djerk * t6;
 		}
 
-		debugPrintf("final speed/acc: %.3e %.3e\n", (double)speed, (double)acc);
+		debugPrintf("final speed/acc: %.3e %.3e\n", speed, acc);
 
 		if (dda.next->IsProvisional())
 		{
-			dda.next->profile.startSpeed = speed;
-			dda.next->profile.startAcceleration = acc;
+			dda.next->profile.startSpeed = (float)speed;
+			dda.next->profile.startAcceleration = (float)acc;
 		}
 
 		if (steadyClocks == 0.0)
@@ -1334,7 +1335,7 @@ struct MultipleMoveParameters
 //	   + (a1^3 - a0^2 * ap + OneThird * a0^3)/j^2
 //
 static bool CalculateMultipleMoveProfile(float startSpeed, float peakSpeed, float startAcceleration, float maxAcceleration, float jerk, MultipleMoveParameters& rslt) noexcept
-pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0; startAcceleration <= maxAcceleration)
+pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0; startAcceleration <= maxAcceleration)
 {
 	if (peakSpeed > startSpeed)
 	{
@@ -1346,7 +1347,7 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 			rslt.t0 = (maxAcceleration - startAcceleration)/jerk;
 			rslt.t1 = ((peakSpeed - startSpeed) * jerk - fsquare(maxAcceleration) + 0.5 * fsquare(startAcceleration))/(maxAcceleration * jerk);
 			rslt.t2 = rslt.peakAcceleration/jerk;
-			rslt.s0 = (maxAcceleration - startAcceleration) * (startSpeed/jerk + (fsquare(maxAcceleration - startAcceleration) + 3 * startAcceleration)/(6 * fsquare(jerk)));
+			rslt.s0 = (maxAcceleration - startAcceleration) * (startSpeed/jerk + (maxAcceleration - startAcceleration) * (2 * startAcceleration + maxAcceleration)/(6 * fsquare(jerk)));
 			rslt.s1 = rslt.t1 * (startSpeed + (maxAcceleration - startAcceleration) * 0.5 * (maxAcceleration + startAcceleration)/jerk + 0.5 * maxAcceleration);
 			rslt.s2 = maxAcceleration * ((startSpeed + maxAcceleration * rslt.t1)/jerk + (5 * fsquare(maxAcceleration) - 3 * fsquare(startAcceleration))/(6 * fsquare(jerk)));
 			rslt.totalDistance = rslt.s0 + rslt.s1 + rslt.s2;
@@ -1360,7 +1361,7 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 				rslt.t0 = (rslt.peakAcceleration - startAcceleration)/jerk;
 				rslt.t1 = 0.0;
 				rslt.t2 = rslt.peakAcceleration/jerk;
-				rslt.s0 = (rslt.peakAcceleration - startAcceleration) * (startSpeed/jerk + (fsquare(rslt.peakAcceleration - startAcceleration) + 3 * startAcceleration)/(6 * fsquare(jerk)));
+				rslt.s0 = (rslt.peakAcceleration - startAcceleration) * (startSpeed/jerk + (rslt.peakAcceleration - startAcceleration) * (2 * startAcceleration + rslt.peakAcceleration)/(6 * fsquare(jerk)));
 				rslt.s1 = 0.0;
 				rslt.s2 = rslt.peakAcceleration * (startSpeed/jerk + (5 * fsquare(rslt.peakAcceleration) - 3 * fsquare(startAcceleration))/(6 * fsquare(jerk)));
 				rslt.totalDistance = rslt.s0 + rslt.s2;
@@ -1370,6 +1371,11 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 				debugPrintf("CalcMMP failed, sa=%.3e pa=%.3e ss=%.3e ps=%.3e\n", (double)startAcceleration, (double)rslt.peakAcceleration, (double)startSpeed, (double)peakSpeed);
 				return false;
 			}
+		}
+		if (rslt.s0 < 0 || rslt.s1 < 0 || rslt.s2 < 0)
+		{
+			debugPrintf("s0,1,2 %.4e %.4e %.4e, ss %.4e ps =%.4e sa %.4e ma %.4e pa %.4e j %.4e\n",
+				(double)rslt.s0, (double)rslt.s1, (double)rslt.s2, (double)startSpeed, (double)peakSpeed, (double)startAcceleration, (double)maxAcceleration, (double)rslt.peakAcceleration, (double)jerk);
 		}
 	}
 	else
@@ -1393,7 +1399,7 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 		startMove->profile.distances[4] = decelParams.s2;
 		startMove->profile.distances[5] = decelParams.s1;
 		startMove->profile.distances[6] = decelParams.s0;
-		startMove->profile.distances[3] = startMove->totalDistance - accelParams.totalDistance - decelParams.totalDistance;
+		startMove->profile.distances[3] = startMove->totalDistance - (accelParams.totalDistance + decelParams.totalDistance);
 	}
 	else
 	{
@@ -1625,9 +1631,9 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 			if (distanceNeeded <= distanceToPlan)
 			{
 				// This plan is viable
-				if (numIterations == 0 || peakSpeedToTry >= unviablePeakSpeed * 0.95)
+				if (numIterations == 0 || distanceNeeded >= 0.98 * distanceToPlan)
 				{
-					debugPrintf("Solved in %u iterations, match = %.2f\n", numIterations, (double)((numIterations == 0) ? 1.0 : peakSpeedToTry/unviablePeakSpeed));
+					debugPrintf("Solved in %u iterations, match = %.2f\n", numIterations, (double)(distanceNeeded/distanceToPlan));
 					DistributePlanOverMoves(firstUnpreparedMove, lastMoveToPlan, distanceToPlan, accelParams, decelParams);
 					return;
 				}
@@ -1664,6 +1670,13 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 							errorLine = __LINE__;
 							break;
 						}
+
+						if (viableDistanceNeeded >= 0.98 * distanceToPlan)		// this test can save a lot of iterations when we re-plan something already planned
+						{
+							debugPrintf("Solved in 0.5 iterations, match = %.2f\n", (double)(viableDistanceNeeded/distanceToPlan));
+							DistributePlanOverMoves(firstUnpreparedMove, lastMoveToPlan, distanceToPlan, accelParams, decelParams);
+							return;
+						}
 					}
 					else
 					{
@@ -1676,9 +1689,11 @@ pre(endSpeed > startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 0;
 				unviablePeakSpeed = peakSpeedToTry;
 			}
 			peakSpeedToTry = 0.5 * (viablePeakSpeed + unviablePeakSpeed);
-			debugPrintf("Distances: viable %.3g unviable %.3g available %.3g, speeds: viable %.3e unviable %.3e trying %.3e\n",
+			debugPrintf("Distances: viable %.6g unviable %.6g available %.6g, speeds: viable %.6e unviable %.6e trying %.6e\n",
 							(double)viableDistanceNeeded, (double)unviableDistanceNeeded, (double)distanceToPlan, (double)viablePeakSpeed, (double)unviablePeakSpeed, (double)peakSpeedToTry);
+			delay(1);
 			++numIterations;
+			if (numIterations > 50) { errorLine = __LINE__; break; }
 		}
 
 		// Here if there is no viable movement profile that satisfies the constraints
