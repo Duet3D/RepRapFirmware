@@ -1420,6 +1420,7 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 				startMove->profile.distances[0] = startMove->totalDistance;
 				startMove->profile.distances[1] = startMove->profile.distances[2] = startMove->profile.distances[3] = startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
 				s0Left -= startMove->totalDistance;
+				startMove->state = planned;
 				startMove->flags.fullyPlanned = true;
 				startMove = startMove->next;
 			}
@@ -1442,6 +1443,7 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 				startMove->profile.distances[1] = distanceLeftAccelerating;
 				startMove->profile.distances[2] = startMove->profile.distances[3] = startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
 				s1Left -= distanceLeftAccelerating;
+				startMove->state = planned;
 				startMove->flags.fullyPlanned = true;
 				startMove = startMove->next;
 				startMove->profile.distances[0] = 0.0;
@@ -1464,6 +1466,7 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 				startMove->profile.distances[2] = startMove->totalDistance;
 				startMove->profile.distances[3] = startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
 				s2Left -= startMove->totalDistance;
+				startMove->state = planned;
 				startMove = startMove->next;
 				startMove->profile.distances[0] = startMove->profile.distances[1] = 0.0;
 				distanceLeftAccelerating = startMove->totalDistance;
@@ -1487,6 +1490,7 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 				endMove->profile.distances[6] = endMove->totalDistance;
 				endMove->profile.distances[0] = endMove->profile.distances[1] = endMove->profile.distances[2] = endMove->profile.distances[3] = endMove->profile.distances[4] = endMove->profile.distances[5] = 0.0;
 				s6Left -= endMove->totalDistance;
+				endMove->state = planned;
 				endMove = endMove->prev;
 			}
 		}
@@ -1508,6 +1512,7 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 				endMove->profile.distances[5] = s5Left;
 				endMove->profile.distances[0] = endMove->profile.distances[1] = endMove->profile.distances[2] = endMove->profile.distances[3] = endMove->profile.distances[4] = 0.0;
 				s5Left -= endMove->totalDistance;
+				endMove->state = planned;
 				endMove = endMove->prev;
 				endMove->profile.distances[6] = 0.0;
 				distanceLeftDecelerating = endMove->totalDistance;
@@ -1535,6 +1540,7 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 				}
 				endMove->profile.distances[0] = endMove->profile.distances[1] = endMove->profile.distances[2] = endMove->profile.distances[3] = 0.0;
 				s4Left -= endMove->totalDistance;
+				endMove->state = planned;
 				endMove = endMove->prev;
 				endMove->profile.distances[5] = endMove->profile.distances[6] = 0.0;
 				distanceLeftDecelerating = endMove->totalDistance;
@@ -1547,18 +1553,22 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 			// Just add a steady speed segment in the middle to make up the distance.
 			startMove->profile.distances[3] = startMove->totalDistance
 						- (startMove->profile.distances[0] + startMove->profile.distances[1] + startMove->profile.distances[2] + startMove->profile.distances[4] + startMove->profile.distances[5] + startMove->profile.distances[6]);
+			startMove->state = planned;
 		}
 		else
 		{
 			startMove->profile.distances[3] = startMove->totalDistance - (startMove->profile.distances[0] + startMove->profile.distances[1] + startMove->profile.distances[2]);
 			startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
+			startMove->state = planned;
 			endMove->profile.distances[3] = endMove->totalDistance - (endMove->profile.distances[4] + endMove->profile.distances[5] + endMove->profile.distances[6]);
 			endMove->profile.distances[0] = endMove->profile.distances[1] = endMove->profile.distances[2] = 0.0;
+			endMove->state = planned;
 			while (startMove->next != endMove)
 			{
 				startMove = startMove->next;
 				startMove->profile.distances[3] = startMove->totalDistance;
 				startMove->profile.distances[0] = startMove->profile.distances[1] = startMove->profile.distances[2] = startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
+				startMove->state = planned;
 			}
 		}
 	}
@@ -1577,6 +1587,7 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 	float maxReqSpeed = firstUnpreparedMove->requestedSpeed;
 	float minJerk = firstUnpreparedMove->jerk;
 	float minMaxAcc = firstUnpreparedMove->maxAcceleration;
+	unsigned int numMoves = 1;
 	while ((nextMove = lastMoveToPlan->next)->GetState() != DDA::empty && nextMove->beforePrepare.maxPrevEndSpeed != 0.0)
 	{
 		distanceToPlan += nextMove->totalDistance;
@@ -1584,7 +1595,9 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 		if (nextMove->maxAcceleration < minMaxAcc) { minMaxAcc = nextMove->maxAcceleration; }
 		if (nextMove->requestedSpeed > maxReqSpeed) { maxReqSpeed = nextMove->requestedSpeed; }
 		lastMoveToPlan = nextMove;
+		++numMoves;
 	}
+	debugPrintf("Planning %u moves, dist %.3e maxSpeed %.4e maxAcc %.4e jerk %.4e\n", numMoves, (double)distanceToPlan, (double)maxReqSpeed, (double)minMaxAcc, (double)minJerk);
 	lastMoveToPlan->profile.endSpeed = lastMoveToPlan->profile.endAcceleration = 0.0;
 
 	// If the sequence comprises a single move and the start speed and acceleration are both zero (e.g. we are adding the first move), this is the simplest case
@@ -1667,6 +1680,7 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 						viableDistanceNeeded = accelParams.totalDistance + decelParams.totalDistance;
 						if (viableDistanceNeeded > distanceToPlan)
 						{
+							debugPrintf("accel %.4e decl %.4e viable %.4e available %.4e\n", (double)accelParams.totalDistance, (double)decelParams.totalDistance, (double)viableDistanceNeeded, (double)distanceToPlan);
 							errorLine = __LINE__;
 							break;
 						}

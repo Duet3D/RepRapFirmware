@@ -353,6 +353,10 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 		{
 			DDA::PlanMoves(firstUnpreparedMove, false);
 		}
+		else
+		{
+			debugPrintf("Skipping planning\n");
+		}
 #endif
 		firstUnpreparedMove->Prepare(*this, prepareAdvanceTime, simulationMode);
 		moveTimeLeft += firstUnpreparedMove->GetTimeLeft();
