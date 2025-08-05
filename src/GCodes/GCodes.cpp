@@ -1266,6 +1266,7 @@ bool GCodes::DoEmergencyPause() noexcept
 		{
 			PrintPausedReason reason = platform.IsPowerOk() ? PrintPausedReason::stall : PrintPausedReason::lowVoltage;
 			reprap.GetSbcInterface().SetEmergencyPauseReason(ms.GetPauseRestorePoint().filePos, reason);
+			reprap.GetSbcInterface().EventOccurred(true);
 		}
 #endif
 
@@ -1856,12 +1857,12 @@ void GCodes::Pop(GCodeBuffer& gb, bool withinSameFile) noexcept
 // Set up the feed rate of a move for the Move class
 // 'moveBuffer.moveType' and 'moveBuffer.isCoordinated' must be set up before calling this
 // 'isPrintingMove' is true if there is any axis movement
-void GCodes::LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException)
+void GCodes::LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool axesMoving) THROWS(GCodeException)
 {
 	// Deal with feed rate, also determine whether M220 and M221 speed and extrusion factors apply to this move
 	if (ms.isCoordinated || machineType == MachineType::fff)
 	{
-		ms.applyM220M221 = (ms.moveType == 0 && isPrintingMove && !gb.LatestMachineState().runningSystemMacro);
+		ms.applyM220M221 = (ms.moveType == 0 && axesMoving && !gb.LatestMachineState().runningSystemMacro);
 		ms.inverseTimeMode = gb.LatestMachineState().inverseTimeMode;
 		if (ms.inverseTimeMode)
 		{
@@ -1897,7 +1898,7 @@ void GCodes::LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPr
 // Set up the extrusion of a move for the Move class
 // 'moveBuffer.moveType', 'moveBuffer.isCoordinated', ms.moveType and ms.feedRate must be set up before calling this
 // 'isPrintingMove' is true if there is any axis movement
-void GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException)
+void GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool axesMoving) THROWS(GCodeException)
 {
 	// Zero every extruder drive as some drives may not be moved
 	for (size_t drive = numTotalAxes; drive < MaxAxesPlusExtruders; drive++)
@@ -1990,7 +1991,7 @@ void GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool isP
 #endif
 					}
 				}
-				if (!isPrintingMove && ms.usingStandardFeedrate)
+				if (!axesMoving && ms.usingStandardFeedrate)
 				{
 					// For E3D: If the total mix ratio is greater than 1.0 then we should scale the feed rate accordingly, e.g. for dual serial extruder drives
 					ms.feedRate *= totalMix;
@@ -3592,6 +3593,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 
 		FileGCode()->LatestMachineState().volumetricExtrusion = false;		// default to non-volumetric extrusion
 		FileGCode()->LatestMachineState().selectedPlane = 0;				// default G2 and G3 moves to XY plane
+		FileGCode()->LatestMachineState().inverseTimeMode = false;			// default to standard feedrate mode
 #if SUPPORT_ASYNC_MOVES
 		FileGCode()->ExecuteAll();											// execute commands for all movement systems initially
 #endif
