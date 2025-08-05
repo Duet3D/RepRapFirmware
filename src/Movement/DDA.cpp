@@ -123,7 +123,8 @@ inline uint32_t doubleToU32(double f) noexcept
 	return (std::signbit(f)) ? 0 : (uint32_t)f;
 }
 
-// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
+// Set up the parameters from the DDA
+// As a side effect it sets up clocksNeeded. If 3rd order motion control is used it also sets the start speed and acceleration in the following DDA.
 void PrepParams::SetFromDDA(const DDA& dda) noexcept
 {
 	totalDistance = dda.totalDistance;
@@ -321,6 +322,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 						 || dda.flags.scanningProbeMove
 #endif
 						) ;
+	dda.clocksNeeded = TotalClocks();
 }
 
 void PrepParams::DebugPrint() const noexcept
@@ -2152,7 +2154,6 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 	// Prepare for movement
 	PrepParams params;
 	params.SetFromDDA(*this);
-	clocksNeeded = params.TotalClocks();
 
 	// Decide when this move should start.
 	// Avoid setting the move start time in the past or with very little time before it starts, because this can lead to us trying to modify a segment that is already executing
