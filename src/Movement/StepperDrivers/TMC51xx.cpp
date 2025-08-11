@@ -107,7 +107,7 @@ static uint32_t DriversDirectSleepClocks = DefaultSpiSleepClocks;	// how long th
 constexpr uint32_t DriversSpiClockFrequency = 2000000;		// 2MHz SPI clock
 #endif
 
-constexpr uint32_t TransferTimeout = 3;						// any transfer should complete within 2 ticks @ 1ms/tick. Need to allow one more in case a tock is about to happen.
+constexpr uint32_t TransferTimeout = 3;						// any transfer should complete within 2 ticks @ 1ms/tick. Need to allow one more in case a tick is about to happen.
 
 // GCONF register (0x00, RW)
 constexpr uint8_t REGNUM_GCONF = 0x00;
@@ -738,7 +738,10 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 		return (configuredChopConfReg & CHOPCONF_HEND_MASK) >> CHOPCONF_HEND_SHIFT;
 
 	case SmartDriverRegister::tpwmthrs:
-		return writeRegisters[WriteTpwmthrs];
+		return writeRegisters[WriteTpwmthrs] & 0x000FFFFF;
+
+	case SmartDriverRegister::tcoolthrs:
+		return writeRegisters[WriteTcoolthrs] & 0x000FFFFF;
 
 	case SmartDriverRegister::thigh:
 		return writeRegisters[WriteThigh];
@@ -1477,7 +1480,7 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	// When in phase stepping or closed loop mode we send the coil currents if any have changes since last time we sent them.
 	// Send a "normal" read or write request after the coil currents have been set.
-	// We don't care about the response from setting the motor currents so that is written to altRcvData so as to not overwrite tmcRcvData
+	// We don't care about the response from setting the motor currents so that is written to tmcAltRcvData so as to not overwrite tmcRcvData
 	if (setCoilCurrents)								// if we just wrote the coil currents
 	{
 		setCoilCurrents = false;
@@ -1620,7 +1623,9 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			AtomicCriticalSectionLocker lock2;
 
 			fastDigitalWriteLow(GlobalTmc51xxCSPin);			// set CS low
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 			tmcTimer.CancelCallbackFromIsr();					// in case the timer is still running from a previous timed-out transfer
+#endif
 			TaskBase::ClearCurrentTaskNotifyCount(NotifyIndices::Tmc);
 			EnableEndOfTransferInterrupt();
 			ResetSpi();
