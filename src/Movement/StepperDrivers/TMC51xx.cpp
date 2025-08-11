@@ -95,7 +95,7 @@ constexpr float RecipFullScaleCurrent = Tmc5160SenseResistor/325.0;		// 1.0 divi
 // - too low and we won't detect stalls quickly enough
 // TODO use the DIAG outputs to detect stalls instead
 #if SUPPORT_PHASE_STEPPING
-constexpr uint32_t DriversSpiClockFrequency = 4000000;		// 4MHz SPI clock, this is the maximum rate the TMC5160/2160 support
+constexpr uint32_t DriversSpiClockFrequency = 4000000;		// 4MHz SPI clock, this is the maximum rate the TMC5160/2160 support using the internal clock
 constexpr uint32_t DefaultSpiSleepMicroseconds = 500;		// Sleep time used for tmcTask when not phase stepping
 constexpr uint32_t PhaseStepSpiSleepMicroseconds = 125;		// Sleep time used for tmcTask when phase stepping
 static uint32_t DriversDirectSleepMicroseconds = DefaultSpiSleepMicroseconds;	// how long the phase stepping task sleeps for in each cycle. Max SPI message frequency is ~16.7 kHz
@@ -1223,18 +1223,20 @@ void TmcDriverState::TransferFailed() noexcept
 }
 
 // State structures for all drivers
-static TmcDriverState driverStates[MaxSmartDrivers];
+static TmcDriverState driverStates[numTmc51xxDrivers];
 
 // TMC51xx management task
 static Task<TmcTaskStackWords> tmcTask;
 
 // Declare the DMA buffers with the __nocache attribute for the SAME70. Access to these must be aligned.
-static __nocache volatile uint8_t sendData[5 * MaxSmartDrivers]; // used to prepare regular read/write requests via SPI
-static __nocache volatile uint8_t rcvData[5 * MaxSmartDrivers];
+// We no longer declare them static, in order that the addresses get included in the linker map file.
+const size_t SpiDataSize = 5 * numTmc51xxDrivers;			// number of bytes in the SPI transfer to/from the TMC driver chain
+__nocache volatile uint8_t tmcSendData[SpiDataSize];		// used to prepare regular read/write requests via SPI
+__nocache volatile uint8_t tmcRcvData[SpiDataSize];
 
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-static __nocache volatile uint8_t phaseSendData[5 * MaxSmartDrivers]; // used to send specific phase data
-static __nocache volatile uint8_t altRcvData[5 * MaxSmartDrivers];
+__nocache volatile uint8_t tmcPhaseSendData[SpiDataSize];	// used to send specific phase data
+__nocache volatile uint8_t tmcAltRcvData[SpiDataSize];
 
 static uint32_t lastWakeupTime = 0;
 static StepTimer tmcTimer;
@@ -1318,7 +1320,7 @@ static void InitialiseDMA()
 						| XDMAC_CC_SAM_FIXED_AM
 						| XDMAC_CC_DAM_INCREMENTED_AM
 						| XDMAC_CC_PERID(TMC51xx_DmaRxPerid);
-		p_cfg.mbr_ubc = ARRAY_SIZE(rcvData);
+		p_cfg.mbr_ubc = SpiDataSize;
 		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(USART_TMC51xx->US_RHR));
 		xdmac_configure_transfer(XDMAC, DmacChanTmcRx, &p_cfg);
 	}
@@ -1337,7 +1339,7 @@ static void InitialiseDMA()
 						| XDMAC_CC_SAM_INCREMENTED_AM
 						| XDMAC_CC_DAM_FIXED_AM
 						| XDMAC_CC_PERID(TMC51xx_DmaTxPerid);
-		p_cfg.mbr_ubc = ARRAY_SIZE(sendData);
+		p_cfg.mbr_ubc = SpiDataSize;
 		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&(USART_TMC51xx->US_THR));
 		xdmac_configure_transfer(XDMAC, DmacChanTmcTx, &p_cfg);
 	}
@@ -1345,21 +1347,13 @@ static void InitialiseDMA()
 }
 
 // Set up the PDC or DMAC to send a register and receive the status, but don't enable it yet
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 static void SetupDMA(const volatile uint8_t *txData, const volatile uint8_t *rxData) noexcept
-#else
-static void SetupDMA() noexcept
-#endif
 {
 #if SAME70
 	// Receive
 	{
 		xdmac_channel_disable(XDMAC, DmacChanTmcRx);
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		uint32_t mbr_da = reinterpret_cast<uint32_t>(rxData);
-#else
-		uint32_t mbr_da = reinterpret_cast<uint32_t>(rcvData);
-#endif
 		xdmac_channel_get_interrupt_status(XDMAC, DmacChanTmcRx);
 		xdmac_channel_set_destination_addr(XDMAC, DmacChanTmcRx, mbr_da);
 	}
@@ -1367,11 +1361,7 @@ static void SetupDMA() noexcept
 	// Transmit
 	{
 		xdmac_channel_disable(XDMAC, DmacChanTmcTx);
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		uint32_t mbr_sa = reinterpret_cast<uint32_t>(txData);
-#else
-		uint32_t mbr_sa = reinterpret_cast<uint32_t>(sendData);
-#endif
 		xdmac_channel_get_interrupt_status(XDMAC, DmacChanTmcRx);
 		xdmac_channel_set_source_addr(XDMAC, DmacChanTmcTx, mbr_sa);
 	}
@@ -1379,28 +1369,18 @@ static void SetupDMA() noexcept
 #elif SAME5x || SAMC21
 	DmacManager::DisableChannel(DmacChanTmcRx);
 	DmacManager::DisableChannel(DmacChanTmcTx);
-# if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	DmacManager::SetSourceAddress(DmacChanTmcTx, (void*)txData);
-	DmacManager::SetDataLength(DmacChanTmcTx, 5 * MaxSmartDrivers);
+	DmacManager::SetDataLength(DmacChanTmcTx, SpiDataSize);
 	DmacManager::SetDestinationAddress(DmacChanTmcRx, (void*)rxData);
-	DmacManager::SetDataLength(DmacChanTmcRx, 5 * MaxSmartDrivers);
-# endif
+	DmacManager::SetDataLength(DmacChanTmcRx, SpiDataSize);
 #else
 	spiPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);		// disable the PDC
 
-# if SUPPORT_PHASE_STEPPING || SUPPORT_COSED_LOOP
 	spiPdc->PERIPH_TPR = reinterpret_cast<uint32_t>(txData);
-#else
-	spiPdc->PERIPH_TPR = reinterpret_cast<uint32_t>(sendData);
-#endif
-	spiPdc->PERIPH_TCR = ARRAY_SIZE(sendData);
+	spiPdc->PERIPH_TCR = SpiDataSize;
 
-# if SUPPORT_PHASE_STEPPING || SUPPORT_COSED_LOOP
 	spiPdc->PERIPH_RPR = reinterpret_cast<uint32_t>(rxData);
-# else
-	spiPdc->PERIPH_RPR = reinterpret_cast<uint32_t>(rcvData);
-# endif
-	spiPdc->PERIPH_RCR = ARRAY_SIZE(rcvData);
+	spiPdc->PERIPH_RCR = SpiDataSize;
 #endif
 }
 
@@ -1492,14 +1472,14 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 #endif
 	dmaFinishedReason = reason;
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-	// When in phase stepping or closed loop node we send the coil currents if any have changes since last tie we sent them.
+	// When in phase stepping or closed loop mode we send the coil currents if any have changes since last time we sent them.
 	// Send a "normal" read or write request after the coil currents have been set.
-	// We don't care about the response from setting the motor currents so that is written to altRcvData so as to not overwrite rcvData
+	// We don't care about the response from setting the motor currents so that is written to altRcvData so as to not overwrite tmcRcvData
 	if (setCoilCurrents)								// if we just wrote the coil currents
 	{
 		setCoilCurrents = false;
 		const uint32_t start = GetCurrentCycles();		// get the time now so we can time the CS high signal
-		SetupDMA(sendData, altRcvData);					// set up the PDC or DMAC
+		SetupDMA(tmcSendData, tmcAltRcvData);			// set up the PDC or DMAC
 		dmaFinishedReason = DmaCallbackReason::none;
 		EnableEndOfTransferInterrupt();
 		DelayCycles(start, 2 * SystemCoreClockFreq/DriversSpiClockFrequency);	// keep CS high for 2 SPI clock cycles between transactions
@@ -1559,7 +1539,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		else if (!timedOut)
 		{
 			// Handle the read response - data comes out of the drivers in reverse driver order
-			const volatile uint8_t *readPtr = rcvData + 5 * numTmc51xxDrivers;
+			const volatile uint8_t *readPtr = tmcRcvData + 5 * numTmc51xxDrivers;
 			for (size_t drive = 0; drive < numTmc51xxDrivers; ++drive)
 			{
 				readPtr -= 5;
@@ -1593,7 +1573,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 #endif
 
 		// Set up data to write. Driver 0 is the first in the SPI chain so we must write them in reverse order.
-		volatile uint8_t *writeBufPtr = sendData + 5 * numTmc51xxDrivers;
+		volatile uint8_t *writeBufPtr = tmcSendData + 5 * numTmc51xxDrivers;
 		for (size_t i = 0; i < numTmc51xxDrivers; ++i)
 		{
 			writeBufPtr -= 5;
@@ -1604,7 +1584,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		if (needToSetCoilCurrents)
 		{
 			needToSetCoilCurrents = false;
-			writeBufPtr = phaseSendData + 5 * numTmc51xxDrivers;
+			writeBufPtr = tmcPhaseSendData + 5 * numTmc51xxDrivers;
 			for (size_t i = 0; i < numTmc51xxDrivers; ++i)
 			{
 				writeBufPtr -= 5;
@@ -1623,9 +1603,9 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			TaskCriticalSectionLocker lock;
 
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-			SetupDMA((setCoilCurrents) ? phaseSendData : sendData, rcvData);	// set up the PDC or DMAC
+			SetupDMA((setCoilCurrents) ? tmcPhaseSendData : tmcSendData, tmcRcvData);	// set up the PDC or DMAC
 #else
-			SetupDMA();											// set up the PDC or DMAC
+			SetupDMA(tmcSendData, tmcRcvData);					// set up the PDC or DMAC
 #endif
 			dmaFinishedReason = DmaCallbackReason::none;
 
@@ -1718,19 +1698,11 @@ void SmartDrivers::Init() noexcept
 	DmacManager::SetBtctrl(DmacChanTmcRx, DMAC_BTCTRL_VALID | DMAC_BTCTRL_EVOSEL_DISABLE | DMAC_BTCTRL_BLOCKACT_INT | DMAC_BTCTRL_BEATSIZE_BYTE
 								| DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_STEPSIZE_X1);
 	DmacManager::SetSourceAddress(DmacChanTmcRx, &(SERCOM_TMC51xx->SPI.DATA.reg));
-# if !(SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP)		// in phase stepping or closed loop mode we use two different receive data blocks
-	DmacManager::SetDestinationAddress(DmacChanTmcRx, rcvData);
-	DmacManager::SetDataLength(DmacChanTmcRx, ARRAY_SIZE(rcvData));
-# endif
 	DmacManager::SetTriggerSourceSercomRx(DmacChanTmcRx, SERCOM_TMC51xx_NUMBER);
 
 	DmacManager::SetBtctrl(DmacChanTmcTx, DMAC_BTCTRL_VALID | DMAC_BTCTRL_EVOSEL_DISABLE | DMAC_BTCTRL_BLOCKACT_INT | DMAC_BTCTRL_BEATSIZE_BYTE
 								| DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_STEPSIZE_X1);
 	DmacManager::SetDestinationAddress(DmacChanTmcTx, &(SERCOM_TMC51xx->SPI.DATA.reg));
-# if !(SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP)		// in phase stepping or closed loop mode we use two different transmit data blocks
-	DmacManager::SetSourceAddress(DmacChanTmcTx, sendData);
-	DmacManager::SetDataLength(DmacChanTmcTx, ARRAY_SIZE(sendData));
-# endif
 	DmacManager::SetTriggerSourceSercomTx(DmacChanTmcTx, SERCOM_TMC51xx_NUMBER);
 
 	DmacManager::SetInterruptCallback(DmacChanTmcRx, RxDmaCompleteCallback, CallbackParameter(0U));
@@ -1864,7 +1836,7 @@ unsigned int SmartDrivers::GetMicrostepping(size_t driver, bool& interpolation) 
 
 bool SmartDrivers::EnablePhaseStepping(size_t driver, bool enable) noexcept
 {
-	if (driver >= MaxSmartDrivers)
+	if (driver >= numTmc51xxDrivers)
 	{
 		return false;
 	}
@@ -1881,7 +1853,7 @@ bool SmartDrivers::EnablePhaseStepping(size_t driver, bool enable) noexcept
 	}
 	else
 	{
-		for (size_t i = 0; i < MaxSmartDrivers; i++)
+		for (size_t i = 0; i < numTmc51xxDrivers; i++)
 		{
 			if (driverStates[i].IsPhaseSteppingEnabled())
 			{
