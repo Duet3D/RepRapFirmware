@@ -93,7 +93,6 @@ constexpr float RecipFullScaleCurrent = Tmc5160SenseResistor/325.0;		// 1.0 divi
 // The SPI clock speed is a compromise:
 // - too high and polling the driver chips takes too much of the CPU time
 // - too low and we won't detect stalls quickly enough
-// TODO use the DIAG outputs to detect stalls instead
 #if SUPPORT_PHASE_STEPPING
 constexpr uint32_t DriversSpiClockFrequency = 4000000;		// 4MHz SPI clock, this is the maximum rate the TMC5160/2160 support using the internal clock
 constexpr uint32_t DefaultSpiSleepMicroseconds = 500;		// Sleep time used for tmcTask when not phase stepping
@@ -108,7 +107,7 @@ static uint32_t DriversDirectSleepClocks = DefaultSpiSleepClocks;	// how long th
 constexpr uint32_t DriversSpiClockFrequency = 2000000;		// 2MHz SPI clock
 #endif
 
-constexpr uint32_t TransferTimeout = 2;						// any transfer should complete within 2 ticks @ 1ms/tick
+constexpr uint32_t TransferTimeout = 3;						// any transfer should complete within 2 ticks @ 1ms/tick. Need to allow one more in case a tock is about to happen.
 
 // GCONF register (0x00, RW)
 constexpr uint8_t REGNUM_GCONF = 0x00;
@@ -1472,7 +1471,7 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 {
 	fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
 #if SAME70
-	xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcRx, 0xFFFFFFFF);
+	DisableEndOfTransferInterrupt();
 #endif
 	dmaFinishedReason = reason;
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
@@ -1498,10 +1497,15 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 		// If we wake up as soon as the transfer has completed then we will use too much of the available CPU time.
 		// So schedule a wakeup call instead. Try to make the wakeup interval regular.
 		lastWakeupTime += DriversDirectSleepClocks;
-		if (tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime))
+
 		{
-			lastWakeupTime = StepTimer::GetTimerTicks();
-			tmcTask.GiveFromISR(NotifyIndices::Tmc);
+			// If the DMA interrupt priority is better (lower number) than the step interrupt priority then we must disable interrupts here
+			AtomicCriticalSectionLocker lock;
+			if (tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime))
+			{
+				lastWakeupTime = StepTimer::GetTimerTicksWhenInterruptsDisabled();
+				tmcTask.GiveFromISR(NotifyIndices::Tmc);
+			}
 		}
 	}
 #else
@@ -1616,6 +1620,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			AtomicCriticalSectionLocker lock2;
 
 			fastDigitalWriteLow(GlobalTmc51xxCSPin);			// set CS low
+			tmcTimer.CancelCallbackFromIsr();					// in case the timer is still running from a previous timed-out transfer
 			TaskBase::ClearCurrentTaskNotifyCount(NotifyIndices::Tmc);
 			EnableEndOfTransferInterrupt();
 			ResetSpi();
@@ -1624,11 +1629,13 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		}
 
 		// Wait for the end-of-transfer interrupt
-		timedOut = !TaskBase::TakeIndexed(NotifyIndices::Tmc, TransferTimeout);
+		(void)TaskBase::TakeIndexed(NotifyIndices::Tmc, TransferTimeout);
 		DisableEndOfTransferInterrupt();
 		DisableDma();
 
-		if (timedOut || dmaFinishedReason != DmaCallbackReason::complete)
+		// We don't care if the TakeIndexed call returned timeout, if the DMA completed then the transfer is OK
+		timedOut = (dmaFinishedReason != DmaCallbackReason::complete);
+		if (timedOut)
 		{
 			TmcDriverState::TransferTimedOut();
 			// If the transfer was interrupted then we will have written dud data to the drivers. So we should re-initialise them all.
