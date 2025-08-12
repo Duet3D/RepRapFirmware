@@ -2167,15 +2167,15 @@ OutputBuffer *_ecv_null RepRap::GetFilelistResponse(c_string dir, unsigned int s
 
 #if HAS_MASS_STORAGE
 
-// Get thumbnail data
+// Get thumbnail data (M36.1 or rr_thumbnail), or get file fragment (M36.2)
 // 'offset' is the offset into the file of the thumbnail data that the caller wants.
 // It is up to the caller to get the offset right, however we must fail gracefully if the caller passes us a bad offset.
 // The offset should always be either the initial offset or the 'next' value passed in a previous call, so it should always be the start of a line.
-OutputBuffer *_ecv_null RepRap::GetThumbnailResponse(c_string filename, FilePosition offset, bool forM31point1) noexcept
+OutputBuffer *_ecv_null RepRap::GetFileFragment(c_string filename, FilePosition offset, bool forM36point1or2, bool isThumbnail) noexcept
 {
-	constexpr unsigned int ThumbnailMaxDataSizeM31 = 1024;			// small enough for PanelDue to buffer
+	constexpr unsigned int MaxFileFragmentSizeM31 = 1024;			// small enough for PanelDue to buffer
 	constexpr unsigned int ThumbnailMaxDataSizeRr = 2600;			// about two TCP messages
-	static_assert(ThumbnailMaxDataSizeM31 % 4 == 0, "must be a multiple of to guarantee base64 alignment");
+	static_assert(MaxFileFragmentSizeM31 % 4 == 0, "must be a multiple of to guarantee base64 alignment");
 	static_assert(ThumbnailMaxDataSizeRr % 4 == 0, "must be a multiple of to guarantee base64 alignment");
 
 	// Need something to write to...
@@ -2185,13 +2185,14 @@ OutputBuffer *_ecv_null RepRap::GetThumbnailResponse(c_string filename, FilePosi
 		return nullptr;
 	}
 
-	if (forM31point1)
+	if (forM36point1or2)
 	{
-		response->cat("{\"thumbnail\":");
+		response->cat((isThumbnail) ? "{\"thumbnail\":" : "{\"fragment\":");
 	}
 	response->catf("{\"fileName\":\"%.s\",\"offset\":%" PRIu32 ",", filename, offset);
 
-	FileStore *_ecv_null const f = platform->OpenFile(Platform::GetGCodeDir(), filename, OpenMode::read);
+	FileStore *_ecv_null const f = (isThumbnail) ? platform->OpenFile(Platform::GetGCodeDir(), filename, OpenMode::read)
+													: platform->OpenSysFile(filename, OpenMode::read);
 	unsigned int err = 0;
 	if (f != nullptr)
 	{
@@ -2199,15 +2200,15 @@ OutputBuffer *_ecv_null RepRap::GetThumbnailResponse(c_string filename, FilePosi
 		{
 			response->cat("\"data\":\"");
 
-			const unsigned int thumbnailMaxDataSize = (forM31point1) ? ThumbnailMaxDataSizeM31 : ThumbnailMaxDataSizeRr;
+			const unsigned int thumbnailMaxDataSize = (forM36point1or2) ? MaxFileFragmentSizeM31 : ThumbnailMaxDataSizeRr;
 			for (unsigned int charsWrittenThisCall = 0; charsWrittenThisCall < thumbnailMaxDataSize; )
 			{
 				// Read a line
 				char lineBuffer[MaxGCodeLength];
 				const int charsRead = f->ReadLine(lineBuffer, sizeof(lineBuffer));
-				if (charsRead <= 0)
+				if (charsRead < 0 || (isThumbnail && charsRead == 0))
 				{
-					err = 1;
+					if (isThumbnail) { err = 1; }
 					offset = 0;
 					break;
 				}
@@ -2217,49 +2218,74 @@ OutputBuffer *_ecv_null RepRap::GetThumbnailResponse(c_string filename, FilePosi
 
 				c_string p = lineBuffer;
 
-				// Skip white spaces
-				while ((p - lineBuffer <= charsRead) && (*p == ';' || *p == ' ' || *p == '\t'))
+				if (isThumbnail)
 				{
-					++p;
-				}
+					// Skip white spaces
+					while ((p - lineBuffer <= charsRead) && (*p == ';' || *p == ' ' || *p == '\t'))
+					{
+						++p;
+					}
 
-				// Skip empty lines (there shouldn't be any, but just in case there are)
-				if (*p == '\n' || *p == '\0')
-				{
-					continue;
-				}
+					// Skip empty lines (there shouldn't be any, but just in case there are)
+					if (*p == '\n' || *p == '\0')
+					{
+						continue;
+					}
 
-				// Check for end of thumbnail. We'd like to use a regex here but we can't afford the flash space of a regex parser in some build configurations.
-				if (   StringStartsWith(p, "thumbnail end") || StringStartsWith(p, "thumbnail_QOI end") || StringStartsWith(p, "thumbnail_JPG end")
-					// Also stop if the base64 data has ended, to avoid sending to the end of file if the end marker is missing. We don't want to take too long so just look for space.
-					|| strchr(p, ' ') != nullptr
-				   )
-				{
-					offset = 0;
-					break;
+					// Check for end of thumbnail. We'd like to use a regex here but we can't afford the flash space of a regex parser in some build configurations.
+					if (   StringStartsWith(p, "thumbnail end") || StringStartsWith(p, "thumbnail_QOI end") || StringStartsWith(p, "thumbnail_JPG end")
+						// Also stop if the base64 data has ended, to avoid sending to the end of file if the end marker is missing. We don't want to take too long so just look for space.
+						|| strchr(p, ' ') != nullptr
+					   )
+					{
+						offset = 0;
+						break;
+					}
 				}
 
 				const unsigned int charsSkipped = p - lineBuffer;
 				const unsigned int charsAvailable = (unsigned int)charsRead - charsSkipped;
 				unsigned int charsWrittenFromThisLine;
-				if (charsAvailable <= thumbnailMaxDataSize - charsWrittenThisCall)
+
+				if (isThumbnail)
 				{
-					// Write all the data in this line
-					charsWrittenFromThisLine = charsAvailable;
+					if (charsAvailable <= thumbnailMaxDataSize - charsWrittenThisCall)
+					{
+						// Write all the data in this line
+						charsWrittenFromThisLine = charsAvailable;
+					}
+					else
+					{
+						// Write just enough characters to fill the buffer
+						charsWrittenFromThisLine = thumbnailMaxDataSize - charsWrittenThisCall;
+						offset = posOld + charsSkipped + charsWrittenFromThisLine;
+					}
+
+					// Copy the data
+					response->cat(p, charsWrittenFromThisLine);
+					charsWrittenThisCall += charsWrittenFromThisLine;
 				}
 				else
 				{
-					// Write just enough characters to fill the buffer
-					charsWrittenFromThisLine = thumbnailMaxDataSize - charsWrittenThisCall;
-					offset = posOld + charsSkipped + charsWrittenFromThisLine;
-				}
+					if (charsAvailable + 2 <= thumbnailMaxDataSize - charsWrittenThisCall)
+					{
+						// Write this line
+						charsWrittenFromThisLine = charsAvailable;
 
-				// Copy the data
-				response->cat(p, charsWrittenFromThisLine);
-				charsWrittenThisCall += charsWrittenFromThisLine;
+						// Copy the data
+						response->cat(p, charsWrittenFromThisLine);
+						response->cat("\\n");				// the two characters "\n" represent newline in the JSON
+						charsWrittenThisCall += charsWrittenFromThisLine;
+					}
+					else
+					{
+						offset = posOld;
+						break;
+					}
+				}
 			}
 
-			response->catf("\",\"next\":%" PRIu32 ",", offset);
+			response->catf("\",\"next\":%" PRIu32 ",", (offset < f->Length()) ? offset : 0);
 		}
 		f->Close();
 	}
@@ -2268,7 +2294,7 @@ OutputBuffer *_ecv_null RepRap::GetThumbnailResponse(c_string filename, FilePosi
 		err = 1;
 	}
 
-	response->catf(forM31point1 ? "\"err\":%u}}\n" : "\"err\":%u}\n", err);
+	response->catf(forM36point1or2 ? "\"err\":%u}}\n" : "\"err\":%u}\n", err);
 	return response;
 }
 

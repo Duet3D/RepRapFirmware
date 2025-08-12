@@ -569,9 +569,6 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	if (seen || seenExtrude)
 	{
-#if SUPPORT_S_CURVE
-		move.UpdateSCurveFlagAndJerk();
-#endif
 		reprap.MoveUpdated();
 #if SUPPORT_CAN_EXPANSION
 		rslt = max(rslt, move.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply));
@@ -909,9 +906,6 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 
 	if (seen)
 	{
-#if SUPPORT_S_CURVE
-		move.UpdateSCurveFlagAndJerk();
-#endif
 		reprap.MoveUpdated();
 	}
 	else

@@ -34,79 +34,6 @@ void Move::SetAcceleration(size_t drive, float value, bool reduced) noexcept
 	}
 }
 
-#if SUPPORT_S_CURVE
-
-// This is called whenever M201 changes normal accelerations or acceleration time, when changing axis/extruder driver assignment (in case new axes/extruders are created), and when changing the step mode.
-// It determines whether we should use S-curve acceleration and if so it recalculates the axis and extruder jerk values in case the accelerations or acceleration time has changed.
-// After calling this, call reprap.moveUpdated in case usingSCurve has changed. Callers normally need to do this anyway to account for other changes they make, so we don't do it here.
-// We now allow S-curve to be enabled even if there are some remote drivers, even though we don't support S-curve over CAN. We just require that all local drivers use phase stepping.
-// This is primarily so that I (DC) can test S-curve acceleration on my toolchanger, which has some extruders and the Z axis driven from CAN-connected boards.
-void Move::UpdateSCurveFlagAndJerk() noexcept
-{
-	if (accelerationTime > 0.0)
-	{
-		// Enable S-curve acceleration if all drives are using phase stepping
-		bool allLocalDrivesUsingPhaseStepping = true;
-		for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); axis++)
-		{
-			jerks[axis] = normalAccelerations[axis] / accelerationTime;
-			if (
-# if SUPPORT_CAN_EXPANSION
-				AxisHasLocalDriver(axis) &&
-# endif
-				GetStepMode(axis) != StepMode::phase
-			   )
-			{
-				allLocalDrivesUsingPhaseStepping = false;
-			}
-		}
-
-		for (size_t extruder = 0; extruder < reprap.GetGCodes().GetNumExtruders(); extruder++)
-		{
-			const size_t drive = ExtruderToLogicalDrive(extruder);
-			jerks[drive] = normalAccelerations[drive] / accelerationTime;
-			if (
-# if SUPPORT_CAN_EXPANSION
-				ExtruderHasLocalDriver(extruder) &&
-# endif
-				GetStepMode(drive) != StepMode::phase
-			   )
-			{
-				allLocalDrivesUsingPhaseStepping = false;
-			}
-		}
-		usingSCurve = allLocalDrivesUsingPhaseStepping;
-	}
-	else
-	{
-		usingSCurve = false;
-	}
-}
-
-#endif
-
-#if SUPPORT_S_CURVE && SUPPORT_CAN_EXPANSION
-
-bool Move::AxisHasLocalDriver(size_t axis) const noexcept
-{
-	for (size_t i = 0; i < axisDrivers[axis].numDrivers; ++i)
-	{
-		const DriverId id = axisDrivers[axis].driverNumbers[i];
-		if (id.IsLocal())
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
-bool Move::ExtruderHasLocalDriver(size_t extruder) const noexcept
-{
-	return extruderDrivers[extruder].IsLocal();
-}
-
-#endif
-
 // Set the microstepping for local drivers, returning true if successful. All drivers for the same axis must use the same microstepping.
 // Caller must deal with remote drivers.
 bool Move::SetMicrostepping(size_t drive, unsigned int microsteps, bool interp, const StringRef& reply) noexcept
@@ -1217,68 +1144,79 @@ void Move::ReportM569Parameters(size_t drive, const StringRef& reply) noexcept
 #if HAS_SMART_DRIVERS
 	if (drive < GetNumSmartDrivers())
 	{
-		// It's a smart driver, so print the parameters common to all modes, except for the position
-		reply.catf(", mode %s, ccr 0x%05" PRIx32 ", toff %" PRIu32 ", tblank %" PRIu32,
-				TranslateDriverMode(SmartDrivers::GetDriverMode(drive)),
-				SmartDrivers::GetRegister(drive, SmartDriverRegister::chopperControl),
-				SmartDrivers::GetRegister(drive, SmartDriverRegister::toff),
-				SmartDrivers::GetRegister(drive, SmartDriverRegister::tblank)
-			);
+# ifdef DUET3MINI
+		// The 2-driver expansion board may or may not be present
+		const StandardDriverStatus status = SmartDrivers::GetStatus(drive, false, false);
+		if (status.notPresent)
+		{
+			reply.cat(", driver not present or external");
+		}
+		else
+#endif
+		{
+			// It's a smart driver, so print the parameters common to all modes, except for the position
+			reply.catf(", mode %s, ccr 0x%05" PRIx32 ", toff %" PRIu32 ", tblank %" PRIu32,
+					TranslateDriverMode(SmartDrivers::GetDriverMode(drive)),
+					SmartDrivers::GetRegister(drive, SmartDriverRegister::chopperControl),
+					SmartDrivers::GetRegister(drive, SmartDriverRegister::toff),
+					SmartDrivers::GetRegister(drive, SmartDriverRegister::tblank)
+				);
 
 # if SUPPORT_TMC51xx
-		{
-			const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
-			const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
-			bool bdummy;
-			const float mmPerSec = (SmartDrivers::GetDriverNominalClockFrequency() * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * DriveStepsPerMm(axis));
-			const uint8_t iRun = SmartDrivers::GetIRun(drive);
-			const uint8_t iHold = SmartDrivers::GetIHold(drive);
-			const uint32_t gs = SmartDrivers::GetGlobalScaler(drive);
-			const float current = SmartDrivers::GetCalculatedCurrent(drive);
-			reply.catf(", thigh %" PRIu32 " (%.1f mm/sec), gs=%lu, iRun=%u, iHold=%u, current=%.3f", thigh, (double)mmPerSec, gs, iRun, iHold, (double)current);
-		}
+			{
+				const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
+				const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
+				bool bdummy;
+				const float mmPerSec = (SmartDrivers::GetDriverNominalClockFrequency() * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * DriveStepsPerMm(axis));
+				const uint8_t iRun = SmartDrivers::GetIRun(drive);
+				const uint8_t iHold = SmartDrivers::GetIHold(drive);
+				const uint32_t gs = SmartDrivers::GetGlobalScaler(drive);
+				const float current = SmartDrivers::GetCalculatedCurrent(drive);
+				reply.catf(", thigh %" PRIu32 " (%.1f mm/sec), gs %lu, iRun/iHold %u/%u, current %.1f", thigh, (double)mmPerSec, gs, iRun, iHold, (double)current);
+			}
 # endif
 
-		// Print the additional parameters that are relevant in the current mode
-		if (SmartDrivers::GetDriverMode(drive) == DriverMode::spreadCycle)
-		{
-			reply.catf(", hstart/hend/hdec %" PRIu32 "/%" PRIu32 "/%" PRIu32,
-						SmartDrivers::GetRegister(drive, SmartDriverRegister::hstart),
-						SmartDrivers::GetRegister(drive, SmartDriverRegister::hend),
-						SmartDrivers::GetRegister(drive, SmartDriverRegister::hdec)
-					  );
-		}
+			// Print the additional parameters that are relevant in the current mode
+			if (SmartDrivers::GetDriverMode(drive) == DriverMode::spreadCycle)
+			{
+				reply.catf(", hstart/hend/hdec %" PRIu32 "/%" PRIu32 "/%" PRIu32,
+							SmartDrivers::GetRegister(drive, SmartDriverRegister::hstart),
+							SmartDrivers::GetRegister(drive, SmartDriverRegister::hend),
+							SmartDrivers::GetRegister(drive, SmartDriverRegister::hdec)
+						  );
+			}
 
 # if SUPPORT_TMC22xx || SUPPORT_TMC51xx
-		if (SmartDrivers::GetDriverMode(drive) == DriverMode::stealthChop)
-		{
-			const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
-			const uint32_t tcoolthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tcoolthrs);
-			const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
-			bool bdummy;
-			const unsigned int microstepping = SmartDrivers::GetMicrostepping(drive, bdummy);
-			const float tcoolMmPerSec = (microstepping * SmartDrivers::GetDriverMaxClockFrequency())/(256 * tcoolthrs * DriveStepsPerMm(axis));
-			const float tpwmMmPerSec = (microstepping * SmartDrivers::GetDriverMinClockFrequency())/(256 * tpwmthrs * DriveStepsPerMm(axis));
-			const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
-			const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
-			const unsigned int pwmScaleSum = pwmScale & 0xFF;
-			const int pwmScaleAuto = (int)((((pwmScale >> 16) & 0x01FF) ^ 0x0100) - 0x0100);
-			const unsigned int pwmOfsAuto = pwmAuto & 0xFF;
-			const unsigned int pwmGradAuto = (pwmAuto >> 16) & 0xFF;
-			reply.catf(", tcoolthrs %" PRIu32 " (%.1f mm/sec), tpwmthrs %" PRIu32 " (%.1f mm/sec), pwmScaleSum %u, pwmScaleAuto %d, pwmOfsAuto %u, pwmGradAuto %u",
-						tcoolthrs, (double)tcoolMmPerSec, tpwmthrs, (double)tpwmMmPerSec, pwmScaleSum, pwmScaleAuto, pwmOfsAuto, pwmGradAuto);
-		}
-# endif
-		// Finally, print the microstep position
-		{
-			const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
-			if (mstepPos < 1024)
+			if (SmartDrivers::GetDriverMode(drive) == DriverMode::stealthChop)
 			{
-				reply.catf(", pos %" PRIu32, mstepPos);
+				const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
+				const uint32_t tcoolthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tcoolthrs);
+				const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
+				bool bdummy;
+				const unsigned int microstepping = SmartDrivers::GetMicrostepping(drive, bdummy);
+				const float tcoolMmPerSec = (microstepping * SmartDrivers::GetDriverMaxClockFrequency())/(256 * tcoolthrs * DriveStepsPerMm(axis));
+				const float tpwmMmPerSec = (microstepping * SmartDrivers::GetDriverMinClockFrequency())/(256 * tpwmthrs * DriveStepsPerMm(axis));
+				const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
+				const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
+				const unsigned int pwmScaleSum = pwmScale & 0xFF;
+				const int pwmScaleAuto = (int)((((pwmScale >> 16) & 0x01FF) ^ 0x0100) - 0x0100);
+				const unsigned int pwmOfsAuto = pwmAuto & 0xFF;
+				const unsigned int pwmGradAuto = (pwmAuto >> 16) & 0xFF;
+				reply.catf(", tcoolthrs %" PRIu32 " (%.1f mm/sec), tpwmthrs %" PRIu32 " (%.1f mm/sec), pwmScaleSum %u, pwmScaleAuto %d, pwmOfsAuto %u, pwmGradAuto %u",
+							tcoolthrs, (double)tcoolMmPerSec, tpwmthrs, (double)tpwmMmPerSec, pwmScaleSum, pwmScaleAuto, pwmOfsAuto, pwmGradAuto);
 			}
-			else
+# endif
+			// Finally, print the microstep position
 			{
-				reply.cat(", pos unknown");
+				const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
+				if (mstepPos < 1024)
+				{
+					reply.catf(", pos %" PRIu32, mstepPos);
+				}
+				else
+				{
+					reply.cat(", pos unknown");
+				}
 			}
 		}
 	}
