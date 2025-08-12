@@ -815,7 +815,7 @@ bool TmcDriverState::SetChopConf(uint32_t newVal) noexcept
 	return true;
 }
 
-// Set the driver mode
+// Set the driver mode, returning true if successful
 bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 {
 	switch (mode)
@@ -1267,7 +1267,7 @@ inline bool TmcDriverState::SetXdirect(uint32_t regVal) noexcept
 
 #endif
 
-static void InitialiseDMA()
+static void InitialiseDMA() noexcept
 {
 #if SAME70
 	/* From the data sheet:
