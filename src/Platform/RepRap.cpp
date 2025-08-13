@@ -2929,34 +2929,26 @@ uint32_t RepRap::SendAlert(MessageType mt, c_string msg, c_string title, int sPa
 {
 	WriteLocker lock(MessageBox::mboxLock);
 
-	uint32_t seq;
-	if (((uint32_t)mt & ((uint32_t)HttpMessage | (uint32_t)AuxMessage | (uint32_t)LcdMessage | (uint32_t)BinaryCodeReplyFlag)) != 0)
-	{
-		seq = MessageBox::Create(msg, title, sParam, tParam, controls, limits);
-		StateUpdated();
-	}
-	else
-	{
-		seq = 0;
-	}
+	const uint32_t seq = MessageBox::Create(msg, title, sParam, tParam, controls, limits);
+	StateUpdated();
 
 	platform->MessageF(MessageType::LogInfo, "M291: - %s - %s", (strlen(title) > 0 ? title : "[no title]"), msg);
 
 	mt = (MessageType)((uint32_t)mt & ((uint32_t)UsbMessage | (uint32_t)TelnetMessage | (uint32_t)Aux2Message));
 	if (mt != NoDestinationMessage)
 	{
+		// Source was USB, Telnet or serial so also send the message back to the sending channel
 		if (strlen(title) > 0)
 		{
 			platform->MessageF(mt, "- %s -\n", title);
 		}
 		platform->MessageF(mt, "%s\n", msg);
-		if (sParam == 2)
+		if (sParam >= 2)
 		{
-			platform->Message(mt, "Send M292 to continue\n");
-		}
-		else if (sParam == 3)
-		{
-			platform->Message(mt, "Send M292 to continue or M292 P1 to cancel\n");
+			const char *_ecv_array text = (sParam == 2) ?  ", or send M292 to continue\n"
+											: (sParam == 3) ? ", or send M292 to continue or M292 P1 to cancel\n"
+												: "\n";
+			platform->MessageF(mt, "Respond to this request on the web interface or screen%s", text);
 		}
 	}
 	return seq;
