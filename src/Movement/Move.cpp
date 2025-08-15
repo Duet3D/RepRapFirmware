@@ -3180,7 +3180,7 @@ int32_t Move::GetLastMoveStepsTaken(size_t drive) const noexcept
 
 #endif
 
-// Reset all extruder positions to zero. Called when we start a print.
+// Reset all extruder positions to zero. Called when we start a print. All motion must be stopped before we call this, otherwise we will get Code 6 movement system errors.
 void Move::ResetExtruderPositions() noexcept
 {
 	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
