@@ -1564,7 +1564,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			else
 			{
-				ms.currentTool->SetOffset(Z_AXIS, -g30zHeightError, true);
+				ms.currentTool->SetOffset(Z_AXIS, platform.GetZProbeOrDefault(currentZProbeNumber)->GetLastStoppedHeight(), true);
 				ToolOffsetInverseTransform(ms);			// update user coordinates to reflect the new tool offset
 			}
 		}
