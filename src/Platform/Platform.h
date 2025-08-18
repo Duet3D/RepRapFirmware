@@ -490,12 +490,13 @@ protected:
 
 private:
 	const char *_ecv_array InternalGetSysDir() const noexcept;  				// where the system files are - not thread-safe!
+	const char *_ecv_array InternalGetWebDir() const noexcept;  				// where the web files are - not thread-safe!
 	void RawMessage(MessageType type, const char *_ecv_array message) noexcept;	// called by Message after handling error/warning flags
 	float GetCpuTemperature() const noexcept;
 	GCodeResult PrintTestReport(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) const THROWS(GCodeException);
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	GCodeResult SetDirectory(const char *_ecv_array dir, const StringRef& reply, ReadWriteLock &lock, const char *_ecv_array _ecv_null & newDir) noexcept;
+	GCodeResult SetDirectory(const char *_ecv_array dir, const StringRef& reply, ReadWriteLock &lock, const char *_ecv_array existingDir, const char *_ecv_array _ecv_null & newDirPtr) noexcept;
 #endif
 
 #if HAS_SMART_DRIVERS
@@ -758,13 +759,13 @@ inline void Platform::SetFilamentWidth(float width) noexcept
 // Set the system files path
 inline GCodeResult Platform::SetSysDir(const char *_ecv_array dir, const StringRef& reply) noexcept
 {
-	return SetDirectory(dir, reply, sysDirLock, sysDir);
+	return SetDirectory(dir, reply, sysDirLock, InternalGetSysDir(), sysDir);
 }
 
 // Set the system files path
 inline GCodeResult Platform::SetWebDir(const char *_ecv_array dir, const StringRef& reply) noexcept
 {
-	return SetDirectory(dir, reply, webDirLock, webDir);
+	return SetDirectory(dir, reply, webDirLock, InternalGetWebDir(), webDir);
 }
 
 #endif

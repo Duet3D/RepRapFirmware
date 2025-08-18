@@ -3710,6 +3710,12 @@ const char *_ecv_array Platform::InternalGetSysDir() const noexcept
 	return (sysDir != nullptr) ? _ecv_not_null(sysDir) : DEFAULT_SYS_DIR;
 }
 
+// Return a pointer to a string holding the directory where the system files are. Lock the webdir lock before calling this.
+const char *_ecv_array Platform::InternalGetWebDir() const noexcept
+{
+	return (webDir != nullptr) ? _ecv_not_null(webDir) : DEFAULT_WEB_DIR;
+}
+
 bool Platform::SysFileExists(const char *_ecv_array filename) const noexcept
 {
 	String<MaxFilenameLength> location;
@@ -3753,11 +3759,11 @@ ReadLockedPointer<const char> Platform::GetWebDir() const noexcept
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
-GCodeResult Platform::SetDirectory(const char *_ecv_array dir, const StringRef& reply, ReadWriteLock &lock, const char *_ecv_array _ecv_null& newDirPtr) noexcept
+GCodeResult Platform::SetDirectory(const char *_ecv_array dir, const StringRef& reply, ReadWriteLock &lock, const char *_ecv_array existingDir, const char *_ecv_array _ecv_null& newDirPtr) noexcept
 {
 	String<MaxFilenameLength> newDir;
 	WriteLocker locker(lock);
-	if (!MassStorage::CombineName(newDir.GetRef(), InternalGetSysDir(), dir) || (!newDir.EndsWith('/') && newDir.cat('/')))
+	if (!MassStorage::CombineName(newDir.GetRef(), existingDir, dir) || (!newDir.EndsWith('/') && newDir.cat('/')))
 	{
 		reply.copy("Path name too long");
 		return GCodeResult::error;
