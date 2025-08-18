@@ -183,6 +183,7 @@ public:
 	void UpdateBacklashSteps() noexcept;
 	int32_t ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept;
 	uint32_t GetBacklashCorrectionDistanceFactor() const noexcept { return backlashCorrectionDistanceFactor; }
+	int32_t GetCurrentBacklashSteps(size_t drive) const noexcept { return currentBacklashSteps[drive]; }
 
 	inline AxesBitmap GetLinearAxes() const noexcept { return linearAxes; }
 	inline AxesBitmap GetRotationalAxes() const noexcept { return rotationalAxes; }
@@ -269,8 +270,8 @@ public:
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, bool doBedCompensation, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetLiveMotorPosition(size_t driver) const noexcept pre(driver < MaxAxesPlusExtruders);
-	void SetMotorPosition(size_t drive, int32_t pos) noexcept pre(drive < MaxAxesPlusExtruders);
-	void SetMotorPositions(LogicalDrivesBitmap drives, const int32_t *positions) noexcept;
+	void SetMotorPosition(size_t drive, int32_t pos, bool clearBacklash) noexcept pre(drive < MaxAxesPlusExtruders);
+	void SetMotorPositions(LogicalDrivesBitmap drives, const int32_t *positions, bool clearBacklash) noexcept;
 
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
 	bool WaitingForAllMovesFinished(MovementSystemNumber msNumber
@@ -731,7 +732,8 @@ private:
 
 	// Backlash compensation system variables
 	uint32_t backlashSteps[MaxAxes];						// the backlash converted to microsteps
-	int32_t backlashStepsDue[MaxAxes];						// how many backlash compensation microsteps are due for each axis
+	int32_t targetBacklashSteps[MaxAxes];					// how many backlash compensation microsteps we need for each axis
+	int32_t currentBacklashSteps[MaxAxes];					// how many backlash compensation microsteps have already been done for each axis
 	LogicalDrivesBitmap lastDirections;						// each bit is set if the corresponding axes motor last moved backwards
 
 #if SUPPORT_NONLINEAR_EXTRUSION

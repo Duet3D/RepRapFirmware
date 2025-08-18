@@ -76,7 +76,7 @@ LogicalDrivesBitmap MovementState::allLogicalDrivesOwned;					// logical drives 
 	memseti32(lastKnownEndpoints, 0, ARRAY_SIZE(lastKnownEndpoints));
 	Move& move = reprap.GetMove();
 	move.CartesianToMotorSteps(initialPosition, lastKnownEndpoints, false);
-	move.SetMotorPositions(allLogicalDrives, lastKnownEndpoints);
+	move.SetMotorPositions(allLogicalDrives, lastKnownEndpoints, true);
 }
 
 float MovementState::GetProportionDone() const noexcept
@@ -340,7 +340,7 @@ void MovementState::UpdateOwnedDriveEndpointsFromMotors() noexcept
 	Move& move = reprap.GetMove();
 	logicalDrivesOwned.Iterate([&move](unsigned int drive, unsigned int count) noexcept
 								{
-									lastKnownEndpoints[drive] = move.GetLiveMotorPosition(drive);
+									lastKnownEndpoints[drive] = move.GetLiveMotorPosition(drive) - move.GetCurrentBacklashSteps(drive);
 								}
 							  );
 	move.SetLastEndpoints(msNumber, logicalDrivesOwned, lastKnownEndpoints);
@@ -555,7 +555,7 @@ void MovementState::AdjustMotorPositions(const float adjustment[], size_t numMot
 	}
 	const LogicalDrivesBitmap drivesToAdjust = LogicalDrivesBitmap::MakeLowestNBits(numMotors);
 	move.SetLastEndpoints(GetNumber(), drivesToAdjust, lastKnownEndpoints);
-	move.SetMotorPositions(drivesToAdjust, lastKnownEndpoints);
+	move.SetMotorPositions(drivesToAdjust, lastKnownEndpoints, false);
 }
 
 /*static*/ void MovementState::SaveEndpointsBeforeSimulating() noexcept

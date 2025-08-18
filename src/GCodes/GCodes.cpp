@@ -848,7 +848,7 @@ void GCodes::EndSimulation(GCodeBuffer *null gb) noexcept
 	// Ending a simulation, so restore the position
 	MovementState::RestoreEndpointsAfterSimulating();					// restore the endpoints
 	Move& move = reprap.GetMove();
-	move.SetMotorPositions(MovementState::allLogicalDrives, MovementState::GetLastKnownEndpoints());
+	move.SetMotorPositions(MovementState::allLogicalDrives, MovementState::GetLastKnownEndpoints(), false);
 	for (MovementState& ms : moveStates)
 	{
 		const RestorePoint& rp = ms.GetSimulationRestorePoint();

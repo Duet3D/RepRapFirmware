@@ -383,7 +383,7 @@ void Move::Init() noexcept
 
 		backlashMm[axis] = 0.0;
 		backlashSteps[axis] = 0;
-		backlashStepsDue[axis] = 0;
+		targetBacklashSteps[axis] = currentBacklashSteps[axis] = 0;
 	}
 
 	backlashCorrectionDistanceFactor = DefaultBacklashCorrectionDistanceFactor;
@@ -1109,7 +1109,7 @@ void Move::GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumbe
 	}
 }
 
-void Move::SetMotorPosition(size_t drive, int32_t pos) noexcept
+void Move::SetMotorPosition(size_t drive, int32_t pos, bool clearBacklash) noexcept
 {
 #if SUPPORT_PHASE_STEPPING
 	uint32_t now = StepTimer::GetTimerTicks();
@@ -1126,7 +1126,11 @@ void Move::SetMotorPosition(size_t drive, int32_t pos) noexcept
 	}
 #endif
 
-	dms[drive].SetMotorPosition(pos);
+	if (clearBacklash)
+	{
+		targetBacklashSteps[drive] = currentBacklashSteps[drive] = 0;
+	}
+	dms[drive].SetMotorPosition(pos + currentBacklashSteps[drive]);
 
 
 #if SUPPORT_PHASE_STEPPING
@@ -1142,9 +1146,9 @@ void Move::SetMotorPosition(size_t drive, int32_t pos) noexcept
 #endif
 }
 
-void Move::SetMotorPositions(LogicalDrivesBitmap drives, const int32_t *positions) noexcept
+void Move::SetMotorPositions(LogicalDrivesBitmap drives, const int32_t *positions, bool clearBacklash) noexcept
 {
-	drives.Iterate([this, positions](unsigned int drive, unsigned int count) noexcept { SetMotorPosition(drive, positions[drive]); });
+	drives.Iterate([this, positions, clearBacklash](unsigned int drive, unsigned int count) noexcept { SetMotorPosition(drive, positions[drive], clearBacklash); });
 }
 
 void Move::SetLastEndpoints(MovementSystemNumber msNumber, LogicalDrivesBitmap logicalDrives, const int32_t *_ecv_array ep) noexcept
@@ -1165,13 +1169,13 @@ int32_t Move::GetLastEndpoint(MovementSystemNumber msNumber, size_t drive) const
 void Move::ChangeEndpointsAfterHoming(MovementSystemNumber msNumber, LogicalDrivesBitmap drives, const int32_t endpoints[MaxAxes]) noexcept
 {
 	rings[msNumber].SetLastEndpoints(drives, endpoints);
-	SetMotorPositions(drives, endpoints);
+	SetMotorPositions(drives, endpoints, true);
 }
 
 void Move::ChangeSingleEndpointAfterHoming(MovementSystemNumber msNumber, size_t drive, int32_t ep) noexcept
 {
 	rings[msNumber].SetLastEndpoint(drive, ep);
-	SetMotorPosition(drive, ep);
+	SetMotorPosition(drive, ep, true);
 }
 
 // Enter or leave simulation mode
@@ -1340,7 +1344,7 @@ void Move::GetLiveMachineCoordinates(float coords[MaxAxes]) const noexcept
 		AtomicCriticalSectionLocker lock;											// to make sure we get a consistent set of coordinates
 		for (size_t i = 0; i < numTotalAxes; ++i)
 		{
-			currentMotorPositions[i] = dms[i].currentMotorPosition;
+			currentMotorPositions[i] = dms[i].currentMotorPosition - currentBacklashSteps[i];
 		}
 	}
 
@@ -3203,7 +3207,7 @@ int32_t Move::ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
 {
 	// If this drive has changed direction, update the backlash correction steps due
 	const bool backwards = (delta < 0);
-	int32_t& stepsDue = backlashStepsDue[drive];
+	int32_t& targetSteps = targetBacklashSteps[drive];
 	if (backwards != lastDirections.IsBitSet(drive))
 	{
 		lastDirections.InvertBit(drive);		// Direction has reversed
@@ -3212,8 +3216,11 @@ int32_t Move::ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
 		{
 			temp = -temp;
 		}
-		stepsDue += temp;
+		targetSteps += temp;
 	}
+
+	int32_t& currentSteps = currentBacklashSteps[drive];
+	const int32_t stepsDue = targetSteps - currentSteps;
 
 	// Apply some or all of the compensation steps due
 	if (stepsDue != 0)
@@ -3221,13 +3228,13 @@ int32_t Move::ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
 		if ((unsigned long)labs(stepsDue) * backlashCorrectionDistanceFactor <= (unsigned long)labs(delta))		// avoid a division if we can
 		{
 			delta += stepsDue;
-			stepsDue = 0;
+			currentSteps = targetSteps;
 		}
 		else
 		{
 			const int32_t maxAllowedSteps = (int32_t)max<uint32_t>((uint32_t)labs(delta)/backlashCorrectionDistanceFactor, 1u);
 			const int32_t stepsToDo = (stepsDue < 0) ? max<int32_t>(stepsDue, -maxAllowedSteps) : min<int32_t>(stepsDue, maxAllowedSteps);
-			stepsDue -= stepsToDo;
+			currentSteps += stepsToDo;
 			delta += stepsToDo;
 		}
 	}
