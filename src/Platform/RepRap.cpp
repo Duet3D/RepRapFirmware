@@ -286,7 +286,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "macros",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetMacroDir()),						ObjectModelEntryFlags::verbose },
 	{ "menu",					OBJECT_MODEL_FUNC_NOSELF(MENU_DIR),										ObjectModelEntryFlags::verbose },
 	{ "system",					OBJECT_MODEL_FUNC_NOSELF(ExpressionValue::SpecialType::sysDir, 0),		ObjectModelEntryFlags::none },
-	{ "web",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetWebDir()),						ObjectModelEntryFlags::verbose },
+	{ "web",					OBJECT_MODEL_FUNC_NOSELF(ExpressionValue::SpecialType::webDir, 0),		ObjectModelEntryFlags::none },
 #endif
 
 	// 2. limits

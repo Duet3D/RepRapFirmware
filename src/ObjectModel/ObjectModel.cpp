@@ -119,6 +119,9 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		case SpecialType::sysDir:
 			reprap.GetPlatform().AppendSysDir(str);
 			break;
+		case SpecialType::webDir:
+			reprap.GetPlatform().AppendWebDir(str);
+			break;
 		}
 #endif
 		break;
@@ -1031,6 +1034,9 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 				{
 				case ExpressionValue::SpecialType::sysDir:
 					buf->catf("\"%.s\"", reprap.GetPlatform().GetSysDir().Ptr());
+					break;
+				case ExpressionValue::SpecialType::webDir:
+					buf->catf("\"%.s\"", reprap.GetPlatform().GetWebDir().Ptr());
 					break;
 				}
 #endif

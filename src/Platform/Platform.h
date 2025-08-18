@@ -299,12 +299,13 @@ public:
 	bool Delete(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
 # endif
 
-	static const char *_ecv_array GetWebDir() noexcept; 		// Where the html etc files are
 	static const char *_ecv_array GetGCodeDir() noexcept; 		// Where the gcodes are
 	static const char *_ecv_array GetMacroDir() noexcept;		// Where the user-defined macros are
 
 	// Functions to work with the system files folder
 	GCodeResult SetSysDir(const char *_ecv_array dir, const StringRef& reply) noexcept;				// Set the system files path
+	GCodeResult SetWebDir(const char *_ecv_array dir, const StringRef& reply) noexcept;				// Set the web files path
+
 	bool SysFileExists(const char *_ecv_array filename) const noexcept;
 	FileStore *_ecv_null OpenSysFile(const char *_ecv_array filename, OpenMode mode) const noexcept;
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -312,7 +313,9 @@ public:
 # endif
 	bool MakeSysFileName(const StringRef& rslt, const char *_ecv_array filename) const noexcept;
 	void AppendSysDir(const StringRef & path) const noexcept;
+	void AppendWebDir(const StringRef & path) const noexcept;
 	ReadLockedPointer<const char> GetSysDir() const noexcept;	// where the system files are
+	ReadLockedPointer<const char> GetWebDir() const noexcept;	// where the web files are
 #endif
 
 	// Message output (see MessageType for further details)
@@ -491,6 +494,10 @@ private:
 	float GetCpuTemperature() const noexcept;
 	GCodeResult PrintTestReport(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) const THROWS(GCodeException);
 
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	GCodeResult SetDirectory(const char *_ecv_array dir, const StringRef& reply, ReadWriteLock &lock, const char *_ecv_array _ecv_null & newDir) noexcept;
+#endif
+
 #if HAS_SMART_DRIVERS
 	void ReportDrivers(MessageType mt, LocalDriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
 #endif
@@ -593,7 +600,9 @@ private:
 	// Files
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	const char *_ecv_array _ecv_null sysDir;
+	const char *_ecv_array _ecv_null webDir;
 	mutable ReadWriteLock sysDirLock;
+	mutable ReadWriteLock webDirLock;
 #endif
 
 	// Data used by the tick interrupt handler
@@ -675,12 +684,6 @@ private:
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
-// Where the htm etc files are
-inline const char *_ecv_array Platform::GetWebDir() noexcept
-{
-	return WEB_DIR;
-}
-
 // Where the gcodes are
 inline const char *_ecv_array Platform::GetGCodeDir() noexcept
 {
@@ -749,5 +752,21 @@ inline void Platform::SetFilamentWidth(float width) noexcept
 {
 	filamentWidth = width;
 }
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+
+// Set the system files path
+inline GCodeResult Platform::SetSysDir(const char *_ecv_array dir, const StringRef& reply) noexcept
+{
+	return SetDirectory(dir, reply, sysDirLock, sysDir);
+}
+
+// Set the system files path
+inline GCodeResult Platform::SetWebDir(const char *_ecv_array dir, const StringRef& reply) noexcept
+{
+	return SetDirectory(dir, reply, webDirLock, webDir);
+}
+
+#endif
 
 #endif

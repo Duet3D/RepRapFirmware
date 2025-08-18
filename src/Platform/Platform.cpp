@@ -348,7 +348,7 @@ Platform::Platform() noexcept :
 	panelDueUpdater(nullptr),
 #endif
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	sysDir(nullptr),
+	sysDir(nullptr), webDir(nullptr),
 #endif
 	tickState(0), debugCode(0),
 	lastDriverPollMillis(0),
@@ -3734,38 +3734,46 @@ void Platform::AppendSysDir(const StringRef & path) const noexcept
 	path.cat(GetSysDir().Ptr());
 }
 
+void Platform::AppendWebDir(const StringRef & path) const noexcept
+{
+	path.cat(GetWebDir().Ptr());
+}
+
 ReadLockedPointer<const char> Platform::GetSysDir() const noexcept
 {
 	return ReadLockedPointer<const char>(sysDirLock, InternalGetSysDir());
+}
+
+ReadLockedPointer<const char> Platform::GetWebDir() const noexcept
+{
+	return ReadLockedPointer<const char>(webDirLock, (webDir != nullptr) ? _ecv_not_null(webDir) : DEFAULT_WEB_DIR);
 }
 
 #endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
-// Set the system files path
-GCodeResult Platform::SetSysDir(const char *_ecv_array dir, const StringRef& reply) noexcept
+GCodeResult Platform::SetDirectory(const char *_ecv_array dir, const StringRef& reply, ReadWriteLock &lock, const char *_ecv_array _ecv_null& newDirPtr) noexcept
 {
-	String<MaxFilenameLength> newSysDir;
-	WriteLocker lock(sysDirLock);
-
-	if (!MassStorage::CombineName(newSysDir.GetRef(), InternalGetSysDir(), dir) || (!newSysDir.EndsWith('/') && newSysDir.cat('/')))
+	String<MaxFilenameLength> newDir;
+	WriteLocker locker(lock);
+	if (!MassStorage::CombineName(newDir.GetRef(), InternalGetSysDir(), dir) || (!newDir.EndsWith('/') && newDir.cat('/')))
 	{
 		reply.copy("Path name too long");
 		return GCodeResult::error;
 	}
 
-	if (!MassStorage::DirectoryExists(newSysDir.GetRef()))
+	if (!MassStorage::DirectoryExists(newDir.GetRef()))
 	{
 		reply.copy("Path not found");
 		return GCodeResult::error;
 	}
 
-	newSysDir.cat('/');								// the call to DirectoryExists removed the trailing '/'
-	const size_t len = newSysDir.strlen() + 1;
-	char *_ecv_array _ecv_null const nsd = new char[len];
-	memcpy(nsd, newSysDir.c_str(), len);
-	ReplaceObject(sysDir, nsd);
+	newDir.cat('/');								// the call to DirectoryExists removed the trailing '/'
+	const size_t len = newDir.strlen() + 1;
+	char *_ecv_array _ecv_null const newDirArray = new char[len];
+	memcpy(newDirArray, newDir.c_str(), len);
+	ReplaceObject(newDirPtr, newDirArray);
 	reprap.DirectoriesUpdated();
 	return GCodeResult::ok;
 }
