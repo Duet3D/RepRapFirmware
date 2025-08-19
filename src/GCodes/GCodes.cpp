@@ -1141,7 +1141,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 // Check if a pause is pending, action it if so
 void GCodes::CheckForDeferredPause(GCodeBuffer& gb) noexcept
 {
-	if (gb.IsFileChannel() && !gb.IsDoingFileMacro() && deferredPauseCommandPending != nullptr)
+	if (gb.IsFileChannel() && !gb.IsDoingFileMacro() && deferredPauseCommandPending != nullptr && !doingToolChange)
 	{
 		gb.PutAndDecode(deferredPauseCommandPending);
 		deferredPauseCommandPending = nullptr;
