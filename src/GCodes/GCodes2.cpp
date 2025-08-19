@@ -1284,10 +1284,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (deferredPauseCommandPending == nullptr)		// filament change pause takes priority
 					{
 						deferredPauseCommandPending = (gb.Seen('P') && gb.GetUIValue() == 0) ? "M226 P0" : "M226";
+						reply.copy("Pausing has been scheduled");
 					}
-					if (!gb.IsFileChannel())
+					else
 					{
-						return false;								// wait for the current macro to finish
+						reply.copy("Pausing is already pending");
 					}
 				}
 				else if (!DoAsynchronousPause(gb, PrintPausedReason::user, GCodeState::pausing1))
