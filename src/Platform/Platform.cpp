@@ -348,7 +348,7 @@ Platform::Platform() noexcept :
 	panelDueUpdater(nullptr),
 #endif
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	sysDir(nullptr), webDir(nullptr),
+	sysFolder(DEFAULT_SYS_DIR), webFolder(DEFAULT_WEB_DIR),
 #endif
 	tickState(0), debugCode(0),
 	lastDriverPollMillis(0),
@@ -3704,18 +3704,6 @@ bool Platform::FileExists(const char *_ecv_array folder, const char *_ecv_array 
 	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::FileExists(location.c_str());
 }
 
-// Return a pointer to a string holding the directory where the system files are. Lock the sysdir lock before calling this.
-const char *_ecv_array Platform::InternalGetSysDir() const noexcept
-{
-	return (sysDir != nullptr) ? _ecv_not_null(sysDir) : DEFAULT_SYS_DIR;
-}
-
-// Return a pointer to a string holding the directory where the system files are. Lock the webdir lock before calling this.
-const char *_ecv_array Platform::InternalGetWebDir() const noexcept
-{
-	return (webDir != nullptr) ? _ecv_not_null(webDir) : DEFAULT_WEB_DIR;
-}
-
 bool Platform::SysFileExists(const char *_ecv_array filename) const noexcept
 {
 	String<MaxFilenameLength> location;
@@ -3735,35 +3723,26 @@ bool Platform::MakeSysFileName(const StringRef& result, const char *_ecv_array f
 	return MassStorage::CombineName(result, GetSysDir().Ptr(), filename);
 }
 
-void Platform::AppendSysDir(const StringRef & path) const noexcept
+ReadLockedPointer<const char> ConfigurableFolder::GetLockedPointer() const noexcept
 {
-	path.cat(GetSysDir().Ptr());
-}
-
-void Platform::AppendWebDir(const StringRef & path) const noexcept
-{
-	path.cat(GetWebDir().Ptr());
-}
-
-ReadLockedPointer<const char> Platform::GetSysDir() const noexcept
-{
-	return ReadLockedPointer<const char>(sysDirLock, InternalGetSysDir());
-}
-
-ReadLockedPointer<const char> Platform::GetWebDir() const noexcept
-{
-	return ReadLockedPointer<const char>(webDirLock, (webDir != nullptr) ? _ecv_not_null(webDir) : DEFAULT_WEB_DIR);
+	return ReadLockedPointer<const char>(lock, GetUnlockedPointer());
 }
 
 #endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
-GCodeResult Platform::SetDirectory(const char *_ecv_array dir, const StringRef& reply, ReadWriteLock &lock, const char *_ecv_array existingDir, const char *_ecv_array _ecv_null& newDirPtr) noexcept
+void ConfigurableFolder::AppendToString(const StringRef& path) const noexcept
+{
+	ReadLocker locker(lock);
+	path.cat(GetUnlockedPointer());
+}
+
+GCodeResult ConfigurableFolder::Configure(const char *_ecv_array dir, const StringRef& reply) noexcept
 {
 	String<MaxFilenameLength> newDir;
 	WriteLocker locker(lock);
-	if (!MassStorage::CombineName(newDir.GetRef(), existingDir, dir) || (!newDir.EndsWith('/') && newDir.cat('/')))
+	if (!MassStorage::CombineName(newDir.GetRef(), GetUnlockedPointer(), dir) || (!newDir.EndsWith('/') && newDir.cat('/')))
 	{
 		reply.copy("Path name too long");
 		return GCodeResult::error;
@@ -3771,7 +3750,7 @@ GCodeResult Platform::SetDirectory(const char *_ecv_array dir, const StringRef& 
 
 	if (!MassStorage::DirectoryExists(newDir.GetRef()))
 	{
-		reply.copy("Path not found");
+		reply.printf("Path \"%s\" not found", newDir.c_str());
 		return GCodeResult::error;
 	}
 
@@ -3779,7 +3758,7 @@ GCodeResult Platform::SetDirectory(const char *_ecv_array dir, const StringRef& 
 	const size_t len = newDir.strlen() + 1;
 	char *_ecv_array _ecv_null const newDirArray = new char[len];
 	memcpy(newDirArray, newDir.c_str(), len);
-	ReplaceObject(newDirPtr, newDirArray);
+	ReplaceObject(userValue, newDirArray);
 	reprap.DirectoriesUpdated();
 	return GCodeResult::ok;
 }
