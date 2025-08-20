@@ -1056,8 +1056,8 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 void GCodes::RotateCoordinates(float angleDegrees, float coords[2]) const noexcept
 {
 	const float angle = angleDegrees * DegreesToRadians;
-	const float newX = (coords[0] - g68Centre[0]) * cosf(angle)    + (coords[1] - g68Centre[1]) * sinf(angle) + g68Centre[0];
-	const float newY = (coords[0] - g68Centre[0]) * (-sinf(angle)) + (coords[1] - g68Centre[1]) * cosf(angle) + g68Centre[1];
+	const float newX = (coords[0] - g68Centre[0]) * cosf(angle) - (coords[1] - g68Centre[1]) * sinf(angle) + g68Centre[0];
+	const float newY = (coords[0] - g68Centre[0]) * sinf(angle) + (coords[1] - g68Centre[1]) * cosf(angle) + g68Centre[1];
 	coords[0] = newX;
 	coords[1] = newY;
 }
