@@ -1022,16 +1022,12 @@ void RepRap::EmergencyStop() noexcept
 	// Do not turn off ATX power here. If the nozzles are still hot, don't risk melting any surrounding parts by turning fans off.
 	//platform->SetAtxPower(false);
 
+	move->EmergencyDisableDrivers();				// disable all local drivers - need to do this to ensure that any motor brakes are re-engaged
+
 #if SUPPORT_REMOTE_COMMANDS
-	if (CanInterface::InExpansionMode())
-	{
-		move->EmergencyDisableDrivers();			// disable all local drivers - need to do this to ensure that any motor brakes are re-engaged
-	}
-	else
+	if (!CanInterface::InExpansionMode())
 #endif
 	{
-		move->DisableAllDrivers();					// disable all local and remote drivers - need to do this to ensure that any motor brakes are re-engaged
-
 		switch (gCodes->GetMachineType())
 		{
 		case MachineType::cnc:
