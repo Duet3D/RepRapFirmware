@@ -537,18 +537,6 @@ void SbcInterface::ExchangeData() noexcept
 					break;
 				}
 
-				// If there is a macro file waiting, the first instruction must be conditional. Don't block any longer...
-				if (gb->IsWaitingForMacro())
-				{
-					gb->ResolveMacroRequest(false, false);
-#ifdef TRACK_FILE_CODES
-					if (gb->IsFileChannel())
-					{
-						fileMacrosRunning++;
-					}
-#endif
-				}
-
 				try
 				{
 					// Evaluate the expression and send the result to DSF

@@ -190,7 +190,7 @@ public:
 	void AbortFile(bool abortAll) noexcept;
 	bool IsDoingFile() const noexcept;										// Return true if this source is executing a file
 	bool IsDoingLocalFile() const noexcept;									// Return true if this source is executing a file from the local SD card
-	bool IsDoingFileMacro() const noexcept;									// Return true if this source is executing a file macro
+	bool IsDoingFileMacro(bool unlessClosed = false) const noexcept;		// Return true if this source is executing a file macro
 	FilePosition GetJobFilePosition() const noexcept;						// Get the file position at the start of the current command
 	FilePosition GetPrintingFilePosition(bool allowNoFilePos) const noexcept;	// Get the file position in the printing file
 	void SavePrintingFilePosition() noexcept;
@@ -388,10 +388,10 @@ private:
 #endif
 };
 
-inline bool GCodeBuffer::IsDoingFileMacro() const noexcept
+inline bool GCodeBuffer::IsDoingFileMacro(bool unlessClosed) const noexcept
 {
 #if HAS_SBC_INTERFACE
-	return machineState->doingFileMacro || IsMacroRequestPending() || macroFileClosed;
+	return machineState->doingFileMacro || IsMacroRequestPending() || (macroFileClosed && !unlessClosed);
 #else
 	return machineState->doingFileMacro;
 #endif
