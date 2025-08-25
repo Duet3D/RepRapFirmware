@@ -2082,7 +2082,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							type = UsbMessage;
 							break;
 						case 2:		// UART port
-							type = DirectAuxMessage;
+							type = AuxMessage;
 							break;
 						case 3:		// HTTP
 							type = HttpMessage;
