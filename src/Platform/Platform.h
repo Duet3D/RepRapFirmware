@@ -192,6 +192,27 @@ enum class ErrorCode : uint32_t
 	HsmciTimeout = 1u << 4
 };
 
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
+
+// Class to manage a configurable folder, used for the sys and web folders
+class ConfigurableFolder
+{
+public:
+	ConfigurableFolder(const char *_ecv_array defValue) noexcept : userValue(nullptr), defaultValue(defValue) { }
+	ReadLockedPointer<const char> GetLockedPointer() const noexcept;
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	void AppendToString(const StringRef& path) const noexcept;
+	GCodeResult Configure(const char *_ecv_array newPath, const StringRef& reply) noexcept;
+#endif
+private:
+	mutable ReadWriteLock lock;
+	const char *_ecv_array GetUnlockedPointer() const noexcept { return (userValue == nullptr) ? defaultValue : userValue; }
+	const char *_ecv_array _ecv_null userValue;
+	const char *_ecv_array defaultValue;
+};
+
+#endif
+
 // The main class that defines the RepRap machine for the benefit of the other classes
 class Platform final INHERIT_OBJECT_MODEL
 {
@@ -281,11 +302,11 @@ public:
 #endif
 
 	void SetIPAddress(IPAddress ip) noexcept;
-	IPAddress GetIPAddress() const noexcept;
+	IPAddress GetIPAddress() const noexcept { return ipAddress; }
 	void SetNetMask(IPAddress nm) noexcept;
-	IPAddress NetMask() const noexcept;
+	IPAddress NetMask() const noexcept { return netMask; }
 	void SetGateWay(IPAddress gw) noexcept;
-	IPAddress GateWay() const noexcept;
+	IPAddress GateWay() const noexcept { return gateWay; }
 	void SetBaudRate(size_t chan, uint32_t br) noexcept;
 	uint32_t GetBaudRate(size_t chan) const noexcept;
 
@@ -297,12 +318,13 @@ public:
 	bool Delete(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
 # endif
 
-	static const char *_ecv_array GetWebDir() noexcept; 		// Where the html etc files are
 	static const char *_ecv_array GetGCodeDir() noexcept; 		// Where the gcodes are
 	static const char *_ecv_array GetMacroDir() noexcept;		// Where the user-defined macros are
 
 	// Functions to work with the system files folder
 	GCodeResult SetSysDir(const char *_ecv_array dir, const StringRef& reply) noexcept;				// Set the system files path
+	GCodeResult SetWebDir(const char *_ecv_array dir, const StringRef& reply) noexcept;				// Set the web files path
+
 	bool SysFileExists(const char *_ecv_array filename) const noexcept;
 	FileStore *_ecv_null OpenSysFile(const char *_ecv_array filename, OpenMode mode) const noexcept;
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -310,7 +332,9 @@ public:
 # endif
 	bool MakeSysFileName(const StringRef& rslt, const char *_ecv_array filename) const noexcept;
 	void AppendSysDir(const StringRef & path) const noexcept;
+	void AppendWebDir(const StringRef & path) const noexcept;
 	ReadLockedPointer<const char> GetSysDir() const noexcept;	// where the system files are
+	ReadLockedPointer<const char> GetWebDir() const noexcept;	// where the web files are
 #endif
 
 	// Message output (see MessageType for further details)
@@ -357,8 +381,8 @@ public:
 	void SendPanelDueMessage(size_t chan, const char *_ecv_array msg) noexcept;
 
 	// Hotend configuration
-	float GetFilamentWidth() const noexcept;
-	void SetFilamentWidth(float width) noexcept;
+	float GetFilamentWidth() const noexcept { return filamentWidth; }
+	void SetFilamentWidth(float width) noexcept { filamentWidth = width; }
 
 	// MCU temperature
 #if HAS_CPU_TEMP_SENSOR
@@ -484,7 +508,6 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
-	const char *_ecv_array InternalGetSysDir() const noexcept;  				// where the system files are - not thread-safe!
 	void RawMessage(MessageType type, const char *_ecv_array message) noexcept;	// called by Message after handling error/warning flags
 	float GetCpuTemperature() const noexcept;
 	GCodeResult PrintTestReport(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) const THROWS(GCodeException);
@@ -590,8 +613,7 @@ private:
 
 	// Files
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	const char *_ecv_array _ecv_null sysDir;
-	mutable ReadWriteLock sysDirLock;
+	ConfigurableFolder sysFolder, webFolder;
 #endif
 
 	// Data used by the tick interrupt handler
@@ -673,12 +695,6 @@ private:
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
-// Where the htm etc files are
-inline const char *_ecv_array Platform::GetWebDir() noexcept
-{
-	return WEB_DIR;
-}
-
 // Where the gcodes are
 inline const char *_ecv_array Platform::GetGCodeDir() noexcept
 {
@@ -719,33 +735,20 @@ inline void Platform::ExtrudeOff() noexcept
 	}
 }
 
-//********************************************************************************************************
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 
-// Drive the RepRap machine - Heat and temperature
+inline ReadLockedPointer<const char> Platform::GetSysDir() const noexcept { return sysFolder.GetLockedPointer(); }
+inline ReadLockedPointer<const char> Platform::GetWebDir() const noexcept { return webFolder.GetLockedPointer(); }
 
-inline IPAddress Platform::GetIPAddress() const noexcept
-{
-	return ipAddress;
-}
+#endif
 
-inline IPAddress Platform::NetMask() const noexcept
-{
-	return netMask;
-}
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
-inline IPAddress Platform::GateWay() const noexcept
-{
-	return gateWay;
-}
+inline void Platform::AppendSysDir(const StringRef & path) const noexcept { sysFolder.AppendToString(path); }
+inline void Platform::AppendWebDir(const StringRef & path) const noexcept { webFolder.AppendToString(path); }
+inline GCodeResult Platform::SetSysDir(const char *_ecv_array dir, const StringRef& reply) noexcept { return sysFolder.Configure(dir, reply); }
+inline GCodeResult Platform::SetWebDir(const char *_ecv_array dir, const StringRef& reply) noexcept { return webFolder.Configure(dir, reply); }
 
-inline float Platform::GetFilamentWidth() const noexcept
-{
-	return filamentWidth;
-}
-
-inline void Platform::SetFilamentWidth(float width) noexcept
-{
-	filamentWidth = width;
-}
+#endif
 
 #endif

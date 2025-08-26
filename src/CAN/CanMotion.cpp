@@ -138,22 +138,8 @@ CanMessageBuffer *_ecv_null CanMotion::GetBuffer(const PrepParams& params, Drive
 			move->decelClocks = buf->next->msg.moveLinearShaped.decelClocks;
 		}
 
-#if SUPPORT_S_CURVE
-		if (params.jerk != 0.0)
-		{
-			// We don't support S-curve acceleration on expansion boards, so the best we can do is compute an average acceleration and scale it to unit distance
-			move->acceleration = (params.peakAcceleration * params.TotalAccelClocks() - 0.5 * params.jerk * (fsquare(params.accelStartClocks) + fsquare(params.accelEndClocks)))/(params.TotalAccelClocks() * params.totalDistance);
-			move->deceleration = (-params.peakDeceleration * params.TotalDecelClocks() - 0.5 * params.jerk * (fsquare(params.decelStartClocks) + fsquare(params.decelEndClocks)))/(params.TotalDecelClocks() * params.totalDistance);
-		}
-		else
-		{
-			move->acceleration = params.peakAcceleration/params.totalDistance;			// scale the acceleration to correspond to unit distance
-			move->deceleration = -params.peakDeceleration/params.totalDistance;			// scale the deceleration to correspond to unit distance
-		}
-#else
 		move->acceleration = params.acceleration/params.totalDistance;					// scale the acceleration to correspond to unit distance
 		move->deceleration = -params.deceleration/params.totalDistance;					// scale the deceleration to correspond to unit distance
-#endif
 		move->extruderDrives = 0;
 		move->numDrivers = canDriver.localDriver + 1;
 		move->zero1 = move->zero2 = 0;

@@ -363,17 +363,20 @@ uint16_t Tool::numToolsToReport = 0;
 // Check whether extruder movement is allowed. As a side effect, if it isn't then set the appropriate bit in prohibitedExtrusionTools.
 /*static*/ bool Tool::ExtruderMovementAllowed(const Tool *_ecv_null tool, bool forwards, unsigned int extruder) noexcept
 {
+	// If cold extrusion is allowed then skip the check
 	if (reprap.GetHeat().ColdExtrude())
 	{
 		return true;
 	}
 
+	// Check that we have a tool selected
 	if (tool == nullptr)
 	{
 		// This should not happen, but if no tool is selected then don't allow any extruder movement
 		return false;
 	}
 
+	// If the drive is used by to the selected tool, check that the tool is hot enough
 	for (size_t driveNum = 0; driveNum < tool->DriveCount(); driveNum++)
 	{
 		if (extruder == (unsigned int)(tool->GetDrive(driveNum)))
@@ -382,6 +385,7 @@ uint16_t Tool::numToolsToReport = 0;
 		}
 	}
 
+	// Else the drive doesn't belong to the selected tool so don't allow extrusion
 	return false;
 }
 

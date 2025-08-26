@@ -544,6 +544,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		break;
 
+	case GCodeState::doingDeferredPause:
+		if (deferredPauseCommandPending == nullptr)
+		{
+			gb.SetState(GCodeState::normal);
+		}
+		break;
+
 	case GCodeState::pausing1:
 	case GCodeState::eventPausing1:
 		if (LockAllMovementSystemsAndWaitForStandstill(gb))
