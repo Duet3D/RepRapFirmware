@@ -328,7 +328,11 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 void PrepParams::DebugPrint() const noexcept
 {
 	debugPrintf("pp: td=%.3g"
+#if SUPPORT_S_CURVE
+				" ad=[%.3g %.3g %.3g] dd=[%.3g %.3g %.3g] a=[%.3g %.3g] d=[%.3g %.3g] ac=[%" PRIu32 " %" PRIu32 " %" PRIu32 "] sc=%" PRIu32 " dc=[%" PRIu32 " %" PRIu32 " %" PRIu32 "]"
+#else
 				" ad=%.3g dsd=%.3g a=%.3g d=%.3g ac=%" PRIu32 " sc=%" PRIu32 " dc=%" PRIu32
+#endif
 				"\n",
 					(double)totalDistance,
 #if SUPPORT_S_CURVE
@@ -680,6 +684,13 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 		maxAcceleration = min<float>(maxAcceleration, (flags.isPrintingMove) ? nextMove.maxPrintingAcceleration : nextMove.maxTravelAcceleration);
 	}
 
+#if SUPPORT_S_CURVE
+	if (move.IsUsingSCurve())
+	{
+		flags.useScurve = true;
+		jerk = VectorBoxIntersection(normalisedDirectionVector, move.Jerks());
+	}
+#endif
 
 	// 6. Set the speed to the smaller of the requested and maximum speed.
 	// Also enforce a minimum speed of 0.5mm/sec. We need a minimum speed to avoid overflow in the movement calculations.
@@ -1684,7 +1695,7 @@ pre(startAcceleration <= 0.0)
 					{
 						// We are at a steady speed or decelerating to start with.
 						// This happens if we are recalculating a previouslt-calculated move (which we normally avoid doing), or a move is added when we have already started decelerating.
-						if (!CalculateDeceleratingMultipleMoveProfile(firstUnpreparedMove->profile.startSpeed, lastMoveToPlan->profile.endSpeed, firstUnpreparedMove->profile.startAcceleration, lastMoveToPlan->profile.endAcceleration, minJerk, decelParams))
+						if (!CalculateDeceleratingMultipleMoveProfile(firstUnpreparedMove->profile.startSpeed, lastMoveToPlan->profile.endSpeed, firstUnpreparedMove->profile.startAcceleration, lastMoveToPlan->profile.endAcceleration, minMaxAcc, minJerk, decelParams))
 						{
 							errorLine = __LINE__;
 							break;

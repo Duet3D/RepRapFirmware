@@ -134,6 +134,11 @@ public:
 	// Get the acceleration
 	motioncalc_t GetA() const noexcept { return a; }
 
+#if SUPPORT_S_CURVE
+	// Get the rate of change of acceleration
+	motioncalc_t GetJ() const noexcept { return j; }
+#endif
+
 	// Get the length
 	motioncalc_t GetLength() const noexcept { return distance; }
 
@@ -141,13 +146,13 @@ public:
 	void AdjustLength(motioncalc_t adjustment) noexcept { distance += adjustment; }
 
 	// Set the parameters of this segment
-	void SetParameters(uint32_t p_startTime, uint32_t p_duration, motioncalc_t p_distance, motioncalc_t p_a, MovementFlags p_flags) noexcept;
+	void SetParameters(uint32_t p_startTime, uint32_t p_duration, motioncalc_t p_distance, motioncalc_t p_a J_FORMAL_PARAMETER(p_j), MovementFlags p_flags) noexcept;
 
 	// Split this segment in two, returning a pointer to the second part
 	MoveSegment *Split(uint32_t firstDuration) noexcept pre(firstDuration < duration);
 
 	// Merge the parameters for another segment with the same start time and duration into this one
-	void Merge(motioncalc_t p_distance, motioncalc_t p_a, MovementFlags p_flags) noexcept;
+	void Merge(motioncalc_t p_distance, motioncalc_t p_a J_FORMAL_PARAMETER(p_j), MovementFlags p_flags) noexcept;
 
 	// Normalise this segment by removing very small accelerations that cause problems, update t0, return true if it is linear
 	bool NormaliseAndCheckLinear(motioncalc_t distanceCarriedForwards, motioncalc_t& t0) noexcept;
@@ -195,6 +200,10 @@ protected:
 	motioncalc_t distance;									// the number of steps moved
 	motioncalc_t a;											// the acceleration (initial if SUPPORT_S_CURVE) during this segment in steps per movement tick squared
 
+#if SUPPORT_S_CURVE
+	motioncalc_t j;											// the jerk i.e. rate of change of acceleration
+#endif
+
 private:
 	explicit MoveSegment(MoveSegment *p_next) noexcept;
 };
@@ -209,7 +218,11 @@ inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
 // Get the initial speed
 inline motioncalc_t MoveSegment::CalcU() const noexcept
 {
+#if SUPPORT_S_CURVE
+	return distance/(motioncalc_t)duration - (OneHalf * a + OneSixth * j * (motioncalc_t)duration) * (motioncalc_t)duration;
+#else
 	return distance/(motioncalc_t)duration - OneHalf * a * (motioncalc_t)duration;
+#endif
 }
 
 // Normalise this segment by removing very small accelerations that cause problems, update t0, return true if it is linear.
@@ -244,6 +257,9 @@ inline bool MoveSegment::NormaliseAndCheckLinear(motioncalc_t distanceCarriedFor
 		}
 		// The acceleration/deceleration is small enough to cause calculation problems, so change it to a linear move
 		a = (motioncalc_t)0.0;
+#if SUPPORT_S_CURVE
+		j = (motioncalc_t)0.0;
+#endif
 	}
 
 	// The move is constant speed
@@ -271,12 +287,15 @@ inline void MoveSegment::SetNext(MoveSegment *_ecv_null p_next) noexcept
 }
 
 // Set the parameters of this segment
-inline void MoveSegment::SetParameters(uint32_t p_startTime, uint32_t p_duration, motioncalc_t p_distance, motioncalc_t p_a, MovementFlags p_flags) noexcept
+inline void MoveSegment::SetParameters(uint32_t p_startTime, uint32_t p_duration, motioncalc_t p_distance, motioncalc_t p_a J_FORMAL_PARAMETER(p_j), MovementFlags p_flags) noexcept
 {
 	startTime = p_startTime;
 	duration = p_duration;
 	distance = p_distance;
 	a = p_a;
+#if SUPPORT_S_CURVE
+	j = p_j;
+#endif
 	flags = p_flags;
 }
 
@@ -284,8 +303,13 @@ inline void MoveSegment::SetParameters(uint32_t p_startTime, uint32_t p_duration
 inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 {
 	MoveSegment *const secondSeg = Allocate(next);
+#if SUPPORT_S_CURVE
+	const motioncalc_t firstDistance = (CalcU() + (OneHalf * a + OneSixth * j * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
+	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, a, j, flags);
+#else
 	const motioncalc_t firstDistance = (CalcU() + OneHalf * a * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
 	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, a, flags);
+#endif
 #if SEGMENT_DEBUG
 	debugPrintf("split at %" PRIu32 ", fd=%.2f, sd=%.2f\n", firstDuration, (double)firstDistance, (double)(distance - firstDistance));
 #endif
@@ -297,7 +321,7 @@ inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 
 // Merge the parameters for another segment with the same start time and duration into this one
 // s = u*t * 0.5*a*t^2 therefore s1+s2 = (u1+u2)*t + 0.5*(a1+a2)*t^2
-inline void MoveSegment::Merge(motioncalc_t p_distance, motioncalc_t p_a, MovementFlags p_flags) noexcept
+inline void MoveSegment::Merge(motioncalc_t p_distance, motioncalc_t p_a J_FORMAL_PARAMETER(p_j), MovementFlags p_flags) noexcept
 {
 #if SEGMENT_DEBUG
 	debugPrintf("merge d=%.2f a=%.4e into ", (double)p_distance, (double)p_a);
@@ -305,6 +329,9 @@ inline void MoveSegment::Merge(motioncalc_t p_distance, motioncalc_t p_a, Moveme
 #endif
 	distance += p_distance;
 	a += p_a;
+#if SUPPORT_S_CURVE
+	j += p_j;
+#endif
 	flags |= p_flags;
 }
 

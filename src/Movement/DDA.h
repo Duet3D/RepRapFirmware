@@ -54,8 +54,8 @@ struct PrepParams
 # define peakDeceleration	deceleration
 	float accelDistance;
 	float decelStartDistance;
-	float totalDistance;
 #endif
+	float totalDistance;
 	float topSpeed;									// the top speed reached
 	bool useInputShaping;
 

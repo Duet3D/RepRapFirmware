@@ -156,6 +156,9 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Move members
+#if SUPPORT_S_CURVE
+	{ "accelerationTime",		OBJECT_MODEL_FUNC(self->accelerationTime * StepClocksToSeconds, 3),								ObjectModelEntryFlags::notPanelDue },
+#endif
 	{ "axes",					OBJECT_MODEL_FUNC_ARRAY(0), 																	ObjectModelEntryFlags::live },
 	{ "backlashFactor",			OBJECT_MODEL_FUNC((int32_t)self->GetBacklashCorrectionDistanceFactor()),						ObjectModelEntryFlags::none },
 	{ "calibration",			OBJECT_MODEL_FUNC(self, 3),																		ObjectModelEntryFlags::notPanelDue },
@@ -177,6 +180,9 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimarySpeedFactor(), 2),						ObjectModelEntryFlags::none },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetPrimaryMaxTravelAcceleration()), 1),		ObjectModelEntryFlags::none },
+#if SUPPORT_S_CURVE
+	{ "usingSCurve",			OBJECT_MODEL_FUNC(self->usingSCurve),															ObjectModelEntryFlags::none },
+#endif
 	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).latestVirtualExtruderPosition, 5),		ObjectModelEntryFlags::liveNotPanelDue },
 	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber() - 1),				ObjectModelEntryFlags::none },
 
@@ -310,7 +316,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 constexpr uint8_t Move::objectModelTableDescriptor[] =
 {
 	15 + SUPPORT_COORDINATE_ROTATION,
-	17 + SUPPORT_COORDINATE_ROTATION + SUPPORT_KEEPOUT_ZONES,
+	17 + SUPPORT_COORDINATE_ROTATION + SUPPORT_KEEPOUT_ZONES + 2 * SUPPORT_S_CURVE,
 	2,
 	5 + SUPPORT_LASER,
 	3,
@@ -372,6 +378,10 @@ Move::Move() noexcept
 void Move::Init() noexcept
 {
 	// Axes
+#if SUPPORT_S_CURVE
+	accelerationTime = 0.0;
+#endif
+
 	for (size_t axis = 0; axis < MaxAxes; ++axis)
 	{
 		axisMinima[axis] = DefaultAxisMinimum;
@@ -380,6 +390,10 @@ void Move::Init() noexcept
 		maxFeedrates[axis] = ConvertSpeedFromMmPerSec(DefaultAxisMaxFeedrate);
 		reducedAccelerations[axis] = normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
 		printingInstantDvs[axis] = maxInstantDvs[axis] = ConvertSpeedFromMmPerSec(DefaultAxisInstantDv);
+#if SUPPORT_S_CURVE
+		// The jerks get initialised when the acceleration time is set, however VectorBoxIntersection may fail if jerks for unused logical drives are zero or negative
+		jerks[axis] = 1.0;
+#endif
 
 		backlashMm[axis] = 0.0;
 		backlashSteps[axis] = 0;
@@ -399,6 +413,10 @@ void Move::Init() noexcept
 		maxFeedrates[drive] = ConvertSpeedFromMmPerSec(DefaultEMaxFeedrate);
 		normalAccelerations[drive] = reducedAccelerations[drive] = ConvertAcceleration(DefaultEAcceleration);
 		printingInstantDvs[drive] = maxInstantDvs[drive] = ConvertSpeedFromMmPerSec(DefaultEInstantDv);
+#if SUPPORT_S_CURVE
+		// The jerks get initialised when the acceleration time is set, however VectorBoxIntersection may fail if jerks for unused logical drives are zero or negative
+		jerks[drive] = 1.0;
+#endif
 	}
 
 	minimumMovementSpeed = ConvertSpeedFromMmPerSec(DefaultMinFeedrate);
@@ -1461,8 +1479,13 @@ void Move::PrepareScanningProbeDataCollection(const DDA& dda, const PrepParams& 
 		probeControl.topSpeed = dda.profile.topSpeed;
 		probeControl.steadyClocks = params.steadyClocks;
 		probeControl.distancePerReading = params.totalDistance/(float)probeControl.numReadingsNeeded;
+#if SUPPORT_S_CURVE
+		probeControl.accelDistance = params.TotalAccelDistance();
+		probeControl.decelStartDistance = params.totalDistance - params.TotalDecelDistance();
+#else
 		probeControl.accelDistance = params.accelDistance;
 		probeControl.decelStartDistance = params.decelStartDistance;
+#endif
 		probeControl.startTime = dda.afterPrepare.moveStartTime;
 		probeControl.timer.SetCallback(ScanningProbeGlobalTimerCallback, CallbackParameter(this));
 #if 0
@@ -1581,17 +1604,33 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 	return ret + adjustment;
 }
 
+#if SUPPORT_S_CURVE
+
+// Calculate the initial speed given the duration, distance, acceleration and jerk
+static inline motioncalc_t CalcInitialSpeed(uint32_t duration, motioncalc_t distance, motioncalc_t a, motioncalc_t j) noexcept
+{
+	return distance/(motioncalc_t)duration - (OneHalf * a + OneSixth * j * (motioncalc_t)duration) * (motioncalc_t)duration;
+}
+
+#else
+
 // Calculate the initial speed given the duration, distance and acceleration
 static inline motioncalc_t CalcInitialSpeed(uint32_t duration, motioncalc_t distance, motioncalc_t a) noexcept
 {
 	return distance/(motioncalc_t)duration - OneHalf * a * (motioncalc_t)duration;
 }
 
+#endif
+
 // Add a segment into a segment list, which may be empty.
 // If the list is not empty then the new segment may overlap segments already in the list.
 // The units of the input parameters are steps for distance and step clocks for time.
 MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a,
+#if SUPPORT_S_CURVE
+	 	 	 	 	 	 	 	 motioncalc_t j, MovementFlags moveFlags, motioncalc_t pressureAdvanceClocks
+#else
 								 	 	 	 	 MovementFlags moveFlags, motioncalc_t pressureAdvanceClocksTimesDuration
+#endif
 							) noexcept
 {
 	if ((int32_t)duration <= 0)
@@ -1602,14 +1641,24 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 	}
 
 	// Adjust the distance (and implicitly the initial speed) to account for pressure advance
+#if SUPPORT_S_CURVE
+	distance += a * pressureAdvanceClocks * duration;
+	a += j * pressureAdvanceClocks;
+#else
 	distance += a * pressureAdvanceClocksTimesDuration;
+#endif
 
 #if !SEGMENT_DEBUG
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
 #endif
 	{
+#if SUPPORT_S_CURVE
+		debugPrintf("Add seg: st=%" PRIu32 " t=%7" PRIu32 " dist=%9.3f u=%10.4e a=%10.4e j=%10.4e f=x%02" PRIx32 "\n",
+					startTime, duration, (double)distance, (double)CalcInitialSpeed(duration, distance, a, j), (double)a, (double)j, moveFlags.all);
+#else
 		debugPrintf("Add seg: st=%" PRIu32 " t=%7" PRIu32 " dist=%9.3f u=%10.4e a=%10.4e f=x%02" PRIx32 "\n",
 					startTime, duration, (double)distance, (double)CalcInitialSpeed(duration, distance, a), (double)a, moveFlags.all);
+#endif
 	}
 
 	MoveSegment *_ecv_null prev = nullptr;
@@ -1641,9 +1690,13 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 				// Insert part of the new segment before the existing one, then merge the rest
 				const uint32_t firstDuration = -offset;
 				const motioncalc_t mFirstDuration = (motioncalc_t)firstDuration;
+#if SUPPORT_S_CURVE
+				const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a, j) + (OneHalf * a + OneSixth * j * mFirstDuration) * mFirstDuration) * mFirstDuration;
+#else
 				const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + OneHalf * a * mFirstDuration) * mFirstDuration;
+#endif
 				seg = MoveSegment::Allocate(seg);
-				seg->SetParameters(startTime, firstDuration, firstDistance, a, moveFlags);
+				seg->SetParameters(startTime, firstDuration, firstDistance, a J_ACTUAL_PARAMETER(j), moveFlags);
 				if (prev == nullptr)
 				{
 					list = _ecv_not_null(seg);
@@ -1720,11 +1773,15 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 				{
 					// The existing segment is shorter in time than the new one, so add the new segment in two or more parts
 					const motioncalc_t segDuration = (motioncalc_t)seg->GetDuration();
+#if SUPPORT_S_CURVE
+					const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a, j) + (OneHalf * a + OneSixth * j * segDuration) * segDuration) * segDuration;	// distance moved by the first part of the new segment
+#else
 					const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + OneHalf * a * segDuration) * segDuration;		// distance moved by the first part of the new segment
+#endif
 #if SEGMENT_DEBUG
 					debugPrintf("merge1: ");
 #endif
-					seg->Merge(firstDistance, a, moveFlags);
+					seg->Merge(firstDistance, a J_ACTUAL_PARAMETER(j), moveFlags);
 #if CHECK_SEGMENTS
 					CheckSegment(__LINE__, prev);
 					CheckSegment(__LINE__, seg);
@@ -1751,7 +1808,7 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 #if SEGMENT_DEBUG
 					debugPrintf("merge2: ");
 #endif
-					seg->Merge(distance, a, moveFlags);
+					seg->Merge(distance, a J_ACTUAL_PARAMETER(j), moveFlags);
 					goto finished;								// ugly but saves some code
 				}
 			}
@@ -1764,7 +1821,7 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 	// If we get here then the new segment (or what's left of it) needs to be added before 'seg' which may be null
 	{
 		MoveSegment *newSeg = MoveSegment::Allocate(seg);
-		newSeg->SetParameters(startTime, duration, distance, a, moveFlags);
+		newSeg->SetParameters(startTime, duration, distance, a J_ACTUAL_PARAMETER(j), moveFlags);
 		if (prev == nullptr)
 		{
 			list = newSeg;
@@ -1867,11 +1924,15 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 #else
 	const uint32_t steadyStartTime = startTime + params.TotalAccelClocks();
 	const uint32_t decelStartTime = steadyStartTime + params.steadyClocks;
+#endif
 	const motioncalc_t totalDistance = (motioncalc_t)params.totalDistance;
 	const motioncalc_t stepsPerMm = (motioncalc_t)steps/totalDistance;
 
 	// Phases with zero duration will not get executed and may lead to infinities in the calculations. Avoid introducing them. Keep the total distance correct.
 	// When using input shaping we can save some FP multiplications by multiplying the acceleration or deceleration time by the pressure advance just once instead of once per impulse
+#if SUPPORT_S_CURVE
+	const motioncalc_t pressureAdvanceClocks = (moveFlags.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)dm.extruderShaper.GetKclocks() : (motioncalc_t)0.0;
+#else
 	motioncalc_t accelDistance, accelPressureAdvance;
 	if (params.accelClocks == 0)
 	{
@@ -1897,6 +1958,7 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 	}
 
 	const motioncalc_t steadyDistance = (params.steadyClocks == 0) ? (motioncalc_t)0.0 : totalDistance - accelDistance - decelDistance;
+#endif
 
 #if STEPS_DEBUG
 	{
@@ -1950,6 +2012,7 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 		{
 			tail = AddSegment(tail, decelStartTime, params.decelClocks, decelDistance * stepsPerMm, (motioncalc_t)params.deceleration * stepsPerMm, moveFlags, decelPressureAdvance);
 		}
+#endif
 	}
 	else
 	{
@@ -2000,6 +2063,7 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 			{
 				tail = AddSegment(tail, decelStartTime + startDelay, params.decelClocks, decelDistance * factor, (motioncalc_t)params.deceleration * factor, moveFlags, decelPressureAdvance);
 			}
+#endif
 		}
 	}
 
