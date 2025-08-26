@@ -125,7 +125,7 @@ inline uint32_t doubleToU32(double f) noexcept
 
 // Set up the parameters from the DDA
 // As a side effect it sets up clocksNeeded. If 3rd order motion control is used it also sets the start speed and acceleration in the following DDA.
-void PrepParams::SetFromDDA(const DDA& dda) noexcept
+void PrepParams::SetFromDDA(DDA& dda) noexcept
 {
 	totalDistance = dda.totalDistance;
 	// Due to rounding error, for an accelerate-decelerate move we may have accelDistance+decelDistance slightly greater than totalDistance.
@@ -1378,6 +1378,33 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 	return true;
 }
 
+// Calculate a deceleration-only profile returning true if successful
+static bool CalculateDeceleratingMultipleMoveProfile(float startSpeed, float endSpeed, float startAcceleration, float endAcceleration, float maxAcceleration, float jerk, MultipleMoveParameters& rslt) noexcept
+pre(startAcceleration <= 0.0)
+{
+	// The plan is to use negative jerk (increase deceleration) for time t2, decelerate steadily for time t1, then use positive jerk (reduce deceleration) for time t0
+	// See Maxima for the derivation of this
+	// First assume t1 is zero and see whether the peak acceleration is within limits
+	const float discriminant = 2 * jerk * (startSpeed - endSpeed) + fsquare(startAcceleration) + fsquare(endAcceleration);
+	if (discriminant < 0) { return false; }			// no solutions
+	const float peakAcceleration = fastSqrtf(discriminant) * (0.5 * sqrtf(2.0));
+	if (fabsf(peakAcceleration) <= maxAcceleration)
+	{
+		// We don't need a constant acceleration segment
+		rslt.t0 = (peakAcceleration + endAcceleration)/jerk;
+		rslt.t2 = (peakAcceleration + startAcceleration)/jerk;
+		rslt.t1 = 0.0;
+		rslt.totalDistance = rslt.t0 + rslt.t2;
+	}
+	else
+	{
+		rslt.t0 = (endAcceleration - maxAcceleration)/jerk;
+		rslt.t2 = (startAcceleration - maxAcceleration)/jerk;
+		rslt.t1 = qq;
+		rslt.totalDistance = rslt.t0 + rslt.t1 + rslt.t2;
+	}
+}
+
 // Given a movement profile that is viable, distribute it over the moves
 /*static*/ void DDA::DistributePlanOverMoves(DDA *startMove, DDA *endMove, float distanceToPlan, const MultipleMoveParameters& accelParams, const MultipleMoveParameters& decelParams) noexcept
 {
@@ -1653,39 +1680,54 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 				unviableDistanceNeeded = distanceNeeded;
 				if (numIterations == 0)
 				{
-					const float minViableSpeedAccel = firstUnpreparedMove->profile.startSpeed + 0.5 * fsquare(firstUnpreparedMove->profile.startAcceleration)/minJerk;
-					const float minViableSpeedDecel = lastMoveToPlan->profile.endSpeed + 0.5 * fsquare(lastMoveToPlan->profile.endAcceleration)/minJerk;
-					viablePeakSpeed = max<float>(minViableSpeedAccel, minViableSpeedDecel);
-					if (viablePeakSpeed > 0.0)
+					if (firstUnpreparedMove->profile.startAcceleration <= 0.0)
 					{
-						if (!CalculateMultipleMoveProfile(lastMoveToPlan->profile.endSpeed, viablePeakSpeed, lastMoveToPlan->profile.endAcceleration, minMaxAcc, minJerk, decelParams))
+						// We are at a steady speed or decelerating to start with.
+						// This happens if we are recalculating a previouslt-calculated move (which we normally avoid doing), or a move is added when we have already started decelerating.
+						if (!CalculateDeceleratingMultipleMoveProfile(firstUnpreparedMove->profile.startSpeed, lastMoveToPlan->profile.endSpeed, firstUnpreparedMove->profile.startAcceleration, lastMoveToPlan->profile.endAcceleration, minJerk, decelParams))
 						{
 							errorLine = __LINE__;
 							break;
 						}
-						if (!CalculateMultipleMoveProfile(firstUnpreparedMove->profile.startSpeed, viablePeakSpeed, firstUnpreparedMove->profile.startAcceleration, minMaxAcc, minJerk, accelParams))
-						{
-							errorLine = __LINE__;
-							break;
-						}
-						viableDistanceNeeded = accelParams.totalDistance + decelParams.totalDistance;
-						if (viableDistanceNeeded > distanceToPlan)
-						{
-							debugPrintf("accel %.4e decl %.4e viable %.4e available %.4e\n", (double)accelParams.totalDistance, (double)decelParams.totalDistance, (double)viableDistanceNeeded, (double)distanceToPlan);
-							errorLine = __LINE__;
-							break;
-						}
-
-						if (viableDistanceNeeded >= 0.98 * distanceToPlan)		// this test can save a lot of iterations when we re-plan something already planned
-						{
-							debugPrintf("Solved in 0.5 iterations, match = %.2f\n", (double)(viableDistanceNeeded/distanceToPlan));
-							DistributePlanOverMoves(firstUnpreparedMove, lastMoveToPlan, distanceToPlan, accelParams, decelParams);
-							return;
-						}
+						viableDistanceNeeded = decelParams.totalDistance;
 					}
 					else
 					{
-						viableDistanceNeeded = 0.0;
+						// We start off accelerating, therefore we can't avoid an acceleration segment
+						const float minViableSpeedAccel = firstUnpreparedMove->profile.startSpeed + 0.5 * fsquare(firstUnpreparedMove->profile.startAcceleration)/minJerk;
+						const float minViableSpeedDecel = lastMoveToPlan->profile.endSpeed + 0.5 * fsquare(lastMoveToPlan->profile.endAcceleration)/minJerk;
+						viablePeakSpeed = max<float>(minViableSpeedAccel, minViableSpeedDecel);
+						if (viablePeakSpeed > 0.0)
+						{
+							if (!CalculateMultipleMoveProfile(lastMoveToPlan->profile.endSpeed, viablePeakSpeed, lastMoveToPlan->profile.endAcceleration, minMaxAcc, minJerk, decelParams))
+							{
+								errorLine = __LINE__;
+								break;
+							}
+							if (!CalculateMultipleMoveProfile(firstUnpreparedMove->profile.startSpeed, viablePeakSpeed, firstUnpreparedMove->profile.startAcceleration, minMaxAcc, minJerk, accelParams))
+							{
+								errorLine = __LINE__;
+								break;
+							}
+							viableDistanceNeeded = accelParams.totalDistance + decelParams.totalDistance;
+							if (viableDistanceNeeded > distanceToPlan)
+							{
+								debugPrintf("accel %.4e decl %.4e viable %.4e available %.4e\n", (double)accelParams.totalDistance, (double)decelParams.totalDistance, (double)viableDistanceNeeded, (double)distanceToPlan);
+								errorLine = __LINE__;
+								break;
+							}
+
+							if (viableDistanceNeeded >= 0.98 * distanceToPlan)		// this test can save a lot of iterations when we re-plan something already planned
+							{
+								debugPrintf("Solved in 0.5 iterations, match = %.2f\n", (double)(viableDistanceNeeded/distanceToPlan));
+								DistributePlanOverMoves(firstUnpreparedMove, lastMoveToPlan, distanceToPlan, accelParams, decelParams);
+								return;
+							}
+						}
+						else
+						{
+							viableDistanceNeeded = 0.0;
+						}
 					}
 				}
 
@@ -1694,8 +1736,8 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 				unviablePeakSpeed = peakSpeedToTry;
 			}
 			peakSpeedToTry = 0.5 * (viablePeakSpeed + unviablePeakSpeed);
-			debugPrintf("Distances: viable %.6g unviable %.6g available %.6g, speeds: viable %.6e unviable %.6e trying %.6e\n",
-							(double)viableDistanceNeeded, (double)unviableDistanceNeeded, (double)distanceToPlan, (double)viablePeakSpeed, (double)unviablePeakSpeed, (double)peakSpeedToTry);
+//			debugPrintf("Distances: viable %.6g unviable %.6g available %.6g, speeds: viable %.6e unviable %.6e trying %.6e\n",
+//							(double)viableDistanceNeeded, (double)unviableDistanceNeeded, (double)distanceToPlan, (double)viablePeakSpeed, (double)unviablePeakSpeed, (double)peakSpeedToTry);
 			delay(1);
 			++numIterations;
 			if (numIterations > 50) { errorLine = __LINE__; break; }
