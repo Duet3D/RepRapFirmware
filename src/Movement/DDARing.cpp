@@ -346,8 +346,8 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 		// If it has been planned then if any moves have been added to the ring we should re-plan it, unless it is flagged as fully planned.
 		if (   firstUnpreparedMove->GetState() == DDA::created
 			|| (   firstUnpreparedMove->IsSCurveMove()
-				&& HaveAddedMove()
-				&& !firstUnpreparedMove->IsFullyPlanned()
+//				&& HaveAddedMove()
+//				&& !firstUnpreparedMove->IsFullyPlanned()
 			   )
 		   )
 		{

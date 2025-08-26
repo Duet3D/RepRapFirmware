@@ -74,7 +74,7 @@ struct PrepParams
 	uint32_t TotalClocks() const noexcept { return TotalAccelClocks() + steadyClocks + TotalDecelClocks(); }
 
 	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
-	void SetFromDDA(const DDA& dda) noexcept;
+	void SetFromDDA(DDA& dda) noexcept;
 
 	void DebugPrint() const noexcept;
 };
