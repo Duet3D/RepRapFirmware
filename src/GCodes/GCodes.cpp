@@ -848,7 +848,7 @@ void GCodes::EndSimulation(GCodeBuffer *null gb) noexcept
 	// Ending a simulation, so restore the position
 	MovementState::RestoreEndpointsAfterSimulating();					// restore the endpoints
 	Move& move = reprap.GetMove();
-	move.SetMotorPositions(MovementState::allLogicalDrives, MovementState::GetLastKnownEndpoints());
+	move.SetMotorPositions(MovementState::allLogicalDrives, MovementState::GetLastKnownEndpoints(), false);
 	for (MovementState& ms : moveStates)
 	{
 		const RestorePoint& rp = ms.GetSimulationRestorePoint();
@@ -1141,7 +1141,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 // Check if a pause is pending, action it if so
 void GCodes::CheckForDeferredPause(GCodeBuffer& gb) noexcept
 {
-	if (gb.IsFileChannel() && !gb.IsDoingFileMacro() && deferredPauseCommandPending != nullptr)
+	if (gb.IsFileChannel() && !gb.IsDoingFileMacro(true) && deferredPauseCommandPending != nullptr && !doingToolChange)
 	{
 		gb.PutAndDecode(deferredPauseCommandPending);
 		deferredPauseCommandPending = nullptr;
@@ -5618,12 +5618,12 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 	return synced;
 }
 
-// Synchronise the other motion system with this one. Return true if done, false if we need to wait for it to catch up.
+// Empty both motion queues and synchronise the other motion system with this one. Return true if done, false if we need to wait for it to catch up.
 bool GCodes::DoSync(GCodeBuffer& gb) noexcept
 {
 	const bool rslt = (&gb == FileGCode()) ? SyncWith(gb, *File2GCode())
 			: (&gb == File2GCode()) ? SyncWith(gb, *FileGCode())
-				: true;
+				: LockAllMovementSystemsAndWaitForStandstill(gb);			// if we're not a file input then just wait for all motion systems to stop
 	return rslt;
 }
 

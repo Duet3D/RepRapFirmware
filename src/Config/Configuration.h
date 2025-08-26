@@ -281,7 +281,7 @@ constexpr size_t MaxThumbnails = 4;						// Maximum number of thumbnail images r
 
 // Filesystem and upload defaults
 #define FS_PREFIX				"0:"
-#define WEB_DIR					"0:/www/"				// Place to find web files on the SD card
+#define DEFAULT_WEB_DIR			"0:/www/"				// Place to find web files on the SD card
 #define GCODE_DIR				"0:/gcodes/"			// Ditto - G-Codes
 #define DEFAULT_SYS_DIR			"0:/sys/"				// Ditto - System files (can be changed using M505)
 #define MACRO_DIR				"0:/macros/"			// Ditto - Macro files
@@ -295,7 +295,7 @@ constexpr size_t MaxThumbnails = 4;						// Maximum number of thumbnail images r
 // As at 2020-05-02 the longest filename requested by DWC is "/fonts/materialdesignicons-webfont.3e2c1c79.eot" which is 48 characters long
 // It must be small enough that a filename within this length doesn't cause an overflow in MassStorage::CombineName. This is checked by the static_assert below.
 constexpr size_t MaxExpectedWebDirFilenameLength = MaxFilenameLength - 20;
-static_assert(MaxExpectedWebDirFilenameLength + strlen(WEB_DIR) + strlen(".gz") <= MaxFilenameLength);
+static_assert(MaxExpectedWebDirFilenameLength + strlen(DEFAULT_WEB_DIR) + strlen(".gz") <= MaxFilenameLength);
 
 #define UPLOAD_EXTENSION ".part"					// Extension to a filename for a file being uploaded
 

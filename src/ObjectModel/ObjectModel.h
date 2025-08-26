@@ -74,6 +74,7 @@ struct ExpressionValue final
 	enum class SpecialType : uint32_t
 	{
 		sysDir = 0,
+		webDir
 	};
 
 	ExpressionValue() noexcept : type((uint32_t)TypeCode::None) { }

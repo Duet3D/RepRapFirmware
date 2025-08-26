@@ -153,7 +153,6 @@ CanMessageBuffer *_ecv_null CanMotion::GetBuffer(const PrepParams& params, Drive
 #else
 		move->acceleration = params.acceleration/params.totalDistance;					// scale the acceleration to correspond to unit distance
 		move->deceleration = -params.deceleration/params.totalDistance;					// scale the deceleration to correspond to unit distance
-#endif
 		move->extruderDrives = 0;
 		move->numDrivers = canDriver.localDriver + 1;
 		move->zero1 = move->zero2 = 0;
