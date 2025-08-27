@@ -1436,6 +1436,11 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 // Given a movement profile that is viable, distribute it over the moves
 /*static*/ void DDA::DistributePlanOverMoves(DDA *startMove, DDA *endMove, float distanceToPlan, const MultipleMoveParameters& accelParams, const MultipleMoveParameters& decelParams) noexcept
 {
+	debugPrintf("Distributing plan: %.3f %.3f %.3f %.3f %.3f %.3f %.3f\n",
+				(double)accelParams.s0, (double)accelParams.s1, (double)accelParams.s2,
+				(double)(distanceToPlan - (accelParams.totalDistance + decelParams.totalDistance)),
+				(double)decelParams.s2, (double)decelParams.s1, (double)decelParams.s0
+			   );
 	if (startMove == endMove)
 	{
 		// The simple case - just copy the distances across
@@ -1445,151 +1450,157 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 		startMove->profile.distances[4] = decelParams.s2;
 		startMove->profile.distances[5] = decelParams.s1;
 		startMove->profile.distances[6] = decelParams.s0;
-		startMove->profile.distances[3] = startMove->totalDistance - (accelParams.totalDistance + decelParams.totalDistance);
+		startMove->profile.distances[3] = distanceToPlan - (accelParams.totalDistance + decelParams.totalDistance);
 	}
 	else
 	{
 		// Allocate the t0 acceleration phase
-		float distanceLeftAccelerating;
 		{
-			float s0Left = accelParams.s0;
-			while (true)
+			float distanceLeftAccelerating;
 			{
-				if (startMove->totalDistance > s0Left)
+				float s0Left = accelParams.s0;
+				while (true)
 				{
-					startMove->profile.distances[0] = s0Left;
-					distanceLeftAccelerating = startMove->totalDistance - s0Left;
-					break;
-				}
+					if (startMove->totalDistance > s0Left)
+					{
+						startMove->profile.distances[0] = s0Left;
+						distanceLeftAccelerating = startMove->totalDistance - s0Left;
+						break;
+					}
 
-				// This whole move is part of the t0 segment of the multiple move acceleration phase
-				startMove->profile.distances[0] = startMove->totalDistance;
-				startMove->profile.distances[1] = startMove->profile.distances[2] = startMove->profile.distances[3] = startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
-				s0Left -= startMove->totalDistance;
-				startMove->state = planned;
-				startMove->flags.fullyPlanned = true;
-				startMove = startMove->next;
+					// This whole move is part of the t0 segment of the multiple move acceleration phase
+					startMove->profile.distances[0] = startMove->totalDistance;
+					startMove->profile.distances[1] = startMove->profile.distances[2] = startMove->profile.distances[3] = startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
+					s0Left -= startMove->totalDistance;
+					startMove->state = planned;
+					startMove->flags.fullyPlanned = true;
+					startMove = startMove->next;
+				}
 			}
-		}
 
-		// Allocate the t1 acceleration phase
-		{
-			float s1Left = accelParams.s1;
-			while (true)
+			// Allocate the t1 acceleration phase
 			{
-				startMove->profile.peakAcceleration = accelParams.peakAcceleration;
-				if (distanceLeftAccelerating > s1Left)
+				float s1Left = accelParams.s1;
+				while (true)
 				{
-					startMove->profile.distances[1] = s1Left;
-					distanceLeftAccelerating -= s1Left;
-					break;
-				}
+					startMove->profile.peakAcceleration = accelParams.peakAcceleration;
+					if (distanceLeftAccelerating > s1Left)
+					{
+						startMove->profile.distances[1] = s1Left;
+						distanceLeftAccelerating -= s1Left;
+						break;
+					}
 
-				// The rest of this move is part of the t1 segment of the multiple move acceleration phase
-				startMove->profile.distances[1] = distanceLeftAccelerating;
-				startMove->profile.distances[2] = startMove->profile.distances[3] = startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
-				s1Left -= distanceLeftAccelerating;
-				startMove->state = planned;
-				startMove->flags.fullyPlanned = true;
-				startMove = startMove->next;
-				startMove->profile.distances[0] = 0.0;
-				distanceLeftAccelerating = startMove->totalDistance;
+					// The rest of this move is part of the t1 segment of the multiple move acceleration phase
+					startMove->profile.distances[1] = distanceLeftAccelerating;
+					startMove->profile.distances[2] = startMove->profile.distances[3] = startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
+					s1Left -= distanceLeftAccelerating;
+					startMove->state = planned;
+					startMove->flags.fullyPlanned = true;
+					startMove = startMove->next;
+					startMove->profile.distances[0] = 0.0;
+					distanceLeftAccelerating = startMove->totalDistance;
+				}
 			}
-		}
 
-		// Allocate the t2 acceleration phase
-		{
-			float s2Left = accelParams.s2;
-			while (true)
+			// Allocate the t2 acceleration phase
 			{
-				if (distanceLeftAccelerating > s2Left)
+				float s2Left = accelParams.s2;
+				while (true)
 				{
-					startMove->profile.distances[2] = s2Left;
-					break;
-				}
+					if (distanceLeftAccelerating > s2Left)
+					{
+						startMove->profile.distances[2] = s2Left;
+						break;
+					}
 
-				// The rest of this move is part of the t2 segment of the multiple move acceleration phase
-				startMove->profile.distances[2] = startMove->totalDistance;
-				startMove->profile.distances[3] = startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
-				s2Left -= startMove->totalDistance;
-				startMove->state = planned;
-				startMove = startMove->next;
-				startMove->profile.distances[0] = startMove->profile.distances[1] = 0.0;
-				distanceLeftAccelerating = startMove->totalDistance;
+					// The rest of this move is part of the t2 segment of the multiple move acceleration phase
+					startMove->profile.distances[2] = distanceLeftAccelerating;
+					startMove->profile.distances[3] = startMove->profile.distances[4] = startMove->profile.distances[5] = startMove->profile.distances[6] = 0.0;
+					s2Left -= distanceLeftAccelerating;
+					startMove->state = planned;
+					startMove = startMove->next;
+					startMove->profile.distances[0] = startMove->profile.distances[1] = 0.0;
+					distanceLeftAccelerating = startMove->totalDistance;
+				}
 			}
 		}
 
 		// Allocate the t6 deceleration phase. This is the reverse of how we allocate the t0 phase.
-		float distanceLeftDecelerating;
 		{
-			float s6Left = decelParams.s0;
-			while (true)
+			float distanceLeftDecelerating;
 			{
-				if (endMove->totalDistance > s6Left)
+				float s6Left = decelParams.s0;
+				while (true)
 				{
-					endMove->profile.distances[6] = s6Left;
-					distanceLeftDecelerating = endMove->totalDistance - s6Left;
-					break;
-				}
+					if (endMove->totalDistance > s6Left)
+					{
+						endMove->profile.distances[6] = s6Left;
+						distanceLeftDecelerating = endMove->totalDistance - s6Left;
+						break;
+					}
 
-				// This whole move is part of the t6 segment of the multiple move deceleration phase
-				endMove->profile.distances[6] = endMove->totalDistance;
-				endMove->profile.distances[0] = endMove->profile.distances[1] = endMove->profile.distances[2] = endMove->profile.distances[3] = endMove->profile.distances[4] = endMove->profile.distances[5] = 0.0;
-				s6Left -= endMove->totalDistance;
-				endMove->state = planned;
-				endMove = endMove->prev;
+					// This whole move is part of the t6 segment of the multiple move deceleration phase
+					endMove->profile.distances[6] = endMove->totalDistance;
+					endMove->profile.distances[0] = endMove->profile.distances[1] = endMove->profile.distances[2] = endMove->profile.distances[3] = endMove->profile.distances[4] = endMove->profile.distances[5] = 0.0;
+					s6Left -= endMove->totalDistance;
+					endMove->state = planned;
+					endMove = endMove->prev;
+				}
 			}
-		}
 
-		// Allocate the t5 deceleration phase. This is the reverse of how we allocate the t1 phase.
-		{
-			float s5Left = decelParams.s1;
-			while (true)
+			// Allocate the t5 deceleration phase. This is the reverse of how we allocate the t1 phase.
 			{
-				endMove->profile.peakDeceleration = -decelParams.peakAcceleration;
-				if (distanceLeftDecelerating > s5Left)
+				float s5Left = decelParams.s1;
+				while (true)
 				{
-					endMove->profile.distances[5] = s5Left;
-					distanceLeftDecelerating -= s5Left;
-					break;
-				}
+					endMove->profile.peakDeceleration = -decelParams.peakAcceleration;
+					if (distanceLeftDecelerating > s5Left)
+					{
+						endMove->profile.distances[5] = s5Left;
+						distanceLeftDecelerating -= s5Left;
+						break;
+					}
 
-				// The rest of this move is part of the t5 segment of the multiple move deceleration phase
-				endMove->profile.distances[5] = s5Left;
-				endMove->profile.distances[0] = endMove->profile.distances[1] = endMove->profile.distances[2] = endMove->profile.distances[3] = endMove->profile.distances[4] = 0.0;
-				s5Left -= endMove->totalDistance;
-				endMove->state = planned;
-				endMove = endMove->prev;
-				endMove->profile.distances[6] = 0.0;
-				distanceLeftDecelerating = endMove->totalDistance;
+					// The rest of this move is part of the t5 segment of the multiple move deceleration phase
+					endMove->profile.distances[5] = distanceLeftDecelerating;
+					endMove->profile.distances[0] = endMove->profile.distances[1] = endMove->profile.distances[2] = endMove->profile.distances[3] = endMove->profile.distances[4] = 0.0;
+					s5Left -= distanceLeftDecelerating;
+					endMove->state = planned;
+					endMove = endMove->prev;
+					endMove->profile.distances[6] = 0.0;
+					distanceLeftDecelerating = endMove->totalDistance;
+				}
 			}
-		}
 
-		// Allocate the t4 deceleration phase. This is the reverse of how we allocate the t2 phase.
-		{
-			float s4Left = decelParams.s2;
-			while (true)
+			// Allocate the t4 deceleration phase. This is the reverse of how we allocate the t2 phase.
 			{
-				if (distanceLeftDecelerating > s4Left)
+				float s4Left = decelParams.s2;
+				while (true)
 				{
-					endMove->profile.distances[4] = s4Left;
-					break;
-				}
+					if (distanceLeftDecelerating > s4Left)
+					{
+						endMove->profile.distances[4] = s4Left;
+						break;
+					}
 
-				// The rest of this move is part of the t4 segment of the multiple move deceleration phase
-				endMove->profile.distances[4] = distanceLeftDecelerating;
-				if (endMove == startMove)
-				{
-					// I think this situation might arise because of rounding error
-					// TODO do we need to take any other action here?
-					break;
+					// The rest of this move is part of the t4 segment of the multiple move deceleration phase
+					endMove->profile.distances[4] = distanceLeftDecelerating;
+					if (endMove == startMove)
+					{
+						// I think this situation might arise because of rounding error
+						// TODO do we need to take any other action here?
+						break;
+					}
+
+					// The rest of this move is part of the t4 segment of the multiple move deceleration phase
+					endMove->profile.distances[0] = endMove->profile.distances[1] = endMove->profile.distances[2] = endMove->profile.distances[3] = 0.0;
+					s4Left -= distanceLeftDecelerating;
+					endMove->state = planned;
+					endMove = endMove->prev;
+					endMove->profile.distances[5] = endMove->profile.distances[6] = 0.0;
+					distanceLeftDecelerating = endMove->totalDistance;
 				}
-				endMove->profile.distances[0] = endMove->profile.distances[1] = endMove->profile.distances[2] = endMove->profile.distances[3] = 0.0;
-				s4Left -= endMove->totalDistance;
-				endMove->state = planned;
-				endMove = endMove->prev;
-				endMove->profile.distances[5] = endMove->profile.distances[6] = 0.0;
-				distanceLeftDecelerating = endMove->totalDistance;
 			}
 		}
 
@@ -1643,7 +1654,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 		lastMoveToPlan = nextMove;
 		++numMoves;
 	}
-	debugPrintf("Planning %u moves, dist %.3e maxSpeed %.4e maxAcc %.4e jerk %.4e ss %.3e sa %.3e\n",
+	debugPrintf("Planning %u moves, dist %.3f maxSpeed %.4e maxAcc %.4e jerk %.4e ss %.3e sa %.3e\n",
 				numMoves, (double)distanceToPlan, (double)maxReqSpeed, (double)minMaxAcc, (double)minJerk, (double)firstUnpreparedMove->profile.startSpeed, (double)firstUnpreparedMove->profile.startAcceleration);
 	lastMoveToPlan->profile.endSpeed = lastMoveToPlan->profile.endAcceleration = 0.0;
 
