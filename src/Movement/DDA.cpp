@@ -1391,7 +1391,7 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 
 // Calculate a deceleration-only profile returning true if successful
 static bool CalculateDeceleratingMultipleMoveProfile(float startSpeed, float endSpeed, float startAcceleration, float endAcceleration, float maxAcceleration, float jerk, MultipleMoveParameters& rslt) noexcept
-pre(startAcceleration <= 0.0)
+pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 {
 	// The plan is to use negative jerk (increase deceleration) for time t2, decelerate steadily for time t1, then use positive jerk (reduce deceleration) for time t0
 	// See Maxima for the derivation of this
@@ -1401,19 +1401,26 @@ pre(startAcceleration <= 0.0)
 	const float peakAcceleration = fastSqrtf(discriminant) * (0.5 * sqrtf(2.0));
 	if (fabsf(peakAcceleration) <= maxAcceleration)
 	{
-		// We don't need a constant acceleration segment
+		// We don't need a constant deceleration segment
 		rslt.t0 = (peakAcceleration + endAcceleration)/jerk;
 		rslt.t2 = (peakAcceleration + startAcceleration)/jerk;
 		rslt.t1 = 0.0;
-		rslt.totalDistance = rslt.t0 + rslt.t2;
+		rslt.totalDistance =  (startSpeed + (0.5 * startAcceleration - OneSixth * jerk * rslt.t0) * rslt.t0) * rslt.t0
+							+ (endSpeed   - (0.5 * endAcceleration   + OneSixth * jerk * rslt.t2) * rslt.t2) * rslt.t2;
 	}
 	else
 	{
+		// We do need a constant deceleration segment, to avoid exceeding maximum deceleration
 		rslt.t0 = (endAcceleration - maxAcceleration)/jerk;
 		rslt.t2 = (startAcceleration - maxAcceleration)/jerk;
-		rslt.t1 = qq;
-		rslt.totalDistance = rslt.t0 + rslt.t1 + rslt.t2;
+		const float t0EndSpeed = startSpeed + (startAcceleration - 0.5 * jerk * rslt.t0) * rslt.t0;
+		const float t2StartSpeed = endSpeed - (endAcceleration   - 0.5 * jerk * rslt.t2) * rslt.t2;
+		rslt.t1 = (t0EndSpeed - t2StartSpeed)/maxAcceleration;
+		rslt.totalDistance =   (startSpeed + (0.5 * startAcceleration - OneSixth * jerk * rslt.t0) * rslt.t0) * rslt.t0
+							 + (t0EndSpeed + t2StartSpeed) * rslt.t1 * 0.5
+							 + (endSpeed   - (0.5 * endAcceleration   + OneSixth * jerk * rslt.t2) * rslt.t2) * rslt.t2;
 	}
+	return true;
 }
 
 // Given a movement profile that is viable, distribute it over the moves
@@ -1650,7 +1657,7 @@ pre(startAcceleration <= 0.0)
 		// - the duration we maintain the peak speed
 		// Start by seeing how much distance we use up if we accelerate to the peak requested speed
 		float viablePeakSpeed, unviablePeakSpeed, peakSpeedToTry = maxReqSpeed;
-		float viableDistanceNeeded, unviableDistanceNeeded;
+		float viableDistanceNeeded;
 		unsigned int numIterations = 0;
 		int errorLine;
 		while (true)
@@ -1688,7 +1695,6 @@ pre(startAcceleration <= 0.0)
 			else
 			{
 				// Here if we have insufficient distance to reach the requested speed
-				unviableDistanceNeeded = distanceNeeded;
 				if (numIterations == 0)
 				{
 					if (firstUnpreparedMove->profile.startAcceleration <= 0.0)
@@ -1701,6 +1707,7 @@ pre(startAcceleration <= 0.0)
 							break;
 						}
 						viableDistanceNeeded = decelParams.totalDistance;
+						viablePeakSpeed = firstUnpreparedMove->profile.startSpeed;
 					}
 					else
 					{
