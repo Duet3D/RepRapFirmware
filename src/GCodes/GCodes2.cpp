@@ -2458,8 +2458,25 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
+#if SUPPORT_S_CURVE
+					if (frac < 1 && gb.Seen('T'))
+					{
+						if (!LockAllMovementSystemsAndWaitForStandstill(gb))
+						{
+							return false;
+						}
+						move.SetAccelerationTime(gb.GetNonNegativeFValue());
+						seen = true;
+					}
+#endif
 					if (seen)
 					{
+#if SUPPORT_S_CURVE
+						if (frac < 1)
+						{
+							move.UpdateSCurveFlagAndJerk();
+						}
+#endif
 						reprap.MoveUpdated();
 					}
 					else
@@ -2476,7 +2493,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(move.Acceleration(ExtruderToLogicalDrive(extruder), frac == 1)));
 							sep = ':';
 						}
+#if SUPPORT_S_CURVE
+						if (frac < 1)
+						{
+							reply.catf(", acceleration time %.2f sec", (double)(move.AccelerationTime() * (1.0/StepClockRate)));
+						}
+#endif
 					}
+
+#if SUPPORT_S_CURVE
+					if (frac < 1 && move.AccelerationTime() != 0.0 && !move.IsUsingSCurve())
+					{
+						reply.lcat("Acceleration time (S-curve acceleration) is disabled because phase stepping is not enabled");
+						result = GCodeResult::warning;
+					}
+#endif
 				}
 				break;
 
