@@ -3055,7 +3055,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 404: // Filament width. See also M200.
-				// TODO support per-extruder values
 				if (gb.Seen('N'))
 				{
 					platform.SetFilamentWidth(gb.GetPositiveFValue());
