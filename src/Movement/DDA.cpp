@@ -153,7 +153,7 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 		{
 			const double t0 = SmallestNonNegativeCubicSolution(djerk, 3 * acc, 6 * speed, (double)(-6 * distances[0]));
 			phase0Clocks = doubleToU32(t0);
-			debugPrintf("Phase 0: %.3e %lu %.3e %.3e\n", (double)distances[0], phase0Clocks, speed, acc);
+			debugPrintf("Phase 0: %.3e %lu %.3e %.3e %.3e\n", (double)distances[0], phase0Clocks, speed, acc, djerk);
 			speed += (acc + (double)0.5 * djerk * t0) * t0;
 			acc += djerk * t0;
 		}
@@ -179,7 +179,7 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 		{
 			const double t2 = SmallestNonNegativeCubicSolution(-djerk, 3 * acc, 6 * speed, (double)(-6 * distances[2]));
 			phase2Clocks = doubleToU32(t2);
-			debugPrintf("Phase 2: %.3e %lu %.3e %.3e\n", (double)distances[2], phase2Clocks, speed, acc);
+			debugPrintf("Phase 2: %.3e %lu %.3e %.3e %.3e\n", (double)distances[2], phase2Clocks, speed, acc, -djerk);
 			speed += (acc - (double)0.5 * djerk * t2) * t2;
 			acc -= djerk * t2;
 		}
@@ -204,7 +204,7 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 		{
 			const double t4 = SmallestNonNegativeCubicSolution(-djerk, 3 * acc, 6 * speed, (double)(-6 * distances[4]));
 			phase4Clocks = doubleToU32(t4);
-			debugPrintf("Phase 4: %.3e %lu %.3e %.3e\n", (double)distances[4], phase4Clocks, speed, acc);
+			debugPrintf("Phase 4: %.3e %lu %.3e %.3e %.3e\n", (double)distances[4], phase4Clocks, speed, acc, -djerk);
 			speed += (acc - (double)0.5 * djerk * t4) * t4;
 			acc -= djerk * t4;
 		}
@@ -249,7 +249,7 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 				}
 			}
 			phase6Clocks = doubleToU32(t6);
-			debugPrintf("Phase 6: %.3e %lu %.3e %.3e\n", (double)distances[6], phase6Clocks, (double)speed, (double)acc);
+			debugPrintf("Phase 6: %.3e %lu %.3e %.3e %.3e\n", (double)distances[6], phase6Clocks, speed, acc, djerk);
 			speed += (acc + (double)0.5 * djerk * t6) * t6;
 			acc += djerk * t6;
 		}
@@ -1341,16 +1341,17 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 {
 	if (peakSpeed > startSpeed)
 	{
+		debugPrintf("Calculating MMP with accel/decel phase\n");
 		// We need an acceleration phase. First, determine whether the maximum acceleration is limiting.
 		if ((peakSpeed - startSpeed) * jerk > fsquare(maxAcceleration) - 0.5 * fsquare(startAcceleration))
 		{
 			// Maximum acceleration is limiting, so we need a constant acceleration phase
 			rslt.peakAcceleration = maxAcceleration;
 			rslt.t0 = (maxAcceleration - startAcceleration)/jerk;
-			rslt.t1 = ((peakSpeed - startSpeed) * jerk - fsquare(maxAcceleration) + 0.5 * fsquare(startAcceleration))/(maxAcceleration * jerk);
-			rslt.t2 = rslt.peakAcceleration/jerk;
 			rslt.s0 = (maxAcceleration - startAcceleration) * (startSpeed/jerk + (maxAcceleration - startAcceleration) * (2 * startAcceleration + maxAcceleration)/(6 * fsquare(jerk)));
+			rslt.t1 = ((peakSpeed - startSpeed) * jerk - fsquare(maxAcceleration) + 0.5 * fsquare(startAcceleration))/(maxAcceleration * jerk);
 			rslt.s1 = rslt.t1 * (startSpeed + (maxAcceleration - startAcceleration) * 0.5 * (maxAcceleration + startAcceleration)/jerk + 0.5 * maxAcceleration);
+			rslt.t2 = rslt.peakAcceleration/jerk;
 			rslt.s2 = maxAcceleration * ((startSpeed + maxAcceleration * rslt.t1)/jerk + (5 * fsquare(maxAcceleration) - 3 * fsquare(startAcceleration))/(6 * fsquare(jerk)));
 			rslt.totalDistance = rslt.s0 + rslt.s1 + rslt.s2;
 		}
@@ -1361,10 +1362,10 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 			if (rslt.peakAcceleration >= startAcceleration)
 			{
 				rslt.t0 = (rslt.peakAcceleration - startAcceleration)/jerk;
-				rslt.t1 = 0.0;
-				rslt.t2 = rslt.peakAcceleration/jerk;
 				rslt.s0 = (rslt.peakAcceleration - startAcceleration) * (startSpeed/jerk + (rslt.peakAcceleration - startAcceleration) * (2 * startAcceleration + rslt.peakAcceleration)/(6 * fsquare(jerk)));
+				rslt.t1 = 0.0;
 				rslt.s1 = 0.0;
+				rslt.t2 = rslt.peakAcceleration/jerk;
 				rslt.s2 = rslt.peakAcceleration * (startSpeed/jerk + (5 * fsquare(rslt.peakAcceleration) - 3 * fsquare(startAcceleration))/(6 * fsquare(jerk)));
 				rslt.totalDistance = rslt.s0 + rslt.s2;
 			}
@@ -1376,12 +1377,13 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 		}
 		if (rslt.s0 < 0 || rslt.s1 < 0 || rslt.s2 < 0)
 		{
-			debugPrintf("s0,1,2 %.4e %.4e %.4e, ss %.4e ps =%.4e sa %.4e ma %.4e pa %.4e j %.4e\n",
+			debugPrintf("Error negative distance: s0,1,2 %.4e %.4e %.4e, ss %.4e ps =%.4e sa %.4e ma %.4e pa %.4e j %.4e\n",
 				(double)rslt.s0, (double)rslt.s1, (double)rslt.s2, (double)startSpeed, (double)peakSpeed, (double)startAcceleration, (double)maxAcceleration, (double)rslt.peakAcceleration, (double)jerk);
 		}
 	}
 	else
 	{
+		debugPrintf("MMP has no accel/decel phase\n");
 		// We don't need an acceleration phase
 		rslt.t0 = rslt.t1 = rslt.t2 = 0.0;
 		rslt.s0 = rslt.s1 = rslt.s2 = rslt.totalDistance = 0.0;
@@ -1393,32 +1395,40 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 static bool CalculateDeceleratingMultipleMoveProfile(float startSpeed, float endSpeed, float startAcceleration, float endAcceleration, float maxAcceleration, float jerk, MultipleMoveParameters& rslt) noexcept
 pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 {
+	debugPrintf("Calculating decel move\n");
 	// The plan is to use negative jerk (increase deceleration) for time t2, decelerate steadily for time t1, then use positive jerk (reduce deceleration) for time t0
 	// See Maxima for the derivation of this
 	// First assume t1 is zero and see whether the peak acceleration is within limits
 	const float discriminant = 2 * jerk * (startSpeed - endSpeed) + fsquare(startAcceleration) + fsquare(endAcceleration);
-	if (discriminant < 0) { return false; }			// no solutions
+	if (discriminant < 0)
+	{
+		return false;					// no solutions
+	}
+
 	const float peakAcceleration = fastSqrtf(discriminant) * (0.5 * sqrtf(2.0));
 	if (fabsf(peakAcceleration) <= maxAcceleration)
 	{
 		// We don't need a constant deceleration segment
 		rslt.t0 = (peakAcceleration + endAcceleration)/jerk;
-		rslt.t2 = (peakAcceleration + startAcceleration)/jerk;
+		rslt.s0 = (endSpeed - (0.5 * endAcceleration   + OneSixth * jerk * rslt.t0) * rslt.t0) * rslt.t0;
 		rslt.t1 = 0.0;
-		rslt.totalDistance =  (startSpeed + (0.5 * startAcceleration - OneSixth * jerk * rslt.t0) * rslt.t0) * rslt.t0
-							+ (endSpeed   - (0.5 * endAcceleration   + OneSixth * jerk * rslt.t2) * rslt.t2) * rslt.t2;
+		rslt.s1 = 0.0;
+		rslt.t2 = (peakAcceleration + startAcceleration)/jerk;
+		rslt.s2 = (startSpeed + (0.5 * startAcceleration - OneSixth * jerk * rslt.t2) * rslt.t2) * rslt.t2;
+		rslt.totalDistance = rslt.s0 + rslt.s2;
 	}
 	else
 	{
 		// We do need a constant deceleration segment, to avoid exceeding maximum deceleration
 		rslt.t0 = (endAcceleration - maxAcceleration)/jerk;
-		rslt.t2 = (startAcceleration - maxAcceleration)/jerk;
+		rslt.s0 = (endSpeed - (0.5 * endAcceleration + OneSixth * jerk * rslt.t0) * rslt.t0) * rslt.t0;
 		const float t0EndSpeed = startSpeed + (startAcceleration - 0.5 * jerk * rslt.t0) * rslt.t0;
 		const float t2StartSpeed = endSpeed - (endAcceleration   - 0.5 * jerk * rslt.t2) * rslt.t2;
 		rslt.t1 = (t0EndSpeed - t2StartSpeed)/maxAcceleration;
-		rslt.totalDistance =   (startSpeed + (0.5 * startAcceleration - OneSixth * jerk * rslt.t0) * rslt.t0) * rslt.t0
-							 + (t0EndSpeed + t2StartSpeed) * rslt.t1 * 0.5
-							 + (endSpeed   - (0.5 * endAcceleration   + OneSixth * jerk * rslt.t2) * rslt.t2) * rslt.t2;
+		rslt.s1 = (t0EndSpeed + t2StartSpeed) * rslt.t1 * 0.5;
+		rslt.t2 = (startAcceleration - maxAcceleration)/jerk;
+		rslt.s2 = (startSpeed + (0.5 * startAcceleration - OneSixth * jerk * rslt.t2) * rslt.t2) * rslt.t2;
+		rslt.totalDistance = rslt.s0 + rslt.s1 + rslt.s2;
 	}
 	return true;
 }
@@ -1633,7 +1643,8 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 		lastMoveToPlan = nextMove;
 		++numMoves;
 	}
-	debugPrintf("Planning %u moves, dist %.3e maxSpeed %.4e maxAcc %.4e jerk %.4e\n", numMoves, (double)distanceToPlan, (double)maxReqSpeed, (double)minMaxAcc, (double)minJerk);
+	debugPrintf("Planning %u moves, dist %.3e maxSpeed %.4e maxAcc %.4e jerk %.4e ss %.3e sa %.3e\n",
+				numMoves, (double)distanceToPlan, (double)maxReqSpeed, (double)minMaxAcc, (double)minJerk, (double)firstUnpreparedMove->profile.startSpeed, (double)firstUnpreparedMove->profile.startAcceleration);
 	lastMoveToPlan->profile.endSpeed = lastMoveToPlan->profile.endAcceleration = 0.0;
 
 	// If the sequence comprises a single move and the start speed and acceleration are both zero (e.g. we are adding the first move), this is the simplest case
@@ -1653,7 +1664,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 		// This is easier if we can constrain the XY max acceleration and jerk to be constant and isotropic (not necessarily true when bed compensation is in use)
 		// The parameters we can adjust are:
 		// - the duration we increase acceleration (up to max acceleration)
-		// - if we reach max acceleration, he duration we maintain it
+		// - if we reach max acceleration, the duration we maintain it
 		// - the duration we maintain the peak speed
 		// Start by seeing how much distance we use up if we accelerate to the peak requested speed
 		float viablePeakSpeed, unviablePeakSpeed, peakSpeedToTry = maxReqSpeed;
