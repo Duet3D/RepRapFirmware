@@ -297,7 +297,7 @@ GCodeResult Move::ConfigureAxisLimits(GCodeBuffer& gb, const StringRef& reply, c
 		char sep = ')';
 		for (size_t axis = 0; axis < numTotalAxes; axis++)
 		{
-			reply.catf("%c %c%.1f:%.1f", sep, axisLetters[axis], (double)AxisMinimum(axis), (double)AxisMaximum(axis));
+			reply.catf("%c %c%.2f:%.2f", sep, axisLetters[axis], (double)AxisMinimum(axis), (double)AxisMaximum(axis));
 			sep = ',';
 		}
 	}
