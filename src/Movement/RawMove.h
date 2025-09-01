@@ -177,8 +177,6 @@ public:
 	unsigned int segmentsTillNextFullCalc;							// how may more segments we can do before we need to do the full calculation instead of the quicker one
 	GCodeQueue *codeQueue;											// stores certain codes for deferred execution
 
-	GCodeBuffer *null updateUserPositionGb;							// if this is non-null then we need to update the user position from the machine position
-
 	unsigned int segmentsLeftToStartAt;
 	float moveFractionToSkip;
 	float firstSegmentFractionToSkip;

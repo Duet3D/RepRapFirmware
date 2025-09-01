@@ -436,15 +436,6 @@ void GCodes::Spin() noexcept
 	}
 #endif
 
-	for (MovementState& ms : moveStates)
-	{
-		if (ms.updateUserPositionGb != nullptr)
-		{
-			UpdateCurrentUserPosition(*ms.updateUserPositionGb);
-			ms.updateUserPositionGb = nullptr;
-		}
-	}
-
 	CheckTriggers();
 
 	// The autoPause buffer has priority, so spin that one first. It may have to wait for other buffers to release locks etc.
