@@ -54,7 +54,7 @@ public:
 
 	GCodeResult SetPwm(float speed, const StringRef& reply) noexcept;
 	bool HasMonitoredSensors() const noexcept { return sensorsMonitored.IsNonEmpty(); }
-	unsigned int GetNumber() const { return fanNumber; }
+	unsigned int GetNumber() const noexcept { return fanNumber; }
 	AutoStringHandle GetName() const noexcept { return name; }
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
