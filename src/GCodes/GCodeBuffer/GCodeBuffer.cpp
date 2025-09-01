@@ -684,7 +684,7 @@ ExpressionValue GCodeBuffer::GetExpression() THROWS(GCodeException)
 	return PARSER_OPERATION(GetExpression());
 }
 
-// Get an unsigned integer or a string after a key letter
+// Get an unsigned integer or a string after a key letter returning true if a string was found, false if an unsigned integer was found
 bool GCodeBuffer::GetStringOrUIValue(uint32_t& ival, const StringRef& str) THROWS(GCodeException)
 {
 	return PARSER_OPERATION(GetStringOrUIValue(ival, str));
