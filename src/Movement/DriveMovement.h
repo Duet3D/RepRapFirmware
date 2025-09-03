@@ -281,9 +281,30 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 				if (phaseStepControl.IsEnabled())
 				{
 					currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
-					distanceCarriedForwards += seg->GetLength() - (motioncalc_t)netStepsThisSegment;
 					phaseStepsTakenSinceMoveStart += seg->GetLength();
-					movementAccumulator += netStepsThisSegment;		// update the amount of extrusion
+					movementAccumulator += netStepsThisSegment;			// update the amount of extrusion
+
+					motioncalc_t provisionalDistanceCarriedForwards = distanceCarriedForwards + seg->GetLength() - (motioncalc_t)netStepsThisSegment;
+					if (seg->GetNext() == nullptr && !seg->GetFlags().isExtruder)
+					{
+						// This is an axis and there are no further segments, so we may need to round the current position to the nearest microstep
+						if (fabsm(provisionalDistanceCarriedForwards) < 0.05)
+						{
+							provisionalDistanceCarriedForwards = (motioncalc_t)0.0;						// just remove the rounding error
+						}
+						else if (provisionalDistanceCarriedForwards > (motioncalc_t)0.95)
+						{
+							++currentMotorPosition;														// round up to next microstep
+							provisionalDistanceCarriedForwards = (motioncalc_t)0.0;
+						}
+						else if (provisionalDistanceCarriedForwards < -(motioncalc_t)0.95)
+						{
+							--currentMotorPosition;														// round down to next position
+							provisionalDistanceCarriedForwards = (motioncalc_t)0.0;
+						}
+					}
+					distanceCarriedForwards = provisionalDistanceCarriedForwards;
+
 					MoveSegment *oldSeg = seg;
 					segments = oldSeg->GetNext();
 					MoveSegment::Release(oldSeg);
