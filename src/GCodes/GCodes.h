@@ -595,6 +595,7 @@ private:
 
 #if SUPPORT_COORDINATE_ROTATION
 	GCodeResult HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle G68
+	bool WriteCoordinateRotation(FileStore *f, const MovementState& ms) const noexcept;
 #endif
 
 #if SUPPORT_DIRECT_LCD
