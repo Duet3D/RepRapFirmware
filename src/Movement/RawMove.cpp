@@ -92,6 +92,11 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 	filePos = noFilePosition;
 	codeQueue->Clear();
 	currentCoordinateSystem = 0;
+
+#if SUPPORT_COORDINATE_ROTATION
+	g68Angle = g68Centre[0] = g68Centre[1] = 0.0;				// no coordinate rotation
+#endif
+
 	pausedInMacro = false;
 
 #if SUPPORT_ASYNC_MOVES

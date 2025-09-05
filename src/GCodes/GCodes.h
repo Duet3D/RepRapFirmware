@@ -239,7 +239,7 @@ public:
 	unsigned int GetPrimaryWorkplaceCoordinateSystemNumber() const noexcept { return GetPrimaryMovementState().currentCoordinateSystem + 1; }
 
 #if SUPPORT_COORDINATE_ROTATION
-	void RotateCoordinates(float angleDegrees, float coords[2]) const noexcept;		// Account for coordinate rotation
+	void RotateCoordinates(const MovementState& ms, float angleDegrees, float coords[2]) const noexcept;		// Account for coordinate rotation
 #endif
 
 	// This function is called by other functions to account correctly for workplace coordinates
@@ -261,10 +261,11 @@ public:
 	float GetPrimaryMaxPrintingAcceleration() const noexcept { return moveStates[0].maxPrintingAcceleration; }
 	float GetPrimaryMaxTravelAcceleration() const noexcept { return moveStates[0].maxTravelAcceleration; }
 
-#if SUPPORT_COORDINATE_ROTATION
-	float GetRotationAngle() const noexcept { return g68Angle; }
-	float GetRotationCentre(size_t index) const noexcept pre(index < 2) { return g68Centre[index]; }
-#endif
+
+# if SUPPORT_COORDINATE_ROTATION
+	float GetRotationAngle(const MovementState& ms) const noexcept { return ms.g68Angle; }
+	float GetRotationCentre(const MovementState& ms, size_t index) const noexcept pre(index < 2) { return ms.g68Centre[index]; }
+# endif
 
 	size_t GetNumInputs() const noexcept { return NumGCodeChannels; }
 	const GCodeBuffer *_ecv_null GetInput(size_t n) const noexcept { return gcodeSources[n]; }
@@ -406,7 +407,7 @@ private:
 	bool DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException);							// Execute an arc move
 	void FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
 	bool CheckEnoughAxesHomed(AxesBitmap axesToMove) noexcept;										// Check that enough axes have been homed
-	bool TravelToStartPoint(GCodeBuffer& gb) noexcept;												// Set up a move to travel to the resume point
+	void TravelToStartPoint(GCodeBuffer& gb) noexcept;												// Set up a move to travel to the resume point
 
 	GCodeResult DoDwell(GCodeBuffer& gb) THROWS(GCodeException);														// Wait for a bit
 	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);									// Home some axes
@@ -442,7 +443,7 @@ private:
 	bool ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Process a whole-line comment
 
 	void LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool axesMoving) THROWS(GCodeException);		// Set up the feed rate of a move
-	void LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool axesMoving) THROWS(GCodeException);	// Set up the extrusion of a move
+	bool LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool axesMoving) THROWS(GCodeException);	// Set up the extrusion of a move, returning true if there is any extrusion
 
 	bool Push(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Pop feedrate etc
@@ -593,6 +594,7 @@ private:
 
 #if SUPPORT_COORDINATE_ROTATION
 	GCodeResult HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle G68
+	bool WriteCoordinateRotation(FileStore *f, const MovementState& ms) const noexcept;
 #endif
 
 #if SUPPORT_DIRECT_LCD
@@ -674,11 +676,6 @@ private:
 	float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
 
 	float workplaceCoordinates[NumCoordinateSystems][MaxAxes];	// Workplace coordinate offsets
-
-#if SUPPORT_COORDINATE_ROTATION
-	float g68Angle;								// the G68 rotation angle in radians
-	float g68Centre[2];							// the XY coordinates of the centre to rotate about
-#endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileData fileToPrint;						// The next file to print

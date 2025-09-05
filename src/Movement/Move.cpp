@@ -115,7 +115,7 @@ constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 	{
 		nullptr,					// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
-		OBJECT_MODEL_ARRAY_VALUE_NOSELF(reprap.GetGCodes().GetRotationCentre(context.GetLastIndex()))
+		OBJECT_MODEL_ARRAY_VALUE_NOSELF(reprap.GetGCodes().GetRotationCentre(reprap.GetGCodes().GetPrimaryMovementState(), context.GetLastIndex()))
 	},
 #elif SUPPORT_KEEPOUT_ZONES
 	{
@@ -308,7 +308,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 
 #if SUPPORT_COORDINATE_ROTATION
 	// 15. move.rotation members
-	{ "angle",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRotationAngle()),										ObjectModelEntryFlags::none },
+	{ "angle",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRotationAngle(reprap.GetGCodes().GetPrimaryMovementState())),	ObjectModelEntryFlags::none },
 	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(5),																				ObjectModelEntryFlags::none },
 #endif
 };

@@ -240,10 +240,6 @@ void GCodes::Reset() noexcept
 		}
 	}
 
-#if SUPPORT_COORDINATE_ROTATION
-	g68Angle = g68Centre[0] = g68Centre[1] = 0.0;				// no coordinate rotation
-#endif
-
 	// Initialise each movement system, except for the initial positions
 	for (MovementSystemNumber i = 0; i < NumMovementSystems; ++i)
 	{
@@ -1537,6 +1533,13 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 		ok = f->Write(buf.c_str());
 	}
 
+#if SUPPORT_COORDINATE_ROTATION
+	if (ok)
+	{
+		ok = WriteCoordinateRotation(f, ms);
+	}
+#endif
+
 	const GCodeMachineState& oms = GetFileGCode(ms.GetNumber())->OriginalMachineState();
 	if (ok && oms.volumetricExtrusion)
 	{
@@ -1886,16 +1889,17 @@ void GCodes::LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool axes
 	}
 }
 
-// Set up the extrusion of a move for the Move class
+// Set up the extrusion of a move, returning true if there is any extrusion
 // 'moveBuffer.moveType', 'moveBuffer.isCoordinated', ms.moveType and ms.feedRate must be set up before calling this
 // 'isPrintingMove' is true if there is any axis movement
-void GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool axesMoving) THROWS(GCodeException)
+bool GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool axesMoving) THROWS(GCodeException)
 {
 	// Zero every extruder drive as some drives may not be moved
 	for (size_t drive = numTotalAxes; drive < MaxAxesPlusExtruders; drive++)
 	{
 		ms.coords[drive] = 0.0;
 	}
+	bool hasExtrusion = false;
 	ms.hasPositiveExtrusion = false;
 	ms.moveStartVirtualExtruderPosition = ms.latestVirtualExtruderPosition;	// save this before we update it
 
@@ -1907,7 +1911,7 @@ void GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool axe
 		if (tool == nullptr)
 		{
 			displayNoToolWarning = true;
-			return;
+			return false;
 		}
 
 		ExtrudersBitmap extrudersMoving;
@@ -1939,6 +1943,7 @@ void GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool axe
 					ms.latestVirtualExtruderPosition = moveArg;
 				}
 
+				hasExtrusion = true;
 				if (requestedExtrusionAmount > 0.0)
 				{
 					ms.hasPositiveExtrusion = true;
@@ -2000,6 +2005,7 @@ void GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool axe
 						float extrusionAmount = gb.ConvertDistance(eMovement[eDrive]);
 						if (extrusionAmount != 0.0)
 						{
+							hasExtrusion = true;
 							if (extrusionAmount > 0.0)
 							{
 								ms.hasPositiveExtrusion = true;
@@ -2053,6 +2059,7 @@ void GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool axe
 			}
 		}
 	}
+	return hasExtrusion;
 }
 
 // Check that enough axes have been homed, returning true if insufficient axes homed
@@ -2288,14 +2295,14 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		}
 	}
 
-	LoadFeedrateFromGCode(gb, ms, axesMentioned.IsNonEmpty());							// set up feedrate before we to the endstop calculations
+	LoadFeedrateFromGCode(gb, ms, axesMentioned.IsNonEmpty());							// set up feedrate before we do the endstop calculations
 
 	AxesBitmap realAxesMoving;				// we'll need this later but only if ms.moveType == 0
 	if (ms.moveType ==  0)
 	{
 #if SUPPORT_COORDINATE_ROTATION
 		// Update the list of axes mentioned to allow for cross coupling between X and Y
-		if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
+		if (ms.g68Angle != 0.0 && gb.DoingCoordinateRotation())
 		{
 			const AxesBitmap xAndY = AxesBitmap::MakeFromBits(X_AXIS, Y_AXIS);
 			if (axesMentioned.Intersects(xAndY))
@@ -2406,26 +2413,22 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		ms.endstopsTriggered.Clear();
 	}
 
-	LoadExtrusionFromGCode(gb, ms, axesMentioned.IsNonEmpty());				// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
-
-	const bool isPrintingMove = ms.hasPositiveExtrusion && axesMentioned.IsNonEmpty();
-	if (ms.IsFirstMoveSincePrintingResumed())								// if this is the first move after skipping an object
+	const bool hasExtrusion = LoadExtrusionFromGCode(gb, ms, axesMentioned.IsNonEmpty());	// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
+	if (ms.IsFirstMoveSincePrintingResumed())												// if this is the first move after skipping an object
 	{
-		if (isPrintingMove)
+		if (!LockCurrentMovementSystemAndWaitForStandstill(gb))								// update the user position from the machine position
 		{
-			if (TravelToStartPoint(gb))										// don't start a printing move from the wrong place
-			{
-				ms.DoneMoveSincePrintingResumed();
-			}
 			return false;
 		}
-		else if (axesMentioned.IsNonEmpty())								// don't count G1 Fxxx as a travel move
+		ms.DoneMoveSincePrintingResumed();
+		if (hasExtrusion)
 		{
-			ms.DoneMoveSincePrintingResumed();
+			TravelToStartPoint(gb);															// don't start a printing move from the wrong place
+			return false;
 		}
 	}
 
-	if (isPrintingMove)
+	if (ms.hasPositiveExtrusion && axesMentioned.IsNonEmpty())
 	{
 		// Update the object coordinates limits. For efficiency, we only update the final coordinate.
 		// Except in the case of a straight line that is only one extrusion width wide, this is sufficient.
@@ -2447,11 +2450,11 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	else
 	{
 #if SUPPORT_COORDINATE_ROTATION
-		if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
+		if (ms.g68Angle != 0.0 && gb.DoingCoordinateRotation())
 		{
 			float coords[MaxAxes];
 			memcpyf(coords, ms.currentUserPosition, MaxAxes);
-			RotateCoordinates(g68Angle, coords);
+			RotateCoordinates(ms, ms.g68Angle, coords);
 			ToolOffsetTransform(ms, coords, ms.coords, axesMentioned);
 		}
 		else
@@ -2857,7 +2860,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 
 #if SUPPORT_COORDINATE_ROTATION
 	// Apply coordinate rotation to the final and the centre coordinates
-	if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
+	if (ms.g68Angle != 0.0 && gb.DoingCoordinateRotation())
 	{
 		const AxesBitmap xAndY = AxesBitmap::MakeFromBits(X_AXIS, Y_AXIS);
 		if (axesMentioned.Intersects(xAndY))
@@ -2866,11 +2869,11 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 		}
 		float coords[MaxAxes];
 		memcpyf(coords, ms.currentUserPosition, MaxAxes);
-		RotateCoordinates(g68Angle, coords);
+		RotateCoordinates(ms, ms.g68Angle, coords);
 		ToolOffsetTransform(ms, coords, ms.coords, axesMentioned);				// set the final position
-		RotateCoordinates(g68Angle, userArcCentre);
-		finalTheta -= g68Angle * DegreesToRadians;
-		ms.arcCurrentAngle -= g68Angle * DegreesToRadians;
+		RotateCoordinates(ms, ms.g68Angle, userArcCentre);
+		finalTheta -= ms.g68Angle * DegreesToRadians;
+		ms.arcCurrentAngle -= ms.g68Angle * DegreesToRadians;
 	}
 	else
 #endif
@@ -2913,21 +2916,19 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 #endif
 
 	LoadFeedrateFromGCode(gb, ms, true);
-	LoadExtrusionFromGCode(gb, ms, true);
 
+	const bool hasExtrusion = LoadExtrusionFromGCode(gb, ms, true);
 	if (ms.IsFirstMoveSincePrintingResumed())
 	{
-		if (ms.hasPositiveExtrusion)							// check whether this is the first move after skipping an object and is extruding
+		if (!LockCurrentMovementSystemAndWaitForStandstill(gb))		// update the user position from the machine position
 		{
-			if (TravelToStartPoint(gb))							// don't start a printing move from the wrong point
-			{
-				ms.DoneMoveSincePrintingResumed();
-			}
 			return false;
 		}
-		else
+		ms.DoneMoveSincePrintingResumed();
+		if (hasExtrusion)											// check whether this is the first move after skipping an object and is extruding
 		{
-			ms.DoneMoveSincePrintingResumed();
+			TravelToStartPoint(gb);									// don't start a printing move from the wrong point
+			return false;
 		}
 	}
 
@@ -3074,13 +3075,8 @@ void GCodes::FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept
 // Set up a move to travel to the resume point. Return true if successful, false if needs to be called again.
 // By the time this is called, the user position has been overwritten with the final position of the pending move, so we can't use it.
 // But the expected position was saved by buildObjects when the state changed from printing a cancelled object to printing a live object.
-bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
+void GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 {
-	if (!LockCurrentMovementSystemAndWaitForStandstill(gb))				// update the user position from the machine position
-	{
-		return false;
-	}
-
 	MovementState& ms = GetMovementState(gb);
 	ms.SetDefaults(numTotalAxes);
 	SetMoveBufferDefaults(ms);
@@ -3091,7 +3087,6 @@ bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 	ms.movementTool = ms.currentTool;
 	ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;			// assume that both linear and rotational axes might be moving
 	NewSegmentableMoveAvailable(ms);
-	return true;
 }
 
 // The Move class calls this function to find what to do next. It takes its own copy of the move because it adjusts the coordinates.
@@ -4668,9 +4663,9 @@ void GCodes::UpdateUserPositionFromMachinePosition(const GCodeBuffer& gb, Moveme
 {
 	ToolOffsetInverseTransform(ms);
 #if SUPPORT_COORDINATE_ROTATION
-	if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
+	if (ms.g68Angle != 0.0 && gb.DoingCoordinateRotation())
 	{
-		RotateCoordinates(-g68Angle, ms.currentUserPosition);
+		RotateCoordinates(ms, -ms.g68Angle, ms.currentUserPosition);
 	}
 #endif
 }
@@ -4894,10 +4889,16 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 
 	// P31 will include G31 Z probe value
 	bool p31 = false;
+
+# if SUPPORT_COORDINATE_ROTATION
+	// P68 will include G68 coordinate rotation for the first movement system
+	bool p68 = false;
+#endif
+
 	if (gb.Seen('P'))
 	{
-		uint32_t pVals[2];
-		size_t pCount = 2;
+		uint32_t pVals[3];
+		size_t pCount = 3;
 		gb.GetUnsignedArray(pVals, pCount, false);
 		for (size_t i = 0; i < pCount; i++)
 		{
@@ -4910,6 +4911,14 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 			case 31:
 				p31 = true;
 				break;
+
+# if SUPPORT_COORDINATE_ROTATION
+			case 68:
+				p68 = true;
+				break;
+#endif
+			default:
+				break;					// other values are ignored without warning
 			}
 		}
 	}
@@ -4931,6 +4940,13 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 	{
 		ok = WriteWorkplaceCoordinates(f);
 	}
+
+# if SUPPORT_COORDINATE_ROTATION
+	if (ok && p68)
+	{
+		ok = WriteCoordinateRotation(f, GetPrimaryMovementState());
+	}
+#endif
 
 	if (!f->Close())
 	{
@@ -5420,7 +5436,7 @@ void GCodes::AllocateAxisLetters(const GCodeBuffer& gb, MovementState& ms, Param
 {
 # if SUPPORT_COORDINATE_ROTATION
 	// If we are rotating coordinates then X implies Y and vice versa
-	if (g68Angle != 0.0)
+	if (ms.g68Angle != 0.0)
 	{
 		if (axLetters.IsBitSet(ParameterLetterToBitNumber('X')))
 		{
