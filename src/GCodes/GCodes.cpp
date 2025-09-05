@@ -1530,6 +1530,17 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 		{
 			buf.printf("G59.%u\n", ms.currentCoordinateSystem - 5);
 		}
+
+#if SUPPORT_COORDINATE_ROTATION
+		if (ms.g68Angle != 0.0)
+		{
+			buf.catf("G68 X%.3f Y%.3f R%.2f\n", (double)ms.g68Centre[0], (double)ms.g68Centre[1], (double)ms.g68Angle);
+		}
+		else
+		{
+			buf.cat("G69\n");
+		}
+#endif
 		ok = f->Write(buf.c_str());
 	}
 
