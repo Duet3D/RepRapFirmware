@@ -56,15 +56,16 @@ GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply) THROWS
 // Note, in the NIST specification G53 doesn't affect how G92 is interpreted.
 GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	MovementState& ms = GetMovementState(gb);
+
 #if SUPPORT_COORDINATE_ROTATION
-	if (g68Angle != 0.0 && gb.SeenAny("XY") && gb.DoingCoordinateRotation())
+	if (ms.g68Angle != 0.0 && gb.SeenAny("XY") && gb.DoingCoordinateRotation())
 	{
 		reply.copy("not supported when coordinate rotation is in effect");
 		return GCodeResult::error;
 	}
 #endif
 
-	MovementState& ms = GetMovementState(gb);
 	AxesBitmap axesIncluded;
 
 	// Don't wait for the machine to stop if only extruder drives are being reset.
@@ -1023,25 +1024,25 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		gb.MustSee('B', 'Y');
 		centreY = gb.GetFValue();
 
-		g68Centre[0] = centreX + GetWorkplaceOffset(gb, 0);
-		g68Centre[1] = centreY + GetWorkplaceOffset(gb, 1);
+		MovementState& ms = GetMovementState(gb);
+		ms.g68Centre[0] = centreX + GetWorkplaceOffset(gb, 0);
+		ms.g68Centre[1] = centreY + GetWorkplaceOffset(gb, 1);
 #if SUPPORT_ASYNC_MOVES
-		const float oldG68Angle = g68Angle;
+		const float oldG68Angle = ms.g68Angle;
 #endif
 		if (gb.Seen('I'))
 		{
-			g68Angle += angle;
+			ms.g68Angle += angle;
 		}
 		else
 		{
-			g68Angle = angle;
+			ms.g68Angle = angle;
 		}
 #if SUPPORT_ASYNC_MOVES
-		if (g68Angle != 0.0 && oldG68Angle == 0.0)
+		if (ms.g68Angle != 0.0 && oldG68Angle == 0.0)
 		{
 			// We have just started doing coordinate rotation, so if we own axis letter X we need to own Y and vice versa
 			// Simplest is just to say we don't own either in the axis letters bitmap
-			MovementState& ms = GetMovementState(gb);
 			ms.ReleaseAxisLetter('X');
 			ms.ReleaseAxisLetter('Y');
 		}
@@ -1053,11 +1054,11 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 }
 
 // Account for coordinate rotation. Only called when the angle to rotate is nonzero, so we don't check that here.
-void GCodes::RotateCoordinates(float angleDegrees, float coords[2]) const noexcept
+void GCodes::RotateCoordinates(const MovementState& ms, float angleDegrees, float coords[2]) const noexcept
 {
 	const float angle = angleDegrees * DegreesToRadians;
-	const float newX = (coords[0] - g68Centre[0]) * cosf(angle) - (coords[1] - g68Centre[1]) * sinf(angle) + g68Centre[0];
-	const float newY = (coords[0] - g68Centre[0]) * sinf(angle) + (coords[1] - g68Centre[1]) * cosf(angle) + g68Centre[1];
+	const float newX = (coords[0] - ms.g68Centre[0]) * cosf(angle) - (coords[1] - ms.g68Centre[1]) * sinf(angle) + ms.g68Centre[0];
+	const float newY = (coords[0] - ms.g68Centre[0]) * sinf(angle) + (coords[1] - ms.g68Centre[1]) * cosf(angle) + ms.g68Centre[1];
 	coords[0] = newX;
 	coords[1] = newY;
 }

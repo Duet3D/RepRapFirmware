@@ -240,10 +240,6 @@ void GCodes::Reset() noexcept
 		}
 	}
 
-#if SUPPORT_COORDINATE_ROTATION
-	g68Angle = g68Centre[0] = g68Centre[1] = 0.0;				// no coordinate rotation
-#endif
-
 	// Initialise each movement system, except for the initial positions
 	for (MovementSystemNumber i = 0; i < NumMovementSystems; ++i)
 	{
@@ -2299,7 +2295,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	{
 #if SUPPORT_COORDINATE_ROTATION
 		// Update the list of axes mentioned to allow for cross coupling between X and Y
-		if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
+		if (ms.g68Angle != 0.0 && gb.DoingCoordinateRotation())
 		{
 			const AxesBitmap xAndY = AxesBitmap::MakeFromBits(X_AXIS, Y_AXIS);
 			if (axesMentioned.Intersects(xAndY))
@@ -2447,11 +2443,11 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	else
 	{
 #if SUPPORT_COORDINATE_ROTATION
-		if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
+		if (ms.g68Angle != 0.0 && gb.DoingCoordinateRotation())
 		{
 			float coords[MaxAxes];
 			memcpyf(coords, ms.currentUserPosition, MaxAxes);
-			RotateCoordinates(g68Angle, coords);
+			RotateCoordinates(ms, ms.g68Angle, coords);
 			ToolOffsetTransform(ms, coords, ms.coords, axesMentioned);
 		}
 		else
@@ -2857,7 +2853,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 
 #if SUPPORT_COORDINATE_ROTATION
 	// Apply coordinate rotation to the final and the centre coordinates
-	if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
+	if (ms.g68Angle != 0.0 && gb.DoingCoordinateRotation())
 	{
 		const AxesBitmap xAndY = AxesBitmap::MakeFromBits(X_AXIS, Y_AXIS);
 		if (axesMentioned.Intersects(xAndY))
@@ -2866,11 +2862,11 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 		}
 		float coords[MaxAxes];
 		memcpyf(coords, ms.currentUserPosition, MaxAxes);
-		RotateCoordinates(g68Angle, coords);
+		RotateCoordinates(ms, ms.g68Angle, coords);
 		ToolOffsetTransform(ms, coords, ms.coords, axesMentioned);				// set the final position
-		RotateCoordinates(g68Angle, userArcCentre);
-		finalTheta -= g68Angle * DegreesToRadians;
-		ms.arcCurrentAngle -= g68Angle * DegreesToRadians;
+		RotateCoordinates(ms, ms.g68Angle, userArcCentre);
+		finalTheta -= ms.g68Angle * DegreesToRadians;
+		ms.arcCurrentAngle -= ms.g68Angle * DegreesToRadians;
 	}
 	else
 #endif
@@ -4660,9 +4656,9 @@ void GCodes::UpdateUserPositionFromMachinePosition(const GCodeBuffer& gb, Moveme
 {
 	ToolOffsetInverseTransform(ms);
 #if SUPPORT_COORDINATE_ROTATION
-	if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
+	if (ms.g68Angle != 0.0 && gb.DoingCoordinateRotation())
 	{
-		RotateCoordinates(-g68Angle, ms.currentUserPosition);
+		RotateCoordinates(ms, -ms.g68Angle, ms.currentUserPosition);
 	}
 #endif
 }
@@ -5412,7 +5408,7 @@ void GCodes::AllocateAxisLetters(const GCodeBuffer& gb, MovementState& ms, Param
 {
 # if SUPPORT_COORDINATE_ROTATION
 	// If we are rotating coordinates then X implies Y and vice versa
-	if (g68Angle != 0.0)
+	if (ms.g68Angle != 0.0)
 	{
 		if (axLetters.IsBitSet(ParameterLetterToBitNumber('X')))
 		{

@@ -679,9 +679,9 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 
 	// Convert target user position to machine coordinates and save them in StraightProbeSettings
 #if SUPPORT_COORDINATE_ROTATION
-	if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
+	if (ms.g68Angle != 0.0 && gb.DoingCoordinateRotation())
 	{
-		RotateCoordinates(g68Angle, userPositionTarget);
+		RotateCoordinates(ms, ms.g68Angle, userPositionTarget);
 	}
 #endif
 

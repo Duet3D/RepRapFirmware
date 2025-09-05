@@ -239,7 +239,7 @@ public:
 	unsigned int GetPrimaryWorkplaceCoordinateSystemNumber() const noexcept { return GetPrimaryMovementState().currentCoordinateSystem + 1; }
 
 #if SUPPORT_COORDINATE_ROTATION
-	void RotateCoordinates(float angleDegrees, float coords[2]) const noexcept;		// Account for coordinate rotation
+	void RotateCoordinates(const MovementState& ms, float angleDegrees, float coords[2]) const noexcept;		// Account for coordinate rotation
 #endif
 
 	// This function is called by other functions to account correctly for workplace coordinates
@@ -263,8 +263,8 @@ public:
 	float GetPrimaryMaxTravelAcceleration() const noexcept { return moveStates[0].maxTravelAcceleration; }
 
 # if SUPPORT_COORDINATE_ROTATION
-	float GetRotationAngle() const noexcept { return g68Angle; }
-	float GetRotationCentre(size_t index) const noexcept pre(index < 2) { return g68Centre[index]; }
+	float GetRotationAngle(const MovementState& ms) const noexcept { return ms.g68Angle; }
+	float GetRotationCentre(const MovementState& ms, size_t index) const noexcept pre(index < 2) { return ms.g68Centre[index]; }
 # endif
 
 	size_t GetNumInputs() const noexcept { return NumGCodeChannels; }
@@ -676,11 +676,6 @@ private:
 	float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
 
 	float workplaceCoordinates[NumCoordinateSystems][MaxAxes];	// Workplace coordinate offsets
-
-#if SUPPORT_COORDINATE_ROTATION
-	float g68Angle;								// the G68 rotation angle in radians
-	float g68Centre[2];							// the XY coordinates of the centre to rotate about
-#endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileData fileToPrint;						// The next file to print
