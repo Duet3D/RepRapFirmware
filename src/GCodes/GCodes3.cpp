@@ -255,9 +255,27 @@ bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const noexcept
 			return false;
 		}
 	}
+
 	return true;
 }
 
+# if SUPPORT_COORDINATE_ROTATION
+
+bool GCodes::WriteCoordinateRotation(FileStore *f, const MovementState& ms) const noexcept
+{
+	String<StringLength100> buf;
+	if (ms.g68Angle != 0.0)
+	{
+		buf.printf("G68 X%.3f Y%.3f R%.2f\n", (double)ms.g68Centre[0], (double)ms.g68Centre[1], (double)ms.g68Angle);
+	}
+	else
+	{
+		buf.copy("G69\n");
+	}
+	return f->Write(buf.c_str());
+}
+
+# endif
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES

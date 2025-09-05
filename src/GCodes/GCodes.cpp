@@ -1530,19 +1530,15 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 		{
 			buf.printf("G59.%u\n", ms.currentCoordinateSystem - 5);
 		}
-
-#if SUPPORT_COORDINATE_ROTATION
-		if (ms.g68Angle != 0.0)
-		{
-			buf.catf("G68 X%.3f Y%.3f R%.2f\n", (double)ms.g68Centre[0], (double)ms.g68Centre[1], (double)ms.g68Angle);
-		}
-		else
-		{
-			buf.cat("G69\n");
-		}
-#endif
 		ok = f->Write(buf.c_str());
 	}
+
+#if SUPPORT_COORDINATE_ROTATION
+	if (ok)
+	{
+		ok = WriteCoordinateRotation(f, ms);
+	}
+#endif
 
 	const GCodeMachineState& oms = GetFileGCode(ms.GetNumber())->OriginalMachineState();
 	if (ok && oms.volumetricExtrusion)
@@ -4893,10 +4889,16 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 
 	// P31 will include G31 Z probe value
 	bool p31 = false;
+
+# if SUPPORT_COORDINATE_ROTATION
+	// P68 will include G68 coordinate rotation for the first movement system
+	bool p68 = false;
+#endif
+
 	if (gb.Seen('P'))
 	{
-		uint32_t pVals[2];
-		size_t pCount = 2;
+		uint32_t pVals[3];
+		size_t pCount = 3;
 		gb.GetUnsignedArray(pVals, pCount, false);
 		for (size_t i = 0; i < pCount; i++)
 		{
@@ -4909,6 +4911,14 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 			case 31:
 				p31 = true;
 				break;
+
+# if SUPPORT_COORDINATE_ROTATION
+			case 68:
+				p68 = true;
+				break;
+#endif
+			default:
+				break;					// other values are ignored without warning
 			}
 		}
 	}
@@ -4930,6 +4940,13 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 	{
 		ok = WriteWorkplaceCoordinates(f);
 	}
+
+# if SUPPORT_COORDINATE_ROTATION
+	if (ok && p68)
+	{
+		ok = WriteCoordinateRotation(f, GetPrimaryMovementState());
+	}
+#endif
 
 	if (!f->Close())
 	{
