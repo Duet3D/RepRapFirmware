@@ -649,7 +649,7 @@ bool BinaryParser::GetStringOrUIValue(uint32_t& uival, const StringRef& str) THR
 
 			case TypeCode::HeapString:
 				{
-					ReadLockedPointer<const char> p = e.shVal.Get();				str.copy(p.Ptr());
+					ReadLockedPointer<const char> p = e.shVal.Get();
 					str.copy(p.Ptr());
 				}
 				return true;
