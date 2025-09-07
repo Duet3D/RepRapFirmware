@@ -254,9 +254,17 @@ uint32_t BinaryParser::GetUIValue() THROWS(GCodeException)
 	switch (seenParameter->type)
 	{
 	case DataType::Float:
+		if (seenParameter->floatValue < 0.0)
+		{
+			throw ConstructParseException("expected non-negative integer after '%c'", seenParameter->letter);
+		}
 		value = (uint32_t)seenParameter->floatValue;
 		break;
 	case DataType::Int:
+		if (seenParameter->intValue < 0)
+		{
+			throw ConstructParseException("expected non-negative integer after '%c'", seenParameter->letter);
+		}
 		value = (uint32_t)seenParameter->intValue;
 		break;
 	case DataType::UInt:
@@ -270,7 +278,7 @@ uint32_t BinaryParser::GetUIValue() THROWS(GCodeException)
 		}
 		break;
 	default:
-		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
+		throw ConstructParseException("expected non-negative integer after '%c'", seenParameter->letter);
 	}
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
@@ -673,7 +681,7 @@ bool BinaryParser::GetStringOrUIValue(uint32_t& uival, const StringRef& str) THR
 	default:
 		break;
 	}
-	throw ConstructParseException("expected a string or unsigned integer");
+	throw ConstructParseException("expected a string or unsigned integer after '%c'", seenParameter->letter);
 }
 
 void BinaryParser::SetFinished() noexcept
