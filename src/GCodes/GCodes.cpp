@@ -5785,7 +5785,7 @@ bool GCodes::EvaluateConditionForDisplay(const char *_ecv_array str) const noexc
 {
 	try
 	{
-		ExpressionParser parser(LcdGCode(), str, str + strlen(str));
+		ExpressionParser parser(LcdGCode(), str);
 		return parser.ParseBoolean();
 	}
 	catch (const GCodeException&)
@@ -5799,7 +5799,7 @@ bool GCodes::EvaluateValueForDisplay(const char *_ecv_array str, ExpressionValue
 {
 	try
 	{
-		ExpressionParser parser(LcdGCode(), str, str + strlen(str));
+		ExpressionParser parser(LcdGCode(), str);
 		expr = parser.Parse();
 		return false;
 	}

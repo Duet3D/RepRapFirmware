@@ -46,6 +46,7 @@ class ExpressionParser
 {
 public:
 	ExpressionParser(const GCodeBuffer *_ecv_null p_gb, const char *_ecv_array text, const char *_ecv_array textLimit, int p_column = -1) noexcept;
+	ExpressionParser(const GCodeBuffer *_ecv_null p_gb, const char *_ecv_array text) noexcept;
 
 	ExpressionValue Parse(bool evaluate = true) THROWS(GCodeException);
 	bool ParseBoolean() THROWS(GCodeException);

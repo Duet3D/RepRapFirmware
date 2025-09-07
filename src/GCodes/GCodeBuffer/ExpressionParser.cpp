@@ -82,6 +82,11 @@ ExpressionParser::ExpressionParser(const GCodeBuffer *_ecv_null p_gb, const char
 {
 }
 
+ExpressionParser::ExpressionParser(const GCodeBuffer *_ecv_null p_gb, const char *_ecv_array text) noexcept
+	: ExpressionParser(p_gb, text, text + strlen(text), -1)
+{
+}
+
 // Evaluate a bracketed expression
 void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char closingBracket) THROWS(GCodeException)
 {
