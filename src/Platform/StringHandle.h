@@ -30,7 +30,7 @@ public:
 	void Delete() noexcept;
 	const StringHandle& IncreaseRefCount() const noexcept;
 	bool IsNull() const noexcept { return slotPtr == nullptr; }
-	void Assign(const char *_ecv_array s) noexcept;
+	void Assign(const char *_ecv_array _ecv_null s) noexcept;
 
 protected:
 	void InternalAssign(const char *_ecv_array s, size_t len) noexcept;
