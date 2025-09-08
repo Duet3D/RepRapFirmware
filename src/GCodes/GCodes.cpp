@@ -859,7 +859,7 @@ void GCodes::CheckTriggers() noexcept
 {
 	for (unsigned int i = 0; i < MaxTriggers; ++i)
 	{
-		if (!triggersPending.IsBitSet(i) && triggers[i].Check())
+		if (!triggersPending.IsBitSet(i) && triggers[i].Check(i))
 		{
 			triggersPending.SetBit(i);
 		}

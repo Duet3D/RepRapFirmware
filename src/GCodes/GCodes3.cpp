@@ -410,6 +410,7 @@ GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 // Handle M581
 GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	if (gb.GetCommandFraction() > 1) { return GCodeResult::errorNotSupported; }
 	const unsigned int triggerNumber = gb.GetLimitedUIValue('T', MaxTriggers);
 	return triggers[triggerNumber].Configure(triggerNumber, gb, reply);
 }
@@ -419,7 +420,7 @@ GCodeResult GCodes::CheckTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS
 {
 	const unsigned int triggerNumber = gb.GetLimitedUIValue('T', MaxTriggers);
 	const bool unconditional = gb.Seen('S') && gb.GetUIValue() == 1;
-	if (unconditional || triggers[triggerNumber].CheckLevel())
+	if (unconditional || triggers[triggerNumber].CheckLevel(triggerNumber))
 	{
 		triggersPending.SetBit(triggerNumber);
 	}

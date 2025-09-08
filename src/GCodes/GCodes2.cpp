@@ -736,7 +736,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_SCANNING_PROBES
 			&& code != 558
 #endif
-			&& code != 569 && code != 586 && code != 587		// these are the only M-codes we implement that can have fractional parts
+			&& code != 569 && code != 581 && code != 586 && code != 587		// these are the only M-codes we implement that can have fractional parts
 #if SUPPORT_PHASE_STEPPING
 			&& code != 970
 #endif
