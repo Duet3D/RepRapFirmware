@@ -309,7 +309,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 			}
 
 			// Now that lastKnownEndpoints is up to date, save it
-			MovementState::RestoreEndpointsAfterSimulating();
+			MovementState::SaveEndpointsBeforeSimulating();
 
 			// Pretend that all axes have been homed
 			axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);
