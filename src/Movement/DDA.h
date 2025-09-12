@@ -205,25 +205,28 @@ private:
 	{
 		struct
 		{
+			// Flag bits. The first 4 or 5 are copied from similar flag bits in RawMove, so keep them together and in the same order so that the compiler can copy them using a ubfx instruction.
 			uint32_t canPauseAfter : 1,				// True if we can pause at the end of this move
-					 isPrintingMove : 1,			// True if this move includes XY movement and extrusion
+			 	 	 checkEndstops : 1,				// True if this move monitors endstops or Z probe
+					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
 					 usePressureAdvance : 1,		// True if pressure advance should be applied to any forward extrusion
+#if SUPPORT_SCANNING_PROBES
+					 scanningProbeMove : 1, 	 	// True if this is a scanning Z probe move
+#endif
+
+					 isPrintingMove : 1,			// True if this move includes XY movement and extrusion
 					 hadLookaheadUnderrun : 1,		// True if the lookahead queue was not long enough to optimise this move
 					 xyMoving : 1,					// True if movement along an X axis or a Y axis was requested, even if it's too small to do
 					 isLeadscrewAdjustmentMove : 1,	// True if this is a leadscrews adjustment move
-					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
 					 isNonPrintingExtruderMove : 1,	// True if this move is an extruder-only move, or involves reverse extrusion (and possibly axis movement too)
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
-					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
-					 controlLaserOrIoBits : 1,				// True if this move controls the laser or iobits
+					 controlLaserOrIoBits : 1,		// True if this move controls the laser or iobits
 					 isolatedMove : 1,				// set if we disable input shaping for this move and wait for it to finish e.g. for a G1 H2 move
+
+					 // These bits are modified during processing of the move
 					 doneIoBits : 1,				// set if we have written the IOBITS ports for this move
 					 doneFeedForward : 1,			// set if we have commanded feedforward for this move
-					 doneOutputOnExtrude: 1			// set if we have set/cleared output on extrude for ths move
-#if SUPPORT_SCANNING_PROBES
-					 , scanningProbeMove : 1 	 	// True if this is a scanning Z probe move
-#endif
-					 ;
+					 doneOutputOnExtrude: 1;		// set if we have set/cleared output on extrude for this move
 		};
 		uint32_t all;								// so that we can print all the flags at once for debugging
 	} flags;
