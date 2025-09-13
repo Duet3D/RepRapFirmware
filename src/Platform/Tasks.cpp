@@ -403,7 +403,9 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 		default:
 			break;
 		}
-		reply.catf(",%.1f%%,%u)", (double)cpuPercent, (unsigned int)taskDetails.usStackHighWaterMark);
+
+		// Print the free stack space in words. The -4 is needed because the FreeRTOS stack overflow check is triggered if any of the last 4 words is used.
+		reply.catf(",%.1f%%,%u)", (double)cpuPercent, (unsigned int)taskDetails.usStackHighWaterMark - 4);
 	}
 	reply.catf(", total %.1f%%\nMutexes:", (double)totalCpuPercent);
 

@@ -188,9 +188,10 @@ public:
 
 	GCodeResult ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M425
 	void UpdateBacklashSteps() noexcept;
-	int32_t ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept;
+	int32_t ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
+		pre(drive < MaxAxes);
 	uint32_t GetBacklashCorrectionDistanceFactor() const noexcept { return backlashCorrectionDistanceFactor; }
-	int32_t GetCurrentBacklashSteps(size_t drive) const noexcept { return currentBacklashSteps[drive]; }
+	int32_t GetCurrentBacklashSteps(size_t drive) const noexcept { return (drive < MaxAxes) ? currentBacklashSteps[drive] : 0; }
 
 	inline AxesBitmap GetLinearAxes() const noexcept { return linearAxes; }
 	inline AxesBitmap GetRotationalAxes() const noexcept { return rotationalAxes; }

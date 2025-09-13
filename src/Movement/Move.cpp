@@ -1134,12 +1134,18 @@ void Move::SetMotorPosition(size_t drive, int32_t pos, bool clearBacklash) noexc
 	}
 #endif
 
-	if (clearBacklash)
+	if (drive < MaxAxes)
 	{
-		targetBacklashSteps[drive] = currentBacklashSteps[drive] = 0;
+		if (clearBacklash)
+		{
+			targetBacklashSteps[drive] = currentBacklashSteps[drive] = 0;
+		}
+		dms[drive].SetMotorPosition(pos + currentBacklashSteps[drive]);
 	}
-	dms[drive].SetMotorPosition(pos + currentBacklashSteps[drive]);
-
+	else
+	{
+		dms[drive].SetMotorPosition(pos);				// we don't store backlash info for extruders
+	}
 
 #if SUPPORT_PHASE_STEPPING
 	if (dm->IsPhaseStepEnabled())
