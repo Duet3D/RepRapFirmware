@@ -12,6 +12,7 @@
 #include "DriveMovement.h"
 #include "StepTimer.h"
 #include "MoveSegment.h"
+#include "MovementProfile.h"
 #include "MovementError.h"
 #include <Platform/Tasks.h>
 #include "RawMove.h"
@@ -22,30 +23,19 @@
 
 class DDARing;
 class CanMessageMovementLinearShaped;
-
-struct MoveProfile
-{
-	float startSpeed;												// the speed at the start of the move. Valid for the first un-commited move in the queue.
-	float topSpeed;													// top speed of the move. Valid???
-	float endSpeed;													// end speed of the move. Valid (and zero) for the last move in the queue
-#if SUPPORT_S_CURVE
-	float startAcceleration;										// the acceleration or deceleration at the start of this move, may be positive or negative. Valid for the first un-commited move in the queue.
-	float peakAcceleration;											// the acceleration in the steady acceleration phase, if any. Valid if phase1Distance != 0.
-    float peakDeceleration;											// the deceleration in the steady deceleration phase, if any. This is negative if there is a peak deceleration phase. Valid if phase5Distance != 0.
-    float endAcceleration;											// the acceleration or deceleration at the end of the move. Valid (and zero) for the last move in the queue.
-    float distances[7];												// the distances of each phase
-#endif
-};
+class MovementProfile;
 
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
 struct PrepParams
 {
 #if SUPPORT_S_CURVE
-	uint32_t phase0Clocks, phase1Clocks, phase2Clocks, steadyClocks, phase4Clocks, phase5Clocks, phase6Clocks;
+	uint32_t phaseClocks[7];						// the number of step clocks for each phase
     float initialAcceleration, peakAcceleration;	// the accelerations, always positive
     float initialDeceleration, peakDeceleration;	// the decelerations, always negative
     float distances[7];								// the distances of each phase
 	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive; or zero if not using S-curve acceleration
+
+	float SteadyClocks() const noexcept { return phaseClocks[3]; }
 #else
 	uint32_t accelClocks, steadyClocks, decelClocks;
 	float acceleration;								// the acceleration to use, always positive
@@ -54,14 +44,15 @@ struct PrepParams
 # define peakDeceleration	deceleration
 	float accelDistance;
 	float decelStartDistance;
+	float SteadyClocks() const noexcept { return steadyClocks; }
 #endif
 	float totalDistance;
 	float topSpeed;									// the top speed reached
 	bool useInputShaping;
 
 #if SUPPORT_S_CURVE
-	uint32_t TotalAccelClocks() const noexcept { return phase0Clocks + phase1Clocks + phase2Clocks; }
-	uint32_t TotalDecelClocks() const noexcept { return phase4Clocks + phase5Clocks + phase6Clocks; }
+	uint32_t TotalAccelClocks() const noexcept { return phaseClocks[0] + phaseClocks[1] + phaseClocks[2]; }
+	uint32_t TotalDecelClocks() const noexcept { return phaseClocks[4] + phaseClocks[5] + phaseClocks[6]; }
 	float TotalAccelDistance() const noexcept { return distances[0] + distances[1] + distances[2]; }
 	float TotalDecelDistance() const noexcept { return distances[4] + distances[5] + distances[6]; }
 #else
@@ -71,7 +62,7 @@ struct PrepParams
 #endif
 
 	// Get the total clocks needed
-	uint32_t TotalClocks() const noexcept { return TotalAccelClocks() + steadyClocks + TotalDecelClocks(); }
+	uint32_t TotalClocks() const noexcept { return TotalAccelClocks() + SteadyClocks() + TotalDecelClocks(); }
 
 	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
 	void SetFromDDA(DDA& dda) noexcept;
@@ -119,7 +110,11 @@ public:
 	void SetNext(DDA *n) noexcept { next = n; }
 	void SetPrevious(DDA *p) noexcept { prev = p; }
 	bool Free() noexcept;
-	void Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode simMode) noexcept SPEED_CRITICAL;	// Calculate all the values and freeze this DDA
+	void Prepare(DDARing& ring,
+#if SUPPORT_S_CURVE
+					MovementProfile& plannedProfile,
+#endif
+					uint32_t prepareAdvanceTime, SimulationMode simMode) noexcept SPEED_CRITICAL;	// Calculate all the values and freeze this DDA
 	bool CanPauseAfter() const noexcept;
 	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }							// Return true if this involves both XY movement and extrusion
 	bool UsingStandardFeedrate() const noexcept { return flags.usingStandardFeedrate; }
@@ -165,6 +160,9 @@ public:
 #if SUPPORT_S_CURVE
 	bool IsSCurveMove() const noexcept { return flags.useScurve; }
 	bool IsFullyPlanned() const noexcept { return flags.fullyPlanned; }
+	void SetSpeedRatioForPrintingMoves(const Move& move) noexcept;
+
+	static void PlanMoves(DDA *firstUnpreparedMove, MovementProfile& plannedProfile, bool stopping) noexcept;
 #endif
 
 	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcept;	// Try to push babystepping earlier in the move queue
@@ -190,11 +188,6 @@ public:
 	void SetDoneIoBits() noexcept { flags.doneIoBits = true; }
 	void SetDoneFeedForward() noexcept { flags.doneFeedForward = true; }
 	void SetDoneOutputOnExtrude() noexcept { flags.doneOutputOnExtrude = true; }
-
-#if SUPPORT_S_CURVE
-	void SetSpeedRatioForPrintingMoves(const Move& move) noexcept;
-	static void PlanMoves(DDA *firstUnpreparedMove, bool stopping) noexcept;
-#endif
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }
@@ -226,7 +219,7 @@ private:
 
 #if SUPPORT_S_CURVE
 	void CalculateIsolatedSCurveMove() noexcept SPEED_CRITICAL pre(endSpeed == 0.0; endDeceleration == 0.0);
-	static void DistributePlanOverMoves(DDA *startMove, DDA *endMove, float distanceToPlan, const MultipleMoveParameters& accelParams, const MultipleMoveParameters& decelParams) noexcept;
+	void AllocateMoveFromPlan(MovementProfile& plannedProfile, PrepParams& params) noexcept SPEED_CRITICAL;
 #endif
 
 	void MatchSpeeds() noexcept SPEED_CRITICAL;

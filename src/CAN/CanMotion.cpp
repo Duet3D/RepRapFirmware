@@ -126,7 +126,7 @@ CanMessageBuffer *_ecv_null CanMotion::GetBuffer(const PrepParams& params, Drive
 		{
 			// This is the first CAN-connected board for this movement
 			move->accelerationClocks = params.TotalAccelClocks();
-			move->steadyClocks = params.steadyClocks;
+			move->steadyClocks = params.SteadyClocks();
 			move->decelClocks = params.TotalDecelClocks();
 			currentMoveClocks = params.TotalClocks();
 		}
@@ -142,8 +142,8 @@ CanMessageBuffer *_ecv_null CanMotion::GetBuffer(const PrepParams& params, Drive
 		if (params.jerk != 0.0)
 		{
 			// We don't support S-curve acceleration on expansion boards, so the best we can do is compute an average acceleration and scale it to unit distance
-			move->acceleration = (params.peakAcceleration * params.TotalAccelClocks() - 0.5 * params.jerk * (fsquare(params.phase0Clocks) + fsquare(params.phase2Clocks)))/(params.TotalAccelClocks() * params.totalDistance);
-			move->deceleration = (-params.peakDeceleration * params.TotalDecelClocks() - 0.5 * params.jerk * (fsquare(params.phase4Clocks) + fsquare(params.phase6Clocks)))/(params.TotalDecelClocks() * params.totalDistance);
+			move->acceleration = (params.peakAcceleration * params.TotalAccelClocks() - 0.5 * params.jerk * (fsquare(params.phaseClocks[0]) + fsquare(params.phaseClocks[2])))/(params.TotalAccelClocks() * params.totalDistance);
+			move->deceleration = (-params.peakDeceleration * params.TotalDecelClocks() - 0.5 * params.jerk * (fsquare(params.phaseClocks[4]) + fsquare(params.phaseClocks[6])))/(params.TotalDecelClocks() * params.totalDistance);
 		}
 		else
 		{

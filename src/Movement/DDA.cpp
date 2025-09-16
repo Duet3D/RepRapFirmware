@@ -117,13 +117,7 @@ void DDA::LogProbePosition() noexcept
 
 #endif
 
-// Convert a float to a uint32_t, with negative values converted to zero
-inline uint32_t doubleToU32(double f) noexcept
-{
-	return (std::signbit(f)) ? 0 : (uint32_t)f;
-}
-
-// Set up the parameters from the DDA
+// Set up the parameters from the DDA. Only called for non-Scurve moves.
 // As a side effect it sets up clocksNeeded. If 3rd order motion control is used it also sets the start speed and acceleration in the following DDA.
 void PrepParams::SetFromDDA(DDA& dda) noexcept
 {
@@ -131,181 +125,18 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 	// Due to rounding error, for an accelerate-decelerate move we may have accelDistance+decelDistance slightly greater than totalDistance.
 	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
 #if SUPPORT_S_CURVE
-	if (dda.flags.useScurve)
-	{
-		peakAcceleration = dda.profile.peakAcceleration;
-		peakDeceleration = dda.profile.peakDeceleration;
-		initialAcceleration = dda.profile.startAcceleration;
-		initialDeceleration = (dda.profile.distances[0] + dda.profile.distances[1] + dda.profile.distances[2] + dda.profile.distances[3] == 0) ? initialAcceleration : 0.0;
-		jerk = dda.jerk;
-
-		memcpyf(distances, dda.profile.distances, ARRAY_SIZE(distances));		//TODO why not use the distances stored in he DDA instead of copying them?
-
-		// Solve for the period of each phase
-		double speed = dda.profile.startSpeed;
-		double acc = dda.profile.startAcceleration;
-		const double djerk = (double)jerk;
-		if (distances[0] == 0.0)
-		{
-			phase0Clocks = 0;
-		}
-		else
-		{
-			const double t0 = SmallestNonNegativeCubicSolution(djerk, 3 * acc, 6 * speed, (double)(-6 * distances[0]));
-			phase0Clocks = doubleToU32(t0);
-			debugPrintf("Phase 0: %.3e %lu %.3e %.3e %.3e\n", (double)distances[0], phase0Clocks, speed, acc, djerk);
-			speed += (acc + (double)0.5 * djerk * t0) * t0;
-			acc += djerk * t0;
-		}
-
-		if (distances[1] == 0.0)
-		{
-			phase1Clocks = 0;
-		}
-		else
-		{
-			const double t1 = SmallestNonNegativeQuadraticSolution((double)(0.5 * peakAcceleration), speed, (double)-distances[1]);
-			phase1Clocks = doubleToU32(t1);
-			debugPrintf("Phase 1: %.3e %lu %.3e %.3e (%.3e)\n", (double)distances[1], phase1Clocks, speed, (double)peakAcceleration, acc);
-			speed += t1 * (double)peakAcceleration;
-			acc = peakAcceleration;
-		}
-
-		if (distances[2] == 0.0)
-		{
-			phase2Clocks = 0.0;
-		}
-		else
-		{
-			const double t2 = SmallestNonNegativeCubicSolution(-djerk, 3 * acc, 6 * speed, (double)(-6 * distances[2]));
-			phase2Clocks = doubleToU32(t2);
-			debugPrintf("Phase 2: %.3e %lu %.3e %.3e %.3e\n", (double)distances[2], phase2Clocks, speed, acc, -djerk);
-			speed += (acc - (double)0.5 * djerk * t2) * t2;
-			acc -= djerk * t2;
-		}
-
-		if (distances[3] == 0.0)
-		{
-			steadyClocks = 0.0;
-		}
-		else
-		{
-			const double t3 = (double)distances[3]/speed;
-			steadyClocks = doubleToU32(t3);
-			debugPrintf("Phase 3: %.3e %lu %.3e %.3e (%.3e)\n", (double)distances[3], steadyClocks, speed, (double)0.0, acc);
-			acc = 0.0;
-		}
-
-		if (distances[4] == 0.0)
-		{
-			phase4Clocks = 0;
-		}
-		else
-		{
-			const double t4 = SmallestNonNegativeCubicSolution(-djerk, 3 * acc, 6 * speed, (double)(-6 * distances[4]));
-			phase4Clocks = doubleToU32(t4);
-			debugPrintf("Phase 4: %.3e %lu %.3e %.3e %.3e\n", (double)distances[4], phase4Clocks, speed, acc, -djerk);
-			speed += (acc - (double)0.5 * djerk * t4) * t4;
-			acc -= djerk * t4;
-		}
-
-		if (distances[5] == 0.0)
-		{
-			phase5Clocks = 0;
-		}
-		else
-		{
-			const double t5 = SmallestNonNegativeQuadraticSolution((double)(0.5 * peakDeceleration), speed, (double)-distances[5]);
-			phase5Clocks = doubleToU32(t5);
-			debugPrintf("Phase 5: %.3e %lu %.3e %.3e (%.3e)\n", (double)distances[5], phase5Clocks, speed, (double)peakDeceleration, acc);
-			speed += (double)peakDeceleration * t5;
-			acc = peakDeceleration;
-		}
-
-		if (distances[6] == 0.0)
-		{
-			phase6Clocks = 0;
-		}
-		else
-		{
-			// If we are ending at zero speed then we only just achieve the distance; and due to rounding error the cubic solution may fail.
-			double t6 = SmallestNonNegativeCubicSolution(djerk, 3 * acc, 6 * speed, (double)(-6 * distances[6]));
-			if (std::isnan(t6))
-			{
-				t6 = SmallestNonNegativeQuadraticSolution((double)0.5 * djerk, acc, speed);
-				if (std::isnan(t6))
-				{
-					debugPrintf("Failed at %d\n", __LINE__);
-					//TODO
-				}
-				else
-				{
-					const float actualDistance = (speed + (double)0.5 * acc * t6) * t6;
-					if (fabsf(distances[6] - actualDistance) > fabsf(distances[6]) * 0.0001)
-					{
-						debugPrintf("Failed at %d\n", __LINE__);
-						//TODO
-					}
-				}
-			}
-			phase6Clocks = doubleToU32(t6);
-			debugPrintf("Phase 6: %.3e %lu %.3e %.3e %.3e\n", (double)distances[6], phase6Clocks, speed, acc, djerk);
-			speed += (acc + (double)0.5 * djerk * t6) * t6;
-			acc += djerk * t6;
-		}
-
-		debugPrintf("final speed/acc: %.3e %.3e\n", speed, acc);
-
-		if (dda.next->IsProvisional())
-		{
-			dda.next->profile.startSpeed = (float)speed;
-			dda.next->profile.startAcceleration = (float)acc;
-		}
-
-		if (steadyClocks == 0.0)
-		{
-			// We have no steady speed phase (phase 4) so we can combine phases 3 and 5 because they must have the same jerk and acceleration is zero at the transition between them
-			phase2Clocks += phase4Clocks;
-			phase4Clocks = 0;
-			distances[2] += distances[4];
-			distances[4] = 0.0;
-		}
-
-		const float residualDistance = totalDistance - (distances[0] + distances[1] + distances[2] + distances[3] + distances[4] + distances[5] + distances[6]);
-
-		// We may have a residual distance because of rounding error.
-		// We want zero residual distance so that the move has the correct length, so add the residual distance to the longest phase that is present
-		if (residualDistance != 0.0)
-		{
-			debugPrintf("totalDistance=%.4e residual=%.4e\n", (double)dda.totalDistance, (double)residualDistance);
-
-			// Find the longest phase, preferring the steady speed phase if there is one
-			unsigned int bestPhase = 3;
-			if (distances[1] > distances[bestPhase]) { bestPhase = 1; }
-			if (distances[5] > distances[bestPhase]) { bestPhase = 5; }
-			if (distances[0] > distances[bestPhase]) { bestPhase = 0; }
-			if (distances[6] > distances[bestPhase]) { bestPhase = 6; }
-			if (distances[2] > distances[bestPhase]) { bestPhase = 2; }
-			if (distances[4] > distances[bestPhase]) { bestPhase = 4; }
-
-			distances[bestPhase] = max<float>(distances[bestPhase] + residualDistance, 0.0);
-		}
-	}
-	else
-	{
-		peakAcceleration = dda.maxAcceleration;
-		peakDeceleration = -dda.maxAcceleration;
-		phase0Clocks = phase2Clocks = phase4Clocks = phase6Clocks = 0;
-		phase1Clocks = lrintf((dda.profile.topSpeed - dda.profile.startSpeed)/peakAcceleration);
-		phase5Clocks = lrintf((dda.profile.endSpeed - dda.profile.topSpeed)/peakDeceleration);
-		distances[0] = distances[2] = distances[4] = distances[6] = 0.0;
-		distances[5] = dda.beforePrepare.decelDistance;
-		const float decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
-		distances[1] = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
-		distances[3] = decelStartDistance - distances[1];
-		steadyClocks = (distances[3] <= 0.0) ? 0 : lrintf(distances[3]/dda.profile.topSpeed);
-		jerk = 0.0;							// this signals that we are not using S-curve acceleration
-	}
+	peakAcceleration = dda.maxAcceleration;
+	peakDeceleration = -dda.maxAcceleration;
+	phaseClocks[0] = phaseClocks[2] = phaseClocks[4] = phaseClocks[6] = 0;
+	phaseClocks[1] = lrintf((dda.profile.topSpeed - dda.profile.startSpeed)/peakAcceleration);
+	phaseClocks[5] = lrintf((dda.profile.endSpeed - dda.profile.topSpeed)/peakDeceleration);
+	distances[0] = distances[2] = distances[4] = distances[6] = 0.0;
+	distances[5] = dda.beforePrepare.decelDistance;
+	const float decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
+	distances[1] = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
+	distances[3] = decelStartDistance - distances[1];
+	phaseClocks[3] = (distances[3] <= 0.0) ? 0 : lrintf(distances[3]/dda.profile.topSpeed);
+	jerk = 0.0;							// this signals that we are not using S-curve acceleration
 #else
 	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
 	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
@@ -340,7 +171,7 @@ void PrepParams::DebugPrint() const noexcept
 					(double)distances[4], (double)distances[5], (double)distances[6],
 					(double)initialAcceleration, (double)peakAcceleration,
 					(double)initialDeceleration, (double)peakDeceleration,
-					phase0Clocks, phase1Clocks, phase2Clocks, steadyClocks, phase4Clocks, phase5Clocks, phase6Clocks
+					phaseClocks[0], phaseClocks[1], phaseClocks[2], phaseClocks[3], phaseClocks[4], phaseClocks[5], phaseClocks[6]
 #else
 					(double)accelDistance, (double)decelStartDistance,
 					(double)acceleration, (double)deceleration,
@@ -1278,8 +1109,24 @@ void DDA::GetEndCoordinates(float returnedCoords[MaxAxes]) noexcept
 
 // Dispatch this DDA to the move segment queue for execution.
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
-void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode simMode) noexcept
+void DDA::Prepare(DDARing& ring,
+#if SUPPORT_S_CURVE
+					MovementProfile& plannedProfile,
+#endif
+					uint32_t prepareAdvanceTime, SimulationMode simMode) noexcept
 {
+	PrepParams params;
+#if SUPPORT_S_CURVE
+	if (flags.useScurve)
+	{
+		AllocateMoveFromPlan(plannedProfile, params);
+	}
+	else
+#endif
+	{
+		params.SetFromDDA(*this);
+	}
+
 #if SUPPORT_LASER
 	if (profile.topSpeed < requestedSpeed && reprap.GetGCodes().GetMachineType() == MachineType::laser)
 	{
@@ -1287,10 +1134,6 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 		laserPwmOrIoBits.laserPwm = (Pwm_t)((laserPwmOrIoBits.laserPwm * profile.topSpeed)/requestedSpeed);
 	}
 #endif
-
-	// Prepare for movement
-	PrepParams params;
-	params.SetFromDDA(*this);
 
 	// Decide when this move should start.
 	// Avoid setting the move start time in the past or with very little time before it starts, because this can lead to us trying to modify a segment that is already executing

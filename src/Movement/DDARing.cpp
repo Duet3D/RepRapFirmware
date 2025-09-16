@@ -328,6 +328,32 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 				: MoveTiming::StandardMoveWakeupInterval;			// the queue is empty, nothing to do until new moves arrive
 }
 
+#if SUPPORT_S_CURVE
+
+// Return true if we need to create a new plan before we can prepare a move
+inline bool DDARing::NeedNewPlan(DDA *moveToPrepare) const noexcept
+{
+	if (plannedProfile.numberOfMovesCovered == 0)
+	{
+		return true;												// if we don't have a plan yet, we need one
+	}
+	if (!plannedProfile.usesAllMoves)
+	{
+		return false;												// if the plan ends before all moves are used, we don't need a new plan
+	}
+	if (plannedProfile.scheduledMovesWhenCreated == scheduledMoves)
+	{
+		return false;												// if no moves have been added, we don't need to re-plan
+	}
+	if (plannedProfile.reachesRequestedSpeed && plannedProfile.TotalDecelDistance() + moveToPrepare->GetTotalDistance() <= plannedProfile.totalDistance)
+	{
+		return false;												// if the profile reaches its requested speed and deceleration begins later than the end of this move, we don't need to re-plan yet
+	}
+	return true;													// else we do need to construct a [new] plan
+}
+
+#endif
+
 // Prepare some moves. moveTimeLeft is the total length remaining of moves that are already executing or prepared.
 // Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or MoveTiming::StandardMoveWakeupInterval if there are no unprepared moves left.
 uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept
@@ -343,22 +369,22 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 	{
 #if SUPPORT_S_CURVE
 		// If the move to prepare is an S-curve move than it may not have been planned yet.
-		// If it has been planned then if any moves have been added to the ring we should re-plan it, unless it is flagged as fully planned.
-		if (   firstUnpreparedMove->GetState() == DDA::created
-			|| (   firstUnpreparedMove->IsSCurveMove()
-//				&& HaveAddedMove()
-//				&& !firstUnpreparedMove->IsFullyPlanned()
-			   )
-		   )
+		// Even if it has been planned, if any moves have been added to the ring then we may need to re-plan it
+		if (firstUnpreparedMove->IsSCurveMove())
 		{
-			DDA::PlanMoves(firstUnpreparedMove, false);
+			if (NeedNewPlan(firstUnpreparedMove))
+			{
+				DDA::PlanMoves(firstUnpreparedMove, plannedProfile, false);		// this resets all the moves it covers to state 'created'
+			}
+			else
+			{
+				debugPrintf("Skipping planning\n");
+			}
 		}
-		else
-		{
-			debugPrintf("Skipping planning\n");
-		}
-#endif
+		firstUnpreparedMove->Prepare(*this, plannedProfile, prepareAdvanceTime, simulationMode);
+#else
 		firstUnpreparedMove->Prepare(*this, prepareAdvanceTime, simulationMode);
+#endif
 		moveTimeLeft += firstUnpreparedMove->GetTimeLeft();
 		++alreadyPrepared;
 		firstUnpreparedMove = firstUnpreparedMove->GetNext();
