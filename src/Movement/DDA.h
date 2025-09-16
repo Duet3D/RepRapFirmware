@@ -64,7 +64,7 @@ struct PrepParams
 	// Get the total clocks needed
 	uint32_t TotalClocks() const noexcept { return TotalAccelClocks() + SteadyClocks() + TotalDecelClocks(); }
 
-	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
+	// Set up the parameters from the DDA. Only called when not using 3rd order motion control.
 	void SetFromDDA(DDA& dda) noexcept;
 
 	void DebugPrint() const noexcept;
@@ -218,7 +218,8 @@ private:
 	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
 
 #if SUPPORT_S_CURVE
-	void CalculateIsolatedSCurveMove() noexcept SPEED_CRITICAL pre(endSpeed == 0.0; endDeceleration == 0.0);
+	void CalculateIsolatedSCurveMove(MovementProfile& plannedProfile) const noexcept SPEED_CRITICAL
+		pre(startSpeed == 0.0; startAcceleration == 0.0);
 	void AllocateMoveFromPlan(MovementProfile& plannedProfile, PrepParams& params) noexcept SPEED_CRITICAL;
 #endif
 

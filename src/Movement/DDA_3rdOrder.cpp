@@ -201,7 +201,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 	return true;
 }
 
-// Plan some moves that haven't yet been committed.
+// Plan some moves that haven't yet been committed and store the plan in plannedProfile.
 // 'firstUnpreparedMove' is the oldest uncommitted move.
 // 'stopping' is true if we want to stop in a controlled manner as quickly as possible; else we have added one or more moves so we may be able to increase the speed of already-planned moves.
 /*static*/ void DDA::PlanMoves(DDA *firstUnpreparedMove, MovementProfile& plannedProfile, bool stopping) noexcept
@@ -237,9 +237,9 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 	lastMoveToPlan->profile.endSpeed = lastMoveToPlan->profile.endAcceleration = 0.0;
 
 	// If the sequence comprises a single move and the start speed and acceleration are both zero (e.g. we are adding the first move), this is the simplest case
-	if (lastMoveToPlan == firstUnpreparedMove && firstUnpreparedMove->profile.startSpeed == 0.0 && firstUnpreparedMove->profile.startAcceleration == 0.0)
+	if (numMoves == 1 && firstUnpreparedMove->profile.startSpeed == 0.0 && firstUnpreparedMove->profile.startAcceleration == 0.0)
 	{
-		firstUnpreparedMove->CalculateIsolatedSCurveMove();
+		firstUnpreparedMove->CalculateIsolatedSCurveMove(plannedProfile);
 	}
 	else
 	{
@@ -832,9 +832,9 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 //	v = j * (t1 * t2 + t1^2) = j * t1 * (t1 + t2)
 //	ap = j * t1
 // The deceleration phase is a mirror image of the acceleration phase. We add a steady speed phase between acceleration and deceleration if we need more distance.
-void DDA::CalculateIsolatedSCurveMove() noexcept
+void DDA::CalculateIsolatedSCurveMove(MovementProfile& plannedProfile) const noexcept
 {
-	profile.startAcceleration = profile.endAcceleration = 0.0;
+	plannedProfile.jerk = jerk;
 	do
 	{
 		// Determine whether the requested speed or the maximum acceleration is more limiting
@@ -844,17 +844,17 @@ void DDA::CalculateIsolatedSCurveMove() noexcept
 		if (fsquare(maxAcceleration) > requestedSpeed * jerk)
 		{
 			// In principle we can reach the requested speed without exceeding the maximum acceleration, without having to include a constant acceleration segment
-			profile.distances[1] = profile.distances[5] = 0.0;
+			plannedProfile.distances[1] = plannedProfile.distances[5] = 0.0;
 			const motioncalc_t halfTimeToReqSpeed = fastSqrtf(requestedSpeed/jerk);
 			const motioncalc_t distanceToReqSpeed = requestedSpeed * halfTimeToReqSpeed;
 			if (2 * distanceToReqSpeed < totalDistance)
 			{
 				// We can reach the requested speed and decelerate to zero again without exceeding the required distance. Generate a 5-phase move.
-				profile.distances[0] = profile.distances[6] = OneSixth * jerk * fcube(halfTimeToReqSpeed);
-				profile.distances[2] = profile.distances[4] = (requestedSpeed * halfTimeToReqSpeed) - profile.distances[0];
-				profile.distances[3] = totalDistance - 2 * distanceToReqSpeed;
-				profile.topSpeed = requestedSpeed;
-				profile.peakAcceleration = jerk * halfTimeToReqSpeed;
+				plannedProfile.distances[0] = plannedProfile.distances[6] = OneSixth * jerk * fcube(halfTimeToReqSpeed);
+				plannedProfile.distances[2] = plannedProfile.distances[4] = (requestedSpeed * halfTimeToReqSpeed) - plannedProfile.distances[0];
+				plannedProfile.distances[3] = totalDistance - 2 * distanceToReqSpeed;
+				plannedProfile.topSpeed = requestedSpeed;
+				plannedProfile.peakAcceleration = jerk * halfTimeToReqSpeed;
 				break;
 			}
 			// Else we can't reach the requested speed without exceeding required distance, or we can only just reach it and then we need to start decelerating immediately. Fall through to beyond the else-part of this if-statement.
@@ -862,7 +862,7 @@ void DDA::CalculateIsolatedSCurveMove() noexcept
 		else
 		{
 			// We can't reach the requested speed without inserting a constant acceleration segment to avoid exceeding maximum acceleration
-			profile.peakAcceleration = maxAcceleration;
+			plannedProfile.peakAcceleration = maxAcceleration;
 			const motioncalc_t basicDistance = 2 * fcube(maxAcceleration)/fsquare(jerk);	// distance if we reach max acceleration but have no constant acceleration segment
 			if (basicDistance < totalDistance)
 			{
@@ -875,26 +875,26 @@ void DDA::CalculateIsolatedSCurveMove() noexcept
 				// But j * t1 = ap, therefore:	t2 = -1.5 * t1 +/- sqrt(0.25 * t1^2 + 2 * s/ap)
 				// s is half the total distance because we accelerate and decelerate again.
 				const motioncalc_t timeToMaxAcceleration = maxAcceleration/jerk;
-				profile.distances[0] = profile.distances[6] = OneSixth * jerk * fcube(timeToMaxAcceleration);
+				plannedProfile.distances[0] = plannedProfile.distances[6] = OneSixth * jerk * fcube(timeToMaxAcceleration);
 				const float constantAccelerationTime = -1.5 * timeToMaxAcceleration + fastSqrtf(0.25 * fsquare(timeToMaxAcceleration) + totalDistance/maxAcceleration);
 				const float newTopSpeed = jerk * timeToMaxAcceleration * (timeToMaxAcceleration + constantAccelerationTime);
 				if (newTopSpeed <= requestedSpeed)
 				{
 					// Generate a 6-phase move. The middle 2 phases could be combined.
-					profile.topSpeed = newTopSpeed;
-					profile.distances[1] = profile.distances[5] = 0.5 * constantAccelerationTime * profile.topSpeed;
-					profile.distances[2] = profile.distances[4] = timeToMaxAcceleration * profile.topSpeed - profile.distances[0];
-					profile.distances[3] = 0.0;
+					plannedProfile.topSpeed = newTopSpeed;
+					plannedProfile.distances[1] = plannedProfile.distances[5] = 0.5 * constantAccelerationTime * plannedProfile.topSpeed;
+					plannedProfile.distances[2] = plannedProfile.distances[4] = timeToMaxAcceleration * plannedProfile.topSpeed - plannedProfile.distances[0];
+					plannedProfile.distances[3] = 0.0;
 				}
 				else
 				{
 					// We need to limit the constant acceleration time in order to limit the top speed, and add a constant speed phase. Generate a 7-phase move.
-					profile.topSpeed = requestedSpeed;
+					plannedProfile.topSpeed = requestedSpeed;
 					//	v = j * t1 * (t1 + t2) therefore t2 = v/(j * t1) - t1
 					const motioncalc_t revisedConstantAccelerationTime = requestedSpeed/(jerk * timeToMaxAcceleration) - timeToMaxAcceleration;
-					profile.distances[1] = profile.distances[5] = 0.5 * revisedConstantAccelerationTime * profile.topSpeed;
-					profile.distances[2] = profile.distances[4] = timeToMaxAcceleration * profile.topSpeed - profile.distances[0];
-					profile.distances[3] = totalDistance - 2 * (profile.distances[0] + profile.distances[2]);
+					plannedProfile.distances[1] = plannedProfile.distances[5] = 0.5 * revisedConstantAccelerationTime * plannedProfile.topSpeed;
+					plannedProfile.distances[2] = plannedProfile.distances[4] = timeToMaxAcceleration * plannedProfile.topSpeed - plannedProfile.distances[0];
+					plannedProfile.distances[3] = totalDistance - 2 * (plannedProfile.distances[0] + plannedProfile.distances[2]);
 				}
 				break;
 			}
@@ -903,15 +903,14 @@ void DDA::CalculateIsolatedSCurveMove() noexcept
 
 		// If we get here then we can reach neither requestedSpeed nor maxAcceleration without exceeding totalDistance. Generate a 4-phase move. The middle 2 phases could be combined.
 		const motioncalc_t halfTimeToTopSpeed = fastCubeRootf(totalDistance * 0.5 / jerk);
-		profile.distances[0] = profile.distances[6] = OneTwelfth * totalDistance;
-		profile.distances[2] = profile.distances[4] = 0.5 * totalDistance - profile.distances[0];
-		profile.distances[1] = profile.distances[3] = profile.distances[5] = 0.0;
-		profile.topSpeed = jerk * fsquare(halfTimeToTopSpeed);
-		profile.peakAcceleration = jerk * halfTimeToTopSpeed;
+		plannedProfile.distances[0] = plannedProfile.distances[6] = OneTwelfth * totalDistance;
+		plannedProfile.distances[2] = plannedProfile.distances[4] = 0.5 * totalDistance - plannedProfile.distances[0];
+		plannedProfile.distances[1] = plannedProfile.distances[3] = plannedProfile.distances[5] = 0.0;
+		plannedProfile.topSpeed = jerk * fsquare(halfTimeToTopSpeed);
+		plannedProfile.peakAcceleration = jerk * halfTimeToTopSpeed;
 	} while (false);
 
-	profile.peakDeceleration = -profile.peakAcceleration;
-	flags.canPauseAfter = true;
+	plannedProfile.peakDeceleration = -plannedProfile.peakAcceleration;
 }
 
 #if 0	// we are probably not going to use this
