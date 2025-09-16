@@ -2710,7 +2710,8 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 	}
 
 	float iParam, jParam;
-	if (gb.Seen('R'))
+	const bool radiusFormat = gb.Seen('R');
+	if (radiusFormat)
 	{
 		// We've been given a radius, which takes precedence over I and J parameters
 		const float rParam = gb.GetDistance();
@@ -2745,6 +2746,8 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 			hDivD = 0.0;													// this has the effect of increasing the radius slightly so that the maths works
 		}
 
+		ms.arcRadius = fabsf(rParam);
+
 		// If hDivD is nonzero then there are two possible positions for the arc centre, giving a short arc (less than 180deg) or a long arc (more than 180deg).
 		// According to https://www.cnccookbook.com/cnc-g-code-arc-circle-g02-g03/ we should choose the shorter arc if the radius is positive, the longer one if it is negative.
 		// If the arc is clockwise then a positive value of h/d gives the smaller arc. If the arc is anticlockwise then it's the other way round.
@@ -2757,6 +2760,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 	}
 	else
 	{
+		// Centre format arc
 		if (gb.Seen((char)('I' + axis0)))
 		{
 			iParam = gb.GetDistance();
@@ -2779,12 +2783,30 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 		{
 			gb.ThrowGCodeException("no I J K or R parameter");
 		}
-	}
 
-	memcpyf(ms.initialCoords, ms.coords, numVisibleAxes);
+		ms.arcRadius = fastSqrtf(fsquare(iParam) + fsquare(jParam));
+	}
 
 	// Save the arc centre user coordinates for later
 	float userArcCentre[2] = { ms.initialUserC0 + iParam, ms.initialUserC1 + jParam };
+
+	if (!radiusFormat)
+	{
+		// From section 3.5.3.2 of the NIST standard, in centre format it is an error if:
+		// "when the arc is projected on the selected plane, the distance from the current point to the center differs from the distance
+		// from the end point to the center by more than 0.0002 inch (if inches are being used) or 0.002 millimeter (if millimeters are being used)."
+		// In non-CNC modes we allow a larger error because slicers and ArcWelder may not output coordinates to a resolution of 0.002mm
+		const float finalRadius = fastSqrtf(fsquare(newAxis0Pos - userArcCentre[0]) + fsquare(newAxis1Pos - userArcCentre[1]));
+		const float maxRadiusDifference = (machineType == MachineType::cnc)
+											? ((gb.LatestMachineState().usingInches) ? MaxCncRadiusErrorInches * InchToMm : MaxCncRadiusErrorMm)
+												: MaxNonCncRadiusError;
+		if (fabsf(finalRadius - ms.arcRadius) > maxRadiusDifference)
+		{
+			gb.ThrowGCodeException("final radius not equal to initial radius");
+		}
+	}
+
+	memcpyf(ms.initialCoords, ms.coords, numVisibleAxes);
 
 	// Set the new user position
 	ms.currentUserPosition[axis0] = newAxis0Pos;
@@ -2853,7 +2875,6 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 
 	// Compute the initial and final angles. Do this before we possibly rotate the coordinates of the arc centre.
 	float finalTheta = atan2f(ms.currentUserPosition[axis1] - userArcCentre[1], ms.currentUserPosition[axis0] - userArcCentre[0]);
-	ms.arcRadius = fastSqrtf(iParam * iParam + jParam * jParam);
 	ms.arcCurrentAngle = atan2f(-jParam, -iParam);
 
 	// Transform to machine coordinates and check that it is within limits

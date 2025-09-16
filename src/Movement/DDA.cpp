@@ -448,16 +448,18 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	initialUserC0 = nextMove.initialUserC0;
 	initialUserC1 = nextMove.initialUserC1;
 
-	flags.checkEndstops = nextMove.checkEndstops;
-	flags.isolatedMove = nextMove.checkEndstops || nextMove.moveType != 0;
+	// These 4 or 5 bits can be copied in one go by the compiler generating a ubfx instruction
 	flags.canPauseAfter = nextMove.canPauseAfter;
+	flags.checkEndstops = nextMove.checkEndstops;
 	flags.usingStandardFeedrate = nextMove.usingStandardFeedrate;
-	flags.isPrintingMove = flags.xyMoving && forwardExtruding;					// require forward extrusion so that wipe-while-retracting doesn't count
-	flags.isNonPrintingExtruderMove = extrudersMoving && !flags.isPrintingMove;	// flag used by filament monitors - we can ignore Z movement
 	flags.usePressureAdvance = nextMove.usePressureAdvance;
 #if SUPPORT_SCANNING_PROBES
 	flags.scanningProbeMove = nextMove.scanningProbeMove;
 #endif
+
+	flags.isolatedMove = nextMove.checkEndstops || nextMove.moveType != 0;
+	flags.isPrintingMove = flags.xyMoving && forwardExtruding;					// require forward extrusion so that wipe-while-retracting doesn't count
+	flags.isNonPrintingExtruderMove = extrudersMoving && !flags.isPrintingMove;	// flag used by filament monitors - we can ignore Z movement
 	flags.controlLaserOrIoBits = nextMove.isCoordinated && !nextMove.checkEndstops;
 
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a raw motor move
