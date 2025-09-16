@@ -345,7 +345,7 @@ inline bool DDARing::NeedNewPlan(DDA *moveToPrepare) const noexcept
 	{
 		return false;												// if no moves have been added, we don't need to re-plan
 	}
-	if (plannedProfile.reachesRequestedSpeed && plannedProfile.TotalDecelDistance() + moveToPrepare->GetTotalDistance() <= plannedProfile.totalDistance)
+	if (plannedProfile.reachesRequestedSpeed && plannedProfile.TotalDecelDistance() + (double)moveToPrepare->GetTotalDistance() <= plannedProfile.totalDistance)
 	{
 		return false;												// if the profile reaches its requested speed and deceleration begins later than the end of this move, we don't need to re-plan yet
 	}
