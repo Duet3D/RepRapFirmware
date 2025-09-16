@@ -141,16 +141,16 @@ public:
 	FilePosition GetFilePosition() const noexcept { return filePos; }
 	float GetRequestedSpeedMmPerClock() const noexcept { return requestedSpeed; }
 	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(requestedSpeed); }
-	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(profile.topSpeed); }
+	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(topSpeed); }
 	float GetAccelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
 #if SUPPORT_S_CURVE
-		{ return InverseConvertAcceleration(profile.peakAcceleration); }
+		{ return InverseConvertAcceleration(afterPrepare.peakAcceleration); }
 #else
 		{ return InverseConvertAcceleration(maxAcceleration); }
 #endif
 	float GetDecelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
 #if SUPPORT_S_CURVE
-		{ return InverseConvertAcceleration(profile.peakDeceleration); }
+		{ return InverseConvertAcceleration(afterPrepare.peakDeceleration); }
 #else
 		{ return InverseConvertAcceleration(maxAcceleration); }
 #endif
@@ -301,7 +301,10 @@ private:
     float virtualExtruderPosition;					// the virtual extruder position at the end of this move, used for pause/resume
 
     // These vary depending on how we connect the move with its predecessor and successor, but remain constant while the move is being executed
-    MoveProfile profile;
+    float startSpeed, topSpeed, endSpeed;
+#if SUPPORT_S_CURVE
+    float startAcceleration, endAcceleration;
+#endif
 
 	float proportionDone;							// what proportion of the extrusion in the G1 or G0 move of which this is a part has been done after this segment is complete
 	float initialUserC0, initialUserC1;				// if this is a segment of an arc move, the user X and Y coordinates at the start
@@ -328,6 +331,9 @@ private:
 		// Values that are not set or accessed before Prepare is called
 		struct
 		{
+			// These are used for reporting the current move parameters in the object model
+			float peakAcceleration, peakDeceleration;
+
 			// These are calculated from the above and used in the ISR, so they are set up by Prepare()
 			uint32_t moveStartTime;					// clock count at which the move is due to start (before execution) or was started (during execution)
 			float averageExtrusionSpeed;			// the average extrusion speed in mm/sec, for applying heater feedforward

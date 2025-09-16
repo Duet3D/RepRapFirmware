@@ -1481,8 +1481,8 @@ void Move::PrepareScanningProbeDataCollection(const DDA& dda, const PrepParams& 
 		probeControl.acceleration = params.acceleration;
 		probeControl.deceleration = params.deceleration;
 #endif
-		probeControl.initialSpeed = dda.profile.startSpeed;
-		probeControl.topSpeed = dda.profile.topSpeed;
+		probeControl.initialSpeed = dda.startSpeed;
+		probeControl.topSpeed = dda.topSpeed;
 		probeControl.steadyClocks = params.SteadyClocks();
 		probeControl.distancePerReading = params.totalDistance/(float)probeControl.numReadingsNeeded;
 #if SUPPORT_S_CURVE

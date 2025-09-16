@@ -225,19 +225,19 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 		++numMoves;
 	}
 
-	plannedProfile.startSpeed = firstUnpreparedMove->profile.startSpeed;
-	plannedProfile.startAcceleration = firstUnpreparedMove->profile.startAcceleration;
+	plannedProfile.startSpeed = firstUnpreparedMove->startSpeed;
+	plannedProfile.startAcceleration = firstUnpreparedMove->startAcceleration;
 	plannedProfile.endSpeed = plannedProfile.endAcceleration = 0.0;
 	plannedProfile.numberOfMovesCovered = numMoves;
 	plannedProfile.totalDistance = distanceToPlan;
 	plannedProfile.jerk = minJerk;
 
 	debugPrintf("Planning %u moves, dist %.3f maxSpeed %.4e maxAcc %.4e jerk %.4e ss %.3e sa %.3e\n",
-				numMoves, (double)distanceToPlan, (double)maxReqSpeed, (double)minMaxAcc, (double)minJerk, (double)firstUnpreparedMove->profile.startSpeed, (double)firstUnpreparedMove->profile.startAcceleration);
-	lastMoveToPlan->profile.endSpeed = lastMoveToPlan->profile.endAcceleration = 0.0;
+				numMoves, (double)distanceToPlan, (double)maxReqSpeed, (double)minMaxAcc, (double)minJerk, (double)firstUnpreparedMove->startSpeed, (double)firstUnpreparedMove->startAcceleration);
+	lastMoveToPlan->endSpeed = lastMoveToPlan->endAcceleration = 0.0;
 
 	// If the sequence comprises a single move and the start speed and acceleration are both zero (e.g. we are adding the first move), this is the simplest case
-	if (numMoves == 1 && firstUnpreparedMove->profile.startSpeed == 0.0 && firstUnpreparedMove->profile.startAcceleration == 0.0)
+	if (numMoves == 1 && firstUnpreparedMove->startSpeed == 0.0 && firstUnpreparedMove->startAcceleration == 0.0)
 	{
 		firstUnpreparedMove->CalculateIsolatedSCurveMove(plannedProfile);
 	}
@@ -263,14 +263,14 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 		while (true)
 		{
 			MultipleMoveParameters accelParams;
-			if (!CalculateMultipleMoveProfile(firstUnpreparedMove->profile.startSpeed, peakSpeedToTry, firstUnpreparedMove->profile.startAcceleration, minMaxAcc, minJerk, accelParams))
+			if (!CalculateMultipleMoveProfile(firstUnpreparedMove->startSpeed, peakSpeedToTry, firstUnpreparedMove->startAcceleration, minMaxAcc, minJerk, accelParams))
 			{
 				errorLine = __LINE__;
 				break;
 			}
 
 			MultipleMoveParameters decelParams;
-			if (!CalculateMultipleMoveProfile(lastMoveToPlan->profile.endSpeed, peakSpeedToTry, lastMoveToPlan->profile.endAcceleration, minMaxAcc, minJerk, decelParams))
+			if (!CalculateMultipleMoveProfile(lastMoveToPlan->endSpeed, peakSpeedToTry, lastMoveToPlan->endAcceleration, minMaxAcc, minJerk, decelParams))
 			{
 				errorLine = __LINE__;
 				break;
@@ -307,17 +307,17 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 				// Here if we have insufficient distance to reach the requested speed
 				if (numIterations == 0)
 				{
-					if (firstUnpreparedMove->profile.startAcceleration <= 0.0)
+					if (firstUnpreparedMove->startAcceleration <= 0.0)
 					{
 						// We are at a steady speed or decelerating to start with.
 						// This happens if we are recalculating a previously-calculated move (which we normally avoid doing), or a move is added when we have already started decelerating.
-						if (!CalculateDeceleratingMultipleMoveProfile(firstUnpreparedMove->profile.startSpeed, lastMoveToPlan->profile.endSpeed, firstUnpreparedMove->profile.startAcceleration, lastMoveToPlan->profile.endAcceleration, minMaxAcc, minJerk, decelParams))
+						if (!CalculateDeceleratingMultipleMoveProfile(firstUnpreparedMove->startSpeed, lastMoveToPlan->endSpeed, firstUnpreparedMove->startAcceleration, lastMoveToPlan->endAcceleration, minMaxAcc, minJerk, decelParams))
 						{
 							errorLine = __LINE__;
 							break;
 						}
 						viableDistanceNeeded = decelParams.totalDistance;
-						viablePeakSpeed = firstUnpreparedMove->profile.startSpeed;
+						viablePeakSpeed = firstUnpreparedMove->startSpeed;
 						//TODO if the viable distance is close to the distance available, accept the move and adjust the parameters slightly if necessary.
 						// If the required distance is much greater or much less, error.
 //						DEBUG_HERE;
@@ -325,17 +325,17 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 					else
 					{
 						// We start off accelerating, therefore we can't avoid an acceleration segment
-						const float minViableSpeedAccel = firstUnpreparedMove->profile.startSpeed + 0.5 * fsquare(firstUnpreparedMove->profile.startAcceleration)/minJerk;
-						const float minViableSpeedDecel = lastMoveToPlan->profile.endSpeed + 0.5 * fsquare(lastMoveToPlan->profile.endAcceleration)/minJerk;
+						const float minViableSpeedAccel = firstUnpreparedMove->startSpeed + 0.5 * fsquare(firstUnpreparedMove->startAcceleration)/minJerk;
+						const float minViableSpeedDecel = lastMoveToPlan->endSpeed + 0.5 * fsquare(lastMoveToPlan->endAcceleration)/minJerk;
 						viablePeakSpeed = max<float>(minViableSpeedAccel, minViableSpeedDecel);
 						if (viablePeakSpeed > 0.0)
 						{
-							if (!CalculateMultipleMoveProfile(lastMoveToPlan->profile.endSpeed, viablePeakSpeed, lastMoveToPlan->profile.endAcceleration, minMaxAcc, minJerk, decelParams))
+							if (!CalculateMultipleMoveProfile(lastMoveToPlan->endSpeed, viablePeakSpeed, lastMoveToPlan->endAcceleration, minMaxAcc, minJerk, decelParams))
 							{
 								errorLine = __LINE__;
 								break;
 							}
-							if (!CalculateMultipleMoveProfile(firstUnpreparedMove->profile.startSpeed, viablePeakSpeed, firstUnpreparedMove->profile.startAcceleration, minMaxAcc, minJerk, accelParams))
+							if (!CalculateMultipleMoveProfile(firstUnpreparedMove->startSpeed, viablePeakSpeed, firstUnpreparedMove->startAcceleration, minMaxAcc, minJerk, accelParams))
 							{
 								errorLine = __LINE__;
 								break;
@@ -384,7 +384,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 			++numIterations;
 			if (numIterations > 50) { errorLine = __LINE__; break; }
 			debugPrintf("Trying peak speed %.3e u=%.3e a=%.3e ma=%.3e j=%.3e s=%.3f\n",
-						(double)peakSpeedToTry, (double)firstUnpreparedMove->profile.startSpeed, (double)firstUnpreparedMove->profile.startAcceleration, (double)minMaxAcc, (double)minJerk, (double)distanceToPlan);
+						(double)peakSpeedToTry, (double)firstUnpreparedMove->startSpeed, (double)firstUnpreparedMove->startAcceleration, (double)minMaxAcc, (double)minJerk, (double)distanceToPlan);
 		}
 
 		// Here if there is no viable movement profile that satisfies the constraints
