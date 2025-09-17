@@ -71,6 +71,8 @@ constexpr float MaxCncRadiusErrorMm = 0.002;			// max difference between G2/G3 s
 constexpr float MaxCncRadiusErrorInches = 0.0002;		// max difference between G2/G3 start and end distances from arc centre when in CNC inches mode, see NIST 3.5.3.2
 constexpr float MaxNonCncRadiusError = 0.05;			// max difference between G2/G3 start and end distances from arc centre when not in CNC mode (mm)
 
+constexpr float MaxRelativeBabystepping = 10.0;			// increased from 1.0mm because we have an OEM using 40mm layer height
+
 // Timeouts
 constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
 constexpr float DefaultMessageTimeout = 10.0;			// How long a message is displayed by default, in seconds
