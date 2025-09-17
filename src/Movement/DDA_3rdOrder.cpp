@@ -106,7 +106,6 @@ struct MultipleMoveParameters
 void DDA::CalculateIsolatedSCurveMove(MovementProfile& plannedProfile) const noexcept
 {
 	plannedProfile.jerk = (double)jerk;
-	plannedProfile.totalDistance = (double)totalDistance;
 	plannedProfile.numberOfMovesCovered = 1;
 	do
 	{
@@ -167,7 +166,7 @@ void DDA::CalculateIsolatedSCurveMove(MovementProfile& plannedProfile) const noe
 					const double revisedConstantAccelerationTime = (double)requestedSpeed/(plannedProfile.jerk * timeToMaxAcceleration) - timeToMaxAcceleration;
 					plannedProfile.distances[1] = plannedProfile.distances[5] = OneHalfDouble * revisedConstantAccelerationTime * plannedProfile.topSpeed;
 					plannedProfile.distances[2] = plannedProfile.distances[4] = timeToMaxAcceleration * plannedProfile.topSpeed - plannedProfile.distances[0];
-					plannedProfile.distances[3] = plannedProfile.totalDistance - 2 * (plannedProfile.distances[0] + plannedProfile.distances[2]);
+					plannedProfile.distances[3] = (double)totalDistance - 2 * (plannedProfile.distances[0] + plannedProfile.distances[2]);
 				}
 				break;
 			}
@@ -177,7 +176,7 @@ void DDA::CalculateIsolatedSCurveMove(MovementProfile& plannedProfile) const noe
 		// If we get here then we can reach neither requestedSpeed nor maxAcceleration without exceeding totalDistance. Generate a 4-phase move. The middle 2 phases could be combined.
 		const double halfTimeToTopSpeed = fastCubeRootd((double)totalDistance * OneHalfDouble / plannedProfile.jerk);
 		plannedProfile.distances[0] = plannedProfile.distances[6] = OneTwelfthDouble * (double)totalDistance;
-		plannedProfile.distances[2] = plannedProfile.distances[4] = OneHalfDouble * plannedProfile.totalDistance - plannedProfile.distances[0];
+		plannedProfile.distances[2] = plannedProfile.distances[4] = OneHalfDouble * (double)totalDistance - plannedProfile.distances[0];
 		plannedProfile.distances[1] = plannedProfile.distances[3] = plannedProfile.distances[5] = 0.0;
 		plannedProfile.topSpeed = plannedProfile.jerk * dsquare(halfTimeToTopSpeed);
 		plannedProfile.peakAcceleration = plannedProfile.jerk * halfTimeToTopSpeed;
@@ -328,7 +327,6 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 	plannedProfile.startAcceleration = firstUnpreparedMove->startAcceleration;
 	plannedProfile.endSpeed = plannedProfile.endAcceleration = 0.0;
 	plannedProfile.numberOfMovesCovered = numMoves;
-	plannedProfile.totalDistance = distanceToPlan;
 	plannedProfile.jerk = minJerk;
 
 	debugPrintf("Planning %u moves, dist %.3f maxSpeed %.4e maxAcc %.4e jerk %.4e ss %.3e sa %.3e\n",
@@ -493,9 +491,8 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 	}
 }
 
-// Given a profile covering a number of moves, allocate at least one move from the profile
-// If the move has already been computed then we just need to update the profile to account for the move we removed.
-// Otherwise we need to compute the move details too.
+// Given a profile covering a number of moves, allocate one move from the profile.
+// Update the profile to reflect what's left of it to execute.
 /*static*/ void DDA::AllocateMoveFromPlan(MovementProfile& plannedProfile, PrepParams& params) noexcept
 {
 	params.totalDistance = totalDistance;

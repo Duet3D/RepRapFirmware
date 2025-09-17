@@ -17,6 +17,8 @@ class MovementProfile
 {
 public:
 	void Invalidate() noexcept { numberOfMovesCovered = 0; }
+    double NonDecelDistance() const noexcept		// return the distance left excluding deceleration distance
+    	{ return distances[0] + distances[1] + distances[2] + distances[3]; }
 
 	double startSpeed;								// the speed at the start of the move. Valid for the first un-commited move in the queue.
 	double topSpeed;								// top speed of the move. Valid???
@@ -28,9 +30,6 @@ public:
     double jerk;
     double distances[7];							// the distances of each phase
 
-    double TotalAccelDistance() const noexcept { return distances[0] + distances[1] + distances[2]; }
-    double TotalDecelDistance() const noexcept { return distances[4] + distances[5] + distances[6]; }
-    double totalDistance;							// total distance to be covered
 	unsigned int numberOfMovesCovered = 0;			// if zero then the profile has not been calculated and the other fields are meaningless
 	uint32_t scheduledMovesWhenCreated;				// number of moves in the ring when we created this plan
 	bool reachesRequestedSpeed;						// true if this profile reaches the requested speed, so if more moves are added there is no point in recomputing the acceleration phase
