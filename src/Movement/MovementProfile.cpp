@@ -9,8 +9,6 @@
 
 #if SUPPORT_S_CURVE
 
-//#include "DDA.h"
-
 // Nothing here yet
 
 #endif

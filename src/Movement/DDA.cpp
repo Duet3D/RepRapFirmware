@@ -558,6 +558,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
 #if SUPPORT_S_CURVE
 	if (   prev->IsProvisional()													// if previous move is queued but has not started yet
+		&& flags.useScurve == prev->flags.useScurve
 		&& flags.isPrintingMove == prev->flags.isPrintingMove
 		&& flags.xyMoving == prev->flags.xyMoving
 		&& flags.isNonPrintingExtruderMove == prev->flags.isNonPrintingExtruderMove	// this is to prevent extruder-only moves being melded with Z-axis moves (issue 990)
@@ -593,6 +594,8 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	{
 		startSpeed = startAcceleration = 0.0;										// in case there is no previous move
 		state = DDAState::created;													// postpone planning this move until preparation
+		// We need to store an estimate of the time needed to execute the move because the Move task uses it when deciding whether to add more moves to the ring
+		clocksNeeded = totalDistance/requestedSpeed;
 		rslt = MovementError::ok;
 	}
 	else

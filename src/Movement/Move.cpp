@@ -641,7 +641,7 @@ void Move::Exit() noexcept
 #if SUPPORT_REMOTE_COMMANDS
 		if (CanInterface::InExpansionMode())
 		{
-			// In expansion mode we don't need the Move task to do anything, and in particular we must not perform udle detection.
+			// In expansion mode we don't need the Move task to do anything, and in particular we must not perform idle detection.
 			// We could terminate the Move task here but currently we don't because:
 			// (a) if we do then we must make sure that any attempts to wake it up are benign
 			// (b) in future we may wish to use the Move task to queue movement commands

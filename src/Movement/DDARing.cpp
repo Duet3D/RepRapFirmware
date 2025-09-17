@@ -151,6 +151,7 @@ bool DDARing::CanAddMove() const noexcept
 	 {
 			// In order to react faster to speed and extrusion rate changes, only add more moves if the total duration of
 			// all un-frozen moves is less than 2 seconds, or the total duration of all but the first un-frozen move is less than 0.5 seconds.
+		 	 // When using S-curve acceleration we use late planning, so GetClocksNeeded() for provisional moves is the minimum clocks that it will need.
 			const DDA *dda = addPointer;
 			uint32_t unPreparedTime = 0;
 			uint32_t prevMoveTime = 0;
@@ -374,7 +375,8 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 		{
 			if (NeedNewPlan(firstUnpreparedMove))
 			{
-				DDA::PlanMoves(firstUnpreparedMove, plannedProfile, false);		// this resets all the moves it covers to state 'created'
+				DDA::PlanMoves(firstUnpreparedMove, plannedProfile, false);
+				plannedProfile.scheduledMovesWhenCreated = scheduledMoves;
 			}
 			else
 			{

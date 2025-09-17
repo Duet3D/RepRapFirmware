@@ -313,7 +313,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 	float minJerk = firstUnpreparedMove->jerk;
 	float minMaxAcc = firstUnpreparedMove->maxAcceleration;
 	unsigned int numMoves = 1;
-	while ((nextMove = lastMoveToPlan->next)->GetState() != DDA::empty && nextMove->beforePrepare.maxPrevEndSpeed != 0.0)
+	while ((nextMove = lastMoveToPlan->next)->state != DDA::empty && nextMove->beforePrepare.maxPrevEndSpeed != 0.0)
 	{
 		distanceToPlan += nextMove->totalDistance;
 		if (nextMove->jerk < minJerk) { minJerk = nextMove->jerk; }
@@ -323,6 +323,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 		++numMoves;
 	}
 
+	plannedProfile.usesAllMoves = (nextMove->state == DDA::empty);
 	plannedProfile.startSpeed = firstUnpreparedMove->startSpeed;
 	plannedProfile.startAcceleration = firstUnpreparedMove->startAcceleration;
 	plannedProfile.endSpeed = plannedProfile.endAcceleration = 0.0;
@@ -391,6 +392,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 					plannedProfile.topSpeed = peakSpeedToTry;
 					plannedProfile.peakAcceleration = accelParams.peakAcceleration;
 					plannedProfile.peakDeceleration = -decelParams.peakAcceleration;
+					plannedProfile.reachesRequestedSpeed = true;
 					return;
 				}
 				else
@@ -459,6 +461,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 								plannedProfile.topSpeed = viablePeakSpeed;
 								plannedProfile.peakAcceleration = accelParams.peakAcceleration;
 								plannedProfile.peakDeceleration = -decelParams.peakAcceleration;
+								plannedProfile.reachesRequestedSpeed = false;
 								return;
 							}
 //							DEBUG_HERE;
