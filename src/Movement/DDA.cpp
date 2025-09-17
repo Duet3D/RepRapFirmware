@@ -125,6 +125,7 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 	// Due to rounding error, for an accelerate-decelerate move we may have accelDistance+decelDistance slightly greater than totalDistance.
 	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
 #if SUPPORT_S_CURVE
+	jerk = 0.0;							// this signals that we are not using S-curve acceleration
 	peakAcceleration = dda.maxAcceleration;
 	peakDeceleration = -dda.maxAcceleration;
 	phaseClocks[0] = phaseClocks[2] = phaseClocks[4] = phaseClocks[6] = 0;
@@ -136,7 +137,7 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 	distances[1] = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
 	distances[3] = decelStartDistance - distances[1];
 	phaseClocks[3] = (distances[3] <= 0.0) ? 0 : lrintf(distances[3]/dda.topSpeed);
-	jerk = 0.0;							// this signals that we are not using S-curve acceleration
+	dda.clocksNeeded = phaseClocks[1] + phaseClocks[3] + phaseClocks[5];
 #else
 	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
 	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
@@ -146,28 +147,23 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 	decelClocks = lrintf((dda.endSpeed - dda.topSpeed)/deceleration);
 	const float steadyDistance = decelStartDistance - accelDistance;
 	steadyClocks = (steadyDistance <= 0.0) ? 0 : lrintf(steadyDistance/dda.topSpeed);
+	dda.clocksNeeded = accelClocks + steadyClocks + decelClocks;
 #endif
-	useInputShaping = dda.flags.xyMoving
-					&& !(dda.flags.isolatedMove || dda.flags.isLeadscrewAdjustmentMove
-#if SUPPORT_SCANNING_PROBES
-						 || dda.flags.scanningProbeMove
-#endif
-						) ;
-	dda.clocksNeeded = TotalClocks();
 }
 
 void PrepParams::DebugPrint() const noexcept
 {
 	debugPrintf("pp: td=%.3g"
 #if SUPPORT_S_CURVE
-				" ad=[%.3g %.3g %.3g] dd=[%.3g %.3g %.3g] a=[%.3g %.3g] d=[%.3g %.3g] ac=[%" PRIu32 " %" PRIu32 " %" PRIu32 "] sc=%" PRIu32 " dc=[%" PRIu32 " %" PRIu32 " %" PRIu32 "]"
+				" ad=[%.4g %.4g %.4g] sd=%.4g dd=[%.4g %.4g %.4g] a=[%.4g %.4g] d=[%.4g %.4g] ac=[%" PRIu32 " %" PRIu32 " %" PRIu32 "] sc=%" PRIu32 " dc=[%" PRIu32 " %" PRIu32 " %" PRIu32 "]"
 #else
-				" ad=%.3g dsd=%.3g a=%.3g d=%.3g ac=%" PRIu32 " sc=%" PRIu32 " dc=%" PRIu32
+				" ad=%.4g dsd=%.4g a=%.4g d=%.4g ac=%" PRIu32 " sc=%" PRIu32 " dc=%" PRIu32
 #endif
 				"\n",
 					(double)totalDistance,
 #if SUPPORT_S_CURVE
 					(double)distances[0], (double)distances[1], (double)distances[2],
+					(double)distances[3],
 					(double)distances[4], (double)distances[5], (double)distances[6],
 					(double)initialAcceleration, (double)peakAcceleration,
 					(double)initialDeceleration, (double)peakDeceleration,
@@ -1128,7 +1124,13 @@ void DDA::Prepare(DDARing& ring,
 	{
 		params.SetFromDDA(*this);
 	}
-
+	params.useInputShaping = flags.xyMoving
+							&& !(   flags.isolatedMove
+								 || flags.isLeadscrewAdjustmentMove
+#if SUPPORT_SCANNING_PROBES
+								 || flags.scanningProbeMove
+#endif
+								) ;
 #if SUPPORT_LASER
 	if (topSpeed < requestedSpeed && reprap.GetGCodes().GetMachineType() == MachineType::laser)
 	{

@@ -92,6 +92,100 @@ struct MultipleMoveParameters
 	double totalDistance;
 };
 
+// Calculate the move to be added to the ring when the start speed and acceleration and the end speed and acceleration are all zero
+// Caller has already set endSpeed and endDeceleration to zero
+// For an S-curve acceleration phase which starts at speed u and acceleration a, spends time t1 accelerating with jerk j to peak acceleration ap, then spends time t2 at constant acceleration ap, then spends time t1 reducing acceleration back to a:
+//	s = u * (2 * t1 + t2) + a * (2 * t1^2 + 2 * t1 * t2 + ½ * t2^2) + j * (t1^3 + (3/2) * t1^2 * t2 + ½ * t1 * t2^2)
+//	v = u + a * (2 * t1 + t2) + j * (t1 * t2 + t1^2)
+//	ap = a + j * t1
+// Given u = 0 and a = 0 for the move we are constructing:
+//	s = j * (t1^3 + (3/2) * t1^2 * t2 + ½ * t1 * t2^2)
+//	v = j * (t1 * t2 + t1^2) = j * t1 * (t1 + t2)
+//	ap = j * t1
+// The deceleration phase is a mirror image of the acceleration phase. We add a steady speed phase between acceleration and deceleration if we need more distance.
+void DDA::CalculateIsolatedSCurveMove(MovementProfile& plannedProfile) const noexcept
+{
+	plannedProfile.jerk = (double)jerk;
+	plannedProfile.totalDistance = (double)totalDistance;
+	plannedProfile.numberOfMovesCovered = 1;
+	do
+	{
+		// Determine whether the requested speed or the maximum acceleration is more limiting
+		// The acceleration reached from a standing start is a = j * t and the speed reached is v = 0.5 * j * t^2.
+		// So a^2 = j^2 * t^2 = 2 * v * j
+		// The phase in which the acceleration is reducing will increase the speed by the same amount. Therefore we can reach acceleration a without exceeding speed v if a^2 >= v * j.
+		if (fsquare(maxAcceleration) > requestedSpeed * jerk)
+		{
+			// In principle we can reach the requested speed without exceeding the maximum acceleration, without having to include a constant acceleration segment
+			plannedProfile.distances[1] = plannedProfile.distances[5] = 0.0;
+			const motioncalc_t halfTimeToReqSpeed = fastSqrtf(requestedSpeed/jerk);
+			const motioncalc_t distanceToReqSpeed = requestedSpeed * halfTimeToReqSpeed;
+			if (2 * distanceToReqSpeed < totalDistance)
+			{
+				// We can reach the requested speed and decelerate to zero again without exceeding the required distance. Generate a 5-phase move.
+				plannedProfile.distances[0] = plannedProfile.distances[6] = OneSixthDouble * plannedProfile.jerk * dcube(halfTimeToReqSpeed);
+				plannedProfile.distances[2] = plannedProfile.distances[4] = (double)(requestedSpeed * halfTimeToReqSpeed) - plannedProfile.distances[0];
+				plannedProfile.distances[3] = totalDistance - 2 * distanceToReqSpeed;
+				plannedProfile.topSpeed = requestedSpeed;
+				plannedProfile.peakAcceleration = jerk * halfTimeToReqSpeed;
+				break;
+			}
+			// Else we can't reach the requested speed without exceeding required distance, or we can only just reach it and then we need to start decelerating immediately. Fall through to beyond the else-part of this if-statement.
+		}
+		else
+		{
+			// We can't reach the requested speed without inserting a constant acceleration segment to avoid exceeding maximum acceleration
+			plannedProfile.peakAcceleration = maxAcceleration;
+			const motioncalc_t basicDistance = 2 * fcube(maxAcceleration)/fsquare(jerk);	// distance if we reach max acceleration but have no constant acceleration segment
+			if (basicDistance < totalDistance)
+			{
+				// We need to insert a constant acceleration segment. We may also need to limit the top speed.
+				// Calculate t1 in the above equations
+				// From the above equations:	t2^2 * (0.5 * t1) + t2 * (1.5 * t1^2) + (t1^3 - s/j) = 0
+				// Solve for t2 to get:			t2 = [-1.5 * t1^2 +/- sqrt(2.25 * t1^4 - 4 * 0.5 * t1 * (t1^3 - s/j))]/t1
+				// Rearrange:					t2 = -1.5 * t1 +/- sqrt(2.25 * t1^2 - 2 * (t1^2 - s/(j*t1))
+				// Simplify:					t2 = -1.5 * t1 +/- sqrt(0.25 * t1^2 + 2 * s/(j*t1))
+				// But j * t1 = ap, therefore:	t2 = -1.5 * t1 +/- sqrt(0.25 * t1^2 + 2 * s/ap)
+				// s is half the total distance because we accelerate and decelerate again.
+				const double timeToMaxAcceleration = maxAcceleration/jerk;
+				plannedProfile.distances[0] = plannedProfile.distances[6] = OneSixthDouble * plannedProfile.jerk * dcube(timeToMaxAcceleration);
+				const double constantAccelerationTime = -(double)1.5 * timeToMaxAcceleration + fastSqrtd(0.25 * fsquare(timeToMaxAcceleration) + totalDistance/maxAcceleration);
+				const double newTopSpeed = plannedProfile.jerk * timeToMaxAcceleration * (timeToMaxAcceleration + constantAccelerationTime);
+				if (newTopSpeed <= (double)requestedSpeed)
+				{
+					// Generate a 6-phase move. The middle 2 phases could be combined.
+					plannedProfile.topSpeed = newTopSpeed;
+					plannedProfile.distances[1] = plannedProfile.distances[5] = OneHalfDouble * constantAccelerationTime * plannedProfile.topSpeed;
+					plannedProfile.distances[2] = plannedProfile.distances[4] = timeToMaxAcceleration * plannedProfile.topSpeed - plannedProfile.distances[0];
+					plannedProfile.distances[3] = (double)0.0;
+				}
+				else
+				{
+					// We need to limit the constant acceleration time in order to limit the top speed, and add a constant speed phase. Generate a 7-phase move.
+					plannedProfile.topSpeed = (double)requestedSpeed;
+					//	v = j * t1 * (t1 + t2) therefore t2 = v/(j * t1) - t1
+					const double revisedConstantAccelerationTime = (double)requestedSpeed/(plannedProfile.jerk * timeToMaxAcceleration) - timeToMaxAcceleration;
+					plannedProfile.distances[1] = plannedProfile.distances[5] = OneHalfDouble * revisedConstantAccelerationTime * plannedProfile.topSpeed;
+					plannedProfile.distances[2] = plannedProfile.distances[4] = timeToMaxAcceleration * plannedProfile.topSpeed - plannedProfile.distances[0];
+					plannedProfile.distances[3] = plannedProfile.totalDistance - 2 * (plannedProfile.distances[0] + plannedProfile.distances[2]);
+				}
+				break;
+			}
+			// Else fall through
+		}
+
+		// If we get here then we can reach neither requestedSpeed nor maxAcceleration without exceeding totalDistance. Generate a 4-phase move. The middle 2 phases could be combined.
+		const double halfTimeToTopSpeed = fastCubeRootd((double)totalDistance * OneHalfDouble / plannedProfile.jerk);
+		plannedProfile.distances[0] = plannedProfile.distances[6] = OneTwelfthDouble * (double)totalDistance;
+		plannedProfile.distances[2] = plannedProfile.distances[4] = OneHalfDouble * plannedProfile.totalDistance - plannedProfile.distances[0];
+		plannedProfile.distances[1] = plannedProfile.distances[3] = plannedProfile.distances[5] = 0.0;
+		plannedProfile.topSpeed = plannedProfile.jerk * dsquare(halfTimeToTopSpeed);
+		plannedProfile.peakAcceleration = plannedProfile.jerk * halfTimeToTopSpeed;
+	} while (false);
+
+	plannedProfile.peakDeceleration = -plannedProfile.peakAcceleration;
+}
+
 // Calculate the desired profile of a series of moves that starts from a given start speed and start acceleration and finishes at a higher end speed and zero acceleration
 // Returns true if the move is feasible, false if we can't slow down to the requested speed and zero acceleration from the starting conditions.
 // Outputs are peakAcceleration (which is <= maxAcceleration), the durations of the increasing acceleration and steady acceleration phases, and the distance covered
@@ -401,11 +495,14 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 // Otherwise we need to compute the move details too.
 /*static*/ void DDA::AllocateMoveFromPlan(MovementProfile& plannedProfile, PrepParams& params) noexcept
 {
+	params.totalDistance = totalDistance;
 	double moveDistanceLeft = (double)totalDistance;
+	params.jerk = (float)plannedProfile.jerk;
+	const double djerk = (double)plannedProfile.jerk;
 	double speed = plannedProfile.startSpeed;
-	double acceleration = params.initialAcceleration = plannedProfile.startAcceleration;
-	params.jerk = plannedProfile.jerk;
-	const double djerk = (double)params.jerk;
+	params.initialAcceleration = (float)plannedProfile.startAcceleration;
+	double acceleration = plannedProfile.startAcceleration;
+
 	uint32_t totalClocks = 0;
 
 	do
@@ -427,6 +524,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 				topSpeed = params.topSpeed = speed;
 				afterPrepare.peakAcceleration = params.peakAcceleration = acceleration;
 				params.distances[1] = params.distances[2] = params.distances[3] = params.distances[4] = params.distances[5] = params.distances[6] = 0;
+				params.phaseClocks[1] = params.phaseClocks[2] = params.phaseClocks[3] = params.phaseClocks[4] = params.phaseClocks[5] = params.phaseClocks[6] = 0;
 				afterPrepare.peakDeceleration = params.initialDeceleration = params.peakDeceleration = 0.0;
 				break;
 			}
@@ -456,6 +554,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 				topSpeed = params.topSpeed = speed;
 				afterPrepare.peakAcceleration = params.peakAcceleration = acceleration;
 				params.distances[2] = params.distances[3] = params.distances[4] = params.distances[5] = params.distances[6] = 0;
+				params.phaseClocks[2] = params.phaseClocks[3] = params.phaseClocks[4] = params.phaseClocks[5] = params.phaseClocks[6] = 0;
 				afterPrepare.peakDeceleration = params.initialDeceleration = params.peakDeceleration = 0.0;
 				break;
 			}
@@ -486,6 +585,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 				plannedProfile.distances[2] -= t2Distance;
 				topSpeed = params.topSpeed = speed;
 				params.distances[3] = params.distances[4] = params.distances[5] = params.distances[6] = 0;
+				params.phaseClocks[3] = params.phaseClocks[4] = params.phaseClocks[5] = params.phaseClocks[6] = 0;
 				afterPrepare.peakDeceleration = params.initialDeceleration = params.peakDeceleration = 0.0;
 				break;
 			}
@@ -514,6 +614,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 			{
 				plannedProfile.distances[3] -= t3Distance;
 				params.distances[4] = params.distances[5] = params.distances[6] = 0;
+				params.phaseClocks[4] = params.phaseClocks[5] = params.phaseClocks[6] = 0;
 				afterPrepare.peakDeceleration = params.initialDeceleration = params.peakDeceleration = 0.0;
 				break;
 			}
@@ -532,7 +633,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 		{
 			const bool lastPhase = (moveDistanceLeft <= plannedProfile.distances[4]);
 			const double t4Distance = (lastPhase) ? moveDistanceLeft : plannedProfile.distances[4];
-			params.distances[2] = t4Distance;
+			params.distances[4] = t4Distance;
 			const double t4 = SmallestNonNegativeCubicSolution(-djerk, 3 * acceleration, 6 * speed, -6 * t4Distance);
 			params.phaseClocks[4] = doubleToU32(t4);
 			totalClocks += params.phaseClocks[4];
@@ -541,8 +642,9 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 			acceleration -= djerk * t4;
 			if (lastPhase)
 			{
-				plannedProfile.distances[2] -= t4Distance;
+				plannedProfile.distances[4] -= t4Distance;
 				params.distances[5] = params.distances[6] = 0;
+				params.phaseClocks[5] = params.phaseClocks[6] = 0;
 				afterPrepare.peakDeceleration = params.peakDeceleration = acceleration;
 				break;
 			}
@@ -561,7 +663,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 		{
 			const bool lastPhase = (moveDistanceLeft <= plannedProfile.distances[5]);
 			const double t5Distance = (lastPhase) ? moveDistanceLeft : plannedProfile.distances[5];
-			params.distances[2] = t5Distance;
+			params.distances[5] = t5Distance;
 			const double t5 = SmallestNonNegativeQuadraticSolution(OneHalfDouble * plannedProfile.peakDeceleration, speed, -t5Distance);
 			params.phaseClocks[5] = doubleToU32(t5);
 			totalClocks += params.phaseClocks[5];
@@ -572,6 +674,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 			{
 				plannedProfile.distances[2] -= t5Distance;
 				params.distances[6] = 0;
+				params.phaseClocks[6] = 0;
 				break;
 			}
 			moveDistanceLeft -= t5Distance;
@@ -585,6 +688,8 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 
 		// Anything left must go in phase 6
 		const double t6Distance = moveDistanceLeft;
+		params.distances[6] = t6Distance;
+
 		// If we are ending at zero speed then we only just achieve the distance, and due to rounding error the cubic solution may fail.
 		double t6 = SmallestNonNegativeCubicSolution(djerk, 3 * acceleration, 6 * speed, -6 * t6Distance);
 		if (std::isnan(t6))
@@ -618,12 +723,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 	plannedProfile.startSpeed = speed;
 	plannedProfile.startAcceleration = acceleration;
 	clocksNeeded = totalClocks;
-	params.useInputShaping = flags.xyMoving
-							&& !(   flags.isolatedMove || flags.isLeadscrewAdjustmentMove
-#if SUPPORT_SCANNING_PROBES
-								 || flags.scanningProbeMove
-#endif
-								);
+	params.DebugPrint();
 }
 
 # if 0
@@ -827,99 +927,6 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 }
 
 #endif
-
-// Calculate the move to be added to the ring when the start speed and acceleration and the end speed and acceleration are all zero
-// Caller has already set endSpeed and endDeceleration to zero
-// For an S-curve acceleration phase which starts at speed u and acceleration a, spends time t1 accelerating with jerk j to peak acceleration ap, then spends time t2 at constant acceleration ap, then spends time t1 reducing acceleration back to a:
-//	s = u * (2 * t1 + t2) + a * (2 * t1^2 + 2 * t1 * t2 + ½ * t2^2) + j * (t1^3 + (3/2) * t1^2 * t2 + ½ * t1 * t2^2)
-//	v = u + a * (2 * t1 + t2) + j * (t1 * t2 + t1^2)
-//	ap = a + j * t1
-// Given u = 0 and a = 0 for the move we are constructing:
-//	s = j * (t1^3 + (3/2) * t1^2 * t2 + ½ * t1 * t2^2)
-//	v = j * (t1 * t2 + t1^2) = j * t1 * (t1 + t2)
-//	ap = j * t1
-// The deceleration phase is a mirror image of the acceleration phase. We add a steady speed phase between acceleration and deceleration if we need more distance.
-void DDA::CalculateIsolatedSCurveMove(MovementProfile& plannedProfile) const noexcept
-{
-	plannedProfile.jerk = (double)jerk;
-	plannedProfile.totalDistance = (double)totalDistance;
-	do
-	{
-		// Determine whether the requested speed or the maximum acceleration is more limiting
-		// The acceleration reached from a standing start is a = j * t and the speed reached is v = 0.5 * j * t^2.
-		// So a^2 = j^2 * t^2 = 2 * v * j
-		// The phase in which the acceleration is reducing will increase the speed by the same amount. Therefore we can reach acceleration a without exceeding speed v if a^2 >= v * j.
-		if (fsquare(maxAcceleration) > requestedSpeed * jerk)
-		{
-			// In principle we can reach the requested speed without exceeding the maximum acceleration, without having to include a constant acceleration segment
-			plannedProfile.distances[1] = plannedProfile.distances[5] = 0.0;
-			const motioncalc_t halfTimeToReqSpeed = fastSqrtf(requestedSpeed/jerk);
-			const motioncalc_t distanceToReqSpeed = requestedSpeed * halfTimeToReqSpeed;
-			if (2 * distanceToReqSpeed < totalDistance)
-			{
-				// We can reach the requested speed and decelerate to zero again without exceeding the required distance. Generate a 5-phase move.
-				plannedProfile.distances[0] = plannedProfile.distances[6] = OneSixthDouble * plannedProfile.jerk * dcube(halfTimeToReqSpeed);
-				plannedProfile.distances[2] = plannedProfile.distances[4] = (double)(requestedSpeed * halfTimeToReqSpeed) - plannedProfile.distances[0];
-				plannedProfile.distances[3] = totalDistance - 2 * distanceToReqSpeed;
-				plannedProfile.topSpeed = requestedSpeed;
-				plannedProfile.peakAcceleration = jerk * halfTimeToReqSpeed;
-				break;
-			}
-			// Else we can't reach the requested speed without exceeding required distance, or we can only just reach it and then we need to start decelerating immediately. Fall through to beyond the else-part of this if-statement.
-		}
-		else
-		{
-			// We can't reach the requested speed without inserting a constant acceleration segment to avoid exceeding maximum acceleration
-			plannedProfile.peakAcceleration = maxAcceleration;
-			const motioncalc_t basicDistance = 2 * fcube(maxAcceleration)/fsquare(jerk);	// distance if we reach max acceleration but have no constant acceleration segment
-			if (basicDistance < totalDistance)
-			{
-				// We need to insert a constant acceleration segment. We may also need to limit the top speed.
-				// Calculate t1 in the above equations
-				// From the above equations:	t2^2 * (0.5 * t1) + t2 * (1.5 * t1^2) + (t1^3 - s/j) = 0
-				// Solve for t2 to get:			t2 = [-1.5 * t1^2 +/- sqrt(2.25 * t1^4 - 4 * 0.5 * t1 * (t1^3 - s/j))]/t1
-				// Rearrange:					t2 = -1.5 * t1 +/- sqrt(2.25 * t1^2 - 2 * (t1^2 - s/(j*t1))
-				// Simplify:					t2 = -1.5 * t1 +/- sqrt(0.25 * t1^2 + 2 * s/(j*t1))
-				// But j * t1 = ap, therefore:	t2 = -1.5 * t1 +/- sqrt(0.25 * t1^2 + 2 * s/ap)
-				// s is half the total distance because we accelerate and decelerate again.
-				const double timeToMaxAcceleration = maxAcceleration/jerk;
-				plannedProfile.distances[0] = plannedProfile.distances[6] = OneSixthDouble * plannedProfile.jerk * dcube(timeToMaxAcceleration);
-				const double constantAccelerationTime = -(double)1.5 * timeToMaxAcceleration + fastSqrtd(0.25 * fsquare(timeToMaxAcceleration) + totalDistance/maxAcceleration);
-				const double newTopSpeed = plannedProfile.jerk * timeToMaxAcceleration * (timeToMaxAcceleration + constantAccelerationTime);
-				if (newTopSpeed <= (double)requestedSpeed)
-				{
-					// Generate a 6-phase move. The middle 2 phases could be combined.
-					plannedProfile.topSpeed = newTopSpeed;
-					plannedProfile.distances[1] = plannedProfile.distances[5] = OneHalfDouble * constantAccelerationTime * plannedProfile.topSpeed;
-					plannedProfile.distances[2] = plannedProfile.distances[4] = timeToMaxAcceleration * plannedProfile.topSpeed - plannedProfile.distances[0];
-					plannedProfile.distances[3] = (double)0.0;
-				}
-				else
-				{
-					// We need to limit the constant acceleration time in order to limit the top speed, and add a constant speed phase. Generate a 7-phase move.
-					plannedProfile.topSpeed = (double)requestedSpeed;
-					//	v = j * t1 * (t1 + t2) therefore t2 = v/(j * t1) - t1
-					const double revisedConstantAccelerationTime = (double)requestedSpeed/(plannedProfile.jerk * timeToMaxAcceleration) - timeToMaxAcceleration;
-					plannedProfile.distances[1] = plannedProfile.distances[5] = OneHalfDouble * revisedConstantAccelerationTime * plannedProfile.topSpeed;
-					plannedProfile.distances[2] = plannedProfile.distances[4] = timeToMaxAcceleration * plannedProfile.topSpeed - plannedProfile.distances[0];
-					plannedProfile.distances[3] = plannedProfile.totalDistance - 2 * (plannedProfile.distances[0] + plannedProfile.distances[2]);
-				}
-				break;
-			}
-			// Else fall through
-		}
-
-		// If we get here then we can reach neither requestedSpeed nor maxAcceleration without exceeding totalDistance. Generate a 4-phase move. The middle 2 phases could be combined.
-		const double halfTimeToTopSpeed = fastCubeRootd((double)totalDistance * OneHalfDouble / plannedProfile.jerk);
-		plannedProfile.distances[0] = plannedProfile.distances[6] = OneTwelfthDouble * (double)totalDistance;
-		plannedProfile.distances[2] = plannedProfile.distances[4] = OneHalfDouble * plannedProfile.totalDistance - plannedProfile.distances[0];
-		plannedProfile.distances[1] = plannedProfile.distances[3] = plannedProfile.distances[5] = 0.0;
-		plannedProfile.topSpeed = plannedProfile.jerk * dsquare(halfTimeToTopSpeed);
-		plannedProfile.peakAcceleration = plannedProfile.jerk * halfTimeToTopSpeed;
-	} while (false);
-
-	plannedProfile.peakDeceleration = -plannedProfile.peakAcceleration;
-}
 
 #if 0	// we are probably not going to use this
 
