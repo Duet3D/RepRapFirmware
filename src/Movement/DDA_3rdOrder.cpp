@@ -391,6 +391,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 					plannedProfile.peakAcceleration = accelParams.peakAcceleration;
 					plannedProfile.peakDeceleration = -decelParams.peakAcceleration;
 					plannedProfile.reachesRequestedSpeed = true;
+					plannedProfile.DebugPrint();
 					return;
 				}
 				else
@@ -460,6 +461,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 								plannedProfile.peakAcceleration = accelParams.peakAcceleration;
 								plannedProfile.peakDeceleration = -decelParams.peakAcceleration;
 								plannedProfile.reachesRequestedSpeed = false;
+								plannedProfile.DebugPrint();
 								return;
 							}
 //							DEBUG_HERE;
