@@ -257,6 +257,7 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 	return true;
 }
 
+#if 0
 // Calculate a deceleration-only profile returning true if successful
 static bool CalculateDeceleratingMultipleMoveProfile(float startSpeed, float endSpeed, float startAcceleration, float endAcceleration, float maxAcceleration, float jerk, MultipleMoveParameters& rslt) noexcept
 pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
@@ -297,6 +298,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 	}
 	return true;
 }
+#endif
 
 // Plan some moves that haven't yet been committed and store the plan in plannedProfile.
 // 'firstUnpreparedMove' is the oldest uncommitted move.
@@ -406,19 +408,36 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 				// Here if we have insufficient distance to reach the requested speed
 				if (numIterations == 0)
 				{
-					if (firstUnpreparedMove->startAcceleration <= 0.0)
+					if (firstUnpreparedMove->startAcceleration < 0.0)
 					{
-						// We are at a steady speed or decelerating to start with.
-						// This happens if we are recalculating a previously-calculated move (which we normally avoid doing), or a move is added when we have already started decelerating.
-						if (!CalculateDeceleratingMultipleMoveProfile(firstUnpreparedMove->startSpeed, lastMoveToPlan->endSpeed, firstUnpreparedMove->startAcceleration, lastMoveToPlan->endAcceleration, minMaxAcc, minJerk, decelParams))
+						// We are decelerating to start with. We get here when we were executing a plan and started the deceleration phase, but more moves have been added.
+						// There are two cases:
+						// 1. We have enough distance to stop decelerating and then execute a standard profile. In that case we can use the standard planning code,
+						//    however the "top speed" of that profile may be lower than our start speed.
+						// 2. We don't have enough distance to stop the deceleration; so the best we can do is reduce the deceleration (phase 0) and then decelerate (phase 4, optionally 5, and 6).
+						//    In this case, phase 4 doesn't start at zero acceleration.
+						// Start by calculating the distance need to stop decelerating and the corresponding speed, then the distance needed to decelerate from that speed.
+						const double timeToStopDecelerating = -firstUnpreparedMove->startAcceleration/minJerk;
+						const double speedAfterStoppingDecelerating = (double)firstUnpreparedMove->startSpeed + OneHalfDouble * (double)firstUnpreparedMove->startAcceleration * timeToStopDecelerating;
+						const double distanceToStopDecelerating = (speedAfterStoppingDecelerating - OneSixthDouble * (double)firstUnpreparedMove->startAcceleration * timeToStopDecelerating) * timeToStopDecelerating;
+						if (!CalculateMultipleMoveProfile(lastMoveToPlan->endSpeed, speedAfterStoppingDecelerating, lastMoveToPlan->endAcceleration, minMaxAcc, minJerk, decelParams))
 						{
 							errorLine = __LINE__;
 							break;
 						}
-						viableDistanceNeeded = decelParams.totalDistance;
-						viablePeakSpeed = firstUnpreparedMove->startSpeed;
-						//TODO if the viable distance is close to the distance available, accept the move and adjust the parameters slightly if necessary.
-						// If the required distance is much greater or much less, error.
+						if (distanceToStopDecelerating + decelParams.totalDistance > (double)distanceToPlan)
+						{
+							// We have insufficient distance to stop decelerating
+							// TODO
+							debugPrintf("unhandled case: time to stop decel %.4g, speed %.4g, dist %.4g, available %.4g\n",
+										timeToStopDecelerating, speedAfterStoppingDecelerating, distanceToStopDecelerating, (double)distanceToPlan);
+							errorLine = __LINE__;
+							break;
+						}
+
+						// We can stop the deceleration, so we can use the normal planning algorithm. We just need to refine the target top speed.
+						viablePeakSpeed = speedAfterStoppingDecelerating;
+						viableDistanceNeeded = distanceToStopDecelerating + decelParams.totalDistance;
 //						DEBUG_HERE;
 					}
 					else
