@@ -19,6 +19,9 @@ public:
 	void Invalidate() noexcept { numberOfMovesCovered = 0; }
     double NonDecelDistance() const noexcept		// return the distance left excluding deceleration distance
     	{ return distances[0] + distances[1] + distances[2] + distances[3]; }
+    bool ReducingDeceleration() const noexcept		// return true if we are in the reducing deceleration phase
+    	{ return distances[0] + distances[2] + distances[3] + distances[4] + distances[5] == (double)0.0; }
+
     void DebugPrint() noexcept;
 
 	double startSpeed;								// the speed at the start of the move. Valid for the first un-commited move in the queue.

@@ -350,6 +350,10 @@ inline bool DDARing::NeedNewPlan(DDA *moveToPrepare) const noexcept
 	{
 		return false;												// if the profile reaches its requested speed and deceleration begins later than the end of this move, we don't need to re-plan yet
 	}
+	if (plannedProfile.ReducingDeceleration())
+	{
+		return false;												// if we are already in the reducing deceleration phase then unless allowed jerk has increased we can't avoid stopping
+	}
 
 	// We have an existing plan but it is out of date. Update the start speed and acceleration in the move to prepare to agree with the plan.
 	moveToPrepare->SetStartSpeedAndAcceleration((float)plannedProfile.startSpeed, (float)plannedProfile.startAcceleration);
