@@ -240,13 +240,13 @@ void DDA::DebugPrint(const char *_ecv_array tag) const noexcept
 	DebugPrintVector(" vec", directionVector, MaxAxesPlusExtruders);
 	debugPrintf("\n"
 #if SUPPORT_S_CURVE
-				"a=[%.4e, %.4e, %.4e] j=%.4e"
+				"a=[%.4e, %.4e, 0.0] j=%.4e"
 #else
 				"a=%.4e"
 #endif
 				" reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=x%04" PRIx32 "\n",
 #if SUPPORT_S_CURVE
-				(double)startAcceleration, (double)maxAcceleration, (double)endAcceleration, (double)jerk,
+				(double)startAcceleration, (double)maxAcceleration, (double)jerk,
 #else
 				(double)maxAcceleration,
 #endif
@@ -578,7 +578,6 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	else
 	{
 		// This will be the first move after standstill
-		endAcceleration = 0.0;														// end acceleration is zero until we have a following move
 		beforePrepare.startSpeedRatio = 1.0;
 		beforePrepare.maxPrevEndSpeed = 0.0;
 	}

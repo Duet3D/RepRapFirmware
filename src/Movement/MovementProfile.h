@@ -13,6 +13,7 @@
 #if SUPPORT_S_CURVE
 
 // Class to represent a movement profile that may cover several moves in a DDARing
+// The end acceleration of a profile is always zero. Currently the end speed is always zero too, but that may change in future.
 class MovementProfile
 {
 public:
@@ -24,14 +25,13 @@ public:
 
     void DebugPrint() noexcept;
 
-	double startSpeed;								// the speed at the start of the move. Valid for the first un-commited move in the queue.
-	double topSpeed;								// top speed of the move. Valid???
-	double endSpeed;								// end speed of the move. Valid (and zero) for the last move in the queue
+	double startSpeed;								// the speed at the start of the profile
+	double topSpeed;								// top speed of the profile
+	double endSpeed;								// end speed of the profile
 	double startAcceleration;						// the acceleration or deceleration at the start of this move, may be positive or negative. Valid for the first un-commited move in the queue.
 	double peakAcceleration;						// the acceleration in the steady acceleration phase, if any. Valid if phase1Distance != 0.
 	double peakDeceleration;						// the deceleration in the steady deceleration phase, if any. This is negative if there is a peak deceleration phase. Valid if phase5Distance != 0.
-	double endAcceleration;							// the acceleration or deceleration at the end of the move. Valid (and zero) for the last move in the queue.
-    double jerk;
+	double jerk;
     double distances[7];							// the distances of each phase
 
 	unsigned int numberOfMovesCovered = 0;			// if zero then the profile has not been calculated and the other fields are meaningless

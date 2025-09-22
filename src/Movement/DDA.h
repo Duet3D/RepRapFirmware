@@ -304,7 +304,7 @@ private:
     // These vary depending on how we connect the move with its predecessor and successor, but remain constant while the move is being executed
     float startSpeed, topSpeed, endSpeed;
 #if SUPPORT_S_CURVE
-    float startAcceleration, endAcceleration;
+    float startAcceleration;
 #endif
 
 	float proportionDone;							// what proportion of the extrusion in the G1 or G0 move of which this is a part has been done after this segment is complete
