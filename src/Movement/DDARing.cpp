@@ -387,7 +387,10 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 			}
 			else
 			{
-				debugPrintf("Skipping planning\n");
+				if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+				{
+					debugPrintf("Skipping planning\n");
+				}
 			}
 		}
 		firstUnpreparedMove->Prepare(*this, plannedProfile, prepareAdvanceTime, simulationMode);

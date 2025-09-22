@@ -13,6 +13,7 @@
 
 #include "DDARing.h"
 #include "MovementProfile.h"
+#include "MoveDebugFlags.h"
 #include <Platform/RepRap.h>
 #include "Move.h"
 #include <GCodes/GCodes.h>
@@ -213,7 +214,11 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 {
 	if (peakSpeed > startSpeed)
 	{
-		debugPrintf("Calculating MMP with accel/decel phase\n");
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+		{
+			debugPrintf("Calculating MMP with accel/decel phase\n");
+		}
+
 		// We need an acceleration phase. First, determine whether the maximum acceleration is limiting.
 		if ((peakSpeed - startSpeed) * jerk > dsquare(maxAcceleration) - OneHalfDouble * dsquare(startAcceleration))
 		{
@@ -250,7 +255,10 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 	}
 	else
 	{
-		debugPrintf("MMP has no accel/decel phase\n");
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+		{
+			debugPrintf("MMP has no accel/decel phase\n");
+		}
 		// We don't need an acceleration phase
 		rslt.s0 = rslt.s1 = rslt.s2 = rslt.totalDistance = 0.0;
 	}
@@ -314,7 +322,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 	float fminJerk = firstUnpreparedMove->jerk;
 	float fminMaxAcc = firstUnpreparedMove->maxAcceleration;
 	unsigned int numMoves = 1;
-	while ((nextMove = lastMoveToPlan->next)->state != DDA::empty && nextMove->beforePrepare.maxPrevEndSpeed != 0.0)
+	while ((nextMove = lastMoveToPlan->next)->IsProvisional() && nextMove->beforePrepare.maxPrevEndSpeed != 0.0)
 	{
 		distanceToPlan += (double)nextMove->totalDistance;
 		if (nextMove->jerk < fminJerk) { fminJerk = nextMove->jerk; }
@@ -335,8 +343,11 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 	lastMoveToPlan->endSpeed = 0.0;					// for now we always end at zero speed (as well as zero acceleration)
 	plannedProfile.endSpeed = 0.0;
 
-	debugPrintf("Planning %u moves, dist %.3f maxSpeed %.4e maxAcc %.4e jerk %.4e ss %.3e sa %.3e\n",
-				numMoves, distanceToPlan, (double)maxReqSpeed, minMaxAcc, minJerk, plannedProfile.startSpeed, plannedProfile.startAcceleration);
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+	{
+		debugPrintf("Planning %u moves, dist %.3f maxSpeed %.4e maxAcc %.4e jerk %.4e ss %.3e sa %.3e\n",
+					numMoves, distanceToPlan, (double)maxReqSpeed, minMaxAcc, minJerk, plannedProfile.startSpeed, plannedProfile.startAcceleration);
+	}
 
 	// If the sequence comprises a single move and the start speed and acceleration are both zero (e.g. we are adding the first move), this is the simplest case
 	if (numMoves == 1 && plannedProfile.startSpeed == (double)0.0 && plannedProfile.startAcceleration == (double)0.0)
@@ -384,7 +395,6 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 				// This plan is viable
 				if (numIterations == 0 || distanceNeeded >= (double)0.98 * distanceToPlan)
 				{
-					debugPrintf("Solved in %u iterations, match = %.2f\n", numIterations, (double)(distanceNeeded/distanceToPlan));
 					plannedProfile.distances[0] = accelParams.s0;
 					plannedProfile.distances[1] = accelParams.s1;
 					plannedProfile.distances[2] = accelParams.s2;
@@ -396,7 +406,11 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 					plannedProfile.peakAcceleration = accelParams.peakAcceleration;
 					plannedProfile.peakDeceleration = -decelParams.peakAcceleration;
 					plannedProfile.reachesRequestedSpeed = true;
-					plannedProfile.DebugPrint();
+					if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+					{
+						debugPrintf("Solved in %u iterations, match = %.2f\n", numIterations, (double)(distanceNeeded/distanceToPlan));
+						plannedProfile.DebugPrint();
+					}
 					return;
 				}
 				else
@@ -503,7 +517,6 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 
 							if (viableDistanceNeeded >= (double)0.98 * distanceToPlan)		// this test can save a lot of iterations when we re-plan something already planned
 							{
-								debugPrintf("Solved in 0.5 iterations, match = %.2f\n", viableDistanceNeeded/distanceToPlan);
 								plannedProfile.distances[0] = accelParams.s0;
 								plannedProfile.distances[1] = accelParams.s1;
 								plannedProfile.distances[2] = accelParams.s2;
@@ -515,7 +528,11 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 								plannedProfile.peakAcceleration = accelParams.peakAcceleration;
 								plannedProfile.peakDeceleration = -decelParams.peakAcceleration;
 								plannedProfile.reachesRequestedSpeed = false;
-								plannedProfile.DebugPrint();
+								if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+								{
+									debugPrintf("Solved in 0.5 iterations, match = %.2f\n", viableDistanceNeeded/distanceToPlan);
+									plannedProfile.DebugPrint();
+								}
 								return;
 							}
 //							DEBUG_HERE;
@@ -538,8 +555,11 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 			delay(1);
 			++numIterations;
 			if (numIterations > 50) { errorLine = __LINE__; break; }
-			debugPrintf("Trying peak speed %.3e u=%.3e a=%.3e ma=%.3e j=%.3e s=%.3f\n",
-						(double)peakSpeedToTry, plannedProfile.startSpeed, plannedProfile.startAcceleration, minMaxAcc, minJerk, distanceToPlan);
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+			{
+				debugPrintf("Trying peak speed %.3e u=%.3e a=%.3e ma=%.3e j=%.3e s=%.3f\n",
+							(double)peakSpeedToTry, plannedProfile.startSpeed, plannedProfile.startAcceleration, minMaxAcc, minJerk, distanceToPlan);
+			}
 		}
 
 		// Here if there is no viable movement profile that satisfies the constraints
@@ -573,7 +593,10 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 			totalClocks += params.phaseClocks[0];
 			speed += (acceleration + OneHalfDouble * djerk * t0) * t0;
 			acceleration += djerk * t0;
-			debugPrintf("Phase 0: %.3e %lu %.3e %.3e %.3e\n", t0Distance, params.phaseClocks[0], speed, acceleration, djerk);
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+			{
+				debugPrintf("Phase 0: %.3e %lu %.3e %.3e %.3e\n", t0Distance, params.phaseClocks[0], speed, acceleration, djerk);
+			}
 			if (lastPhase)
 			{
 				plannedProfile.distances[0] -= t0Distance;
@@ -601,7 +624,10 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 			const double t1 = SmallestNonNegativeQuadraticSolution(OneHalfDouble * plannedProfile.peakAcceleration, speed, -t1Distance);
 			params.phaseClocks[1] = doubleToU32(t1);
 			totalClocks += params.phaseClocks[2];
-			debugPrintf("Phase 1: %.3e %lu %.3e %.3e (%.3e)\n", t1Distance, params.phaseClocks[1], speed, (double)plannedProfile.peakAcceleration, acceleration);
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+			{
+				debugPrintf("Phase 1: %.3e %lu %.3e %.3e (%.3e)\n", t1Distance, params.phaseClocks[1], speed, (double)plannedProfile.peakAcceleration, acceleration);
+			}
 			speed += t1 * plannedProfile.peakAcceleration;
 			acceleration = params.peakAcceleration = plannedProfile.peakAcceleration;
 			if (lastPhase)
@@ -633,7 +659,10 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 			const double t2 = SmallestNonNegativeCubicSolution(-djerk, 3 * acceleration, 6 * speed, -6 * t2Distance);
 			params.phaseClocks[2] = doubleToU32(t2);
 			totalClocks += params.phaseClocks[2];
-			debugPrintf("Phase 2: %.3e %lu %.3e %.3e %.3e\n", t2Distance, params.phaseClocks[2], speed, acceleration, -djerk);
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+			{
+				debugPrintf("Phase 2: %.3e %lu %.3e %.3e %.3e\n", t2Distance, params.phaseClocks[2], speed, acceleration, -djerk);
+			}
 			speed += (acceleration - OneHalfDouble * djerk * t2) * t2;
 			acceleration -= djerk * t2;
 			if (lastPhase)
@@ -664,7 +693,10 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 			const double t3 = (double)t3Distance/speed;
 			params.phaseClocks[3] = doubleToU32(t3);
 			totalClocks += params.phaseClocks[3];
-			debugPrintf("Phase 3: %.3e %lu %.3e %.3e (%.3e)\n", t3Distance, params.phaseClocks[3], speed, (double)0.0, acceleration);
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+			{
+				debugPrintf("Phase 3: %.3e %lu %.3e %.3e (%.3e)\n", t3Distance, params.phaseClocks[3], speed, (double)0.0, acceleration);
+			}
 			acceleration = 0.0;
 			if (lastPhase)
 			{
@@ -693,7 +725,10 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 			const double t4 = SmallestNonNegativeCubicSolution(-djerk, 3 * acceleration, 6 * speed, -6 * t4Distance);
 			params.phaseClocks[4] = doubleToU32(t4);
 			totalClocks += params.phaseClocks[4];
-			debugPrintf("Phase 4: %.3e %lu %.3e %.3e %.3e\n", t4Distance, params. phaseClocks[4], speed, (double)0.0, -djerk);
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+			{
+				debugPrintf("Phase 4: %.3e %lu %.3e %.3e %.3e\n", t4Distance, params. phaseClocks[4], speed, (double)0.0, -djerk);
+			}
 			speed += (acceleration - OneHalfDouble * djerk * t4) * t4;
 			acceleration -= djerk * t4;
 			if (lastPhase)
@@ -723,7 +758,10 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 			const double t5 = SmallestNonNegativeQuadraticSolution(OneHalfDouble * plannedProfile.peakDeceleration, speed, -t5Distance);
 			params.phaseClocks[5] = doubleToU32(t5);
 			totalClocks += params.phaseClocks[5];
-			debugPrintf("Phase 5: %.3e %lu %.3e %.3e (%.3e)\n", t5Distance, params.phaseClocks[5], speed, plannedProfile.peakDeceleration, acceleration);
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+			{
+				debugPrintf("Phase 5: %.3e %lu %.3e %.3e (%.3e)\n", t5Distance, params.phaseClocks[5], speed, plannedProfile.peakDeceleration, acceleration);
+			}
 			speed += plannedProfile.peakDeceleration * t5;
 			acceleration = plannedProfile.peakDeceleration;
 			if (lastPhase)
@@ -768,7 +806,10 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 		}
 		params.phaseClocks[6] = doubleToU32(t6);
 		totalClocks += params.phaseClocks[6];
-		debugPrintf("Phase 6: %.3e %lu %.3e %.3e %.3e\n", t6Distance, params.phaseClocks[6], speed, acceleration, djerk);
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+		{
+			debugPrintf("Phase 6: %.3e %lu %.3e %.3e %.3e\n", t6Distance, params.phaseClocks[6], speed, acceleration, djerk);
+		}
 		speed += (acceleration + OneHalfDouble * djerk * t6) * t6;
 		acceleration += djerk * t6;
 		plannedProfile.distances[6] = max<double>(plannedProfile.distances[6] - t6Distance, 0.0);
@@ -779,7 +820,10 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 	plannedProfile.startSpeed = speed;
 	plannedProfile.startAcceleration = acceleration;
 	clocksNeeded = totalClocks;
-	params.DebugPrint();
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+	{
+		params.DebugPrint();
+	}
 }
 
 # if 0
