@@ -983,13 +983,33 @@ void Move::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 #endif
 
 #if STEPS_DEBUG
+# if 0	// DEBUG
+			reply.lcat("Pos req/act/dcf/state/seg:");
+# else
 			reply.lcat("Pos req/act/dcf:");
+# endif
 			for (size_t drive = 0; drive < reprap.GetGCodes().GetTotalAxes(); ++drive)
 			{
+# if 0	// DEBUG
+				reply.catf(" %.2f/%" PRIi32 "/%.2f/%u/%u", (double)dms[drive].positionRequested, dms[drive].currentMotorPosition, (double)dms[drive].distanceCarriedForwards, (unsigned int)dms[drive].state, dms[drive].segments != nullptr);
+# else
 				reply.catf(" %.2f/%" PRIi32 "/%.2f", (double)dms[drive].positionRequested, dms[drive].currentMotorPosition, (double)dms[drive].distanceCarriedForwards);
+# endif
 			}
 #endif
-
+#if 0	// DEBUG
+			reply.lcat("ADM:");
+			for (const DriveMovement *dm = activeDMs; dm != nullptr; dm = dm->nextDM)
+			{
+				reply.catf(" %u,%u,%lu", dm->drive, (unsigned int)dm->state, dm->nextStepTime);
+			}
+			reply.cat(" PDM:");
+			for (const DriveMovement *dm = phaseStepDMs; dm != nullptr; dm = dm->nextDM)
+			{
+				reply.catf(" %u,%u,%lu", dm->drive, (unsigned int)dm->state, dm->nextStepTime);
+			}
+			reply.catf(" Now: %lu", StepTimer::GetMovementTimerTicks());
+#endif
 			StepTimer::Diagnostics(reply);
 		}
 		break;
@@ -1965,9 +1985,12 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 		{
 			if (dm.ScheduleFirstSegment())
 			{
-				// Always set the direction when starting the first move
-				dm.directionChanged = false;
-				SetDirection(dm.drive, dm.direction);
+				if (dm.state != DMState::phaseStepping)
+				{
+					// Always set the direction when starting the first move
+					dm.directionChanged = false;
+					SetDirection(dm.drive, dm.direction);
+				}
 				InsertDM(&dm);
 				if (activeDMs == &dm && simulationMode == SimulationMode::off)			// if this is now the first DM in the active list
 				{
@@ -1978,7 +2001,7 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 				}
 			}
 		}
-	}
+	}		// End of boosted base priority section
 }
 
 // Return true if none of the drives passed has any movement pending
@@ -2162,7 +2185,6 @@ StepMode Move::GetStepMode(size_t axisOrExtruder) const noexcept
 
 void Move::PhaseStepControlLoop() noexcept
 {
-
 	// Record the control loop call interval
 	const StepTimer::Ticks loopCallTime = StepTimer::GetTimerTicks();
 	const StepTimer::Ticks timeElapsed = loopCallTime - prevPSControlLoopCallTime;
@@ -2191,11 +2213,11 @@ void Move::PhaseStepControlLoop() noexcept
 		CheckEndstops(true);												// call out to a separate function because this may help cache locality in the more common and time-critical case where we don't call it
 	}
 
+	bool inserted = false;
 	DriveMovement **dmp = &phaseStepDMs;
 	while (*dmp != nullptr)
 	{
 		DriveMovement * const dm = *dmp;
-
 		GetCurrentMotion(dm->drive, now, dm->phaseStepControl.mParams);
 
 		if (dm->state != DMState::phaseStepping)
@@ -2204,6 +2226,10 @@ void Move::PhaseStepControlLoop() noexcept
 			if (dm->state >= DMState::firstMotionState)
 			{
 				InsertDM(dm);
+				if (activeDMs == dm)
+				{
+					inserted = true;										// we have scheduled a new segment which isn't ready to start, so we need an interrupt
+				}
 			}
 		}
 		else
@@ -2226,6 +2252,14 @@ void Move::PhaseStepControlLoop() noexcept
 		}
 	}
 
+	if (inserted)
+	{
+		BasePriorityBooster booster(NvicPriorityStep);					// shut out the step interrupt
+		if (!ScheduleNextStepInterrupt())
+		{
+			Interrupt();
+		}
+	}
 
 	// Record how long this has taken to run
 	const StepTimer::Ticks loopRuntime = StepTimer::GetTimerTicks() - loopCallTime;
@@ -2308,18 +2342,6 @@ void Move::Interrupt() noexcept
 
 						}
 						//END DEBUG
-#endif
-#if SUPPORT_CAN_EXPANSION
-# if SUPPORT_REMOTE_COMMANDS
-						if (inExpansionMode)
-						{
-							//TODO tell the main board we are behind schedule
-						}
-						else
-# endif
-						{
-							CanMotion::InsertHiccup(hiccupTimeInserted);		// notify expansion boards of the increased delay
-						}
 #endif
 						return;
 					}
@@ -2460,7 +2482,7 @@ void Move::CheckEndstops(bool executingMove) noexcept
 }
 
 // Generate the step pulses of internal drivers used by this DDA
-// Note, we use the movement timer ticks to decide when to generate step pulses, but we must use th raw step timer to enforce delays between pulses.
+// Note, we use the movement timer ticks to decide when to generate step pulses, but we must use the raw step timer to enforce delays between pulses.
 // 'now'is the movement timer ticks
 void Move::StepDrivers(uint32_t now) noexcept
 {
@@ -2580,22 +2602,21 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 			{
 				dm2->driversCurrentlyUsed = dm2->driversNormallyUsed & ~dm2->driverEndstopsTriggeredAtStart;	// we previously set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-				if (dm2->state == DMState::phaseStepping)
-				{
-					return;
-				}
+				if (dm2->state != DMState::phaseStepping)				// if we are phase stepping, skip the rest and proceed to the next DM
 #endif
+				{
 # if SUPPORT_CAN_EXPANSION
-				flags |= dm2->segmentFlags;
-				if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
-				{
-					dm2->TakeStepsAndCalcStepTimeRarely(now);
-				}
-				else
+					flags |= dm2->segmentFlags;
+					if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
+					{
+						dm2->TakeStepsAndCalcStepTimeRarely(now);
+					}
+					else
 # endif
-				{
-					(void)dm2->CalcNextStepTimeFull(now); 			// calculate next step time
-					dm2->directionChanged = true;					// force the direction to be set up
+					{
+						(void)dm2->CalcNextStepTimeFull(now); 			// calculate next step time
+						dm2->directionChanged = true;					// force the direction to be set up
+					}
 				}
 			}
 		}
