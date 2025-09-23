@@ -318,13 +318,6 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 
 // The next 4 functions may be called from the step ISR, so they can't send CAN messages directly
 
-void CanMotion::InsertHiccup(uint32_t numClocks) noexcept
-{
-	//TODO sort out how we tell expansion boards about hiccups
-//	hiccupToInsert += numClocks;
-//	CanInterface::WakeAsyncSender();
-}
-
 // Flag a CAN-connected driver as not moving when we haven't sent the movement message yet
 void CanMotion::StopDriverWhenProvisional(DriverId driver) noexcept
 {

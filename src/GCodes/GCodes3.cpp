@@ -854,6 +854,11 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
+			if (!seen && !LockAllMovementSystemsAndWaitForStandstill(gb))
+			{
+				return GCodeResult::notFinished;
+			}
+
 			seen = true;
 			switch (commandFraction)
 			{
@@ -881,6 +886,11 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 
 	if (gb.Seen(extrudeLetter))
 	{
+		if (!seen && !LockAllMovementSystemsAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+
 		seen = true;
 		switch (commandFraction)
 		{
