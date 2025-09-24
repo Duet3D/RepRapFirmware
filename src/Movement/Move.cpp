@@ -2123,7 +2123,9 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 		{
 			if (dm.ScheduleFirstSegment())
 			{
+#if SUPPORT_PHASE_STEPPING
 				if (dm.state != DMState::phaseStepping)
+#endif
 				{
 					// Always set the direction when starting the first move
 					dm.directionChanged = false;
