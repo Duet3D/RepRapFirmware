@@ -33,12 +33,13 @@ jobs:
           ref: "3.5-dev"
           path: "./FreeRTOS"
 
-      - name: "Check out LibTinyUSB"
+      - name: "Check out LibTinyusb"
         uses: actions/checkout@v5
         with:
-          repository: "Duet3D/LibTinyUSB"
+          repository: "Duet3D/LibTinyusb"
           ref: "master"
-          path: "./LibTinyUSB"
+          path: "./LibTinyusb"
+          submodules: "recursive"
 
       - name: "Check out RepRapFirmware"
         uses: actions/checkout@v5
