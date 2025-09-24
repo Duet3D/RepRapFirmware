@@ -10,66 +10,66 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: "Check out CANlib"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           repository: "Duet3D/CANlib"
           ref: "3.6-dev"
           path: "./CANlib"
 
       - name: "Check out CoreN2G"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           repository: "Duet3D/CoreN2G"
           ref: "3.6-dev"
           path: "./CoreN2G"
 
       - name: "Check out Duet3Bootloader"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           repository: "Duet3D/Duet3Bootloader"
           ref: "dev"
           path: "./Duet3Bootloader"
 
       - name: "Check out Duet3Expansion"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           repository: "Duet3D/Duet3Expansion"
           ref: "3.6-dev"
           path: "./Duet3Expansion"
 
       - name: "Check out FreeRTOS"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           repository: "Duet3D/FreeRTOS"
           ref: "3.5-dev"
           path: "./FreeRTOS"
 
       - name: "Check out Qfplib-M0-full"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           repository: "Duet3D/Qfplib-M0-full"
           ref: "master"
           path: "./Qfplib-M0-full"
 
       - name: "Check out RepRapFirmware"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           repository: "Duet3D/RepRapFirmware"
           ref: "3.6-dev"
           path: "./RepRapFirmware"
 
       - name: "Check out RRFLibraries"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           repository: "Duet3D/RRFLibraries"
           ref: "3.5-dev"
           path: "./RRFLibraries"
 
       - name: "Check out WiFiSocketServerRTOS"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           repository: "Duet3D/WiFiSocketServerRTOS"
           ref: "main"
@@ -92,8 +92,8 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y libarchive-tools default-jre
-          curl -L -O "https://pkg.duet3d.com/eclipse-cpp-2023-09-R-linux-gtk-x86_64.tar.gz"
-          sudo bsdtar -x -f ./eclipse-cpp-2023-09-R-linux-gtk-x86_64.tar.gz -C /opt
+          curl -L -O "https://pkg.duet3d.com/eclipse-cpp-2025-09-R-linux-gtk-x86_64.tar.gz"
+          sudo bsdtar -x -f ./eclipse-cpp-2025-09-R-linux-gtk-x86_64.tar.gz -C /opt
 
       - name: "Set up ARM GCC"
         run: |
@@ -188,7 +188,7 @@ jobs:
           rm ./Duet3Firmware_Mini5plus.bin
 
       - name: "Attach binaries"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: binaries
           path: |
@@ -196,7 +196,7 @@ jobs:
             ./*.uf2
 
       - name: "Attach symbols"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: symbols
           path: |
@@ -209,7 +209,7 @@ jobs:
           mv ./*.uf2 ./files/
 
       - name: "Upload files to dev feed"
-        uses: Creepios/sftp-action@v1.0.3
+        uses: Creepios/sftp-action@v1.0.5
         with:
           host: pkg.duet3d.com
           port: 22
