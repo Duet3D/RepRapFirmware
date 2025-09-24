@@ -90,6 +90,10 @@ jobs:
         run: |
           /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin -importAll ./
 
+      - name: "Build RepRapFirmware Duet2"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin -cleanBuild "RepRapFirmware/Duet2"
+
       - name: "Build RepRapFirmware Duet2_SBC"
         run: |
           /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin -cleanBuild "RepRapFirmware/Duet2_SBC"
@@ -130,6 +134,7 @@ jobs:
 
       - name: "Prepare files for upload"
         run: |
+          rm Duet2CombinedFirmware.bin
           mkdir files
           mv ./*.bin ./files/
           mv ./*.uf2 ./files/
