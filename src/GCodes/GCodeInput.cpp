@@ -144,7 +144,7 @@ void NetworkGCodeInput::Put(MessageType mtype, char c) noexcept
 		return;
 	}
 
-	// Check for M112 (emergency stop) and for M122 (diagnostics) while receiving new characters
+	// Check for M112 (emergency stop), M122 (diagnostics) and M108 (abort wait for temperature) while receiving new characters
 	switch (state)
 	{
 		case GCodeInputState::idle:
@@ -169,7 +169,11 @@ void NetworkGCodeInput::Put(MessageType mtype, char c) noexcept
 			break;
 
 		case GCodeInputState::doingMCode1:
-			state = (c == '1') ? GCodeInputState::doingMCode11: (c == '2') ? GCodeInputState::doingMCode12 : GCodeInputState::doingCode;
+			state = (c == '0') ? GCodeInputState::doingMCode10 : (c == '1') ? GCodeInputState::doingMCode11: (c == '2') ? GCodeInputState::doingMCode12 : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode10:
+			state = (c == '8') ? GCodeInputState::doingMCode108 : GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingMCode11:
@@ -178,6 +182,17 @@ void NetworkGCodeInput::Put(MessageType mtype, char c) noexcept
 
 		case GCodeInputState::doingMCode12:
 			state = (c == '2') ? GCodeInputState::doingMCode122 : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode108:
+			if (c < ' ' || c == ';')
+			{
+				reprap.GetGCodes().CancelWaitForTemperatures(false);
+				// Normally we would call Reset and then return here to prevent the command being executed twice.
+				// However, DWC will be expecting an empty response, which we can't send from here because that will result in deadlock if no buffer is available.
+				// So we allow the command to be queued and executed again, which is harmless.
+			}
+			state = GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingMCode112:

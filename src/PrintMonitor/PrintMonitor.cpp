@@ -458,6 +458,8 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 	return 0.0;
 }
 
+#if SUPPORT_OBJECT_MODEL
+
 // Return the estimated time remaining if we have it, else null
 ExpressionValue PrintMonitor::EstimateTimeLeftAsExpression(PrintEstimationMethod method) const noexcept
 {
@@ -479,6 +481,8 @@ ExpressionValue PrintMonitor::EstimateTimeToPause() const noexcept
 	}
 	return ret;
 }
+
+#endif
 
 // This returns the amount of time the machine has printed without interruptions (i.e. pauses)
 float PrintMonitor::GetPrintDuration() const noexcept

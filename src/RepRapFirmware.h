@@ -760,16 +760,19 @@ const NvicPriority NvicPriorityWiFiUart = 3;		// UART used to receive debug data
 const NvicPriority NvicPriorityCan = 4;				// CAN interface
 const NvicPriority NvicPriorityPins = 4;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const NvicPriority NvicPriorityDriversSerialTMC = 4; // USART or UART used to control and monitor the smart drivers
+
+// We used to set the end-of-dma interrupt priority to 7 but that results in too many TMC driver transfer timeouts on the MB6HC.
+// I tried setting it to 4 but that breaks the DMA somehow, looks like the motor currents don't get set properly.
+const NvicPriority NvicPriorityDMA = 5;				// end-of-DMA interrupt, used on the SAME70 by TMC2160 drivers and HSMCI
 const NvicPriority NvicPriorityStep = 5;			// step interrupt is next highest, it can preempt most other interrupts
+
 const NvicPriority NvicPriorityUSB = 6;				// USB interrupt
 const NvicPriority NvicPriorityHSMCI = 6;			// HSMCI command complete interrupt
 
 # if HAS_LWIP_NETWORKING
-const NvicPriority NvicPriorityNetworkTick = 7;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
 const NvicPriority NvicPriorityEthernet = 7;		// priority for Ethernet interface
 # endif
 
-const NvicPriority NvicPriorityDMA = 7;				// end-of-DMA interrupt used by TMC drivers and HSMCI
 const NvicPriority NvicPrioritySpi = 7;				// SPI is used for network transfers on Duet WiFi/Duet Ethernet and for SBC transfers
 
 #elif __NVIC_PRIO_BITS >= 4
@@ -789,7 +792,6 @@ const NvicPriority NvicPriorityUSB = 7;				// USB interrupt
 const NvicPriority NvicPriorityHSMCI = 7;			// HSMCI command complete interrupt
 
 # if HAS_LWIP_NETWORKING
-const NvicPriority NvicPriorityNetworkTick = 8;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
 const NvicPriority NvicPriorityEthernet = 8;		// priority for Ethernet interface
 # endif
 

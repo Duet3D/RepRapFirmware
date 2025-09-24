@@ -13,12 +13,12 @@
 #include "ExpressionParser.h"
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
-#include <Platform/Tasks.h>
 #include <ObjectModel/Variable.h>
 #include <Networking/NetworkDefs.h>
 
-BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer), bufferLength(0), header(nullptr)
+BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer)
 {
+	header = reinterpret_cast<CodeHeader *>(gcodeBuffer.buffer);
 }
 
 void BinaryParser::Init() noexcept
@@ -32,37 +32,11 @@ void BinaryParser::Init() noexcept
 // CAUTION! This may be called with the task scheduler suspended, so don't do anything that might block or take more than a few microseconds to execute
 void BinaryParser::Put(const uint32_t *data, size_t len) noexcept
 {
-	// Buffer allocation happens dynamically when the GB is used for the first time.
-	// Hence, in theory, it is possible for different GBs to have different buffer sizes
-	if (header == nullptr)
-	{
-		if (gb.buffer == nullptr)
-		{
-			gb.buffer = static_cast<char *>(Tasks::AllocPermanent(MaxGCodeBinaryLength, std::align_val_t(4)));
-			gb.bufferLength = MaxGCodeBinaryLength;
-		}
-		header = reinterpret_cast<CodeHeader *>(gb.buffer);
-	}
-
-	// Make sure we can store the incoming chunk. If it doesn't fit, report an error later
-	const size_t codeLength = len * sizeof(uint32_t);
-	if (codeLength > gb.bufferLength)
-	{
-		bufferLength = 0;
-		gb.bufferState = GCodeBufferState::executing;
-		gb.overflowed = true;
-	}
-	else
-	{
-		memcpyu32(reinterpret_cast<uint32_t *>(gb.buffer), data, len);
-		bufferLength = codeLength;
-		gb.bufferState = GCodeBufferState::parsingGCode;
-		gb.overflowed = false;
-	}
-
-	// Copy G-code data
-	gb.LatestMachineState().g53Active = (bufferLength != 0) && (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
-	gb.CurrentFileMachineState().lineNumber = (bufferLength != 0) ? header->lineNumber : 0;
+	memcpyu32(reinterpret_cast<uint32_t *>(gb.buffer), data, len);
+	bufferLength = len * sizeof(uint32_t);
+	gb.bufferState = GCodeBufferState::parsingGCode;
+	gb.LatestMachineState().g53Active = (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
+	gb.CurrentFileMachineState().lineNumber = header->lineNumber;
 #if SUPPORT_ASYNC_MOVES
 	gb.CurrentFileMachineState().fpos = GetFilePosition();
 #endif
@@ -74,7 +48,7 @@ void BinaryParser::DecodeCommand() noexcept
 	{
 		if (reprap.GetDebugFlags(Module::Gcodes).IsBitSet(gb.GetChannel().ToBaseType()))
 		{
-			String<MaxGCodeStringLength> buf;
+			String<MaxCodeBufferSize> buf;
 			AppendFullCommand(buf.GetRef());
 			debugPrintf("%s: %s\n", gb.GetIdentity(), buf.c_str());
 		}
@@ -615,67 +589,6 @@ ExpressionValue BinaryParser::GetExpression() THROWS(GCodeException)
 	throw ConstructParseException("expected an expression inside { }");
 }
 
-// Get an unsigned integer or a string after a key letter. Return true if a string was found, false if an unsigned integer; else throw,
-bool BinaryParser::GetStringOrUIValue(uint32_t& uival, const StringRef& str) THROWS(GCodeException)
-{
-	if (seenParameter == nullptr)
-	{
-		THROW_INTERNAL_ERROR;
-	}
-
-	switch (seenParameter->type)
-	{
-	case DataType::Float:
-		uival = (uint32_t)seenParameter->floatValue;
-		return false;
-	case DataType::Int:
-		uival = (uint32_t)seenParameter->intValue;
-		return false;
-	case DataType::UInt:
-		uival = seenParameter->uintValue;
-		return false;
-	case DataType::String:
-		str.copy(seenParameterValue, seenParameter->intValue);
-		return true;
-	case DataType::Expression:
-		{
-			ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
-			const ExpressionValue e = parser.Parse();
-			switch (e.GetType())
-			{
-			case TypeCode::CString:
-				str.copy(e.sVal);
-				return true;
-
-			case TypeCode::HeapString:
-				{
-					ReadLockedPointer<const char> p = e.shVal.Get();				str.copy(p.Ptr());
-					str.copy(p.Ptr());
-				}
-				return true;
-
-			case TypeCode::Uint32:
-				uival = e.uVal;
-				return false;
-
-			case TypeCode::Int32:
-				if (e.iVal >= 0)
-				{
-					uival = (uint32_t)e.iVal;
-					return false;
-				}
-				break;
-			default:
-				break;
-			}
-		}
-		break;
-	default:
-		break;
-	}
-	throw ConstructParseException("expected a string or unsigned integer");
-}
-
 void BinaryParser::SetFinished() noexcept
 {
 	gb.LatestMachineState().g53Active = false;		// G53 does not persist beyond the current command
@@ -684,28 +597,25 @@ void BinaryParser::SetFinished() noexcept
 
 FilePosition BinaryParser::GetFilePosition() const noexcept
 {
-	return (bufferLength != 0) && ((header->flags & CodeFlags::HasFilePosition) != 0) ? header->filePosition : noFilePosition;
+	return ((header->flags & CodeFlags::HasFilePosition) != 0) ? header->filePosition : noFilePosition;
 }
 
 void BinaryParser::SetFilePosition(FilePosition fpos) noexcept
 {
-	if (bufferLength != 0)
+	if (fpos == noFilePosition)
 	{
-		if (fpos == noFilePosition)
-		{
-			header->flags = (CodeFlags)(header->flags & ~CodeFlags::HasFilePosition);
-		}
-		else
-		{
-			header->filePosition = fpos;
-			header->flags = (CodeFlags)(header->flags | CodeFlags::HasFilePosition);
-		}
+		header->flags = (CodeFlags)(header->flags & ~CodeFlags::HasFilePosition);
+	}
+	else
+	{
+		header->filePosition = fpos;
+		header->flags = (CodeFlags)(header->flags | CodeFlags::HasFilePosition);
 	}
 }
 
 const char* BinaryParser::DataStart() const noexcept
 {
-	return (bufferLength != 0) ? gb.buffer : nullptr;
+	return gb.buffer;
 }
 
 size_t BinaryParser::DataLength() const noexcept

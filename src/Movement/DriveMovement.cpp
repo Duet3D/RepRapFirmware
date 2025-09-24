@@ -386,13 +386,13 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 		if (stepsToLimit <= 0)
 		{
 			distanceCarriedForwards += currentSegment->GetLength() - (motioncalc_t)netStepsThisSegment;
-			if (distanceCarriedForwards > (motioncalc_t)1.0 || distanceCarriedForwards < (motioncalc_t)-1.0)
+			if (fabsf(distanceCarriedForwards) > (motioncalc_t)1.0)
 			{
 				return LogStepError(5, (float)distanceCarriedForwards, currentSegment);
 			}
 			if (currentMotorPosition - positionAtSegmentStart != netStepsThisSegment)
 			{
-				return LogStepError(6, 0.0, currentSegment);
+				return LogStepError(6, (float)(currentMotorPosition - positionAtSegmentStart - netStepsThisSegment), currentSegment);
 			}
 
 			movementAccumulator += netStepsThisSegment;				// update the amount of extrusion

@@ -1597,6 +1597,10 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 	{
 		rslt.all = 0;
 		rslt.notPresent = true;
+#ifdef DUET3MINI
+		// The DIAG inputs can be fed from DRIVER_ERROR inputs on the external drivers adapter
+		rslt.externalDriverError = digitalRead(DriverDiagPins[driverNumber]);
+#endif
 	}
 	return rslt;
 }
@@ -2710,7 +2714,7 @@ extern "C" void EVSYS_3_Handler() noexcept __attribute__ ((alias("StallEventInte
 // Check whether stall detection is viable. If yes, return nullptr. If no, return a message string in flash memory containing a single %u placeholder for the driver number.
 const char *_ecv_array _ecv_null SmartDrivers::CheckStallDetectionEnabled(size_t driver, float speed) noexcept
 {
-	return (driver < GetNumTmcDrivers())
+	return (driver < GetNumTmcDrivers() && driverStates[driver].DriverAssumedPresent())
 			? driverStates[driver].CheckStallDetectionEnabled(speed)
 				: "driver %u does not support stall detection";
 }
@@ -2721,7 +2725,7 @@ const char *_ecv_array _ecv_null SmartDrivers::CheckStallDetectionEnabled(size_t
 
 GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept
 {
-	if (driverNumber < GetNumTmcDrivers())
+	if (driverNumber < GetNumTmcDrivers() && driverStates[driverNumber].DriverAssumedPresent())
 	{
 		const char *_ecv_array _ecv_null const msg = driverStates[driverNumber].CheckStallDetectionEnabled(speed);
 		if (msg == nullptr)

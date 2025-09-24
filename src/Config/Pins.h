@@ -138,6 +138,10 @@
 # define DUAL_CAN				0
 #endif
 
+#ifndef SUPPORT_OBJECT_MODEL
+# define SUPPORT_OBJECT_MODEL	0
+#endif
+
 #define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx || SUPPORT_TMC51xx)
 #ifndef HAS_STALL_DETECT
 # define HAS_STALL_DETECT		(SUPPORT_TMC2660 || SUPPORT_TMC51xx)
@@ -255,14 +259,6 @@
 #define SUPPORT_PHASE_STEPPING	0
 #endif
 
-#ifdef SUPPORT_S_CURVE
-# if SUPPORT_S_CURVE && !SUPPORT_PHASE_STEPPING
-#  error Cannot support S Curve acceleration without phase stepping
-# endif
-#else
-# define SUPPORT_S_CURVE		0
-#endif
-
 #ifndef SUPPORT_PROBE_POINTS_FILE
 # define SUPPORT_PROBE_POINTS_FILE	0
 #endif
@@ -311,7 +307,7 @@
 
 // Define SUPPORT_REMOTE_COMMANDS according to whether this hardware accepts commands over CAN
 #ifndef SUPPORT_REMOTE_COMMANDS
-# define SUPPORT_REMOTE_COMMANDS		(SUPPORT_CAN_EXPANSION && !defined(DUET3_ATE) && !SUPPORT_S_CURVE)
+# define SUPPORT_REMOTE_COMMANDS		(SUPPORT_CAN_EXPANSION && !defined(DUET3_ATE))
 #endif
 
 #ifndef SUPPORT_SCANNING_PROBES

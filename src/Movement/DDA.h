@@ -26,15 +26,6 @@ class CanMessageMovementLinearShaped;
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
 struct PrepParams
 {
-#if SUPPORT_S_CURVE
-	uint32_t accelStartClocks, accelConstantClocks, accelEndClocks, steadyClocks, decelStartClocks, decelConstantClocks, decelEndClocks;
-    float initialAcceleration, peakAcceleration;	// the accelerations, always positive
-    float initialDeceleration, peakDeceleration;	// the decelerations, always negative
-    float accelInitialDistance, accelPeakDistance, accelEndDistance;
-    float decelInitialDistance, decelPeakDistance, decelEndDistance;
-    float steadyDistance;
-	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive; or zero if not using S-curce acceleration
-#else
 	uint32_t accelClocks, steadyClocks, decelClocks;
 	float acceleration;								// the acceleration to use, always positive
 	float deceleration;								// the deceleration to use, always negative
@@ -42,21 +33,13 @@ struct PrepParams
 # define peakDeceleration	deceleration
 	float accelDistance;
 	float decelStartDistance;
-#endif
 	float totalDistance;
 	float topSpeed;									// the top speed reached
 	bool useInputShaping;
 
-#if SUPPORT_S_CURVE
-	uint32_t TotalAccelClocks() const noexcept { return accelStartClocks + accelConstantClocks + accelEndClocks; }
-	uint32_t TotalDecelClocks() const noexcept { return decelStartClocks + decelConstantClocks + decelEndClocks; }
-	float TotalAccelDistance() const noexcept { return accelInitialDistance + accelPeakDistance + accelEndDistance; }
-	float TotalDecelDistance() const noexcept { return decelInitialDistance + decelPeakDistance + decelEndDistance; }
-#else
 	uint32_t TotalAccelClocks() const noexcept { return accelClocks; }
 	uint32_t TotalDecelClocks() const noexcept { return decelClocks; }
 	float TotalAccelDistance() const noexcept { return accelDistance; }
-#endif
 
 	// Get the total clocks needed
 	uint32_t TotalClocks() const noexcept { return TotalAccelClocks() + steadyClocks + TotalDecelClocks(); }
@@ -128,17 +111,9 @@ public:
 	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(requestedSpeed); }
 	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(topSpeed); }
 	float GetAccelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
-#if SUPPORT_S_CURVE
-		{ return InverseConvertAcceleration(peakAcceleration); }
-#else
 		{ return InverseConvertAcceleration(maxAcceleration); }
-#endif
 	float GetDecelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
-#if SUPPORT_S_CURVE
-		{ return InverseConvertAcceleration(peakDeceleration); }
-#else
 		{ return InverseConvertAcceleration(maxDeceleration); }
-#endif
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float GetTotalExtrusionRate() const noexcept;
 
@@ -198,14 +173,6 @@ private:
 	MovementError RecalculateMove(DDARing& ring) noexcept SPEED_CRITICAL;
 	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
 
-#if SUPPORT_S_CURVE
-	void RecalculateSCurveMove(DDARing& ring) noexcept SPEED_CRITICAL;
-	MovementError CalculateIsolatedSCurveMove() noexcept SPEED_CRITICAL pre(endSpeed == 0.0; endDeceleration == 0.0);
-	int CalculateNewSCurveMove() noexcept SPEED_CRITICAL pre(endSpeed == 0.0; endDeceleration == 0.0);
-	static MovementError DoSCurveLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
-	bool ExtrusionSpeedMatchesPrevious() const noexcept;
-#endif
-
 	void MatchSpeeds() noexcept SPEED_CRITICAL;
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be an acceleration-only move
@@ -238,31 +205,28 @@ private:
 	{
 		struct
 		{
+			// Flag bits. The first 4 or 5 are copied from similar flag bits in RawMove, so keep them together and in the same order so that the compiler can copy them using a ubfx instruction.
 			uint32_t canPauseAfter : 1,				// True if we can pause at the end of this move
-					 isPrintingMove : 1,			// True if this move includes XY movement and extrusion
+			 	 	 checkEndstops : 1,				// True if this move monitors endstops or Z probe
+					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
 					 usePressureAdvance : 1,		// True if pressure advance should be applied to any forward extrusion
+#if SUPPORT_SCANNING_PROBES
+					 scanningProbeMove : 1, 	 	// True if this is a scanning Z probe move
+#endif
+
+					 isPrintingMove : 1,			// True if this move includes XY movement and extrusion
 					 hadLookaheadUnderrun : 1,		// True if the lookahead queue was not long enough to optimise this move
 					 xyMoving : 1,					// True if movement along an X axis or a Y axis was requested, even if it's too small to do
 					 isLeadscrewAdjustmentMove : 1,	// True if this is a leadscrews adjustment move
-					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
 					 isNonPrintingExtruderMove : 1,	// True if this move is an extruder-only move, or involves reverse extrusion (and possibly axis movement too)
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
-					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
-					 controlLaserOrIoBits : 1,				// True if this move controls the laser or iobits
+					 controlLaserOrIoBits : 1,		// True if this move controls the laser or iobits
 					 isolatedMove : 1,				// set if we disable input shaping for this move and wait for it to finish e.g. for a G1 H2 move
+
+					 // These bits are modified during processing of the move
 					 doneIoBits : 1,				// set if we have written the IOBITS ports for this move
 					 doneFeedForward : 1,			// set if we have commanded feedforward for this move
-					 doneOutputOnExtrude: 1			// set if we have set/cleared output on extrude for ths move
-#if SUPPORT_SCANNING_PROBES
-					 , scanningProbeMove : 1 	 	// True if this is a scanning Z probe move
-#endif
-#if SUPPORT_S_CURVE
-					 , useScurve : 1,				// set if this move uses S-curve acceleration
-					 usingMaxAccceleration : 1,		// set if this move and all previous contiguous moves accelerate at the maximum rate, so there is no point asking them to accelerate faster
-					 haveReducedSpeed: 1,
-					 haveReducedAcceleration: 1
-#endif
-					 ;
+					 doneOutputOnExtrude: 1;		// set if we have set/cleared output on extrude for this move
 		};
 		uint32_t all;								// so that we can print all the flags at once for debugging
 	} flags;
@@ -275,11 +239,6 @@ private:
 	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;							// How long is the move in hypercuboid space
     float maxAcceleration, maxDeceleration;			// The maximum acceleration and deceleration to use, always positive
-#if SUPPORT_S_CURVE
-    float startAcceleration, peakAcceleration, finalAcceleration;	// accelerations, always positive or zero
-    float initialDeceleration, peakDeceleration, endDeceleration;	// decelerations, always negative or zero
-	float jerk;										// The magnitude of the rate of change of acceleration or deceleration, always positive
-#endif
     float requestedSpeed;							// The speed that the user asked for
     float virtualExtruderPosition;					// the virtual extruder position at the end of this move, used for pause/resume
 
@@ -304,11 +263,6 @@ private:
 			float accelDistance;
 			float decelDistance;
 			float targetNextSpeed;					// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
-#if SUPPORT_S_CURVE
-			float targetNextAcceleration;			// The acceleration that the next move would like to start at
-			//TODO we may not need all of the following, or we may be able to remove accelDistance and decelDistance when using S-curve acceleration
-		    float phase1Time, phase2Time, phase3Time, phase4Time, phase5Time, phase6Time, phase7Time;
-#endif
 		} beforePrepare;
 
 		// Values that are not set or accessed before Prepare is called

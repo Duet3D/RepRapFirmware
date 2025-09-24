@@ -639,7 +639,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		if (nameVal != nullptr && offsetVal != nullptr && (offset = StrToU32(offsetVal)) != 0)
 		{
 			OutputBuffer::ReleaseAll(response);
-			response = reprap.GetThumbnailResponse(nameVal, offset, false);
+			response = reprap.GetFileFragment(nameVal, offset, false, true);
 		}
 		else
 		{
@@ -860,6 +860,7 @@ void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWeb
 #if HAS_MASS_STORAGE
 	FileStore *_ecv_null fileToSend = nullptr;
 	bool zip = false;
+	Platform& platform = GetPlatform();
 
 	if (isWebFile)
 	{
@@ -873,6 +874,8 @@ void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWeb
 		{
 			nameOfFileToSend = INDEX_PAGE_FILE;
 		}
+
+		auto webDir = platform.GetWebDir();
 
 		// Check that the length of the filename requested is short enough for CombineName not to generate an error message before we try to open it.
 		// We used to report a possible virus attack in this case, but that sometimes leads to false warnings because of OCSP requests from AV programs,
@@ -888,7 +891,7 @@ void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWeb
 					String<MaxFilenameLength> nameBuf;
 					nameBuf.copy(nameOfFileToSend);
 					nameBuf.cat(".gz");
-					fileToSend = GetPlatform().OpenFile(Platform::GetWebDir(), nameBuf.c_str(), OpenMode::read);
+					fileToSend = platform.OpenFile(webDir.Ptr(), nameBuf.c_str(), OpenMode::read);
 					if (fileToSend != nullptr)
 					{
 						zip = true;
@@ -897,7 +900,7 @@ void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWeb
 				}
 
 				// That failed, so try to open the normal version of the file
-				fileToSend = GetPlatform().OpenFile(Platform::GetWebDir(), nameOfFileToSend, OpenMode::read);
+				fileToSend = platform.OpenFile(webDir.Ptr(), nameOfFileToSend, OpenMode::read);
 				if (fileToSend != nullptr)
 				{
 					break;
@@ -922,18 +925,21 @@ void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWeb
 		if (fileToSend == nullptr && (StringEndsWithIgnoreCase(nameOfFileToSend, ".html") || StringEndsWithIgnoreCase(nameOfFileToSend, ".htm")))
 		{
 			nameOfFileToSend = FOUR04_PAGE_FILE;
-			fileToSend = GetPlatform().OpenFile(Platform::GetWebDir(), nameOfFileToSend, OpenMode::read);
+			fileToSend = platform.OpenFile(webDir.Ptr(), nameOfFileToSend, OpenMode::read);
 		}
 
 		if (fileToSend == nullptr)
 		{
-			RejectMessage("page not found<br>Check that the SD card is mounted and has the correct files in its /www folder", 404);
+			String<MaxFilenameLength> messageBuf;
+			messageBuf.copy("page not found<br>Check that the SD card is mounted and has the correct files in folder ");
+			platform.AppendWebDir(messageBuf.GetRef());
+			RejectMessage(messageBuf.c_str(), 404);
 			return;
 		}
 	}
 	else
 	{
-		fileToSend = GetPlatform().OpenFile(FS_PREFIX, nameOfFileToSend, OpenMode::read);
+		fileToSend = platform.OpenFile(FS_PREFIX, nameOfFileToSend, OpenMode::read);
 		if (fileToSend == nullptr)
 		{
 			RejectMessage("file not found", 404);

@@ -15,6 +15,8 @@
 # include <CanMessageFormats.h>
 #endif
 
+#if SUPPORT_OBJECT_MODEL
+
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -49,6 +51,8 @@ constexpr ObjectModelTableEntry FopDt::objectModelTable[] =
 constexpr uint8_t FopDt::objectModelTableDescriptor[] = { 2, 10, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(FopDt)
+
+#endif
 
 // The heater model is disabled until the user declares the heater to be a bed, chamber or tool heater
 FopDt::FopDt() noexcept

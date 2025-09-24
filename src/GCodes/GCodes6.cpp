@@ -626,7 +626,20 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 			// - If prefixed by G53 add the ToolOffset that will be subtracted below in ToolOffsetTransform as we ignore any offsets when G53 is active
 			// - otherwise add current workplace offsets so we go where the user expects to go
 			// comparable to how DoStraightMove/DoArcMove does it
-			const float axisTarget = gb.GetDistance() + (gb.LatestMachineState().g53Active ? ms.GetCurrentToolOffset(axis) : GetWorkplaceOffset(gb, axis));
+			float axisTarget = gb.GetDistance();
+			if (gb.LatestMachineState().axesRelative)
+			{
+				axisTarget += ms.currentUserPosition[axis];
+			}
+			else if (gb.LatestMachineState().g53Active)
+			{
+				axisTarget += ms.GetCurrentToolOffset(axis)/axisScaleFactors[axis];		// g53 ignores tool offsets and scale factors as well as workplace coordinates
+			}
+			else if (!gb.LatestMachineState().runningSystemMacro)
+			{
+				axisTarget += GetWorkplaceOffset(gb, axis);
+			}
+
 			if (axisTarget != userPositionTarget[axis])
 			{
 				doesMove = true;
@@ -665,6 +678,13 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 #endif
 
 	// Convert target user position to machine coordinates and save them in StraightProbeSettings
+#if SUPPORT_COORDINATE_ROTATION
+	if (ms.g68Angle != 0.0 && gb.DoingCoordinateRotation())
+	{
+		RotateCoordinates(ms, ms.g68Angle, userPositionTarget);
+	}
+#endif
+
 	ToolOffsetTransform(ms, userPositionTarget, straightProbeSettings.GetTarget());
 
 	// Find which probe we are using

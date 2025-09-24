@@ -22,8 +22,9 @@ inline floatc_t fcsquare(floatc_t a) noexcept
 
 // Different types of kinematics we support. Each of these has a class to represent it.
 // These must have the same numeric assignments as the K parameter of the M669 command, as documented in the GCodes wiki page
-NamedEnum(KinematicsType, uint8_t,
-	cartesian,
+enum class KinematicsType : uint8_t
+{
+	cartesian = 0,
 	coreXY,
 	coreXZ,
 	linearDelta,
@@ -32,11 +33,15 @@ NamedEnum(KinematicsType, uint8_t,
 	hangprinter,
 	polar,
 	coreXYUV,
-	fiveBarScara,
+	fiveBarScara,		// was previously reserved for @sga, see https://forum.duet3d.com/topic/5775/aditional-carterian-z-axis-on-delta-printer
 	rotaryDelta,
 	markForged,
+	collinearTriperon,	// reserved for @oliof, see https://forum.duet3d.com/topic/11646/kinematics-type-number-allocation-for-colinear-tripteron
+	robot5axis,			// reserved for @joergS5, see https://forum.duet3d.com/post/172204
+	sixAxisDelta,		// reserved for @tkln, see https://forum.duet3d.com/post/314950
+
 	unknown				// this one must be last!
-);
+};
 
 // Return value from limitPosition
 enum class LimitPositionResult : uint8_t
@@ -63,32 +68,13 @@ struct SegmentationType
 class Kinematics INHERIT_OBJECT_MODEL
 {
 public:
-	// Machinery for automatically linking new kinematics into the kinematics classes list
-	struct KinematicsTypeDescriptor
-	{
-	public:
-		typedef Kinematics *_ecv_from _ecv_null (*CreationFunction)(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept;
-
-		KinematicsTypeDescriptor(CreationFunction p_creationFunction) noexcept;
-
-		const KinematicsTypeDescriptor *_ecv_null GetNext() const noexcept { return next; }
-		Kinematics *_ecv_from Create(const char *_ecv_array _ecv_null name, unsigned int legacyNumber) const noexcept { return createFunction(name, legacyNumber); }
-
-		static const KinematicsTypeDescriptor *_ecv_null GetRoot() noexcept { return kinematicsTypeListRoot; }
-
-	private:
-		// Root of the sensor types list
-		static KinematicsTypeDescriptor *_ecv_null kinematicsTypeListRoot;
-
-		KinematicsTypeDescriptor *_ecv_null next;
-		const char *_ecv_array kinematicsName;
-		CreationFunction createFunction;
-	};
-
 	// Functions that must be defined in each derived class that implements a kinematics
 
 	// Return the name of the current kinematics.
-	virtual const char *_ecv_array GetName() const noexcept;
+	// If 'forStatusReport' is true then the string must be the one for that kinematics expected by DuetWebControl and PanelDue.
+	// Otherwise it should be in a format suitable for printing.
+	// For any new kinematics, the same string can be returned regardless of the parameter.
+	virtual const char *_ecv_array GetName(bool forStatusReport = false) const noexcept = 0;
 
 	// Set or report the parameters from a M665, M666 or M669 command
 	// If 'mCode' is an M-code used to set parameters for the current kinematics (which should only ever be 665, 666, 667 or 669)
@@ -201,11 +187,12 @@ public:
 	// Override this virtual destructor if your constructor allocates any dynamic memory
 	virtual ~Kinematics() override { }
 
-	// Factory function to create a particular kinematics object and return a pointer to it, or nullptr if no matching kinematics was found
-	static Kinematics *_ecv_from _ecv_null Create(const char *_ecv_array name, int legacyTypeNumber) noexcept;
+	// Factory function to create a particular kinematics object and return a pointer to it.
+	// When adding new kinematics, you will need to extend this function to handle your new kinematics type.
+	static Kinematics *_ecv_from Create(KinematicsType k) noexcept;
 
 	// Functions that return information held in this base class
-	KinematicsType GetLegacyType() const noexcept { return legacyType; }
+	KinematicsType GetKinematicsType() const noexcept { return type; }
 
 	SegmentationType GetSegmentationType() const noexcept { return segmentationType; }
 	float GetSegmentsPerSecond() const noexcept pre(GetSegmentationType().useSegmentation) { return segmentsPerSecond; }
@@ -235,9 +222,6 @@ protected:
 	// Round a float value to int32_t if it will fit, else set update a movement error code
 	static void RoundToInt32(MovementError& ErrorCode, float pos, int32_t& whereToStore) noexcept;
 
-	// Check whether a requested name or code number matches a particular legacy type
-	static bool MatchesLegacyType(const char *_ecv_array _ecv_null name, int requestedLegacyType, KinematicsType::RawType t) noexcept;
-
 	// Debugging functions
 	static void PrintMatrix(const char *_ecv_array s, const MathMatrix<float>& m, size_t numRows = 0, size_t maxCols = 0) noexcept;
 	static void PrintMatrix(const char *_ecv_array s, const MathMatrix<double>& m, size_t numRows = 0, size_t maxCols = 0) noexcept;
@@ -256,7 +240,7 @@ private:
 	float reciprocalMinSegmentLength;		// if we are using segmentation, the reciprocal of minimum segment size
 
 	SegmentationType segmentationType;		// the type of segmentation we are using
-	KinematicsType::RawType legacyType;		// for older kinematics types, the type code. Newer kinematics types do not have type codes.
+	KinematicsType type;
 };
 
 #endif /* SRC_MOVEMENT_KINEMATICS_H_ */

@@ -24,9 +24,11 @@ enum class Arm : uint8_t
 class FiveBarScaraKinematics : public ZLeadscrewKinematics
 {
 public:
-	static Kinematics *_ecv_from _ecv_null Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept;
+	// Constructors
+	FiveBarScaraKinematics() noexcept;
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
+	const char *GetName(bool forStatusReport) const noexcept override;
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException) override;
 	MovementError CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
@@ -45,12 +47,7 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	static KinematicsTypeDescriptor fiveBarScaraKinematicsDescriptor;
-
 	static constexpr const char *Home5BarScaraFileName = "home5barscara.g";
-
-	// Constructors
-	FiveBarScaraKinematics() noexcept;
 
 	void Recalc() noexcept;
 	int getQuadrant(float x, float y) const noexcept;

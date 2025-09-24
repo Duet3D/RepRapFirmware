@@ -80,7 +80,7 @@ ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k, SegmentationType se
 // Configure this kinematics. We only deal with the leadscrew coordinates here
 bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException)
 {
-	if (mCode == 671 && GetLegacyType() != KinematicsType::coreXZ)
+	if (mCode == 671 && GetKinematicsType() != KinematicsType::coreXZ)
 	{
 		// Configuring leadscrew positions.
 		// We no longer require the number of leadscrews to equal the number of motors. If there is a mismatch then auto calibration just prints the corrections.

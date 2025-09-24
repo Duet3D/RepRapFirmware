@@ -7,6 +7,8 @@
 
 #include "ObjectModel.h"
 
+#if SUPPORT_OBJECT_MODEL
+
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <Platform/OutputMemory.h>
@@ -116,6 +118,9 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		{
 		case SpecialType::sysDir:
 			reprap.GetPlatform().AppendSysDir(str);
+			break;
+		case SpecialType::webDir:
+			reprap.GetPlatform().AppendWebDir(str);
 			break;
 		}
 #endif
@@ -1030,6 +1035,9 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 				case ExpressionValue::SpecialType::sysDir:
 					buf->catf("\"%.s\"", reprap.GetPlatform().GetSysDir().Ptr());
 					break;
+				case ExpressionValue::SpecialType::webDir:
+					buf->catf("\"%.s\"", reprap.GetPlatform().GetWebDir().Ptr());
+					break;
 				}
 #endif
 				break;
@@ -1653,6 +1661,8 @@ ExpressionValue ObjectModel::GetExpansionBoardDetailLength(const ExpressionValue
 	val.ExtractRequestedPart(rslt.GetRef());
 	return ExpressionValue((int32_t)rslt.strlen());
 }
+
+#endif
 
 #endif
 

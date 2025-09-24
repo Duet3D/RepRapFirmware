@@ -348,7 +348,7 @@ Platform::Platform() noexcept :
 	panelDueUpdater(nullptr),
 #endif
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	sysDir(nullptr),
+	sysFolder(DEFAULT_SYS_DIR), webFolder(DEFAULT_WEB_DIR),
 #endif
 	tickState(0), debugCode(0),
 	lastDriverPollMillis(0),
@@ -1848,106 +1848,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 									(double)((float)(tim3 * (1'000'000/iterations))/SystemCoreClock), (ok3) ? "ok" : "ERROR");
 			}
 
-#if SUPPORT_S_CURVE
-			// Time and check floating point cube root
-			{
-				unsigned int numBad = 0, numBetter = 0, numWorse = 0, numEqual = 0, numSameError = 0;
-				uint32_t tim1 = 0, tim2 = 0;
-				for (unsigned int i = 0; i < iterations; ++i)
-				{
-					float val = 0.5 + (float)i * 3.5 / 1000.0;
-					if (i == 0) { val = 0.0; }
-					else if (i & 1) { val = -val; }
-
-					IrqDisable();
-					asm volatile("":::"memory");
-					uint32_t now1 = SysTick->VAL;
-					const float nval1 = fastCubeRootf(val);
-					uint32_t now2 = SysTick->VAL;
-					asm volatile("":::"memory");
-					IrqEnable();
-
-					now1 &= 0x00FFFFFF;
-					now2 &= 0x00FFFFFF;
-					tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
-
-					IrqDisable();
-					asm volatile("":::"memory");
-					uint32_t now3 = SysTick->VAL;
-					const volatile float nval2 = cbrt(val);
-					uint32_t now4 = SysTick->VAL;
-					asm volatile("":::"memory");
-					IrqEnable();
-
-					now3 &= 0x00FFFFFF;
-					now4 &= 0x00FFFFFF;
-					tim2 += ((now3 > now4) ? now3 : now3 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now4;
-
-					bool thisOneOk = true;
-					if (val == 0.0)
-					{
-						thisOneOk = (nval1 == 0.0);
-					}
-					else if (val > 0.0)
-					{
-						thisOneOk = fcube(std::nextafter(nval1, nval1 * 2)) >= val && fcube(std::nextafter(nval1, 0.0)) <= val;
-					}
-					else
-					{
-						thisOneOk = fcube(std::nextafter(nval1, nval1 * 2)) <= val && fcube(std::nextafter(nval1, 0.0)) >= val;
-					}
-
-					if (!thisOneOk)
-					{
-						++numBad;
-					}
-					else if (nval1 == nval2)
-					{
-						++numEqual;
-					}
-					else
-					{
-						const float err1 = fcube(nval1) - val;
-						const float err2 = fcube(nval2) - val;
-						if (fabsf(err1) < fabsf(err2)) { ++numBetter; }
-						else if (fabsf(err1) > fabsf(err2)) { ++numWorse; }
-						else { ++numSameError; }
-						if (reprap.Debug(Module::Platform))
-						{
-							debugPrintf("val=% .7e fcr=% .7e cbrt=% .7e fcre=% .7e cbrte=% .7e\n", (double)val, (double)nval1, (double)nval2, (double)err1, (double)err1);
-						}
-					}
-				}
-
-				reply.lcatf("Cube roots: fcbrt %.2fus cbrt %.2fus, bad %u, equal %u, better %u, worse %u, sameError %u",
-							(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock),
-							numBad, numEqual, numBetter, numWorse, numSameError
-							);
-			}
-
-			// Time and check a cubic equation with three real roots (the most complicated case)
-			{
-				uint32_t tim1 = 0;
-				size_t numRoots;
-				float rslt[3] = { std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::quiet_NaN() };
-				for (unsigned int i = 0; i < iterations; ++i)
-				{
-					IrqDisable();
-					asm volatile("":::"memory");
-					uint32_t now1 = SysTick->VAL;
-					numRoots = SolveCubic(1.0, -6.0, 11.0, -6.0, rslt);
-					uint32_t now2 = SysTick->VAL;
-					asm volatile("":::"memory");
-					IrqEnable();
-
-					now1 &= 0x00FFFFFF;
-					now2 &= 0x00FFFFFF;
-					tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
-				}
-
-				reply.lcatf("Cubic equation solver: %.2fus, %u roots %.6f %.6f %.6f", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), numRoots, (double)rslt[0], (double)rslt[1], (double)rslt[2]);
-			}
-#endif
 		}
 
 		// We now also time sine and cosine in the same test
@@ -3804,12 +3704,6 @@ bool Platform::FileExists(const char *_ecv_array folder, const char *_ecv_array 
 	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::FileExists(location.c_str());
 }
 
-// Return a pointer to a string holding the directory where the system files are. Lock the sysdir lock before calling this.
-const char *_ecv_array Platform::InternalGetSysDir() const noexcept
-{
-	return (sysDir != nullptr) ? _ecv_not_null(sysDir) : DEFAULT_SYS_DIR;
-}
-
 bool Platform::SysFileExists(const char *_ecv_array filename) const noexcept
 {
 	String<MaxFilenameLength> location;
@@ -3829,43 +3723,42 @@ bool Platform::MakeSysFileName(const StringRef& result, const char *_ecv_array f
 	return MassStorage::CombineName(result, GetSysDir().Ptr(), filename);
 }
 
-void Platform::AppendSysDir(const StringRef & path) const noexcept
+ReadLockedPointer<const char> ConfigurableFolder::GetLockedPointer() const noexcept
 {
-	path.cat(GetSysDir().Ptr());
-}
-
-ReadLockedPointer<const char> Platform::GetSysDir() const noexcept
-{
-	return ReadLockedPointer<const char>(sysDirLock, InternalGetSysDir());
+	return ReadLockedPointer<const char>(lock, GetUnlockedPointer());
 }
 
 #endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
-// Set the system files path
-GCodeResult Platform::SetSysDir(const char *_ecv_array dir, const StringRef& reply) noexcept
+void ConfigurableFolder::AppendToString(const StringRef& path) const noexcept
 {
-	String<MaxFilenameLength> newSysDir;
-	WriteLocker lock(sysDirLock);
+	ReadLocker locker(lock);
+	path.cat(GetUnlockedPointer());
+}
 
-	if (!MassStorage::CombineName(newSysDir.GetRef(), InternalGetSysDir(), dir) || (!newSysDir.EndsWith('/') && newSysDir.cat('/')))
+GCodeResult ConfigurableFolder::Configure(const char *_ecv_array dir, const StringRef& reply) noexcept
+{
+	String<MaxFilenameLength> newDir;
+	WriteLocker locker(lock);
+	if (!MassStorage::CombineName(newDir.GetRef(), GetUnlockedPointer(), dir) || (!newDir.EndsWith('/') && newDir.cat('/')))
 	{
 		reply.copy("Path name too long");
 		return GCodeResult::error;
 	}
 
-	if (!MassStorage::DirectoryExists(newSysDir.GetRef()))
+	if (!MassStorage::DirectoryExists(newDir.GetRef()))
 	{
-		reply.copy("Path not found");
+		reply.printf("Path \"%s\" not found", newDir.c_str());
 		return GCodeResult::error;
 	}
 
-	newSysDir.cat('/');								// the call to DirectoryExists removed the trailing '/'
-	const size_t len = newSysDir.strlen() + 1;
-	char *_ecv_array _ecv_null const nsd = new char[len];
-	memcpy(nsd, newSysDir.c_str(), len);
-	ReplaceObject(sysDir, nsd);
+	newDir.cat('/');								// the call to DirectoryExists removed the trailing '/'
+	const size_t len = newDir.strlen() + 1;
+	char *_ecv_array _ecv_null const newDirArray = new char[len];
+	memcpy(newDirArray, newDir.c_str(), len);
+	ReplaceObject(userValue, newDirArray);
 	reprap.DirectoriesUpdated();
 	return GCodeResult::ok;
 }

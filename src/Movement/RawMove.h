@@ -38,21 +38,23 @@ struct RawMove
 #endif
 
 	uint16_t moveType : 3,											// the H parameter from the G0 or G1 command, 0 for a normal move
-			applyM220M221 : 1,										// true if this move is affected by M220 and M221 (this could be moved to ExtendedRawMove)
-			usePressureAdvance : 1,									// true if we want to us extruder pressure advance, if there is any extrusion
+
+			// These next 4 or 5 flags bits are copied to the DDA. Keep them contiguous and in the same order so that the compiler can use a ubfx instruction to copy them.
 			canPauseAfter : 1,										// true if we can pause just after this move and successfully restart
+			checkEndstops : 1,										// true if any endstops or the Z probe can terminate the move
+			usingStandardFeedrate : 1,								// true if this move uses the standard feed rate
+			usePressureAdvance : 1,									// true if we want to us extruder pressure advance, if there is any extrusion
+#if SUPPORT_SCANNING_PROBES
+			scanningProbeMove : 1,									// true if the laser task should be woken at the end of each segment to capture a height reading
+#endif
+
+			applyM220M221 : 1,										// true if this move is affected by M220 and M221 (this could be moved to ExtendedRawMove)
 			hasPositiveExtrusion : 1,								// true if the move includes extrusion; only valid if the move was set up by SetupMove
 			isCoordinated : 1,										// true if this is a coordinated move
-			usingStandardFeedrate : 1,								// true if this move uses the standard feed rate
-			checkEndstops : 1,										// true if any endstops or the Z probe can terminate the move
 			reduceAcceleration : 1,									// true if Z probing so we should limit the Z acceleration
 			inverseTimeMode : 1,									// true if executing the move in inverse time mode
 			linearAxesMentioned : 1,								// true if any linear axes were mentioned in the movement command
-			rotationalAxesMentioned: 1								// true if any rotational axes were mentioned in the movement command
-#if SUPPORT_SCANNING_PROBES
-			, scanningProbeMove : 1									// true if the laser task should be woken at the end of each segment to capture a height reading
-#endif
-			;
+			rotationalAxesMentioned: 1;								// true if any rotational axes were mentioned in the movement command
 
 	// Note that this point is an odd multiple of 2 bytes from the start of the struct in all configurations
 #if SUPPORT_LASER || SUPPORT_IOBITS
@@ -175,9 +177,13 @@ public:
 	float angleIncrementSine, angleIncrementCosine;					// the sine and cosine of the increment
 	float speedFactor;												// speed factor as a fraction (normally 1.0)
 	unsigned int segmentsTillNextFullCalc;							// how may more segments we can do before we need to do the full calculation instead of the quicker one
-	GCodeQueue *codeQueue;											// stores certain codes for deferred execution
 
-	GCodeBuffer *null updateUserPositionGb;							// if this is non-null then we need to update the user position from the machine position
+#if SUPPORT_COORDINATE_ROTATION
+	float g68Angle;													// the G68 rotation angle in radians
+	float g68Centre[2];												// the XY coordinates of the centre to rotate about
+#endif
+
+	GCodeQueue *codeQueue;											// stores certain codes for deferred execution
 
 	unsigned int segmentsLeftToStartAt;
 	float moveFractionToSkip;

@@ -88,7 +88,9 @@ private:
 	// Add an endstop to the active list
 	void AddToActive(EndstopOrZProbe &_ecv_from e) noexcept;
 
+#if SUPPORT_OBJECT_MODEL
 	size_t GetNumProbesToReport() const noexcept;
+#endif
 
 	// Translate end stop result to text
 	static const char *_ecv_array TranslateEndStopResult(bool hit, bool atHighEnd) noexcept;

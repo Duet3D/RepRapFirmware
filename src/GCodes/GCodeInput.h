@@ -60,8 +60,10 @@ enum class GCodeInputState
 	doingCode,
 	doingMCode,
 	doingMCode1,
+	doingMCode10,
 	doingMCode11,
 	doingMCode12,
+	doingMCode108,
 	doingMCode112,
 	doingMCode122
 };

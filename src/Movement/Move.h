@@ -162,13 +162,6 @@ public:
 	float Acceleration(size_t axisOrExtruder, bool reduced) const noexcept;
 	const float *_ecv_array Accelerations(bool reduced) const noexcept { return (reduced) ? reducedAccelerations : normalAccelerations; }
 	void SetAcceleration(size_t axisOrExtruder, float value, bool reduced) noexcept;
-#if SUPPORT_S_CURVE
-	const float *_ecv_array Jerks() const noexcept { return jerks; }
-	void SetAccelerationTime(float value) noexcept;
-	float AccelerationTime() const noexcept { return accelerationTime; }
-	void UpdateSCurveFlagAndJerk() noexcept;
-	bool IsUsingSCurve() const noexcept { return usingSCurve; }
-#endif
 
 	float MaxFeedrate(size_t axisOrExtruder) const noexcept;
 	const float *_ecv_array MaxFeedrates() const noexcept { return maxFeedrates; }
@@ -188,8 +181,10 @@ public:
 
 	GCodeResult ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M425
 	void UpdateBacklashSteps() noexcept;
-	int32_t ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept;
+	int32_t ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
+		pre(drive < MaxAxes);
 	uint32_t GetBacklashCorrectionDistanceFactor() const noexcept { return backlashCorrectionDistanceFactor; }
+	int32_t GetCurrentBacklashSteps(size_t drive) const noexcept { return (drive < MaxAxes) ? currentBacklashSteps[drive] : 0; }
 
 	inline AxesBitmap GetLinearAxes() const noexcept { return linearAxes; }
 	inline AxesBitmap GetRotationalAxes() const noexcept { return rotationalAxes; }
@@ -276,8 +271,8 @@ public:
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, bool doBedCompensation, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetLiveMotorPosition(size_t driver) const noexcept pre(driver < MaxAxesPlusExtruders);
-	void SetMotorPosition(size_t drive, int32_t pos) noexcept pre(drive < MaxAxesPlusExtruders);
-	void SetMotorPositions(LogicalDrivesBitmap drives, const int32_t *positions) noexcept;
+	void SetMotorPosition(size_t drive, int32_t pos, bool clearBacklash) noexcept pre(drive < MaxAxesPlusExtruders);
+	void SetMotorPositions(LogicalDrivesBitmap drives, const int32_t *positions, bool clearBacklash) noexcept;
 
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
 	bool WaitingForAllMovesFinished(MovementSystemNumber msNumber
@@ -359,12 +354,12 @@ public:
 
 	// Kinematics and related functions
 	Kinematics &_ecv_from GetKinematics() const noexcept { return *kinematics; }
-	bool SetKinematics(const char *_ecv_array _ecv_null name, int legacyType) noexcept;		// Set kinematics, return true if successful
+	bool SetKinematics(KinematicsType k) noexcept;											// Set kinematics, return true if successful
 	MovementError CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const noexcept;
 																							// Convert Cartesian coordinates to motor coordinates, return true if successful
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept;
 																							// Convert motor coordinates to machine coordinates
-	const char *_ecv_array GetGeometryString() const noexcept { return kinematics->GetName(); }
+	const char *_ecv_array GetGeometryString() const noexcept { return kinematics->GetName(true); }
 	bool IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
 
 	bool IsRawMotorMove(uint8_t moveType) const noexcept;									// Return true if this is a raw motor move
@@ -532,11 +527,7 @@ private:
 #endif
 
 	MoveSegment *AddSegment(MoveSegment *list, uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a,
-#if SUPPORT_S_CURVE
-	 	 	 	 	 	 	 motioncalc_t j, MovementFlags moveFlags, motioncalc_t pressureAdvanceClocks
-#else
 							 	 	 	 	 MovementFlags moveFlags, motioncalc_t pressureAdvanceClocksTimesDuration
-#endif
 						  ) noexcept;
 
 	void BedTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept;						// Take a position and apply the bed compensations
@@ -572,11 +563,6 @@ private:
 #else
 	void IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc) noexcept;
 	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func); }
-#endif
-
-#if SUPPORT_S_CURVE && SUPPORT_CAN_EXPANSION
-	bool AxisHasLocalDriver(size_t axis) const noexcept;
-	bool ExtruderHasLocalDriver(size_t extruder) const noexcept;
 #endif
 
 	void InternalDisableDriver(size_t driver) noexcept;
@@ -728,12 +714,6 @@ private:
 	float printingInstantDvs[MaxAxesPlusExtruders];			// current max jerk in mm per step clock (changed by M205 and M206)
 	float maxInstantDvs[MaxAxesPlusExtruders];				// max instant velocity change in mm per step clock (changed by M206 only)
 
-#if SUPPORT_S_CURVE
-	float accelerationTime;									// time taken to each max acceleration in step clocks, single value used for all axes.
-	float jerks[MaxAxesPlusExtruders];						// max rate of change of acceleration, calculated from accelerationTime and normalAccelerations. Only used if accelerationTime > 0.0.
-	bool usingSCurve = false;
-#endif
-
 	AxisDriversConfig axisDrivers[MaxAxes];					// the driver numbers assigned to each axis
 	AxesBitmap linearAxes;									// axes that behave like linear axes w.r.t. feedrate handling
 	AxesBitmap rotationalAxes;								// axes that behave like rotational axes w.r.t. feedrate handling
@@ -753,7 +733,8 @@ private:
 
 	// Backlash compensation system variables
 	uint32_t backlashSteps[MaxAxes];						// the backlash converted to microsteps
-	int32_t backlashStepsDue[MaxAxes];						// how many backlash compensation microsteps are due for each axis
+	int32_t targetBacklashSteps[MaxAxes];					// how many backlash compensation microsteps we need for each axis
+	int32_t currentBacklashSteps[MaxAxes];					// how many backlash compensation microsteps have already been done for each axis
 	LogicalDrivesBitmap lastDirections;						// each bit is set if the corresponding axes motor last moved backwards
 
 #if SUPPORT_NONLINEAR_EXTRUSION
@@ -999,16 +980,6 @@ inline __attribute__((always_inline)) uint32_t Move::GetStepInterval(size_t driv
 inline void Move::InvertCurrentMotorSteps(size_t driver) noexcept
 {
 	dms[driver].currentMotorPosition = -dms[driver].currentMotorPosition;
-}
-
-#endif
-
-#if SUPPORT_S_CURVE
-
-// Set the acceleration time
-inline void Move::SetAccelerationTime(float value) noexcept
-{
-	accelerationTime = value * (float)StepClockRate;
 }
 
 #endif

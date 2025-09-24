@@ -18,7 +18,7 @@
 namespace DuetExpansion
 {
 	constexpr uint8_t DueXnAddress = 0x3E;						// address of the SX1509B on the DueX2/DueX5
-	static constexpr unsigned int DueXTaskStackWords = 100;		// task stack size in dwords
+	static constexpr unsigned int DueXTaskStackWords = 128;		// task stack size in dwords, was 100, see https://forum.duet3d.com/topic/38467/frequent-crashing-after-upgrade-to-3-6-0-on-duet-2-wifi-duex-5/2
 
 	static SX1509 dueXnExpander;
 	static uint16_t dueXnInputMask;
@@ -38,7 +38,7 @@ namespace DuetExpansion
 	Task<DueXTaskStackWords> *dueXTask = nullptr;
 
 	// The original DueX2 and DueX5 boards had 2 board ID pins, bits 14 and 15.
-	// The new ones use bit 15 for fan 8, so not we just have bit 14.
+	// The new ones use bit 15 for fan 8, so now we just have bit 14.
 	// If we want any more variants, they will have to use a different I2C address.
 	const uint16_t BoardTypePins = (1u << 14);
 	const unsigned int BoardTypeShift = 14;
