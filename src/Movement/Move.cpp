@@ -193,6 +193,8 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	// 2. move.currentMove members
 	{ "acceleration",			OBJECT_MODEL_FUNC(self->GetAccelerationMmPerSecSquared(), 1),									ObjectModelEntryFlags::live },
 	{ "deceleration",			OBJECT_MODEL_FUNC(self->GetDecelerationMmPerSecSquared(), 1),									ObjectModelEntryFlags::live },
+	{ "distance",				OBJECT_MODEL_FUNC(self->GetCurrentMoveDistance(), 2),											ObjectModelEntryFlags::liveNotPanelDue },
+	{ "duration",				OBJECT_MODEL_FUNC(self->GetCurrentMoveDuration(), 2),											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "extrusionRate",			OBJECT_MODEL_FUNC(self->GetTotalExtrusionRate(), 2),											ObjectModelEntryFlags::live },
 # if SUPPORT_LASER
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetGCodes().GetMachineType() == MachineType::laser,
@@ -318,7 +320,7 @@ constexpr uint8_t Move::objectModelTableDescriptor[] =
 	15 + SUPPORT_COORDINATE_ROTATION,
 	17 + SUPPORT_COORDINATE_ROTATION + SUPPORT_KEEPOUT_ZONES + 2 * SUPPORT_S_CURVE,
 	2,
-	5 + SUPPORT_LASER,
+	7 + SUPPORT_LASER,
 	3,
 	2,
 	2,
@@ -999,9 +1001,9 @@ void Move::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 			for (size_t drive = 0; drive < reprap.GetGCodes().GetTotalAxes(); ++drive)
 			{
 # if 0	// DEBUG
-				reply.catf(" %.2f/%" PRIi32 "/%.2f/%u/%u", (double)dms[drive].positionRequested, dms[drive].currentMotorPosition, (double)dms[drive].distanceCarriedForwards, (unsigned int)dms[drive].state, dms[drive].segments != nullptr);
+				reply.catf(" %.3f/%" PRIi32 "/%.3f/%u/%u", (double)dms[drive].positionRequested, dms[drive].currentMotorPosition, (double)dms[drive].distanceCarriedForwards, (unsigned int)dms[drive].state, dms[drive].segments != nullptr);
 # else
-				reply.catf(" %.2f/%" PRIi32 "/%.2f", (double)dms[drive].positionRequested, dms[drive].currentMotorPosition, (double)dms[drive].distanceCarriedForwards);
+				reply.catf(" %.3f/%" PRIi32 "/%.3f", (double)dms[drive].positionRequested, dms[drive].currentMotorPosition, (double)dms[drive].distanceCarriedForwards);
 # endif
 			}
 #endif
@@ -3033,7 +3035,7 @@ void Move::SetAxisType(size_t axis, AxisWrapType wrapType, bool isNistRotational
 #if 0	// shortcut axes not implemented yet
 	case AxisWrapType::wrapWithShortcut:
 		shortcutAxes.SetBit(axis);
-		// no break
+		[[fallthrough]];
 #endif
 	case AxisWrapType::wrapAt360:
 		continuousAxes.SetBit(axis);
