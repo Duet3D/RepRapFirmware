@@ -730,7 +730,7 @@ void HangprinterKinematics::ForwardTransform(float const distances[HANGPRINTER_M
 				return;
 			}
 			// Intentional fall-through to next case if no forward transform
-			//no break
+			[[fallthrough]];
 		case HangprinterAnchorMode::None:
 		case HangprinterAnchorMode::AllOnTop:
 		default:
@@ -1274,9 +1274,8 @@ void HangprinterKinematics::StaticForces(float const machinePos[3], float F[HANG
 				StaticForcesQuadrilateralPyramid(machinePos, F);
 				return;
 			}
-			// Intentional fall-through to next case
-			// if no line flex compensation
-			// no break
+			// Intentional fall-through to next case if no line flex compensation
+			[[fallthrough]];
 		case HangprinterAnchorMode::None:
 		case HangprinterAnchorMode::AllOnTop:
 		default:

@@ -262,7 +262,7 @@ bool HttpResponder::CharFromClient(char c) noexcept
 				parseState = HttpParseState::doingCommandWord;
 				break;
 			}
-			// no break
+			[[fallthrough]];
 		case '%':	// none of our keys needs escaping, so treat an escape within a key as an error
 		case '&':	// key with no value
 			RejectMessage("bad qualifier key");
@@ -396,8 +396,7 @@ bool HttpResponder::CharFromClient(char c) noexcept
 			break;		// ignore spaces between header key and value
 		}
 		parseState = HttpParseState::doingHeaderValue;
-		// no break
-
+		[[fallthrough]];
 	case HttpParseState::doingHeaderValue:
 		if (c == '\n')
 		{

@@ -504,7 +504,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 				}
 				break;
 			}
-			// no break
+			[[fallthrough]];
 		case 'M':
 		case 'T':
 			if (isParsingHeader)

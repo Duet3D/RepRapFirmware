@@ -1822,8 +1822,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						UnlockMovement(gb);							// allow babystepping and pausing while heating
 					}
 				}
-
-				// no break
+				[[fallthrough]];
 			case 104:
 				// New behaviour from 1.20beta12:
 				// M109 Snnn
@@ -3061,7 +3060,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					platform.SetFilamentWidth(gb.GetPositiveFValue());
 					break;
 				}
-				// no break
+				[[fallthrough]];
 			case 407:
 				reply.printf("Filament width %.2fmm", (double)platform.GetFilamentWidth());
 				break;

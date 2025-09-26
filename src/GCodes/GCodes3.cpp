@@ -1245,8 +1245,7 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 						}
 						text += 6;			// skip ", z = "
 					}
-					// no break
-
+					[[fallthrough]];
 				case 7:		// new layer, but we are given the Z height, not the layer number
 				case 8:
 					{

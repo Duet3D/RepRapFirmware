@@ -2505,8 +2505,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			{
 				break;														// we can reach the intermediate positions, so nothing more to do
 			}
-			// no break
-
+			[[fallthrough]];
 		case LimitPositionResult::intermediateUnreachable:
 			if (   ms.isCoordinated
 				&& (   (machineType == MachineType::fff && !ms.hasPositiveExtrusion)
@@ -2525,8 +2524,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 				}
 			}
 			gb.ThrowGCodeException("target position not reachable from current position");		// we can't bring the move within limits, so this is a definite error
-			// no break
-
+			[[fallthrough]];
 		case LimitPositionResult::ok:
 		default:
 			break;
@@ -5135,7 +5133,7 @@ OutputBuffer *_ecv_null GCodes::GenerateJsonStatusResponse(int type, int seq, Re
 
 		default:				// need a default clause to prevent the command hanging by always returning a null buffer
 			type = 2;
-			// no break
+			[[fallthrough]];
 		case 2:
 		case 3:
 		case 4:
@@ -5574,7 +5572,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 	case GCodeBuffer::SyncState::running:
 		thisGb.syncState = GCodeBuffer::SyncState::syncing;				// tell other input channels that we are waiting for sync
 		//debugPrintf("Channel %u changed state to syncing, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
-		// no break
+		[[fallthrough]];
 	case GCodeBuffer::SyncState::syncing:
 		if (otherGb.syncState == GCodeBuffer::SyncState::running)
 		{
@@ -5597,7 +5595,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 		// Now that we no longer need to read axis coordinates from the other motion system, flag that we have finished syncing
 		thisGb.syncState = GCodeBuffer::SyncState::synced;
 		//debugPrintf("Channel %u changed state to synced, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
-		// no break
+		[[fallthrough]];
 	case GCodeBuffer::SyncState::synced:
 		switch (otherGb.syncState)
 		{

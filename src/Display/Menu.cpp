@@ -352,7 +352,7 @@ const char *_ecv_array _ecv_null Menu::ParseMenuLine(char *_ecv_array const comm
 		case '"':			// a string with no letter is a T argument
 			ch = 'T';
 			--args;
-			// no break
+			[[fallthrough]];
 		case 'T':
 		case 'L':
 		case 'A':

@@ -478,7 +478,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 		direction = !direction;
 		directionChanged = true;
 		state = DMState::cartDecelReverse;
-		// no break
+		[[fallthrough]];
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion. Convert the steps to int32_t because the net steps may be negative.
 		{
 			const int32_t netSteps = 2 * reverseStartStep - nextStep - 1;
