@@ -38,6 +38,7 @@ public:
 	uint32_t scheduledMovesWhenCreated;				// number of moves in the ring when we created this plan
 	bool reachesRequestedSpeed;						// true if this profile reaches the requested speed, so if more moves are added there is no point in recomputing the acceleration phase
 	bool usesAllMoves;								// true if this profile covers all moves in the ring when created. If false then there is a stop-point before further moves in the ring.
+	bool simple;									// for debugging only
 };
 
 #endif
