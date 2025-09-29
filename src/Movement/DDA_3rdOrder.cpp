@@ -21,6 +21,7 @@
 constexpr double OneHalfDouble = (double)0.5;
 constexpr double OneSixthDouble = (double)1.0/(double)6.0;
 constexpr double OneTwelfthDouble = (double)1.0/(double)12.0;
+constexpr double TwoThirdsDouble = (double)2.0/(double)3.0;
 
 // Return the smallest non-negative root of the equation. Returns the largest solution if there is no nonnegative solution, or NaN if there are no solutions.
 static double SmallestNonNegativeCubicSolution(double a, double b, double c, double d) noexcept
@@ -299,7 +300,7 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 			}
 			else
 			{
-				debugPrintf("CalcMMP failed, sa=%.3e pa=%.3e ss=%.3e ps=%.3e\n", startAcceleration, rslt.peakAcceleration, startSpeed, peakSpeed);
+				debugPrintf("CalcMMP failed, sa=%.4e pa=%.4e ss=%.4e ps=%.4e j=%.4e\n", startAcceleration, rslt.peakAcceleration, startSpeed, peakSpeed, jerk);
 				return false;
 			}
 		}
@@ -426,7 +427,6 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 		// - the duration we maintain the peak speed
 		// Start by seeing how much distance we use up if we accelerate to the peak requested speed
 		double viablePeakSpeed, unviablePeakSpeed, peakSpeedToTry = maxReqSpeed;
-		double viableDistanceNeeded;
 		unsigned int numIterations = 0;
 		int errorLine;
 		while (true)
@@ -476,7 +476,6 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 				{
 //					DEBUG_HERE;
 					viablePeakSpeed = peakSpeedToTry;
-					viableDistanceNeeded = distanceNeeded;
 				}
 			}
 			else
@@ -545,64 +544,87 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 
 						// We can stop the deceleration, so we can use the normal planning algorithm. We just need to refine the target top speed.
 						viablePeakSpeed = speedAfterStoppingDecelerating;
-						viableDistanceNeeded = distanceToStopDecelerating + decelParams.totalDistance;
 //						DEBUG_HERE;
 					}
 					else
 					{
-						// We start off accelerating, therefore we can't avoid an acceleration segment
-						const double minViableSpeedAccel = plannedProfile.startSpeed + OneHalfDouble * dsquare(plannedProfile.startAcceleration)/minJerk;
-						const double minViableSpeedDecel = plannedProfile.endSpeed;
-						viablePeakSpeed = max<float>(minViableSpeedAccel, minViableSpeedDecel);
-						if (viablePeakSpeed > (double)0.0)
+						if (plannedProfile.startAcceleration > (double)0.0)
 						{
+							// We start off accelerating, therefore we can't avoid an acceleration segment
+							const double accelTime = plannedProfile.startAcceleration/minJerk;
+							const double minViableSpeedAccel = plannedProfile.startSpeed + OneHalfDouble * plannedProfile.startAcceleration * accelTime;
+							if (minViableSpeedAccel > plannedProfile.endSpeed)
+							{
+								// The minimum viable speed is determined by the initial acceleration and speed.
+								// If we call CalculateMultipleMoveProfile to calculate the acceleration parameters, it may fail to find a solution because of rounding error.
+								// Therefore we calculate the distances separately here.
+								viablePeakSpeed = minViableSpeedAccel;
+								accelParams.s0 = accelParams.s1 = 0.0;
+								accelParams.totalDistance = accelParams.s2 = (plannedProfile.startSpeed + TwoThirdsDouble * plannedProfile.startAcceleration * accelTime) * accelTime;
+							}
+							else
+							{
+								viablePeakSpeed = plannedProfile.endSpeed;
+								if (!CalculateMultipleMoveProfile(plannedProfile.startSpeed, viablePeakSpeed, plannedProfile.startAcceleration, minMaxAcc, minJerk, accelParams))
+								{
+									errorLine = __LINE__;
+									break;
+								}
+							}
 							if (!CalculateMultipleMoveProfile(plannedProfile.endSpeed, viablePeakSpeed, 0.0, minMaxAcc, minJerk, decelParams))
 							{
 								errorLine = __LINE__;
 								break;
 							}
-							if (!CalculateMultipleMoveProfile(plannedProfile.startSpeed, viablePeakSpeed, plannedProfile.startAcceleration, minMaxAcc, minJerk, accelParams))
-							{
-								errorLine = __LINE__;
-								break;
-							}
-							viableDistanceNeeded = accelParams.totalDistance + decelParams.totalDistance;
-							if (viableDistanceNeeded > distanceToPlan)
-							{
-								debugPrintf("accel %.4e decl %.4e viable %.4e available %.4e\n", accelParams.totalDistance, decelParams.totalDistance, viableDistanceNeeded, distanceToPlan);
-								errorLine = __LINE__;
-								break;
-							}
-
-							if (viableDistanceNeeded >= (double)0.98 * distanceToPlan)		// this test can save a lot of iterations when we re-plan something already planned
-							{
-								plannedProfile.distances[0] = accelParams.s0;
-								plannedProfile.distances[1] = accelParams.s1;
-								plannedProfile.distances[2] = accelParams.s2;
-								plannedProfile.distances[3] = distanceToPlan - distanceNeeded;
-								plannedProfile.distances[4] = decelParams.s2;
-								plannedProfile.distances[5] = decelParams.s1;
-								plannedProfile.distances[6] = decelParams.s0;
-								plannedProfile.topSpeed = viablePeakSpeed;
-								plannedProfile.peakAcceleration = accelParams.peakAcceleration;
-								plannedProfile.peakDeceleration = -decelParams.peakAcceleration;
-								plannedProfile.reachesRequestedSpeed = false;
-								if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
-								{
-									debugPrintf("Solved in 0.5 iterations, match = %.2f\n", viableDistanceNeeded/distanceToPlan);
-									plannedProfile.DebugPrint();
-								}
-#if 0	//DEBUG
-								debugProfile = plannedProfile;
-#endif
-								return;
-							}
-//							DEBUG_HERE;
 						}
 						else
 						{
-							viableDistanceNeeded = 0.0;
-//							DEBUG_HERE;
+							// Start and end acceleration are both zero
+							if (plannedProfile.startSpeed > plannedProfile.endSpeed)
+							{
+								viablePeakSpeed = plannedProfile.startSpeed;
+								accelParams.totalDistance = accelParams.s0 = accelParams.s1 = accelParams.s2 = 0.0;
+								if (!CalculateMultipleMoveProfile(plannedProfile.endSpeed, viablePeakSpeed, 0.0, minMaxAcc, minJerk, decelParams))
+								{
+									errorLine = __LINE__;
+									break;
+								}
+							}
+							else
+							{
+								viablePeakSpeed = plannedProfile.endSpeed;
+								decelParams.totalDistance = decelParams.s0 = decelParams.s1 = decelParams.s2 = 0.0;
+								if (!CalculateMultipleMoveProfile(plannedProfile.startSpeed, viablePeakSpeed, plannedProfile.startAcceleration, minMaxAcc, minJerk, accelParams))
+								{
+									errorLine = __LINE__;
+									break;
+								}
+							}
+						}
+
+						const double viableDistanceNeeded = accelParams.totalDistance + decelParams.totalDistance;
+						if (viableDistanceNeeded >= (double)0.98 * distanceToPlan)		// this test can save a lot of iterations when we re-plan something already planned
+						{
+							plannedProfile.distances[0] = accelParams.s0;
+							plannedProfile.distances[1] = accelParams.s1;
+							plannedProfile.distances[2] = accelParams.s2;
+							plannedProfile.distances[3] = distanceToPlan - viableDistanceNeeded;
+							plannedProfile.distances[4] = decelParams.s2;
+							plannedProfile.distances[5] = decelParams.s1;
+							plannedProfile.distances[6] = decelParams.s0;
+							plannedProfile.topSpeed = viablePeakSpeed;
+							plannedProfile.peakAcceleration = accelParams.peakAcceleration;
+							plannedProfile.peakDeceleration = -decelParams.peakAcceleration;
+							plannedProfile.reachesRequestedSpeed = false;
+							if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+							{
+								debugPrintf("Solved in 0.5 iterations, match = %.2f\n", viableDistanceNeeded/distanceToPlan);
+								plannedProfile.DebugPrint();
+							}
+#if 0	//DEBUG
+							debugProfile = plannedProfile;
+#endif
+							return;
 						}
 					}
 				}
