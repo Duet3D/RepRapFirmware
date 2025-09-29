@@ -18,7 +18,11 @@
 #include "Move.h"
 #include <GCodes/GCodes.h>
 
+#define COPY_PLAN	1
+
+// Constants that we use in double precision calculations
 constexpr double OneHalfDouble = (double)0.5;
+constexpr double OneQuarterDouble = (double)0.25;
 constexpr double OneSixthDouble = (double)1.0/(double)6.0;
 constexpr double OneTwelfthDouble = (double)1.0/(double)12.0;
 constexpr double TwoThirdsDouble = (double)2.0/(double)3.0;
@@ -137,43 +141,47 @@ struct MultipleMoveParameters
 	double totalDistance;
 };
 
-#if 0	//DEBUG
+#if COPY_PLAN	//DEBUG
+// WARNING: this variable is static, so it's not going to work with multiple motion systems.
+// However, it's for debugging only, so as long as we only run one motion system while debugging with COPY_PLAN set then that's OK.
 static MovementProfile debugProfile;
 #endif
 
 // Calculate the move to be added to the ring when the start speed and acceleration and the end speed and acceleration are all zero
 // Caller has already set endSpeed and endDeceleration to zero
-// For an S-curve acceleration phase which starts at speed u and acceleration a, spends time t1 accelerating with jerk j to peak acceleration ap, then spends time t2 at constant acceleration ap, then spends time t1 reducing acceleration back to a:
-//	s = u * (2 * t1 + t2) + a * (2 * t1^2 + 2 * t1 * t2 + ½ * t2^2) + j * (t1^3 + (3/2) * t1^2 * t2 + ½ * t1 * t2^2)
-//	v = u + a * (2 * t1 + t2) + j * (t1 * t2 + t1^2)
-//	ap = a + j * t1
+// For an S-curve acceleration phase which starts at speed u and acceleration a, spends time t0 accelerating with jerk j to peak acceleration ap, then spends time t1 at constant acceleration ap, then spends time t0 reducing acceleration back to a:
+//	s = u * (2 * t0 + t1) + a * (2 * t0^2 + 2 * t0 * t1 + ½ * t1^2) + j * (t0^3 + (3/2) * t0^2 * t1 + ½ * t0 * t1^2)
+//	v = u + a * (2 * t0 + t1) + j * (t0 * t1 + t0^2)
+//	ap = a + j * t0
 // Given u = 0 and a = 0 for the move we are constructing:
-//	s = j * (t1^3 + (3/2) * t1^2 * t2 + ½ * t1 * t2^2)
-//	v = j * (t1 * t2 + t1^2) = j * t1 * (t1 + t2)
-//	ap = j * t1
+//	s = j * (t0^3 + (3/2) * t0^2 * t1 + ½ * t0 * t1^2)
+//	v = j * (t0 * t1 + t0^2) = j * t0 * (t0 + t1)
+//	ap = j * t0
 // The deceleration phase is a mirror image of the acceleration phase. We add a steady speed phase between acceleration and deceleration if we need more distance.
 void DDA::CalculateIsolatedSCurveMove(MovementProfile& plannedProfile) const noexcept
 {
 	const double djerk = (double)jerk;
 	const double dspeed = (double)requestedSpeed;
+	const double dacc = (double)maxAcceleration;
 	plannedProfile.jerk = djerk;
 	plannedProfile.numberOfMovesCovered = 1;
+	plannedProfile.simple = true;
 	do
 	{
 		// Determine whether the requested speed or the maximum acceleration is more limiting
 		// The acceleration reached from a standing start is a = j * t and the speed reached is v = 0.5 * j * t^2.
 		// So a^2 = j^2 * t^2 = 2 * v * j
 		// The phase in which the acceleration is reducing will increase the speed by the same amount. Therefore we can reach acceleration a without exceeding speed v if a^2 >= v * j.
-		if (fsquare(maxAcceleration) > requestedSpeed * jerk)
+		if (dsquare(dacc) > dspeed * djerk)
 		{
 			// In principle we can reach the requested speed without exceeding the maximum acceleration, without having to include a constant acceleration segment
-			plannedProfile.distances[1] = plannedProfile.distances[5] = 0.0;
 			const double halfTimeToReqSpeed = fastSqrtd(dspeed/djerk);
 			const double distanceToReqSpeed = dspeed * halfTimeToReqSpeed;
 			if (2 * distanceToReqSpeed < (double)totalDistance)
 			{
 				// We can reach the requested speed and decelerate to zero again without exceeding the required distance. Generate a 5-phase move.
 				plannedProfile.distances[0] = plannedProfile.distances[6] = OneSixthDouble * djerk * dcube(halfTimeToReqSpeed);
+				plannedProfile.distances[1] = plannedProfile.distances[5] = 0.0;
 				plannedProfile.distances[2] = plannedProfile.distances[4] = dspeed * halfTimeToReqSpeed - plannedProfile.distances[0];
 				plannedProfile.distances[3] = (double)totalDistance - 2 * distanceToReqSpeed;
 				plannedProfile.topSpeed = dspeed;
@@ -187,39 +195,39 @@ void DDA::CalculateIsolatedSCurveMove(MovementProfile& plannedProfile) const noe
 		{
 			// We can't reach the requested speed without inserting a constant acceleration segment to avoid exceeding maximum acceleration
 			plannedProfile.peakAcceleration = maxAcceleration;
-			const motioncalc_t basicDistance = 2 * fcube(maxAcceleration)/fsquare(jerk);	// distance if we reach max acceleration but have no constant acceleration segment
-			if (basicDistance < totalDistance)
+			const double basicDistance = 2 * dcube(dacc)/dsquare(djerk);	// distance if we reach max acceleration but have no constant acceleration segment
+			if (basicDistance < (double)totalDistance)
 			{
 				// We need to insert a constant acceleration segment. We may also need to limit the top speed.
 				// Calculate t1 in the above equations
-				// From the above equations:	t2^2 * (0.5 * t1) + t2 * (1.5 * t1^2) + (t1^3 - s/j) = 0
-				// Solve for t2 to get:			t2 = [-1.5 * t1^2 +/- sqrt(2.25 * t1^4 - 4 * 0.5 * t1 * (t1^3 - s/j))]/t1
-				// Rearrange:					t2 = -1.5 * t1 +/- sqrt(2.25 * t1^2 - 2 * (t1^2 - s/(j*t1))
-				// Simplify:					t2 = -1.5 * t1 +/- sqrt(0.25 * t1^2 + 2 * s/(j*t1))
-				// But j * t1 = ap, therefore:	t2 = -1.5 * t1 +/- sqrt(0.25 * t1^2 + 2 * s/ap)
+				// From the above equations:	t1^2 * (0.5 * t0) + t1 * (1.5 * t0^2) + (t0^3 - s/j) = 0
+				// Solve for t2 to get:			t1 = [-1.5 * t0^2 +/- sqrt(2.25 * t0^4 - 4 * 0.5 * t0 * (t0^3 - s/j))]/t0
+				// Rearrange:					t1 = -1.5 * t0 +/- sqrt(2.25 * t0^2 - 2 * (t0^2 - s/(j*t0))
+				// Simplify:					t1 = -1.5 * t0 +/- sqrt(0.25 * t0^2 + 2 * s/(j*t0))
+				// But j * t0 = a, therefore:	t1 = -1.5 * t0 +/- sqrt(0.25 * t0^2 + 2 * s/a)  [Verified using Maxima]
 				// s is half the total distance because we accelerate and decelerate again.
-				const double timeToMaxAcceleration = maxAcceleration/jerk;
+				const double timeToMaxAcceleration = dacc/djerk;
 				plannedProfile.distances[0] = plannedProfile.distances[6] = OneSixthDouble * plannedProfile.jerk * dcube(timeToMaxAcceleration);
-				const double constantAccelerationTime = -(double)1.5 * timeToMaxAcceleration + fastSqrtd(0.25 * fsquare(timeToMaxAcceleration) + totalDistance/maxAcceleration);
-				const double newTopSpeed = plannedProfile.jerk * timeToMaxAcceleration * (timeToMaxAcceleration + constantAccelerationTime);
-				if (newTopSpeed <= (double)requestedSpeed)
+				const double constantAccelerationTime = -(double)1.5 * timeToMaxAcceleration + fastSqrtd(OneQuarterDouble * dsquare(timeToMaxAcceleration) + (double)totalDistance/dacc);
+				const double newTopSpeed = djerk * timeToMaxAcceleration * (timeToMaxAcceleration + constantAccelerationTime);
+				if (newTopSpeed <= dspeed)
 				{
 					// Generate a 6-phase move. The middle 2 phases could be combined.
 					plannedProfile.topSpeed = newTopSpeed;
-					plannedProfile.distances[1] = plannedProfile.distances[5] = OneHalfDouble * constantAccelerationTime * plannedProfile.topSpeed;
-					plannedProfile.distances[2] = plannedProfile.distances[4] = timeToMaxAcceleration * plannedProfile.topSpeed - plannedProfile.distances[0];
+					plannedProfile.distances[1] = plannedProfile.distances[5] = OneHalfDouble * constantAccelerationTime * newTopSpeed;
+					plannedProfile.distances[2] = plannedProfile.distances[4] = timeToMaxAcceleration * newTopSpeed - plannedProfile.distances[0];
 					plannedProfile.distances[3] = (double)0.0;
-					plannedProfile.reachesRequestedSpeed = true;
+					plannedProfile.reachesRequestedSpeed = false;
 				}
 				else
 				{
 					// We need to limit the constant acceleration time in order to limit the top speed, and add a constant speed phase. Generate a 7-phase move.
-					plannedProfile.topSpeed = (double)requestedSpeed;
-					//	v = j * t1 * (t1 + t2) therefore t2 = v/(j * t1) - t1
-					const double revisedConstantAccelerationTime = (double)requestedSpeed/(plannedProfile.jerk * timeToMaxAcceleration) - timeToMaxAcceleration;
-					plannedProfile.distances[1] = plannedProfile.distances[5] = OneHalfDouble * revisedConstantAccelerationTime * plannedProfile.topSpeed;
-					plannedProfile.distances[2] = plannedProfile.distances[4] = timeToMaxAcceleration * plannedProfile.topSpeed - plannedProfile.distances[0];
-					plannedProfile.distances[3] = (double)totalDistance - 2 * (plannedProfile.distances[0] + plannedProfile.distances[2]);
+					plannedProfile.topSpeed = dspeed;
+					//	v = j * t0 * (t0 + t1) therefore t1 = v/(j * t0) - t0 = v/a - t0
+					const double revisedConstantAccelerationTime = dspeed/dacc - timeToMaxAcceleration;
+					plannedProfile.distances[1] = plannedProfile.distances[5] = OneHalfDouble * revisedConstantAccelerationTime * dspeed;
+					plannedProfile.distances[2] = plannedProfile.distances[4] = timeToMaxAcceleration * dspeed - plannedProfile.distances[0];
+					plannedProfile.distances[3] = (double)totalDistance - 2 * (plannedProfile.distances[0] + plannedProfile.distances[1] + plannedProfile.distances[2]);
 					plannedProfile.reachesRequestedSpeed = true;
 				}
 				break;
@@ -238,7 +246,7 @@ void DDA::CalculateIsolatedSCurveMove(MovementProfile& plannedProfile) const noe
 	} while (false);
 
 	plannedProfile.peakDeceleration = -plannedProfile.peakAcceleration;
-#if 0	//DEBUG
+#if COPY_PLAN	//DEBUG
 	debugProfile = plannedProfile;
 #endif
 }
@@ -282,8 +290,10 @@ pre(peakSpeed >= startSpeed; jerk > 0; startAcceleration > 0; maxAcceleration > 
 			// Maximum acceleration is limiting, so we need a constant acceleration phase
 			rslt.peakAcceleration = maxAcceleration;
 			rslt.s0 = (maxAcceleration - startAcceleration) * (startSpeed/jerk + (maxAcceleration - startAcceleration) * (2 * startAcceleration + maxAcceleration)/(6 * dsquare(jerk)));
+			// t1 = (v-u)/a + a0^2/2aj - a/j						[checked using Maxima]
 			const double t1 = ((peakSpeed - startSpeed) * jerk - dsquare(maxAcceleration) + OneHalfDouble * dsquare(startAcceleration))/(maxAcceleration * jerk);
-			rslt.s1 = t1 * (startSpeed + (maxAcceleration - startAcceleration) * OneHalfDouble * (maxAcceleration + startAcceleration)/jerk + OneHalfDouble * maxAcceleration);
+			// s1 = t1 * (u + 0.5 * (a * t1 + (a^2 - a0^2)/j))		[checked using Maxima]
+			rslt.s1 = t1 * (startSpeed + OneHalfDouble * (maxAcceleration * t1 + (dsquare(maxAcceleration - dsquare(startAcceleration))/jerk)));
 			rslt.s2 = maxAcceleration * ((startSpeed + maxAcceleration * t1)/jerk + (5 * dsquare(maxAcceleration) - 3 * dsquare(startAcceleration))/(6 * dsquare(jerk)));
 			rslt.totalDistance = rslt.s0 + rslt.s1 + rslt.s2;
 		}
@@ -396,6 +406,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 	const double minJerk = (double)fminJerk;
 	plannedProfile.jerk = minJerk;
 	const double minMaxAcc = (double)fminMaxAcc;
+	plannedProfile.simple = false;
 
 	lastMoveToPlan->endSpeed = 0.0;					// for now we always end at zero speed (as well as zero acceleration)
 	plannedProfile.endSpeed = 0.0;
@@ -467,7 +478,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 						debugPrintf("Solved in %u iterations, match = %.2f\n", numIterations, (double)(distanceNeeded/distanceToPlan));
 						plannedProfile.DebugPrint();
 					}
-#if 0	//DEBUG
+#if COPY_PLAN	//DEBUG
 					debugProfile = plannedProfile;
 #endif
 					return;
@@ -621,7 +632,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 								debugPrintf("Solved in 0.5 iterations, match = %.2f\n", viableDistanceNeeded/distanceToPlan);
 								plannedProfile.DebugPrint();
 							}
-#if 0	//DEBUG
+#if COPY_PLAN	//DEBUG
 							debugProfile = plannedProfile;
 #endif
 							return;
@@ -864,7 +875,7 @@ pre(startAcceleration <= 0.0; endAcceleration <= 0.0)
 			if (std::isnan(t5) || t5 < (double)0.0)
 			{
 				debugPrintf("Failed at %d, t5=%.7e dist=%.7e decl=%.7e speed=%.7e\n", __LINE__, t5, t5Distance, plannedProfile.peakDeceleration, speed);
-#if 0	//DEBUG
+#if COPY_PLAN	//DEBUG
 				debugPrintf("Original:  "); debugProfile.DebugPrint();
 #endif
 				debugPrintf("Remaining: "); plannedProfile.DebugPrint();
