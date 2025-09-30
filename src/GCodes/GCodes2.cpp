@@ -79,7 +79,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (&gb == FileGCode() && gb.ExecutingAll())
 		{
 			const FilePosition offsetToSkipTo = GetMovementState(gb).fileOffsetToSkipTo;
-			if (offsetToSkipTo != 0)
+			if (offsetToSkipTo != 0 && offsetToSkipTo != noFilePosition)
 			{
 				const FilePosition jobFilePos = gb.GetJobFilePosition();
 				if (jobFilePos < offsetToSkipTo)
@@ -87,6 +87,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 					// Skip any command except M596
 					if (!(gb.GetCommandLetter() == 'M' && gb.HasCommandNumber() && gb.GetCommandNumber() == 596))
 					{
+						HandleReply(gb, GCodeResult::ok, "");
 						return true;
 					}
 				}
@@ -98,6 +99,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 						&& ((commandNumber = gb.GetCommandNumber()) == 226 || commandNumber == 600 || commandNumber == 601 || commandNumber == 25)
 					   )
 					{
+						HandleReply(gb, GCodeResult::ok, "");
 						return true;
 					}
 				}
