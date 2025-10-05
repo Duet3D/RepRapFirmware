@@ -1959,6 +1959,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			{
 				{ (double)1.0, (double)-6.0, (double)11.0, (double)-6.0 },		// roots are 1 2 3
 				{ (double)1.0, (double)-1.0, (double)1.0, (double)-1.0 },		// roots are 1
+				{ (double)2.0, (double)-6.0, (double)-18.5, (double)-7.5 },		// roots are -1.5 -0.5 5
 			};
 			for (size_t i = 0; i < ARRAY_SIZE(coeffs); ++i)
 			{
