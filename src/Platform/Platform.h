@@ -159,7 +159,8 @@ enum class DiagnosticTestType : unsigned int
 	TimeGetTimerTicks = 108,		// time now long it takes to read the step clock
 	UndervoltageEvent = 109,		// pretend an undervoltage condition has occurred
 #if SUPPORT_S_CURVE
-	TimeSolvers = 110,
+	TimeCubicSolver = 110,
+	TimeQuarticSolver = 111,
 #endif
 
 	SetWriteBuffer = 500,			// enable/disable the write buffer

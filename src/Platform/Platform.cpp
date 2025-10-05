@@ -1952,20 +1952,25 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		break;
 
 #if SUPPORT_S_CURVE
-	case (unsigned int)DiagnosticTestType::TimeSolvers:		// Show the cubic and quartic solver calculation time. Caution: may disable interrupt for several tens of microseconds.
+	case (unsigned int)DiagnosticTestType::TimeCubicSolver:		// Show the cubic solver calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
 			constexpr uint32_t iterations = 100;				// use a value that divides into one million
-			// Time and check a cubic equation with three real roots (the most complicated case)
+			constexpr double coeffs[][4] =
+			{
+				{ (double)1.0, (double)-6.0, (double)11.0, (double)-6.0 },		// roots are 1 2 3
+				{ (double)1.0, (double)-1.0, (double)1.0, (double)-1.0 },		// roots are 1
+			};
+			for (size_t i = 0; i < ARRAY_SIZE(coeffs); ++i)
 			{
 				uint32_t tim1 = 0;
 				size_t numRoots;
 				double rslt[3] = { std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN() };
-				for (unsigned int i = 0; i < iterations; ++i)
+				for (unsigned int j = 0; j < iterations; ++j)
 				{
 					IrqDisable();
 					asm volatile("":::"memory");
 					uint32_t now1 = SysTick->VAL;
-					numRoots = SolveCubic((double)1.0, (double)-6.0, (double)11.0, (double)-6.0, rslt);
+					numRoots = SolveCubic(coeffs[i][0], coeffs[i][1], coeffs[i][2], coeffs[i][3], rslt);
 					uint32_t now2 = SysTick->VAL;
 					asm volatile("":::"memory");
 					IrqEnable();
@@ -1975,47 +1980,60 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 					tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
 				}
 
-				reply.lcatf("Cubic solver: %.2fus, %u roots %.6f %.6f %.6f", (double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), numRoots, rslt[0], rslt[1], rslt[2]);
-			}
-
-			// Time and check solving a quartic equation with four real roots
-			{
-				constexpr double coeffs[][5] =
+				reply.lcatf("Cubic coeffs %.1f %.1f %.1f %.1f, %.2fus, %u roots:",
+							coeffs[i][0], coeffs[i][1], coeffs[i][2], coeffs[i][3],
+							(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), numRoots);
+				for (size_t j = 0; j < numRoots; ++j)
 				{
-					{ (double)1.0, (double)-10.0, (double)35.0, (double)-50.0, (double)24.0 },		// roots are 1 2 3 4
-					{ (double)1.0, (double)-3.0, (double)3.0, (double)-3.0, (double)2.0 },			// roots are 1 2
-					{ (double)1.0, (double)-3.0, (double)1.0, (double)3.0, (double)-2.0 },			// roots are 1 2
-					{ (double)1.0, (double)-2.0, (double)0.0, (double)2.0, (double)-1.0 },			// roots are 1
-				};
-				for (size_t i = 0; i < ARRAY_SIZE(coeffs); ++i)
-				{
-					uint32_t tim1 = 0;
-					size_t numRoots;
-					double rslt[4] = { std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN() };
-					for (unsigned int j = 0; j < iterations; ++j)
-					{
-						IrqDisable();
-						asm volatile("":::"memory");
-						uint32_t now1 = SysTick->VAL;
-						numRoots = SolveQuartic(coeffs[i][0],coeffs[i][1], coeffs[i][2], coeffs[i][3], coeffs[i][4], rslt);
-						uint32_t now2 = SysTick->VAL;
-						asm volatile("":::"memory");
-						IrqEnable();
-
-						now1 &= 0x00FFFFFF;
-						now2 &= 0x00FFFFFF;
-						tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
-					}
-
-					reply.lcatf("Quartic solver: %.2fus, coeffs %.1f %.1f %.1f %.1f %.1f, %u roots %.6f %.6f %.6f %.6f",
-									(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock),
-									coeffs[i][0],coeffs[i][1], coeffs[i][2], coeffs[i][3], coeffs[i][4],
-									numRoots, rslt[0], rslt[1], rslt[2], rslt[3]);
+					reply.catf(" %.6f", rslt[j]);
 				}
 			}
-#endif
 		}
 		break;
+
+	case (unsigned int)DiagnosticTestType::TimeQuarticSolver:	// Show the quartic solver calculation time. Caution: may disable interrupt for several tens of microseconds.
+		{
+			constexpr uint32_t iterations = 1;				// use a value that divides into one million
+			constexpr double coeffs[][5] =
+			{
+				{ (double)1.0, (double)-10.0, (double)35.0, (double)-50.0, (double)24.0 },		// roots are 1 2 3 4
+				{ (double)1.0, (double)-3.0, (double)1.0, (double)3.0, (double)-2.0 },			// roots are -1 1 2
+				{ (double)1.0, (double)-2.0, (double)0.0, (double)2.0, (double)-1.0 },			// roots are -1 1
+				{ (double)1.0, (double)-3.0, (double)3.0, (double)-3.0, (double)2.0 },			// roots are 1 2
+				{ (double)1.0, (double)0.0, (double)17.0, (double)0.0, (double)16.0 },			// bicubic, no real roots
+				{ (double)1.0, (double)0.0, (double)-17.0, (double)0.0, (double)16.0 },			// bicubic, roots -4 -1 1 4
+			};
+			for (size_t i = 0; i < ARRAY_SIZE(coeffs); ++i)
+			{
+				uint32_t tim1 = 0;
+				size_t numRoots;
+				double rslt[4] = { std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN() };
+				for (unsigned int j = 0; j < iterations; ++j)
+				{
+					IrqDisable();
+					asm volatile("":::"memory");
+					uint32_t now1 = SysTick->VAL;
+					numRoots = SolveQuartic(coeffs[i][0],coeffs[i][1], coeffs[i][2], coeffs[i][3], coeffs[i][4], rslt);
+					uint32_t now2 = SysTick->VAL;
+					asm volatile("":::"memory");
+					IrqEnable();
+
+					now1 &= 0x00FFFFFF;
+					now2 &= 0x00FFFFFF;
+					tim1 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+				}
+
+				reply.lcatf("Quartic coeffs %.1f %.1f %.1f %.1f %.1f, %.2fus, %u roots:",
+							coeffs[i][0],coeffs[i][1], coeffs[i][2], coeffs[i][3], coeffs[i][4],
+							(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), numRoots);
+				for (size_t j = 0; j < numRoots; ++j)
+				{
+					reply.catf(" %.6f", rslt[j]);
+				}
+			}
+		}
+		break;
+#endif
 
 	case (unsigned int)DiagnosticTestType::TimeSDWrite:
 #if HAS_MASS_STORAGE
