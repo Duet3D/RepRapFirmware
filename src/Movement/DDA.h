@@ -219,8 +219,7 @@ private:
 	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
 
 #if SUPPORT_S_CURVE
-	void CalculateIsolatedSCurveMove(MovementProfile& plannedProfile) const noexcept SPEED_CRITICAL
-		pre(startSpeed == 0.0; startAcceleration == 0.0);
+	static void PlanDeceleratingMoves(double distance, double acc, MovementProfile& plannedProfile) noexcept SPEED_CRITICAL;
 	void AllocateMoveFromPlan(MovementProfile& plannedProfile, PrepParams& params) noexcept SPEED_CRITICAL;
 #endif
 
