@@ -264,25 +264,89 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 	// Plans 2, 3 and 4 are simpler to calculate than 1 I suspect?
 	//TODO
 
-	// Calculate plan 1
+	// Try plan 1
+	debugPrintf("Invoking quartic solver, u=%.7e, v=%.7e, a=%.7e, j=%.7e, d=%.7e\n", startSpeed, endSpeed, startAcceleration, jerk, distance);
+
+	// For debugging, first calculate the minimum distance, which is when either t0=0 or t6=0
+	{
+		const double square = jerk * (startSpeed - endSpeed) + OneHalfDouble * dsquare(startAcceleration);
+		if (square >= (double)0.0)
+		{
+			// t0 = 0 is viable
+			const double tempT6 = fastSqrtd(square)/jerk;
+			const double minDistance = 2 * tempT6 * startSpeed - jerk * dcube(tempT6) + startAcceleration * (startSpeed + startAcceleration * tempT6)/jerk + dcube(startAcceleration)/(3 * dsquare(jerk));
+			debugPrintf("Min distance %.3f when t0=0 t6=%.1f\n", minDistance, tempT6);
+		}
+		const double square2 = jerk * (endSpeed - startSpeed) + OneHalfDouble * dsquare(startAcceleration);
+		if (square2 >= (double)0.0)
+		{
+			// t6 = 0 may be viable
+			const double tempT0 = (fastSqrtd(square2) - startAcceleration)/jerk;
+			if (tempT0 >= (double)0.0)
+			{
+				const double minDistance = 2 * tempT0 * startSpeed + jerk * dcube(tempT0) + startAcceleration * (startSpeed + 2 * startAcceleration * tempT0)/jerk + 3 * startAcceleration * dsquare(tempT0) + dcube(startAcceleration)/(3 * dsquare(jerk));
+				debugPrintf("Min distance %.3f when t0=%.1f, t6=0\n", minDistance, tempT0);
+			}
+		}
+	}
+
 	// The following quartic equation solves for t0, see Maxima worksheet
-	debugPrintf("Invoking quartic solver, u=%.4e, v=%.4e, a=%.4e, j=%.4e, d=%.4e\n", startSpeed, endSpeed, startAcceleration, jerk, distance);
 	double rslt[4];
 	const double coeff0 = 72 * dcube(jerk) * startSpeed * endSpeed * (startSpeed - endSpeed)
 						+ 72 * dcube(jerk) * (dcube(startSpeed) - dcube(endSpeed))
 						+ 144 * dcube(jerk) * startAcceleration * startSpeed * distance
-						+ 36 * dsquare(jerk) * dsquare(startAcceleration) * (dsquare(startSpeed) - dsquare(endSpeed) * 2 * startSpeed * endSpeed)
+						+ 36 * dsquare(jerk) * dsquare(startAcceleration) * (dsquare(startSpeed) - dsquare(endSpeed) + 2 * startSpeed * endSpeed)
 						+ 48 * dsquare(jerk) * dcube(startAcceleration) * distance
-						- 72 * dsquare(dsquare(jerk) * dsquare(distance))
+						- 72 * dsquare(dsquare(jerk)) * dsquare(distance)
 						+ 6 * jerk * dsquare(dsquare(startAcceleration)) * (startSpeed + 3 * endSpeed)
 						+ dsquare(dcube(startAcceleration));
 
-	const double coeff1 = -12 * jerk * (- 12 * dsquare(jerk) * startAcceleration * startSpeed * (startSpeed + 2 * endSpeed)
-										- 4 * jerk * dcube(startAcceleration) * (startSpeed + 6 * endSpeed)
-										- 24 * distance * dcube(jerk) * startSpeed - startAcceleration * dsquare(dsquare(startAcceleration))
-										- 12 * jerk * dcube(startAcceleration) * endSpeed
-										+ 12 * dsquare(jerk) * startAcceleration * dsquare(endSpeed)
+//	+72*dcube(jerk)*dsquare(startSpeed)*endSpeed
+//	-72*dcube(jerk)*startSpeed*dsquare(endSpeed)
+//	+72*dcube(jerk)*dcube(startSpeed)
+//	-72*dcube(jerk)*dcube(endSpeed)
+//	+144*dcube(jerk)*startAcceleration*startSpeed*distance
+//	+36*dsquare(jerk)*dsquare(startAcceleration)*dsquare(startSpeed)
+//	-36*dsquare(jerk)*dsquare(startAcceleration)*dsquare(endSpeed)
+//	+72*dsquare(jerk)*dsquare(startAcceleration)*startSpeed*endSpeed
+//	+48*dsquare(jerk)*dcube(startAcceleration)*distance
+//	-72*dsquare(dsquare(jerk))*dsquare(distance)
+//	+6*jerk*dsquare(dsquare(startAcceleration))*startSpeed
+//	+18*jerk*dsquare(dsquare(startAcceleration))*endSpeed
+//	+dsquare(dcube(startAcceleration))
+
+//	+72*dcube(jerk)*dcube(startSpeed)
+//	-72*dcube(jerk)*dcube(endSpeed)
+//	+72*dcube(jerk)*dsquare(startSpeed)*endSpeed
+//	-72*dcube(jerk)*startSpeed*dsquare(endSpeed)
+//	+144*dcube(jerk)*startAcceleration*startSpeed*distance
+//	+36*dsquare(jerk)*dsquare(startAcceleration)*dsquare(startSpeed)
+//	-36*dsquare(jerk)*dsquare(startAcceleration)*dsquare(endSpeed)
+//	+72*dsquare(jerk)*dsquare(startAcceleration)*startSpeed*endSpeed
+//	+48*dsquare(jerk)*dcube(startAcceleration)*distance
+//	-72*dsquare(dsquare(jerk))*dsquare(distance)
+//	+6*jerk*dsquare(dsquare(startAcceleration))*startSpeed
+//	+18*jerk*dsquare(dsquare(startAcceleration))*endSpeed
+//	+dsquare(dcube(startAcceleration))
+
+	const double coeff1 = -12 * jerk * (  12 * dsquare(jerk) * startAcceleration * (dsquare(endSpeed) - dsquare(startSpeed) - 2 * (startSpeed * endSpeed + startAcceleration * distance))
+										- 24 * dcube(jerk) * startSpeed * distance
+										- 4 * jerk * dcube(startAcceleration) * (startSpeed + 3 * endSpeed)
+										- startAcceleration * dsquare(dsquare(startAcceleration))
 									   );
+
+//	-(12*jerk*
+//			(
+//				+12*dsquare(jerk)*startAcceleration*dsquare(endSpeed)
+//				-12*dsquare(jerk)*startAcceleration*dsquare(startSpeed)
+//				-24*dsquare(jerk)*startAcceleration*startSpeed*endSpeed
+//				-24*dsquare(jerk)*dsquare(startAcceleration)*distance
+//				-24*dcube(jerk)*startSpeed*distance
+//				-4*jerk*dcube(startAcceleration)*startSpeed
+//				-12*jerk*dcube(startAcceleration)*endSpeed
+//				-startAcceleration*dsquare(dsquare(startAcceleration))
+//			)
+//	 )
 
 	const double coeff2 = -(  18 * dsquare(jerk) * (  4 * dsquare(jerk) * (dsquare(startSpeed) + dsquare(endSpeed) - 2 * startSpeed * endSpeed)
 													- 24 * dsquare(jerk) * startAcceleration * distance
@@ -301,6 +365,10 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 														);
 
 	const size_t numSolutions = SolveQuartic(coeff4, coeff3, coeff2, coeff1, coeff0, rslt);
+
+	debugPrintf("Coefficients %.7e %.7e %.7e %.7e %.7e, solutions", coeff4, coeff3, coeff2, coeff1, coeff0);
+	for (size_t i = 0; i < numSolutions; ++i) { debugPrintf(" %.7e", rslt[i]); }
+	debugPrintf("\n");
 
 	// We want a solution in which t0, t2 and t6 are all non-negative. If there is more than one, we want the one with the lowest sum.
 	double t0, t2, t6;
@@ -327,7 +395,7 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 								    )
 								    / (6 * dcube(jerk) * dsquare(tempT0) + 12 * (dsquare(jerk) * startAcceleration) * tempT0 + 6 * dsquare(jerk) * (startSpeed + endSpeed) + 3 * jerk * dsquare(startAcceleration))
 								   );
-//			if (t6 >= 0.0)
+			if (tempT6 >= (double)0.0)
 			{
 #endif
 				const double tempT2 = tempT6 + tempT0 + startAcceleration/jerk;
