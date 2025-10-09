@@ -237,13 +237,13 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 	// First make sure we don't have a top speed that is lower than the start or end speed, because that would lead to negative phase times
 	if (topSpeed < startSpeed || topSpeed < startSpeed + OneHalfDouble * dsquare(startAcceleration)/jerk)
 	{
+		debugPrintf("Increasing top speed from %.4e to %.4e due to start speed/accel\n", topSpeed, startSpeed);
 		topSpeed = startSpeed;
-		debugPrintf("Increasing top speed due to start speed/accel\n");
 	}
 	if (topSpeed < endSpeed)
 	{
+		debugPrintf("Increasing top speed from %.4e to %.4e due to end speed\n", topSpeed, endSpeed);
 		topSpeed = endSpeed;
-		debugPrintf("Increasing top speed due to end speed\n");
 	}
 
 	// See if any of plans 5,6,7,8 are feasible
@@ -265,6 +265,7 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 	//TODO
 
 	// Try plan 1
+#if 0
 	debugPrintf("Invoking quartic solver, u=%.7e, v=%.7e, a=%.7e, j=%.7e, d=%.7e\n", startSpeed, endSpeed, startAcceleration, jerk, distance);
 
 	// For debugging, first calculate the minimum distance, which is when either t0=0 or t6=0
@@ -289,9 +290,33 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 			}
 		}
 	}
+#endif
 
 	// The following quartic equation solves for t0, see Maxima worksheet
-	double rslt[4];
+	// The coefficients are a little simpler if we express them in terms of (endSpeed - startSpeed) instead of endSpeed
+	const double speedDiff = endSpeed - startSpeed;
+
+#if 1	// using speedDiff
+	const double coeff0 = 144 * dcube(jerk) * startSpeed * (startAcceleration * distance - 2 * speedDiff * endSpeed)
+						- 72 * dcube(jerk) * dcube(speedDiff)
+						+ 12 * dsquare(jerk) * dsquare(startAcceleration) * (6 * dsquare(startSpeed) - 3 * dsquare(speedDiff) + 4 * startAcceleration * distance)
+						- 72 * dsquare(dsquare(jerk)) * dsquare(distance)
+						+ 6 * jerk * dsquare(dsquare(startAcceleration)) * (startSpeed + 3 * endSpeed)
+						+ dsquare(dcube(startAcceleration));
+
+//	+144*dcube(jerk)*startAcceleration*startSpeed*distance
+//	-288*dcube(jerk)*speedDiff*dsquare(startSpeed)
+//	-288*dcube(jerk)*dsquare(speedDiff)*startSpeed
+//	-72*dcube(jerk)*dcube(speedDiff)
+//	+72*dsquare(jerk)*dsquare(startAcceleration)*dsquare(startSpeed)
+//	-36*dsquare(jerk)*dsquare(startAcceleration)*dsquare(speedDiff)
+//	+48*dsquare(jerk)*dcube(startAcceleration)*distance
+//	-72*dsquare(dsquare(jerk))*dsquare(distance)
+//	+18*jerk*dsquare(dsquare(startAcceleration))*speedDiff
+//	+24*jerk*dsquare(dsquare(startAcceleration))*startSpeed
+//	+dsquare(dcube(startAcceleration))
+
+#else	// not using speedDiff
 	const double coeff0 = 72 * dcube(jerk) * startSpeed * endSpeed * (startSpeed - endSpeed)
 						+ 72 * dcube(jerk) * (dcube(startSpeed) - dcube(endSpeed))
 						+ 144 * dcube(jerk) * startAcceleration * startSpeed * distance
@@ -301,20 +326,6 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 						+ 6 * jerk * dsquare(dsquare(startAcceleration)) * (startSpeed + 3 * endSpeed)
 						+ dsquare(dcube(startAcceleration));
 
-//	+72*dcube(jerk)*dsquare(startSpeed)*endSpeed
-//	-72*dcube(jerk)*startSpeed*dsquare(endSpeed)
-//	+72*dcube(jerk)*dcube(startSpeed)
-//	-72*dcube(jerk)*dcube(endSpeed)
-//	+144*dcube(jerk)*startAcceleration*startSpeed*distance
-//	+36*dsquare(jerk)*dsquare(startAcceleration)*dsquare(startSpeed)
-//	-36*dsquare(jerk)*dsquare(startAcceleration)*dsquare(endSpeed)
-//	+72*dsquare(jerk)*dsquare(startAcceleration)*startSpeed*endSpeed
-//	+48*dsquare(jerk)*dcube(startAcceleration)*distance
-//	-72*dsquare(dsquare(jerk))*dsquare(distance)
-//	+6*jerk*dsquare(dsquare(startAcceleration))*startSpeed
-//	+18*jerk*dsquare(dsquare(startAcceleration))*endSpeed
-//	+dsquare(dcube(startAcceleration))
-
 //	+72*dcube(jerk)*dcube(startSpeed)
 //	-72*dcube(jerk)*dcube(endSpeed)
 //	+72*dcube(jerk)*dsquare(startSpeed)*endSpeed
@@ -329,11 +340,30 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 //	+18*jerk*dsquare(dsquare(startAcceleration))*endSpeed
 //	+dsquare(dcube(startAcceleration))
 
-	const double coeff1 = -12 * jerk * (  12 * dsquare(jerk) * startAcceleration * (dsquare(endSpeed) - dsquare(startSpeed) - 2 * (startSpeed * endSpeed + startAcceleration * distance))
-										- 24 * dcube(jerk) * startSpeed * distance
-										- 4 * jerk * dcube(startAcceleration) * (startSpeed + 3 * endSpeed)
-										- startAcceleration * dsquare(dsquare(startAcceleration))
+#endif
+
+#if 1	// using speedDiff
+	const double coeff1 = -12 * jerk * (  12 * dsquare(jerk) * (startAcceleration * (dsquare(speedDiff) - 2 * dsquare(startSpeed)) - 2 * distance * (jerk * startSpeed + dsquare(startAcceleration)))
+										- 4 * jerk * dcube(startAcceleration) * (4 + startSpeed + 3 * speedDiff)
+										- startAcceleration*dsquare(dsquare(startAcceleration))
 									   );
+
+//	coeff1=-(12*jerk*(	-24*dsquare(jerk)*startAcceleration*dsquare(startSpeed)
+//						+12*dsquare(jerk)*startAcceleration*dsquare(speedDiff)
+//						-24*dsquare(jerk)*dsquare(startAcceleration)*distance
+//						-16*jerk*dcube(startAcceleration)*startSpeed
+//						-12*jerk*dcube(startAcceleration)*speedDiff
+//						-24*dcube(jerk)*startSpeed*distance
+//						-startAcceleration*dsquare(dsquare(startAcceleration))
+//					 )
+//			)
+
+#else	// not using speedDiff
+	const double coeff1 = 12 * jerk * (  24 * dcube(jerk) * startSpeed * distance
+									   - 12 * dsquare(jerk) * startAcceleration * (dsquare(endSpeed) - dsquare(startSpeed) - 2 * (startSpeed * endSpeed + startAcceleration * distance))
+									   + 4 * jerk * dcube(startAcceleration) * (startSpeed + 3 * endSpeed)
+									   + startAcceleration * dsquare(dsquare(startAcceleration))
+									  );
 
 //	-(12*jerk*
 //			(
@@ -348,6 +378,25 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 //			)
 //	 )
 
+#endif
+
+#if 1	// using speedDiff
+	const double coeff2 = -18 * dsquare(jerk) * (
+												 + 4 * dsquare(jerk) * (dsquare(speedDiff) - 6 * startAcceleration * distance)
+												 - 4 * jerk * dsquare(startAcceleration) * (startSpeed + 5 * endSpeed)
+												 - 3 * dsquare(dsquare(startAcceleration))
+												);
+
+//	coeff2=-(18*dsquare(jerk)*(
+//								-24*jerk*dsquare(startAcceleration)*startSpeed
+//								-20*jerk*dsquare(startAcceleration)*speedDiff
+//								-24*dsquare(jerk)*startAcceleration*distance
+//								+4*dsquare(jerk)*dsquare(speedDiff)
+//								-3*dsquare(dsquare(startAcceleration))
+//							  )
+//			)
+
+#else	// not using speedDiff
 	const double coeff2 = -(  18 * dsquare(jerk) * (  4 * dsquare(jerk) * (dsquare(startSpeed) + dsquare(endSpeed) - 2 * startSpeed * endSpeed)
 													- 24 * dsquare(jerk) * startAcceleration * distance
 													- 4 * jerk * dsquare(startAcceleration) * (startSpeed + 5 * endSpeed)
@@ -355,15 +404,39 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 												   )
 						   );
 
+#endif
+
+#if 1	// using speedDiff
+	const double coeff3 = 48 * dcube(jerk) * (  2 * dcube(startAcceleration)
+											  + 3 * jerk * startAcceleration * (endSpeed + speedDiff)
+											  + 3 * distance * dsquare(jerk)
+											 );
+//	coeff3=48*dcube(jerk)*(  3*jerk*startAcceleration*startSpeed
+//							+6*jerk*startAcceleration*speedDiff
+//							+2*dcube(startAcceleration)
+//							+3*distance*dsquare(jerk)
+//						  )
+
+#else	// not using speedDiff
 	const double coeff3 = 48 * dcube(jerk) * (  2 * dcube(startAcceleration)
 											  + 3 * jerk * startAcceleration * (2 * endSpeed - startSpeed)
 											  + 3 * distance * dsquare(jerk)
 											 );
 
+#endif
+
+#if 1	// using speedDiff
+	const double coeff4 = 36 * dsquare(dsquare(jerk)) * (  dsquare(startAcceleration)
+														 + 2 * jerk * speedDiff
+														);
+//	coeff4=36*dsquare(dsquare(jerk))*(dsquare(startAcceleration)+2*jerk*speedDiff)
+#else
 	const double coeff4 = 36 * dsquare(dsquare(jerk)) * (  dsquare(startAcceleration)
 														 + 2 * jerk * (endSpeed - startSpeed)
 														);
+#endif
 
+	double rslt[4];
 	const size_t numSolutions = SolveQuartic(coeff4, coeff3, coeff2, coeff1, coeff0, rslt);
 
 	debugPrintf("Coefficients %.7e %.7e %.7e %.7e %.7e, solutions", coeff4, coeff3, coeff2, coeff1, coeff0);

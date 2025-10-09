@@ -230,7 +230,7 @@ static MovementProfile debugProfile;
 	float fminJerk = firstUnpreparedMove->jerk;
 	float fminMaxAcc = firstUnpreparedMove->maxAcceleration;
 	unsigned int numMoves = 1;
-	while ((nextMove = lastMoveToPlan->next)->IsProvisional() && nextMove->beforePrepare.maxPrevEndSpeed != 0.0)
+	while ((nextMove = lastMoveToPlan->next)->IsProvisional() && nextMove->IsSCurveMove() && nextMove->beforePrepare.maxPrevEndSpeed != 0.0)
 	{
 		distanceToPlan += (double)nextMove->totalDistance;
 		if (nextMove->jerk < fminJerk) { fminJerk = nextMove->jerk; }

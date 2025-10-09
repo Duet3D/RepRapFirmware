@@ -1124,6 +1124,9 @@ void DDA::Prepare(DDARing& ring,
 	else
 #endif
 	{
+#if SUPPORT_S_CURVE
+		debugPrintf("2nd order move\n");
+#endif
 		params.SetFromDDA(*this);
 	}
 	params.useInputShaping = flags.xyMoving
