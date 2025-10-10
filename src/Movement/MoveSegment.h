@@ -137,6 +137,12 @@ public:
 #if SUPPORT_S_CURVE
 	// Get the rate of change of acceleration
 	motioncalc_t GetJ() const noexcept { return j; }
+
+	// Get the speed change
+	motioncalc_t GetSpeedChange() const noexcept { return (a + 0.5 * j * (motioncalc_t)duration) * (motioncalc_t)duration; }
+
+	// Get the acceleration change
+	motioncalc_t GetAccChange() const noexcept { return j * (motioncalc_t)duration; }
 #endif
 
 	// Get the length

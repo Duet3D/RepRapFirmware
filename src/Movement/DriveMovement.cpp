@@ -47,6 +47,13 @@ void DriveMovement::Init(size_t drv) noexcept
 #if SUPPORT_PHASE_STEPPING
 	stepMode = StepMode::stepDir;
 #endif
+#if SUPPORT_PHASE_STEPPING || SUPPORT_S_CURVE
+	u = (motioncalc_t)0.0;
+#endif
+#if SUPPORT_S_CURVE
+	peakDeltaV = peakDeltaA = (motioncalc_t)0.0;
+	finalSpeed = finalAcc = (motioncalc_t)0.0;
+#endif
 }
 
 void DriveMovement::DebugPrint() const noexcept
@@ -63,6 +70,37 @@ void DriveMovement::DebugPrint() const noexcept
 	{
 		debugPrintf("DM%c: not moving\n", c);
 	}
+}
+
+void DriveMovement::DiagnosticHeader(const StringRef& reply) noexcept
+{
+	reply.lcat(
+#if 0
+				"Drive req/act/dcf/state/segs?"
+#else
+				"Drive req/act/dcf"
+#endif
+# if SUPPORT_S_CURVE
+				" deltaV/deltaA"
+# endif
+				":");
+}
+
+// Report diagnostic information for this logical drive
+void DriveMovement::Diagnostics(const StringRef& reply) noexcept
+{
+# if 0	// DEBUG
+	reply.lcatf("%u: %.3f/%" PRIi32 "/%.3f/%u/%u", drive, (double)positionRequested, currentMotorPosition, (double)distanceCarriedForwards, (unsigned int)state, segments != nullptr);
+# else
+	reply.lcatf("%u: %.3f/%" PRIi32 "/%.3f", drive, (double)positionRequested, currentMotorPosition, (double)distanceCarriedForwards);
+# endif
+#if SUPPORT_S_CURVE
+	reply.catf(" %.1f/%.1f",
+				(double)InverseConvertSpeedToMmPerSec((float)peakDeltaV/reprap.GetMove().DriveStepsPerMm(drive)),
+				(double)InverseConvertAcceleration((float)peakDeltaA/reprap.GetMove().DriveStepsPerMm(drive))
+			  );
+	peakDeltaV = peakDeltaA = 0.0;
+#endif
 }
 
 // Set the position of a motor. Only call this when the motor is not moving.
@@ -103,6 +141,20 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 	return false;
 }
 
+#if SUPPORT_S_CURVE
+
+// Update the stored speed, final acceleration, speed change and acceleration change values
+inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpeed, motioncalc_t speedChange, motioncalc_t newAcc, motioncalc_t accChange) noexcept
+{
+	u = newSpeed;
+	peakDeltaV = max<float>(peakDeltaV, fabsf(newSpeed - finalSpeed));
+	finalSpeed = newSpeed + speedChange;
+	peakDeltaA = max<float>(peakDeltaA, fabsf(newAcc - finalAcc));
+	finalAcc = newAcc + accChange;
+}
+
+#endif
+
 // This is called when we need to examine the segment list and prepare the head segment (if there is one) for execution.
 // If there is no segment to execute, set our state to 'idle' and return nullptr.
 // If there is a segment to execute but it isn't due to start for a while, set our state to 'starting', set nextStepTime to when the move is due to start or shortly before,
@@ -120,6 +172,9 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 		{
 			segmentFlags.Init();
 			state = DMState::idle;								// if we have been round this loop already then we will have changed the state, so reset it to idle
+#if SUPPORT_S_CURVE
+			UpdateSpeedAndAccelerationChange((motioncalc_t)0.0, (motioncalc_t)0.0, (motioncalc_t)0.0, (motioncalc_t)0.0);
+#endif
 			return nullptr;
 		}
 
@@ -131,10 +186,17 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 			driversCurrentlyUsed = 0;							// don't generate a step on that interrupt
 			driverEndstopsTriggeredAtStart = 0;					// reset since we will be setting this in DDA::Prepare()
 			nextStepTime = seg->GetStartTime();					// this is when we want the interrupt
+#if SUPPORT_S_CURVE
+			UpdateSpeedAndAccelerationChange((motioncalc_t)0.0, (motioncalc_t)0.0, (motioncalc_t)0.0, (motioncalc_t)0.0);
+#endif
 			return seg;
 		}
 
 		seg->SetExecuting();
+
+#if SUPPORT_S_CURVE
+		UpdateSpeedAndAccelerationChange(seg->CalcU(), seg->GetSpeedChange(), seg->GetA(), seg->GetAccChange());
+#endif
 
 		// Calculate the movement parameters
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
@@ -142,7 +204,9 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		if (IsPhaseStepEnabled())
 		{
+# if !SUPPORT_S_CURVE							// we already calcuated and set u if we are supporting 3rd order motion control
 			u = seg->CalcU();
+# endif
 			state = DMState::phaseStepping;
 			return seg;
 		}

@@ -992,21 +992,16 @@ void Move::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 			minExtrusionPending = maxExtrusionPending = 0.0;
 #endif
 
-#if STEPS_DEBUG
-# if 0	// DEBUG
-			reply.lcat("Pos req/act/dcf/state/seg:");
-# else
-			reply.lcat("Pos req/act/dcf:");
-# endif
+			DriveMovement::DiagnosticHeader(reply);
 			for (size_t drive = 0; drive < reprap.GetGCodes().GetTotalAxes(); ++drive)
 			{
-# if 0	// DEBUG
-				reply.catf(" %.3f/%" PRIi32 "/%.3f/%u/%u", (double)dms[drive].positionRequested, dms[drive].currentMotorPosition, (double)dms[drive].distanceCarriedForwards, (unsigned int)dms[drive].state, dms[drive].segments != nullptr);
-# else
-				reply.catf(" %.3f/%" PRIi32 "/%.3f", (double)dms[drive].positionRequested, dms[drive].currentMotorPosition, (double)dms[drive].distanceCarriedForwards);
-# endif
+				dms[drive].Diagnostics(reply);
 			}
-#endif
+			for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
+			{
+				dms[drive].Diagnostics(reply);
+			}
+
 #if 0	// DEBUG
 			reply.lcat("ADM:");
 			for (const DriveMovement *dm = activeDMs; dm != nullptr; dm = dm->nextDM)

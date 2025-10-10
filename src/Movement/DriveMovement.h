@@ -81,6 +81,9 @@ public:
 
 	bool HasError() const noexcept { return state != DMState::idle && state < DMState::firstMotionState; }
 
+	static void DiagnosticHeader(const StringRef& reply) noexcept;
+	void Diagnostics(const StringRef& reply) noexcept;
+
 	static int32_t GetAndClearMaxStepsLate() noexcept;
 	static int32_t GetAndClearMinStepInterval() noexcept;
 
@@ -97,6 +100,9 @@ private:
 
 #if SUPPORT_PHASE_STEPPING
 	motioncalc_t GetPhaseStepsTakenThisSegment() const noexcept;
+#endif
+#if SUPPORT_S_CURVE
+	void UpdateSpeedAndAccelerationChange(motioncalc_t newSpeed, motioncalc_t speedChange, motioncalc_t newAcc, motioncalc_t accChange) noexcept;
 #endif
 
 #if CHECK_SEGMENTS
@@ -127,7 +133,7 @@ private:
 	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
 	motioncalc_t q, t0, p;								// the movement parameters of the current segment. Only set when not phase stepping
 #if SUPPORT_PHASE_STEPPING
-	motioncalc_t u;										// the initial speed of this segment. Only set when in phase stepping
+	motioncalc_t u;										// the initial speed of the current segment. Only set when phase stepping, or when 3rd order motion is supported.
 	motioncalc_t phaseStepsTakenSinceMoveStart;			// how many steps we took in previous segments of the current isolated move
 #endif
 	MovementFlags segmentFlags;							// whether this segment checks endstops etc.
@@ -151,6 +157,11 @@ private:
 
 	std::atomic<int32_t> movementAccumulator;			// the accumulated movement in microsteps since GetAccumulatedMovement was last called. Only used for extruders.
 	uint32_t extruderPrintingSince;						// the millis ticks when this extruder started doing printing moves
+
+#if SUPPORT_S_CURVE
+	motioncalc_t finalSpeed, finalAcc;					// the final speed and acceleration of the current segment
+	motioncalc_t peakDeltaV, peakDeltaA;				// For debugging: the maximum instantaneous speed change and acceleration change recorded
+#endif
 
 	bool extruderPrinting;								// true if this is an extruder and the most recent segment started was a printing move
 
