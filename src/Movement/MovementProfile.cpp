@@ -261,259 +261,339 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 	}
 
 	// If we get here then we can't reach top speed without exceeding the available distance, so we must use one of plans 1,2,3,4.
-	// Plans 2, 3 and 4 are simpler to calculate than 1 I suspect?
-	//TODO
+	// Plan 2 has a quadratic solution, plan 1 has a quartic solution.
 
-	// Try plan 1
-#if 0
-	debugPrintf("Invoking quartic solver, u=%.7e, v=%.7e, a=%.7e, j=%.7e, d=%.7e\n", startSpeed, endSpeed, startAcceleration, jerk, distance);
-
-	// For debugging, first calculate the minimum distance, which is when either t0=0 or t6=0
+	// Try plan 2
 	{
-		const double square = jerk * (startSpeed - endSpeed) + OneHalfDouble * dsquare(startAcceleration);
-		if (square >= (double)0.0)
+		const double coeff0 = 12 * jerk * (  startSpeed * (dsquare(startAcceleration) - 2 * dsquare(peakAcceleration) + peakDeceleration * (4 * peakAcceleration - 2 * startAcceleration - peakDeceleration))
+										   - dsquare(peakDeceleration) * endSpeed
+										   + jerk * (dsquare(endSpeed) - dsquare(startSpeed) - 2 * peakDeceleration * distance)
+										  )
+							+ dsquare(peakDeceleration) * (6 * dsquare(startAcceleration) - 12 * dsquare(peakAcceleration))
+							+ peakDeceleration * (24 * peakAcceleration * (dsquare(peakAcceleration) - dsquare(startAcceleration)) + 8 *dcube(startAcceleration))
+							+ 12 * dsquare(peakAcceleration) * (dsquare(startAcceleration) - dsquare(peakAcceleration))
+							- 3 * dsquare(dsquare(startAcceleration));
+//		+12*j^2*u7^2
+//		-12*j^2*u0^2
+//		-24*j^2*dmax*s
+
+//		+12*j*u0*a0^2
+//		-24*j*u0*amax^2
+//		-12*j*u0*dmax^2
+//		+48*j*u0*dmax*amax
+//		-24*j*u0*dmax*a0
+//		-12*j*dmax^2*u7
+
+//		+6*dmax^2*a0^2
+//		-12*dmax^2*amax^2
+//		+24*dmax*amax^3
+//		-24*dmax*amax*a0^2
+//		+8*dmax*a0^3
+
+//		-12*amax^4
+//		+12*a0^2*amax^2
+//		-3*a0^4
+
+		const double coeff1 = 12 * jerk * (peakDeceleration - peakAcceleration) * (2 * jerk * startSpeed - peakAcceleration * peakDeceleration + 2 * dsquare(peakAcceleration) - dsquare(startAcceleration));
+//		12*(dmax-amax)*j*(2*j*u0-amax*dmax+2*amax^2-a0^2)
+
+		const double coeff2 = 12 * dsquare(jerk) * peakAcceleration * (peakDeceleration - peakAcceleration);
+//		12*amax*(dmax-amax)*j^2
+
+		double rslt[2];
+		const size_t numSolutions = SolveQuadratic(coeff2, coeff1, coeff0, rslt);
+
+		double t1, t5;
+		bool foundSolution = false;
+		double bestTime;
+		for (size_t i = 0; i < numSolutions; ++i)
 		{
-			// t0 = 0 is viable
-			const double tempT6 = fastSqrtd(square)/jerk;
-			const double minDistance = 2 * tempT6 * startSpeed - jerk * dcube(tempT6) + startAcceleration * (startSpeed + startAcceleration * tempT6)/jerk + dcube(startAcceleration)/(3 * dsquare(jerk));
-			debugPrintf("Min distance %.3f when t0=0 t6=%.1f\n", minDistance, tempT6);
-		}
-		const double square2 = jerk * (endSpeed - startSpeed) + OneHalfDouble * dsquare(startAcceleration);
-		if (square2 >= (double)0.0)
-		{
-			// t6 = 0 may be viable
-			const double tempT0 = (fastSqrtd(square2) - startAcceleration)/jerk;
-			if (tempT0 >= (double)0.0)
+			const double tempT1 = rslt[i];
+			if (tempT1 >= (double)0.0)
 			{
-				const double minDistance = 2 * tempT0 * startSpeed + jerk * dcube(tempT0) + startAcceleration * (startSpeed + 2 * startAcceleration * tempT0)/jerk + 3 * startAcceleration * dsquare(tempT0) + dcube(startAcceleration)/(3 * dsquare(jerk));
-				debugPrintf("Min distance %.3f when t0=%.1f, t6=0\n", minDistance, tempT0);
-			}
-		}
-	}
-#endif
-
-	// The following quartic equation solves for t0, see Maxima worksheet
-	// The coefficients are a little simpler if we express them in terms of (endSpeed - startSpeed) instead of endSpeed
-	const double speedDiff = endSpeed - startSpeed;
-
-#if 1	// using speedDiff
-	const double coeff0 = 144 * dcube(jerk) * startSpeed * (startAcceleration * distance - 2 * speedDiff * endSpeed)
-						- 72 * dcube(jerk) * dcube(speedDiff)
-						+ 12 * dsquare(jerk) * dsquare(startAcceleration) * (6 * dsquare(startSpeed) - 3 * dsquare(speedDiff) + 4 * startAcceleration * distance)
-						- 72 * dsquare(dsquare(jerk)) * dsquare(distance)
-						+ 6 * jerk * dsquare(dsquare(startAcceleration)) * (startSpeed + 3 * endSpeed)
-						+ dsquare(dcube(startAcceleration));
-
-//	+144*dcube(jerk)*startAcceleration*startSpeed*distance
-//	-288*dcube(jerk)*speedDiff*dsquare(startSpeed)
-//	-288*dcube(jerk)*dsquare(speedDiff)*startSpeed
-//	-72*dcube(jerk)*dcube(speedDiff)
-//	+72*dsquare(jerk)*dsquare(startAcceleration)*dsquare(startSpeed)
-//	-36*dsquare(jerk)*dsquare(startAcceleration)*dsquare(speedDiff)
-//	+48*dsquare(jerk)*dcube(startAcceleration)*distance
-//	-72*dsquare(dsquare(jerk))*dsquare(distance)
-//	+18*jerk*dsquare(dsquare(startAcceleration))*speedDiff
-//	+24*jerk*dsquare(dsquare(startAcceleration))*startSpeed
-//	+dsquare(dcube(startAcceleration))
-
-#else	// not using speedDiff
-	const double coeff0 = 72 * dcube(jerk) * startSpeed * endSpeed * (startSpeed - endSpeed)
-						+ 72 * dcube(jerk) * (dcube(startSpeed) - dcube(endSpeed))
-						+ 144 * dcube(jerk) * startAcceleration * startSpeed * distance
-						+ 36 * dsquare(jerk) * dsquare(startAcceleration) * (dsquare(startSpeed) - dsquare(endSpeed) + 2 * startSpeed * endSpeed)
-						+ 48 * dsquare(jerk) * dcube(startAcceleration) * distance
-						- 72 * dsquare(dsquare(jerk)) * dsquare(distance)
-						+ 6 * jerk * dsquare(dsquare(startAcceleration)) * (startSpeed + 3 * endSpeed)
-						+ dsquare(dcube(startAcceleration));
-
-//	+72*dcube(jerk)*dcube(startSpeed)
-//	-72*dcube(jerk)*dcube(endSpeed)
-//	+72*dcube(jerk)*dsquare(startSpeed)*endSpeed
-//	-72*dcube(jerk)*startSpeed*dsquare(endSpeed)
-//	+144*dcube(jerk)*startAcceleration*startSpeed*distance
-//	+36*dsquare(jerk)*dsquare(startAcceleration)*dsquare(startSpeed)
-//	-36*dsquare(jerk)*dsquare(startAcceleration)*dsquare(endSpeed)
-//	+72*dsquare(jerk)*dsquare(startAcceleration)*startSpeed*endSpeed
-//	+48*dsquare(jerk)*dcube(startAcceleration)*distance
-//	-72*dsquare(dsquare(jerk))*dsquare(distance)
-//	+6*jerk*dsquare(dsquare(startAcceleration))*startSpeed
-//	+18*jerk*dsquare(dsquare(startAcceleration))*endSpeed
-//	+dsquare(dcube(startAcceleration))
-
-#endif
-
-#if 1	// using speedDiff
-	const double coeff1 = -12 * jerk * (  12 * dsquare(jerk) * (startAcceleration * (dsquare(speedDiff) - 2 * dsquare(startSpeed)) - 2 * distance * (jerk * startSpeed + dsquare(startAcceleration)))
-										- 4 * jerk * dcube(startAcceleration) * (4 + startSpeed + 3 * speedDiff)
-										- startAcceleration*dsquare(dsquare(startAcceleration))
-									   );
-
-//	coeff1=-(12*jerk*(	-24*dsquare(jerk)*startAcceleration*dsquare(startSpeed)
-//						+12*dsquare(jerk)*startAcceleration*dsquare(speedDiff)
-//						-24*dsquare(jerk)*dsquare(startAcceleration)*distance
-//						-16*jerk*dcube(startAcceleration)*startSpeed
-//						-12*jerk*dcube(startAcceleration)*speedDiff
-//						-24*dcube(jerk)*startSpeed*distance
-//						-startAcceleration*dsquare(dsquare(startAcceleration))
-//					 )
-//			)
-
-#else	// not using speedDiff
-	const double coeff1 = 12 * jerk * (  24 * dcube(jerk) * startSpeed * distance
-									   - 12 * dsquare(jerk) * startAcceleration * (dsquare(endSpeed) - dsquare(startSpeed) - 2 * (startSpeed * endSpeed + startAcceleration * distance))
-									   + 4 * jerk * dcube(startAcceleration) * (startSpeed + 3 * endSpeed)
-									   + startAcceleration * dsquare(dsquare(startAcceleration))
-									  );
-
-//	-(12*jerk*
-//			(
-//				+12*dsquare(jerk)*startAcceleration*dsquare(endSpeed)
-//				-12*dsquare(jerk)*startAcceleration*dsquare(startSpeed)
-//				-24*dsquare(jerk)*startAcceleration*startSpeed*endSpeed
-//				-24*dsquare(jerk)*dsquare(startAcceleration)*distance
-//				-24*dcube(jerk)*startSpeed*distance
-//				-4*jerk*dcube(startAcceleration)*startSpeed
-//				-12*jerk*dcube(startAcceleration)*endSpeed
-//				-startAcceleration*dsquare(dsquare(startAcceleration))
-//			)
-//	 )
-
-#endif
-
-#if 1	// using speedDiff
-	const double coeff2 = -18 * dsquare(jerk) * (
-												 + 4 * dsquare(jerk) * (dsquare(speedDiff) - 6 * startAcceleration * distance)
-												 - 4 * jerk * dsquare(startAcceleration) * (startSpeed + 5 * endSpeed)
-												 - 3 * dsquare(dsquare(startAcceleration))
-												);
-
-//	coeff2=-(18*dsquare(jerk)*(
-//								-24*jerk*dsquare(startAcceleration)*startSpeed
-//								-20*jerk*dsquare(startAcceleration)*speedDiff
-//								-24*dsquare(jerk)*startAcceleration*distance
-//								+4*dsquare(jerk)*dsquare(speedDiff)
-//								-3*dsquare(dsquare(startAcceleration))
-//							  )
-//			)
-
-#else	// not using speedDiff
-	const double coeff2 = -(  18 * dsquare(jerk) * (  4 * dsquare(jerk) * (dsquare(startSpeed) + dsquare(endSpeed) - 2 * startSpeed * endSpeed)
-													- 24 * dsquare(jerk) * startAcceleration * distance
-													- 4 * jerk * dsquare(startAcceleration) * (startSpeed + 5 * endSpeed)
-													- 3 * dsquare(dsquare(startAcceleration))
-												   )
-						   );
-
-#endif
-
-#if 1	// using speedDiff
-	const double coeff3 = 48 * dcube(jerk) * (  2 * dcube(startAcceleration)
-											  + 3 * jerk * startAcceleration * (endSpeed + speedDiff)
-											  + 3 * distance * dsquare(jerk)
-											 );
-//	coeff3=48*dcube(jerk)*(  3*jerk*startAcceleration*startSpeed
-//							+6*jerk*startAcceleration*speedDiff
-//							+2*dcube(startAcceleration)
-//							+3*distance*dsquare(jerk)
-//						  )
-
-#else	// not using speedDiff
-	const double coeff3 = 48 * dcube(jerk) * (  2 * dcube(startAcceleration)
-											  + 3 * jerk * startAcceleration * (2 * endSpeed - startSpeed)
-											  + 3 * distance * dsquare(jerk)
-											 );
-
-#endif
-
-#if 1	// using speedDiff
-	const double coeff4 = 36 * dsquare(dsquare(jerk)) * (  dsquare(startAcceleration)
-														 + 2 * jerk * speedDiff
-														);
-//	coeff4=36*dsquare(dsquare(jerk))*(dsquare(startAcceleration)+2*jerk*speedDiff)
-#else
-	const double coeff4 = 36 * dsquare(dsquare(jerk)) * (  dsquare(startAcceleration)
-														 + 2 * jerk * (endSpeed - startSpeed)
-														);
-#endif
-
-	double rslt[4];
-	const size_t numSolutions = SolveQuartic(coeff4, coeff3, coeff2, coeff1, coeff0, rslt);
-
-	debugPrintf("Coefficients %.7e %.7e %.7e %.7e %.7e, solutions", coeff4, coeff3, coeff2, coeff1, coeff0);
-	for (size_t i = 0; i < numSolutions; ++i) { debugPrintf(" %.7e", rslt[i]); }
-	debugPrintf("\n");
-
-	// We want a solution in which t0, t2 and t6 are all non-negative. If there is more than one, we want the one with the lowest sum.
-	double t0, t2, t6;
-	bool foundSolution = false;
-	double bestTime;
-	for (size_t i = 0; i < numSolutions; ++i)
-	{
-		const double tempT0 = rslt[i];
-		if (tempT0 >= (double)0.0)
-		{
-#if 0
-			// Maxima gives t6 = sqrt((2 * jerk * (startSpeed - endSpeed + 2 * startAcceleration * tempT0) + startAcceleration^2)/(2 * jerk^2) + tempT0^2)
-			const double square = (2 * jerk * (startSpeed - endSpeed + 2 * startAcceleration * tempT0) + dsquare(startAcceleration))/(2 * dsquare(jerk)) + dsquare(tempT0);
-			if (square >= (double)0.0)
-			{
-				const double tempT6 = fastSqrtd(square);
-#else
-			// Unfortunately that doesn't tell us the sign of t6 and some solutions give a negative value.
-			// So instead we have to use this:
-			// t6=-((6*jerk^3*t0^3+18*jerk^2*startAcceleration*t0^2+startSpeed*(12*jerk^2*t0+6*jerk*startAcceleration)+12*jerk*startAcceleration^2*t0+2*startAcceleration^3-6*distance*jerk^2)
-			//		/(6*jerk^3*t0^2+12*jerk^2*startAcceleration*t0+6*jerk^2*startSpeed+3*jerk*startAcceleration^2+6*endSpeed*jerk^2))
-			const double tempT6 = -((  6 * dcube(jerk) * dcube(tempT0) + 18 * (dsquare(jerk) * startAcceleration) * dsquare(tempT0) + startSpeed * (12 * dsquare(jerk) * tempT0 + 6 * jerk * startAcceleration)
-									 + 12 * jerk * dsquare(startAcceleration) * tempT0 + 2 * dcube(startAcceleration) - 6 * dsquare(jerk) * distance
-								    )
-								    / (6 * dcube(jerk) * dsquare(tempT0) + 12 * (dsquare(jerk) * startAcceleration) * tempT0 + 6 * dsquare(jerk) * (startSpeed + endSpeed) + 3 * jerk * dsquare(startAcceleration))
-								   );
-			if (tempT6 >= (double)0.0)
-			{
-#endif
-				const double tempT2 = tempT6 + tempT0 + startAcceleration/jerk;
-				const double totalTime = tempT0 + tempT2 + tempT6;
-				if (!foundSolution || totalTime < bestTime)
+				// Check that t5 is also non-negative
+				const double tempT5 = ((endSpeed - startSpeed - peakAcceleration * tempT1) * jerk + dsquare(peakDeceleration) - dsquare(peakAcceleration) + OneHalfDouble * dsquare(startAcceleration))/(peakDeceleration * jerk);
+				if (tempT5 >= (double)0.0)
 				{
-					bestTime = totalTime;
-					t0 = tempT0;
-					t2 = tempT2;
-					t6 = tempT6;
-					foundSolution = true;
+					const double tempT1PlusT5 = tempT1 + tempT5;
+					if (!foundSolution || tempT1PlusT5 < bestTime)
+					{
+						t1 = tempT1;
+						t5 = tempT5;
+						bestTime = tempT1PlusT5;
+						foundSolution = true;
+					}
 				}
 			}
 		}
+		if (foundSolution)
+		{
+			const double t0 = (peakAcceleration - startAcceleration)/jerk;
+			const double t2 = (peakAcceleration - peakDeceleration)/jerk;
+			const double t6 = -peakDeceleration/jerk;
+
+			const double dist0 = (startSpeed + (OneHalfDouble * startAcceleration + OneSixthDouble * jerk * t0) * t0) * t0;
+			const double u1 = startSpeed + (startAcceleration + OneHalfDouble * jerk * t0) * t0;
+
+			const double dist1 = (u1 + OneHalfDouble * peakAcceleration * t1) * t1;
+			const double u2 = u1 + peakAcceleration * t1;
+
+			const double dist2 = (u2 + (OneHalfDouble * peakAcceleration - OneSixthDouble * jerk * t2) * t2) * t2;
+
+			const double v5 = endSpeed - OneHalfDouble * peakDeceleration * t6;
+			const double dist5 = (v5 - OneHalfDouble * peakDeceleration * t5) * t5;
+			const double dist6 = (endSpeed + OneSixthDouble * jerk * dsquare(t6)) * t6;
+
+			debugPrintf("Quadratic solution: t0,t1,t2,t5,t6 = %.1f %.1f %.1f %.1f %.1f, distances %.3f %.3f %.3f %.3f %.3f total %.3f, orig dist %.3f\n",
+							t0, t1, t2, t5, t6, dist0, dist1, dist2, dist5, dist6, dist0 + dist1 + dist2 + dist5 + dist6, distance);
+
+			distances[0] = dist0;
+			distances[1] = dist1;
+			distances[2] = dist2;
+			distances[3] = distances[4] = 0.0;
+			distances[5] = dist5;
+			distances[6] = dist6;
+			return;
+		}
 	}
 
-	if (foundSolution)
+	// Try plan 1
 	{
-		const double dist0 = (startSpeed + (OneHalfDouble * startAcceleration + OneSixthDouble * jerk * t0) * t0) * t0;
-		const double u2 = startSpeed + (startAcceleration + OneHalfDouble * jerk * t0) * t0;
-		const double a2 = startAcceleration + jerk * t0;
-		const double dist2 = (u2 + (OneHalfDouble * a2 - OneSixthDouble * jerk * t2) * t2) * t2;
-		const double dist6 = (endSpeed + OneSixthDouble * jerk * dsquare(t6)) * t6;
-		const double a6 = -OneHalfDouble * jerk * t6;
+#if 0
+		debugPrintf("Invoking quartic solver, u=%.7e, v=%.7e, a=%.7e, j=%.7e, d=%.7e\n", startSpeed, endSpeed, startAcceleration, jerk, distance);
 
-		debugPrintf("Quartic solution: t0,t2,t6 = %.1f %.1f %.1f, distances %.3f %.3f %.3f total %.3g, orig dist %.3g\n", t0, t2, t6, dist0, dist2, dist6, dist0 + dist2 + dist6, distance);
-
-		// Check that max acceleration isn't exceeded
-		if (a2 > peakAcceleration || a6 < peakDeceleration)
+		// For debugging, first calculate the minimum distance, which is when either t0=0 or t6=0
 		{
-			//TODO use another plan
-			debugPrintf("Acceleration limits exceeded: %.4e %.4e vs. %.4e %.4e\n", a2, a6, peakAcceleration, peakDeceleration);
+			const double square = jerk * (startSpeed - endSpeed) + OneHalfDouble * dsquare(startAcceleration);
+			if (square >= (double)0.0)
+			{
+				// t0 = 0 is viable
+				const double tempT6 = fastSqrtd(square)/jerk;
+				const double minDistance = 2 * tempT6 * startSpeed - jerk * dcube(tempT6) + startAcceleration * (startSpeed + startAcceleration * tempT6)/jerk + dcube(startAcceleration)/(3 * dsquare(jerk));
+				debugPrintf("Min distance %.3f when t0=0 t6=%.1f\n", minDistance, tempT6);
+			}
+			const double square2 = jerk * (endSpeed - startSpeed) + OneHalfDouble * dsquare(startAcceleration);
+			if (square2 >= (double)0.0)
+			{
+				// t6 = 0 may be viable
+				const double tempT0 = (fastSqrtd(square2) - startAcceleration)/jerk;
+				if (tempT0 >= (double)0.0)
+				{
+					const double minDistance = 2 * tempT0 * startSpeed + jerk * dcube(tempT0) + startAcceleration * (startSpeed + 2 * startAcceleration * tempT0)/jerk + 3 * startAcceleration * dsquare(tempT0) + dcube(startAcceleration)/(3 * dsquare(jerk));
+					debugPrintf("Min distance %.3f when t0=%.1f, t6=0\n", minDistance, tempT0);
+				}
+			}
+		}
+#endif
+		// The following quartic equation solves for t0, see Maxima worksheet
+		// The coefficients are a little simpler if we express them in terms of (endSpeed - startSpeed) in placesS instead of endSpeed
+		const double speedDiff = endSpeed - startSpeed;
+
+#if 1	// using speedDiff
+		const double coeff0 = 144 * dcube(jerk) * startSpeed * (startAcceleration * distance - 2 * speedDiff * endSpeed)
+							- 72 * dcube(jerk) * dcube(speedDiff)
+							+ 12 * dsquare(jerk) * dsquare(startAcceleration) * (6 * dsquare(startSpeed) - 3 * dsquare(speedDiff) + 4 * startAcceleration * distance)
+							- 72 * dsquare(dsquare(jerk)) * dsquare(distance)
+							+ 6 * jerk * dsquare(dsquare(startAcceleration)) * (startSpeed + 3 * endSpeed)
+							+ dsquare(dcube(startAcceleration));
+//		+144*dcube(jerk)*startAcceleration*startSpeed*distance
+//		-288*dcube(jerk)*speedDiff*dsquare(startSpeed)
+//		-288*dcube(jerk)*dsquare(speedDiff)*startSpeed
+//		-72*dcube(jerk)*dcube(speedDiff)
+//		+72*dsquare(jerk)*dsquare(startAcceleration)*dsquare(startSpeed)
+//		-36*dsquare(jerk)*dsquare(startAcceleration)*dsquare(speedDiff)
+//		+48*dsquare(jerk)*dcube(startAcceleration)*distance
+//		-72*dsquare(dsquare(jerk))*dsquare(distance)
+//		+18*jerk*dsquare(dsquare(startAcceleration))*speedDiff
+//		+24*jerk*dsquare(dsquare(startAcceleration))*startSpeed
+//		+dsquare(dcube(startAcceleration))
+#else	// not using speedDiff
+		const double coeff0 = 72 * dcube(jerk) * startSpeed * endSpeed * (startSpeed - endSpeed)
+							+ 72 * dcube(jerk) * (dcube(startSpeed) - dcube(endSpeed))
+							+ 144 * dcube(jerk) * startAcceleration * startSpeed * distance
+							+ 36 * dsquare(jerk) * dsquare(startAcceleration) * (dsquare(startSpeed) - dsquare(endSpeed) + 2 * startSpeed * endSpeed)
+							+ 48 * dsquare(jerk) * dcube(startAcceleration) * distance
+							- 72 * dsquare(dsquare(jerk)) * dsquare(distance)
+							+ 6 * jerk * dsquare(dsquare(startAcceleration)) * (startSpeed + 3 * endSpeed)
+							+ dsquare(dcube(startAcceleration));
+//		+72*dcube(jerk)*dcube(startSpeed)
+//		-72*dcube(jerk)*dcube(endSpeed)
+//		+72*dcube(jerk)*dsquare(startSpeed)*endSpeed
+//		-72*dcube(jerk)*startSpeed*dsquare(endSpeed)
+//		+144*dcube(jerk)*startAcceleration*startSpeed*distance
+//		+36*dsquare(jerk)*dsquare(startAcceleration)*dsquare(startSpeed)
+//		-36*dsquare(jerk)*dsquare(startAcceleration)*dsquare(endSpeed)
+//		+72*dsquare(jerk)*dsquare(startAcceleration)*startSpeed*endSpeed
+//		+48*dsquare(jerk)*dcube(startAcceleration)*distance
+//		-72*dsquare(dsquare(jerk))*dsquare(distance)
+//		+6*jerk*dsquare(dsquare(startAcceleration))*startSpeed
+//		+18*jerk*dsquare(dsquare(startAcceleration))*endSpeed
+//		+dsquare(dcube(startAcceleration))
+#endif
+
+#if 1	// using speedDiff
+		const double coeff1 = -12 * jerk * (  12 * dsquare(jerk) * (startAcceleration * (dsquare(speedDiff) - 2 * dsquare(startSpeed)) - 2 * distance * (jerk * startSpeed + dsquare(startAcceleration)))
+											- 4 * jerk * dcube(startAcceleration) * (4 + startSpeed + 3 * speedDiff)
+											- startAcceleration*dsquare(dsquare(startAcceleration))
+										   );
+//		coeff1=-(12*jerk*(	-24*dsquare(jerk)*startAcceleration*dsquare(startSpeed)
+//							+12*dsquare(jerk)*startAcceleration*dsquare(speedDiff)
+//							-24*dsquare(jerk)*dsquare(startAcceleration)*distance
+//							-16*jerk*dcube(startAcceleration)*startSpeed
+//							-12*jerk*dcube(startAcceleration)*speedDiff
+//							-24*dcube(jerk)*startSpeed*distance
+//							-startAcceleration*dsquare(dsquare(startAcceleration))
+//						 )
+//				)
+#else	// not using speedDiff
+		const double coeff1 = 12 * jerk * (  24 * dcube(jerk) * startSpeed * distance
+										   - 12 * dsquare(jerk) * startAcceleration * (dsquare(endSpeed) - dsquare(startSpeed) - 2 * (startSpeed * endSpeed + startAcceleration * distance))
+										   + 4 * jerk * dcube(startAcceleration) * (startSpeed + 3 * endSpeed)
+										   + startAcceleration * dsquare(dsquare(startAcceleration))
+										  );
+//		-(12*jerk*
+//				(
+//					+12*dsquare(jerk)*startAcceleration*dsquare(endSpeed)
+//					-12*dsquare(jerk)*startAcceleration*dsquare(startSpeed)
+//					-24*dsquare(jerk)*startAcceleration*startSpeed*endSpeed
+//					-24*dsquare(jerk)*dsquare(startAcceleration)*distance
+//					-24*dcube(jerk)*startSpeed*distance
+//					-4*jerk*dcube(startAcceleration)*startSpeed
+//					-12*jerk*dcube(startAcceleration)*endSpeed
+//					-startAcceleration*dsquare(dsquare(startAcceleration))
+//				)
+//		 )
+#endif
+
+#if 1	// using speedDiff
+		const double coeff2 = -18 * dsquare(jerk) * (
+													 + 4 * dsquare(jerk) * (dsquare(speedDiff) - 6 * startAcceleration * distance)
+													 - 4 * jerk * dsquare(startAcceleration) * (startSpeed + 5 * endSpeed)
+													 - 3 * dsquare(dsquare(startAcceleration))
+													);
+//		coeff2=-(18*dsquare(jerk)*(
+//									-24*jerk*dsquare(startAcceleration)*startSpeed
+//									-20*jerk*dsquare(startAcceleration)*speedDiff
+//									-24*dsquare(jerk)*startAcceleration*distance
+//									+4*dsquare(jerk)*dsquare(speedDiff)
+//									-3*dsquare(dsquare(startAcceleration))
+//								  )
+//				)
+#else	// not using speedDiff
+		const double coeff2 = -(  18 * dsquare(jerk) * (  4 * dsquare(jerk) * (dsquare(startSpeed) + dsquare(endSpeed) - 2 * startSpeed * endSpeed)
+														- 24 * dsquare(jerk) * startAcceleration * distance
+														- 4 * jerk * dsquare(startAcceleration) * (startSpeed + 5 * endSpeed)
+														- 3 * dsquare(dsquare(startAcceleration))
+													   )
+							   );
+#endif
+
+#if 1	// using speedDiff
+		const double coeff3 = 48 * dcube(jerk) * (  2 * dcube(startAcceleration)
+												  + 3 * jerk * startAcceleration * (endSpeed + speedDiff)
+												  + 3 * distance * dsquare(jerk)
+												 );
+//		coeff3=48*dcube(jerk)*(  3*jerk*startAcceleration*startSpeed
+//								+6*jerk*startAcceleration*speedDiff
+//								+2*dcube(startAcceleration)
+//								+3*distance*dsquare(jerk)
+//							  )
+#else	// not using speedDiff
+		const double coeff3 = 48 * dcube(jerk) * (  2 * dcube(startAcceleration)
+												  + 3 * jerk * startAcceleration * (2 * endSpeed - startSpeed)
+												  + 3 * distance * dsquare(jerk)
+												 );
+#endif
+
+#if 1	// using speedDiff
+		const double coeff4 = 36 * dsquare(dsquare(jerk)) * (  dsquare(startAcceleration)
+															 + 2 * jerk * speedDiff
+															);
+//		coeff4=36*dsquare(dsquare(jerk))*(dsquare(startAcceleration)+2*jerk*speedDiff)
+#else
+		const double coeff4 = 36 * dsquare(dsquare(jerk)) * (  dsquare(startAcceleration)
+															 + 2 * jerk * (endSpeed - startSpeed)
+															);
+#endif
+
+		double rslt[4];
+		const size_t numSolutions = SolveQuartic(coeff4, coeff3, coeff2, coeff1, coeff0, rslt);
+
+		debugPrintf("Coefficients %.7e %.7e %.7e %.7e %.7e, solutions", coeff4, coeff3, coeff2, coeff1, coeff0);
+		for (size_t i = 0; i < numSolutions; ++i) { debugPrintf(" %.7e", rslt[i]); }
+		debugPrintf("\n");
+
+		// We want a solution in which t0, t2 and t6 are all non-negative. If there is more than one, we want the one with the lowest sum.
+		double t0, t2, t6;
+		bool foundSolution = false;
+		double bestTime;
+		for (size_t i = 0; i < numSolutions; ++i)
+		{
+			const double tempT0 = rslt[i];
+			if (tempT0 >= (double)0.0)
+			{
+#if 0
+				// Maxima gives t6 = sqrt((2 * jerk * (startSpeed - endSpeed + 2 * startAcceleration * tempT0) + startAcceleration^2)/(2 * jerk^2) + tempT0^2)
+				const double square = (2 * jerk * (startSpeed - endSpeed + 2 * startAcceleration * tempT0) + dsquare(startAcceleration))/(2 * dsquare(jerk)) + dsquare(tempT0);
+				if (square >= (double)0.0)
+				{
+					const double tempT6 = fastSqrtd(square);
+#else
+				// Unfortunately that doesn't tell us the sign of t6 and some solutions give a negative value.
+				// So instead we have to use this:
+				// t6=-((6*jerk^3*t0^3+18*jerk^2*startAcceleration*t0^2+startSpeed*(12*jerk^2*t0+6*jerk*startAcceleration)+12*jerk*startAcceleration^2*t0+2*startAcceleration^3-6*distance*jerk^2)
+				//		/(6*jerk^3*t0^2+12*jerk^2*startAcceleration*t0+6*jerk^2*startSpeed+3*jerk*startAcceleration^2+6*endSpeed*jerk^2))
+				const double tempT6 = -((  6 * dcube(jerk) * dcube(tempT0) + 18 * (dsquare(jerk) * startAcceleration) * dsquare(tempT0) + startSpeed * (12 * dsquare(jerk) * tempT0 + 6 * jerk * startAcceleration)
+										 + 12 * jerk * dsquare(startAcceleration) * tempT0 + 2 * dcube(startAcceleration) - 6 * dsquare(jerk) * distance
+										)
+										/ (6 * dcube(jerk) * dsquare(tempT0) + 12 * (dsquare(jerk) * startAcceleration) * tempT0 + 6 * dsquare(jerk) * (startSpeed + endSpeed) + 3 * jerk * dsquare(startAcceleration))
+									   );
+				if (tempT6 >= (double)0.0)
+				{
+#endif
+					const double tempT2 = tempT6 + tempT0 + startAcceleration/jerk;
+					const double totalTime = tempT0 + tempT2 + tempT6;
+					if (!foundSolution || totalTime < bestTime)
+					{
+						bestTime = totalTime;
+						t0 = tempT0;
+						t2 = tempT2;
+						t6 = tempT6;
+						foundSolution = true;
+					}
+				}
+			}
 		}
 
-		distances[0] = dist0;
-		distances[1] = distances[3] = distances[4] = distances[5] = 0.0;
-		distances[2] = dist2;
-		distances[6] = dist6;
+		if (foundSolution)
+		{
+			const double dist0 = (startSpeed + (OneHalfDouble * startAcceleration + OneSixthDouble * jerk * t0) * t0) * t0;
+			const double u2 = startSpeed + (startAcceleration + OneHalfDouble * jerk * t0) * t0;
+			const double a2 = startAcceleration + jerk * t0;
+			const double dist2 = (u2 + (OneHalfDouble * a2 - OneSixthDouble * jerk * t2) * t2) * t2;
+			const double dist6 = (endSpeed + OneSixthDouble * jerk * dsquare(t6)) * t6;
+			const double a6 = -OneHalfDouble * jerk * t6;
+
+			debugPrintf("Quartic solution: t0,t2,t6 = %.1f %.1f %.1f, distances %.3f %.3f %.3f total %.3f, orig dist %.3f\n", t0, t2, t6, dist0, dist2, dist6, dist0 + dist2 + dist6, distance);
+
+			// Check that max acceleration isn't exceeded
+			if (a2 > peakAcceleration || a6 < peakDeceleration)
+			{
+				//TODO use another plan
+				debugPrintf("Acceleration limits exceeded: %.4e %.4e vs. %.4e %.4e\n", a2, a6, peakAcceleration, peakDeceleration);
+			}
+
+			distances[0] = dist0;
+			distances[1] = distances[3] = distances[4] = distances[5] = 0.0;
+			distances[2] = dist2;
+			distances[6] = dist6;
+			return;
+		}
 	}
-	else
-	{
-		debugPrintf("No quartic solution\n");
-		//TODO
-		distances[0] = distances[1] = distances[3] = distances[4] = distances[5] = distances[6] = 0.0;
-	}
+
+	debugPrintf("No quartic solution\n");
+	//TODO
+	distances[0] = distances[1] = distances[3] = distances[4] = distances[5] = distances[6] = 0.0;
 }
 
 #endif
