@@ -1960,6 +1960,8 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 				{ (double)1.0, (double)-6.0, (double)11.0, (double)-6.0 },		// roots are 1 2 3
 				{ (double)1.0, (double)-1.0, (double)1.0, (double)-1.0 },		// roots are 1
 				{ (double)2.0, (double)-6.0, (double)-18.5, (double)-7.5 },		// roots are -1.5 -0.5 5
+				{ (double)1.0, (double)-4.0, (double)5.0, (double)-2.0 },		// roots are 1 2
+				{ (double)1.0, (double)-6.0, (double)12.0, (double)-8.0 },		// roots are 2
 			};
 			for (size_t i = 0; i < ARRAY_SIZE(coeffs); ++i)
 			{
@@ -1998,6 +2000,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			constexpr double coeffs[][5] =
 			{
 				{ (double)1.0, (double)-10.0, (double)35.0, (double)-50.0, (double)24.0 },		// roots are 1 2 3 4
+				{ (double)-3.0, (double)12.0, (double)-6.0, (double)-3.0, (double)-18.0 },		// roots are 2 3 plus two complex roots
 				{ (double)1.0, (double)-3.0, (double)1.0, (double)3.0, (double)-2.0 },			// roots are -1 1 2
 				{ (double)1.0, (double)-2.0, (double)0.0, (double)2.0, (double)-1.0 },			// roots are -1 1
 				{ (double)1.0, (double)-3.0, (double)3.0, (double)-3.0, (double)2.0 },			// roots are 1 2
