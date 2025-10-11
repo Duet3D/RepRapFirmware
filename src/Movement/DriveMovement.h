@@ -103,6 +103,7 @@ private:
 #endif
 #if SUPPORT_S_CURVE
 	void UpdateSpeedAndAccelerationChange(motioncalc_t newSpeed, motioncalc_t speedChange, motioncalc_t newAcc, motioncalc_t accChange) noexcept;
+	void MovementStopped() noexcept;
 #endif
 
 #if CHECK_SEGMENTS

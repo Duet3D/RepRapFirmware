@@ -90,12 +90,12 @@ void DriveMovement::DiagnosticHeader(const StringRef& reply) noexcept
 void DriveMovement::Diagnostics(const StringRef& reply) noexcept
 {
 # if 0	// DEBUG
-	reply.lcatf("%u: %.3f/%" PRIi32 "/%.3f/%u/%u", drive, (double)positionRequested, currentMotorPosition, (double)distanceCarriedForwards, (unsigned int)state, segments != nullptr);
+	reply.lcatf("%2u: %.3f/%" PRIi32 "/%.3f/%u/%u", drive, (double)positionRequested, currentMotorPosition, (double)distanceCarriedForwards, (unsigned int)state, segments != nullptr);
 # else
-	reply.lcatf("%u: %.3f/%" PRIi32 "/%.3f", drive, (double)positionRequested, currentMotorPosition, (double)distanceCarriedForwards);
+	reply.lcatf("%2u: %.3f/%" PRIi32 "/%.3f", drive, (double)positionRequested, currentMotorPosition, (double)distanceCarriedForwards);
 # endif
 #if SUPPORT_S_CURVE
-	reply.catf(" %.1f/%.1f",
+	reply.catf(" %4.1f/%4.1f",
 				(double)InverseConvertSpeedToMmPerSec((float)peakDeltaV/reprap.GetMove().DriveStepsPerMm(drive)),
 				(double)InverseConvertAcceleration((float)peakDeltaA/reprap.GetMove().DriveStepsPerMm(drive))
 			  );
@@ -147,10 +147,46 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpeed, motioncalc_t speedChange, motioncalc_t newAcc, motioncalc_t accChange) noexcept
 {
 	u = newSpeed;
-	peakDeltaV = max<float>(peakDeltaV, fabsf(newSpeed - finalSpeed));
+	peakDeltaV = max<motioncalc_t>(peakDeltaV, fabsm(newSpeed - finalSpeed));
+#if 1	//DEBUG
+	if (drive == MaxAxesPlusExtruders - 1 && fabsm(newSpeed - finalSpeed) > ConvertSpeedFromMmPerSec(1.0 * 420))	// 420 is extruder steps/mm in test config
+	{
+		debugPrintf("Speed change %.1f to %.1f\n", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed), (double)InverseConvertSpeedToMmPerSec((float)newSpeed));
+	}
+#endif
 	finalSpeed = newSpeed + speedChange;
-	peakDeltaA = max<float>(peakDeltaA, fabsf(newAcc - finalAcc));
+
+	peakDeltaA = max<motioncalc_t>(peakDeltaA, fabsm(newAcc - finalAcc));
+#if 1	//DEBUG
+	if (drive == MaxAxesPlusExtruders - 1 && fabsm(newAcc - finalAcc) > ConvertAcceleration(50.0 * 420))	// 420 is extruder steps/mm in test config
+	{
+		debugPrintf("Acc change %.1f to %.1f\n", (double)InverseConvertAcceleration((float)finalAcc), (double)InverseConvertAcceleration((float)newAcc));
+	}
+#endif
 	finalAcc = newAcc + accChange;
+}
+
+// Update the stored speed, final acceleration, speed change and acceleration change values when movement has stopped
+inline void DriveMovement::MovementStopped() noexcept
+{
+	u = (motioncalc_t)0.0;
+	peakDeltaV = max<motioncalc_t>(peakDeltaV, fabsm(finalSpeed));
+#if 1	//DEBUG
+	if (drive == MaxAxesPlusExtruders - 1 && fabsm(finalSpeed) > ConvertSpeedFromMmPerSec(1.0 * 420))	// 420 is extruder steps/mm in test config
+	{
+		debugPrintf("Speed change to standstill %.1f\n", (double)InverseConvertSpeedToMmPerSec((float)fabsm(finalSpeed)));
+	}
+#endif
+	finalSpeed = (motioncalc_t)0.0;
+
+	peakDeltaA = max<motioncalc_t>(peakDeltaA, fabsm(finalAcc));
+#if 1	//DEBUG
+	if (drive == MaxAxesPlusExtruders - 1 && fabsm(finalAcc) > ConvertAcceleration(50.0 * 420))	// 420 is extruder steps/mm in test config
+	{
+		debugPrintf("Acc change to standstill %.1f\n", (double)InverseConvertAcceleration((float)fabsm(finalAcc)));
+	}
+#endif
+	finalAcc = (motioncalc_t)0.0;
 }
 
 #endif
@@ -173,7 +209,7 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 			segmentFlags.Init();
 			state = DMState::idle;								// if we have been round this loop already then we will have changed the state, so reset it to idle
 #if SUPPORT_S_CURVE
-			UpdateSpeedAndAccelerationChange((motioncalc_t)0.0, (motioncalc_t)0.0, (motioncalc_t)0.0, (motioncalc_t)0.0);
+			MovementStopped();
 #endif
 			return nullptr;
 		}
@@ -187,13 +223,12 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 			driverEndstopsTriggeredAtStart = 0;					// reset since we will be setting this in DDA::Prepare()
 			nextStepTime = seg->GetStartTime();					// this is when we want the interrupt
 #if SUPPORT_S_CURVE
-			UpdateSpeedAndAccelerationChange((motioncalc_t)0.0, (motioncalc_t)0.0, (motioncalc_t)0.0, (motioncalc_t)0.0);
+			MovementStopped();									// say we have stopped. NewSegment will be called again for this segment when the state changes from 'starting' to something else.
 #endif
 			return seg;
 		}
 
 		seg->SetExecuting();
-
 #if SUPPORT_S_CURVE
 		UpdateSpeedAndAccelerationChange(seg->CalcU(), seg->GetSpeedChange(), seg->GetA(), seg->GetAccChange());
 #endif
@@ -204,7 +239,7 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		if (IsPhaseStepEnabled())
 		{
-# if !SUPPORT_S_CURVE							// we already calcuated and set u if we are supporting 3rd order motion control
+# if !SUPPORT_S_CURVE							// we already calculated and set u if we are supporting 3rd order motion control
 			u = seg->CalcU();
 # endif
 			state = DMState::phaseStepping;
