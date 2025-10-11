@@ -152,6 +152,7 @@ inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpee
 	if (drive == MaxAxesPlusExtruders - 1 && fabsm(newSpeed - finalSpeed) > ConvertSpeedFromMmPerSec(1.0 * 420))	// 420 is extruder steps/mm in test config
 	{
 		debugPrintf("Speed change %.1f to %.1f\n", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed), (double)InverseConvertSpeedToMmPerSec((float)newSpeed));
+		MoveSegment::DebugPrintList(segments);
 	}
 #endif
 	finalSpeed = newSpeed + speedChange;
@@ -161,6 +162,7 @@ inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpee
 	if (drive == MaxAxesPlusExtruders - 1 && fabsm(newAcc - finalAcc) > ConvertAcceleration(50.0 * 420))	// 420 is extruder steps/mm in test config
 	{
 		debugPrintf("Acc change %.1f to %.1f\n", (double)InverseConvertAcceleration((float)finalAcc), (double)InverseConvertAcceleration((float)newAcc));
+		MoveSegment::DebugPrintList(segments);
 	}
 #endif
 	finalAcc = newAcc + accChange;
