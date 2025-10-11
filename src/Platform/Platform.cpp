@@ -3406,6 +3406,7 @@ GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) 
 			}
 			return logger->Start(realTime, filename, reply);
 		}
+		reprap.StateUpdated();						// logLevel has been changed to off, so the OM has been updated
 	}
 	else
 	{
