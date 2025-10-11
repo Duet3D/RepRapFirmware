@@ -311,7 +311,7 @@ inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 	MoveSegment *const secondSeg = Allocate(next);
 #if SUPPORT_S_CURVE
 	const motioncalc_t firstDistance = (CalcU() + (OneHalf * a + OneSixth * j * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
-	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, a, j, flags);
+	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, a + j * (motioncalc_t)firstDuration, j, flags);
 #else
 	const motioncalc_t firstDistance = (CalcU() + OneHalf * a * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
 	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, a, flags);
