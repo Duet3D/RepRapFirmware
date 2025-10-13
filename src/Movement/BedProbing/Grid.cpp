@@ -579,7 +579,7 @@ unsigned int HeightMap::GetStatistics(Deviation& deviation, float& minError, flo
 		}
 	}
 
-	deviation.Set(heightSquaredSum, heightSum, numProbed);
+	deviation.Set((float)heightSquaredSum, (float)heightSum, numProbed);
 	return numProbed;
 }
 
@@ -625,10 +625,10 @@ float HeightMap::GetInterpolatedHeightError(float axis0, float axis1) const noex
 
 
 	const float xf = (axis0 - def.mins[0]) * def.recipAxisSpacings[0];
-	const float xFloor = floor(xf);
+	const float xFloor = floorf(xf);
 	const int32_t xIndex = (int32_t)xFloor;
 	const float yf = (axis1 - def.mins[1]) * def.recipAxisSpacings[1];
-	const float yFloor = floor(yf);
+	const float yFloor = floorf(yf);
 	const int32_t yIndex = (int32_t)yFloor;
 
 	return InterpolateAxis0Axis1(xIndex, yIndex, xf - xFloor, yf - yFloor);

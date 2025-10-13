@@ -182,7 +182,7 @@ bool FiveBarScaraKinematics::isCantilevered(int mode) const noexcept
 float FiveBarScaraKinematics::getAbsoluteAngle(float xOrig, float yOrig, float xDest, float yDest) const noexcept
 {
 	const float length = fastSqrtf(fsquare(xOrig - xDest) + fsquare(yOrig - yDest));
-	const float y = fabs(yOrig - yDest);
+	const float y = fabsf(yOrig - yDest);
 	float angle = asinf(y / length) * 180.0f / Pi;
 
 	const int quad = getQuadrant(xDest - xOrig, yDest - yOrig);

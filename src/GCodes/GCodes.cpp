@@ -3072,7 +3072,7 @@ void GCodes::FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept
 
 			if (ms.moveFractionToSkip != 0.0)
 			{
-				const float fseg = floor(ms.totalSegments * ms.moveFractionToSkip);		// round down to the start of a move
+				const float fseg = floorf(ms.totalSegments * ms.moveFractionToSkip);	// round down to the start of a move
 				ms.segmentsLeftToStartAt = ms.totalSegments - (unsigned int)fseg;
 				ms.firstSegmentFractionToSkip = (ms.moveFractionToSkip * ms.totalSegments) - fseg;
 				NewMoveAvailable(ms);

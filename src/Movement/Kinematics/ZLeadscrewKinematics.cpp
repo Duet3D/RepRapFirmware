@@ -260,7 +260,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(MovementState& ms, size_t numFactor
 			}
 		}
 
-		initialDeviation.Set(initialSumOfSquares, initialSum, numPoints);
+		initialDeviation.Set((float)initialSumOfSquares, (float)initialSum, numPoints);
 	}
 
 	// Set up the initial and final deviations now in case calibration fails
@@ -333,7 +333,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(MovementState& ms, size_t numFactor
 			finalSumOfSquares += fcsquare(residuals[i]);
 		}
 
-		finalDeviation.Set(finalSumOfSquares, finalSum, numPoints);
+		finalDeviation.Set((float)finalSumOfSquares, (float)finalSum, numPoints);
 
 		if (reprap.Debug(Module::Kinematics))
 		{
@@ -352,7 +352,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(MovementState& ms, size_t numFactor
 		else
 		{
 			solution[i] *= (floatc_t)correctionFactor;
-			if (fabsf(solution[i]) > maxCorrection)
+			if (fabsf((float)solution[i]) > maxCorrection)
 			{
 				haveLargeCorrection = true;
 			}
@@ -382,7 +382,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(MovementState& ms, size_t numFactor
 				reprap.GetMove().AdjustLeadscrews(solution);
 				for (size_t i = 0; i < numLeadscrews; ++i)
 				{
-					lastCorrections[i] = solution[i];
+					lastCorrections[i] = (float)solution[i];
 				}
 
 				reply.printf("Leadscrew adjustments made:");
@@ -401,7 +401,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(MovementState& ms, size_t numFactor
 			reply.printf("Manual corrections required:");
 			for (size_t i = 0; i < numLeadscrews; ++i)
 			{
-				const float netAdjustment = solution[i] - solution[0];
+				const float netAdjustment = (float)(solution[i] - solution[0]);
 				lastCorrections[i] = netAdjustment;
 				reply.catf(" %.2f turn %s (%.2fmm)", (double)(fabsf(netAdjustment)/screwPitch), (netAdjustment > 0) ? "down" : "up", (double)netAdjustment);
 			}

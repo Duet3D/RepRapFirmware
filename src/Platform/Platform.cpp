@@ -1874,7 +1874,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 					IrqDisable();
 					asm volatile("":::"memory");
 					uint32_t now3 = SysTick->VAL;
-					const volatile float nval2 = cbrt(val);
+					const volatile float nval2 = cbrtf(val);
 					uint32_t now4 = SysTick->VAL;
 					asm volatile("":::"memory");
 					IrqEnable();

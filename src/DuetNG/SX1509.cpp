@@ -358,7 +358,7 @@ void SX1509::clock(uint8_t oscDivider) noexcept
 	// Config RegMisc[6:4] with oscDivider
 	// 0: off, else ClkX = fOSC / (2^(RegMisc[6:4] - 1))
 	oscDivider = constrain<uint8_t>(oscDivider, 1, 7);
-	_clkX = 2000000.0 / (1u << (oscDivider - 1u));			// update private clock variable
+	_clkX = 2000000 / (1u << (oscDivider - 1u));			// update private clock variable
 	uint8_t regMisc = readByte(REG_MISC);
 	regMisc &= ~((0b111 << 4) | (1u << 1) | (1u << 0));		// clear clock divider bits, auto-increment is enabled, clear interrupt on register read
 	regMisc |= oscDivider << 4;
@@ -393,7 +393,7 @@ uint8_t SX1509::calculateSlopeRegister(int ms, uint8_t onIntensity, uint8_t offI
 	const float tFactor = ((float) onIntensity - (4.0 * (float)offIntensity)) * 255.0 / (float) _clkX;
 	const float timeS = float(ms) / 1000.0;
 
-	int regSlope1 = timeS / tFactor;
+	int regSlope1 = (int)(timeS / tFactor);
 	int regSlope2 = regSlope1 / 16;
 
 	regSlope1 = constrain<int>(regSlope1, 1, 15);

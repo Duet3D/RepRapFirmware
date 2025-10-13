@@ -220,7 +220,7 @@ int32_t BinaryParser::GetIValue() THROWS(GCodeException)
 	switch (seenParameter->type)
 	{
 	case DataType::Float:
-		value = seenParameter->floatValue;
+		value = (int32_t)seenParameter->floatValue;
 		break;
 	case DataType::Int:
 		value = seenParameter->intValue;

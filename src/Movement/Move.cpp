@@ -1062,7 +1062,7 @@ void Move::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 MovementError Move::MotorMovementToSteps(size_t drive, float coord, int32_t& whereToStore) const noexcept
 {
 	const float pos = coord * driveStepsPerMm[drive];
-	constexpr float limit = std::numeric_limits<int32_t>::max() - 10;
+	constexpr float limit = (float)(std::numeric_limits<int32_t>::max() - 10);
 	if (fabsf(pos) <= limit)
 	{
 		whereToStore = lrintf(pos);
@@ -1541,7 +1541,7 @@ void Move::SetupNextScanningProbeReading() noexcept
 		}
 		else if (distance <= probeControl.decelStartDistance)
 		{
-			wakeupTime = (distance - probeControl.accelDistance)/probeControl.topSpeed + probeControl.accelClocks;
+			wakeupTime = (uint32_t)((distance - probeControl.accelDistance)/probeControl.topSpeed) + probeControl.accelClocks;
 		}
 		else
 		{
