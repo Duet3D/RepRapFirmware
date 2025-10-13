@@ -3272,7 +3272,7 @@ const char *_ecv_array Platform::GetLogLevel() const noexcept
 {
 	static const LogLevel off = LogLevel::off;	// need to have an instance otherwise it will fail .ToString() below
 #if HAS_MASS_STORAGE
-	return (logger == nullptr) ? off.ToString() : logger->GetLogLevel().ToString();
+	return (logger == nullptr || !logger->IsActive()) ? off.ToString() : logger->GetLogLevel().ToString();
 #else
 	return off.ToString();
 #endif
