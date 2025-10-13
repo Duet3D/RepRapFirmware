@@ -346,6 +346,7 @@ inline bool DDARing::NeedNewPlan(DDA *moveToPrepare) const noexcept
 	{
 		return false;												// if no moves have been added, we don't need to re-plan
 	}
+	//TODO ***** NonDecelDistance in the following is wrong if the t2 and t4 segments have been merged *****
 	if (plannedProfile.reachesRequestedSpeed && (double)moveToPrepare->GetTotalDistance() <= plannedProfile.NonDecelDistance())
 	{
 		return false;												// if the profile reaches its requested speed and deceleration begins later than the end of this move, we don't need to re-plan yet

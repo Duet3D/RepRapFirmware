@@ -256,7 +256,7 @@ inline bool MoveSegment::NormaliseAndCheckLinear(motioncalc_t distanceCarriedFor
 		// However, using the Maclaurin expansion requires an extra division in each step calculation, which we would prefer to avoid.
 		// 2. We can convert the segment to a constant-speed segment, on the assumption that the speed won't change much during it. This is what we currently do.
 		const motioncalc_t provisionalT0 = OneHalf * (motioncalc_t)duration - distance/(a * (motioncalc_t)duration);
-		if (likely(fabsm(provisionalT0) <= 4 * (motioncalc_t)16777216.0))
+		if (likely(std::fabs(provisionalT0) <= 4 * (motioncalc_t)16777216.0))
 		{
 			t0 = provisionalT0;
 			return false;

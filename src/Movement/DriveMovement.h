@@ -300,7 +300,7 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 					if (seg->GetNext() == nullptr && !seg->GetFlags().isExtruder)
 					{
 						// This is an axis and there are no further segments, so we may need to round the current position to the nearest microstep
-						if (fabsm(provisionalDistanceCarriedForwards) < 0.05)
+						if (std::fabs(provisionalDistanceCarriedForwards) < 0.05)
 						{
 							provisionalDistanceCarriedForwards = (motioncalc_t)0.0;						// just remove the rounding error
 						}

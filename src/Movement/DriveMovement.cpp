@@ -147,9 +147,9 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpeed, motioncalc_t speedChange, motioncalc_t newAcc, motioncalc_t accChange) noexcept
 {
 	u = newSpeed;
-	peakDeltaV = max<motioncalc_t>(peakDeltaV, fabsm(newSpeed - finalSpeed));
+	peakDeltaV = max<motioncalc_t>(peakDeltaV, std::fabs(newSpeed - finalSpeed));
 #if 1	//DEBUG
-	if (drive == MaxAxesPlusExtruders - 1 && fabsm(newSpeed - finalSpeed) > ConvertSpeedFromMmPerSec(1.0 * 420))	// 420 is extruder steps/mm in test config
+	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(newSpeed - finalSpeed) > ConvertSpeedFromMmPerSec(1.0 * 420))	// 420 is extruder steps/mm in test config
 	{
 		debugPrintf("Speed change %.1f to %.1f\n", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed), (double)InverseConvertSpeedToMmPerSec((float)newSpeed));
 		MoveSegment::DebugPrintList(segments);
@@ -157,9 +157,9 @@ inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpee
 #endif
 	finalSpeed = newSpeed + speedChange;
 
-	peakDeltaA = max<motioncalc_t>(peakDeltaA, fabsm(newAcc - finalAcc));
+	peakDeltaA = max<motioncalc_t>(peakDeltaA, std::fabs(newAcc - finalAcc));
 #if 1	//DEBUG
-	if (drive == MaxAxesPlusExtruders - 1 && fabsm(newAcc - finalAcc) > ConvertAcceleration(50.0 * 420))	// 420 is extruder steps/mm in test config
+	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(newAcc - finalAcc) > ConvertAcceleration(50.0 * 420))	// 420 is extruder steps/mm in test config
 	{
 		debugPrintf("Acc change %.1f to %.1f\n", (double)InverseConvertAcceleration((float)finalAcc), (double)InverseConvertAcceleration((float)newAcc));
 		MoveSegment::DebugPrintList(segments);
@@ -172,20 +172,20 @@ inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpee
 inline void DriveMovement::MovementStopped() noexcept
 {
 	u = (motioncalc_t)0.0;
-	peakDeltaV = max<motioncalc_t>(peakDeltaV, fabsm(finalSpeed));
+	peakDeltaV = max<motioncalc_t>(peakDeltaV, std::fabs(finalSpeed));
 #if 1	//DEBUG
-	if (drive == MaxAxesPlusExtruders - 1 && fabsm(finalSpeed) > ConvertSpeedFromMmPerSec(1.0 * 420))	// 420 is extruder steps/mm in test config
+	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(finalSpeed) > ConvertSpeedFromMmPerSec(1.0 * 420))	// 420 is extruder steps/mm in test config
 	{
-		debugPrintf("Speed change to standstill %.1f\n", (double)InverseConvertSpeedToMmPerSec((float)fabsm(finalSpeed)));
+		debugPrintf("Speed change to standstill %.1f\n", (double)InverseConvertSpeedToMmPerSec((float)std::fabs(finalSpeed)));
 	}
 #endif
 	finalSpeed = (motioncalc_t)0.0;
 
-	peakDeltaA = max<motioncalc_t>(peakDeltaA, fabsm(finalAcc));
+	peakDeltaA = max<motioncalc_t>(peakDeltaA, std::fabs(finalAcc));
 #if 1	//DEBUG
-	if (drive == MaxAxesPlusExtruders - 1 && fabsm(finalAcc) > ConvertAcceleration(50.0 * 420))	// 420 is extruder steps/mm in test config
+	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(finalAcc) > ConvertAcceleration(50.0 * 420))	// 420 is extruder steps/mm in test config
 	{
-		debugPrintf("Acc change to standstill %.1f\n", (double)InverseConvertAcceleration((float)fabsm(finalAcc)));
+		debugPrintf("Acc change to standstill %.1f\n", (double)InverseConvertAcceleration((float)std::fabs(finalAcc)));
 	}
 #endif
 	finalAcc = (motioncalc_t)0.0;
@@ -383,7 +383,7 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 #endif
 		// nextStep is not less than segmentStepLimit, so we are not going to execute this segment
 		motioncalc_t newDcf = distanceCarriedForwards + seg->GetLength();
-		if (fabsm(newDcf) > (motioncalc_t)1.0)
+		if (std::fabs(newDcf) > (motioncalc_t)1.0)
 		{
 			(void)LogStepError(7, (float)newDcf, seg);
 			newDcf = constrain<motioncalc_t>(newDcf, -1.0, 1.0);	// to prevent the next segment erroring out
@@ -438,7 +438,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 			// It's an axis and we are soon to stop movement, so we should end on an exact microstep.
 			// Check whether taking the last step would end up going a little too far or not quite far enough
 			const motioncalc_t provisionalDistanceCarriedForwards = distanceCarriedForwards + currentSegment->GetLength() - (motioncalc_t)netStepsThisSegment;
-			if (fabsm(provisionalDistanceCarriedForwards) < 0.05)
+			if (std::fabs(provisionalDistanceCarriedForwards) < 0.05)
 			{
 				currentSegment->AdjustLength(-provisionalDistanceCarriedForwards);				// just correct the segment length
 			}

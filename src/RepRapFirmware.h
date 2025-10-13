@@ -394,15 +394,6 @@ inline motioncalc_t msquare(motioncalc_t a) noexcept
 	return a * a;
 }
 
-inline motioncalc_t fabsm(motioncalc_t a) noexcept
-{
-#if USE_DOUBLE_MOTIONCALC
-	return fabs(a);
-#else
-	return fabsf(a);
-#endif
-}
-
 // Define floating point type to use for calculations where we would like high precision in matrix calculations
 #if SAME70
 typedef double floatc_t;							// type of matrix element used for calibration

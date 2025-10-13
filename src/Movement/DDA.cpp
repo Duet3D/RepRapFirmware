@@ -384,6 +384,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	memcpyf(accelerations, move.Accelerations(nextMove.reduceAcceleration), MaxAxesPlusExtruders);
 	bool extrudersMoving = false;
 	bool forwardExtruding = false;
+	float totalExtrusion = 0.0;
 
 	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
 	{
@@ -397,6 +398,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 			directionVector[drive] = movement;							// for an extruder, endCoordinates is the amount of movement
 			if (movement != 0.0)
 			{
+				totalExtrusion += std::fabs(movement);
 				extrudersMoving = true;
 				if (movement > 0.0)
 				{
@@ -483,24 +485,29 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 		// First do the bed tilt compensation for deltas.
 		directionVector[Z_AXIS] += (directionVector[X_AXIS] * k.GetTiltCorrection(X_AXIS)) + (directionVector[Y_AXIS] * k.GetTiltCorrection(Y_AXIS));
 		totalDistance = NormaliseLinearMotion(move.GetLinearAxes());
+#if SUPPORT_S_CURVE
+		movementRatio = (extrudersMoving) ? totalExtrusion/totalDistance : 1.0;
+#endif
 	}
 	else if (rotationalAxesMoving)
 	{
-		// Some axes are moving, but not axes that X or Y are mapped to. Normalise the movement to the vector sum of the axes that are moving.
+		// Some axes are moving, but not linear axes. Normalise the movement to the vector sum of the axes that are moving.
 		totalDistance = Normalise(directionVector, move.GetRotationalAxes());
+#if SUPPORT_S_CURVE
+		movementRatio = (extrudersMoving) ? totalExtrusion/totalDistance : 1.0;
+#endif
 	}
 	else
 	{
 		// Extruder-only movement. Normalise so that the magnitude is the total absolute movement. This gives the correct feed rate for mixing extruders.
-		totalDistance = 0.0;
-		for (size_t d = 0; d < MaxAxesPlusExtruders; d++)
-		{
-			totalDistance += fabsf(directionVector[d]);
-		}
+		totalDistance = totalExtrusion;
 		if (totalDistance > 0.0)		// should always be true
 		{
 			Scale(directionVector, 1.0/totalDistance);
 		}
+#if SUPPORT_S_CURVE
+		movementRatio = 1.0;
+#endif
 	}
 
 	// 5. Compute the maximum acceleration available
@@ -594,7 +601,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 		startSpeed = startAcceleration = 0.0;										// in case there is no previous move
 		state = DDAState::created;													// postpone planning this move until preparation
 		// We need to store an estimate of the time needed to execute the move because the Move task uses it when deciding whether to add more moves to the ring
-		clocksNeeded = totalDistance/requestedSpeed;
+		clocksNeeded = (uint32_t)(totalDistance/requestedSpeed);
 		rslt = MovementError::ok;
 	}
 	else
@@ -1071,7 +1078,7 @@ MovementError DDA::RecalculateMove(DDARing& ring) noexcept
 	const float totalTime = (2 * topSpeed - startSpeed - endSpeed)/maxAcceleration
 							+ (totalDistance - beforePrepare.accelDistance - beforePrepare.decelDistance)/topSpeed;
 	clocksNeeded = (uint32_t)totalTime;
-	return (totalTime < std::numeric_limits<int32_t>::max() - 100) ? MovementError::ok : MovementError::move_duration_too_long;
+	return (totalTime < (float)(std::numeric_limits<int32_t>::max() - 100)) ? MovementError::ok : MovementError::move_duration_too_long;
 }
 
 // Decide what speed we would really like this move to end at and the next move to start at, assuming we want to use the same speed for both.

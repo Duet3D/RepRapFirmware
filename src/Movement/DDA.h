@@ -35,7 +35,7 @@ struct PrepParams
     float distances[7];								// the distances of each phase
 	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive; or zero if not using S-curve acceleration
 
-	float SteadyClocks() const noexcept { return phaseClocks[3]; }
+	uint32_t SteadyClocks() const noexcept { return phaseClocks[3]; }
 #else
 	uint32_t accelClocks, steadyClocks, decelClocks;
 	float acceleration;								// the acceleration to use, always positive
@@ -44,7 +44,7 @@ struct PrepParams
 # define peakDeceleration	deceleration
 	float accelDistance;
 	float decelStartDistance;
-	float SteadyClocks() const noexcept { return steadyClocks; }
+	uint32_t SteadyClocks() const noexcept { return steadyClocks; }
 #endif
 	float totalDistance;
 	float topSpeed;									// the top speed reached
@@ -304,6 +304,7 @@ private:
     float startSpeed, topSpeed, endSpeed;
 #if SUPPORT_S_CURVE
     float startAcceleration;
+    float movementRatio;							// for moves with extrusion and axis movement this is the ratio of total extrusion to total distance. For non extruding moves it is 1.0.
 #endif
 
 	float proportionDone;							// what proportion of the extrusion in the G1 or G0 move of which this is a part has been done after this segment is complete
