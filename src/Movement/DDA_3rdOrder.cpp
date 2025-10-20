@@ -281,7 +281,7 @@ static MovementProfile debugProfile;
 			totalClocks += params.phaseClocks[1];
 			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
 			{
-				debugPrintf("Phase 1 %.4e %lu %.4e %.4e %.4e (%.4e)\n", t1Distance, params.phaseClocks[1], speed, acceleration, (double)0.0, (double)plannedProfile.peakAcceleration);
+				debugPrintf("Phase 1 %.4e %lu %.4e %.4e %.4e %.4e\n", t1Distance, params.phaseClocks[1], speed, acceleration, (double)0.0, (double)plannedProfile.peakAcceleration);
 			}
 			params.peakAcceleration = (float)(acceleration * recipMovementRatio);
 			speed += t1 * plannedProfile.peakAcceleration;
@@ -506,10 +506,12 @@ static MovementProfile debugProfile;
 	plannedProfile.startSpeed = speed;
 	plannedProfile.startAcceleration = acceleration;
 	clocksNeeded = totalClocks;
+#if 0
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
 	{
 		params.DebugPrint();
 	}
+#endif
 }
 
 #endif

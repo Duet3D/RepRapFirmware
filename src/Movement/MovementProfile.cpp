@@ -30,14 +30,14 @@ double MovementProfile::CalculateAccelerationParameters() noexcept
 	if (startSpeed < topSpeed)
 	{
 		// We need an acceleration phase. First, determine whether the maximum acceleration is limiting.
-		if ((topSpeed - startSpeed) * jerk > dsquare(peakAcceleration) - OneHalfDouble * dsquare(startAcceleration))
+		if ((topSpeed - startSpeed) * jerk + OneHalfDouble * dsquare(startAcceleration) > dsquare(peakAcceleration) )
 		{
 			// Maximum acceleration is limiting, so we need a constant acceleration phase
 			distances[0] = (peakAcceleration - startAcceleration) * (startSpeed/jerk + (peakAcceleration - startAcceleration) * (2 * startAcceleration + peakAcceleration)/(6 * dsquare(jerk)));
 			// t1 = (v-u)/a + a0^2/2aj - a/j						[checked using Maxima]
 			const double t1 = ((topSpeed - startSpeed) * jerk - dsquare(peakAcceleration) + OneHalfDouble * dsquare(startAcceleration))/(peakAcceleration * jerk);
 			// s1 = t1 * (u + 0.5 * (a * t1 + (a^2 - a0^2)/j))		[checked using Maxima]
-			distances[1] = t1 * (startSpeed + OneHalfDouble * (peakAcceleration * t1 + (dsquare(peakAcceleration - dsquare(startAcceleration))/jerk)));
+			distances[1] = t1 * (startSpeed + OneHalfDouble * (peakAcceleration * t1 + (dsquare(peakAcceleration) - dsquare(startAcceleration))/jerk));
 			distances[2] = peakAcceleration * ((startSpeed + peakAcceleration * t1)/jerk + (5 * dsquare(peakAcceleration) - 3 * dsquare(startAcceleration))/(6 * dsquare(jerk)));
 			return distances[0] + distances[1] + distances[2];
 		}
