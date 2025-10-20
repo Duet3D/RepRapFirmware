@@ -27,7 +27,7 @@ public:
 	void Invalidate() noexcept { numberOfMovesCovered = 0; }
 
 	double NonDecelDistance() const noexcept		// return the distance left excluding deceleration distance
-		{ return distances[0] + distances[1] + distances[2] + distances[3]; }
+		{ return distances[0] + distances[1] + t2NonDecelDistance + distances[3]; }
 	bool ReducingDeceleration() const noexcept		// return true if we are in the reducing deceleration phase
 		{ return distances[0] + distances[2] + distances[3] + distances[4] + distances[5] == (double)0.0; }
 
@@ -48,6 +48,7 @@ public:
 	double peakDeceleration;						// the deceleration in the steady deceleration phase, if any. This is negative if there is a peak deceleration phase. Valid if phase5Distance != 0.
 	double jerk;
 	double distances[7];							// the distances of each phase
+	double t2NonDecelDistance;						// that part of distances[2] that is not deceleration
 
 	unsigned int numberOfMovesCovered = 0;			// if zero then the profile has not been calculated and the other fields are meaningless
 	uint32_t scheduledMovesWhenCreated;				// number of moves in the ring when we created this plan

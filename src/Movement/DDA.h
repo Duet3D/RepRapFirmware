@@ -160,6 +160,7 @@ public:
 #if SUPPORT_S_CURVE
 	bool IsSCurveMove() const noexcept { return flags.useScurve; }
 	bool IsFullyPlanned() const noexcept { return flags.fullyPlanned; }
+	float GetMovementRatio() const noexcept { return movementRatio; }
 	void SetSpeedRatioForPrintingMoves(const Move& move) noexcept;
 	void SetStartSpeedAndAcceleration(float speed, float acceleration) noexcept { startSpeed = speed; startAcceleration = acceleration; }
 

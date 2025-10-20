@@ -346,7 +346,6 @@ inline bool DDARing::NeedNewPlan(DDA *moveToPrepare) const noexcept
 	{
 		return false;												// if no moves have been added, we don't need to re-plan
 	}
-	//TODO ***** NonDecelDistance in the following is wrong if the t2 and t4 segments have been merged *****
 	if (plannedProfile.reachesRequestedSpeed && (double)moveToPrepare->GetTotalDistance() <= plannedProfile.NonDecelDistance())
 	{
 		return false;												// if the profile reaches its requested speed and deceleration begins later than the end of this move, we don't need to re-plan yet
@@ -357,14 +356,14 @@ inline bool DDARing::NeedNewPlan(DDA *moveToPrepare) const noexcept
 	}
 
 	// We have an existing plan but it is out of date. Update the start speed and acceleration in the move to prepare to agree with the plan.
-	moveToPrepare->SetStartSpeedAndAcceleration((float)plannedProfile.startSpeed, (float)plannedProfile.startAcceleration);
+	moveToPrepare->SetStartSpeedAndAcceleration((float)plannedProfile.startSpeed/moveToPrepare->GetMovementRatio(), (float)plannedProfile.startAcceleration/moveToPrepare->GetMovementRatio());
 	return true;													// we do need to construct a [new] plan
 }
 
 #endif
 
 // Prepare some moves. moveTimeLeft is the total length remaining of moves that are already executing or prepared.
-// Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or MoveTiming::StandardMoveWakeupInterval if there are no unprepared moves left.
+// Return the maximum time in milliseconds that should elapse before we prepare and commit further uncommitted moves that are already in the ring, or MoveTiming::StandardMoveWakeupInterval if there are no uncommitted moves left.
 uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept
 {
 	// If the already-prepared moves will execute in less than the minimum time, prepare another move.
