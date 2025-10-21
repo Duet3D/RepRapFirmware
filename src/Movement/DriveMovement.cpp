@@ -90,12 +90,12 @@ void DriveMovement::DiagnosticHeader(const StringRef& reply) noexcept
 void DriveMovement::Diagnostics(const StringRef& reply) noexcept
 {
 # if 0	// DEBUG
-	reply.lcatf("%2u: %.3f/%" PRIi32 "/%.3f/%u/%u", drive, (double)positionRequested, currentMotorPosition, (double)distanceCarriedForwards, (unsigned int)state, segments != nullptr);
+	reply.lcatf("%2u: %.2f/%" PRIi32 "/%.2f/%u/%u", drive, (double)positionRequested, currentMotorPosition, (double)distanceCarriedForwards, (unsigned int)state, segments != nullptr);
 # else
-	reply.lcatf("%2u: %.3f/%" PRIi32 "/%.3f", drive, (double)positionRequested, currentMotorPosition, (double)distanceCarriedForwards);
+	reply.lcatf("%2u: %.2f/%" PRIi32 "/%.2f", drive, (double)positionRequested, currentMotorPosition, (double)distanceCarriedForwards);
 # endif
 #if SUPPORT_S_CURVE
-	reply.catf(" %4.1f/%4.1f",
+	reply.catf(" %.2f/%.2f",
 				(double)InverseConvertSpeedToMmPerSec((float)peakDeltaV/reprap.GetMove().DriveStepsPerMm(drive)),
 				(double)InverseConvertAcceleration((float)peakDeltaA/reprap.GetMove().DriveStepsPerMm(drive))
 			  );
@@ -143,28 +143,35 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 
 #if SUPPORT_S_CURVE
 
+# define DEBUG_DISCONTINUITIES	(1)			// set nonzero to generate debug messages if extruder 0 has discontinuous speed or acceleration
+
+# if DEBUG_DISCONTINUITIES
+constexpr float MaxSpeedChange = ConvertSpeedFromMmPerSec(0.1 * 420);		// 420 is extruder steps/mm in test config
+constexpr float MaxAccChange = ConvertAcceleration(5.0 * 420);				// 420 is extruder steps/mm in test config
+# endif
+
 // Update the stored speed, final acceleration, speed change and acceleration change values
 inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpeed, motioncalc_t speedChange, motioncalc_t newAcc, motioncalc_t accChange) noexcept
 {
 	u = newSpeed;
 	peakDeltaV = max<motioncalc_t>(peakDeltaV, std::fabs(newSpeed - finalSpeed));
-#if 1	//DEBUG
-	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(newSpeed - finalSpeed) > ConvertSpeedFromMmPerSec(1.0 * 420))	// 420 is extruder steps/mm in test config
+# if DEBUG_DISCONTINUITIES
+	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(newSpeed - finalSpeed) > MaxSpeedChange)
 	{
 		debugPrintf("Speed change %.1f to %.1f\n", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed), (double)InverseConvertSpeedToMmPerSec((float)newSpeed));
 		MoveSegment::DebugPrintList(segments);
 	}
-#endif
+# endif
 	finalSpeed = newSpeed + speedChange;
 
 	peakDeltaA = max<motioncalc_t>(peakDeltaA, std::fabs(newAcc - finalAcc));
-#if 1	//DEBUG
-	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(newAcc - finalAcc) > ConvertAcceleration(50.0 * 420))	// 420 is extruder steps/mm in test config
+# if DEBUG_DISCONTINUITIES
+	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(newAcc - finalAcc) > MaxAccChange)
 	{
 		debugPrintf("Acc change %.1f to %.1f\n", (double)InverseConvertAcceleration((float)finalAcc), (double)InverseConvertAcceleration((float)newAcc));
 		MoveSegment::DebugPrintList(segments);
 	}
-#endif
+# endif
 	finalAcc = newAcc + accChange;
 }
 
@@ -173,21 +180,21 @@ inline void DriveMovement::MovementStopped() noexcept
 {
 	u = (motioncalc_t)0.0;
 	peakDeltaV = max<motioncalc_t>(peakDeltaV, std::fabs(finalSpeed));
-#if 1	//DEBUG
-	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(finalSpeed) > ConvertSpeedFromMmPerSec(1.0 * 420))	// 420 is extruder steps/mm in test config
+# if 1	//DEBUG
+	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(finalSpeed) > MaxSpeedChange)
 	{
-		debugPrintf("Speed change to standstill %.1f\n", (double)InverseConvertSpeedToMmPerSec((float)std::fabs(finalSpeed)));
+		debugPrintf("Speed change to standstill %.1f\n", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed));
 	}
-#endif
+# endif
 	finalSpeed = (motioncalc_t)0.0;
 
 	peakDeltaA = max<motioncalc_t>(peakDeltaA, std::fabs(finalAcc));
-#if 1	//DEBUG
-	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(finalAcc) > ConvertAcceleration(50.0 * 420))	// 420 is extruder steps/mm in test config
+# if 1	//DEBUG
+	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(finalAcc) > MaxAccChange)
 	{
-		debugPrintf("Acc change to standstill %.1f\n", (double)InverseConvertAcceleration((float)std::fabs(finalAcc)));
+		debugPrintf("Acc change to standstill %.1f\n", (double)InverseConvertAcceleration((float)finalAcc));
 	}
-#endif
+# endif
 	finalAcc = (motioncalc_t)0.0;
 }
 
