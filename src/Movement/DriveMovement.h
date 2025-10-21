@@ -316,7 +316,7 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, float multiplier, Mot
 			}
 
 			const float rawPosition = (float)((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
-			currentMotorPosition = (int32_t)mParams.position;			// store the approximate position for OM updates
+			currentMotorPosition = (int32_t)rawPosition;												// store the approximate position for OM updates
 			mParams.position = rawPosition * multiplier;
 			mParams.speed = (float)(u + seg->GetA() * timeSinceStart) * multiplier;
 			mParams.acceleration = (float)seg->GetA() * multiplier;
