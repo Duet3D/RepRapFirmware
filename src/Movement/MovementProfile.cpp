@@ -137,7 +137,7 @@ double MovementProfile::CalculateDecelerationParameters() noexcept
 			peakAcceleration = jerk * halfTimeToReqSpeed;
 			peakDeceleration = -peakAcceleration;
 			reachesRequestedSpeed = true;
-			debugPrintf("Ss, rrs, no cas\n");
+//			debugPrintf("Ss, rrs, no cas\n");
 			return;
 		}
 		// Else we can't reach the requested speed without exceeding required distance, or we can only just reach it and then we need to start decelerating immediately. Fall through to beyond the else-part of this if-statement.
@@ -169,7 +169,7 @@ double MovementProfile::CalculateDecelerationParameters() noexcept
 				distances[2] = 2 * t2NonDecelDistance;
 				distances[3] = distances[4] = (double)0.0;
 				reachesRequestedSpeed = false;
-				debugPrintf("Ss, not rrs, cas\n");
+//				debugPrintf("Ss, not rrs, cas\n");
 			}
 			else
 			{
@@ -180,7 +180,7 @@ double MovementProfile::CalculateDecelerationParameters() noexcept
 				distances[2] = distances[4] = t2NonDecelDistance = timeToMaxAcceleration * topSpeed - distances[0];
 				distances[3] = distance - 2 * (distances[0] + distances[1] + distances[2]);
 				reachesRequestedSpeed = true;
-				debugPrintf("Ss, rrs, cas\n");
+//				debugPrintf("Ss, rrs, cas\n");
 			}
 			return;
 		}
@@ -197,7 +197,7 @@ double MovementProfile::CalculateDecelerationParameters() noexcept
 	peakAcceleration = jerk * halfTimeToTopSpeed;
 	peakDeceleration = -peakAcceleration;
 	reachesRequestedSpeed = false;
-	debugPrintf("Ss, not rrs, no cas\n");
+//	debugPrintf("Ss, not rrs, no cas\n");
 }
 
 // Calculate a general 3rd order motion plan for a sequence of moves
