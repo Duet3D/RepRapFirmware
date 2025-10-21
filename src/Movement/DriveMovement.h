@@ -328,13 +328,18 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 			}
 
 #if SUPPORT_S_CURVE
-			mParams.position = (float)((u + (0.5 * seg->GetA() + OneSixth * seg->GetJ() * timeSinceStart) * timeSinceStart) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
+			mParams.position = (float)((u + ((motioncalc_t)0.5 * seg->GetA() + OneSixth * seg->GetJ() * timeSinceStart) * timeSinceStart) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 #else
-			mParams.position = (float)((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
+			mParams.position = (float)((u + (motioncalc_t)0.5 * seg->GetA() * timeSinceStart) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 #endif
 			currentMotorPosition = (int32_t)mParams.position;			// store the approximate position for OM updates
+#if SUPPORT_S_CURVE
+			mParams.speed = (float)(u + (seg->GetA() + (motioncalc_t)0.5 * seg->GetJ() * timeSinceStart) * timeSinceStart);
+			mParams.acceleration = (float)(seg->GetA() + seg->GetJ() * timeSinceStart);
+#else
 			mParams.speed = (float)(u + seg->GetA() * timeSinceStart);
 			mParams.acceleration = (float)seg->GetA();
+#endif
 			return true;
 		}
 	}
