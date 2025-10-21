@@ -66,7 +66,7 @@ static inline uint32_t doubleToU32(double f) noexcept
 	{
 		debugPrintf("Calculated duration: %.4g\n", f);
 	}
-	return (std::signbit(f) || std::isnan(f)) ? 0 : (uint32_t)f;
+	return (std::signbit(f) || std::isnan(f)) ? 0 : (uint32_t)(f + (double)0.5);
 }
 
 // If the extrusion mix hasn't changed, calculate the feed rate ratio needed to maintain constant extrusion speed and the maximum end speed of the previous move
