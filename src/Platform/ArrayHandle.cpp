@@ -58,7 +58,7 @@ void ArrayHandle::AssignElement(size_t index, ExpressionValue &val) THROWS(GCode
 			return;
 		}
 	}
-	throw GCodeException("array index out of bounds");
+	throw GCodeException(ArrayIndexOutOfRangeText);
 }
 
 // Make an array unique and assign an element, possibly nested
@@ -75,7 +75,7 @@ void ArrayHandle::InternalAssignIndexed(volatile ArrayHandle *_ecv_from ah, cons
 	{
 		if (indices[0] >= (const_cast<ArrayHandle *_ecv_from>(ah))->GetNumElements())
 		{
-			throw GCodeException("array index out of bounds");
+			throw GCodeException(ArrayIndexOutOfRangeText);
 		}
 
 		Heap::IndexSlot *const newSlotPtr = _ecv_not_null(MakeUnique(ah));
