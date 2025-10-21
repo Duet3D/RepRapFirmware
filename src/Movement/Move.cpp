@@ -605,6 +605,10 @@ void Move::Init() noexcept
 
 #if SUPPORT_PHASE_STEPPING
 	phaseStepDMs = nullptr;
+	for (float& rm : phaseStepMultiplier)
+	{
+		rm = -(1.0/16.0);
+	}
 	ResetPhaseStepMonitoringVariables();
 #endif
 
@@ -2214,14 +2218,7 @@ PhaseStepParams Move::GetPhaseStepParams(size_t axisOrExtruder) const noexcept
 // Get the motor position in the current move so far, also speed and acceleration. Units are full steps and step clocks.
 bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
 {
-	const bool ret = dms[driver].GetCurrentMotion(when, mParams);
-	const float multiplier = ldexpf(-1.0, -(int)SmartDrivers::GetMicrostepShift(driver));
-
-	// Convert microsteps to full steps
-	mParams.position *= multiplier;
-	mParams.speed *= multiplier;
-	mParams.acceleration *= multiplier;
-	return ret;
+	return dms[driver].GetCurrentMotion(when, phaseStepMultiplier[driver], mParams);
 }
 
 bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept

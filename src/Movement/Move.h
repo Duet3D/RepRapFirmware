@@ -633,13 +633,14 @@ private:
 	DriveMovement *_ecv_null activeDMs;
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	DriveMovement *_ecv_null phaseStepDMs;
+	float phaseStepMultiplier[MaxAxesPlusExtruders];				// the negative of the reciprocal of the microstepping of each drive
 
 	// These variables monitor how fast the phase stepping control loop is running etc.
-	StepTimer::Ticks prevPSControlLoopCallTime;			// The last time the control loop was called
+	StepTimer::Ticks prevPSControlLoopCallTime;				// The last time the control loop was called
 	StepTimer::Ticks minPSControlLoopRuntime;				// The minimum time the control loop has taken to run
 	StepTimer::Ticks maxPSControlLoopRuntime;				// The maximum time the control loop has taken to run
-	StepTimer::Ticks minPSControlLoopCallInterval;		// The minimum interval between the control loop being called
-	StepTimer::Ticks maxPSControlLoopCallInterval;		// The maximum interval between the control loop being called
+	StepTimer::Ticks minPSControlLoopCallInterval;			// The minimum interval between the control loop being called
+	StepTimer::Ticks maxPSControlLoopCallInterval;			// The maximum interval between the control loop being called
 #endif
 
 #if SUPPORT_ASYNC_MOVES

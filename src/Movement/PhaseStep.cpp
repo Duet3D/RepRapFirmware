@@ -128,7 +128,7 @@ uint16_t PhaseStep::GetPhaseOffset(size_t driver)
 
 uint16_t PhaseStep::CalculateStepPhase(size_t driver) noexcept
 {
-	const float multiplier = reprap.GetMove().GetDirectionValue(driver) ? 1.0 : -1.0;
+	const float multiplier = (reprap.GetMove().GetDirectionValue(driver)) ? 1.0 : -1.0;
 	const uint16_t calculatedStepPhase = (uint16_t)llrintf(mParams.position * multiplier * 1024.0);		// we use llrintf so that we can guarantee to convert the float operand to integer. We only care about the lowest 12 bits.
 	return (calculatedStepPhase + phaseOffset[driver]) % 4096u;
 }
