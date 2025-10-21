@@ -18,12 +18,12 @@ Changes to RRF for RTOS
 [done] Make interface between Network received data and GCodeBuffer thread safe, ready for running as separate tasks
 [done] FileGCodeInput: do away with unnecessary local buffer
 [done] Run Network as a separate task
-Run Move as a separate task. Probably needs a mutex to protect calls into it, e.g. babystepping and pause.
+[done] Run Move as a separate task. Probably needs a mutex to protect calls into it, e.g. babystepping and pause.
 Use DMA for SharedSPI transfers, suspend the calling task while waiting on a transfer
-Do a SAM4S version of FreeRTOS, then do a SAM4S_RTOS build of RRF
+[done] Do a SAM4S version of FreeRTOS, then do a SAM4S_RTOS build of RRF
 Stop allocating file buffers on the stack?
 Find maximum stack sizes and optimise stacks
-Run all network responders as separate tasks? Would need mutex on network interface access
+[not doing] Run all network responders as separate tasks? Would need mutex on network interface access
 
 Bugs
 
@@ -39,8 +39,8 @@ Bugs
 
 Deferred work
 
-Use our own vsnprintf, and stop using sscanf. Should save a significant amount of stack space.
-Check whether we use any time conversion functoins that use _reent
+[done] Use our own vsnprintf, and stop using sscanf. Should save a significant amount of stack space.
+Check whether we use any time conversion functions that use _reent
 SAME70 uses a different memory model i.e. not strongly-ordered. Does this have any consequences for the code so far?
 Are there any aspects of Platform that are not thread-safe? e.g. GCodes setting multiple interdependent variables while network reports on them?
-Use a mutex to protect HSMCI from reentrant calls (only needed if/when we support more than one HSMCI volume, which is unlikely but possoible on the SAME70)
+Use a mutex to protect HSMCI from reentrant calls (only needed if/when we support more than one HSMCI volume, which is unlikely but possible on the SAME70)
