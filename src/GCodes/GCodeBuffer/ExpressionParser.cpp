@@ -2254,7 +2254,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 							rslt.SetBool(false);
 							return;
 						}
-						ThrowParseException("Index out of range");
+						ThrowParseException(ArrayIndexOutOfRangeText);
 					}
 				}
 
