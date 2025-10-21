@@ -42,6 +42,9 @@ bool Move::SetMicrostepping(size_t drive, unsigned int microsteps, bool interp, 
 	if (ret)
 	{
 		microstepping[drive] = (interp) ? microsteps | 0x8000 : microsteps;
+#if SUPPORT_PHASE_STEPPING
+		phaseStepMultiplier[drive] = -1.0/(float)microsteps;		// 'microsteps' is normally a power of 2 so this should always be an exact value
+#endif
 		reprap.MoveUpdated();
 	}
 	return ret;
