@@ -215,6 +215,8 @@ static MovementProfile debugProfile;
 // Update the profile to reflect what's left of it to execute.
 /*static*/ void DDA::AllocateMoveFromPlan(MovementProfile& plannedProfile, PrepParams& params) noexcept
 {
+	constexpr uint32_t MinimumPhaseClocks = 10;
+
 	params.totalDistance = totalDistance;
 	double moveDistanceLeft = (double)totalDistance * (double)movementRatio;
 	const double djerk = plannedProfile.jerk;
@@ -225,6 +227,7 @@ static MovementProfile debugProfile;
 	params.initialAcceleration = (float)(acceleration * recipMovementRatio);
 
 	uint32_t totalClocks = 0;
+	size_t lastPhaseNumber;
 
 	do
 	{
@@ -255,6 +258,7 @@ static MovementProfile debugProfile;
 				params.distances[1] = params.distances[2] = params.distances[3] = params.distances[4] = params.distances[5] = params.distances[6] = 0;
 				params.phaseClocks[1] = params.phaseClocks[2] = params.phaseClocks[3] = params.phaseClocks[4] = params.phaseClocks[5] = params.phaseClocks[6] = 0;
 				afterPrepare.peakDeceleration = params.initialDeceleration = params.peakDeceleration = 0.0;
+				lastPhaseNumber = 0;
 				break;
 			}
 			moveDistanceLeft -= t0Distance;
@@ -294,6 +298,7 @@ static MovementProfile debugProfile;
 				params.distances[2] = params.distances[3] = params.distances[4] = params.distances[5] = params.distances[6] = 0;
 				params.phaseClocks[2] = params.phaseClocks[3] = params.phaseClocks[4] = params.phaseClocks[5] = params.phaseClocks[6] = 0;
 				afterPrepare.peakDeceleration = params.initialDeceleration = params.peakDeceleration = 0.0;
+				lastPhaseNumber = 1;
 				break;
 			}
 			moveDistanceLeft -= t1Distance;
@@ -335,6 +340,7 @@ static MovementProfile debugProfile;
 				params.distances[3] = params.distances[4] = params.distances[5] = params.distances[6] = 0;
 				params.phaseClocks[3] = params.phaseClocks[4] = params.phaseClocks[5] = params.phaseClocks[6] = 0;
 				afterPrepare.peakDeceleration = params.initialDeceleration = params.peakDeceleration = 0.0;
+				lastPhaseNumber = 2;
 				break;
 			}
 			moveDistanceLeft -= t2Distance;
@@ -367,6 +373,7 @@ static MovementProfile debugProfile;
 				params.distances[4] = params.distances[5] = params.distances[6] = 0;
 				params.phaseClocks[4] = params.phaseClocks[5] = params.phaseClocks[6] = 0;
 				afterPrepare.peakDeceleration = params.initialDeceleration = params.peakDeceleration = 0.0;
+				lastPhaseNumber = 3;
 				break;
 			}
 			moveDistanceLeft -= t3Distance;
@@ -409,6 +416,7 @@ static MovementProfile debugProfile;
 				params.distances[5] = params.distances[6] = 0.0;
 				params.phaseClocks[5] = params.phaseClocks[6] = 0;
 				afterPrepare.peakDeceleration = params.peakDeceleration = (float)(acceleration * recipMovementRatio);
+				lastPhaseNumber = 4;
 				break;
 			}
 			moveDistanceLeft -= t4Distance;
@@ -450,6 +458,7 @@ static MovementProfile debugProfile;
 				plannedProfile.distances[5] -= t5Distance;
 				params.distances[6] = 0.0;
 				params.phaseClocks[6] = 0;
+				lastPhaseNumber = 5;
 				break;
 			}
 			moveDistanceLeft -= t5Distance;
@@ -499,6 +508,7 @@ static MovementProfile debugProfile;
 		speed += (acceleration + OneHalfDouble * djerk * t6) * t6;
 		acceleration += djerk * t6;
 		plannedProfile.distances[6] = max<double>(plannedProfile.distances[6] - t6Distance, 0.0);
+		lastPhaseNumber = 6;
 	} while (false);
 
 	state = DDA::planned;
@@ -506,6 +516,45 @@ static MovementProfile debugProfile;
 	plannedProfile.startSpeed = speed;
 	plannedProfile.startAcceleration = acceleration;
 	clocksNeeded = totalClocks;
+
+	// Allocating phases between moves sometimes leads to some very short segments at the start and/or end of the move.
+	// This is inefficient, and also messes up the initial speed calculation due to the rounding of duration to integer, resulting in large reported discontinuities.
+	// So we eliminate very short phases by merging them with adjacent phases. This will result in very small speed discontinuities.
+	// First find the first and non-empty segment number (we already have the last non-empty segment number)
+	size_t firstPhaseNumber = 0;
+	while (firstPhaseNumber < lastPhaseNumber && params.distances[firstPhaseNumber] == 0.0) { ++firstPhaseNumber; }
+
+	// If the first non-empty segment is very short, move it into the next non-empty segment
+	if (firstPhaseNumber < lastPhaseNumber && params.phaseClocks[firstPhaseNumber] < MinimumPhaseClocks)
+	{
+		// Find the next non-empty segment
+		size_t nextPhaseNumber = firstPhaseNumber + 1;
+		while (nextPhaseNumber < lastPhaseNumber && params.distances[nextPhaseNumber] == 0.0)
+		{
+			++nextPhaseNumber;
+		}
+		params.distances[nextPhaseNumber] += params.distances[firstPhaseNumber];
+		params.phaseClocks[nextPhaseNumber] += params.phaseClocks[firstPhaseNumber];
+		params.distances[firstPhaseNumber] = 0.0;
+		params.phaseClocks[firstPhaseNumber] = 0;
+		firstPhaseNumber = nextPhaseNumber;
+	}
+
+	// If the last non-empty segment is very short, move it into the previous non-empty segment
+	if (lastPhaseNumber > firstPhaseNumber && params.phaseClocks[lastPhaseNumber] < MinimumPhaseClocks)
+	{
+		// Find the previous non-empty segment
+		size_t prevPhaseNumber = lastPhaseNumber - 1;
+		while (prevPhaseNumber > firstPhaseNumber && params.distances[prevPhaseNumber] == 0.0)
+		{
+			--prevPhaseNumber;
+		}
+		params.distances[prevPhaseNumber] += params.distances[lastPhaseNumber];
+		params.phaseClocks[prevPhaseNumber] += params.phaseClocks[lastPhaseNumber];
+		params.distances[lastPhaseNumber] = 0.0;
+		params.phaseClocks[lastPhaseNumber] = 0;
+	}
+
 #if 0
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
 	{
