@@ -1301,7 +1301,6 @@ decrease(strlen(idString))	// recursion variant
 	}
 
 	// Here we need to handle separately all the types that can be indexed.
-	// If we are at the end of the selector string then we only need to handle context.WantExists() in conjunction with context.WantArrayLength().
 	switch (val.GetType())
 	{
 	case TypeCode::ObjectModelArray:
@@ -1390,6 +1389,10 @@ decrease(strlen(idString))	// recursion variant
 		}
 
 	case TypeCode::ObjectModel_tc:
+		if (*idString == 0)
+		{
+			return val;
+		}
 		if (*idString == '.')
 		{
 			context.CheckStack(StackUsage::GetObjectValue_withTable);
@@ -1601,15 +1604,6 @@ decrease(strlen(idString))	// recursion variant
 	default:
 		throw context.ConstructParseException("unexpected character in selector string");
 	}
-
-	if (context.WantExists())
-	{
-		return ExpressionValue(false);
-	}
-
-	throw context.ConstructParseException("reached primitive type before end of selector string");
-	throw context.ConstructParseException("object is not an array");
-	throw context.ConstructParseException("reached null object before end of selector string");
 }
 
 // Separate function to avoid the tm object (44 bytes) being allocated on the stack frame of a recursive function
