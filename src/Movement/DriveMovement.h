@@ -328,9 +328,11 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, float multiplier, Mot
 			}
 
 #if SUPPORT_S_CURVE
-			const float rawPosition = (float)((u + ((motioncalc_t)0.5 * seg->GetA() + OneSixth * seg->GetJ() * timeSinceStart) * timeSinceStart) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
+			const float rawPosition = (float)((u + ((motioncalc_t)0.5 * seg->GetA() + OneSixth * seg->GetJ() * timeSinceStart) * timeSinceStart) * timeSinceStart
+										+ (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 #else
-			const float rawPosition = (float)((u + (motioncalc_t)0.5 * seg->GetA() * timeSinceStart) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
+			const float rawPosition = (float)((u + (motioncalc_t)0.5 * seg->GetA() * timeSinceStart) * timeSinceStart
+										+ (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 #endif
 			currentMotorPosition = (int32_t)rawPosition;												// store the approximate position for OM updates
 			mParams.position = rawPosition * multiplier;
