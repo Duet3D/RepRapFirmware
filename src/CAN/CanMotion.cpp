@@ -141,9 +141,13 @@ CanMessageBuffer *_ecv_null CanMotion::GetBuffer(const PrepParams& params, Drive
 #if SUPPORT_S_CURVE
 		if (params.jerk != 0.0)
 		{
-			// We don't support S-curve acceleration on expansion boards, so the best we can do is compute an average acceleration and scale it to unit distance
-			move->acceleration = (params.peakAcceleration * params.TotalAccelClocks() - 0.5 * params.jerk * (fsquare(params.phaseClocks[0]) + fsquare(params.phaseClocks[2])))/(params.TotalAccelClocks() * params.totalDistance);
-			move->deceleration = (-params.peakDeceleration * params.TotalDecelClocks() - 0.5 * params.jerk * (fsquare(params.phaseClocks[4]) + fsquare(params.phaseClocks[6])))/(params.TotalDecelClocks() * params.totalDistance);
+			// We don't support 3rd order motion on expansion boards yet, so the best we can do is compute an average acceleration and scale it to unit distance
+			move->acceleration = (params.TotalAccelClocks() <= 0)
+								? 0.0
+									: (params.peakAcceleration * params.TotalAccelClocks() - 0.5 * params.jerk * (fsquare(params.phaseClocks[0]) + fsquare(params.phaseClocks[2])))/(params.TotalAccelClocks() * params.totalDistance);
+			move->deceleration = (params.TotalDecelClocks() <= 0)
+								? 0.0
+									: (-params.peakDeceleration * params.TotalDecelClocks() - 0.5 * params.jerk * (fsquare(params.phaseClocks[4]) + fsquare(params.phaseClocks[6])))/(params.TotalDecelClocks() * params.totalDistance);
 		}
 		else
 		{
