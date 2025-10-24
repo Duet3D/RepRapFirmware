@@ -172,6 +172,8 @@ public:
 	ReadLockedPointer<const VariableSet> GetGlobalVariablesForReading() noexcept { return globalVariables.GetForReading(); }
 	WriteLockedPointer<VariableSet> GetGlobalVariablesForWriting() noexcept { return globalVariables.GetForWriting(); }
 
+	static void StartJsonResponse(const GCodeBuffer *_ecv_null gb, OutputBuffer *outbuf) noexcept;
+
 	static constexpr uint16_t DefaultDebugFlags = 0x00FF;
 
 protected:

@@ -42,7 +42,8 @@ public:
 	int8_t GetCommandFraction() const noexcept { return commandFraction; }
 	bool IsLastCommand() const noexcept;
 	bool ContainsExpression() const noexcept { return seenExpression; }
-	bool HadLineNumber() const noexcept { return hadLineNumber; }
+	bool HadExplicitLineNumber() const noexcept { return hadLineNumber; }
+	uint32_t GetExplicitLineNumber() const noexcept { return receivedLineNumber; }
 
 	bool Seen(char c) noexcept SPEED_CRITICAL;													// Is a character present?
 	ParameterLettersBitmap AllParameters() const noexcept { return parametersPresent; }			// Return the bitmap of all parameters seen

@@ -1985,12 +1985,12 @@ OutputBuffer *_ecv_null RepRap::GetLegacyStatusResponse(uint8_t type, int seq) c
 }
 
 // Start constructing a JSON response in the provided output buffer. If there was a line number, put it in the response.
-static void StartJsonResponse(const GCodeBuffer *_ecv_null gb, OutputBuffer *outbuf) noexcept
+/*static*/ void RepRap::StartJsonResponse(const GCodeBuffer *_ecv_null gb, OutputBuffer *outbuf) noexcept
 {
 	outbuf->copy('{');
-	if (gb != nullptr && gb->HadLineNumber())
+	if (gb != nullptr && gb->HadExplicitLineNumber())
 	{
-		outbuf->catf("\"line\":%ld,", gb->GetLineNumber());
+		outbuf->catf("\"line\":%ld,", gb->GetExplicitLineNumber());
 	}
 }
 

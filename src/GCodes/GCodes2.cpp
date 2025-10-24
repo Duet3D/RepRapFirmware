@@ -1509,9 +1509,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (format == 2)
 					{
 						reply.copy("{");
-						if (gb.HadLineNumber())
+						if (gb.HadExplicitLineNumber())
 						{
-							reply.catf("\"line\":%ld,", gb.GetLineNumber());
+							reply.catf("\"line\":%ld,", gb.GetExplicitLineNumber());
 						}
 						reply.catf("\"SDinfo\":{\"slot\":%" PRIu32 ",\"present\":", slot);
 						if (res == MassStorage::InfoResult::ok)
@@ -4573,12 +4573,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							gb.GetQuotedString(eraseString.GetRef());
 							if (eraseString.Equals("ERASE"))
 							{
-								platform.AppendAuxReply(auxChannel, panelDueCommandEraseAndReset, true);
+								platform.AppendAuxReply(auxChannel, nullptr, panelDueCommandEraseAndReset, true);
 							}
 						}
 						else
 						{
-							platform.AppendAuxReply(auxChannel, panelDueCommandReset, true);
+							platform.AppendAuxReply(auxChannel, nullptr, panelDueCommandReset, true);
 						}
 						break;
 					}

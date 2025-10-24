@@ -2910,7 +2910,7 @@ void Platform::InitPanelDueUpdater() noexcept
 }
 #endif
 
-void Platform::AppendAuxReply(size_t auxNumber, const char *_ecv_array msg, bool rawMessage) noexcept
+void Platform::AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, const char *_ecv_array msg, bool rawMessage) noexcept
 {
 #if HAS_AUX_DEVICES
 	if (auxNumber < ARRAY_SIZE(auxDevices))
@@ -2920,12 +2920,12 @@ void Platform::AppendAuxReply(size_t auxNumber, const char *_ecv_array msg, bool
 		{
 			return;
 		}
-		auxDevices[auxNumber].AppendAuxReply(msg, rawMessage);
+		auxDevices[auxNumber].AppendAuxReply(gb, msg, rawMessage);
 	}
 #endif
 }
 
-void Platform::AppendAuxReply(size_t auxNumber, OutputBuffer *reply, bool rawMessage) noexcept
+void Platform::AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *reply, bool rawMessage) noexcept
 {
 #if HAS_AUX_DEVICES
 	if (auxNumber < ARRAY_SIZE(auxDevices))
@@ -2936,7 +2936,7 @@ void Platform::AppendAuxReply(size_t auxNumber, OutputBuffer *reply, bool rawMes
 			OutputBuffer::ReleaseAll(reply);
 			return;
 		}
-		auxDevices[auxNumber].AppendAuxReply(reply, rawMessage);
+		auxDevices[auxNumber].AppendAuxReply(gb, reply, rawMessage);
 	}
 	else
 #endif
@@ -2946,7 +2946,7 @@ void Platform::AppendAuxReply(size_t auxNumber, OutputBuffer *reply, bool rawMes
 }
 
 // Send the specified message to the specified destinations. The Error and Warning flags have already been handled.
-void Platform::RawMessage(MessageType type, const char *_ecv_array message) noexcept
+void Platform::RawMessage(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array message) noexcept
 {
 #if HAS_MASS_STORAGE
 	// Deal with logging
@@ -2963,7 +2963,7 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 	}
 	else if ((type & AuxMessage) != 0)
 	{
-		AppendAuxReply(0, message, message[0] == '{' || (type & RawMessageFlag) != 0);
+		AppendAuxReply(0, gb, message, message[0] == '{' || (type & RawMessageFlag) != 0);
 	}
 
 	if ((type & HttpMessage) != 0)
@@ -2978,7 +2978,7 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 
 	if ((type & Aux2Message) != 0)
 	{
-		AppendAuxReply(1, message, message[0] == '{' || (type & RawMessageFlag) != 0);
+		AppendAuxReply(1, gb, message, message[0] == '{' || (type & RawMessageFlag) != 0);
 	}
 
 	if ((type & BlockingUsbMessage) != 0)
@@ -3027,7 +3027,8 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 			if (OutputBuffer::Allocate(buf))
 			{
 				usbMessageSeq++;
-				buf->printf("{\"seq\":%" PRIu32 ",\"resp\":\"%.s\"}\n", usbMessageSeq, message);
+				RepRap::StartJsonResponse(gb, buf);
+				buf->catf("\"seq\":%" PRIu32 ",\"resp\":\"%.s\"}\n", usbMessageSeq, message);
 				usbOutput.Push(buf);
 			}
 			// else we can't allocate a buffer, so discard the message
@@ -3071,13 +3072,13 @@ void Platform::Message(MessageType type, OutputBuffer *buffer) noexcept
 
 		if ((type & (AuxMessage | ImmediateAuxMessage)) != 0)
 		{
-			AppendAuxReply(0, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
+			AppendAuxReply(0, nullptr, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
 
 #ifdef SERIAL_AUX2_DEVICE
 		if ((type & Aux2Message) != 0)
 		{
-			AppendAuxReply(1, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
+			AppendAuxReply(1, nullptr, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
 #endif
 
@@ -3105,7 +3106,7 @@ void Platform::Message(MessageType type, OutputBuffer *buffer) noexcept
 	}
 }
 
-void Platform::MessageV(MessageType type, const char *_ecv_array fmt, va_list vargs) noexcept
+void Platform::MessageV(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array fmt, va_list vargs) noexcept
 {
 	String<FormatStringLength> formatString;
 #if HAS_SBC_INTERFACE
@@ -3135,14 +3136,22 @@ void Platform::MessageV(MessageType type, const char *_ecv_array fmt, va_list va
 		formatString.vprintf(fmt, vargs);
 	}
 
-	RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
+	RawMessage(gb, (MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
 }
 
 void Platform::MessageF(MessageType type, const char *_ecv_array fmt, ...) noexcept
 {
 	va_list vargs;
 	va_start(vargs, fmt);
-	MessageV(type, fmt, vargs);
+	MessageV(nullptr, type, fmt, vargs);
+	va_end(vargs);
+}
+
+void Platform::MessageF(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array fmt, ...) noexcept
+{
+	va_list vargs;
+	va_start(vargs, fmt);
+	MessageV(gb, type, fmt, vargs);
 	va_end(vargs);
 }
 
@@ -3162,7 +3171,7 @@ void Platform::Message(MessageType type, const char *_ecv_array message) noexcep
 
 	if ((type & (ErrorMessageFlag | WarningMessageFlag)) == 0)
 	{
-		RawMessage(type, message);
+		RawMessage(nullptr, type, message);
 	}
 	else
 	{
@@ -3181,7 +3190,7 @@ void Platform::Message(MessageType type, const char *_ecv_array message) noexcep
 			String<FormatStringLength> formatString;
 			formatString.copy(((type & ErrorMessageFlag) != 0) ? "Error: " : "Warning: ");
 			formatString.cat(message);
-			RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
+			RawMessage(nullptr, (MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
 		}
 	}
 }
