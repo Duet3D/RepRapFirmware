@@ -578,7 +578,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		const unsigned int startAt = (firstVal == nullptr) ? 0 : StrToU32(firstVal);
 		const char *_ecv_array _ecv_null const maxVal = GetKeyValue("max");
 		const int maxItems = (maxVal == nullptr) ? -1 : StrToI32(maxVal, nullptr);
-		response = reprap.GetFilelistResponse(parameter, startAt, maxItems);			// this may return nullptr
+		response = reprap.GetFilelistResponse(nullptr, parameter, startAt, maxItems);			// this may return nullptr
 	}
 	else if (StringEqualsIgnoreCase(request, "files"))
 	{
@@ -594,7 +594,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		const bool flagDirs = flagDirsVal != nullptr && StrToU32(flagDirsVal) == 1;
 		const char *_ecv_array _ecv_null const maxVal = GetKeyValue("max");
 		const int maxItems = (maxVal == nullptr) ? -1 : StrToI32(maxVal, nullptr);
-		response = reprap.GetFilesResponse(dir, startAt, maxItems, flagDirs);			// this may return nullptr
+		response = reprap.GetFilesResponse(nullptr, dir, startAt, maxItems, flagDirs);			// this may return nullptr
 	}
 	else if (StringEqualsIgnoreCase(request, "upload"))
 	{
@@ -735,7 +735,7 @@ HttpSessionKey HttpResponder::GetSessionKey() const noexcept
 bool HttpResponder::SendFileInfo(bool quitEarly) noexcept
 {
 	OutputBuffer *_ecv_null jsonResponse = nullptr;
-	bool gotFileInfo = (reprap.GetFileInfoResponse(filenameBeingProcessed.c_str(), jsonResponse, quitEarly) != GCodeResult::notFinished);
+	bool gotFileInfo = (reprap.GetFileInfoResponse(nullptr, filenameBeingProcessed.c_str(), jsonResponse, quitEarly) != GCodeResult::notFinished);
 	if (gotFileInfo)
 	{
 		// Got it - send the response now

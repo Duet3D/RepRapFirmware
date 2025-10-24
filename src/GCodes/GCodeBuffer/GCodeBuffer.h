@@ -79,6 +79,7 @@ public:
 	bool ContainsExpression() const noexcept;
 	void GetCompleteParameters(const StringRef& str) THROWS(GCodeException);		// Get all of the line following the command. Currently called only for the Q0 command.
 	int32_t GetLineNumber() const noexcept { return CurrentFileMachineState().lineNumber; }
+	bool HadLineNumber() const noexcept;
 	bool IsLastCommand() const noexcept;
 	GCodeResult GetLastResult() const noexcept { return lastResult; }
 	void SetLastResult(GCodeResult r) noexcept { lastResult = r; }
