@@ -1667,11 +1667,12 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 		Platform::hasGenericDebug = true;
 	}
 
-	// Adjust the distance (and implicitly the initial speed) to account for pressure advance
 #if SUPPORT_S_CURVE
-	distance += a * pressureAdvanceClocks * duration;
+	// Adjust the distance and acceleration (and implicitly the initial speed) to account for pressure advance
+	distance += (a + 0.5 * j * (motioncalc_t)duration) * pressureAdvanceClocks * (motioncalc_t)duration;
 	a += j * pressureAdvanceClocks;
 #else
+	// Adjust the distance (and implicitly the initial speed) to account for pressure advance
 	distance += a * pressureAdvanceClocksTimesDuration;
 #endif
 
