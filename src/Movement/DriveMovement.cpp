@@ -166,7 +166,7 @@ inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpee
 
 	peakDeltaA = max<motioncalc_t>(peakDeltaA, std::fabs(newAcc - finalAcc));
 # if DEBUG_DISCONTINUITIES
-	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(newAcc - finalAcc) > MaxAccChange)
+	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(newAcc - finalAcc) > MaxAccChange && extruderShaper.GetKclocks() == 0.0)
 	{
 		debugPrintf("Acc change %.1f to %.1f\n", (double)InverseConvertAcceleration((float)finalAcc), (double)InverseConvertAcceleration((float)newAcc));
 		MoveSegment::DebugPrintList(segments);
@@ -180,19 +180,19 @@ inline void DriveMovement::MovementStopped() noexcept
 {
 	u = (motioncalc_t)0.0;
 	peakDeltaV = max<motioncalc_t>(peakDeltaV, std::fabs(finalSpeed));
-# if 1	//DEBUG
+# if DEBUG_DISCONTINUITIES
 	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(finalSpeed) > MaxSpeedChange)
 	{
-		debugPrintf("Speed change to standstill %.1f\n", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed));
+		debugPrintf("Speed change %.1f to standstill\n", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed));
 	}
 # endif
 	finalSpeed = (motioncalc_t)0.0;
 
 	peakDeltaA = max<motioncalc_t>(peakDeltaA, std::fabs(finalAcc));
-# if 1	//DEBUG
-	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(finalAcc) > MaxAccChange)
+# if DEBUG_DISCONTINUITIES
+	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(finalAcc) > MaxAccChange && extruderShaper.GetKclocks() == 0.0)
 	{
-		debugPrintf("Acc change to standstill %.1f\n", (double)InverseConvertAcceleration((float)finalAcc));
+		debugPrintf("Acc change %.1f to standstill\n", (double)InverseConvertAcceleration((float)finalAcc));
 	}
 # endif
 	finalAcc = (motioncalc_t)0.0;
