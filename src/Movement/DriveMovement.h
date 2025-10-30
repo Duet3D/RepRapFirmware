@@ -95,7 +95,7 @@ private:
 	MoveSegment *_ecv_null NewSegment(uint32_t now) noexcept SPEED_CRITICAL;
 	bool ScheduleFirstSegment() noexcept;
 
-	void ReleaseSegments() noexcept;					// release the list of segments and set it to nullptr
+	void RetireSegment(MoveSegment *oldSegment) noexcept;							// retire the current segment but keep it available temporarily for debugging
 	bool LogStepError(uint8_t type, float info, const MoveSegment *seg) noexcept;	// record a step error
 
 #if SUPPORT_PHASE_STEPPING
@@ -104,6 +104,7 @@ private:
 #if SUPPORT_S_CURVE
 	void UpdateSpeedAndAccelerationChange(motioncalc_t newSpeed, motioncalc_t speedChange, motioncalc_t newAcc, motioncalc_t accChange) noexcept;
 	void MovementStopped() noexcept;
+	void PrintRetiredSegment() const noexcept;
 #endif
 
 #if CHECK_SEGMENTS
@@ -115,8 +116,9 @@ private:
 
 	// Parameters common to Cartesian, delta and extruder moves
 
-	DriveMovement *_ecv_null nextDM ;					// link to next DM that needs a step
-	MoveSegment *volatile _ecv_null segments;			// pointer to the segment list for this driver
+	DriveMovement *_ecv_null nextDM ;							// link to next DM that needs a step
+	MoveSegment *volatile _ecv_null segments = nullptr;			// pointer to the segment list for this driver
+	MoveSegment *volatile _ecv_null retiredSegment = nullptr;	// the most recent segment we retired
 
 	ExtruderShaper extruderShaper;						// pressure advance control
 
@@ -319,7 +321,7 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, float multiplier, Mot
 
 					MoveSegment *oldSeg = seg;
 					segments = oldSeg->GetNext();
-					MoveSegment::Release(oldSeg);
+					RetireSegment(oldSeg);
 					seg = NewSegment(when);
 					hasMotion = true;
 					continue;

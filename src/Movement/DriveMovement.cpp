@@ -103,6 +103,16 @@ void DriveMovement::Diagnostics(const StringRef& reply) noexcept
 #endif
 }
 
+// Retire the current segment but keep it available temporarily for debugging
+void DriveMovement::RetireSegment(MoveSegment *oldSegment) noexcept
+{
+	if (retiredSegment != nullptr)
+	{
+		MoveSegment::Release(retiredSegment);
+	}
+	retiredSegment = oldSegment;
+}
+
 // Set the position of a motor. Only call this when the motor is not moving.
 void DriveMovement::SetMotorPosition(int32_t pos) noexcept
 {
@@ -150,6 +160,18 @@ constexpr float MaxSpeedChange = ConvertSpeedFromMmPerSec(0.1 * 420);		// 420 is
 constexpr float MaxAccChange = ConvertAcceleration(5.0 * 420);				// 420 is extruder steps/mm in test config
 # endif
 
+void DriveMovement::PrintRetiredSegment() const noexcept
+{
+	if (retiredSegment != nullptr)
+	{
+		retiredSegment->DebugPrint();
+	}
+	else
+	{
+		debugPrintf("null\n");
+	}
+}
+
 // Update the stored speed, final acceleration, speed change and acceleration change values
 inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpeed, motioncalc_t speedChange, motioncalc_t newAcc, motioncalc_t accChange) noexcept
 {
@@ -158,7 +180,8 @@ inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpee
 # if DEBUG_DISCONTINUITIES
 	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(newSpeed - finalSpeed) > MaxSpeedChange)
 	{
-		debugPrintf("Speed change %.1f to %.1f\n", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed), (double)InverseConvertSpeedToMmPerSec((float)newSpeed));
+		debugPrintf("Speed change %.1f to %.1f, retired: ", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed), (double)InverseConvertSpeedToMmPerSec((float)newSpeed));
+		PrintRetiredSegment();
 		MoveSegment::DebugPrintList(segments);
 	}
 # endif
@@ -168,7 +191,8 @@ inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpee
 # if DEBUG_DISCONTINUITIES
 	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(newAcc - finalAcc) > MaxAccChange && extruderShaper.GetKclocks() == 0.0)
 	{
-		debugPrintf("Acc change %.1f to %.1f\n", (double)InverseConvertAcceleration((float)finalAcc), (double)InverseConvertAcceleration((float)newAcc));
+		debugPrintf("Acc change %.1f to %.1f, retired: ", (double)InverseConvertAcceleration((float)finalAcc), (double)InverseConvertAcceleration((float)newAcc));
+		PrintRetiredSegment();
 		MoveSegment::DebugPrintList(segments);
 	}
 # endif
@@ -183,7 +207,8 @@ inline void DriveMovement::MovementStopped() noexcept
 # if DEBUG_DISCONTINUITIES
 	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(finalSpeed) > MaxSpeedChange)
 	{
-		debugPrintf("Speed change %.1f to standstill\n", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed));
+		debugPrintf("Speed change %.1f to standstill, retired: ", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed));
+		PrintRetiredSegment();
 	}
 # endif
 	finalSpeed = (motioncalc_t)0.0;
@@ -192,7 +217,8 @@ inline void DriveMovement::MovementStopped() noexcept
 # if DEBUG_DISCONTINUITIES
 	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(finalAcc) > MaxAccChange && extruderShaper.GetKclocks() == 0.0)
 	{
-		debugPrintf("Acc change %.1f to standstill\n", (double)InverseConvertAcceleration((float)finalAcc));
+		debugPrintf("Acc change %.1f to standstill, retired: ", (double)InverseConvertAcceleration((float)finalAcc));
+		PrintRetiredSegment();
 	}
 # endif
 	finalAcc = (motioncalc_t)0.0;
@@ -398,7 +424,7 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 		distanceCarriedForwards = newDcf;
 		MoveSegment *oldSeg = seg;
 		segments = seg = seg->GetNext();							// skip this segment
-		MoveSegment::Release(oldSeg);
+		RetireSegment(oldSeg);
 	}
 }
 
@@ -506,7 +532,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 			movementAccumulator += netStepsThisSegment;				// update the amount of extrusion
 			segments = currentSegment->GetNext();
 			const uint32_t prevEndTime = currentSegment->GetStartTime() + currentSegment->GetDuration();
-			MoveSegment::Release(currentSegment);
+			RetireSegment(currentSegment);
 			currentSegment = NewSegment(now);
 			if (currentSegment == nullptr)
 			{
