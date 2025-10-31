@@ -106,7 +106,7 @@ public:
 	void operator delete(void* ptr, std::align_val_t align) noexcept {}
 
 	// Read the values of the flag bits
-	bool IsLinear() const noexcept { return a == 0.0; }
+	bool IsLinear() const noexcept { return a == (motioncalc_t)0.0; }
 	MovementFlags GetFlags() const noexcept { return flags; }
 
 #if 0 //SUPPORT_REMOTE_COMMANDS

@@ -34,7 +34,7 @@ constexpr ObjectModelArrayTableEntry AxisShaper::objectModelArrayTable[] =
 	{
 		nullptr,					// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT(self->numImpulses),
-		OBJECT_MODEL_ARRAY_VALUE(self->coefficients[context.GetLastIndex()], 3)
+		OBJECT_MODEL_ARRAY_VALUE((float)self->coefficients[context.GetLastIndex()], 3)
 	},
 	// 1. Durations
 	{
@@ -273,18 +273,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		reprap.MoveUpdated();
 
 #if SUPPORT_CAN_EXPANSION
-# if USE_DOUBLE_MOTIONCALC
-		{
-			float fCoefficients[MaxImpulses];
-			for (size_t i = 0; i < numImpulses; ++i)
-			{
-				fCoefficients[i] = (float)coefficients[i];
-			}
-			return reprap.GetMove().UpdateRemoteInputShaping(numImpulses, fCoefficients, delays, reply);
-		}
-# else
 		return UpdateRemoteInputShaping(reply);
-# endif
 #else
 		// Fall through to return GCodeResult::ok
 #endif
@@ -335,7 +324,7 @@ GCodeResult AxisShaper::UpdateRemoteInputShaping(const StringRef& reply) const n
 					msg->numImpulses = numImpulses;
 					for (unsigned int i = 0; i < numImpulses; ++i)
 					{
-						msg->impulses[i].coefficient = coefficients[i];
+						msg->impulses[i].coefficient = (float)coefficients[i];
 						msg->impulses[i].delay = delays[i];
 					}
 					buf->dataLength = msg->GetActualDataLength();

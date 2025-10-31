@@ -221,10 +221,10 @@ static MovementProfile debugProfile;
 	double moveDistanceLeft = (double)totalDistance * (double)movementRatio;
 	const double djerk = plannedProfile.jerk;
 	const double recipMovementRatio = (double)1.0/(double)movementRatio;
-	params.jerk = (float)(djerk * recipMovementRatio);
+	params.jerk = (motioncalc_t)(djerk * recipMovementRatio);
 	double speed = plannedProfile.startSpeed;
 	double acceleration = plannedProfile.startAcceleration;
-	params.initialAcceleration = (float)(acceleration * recipMovementRatio);
+	params.initialAcceleration = (motioncalc_t)(acceleration * recipMovementRatio);
 
 	uint32_t totalClocks = 0;
 	size_t lastPhaseNumber;
@@ -235,7 +235,7 @@ static MovementProfile debugProfile;
 		{
 			const bool lastPhase = (moveDistanceLeft <= plannedProfile.distances[0]);
 			const double t0Distance = (lastPhase) ? moveDistanceLeft : plannedProfile.distances[0];
-			params.distances[0] = (float)(t0Distance * recipMovementRatio);
+			params.distances[0] = (motioncalc_t)(t0Distance * recipMovementRatio);
 			const double t0 = SmallestNonNegativeCubicSolution(plannedProfile.jerk, 3 * acceleration, 6 * speed, -6 * t0Distance);
 			if (std::isnan(t0) || t0 < (double)0.0)
 			{
@@ -253,11 +253,14 @@ static MovementProfile debugProfile;
 			if (lastPhase)
 			{
 				plannedProfile.distances[0] -= t0Distance;
-				topSpeed = params.topSpeed = (float)(speed * recipMovementRatio);
-				afterPrepare.peakAcceleration = params.peakAcceleration = (float)(acceleration * recipMovementRatio);
+				params.topSpeed = (motioncalc_t)(speed * recipMovementRatio);
+				topSpeed = (float)params.topSpeed;
+				params.peakAcceleration = (motioncalc_t)(acceleration * recipMovementRatio);
+				afterPrepare.peakAcceleration = (float)params.peakAcceleration;
 				params.distances[1] = params.distances[2] = params.distances[3] = params.distances[4] = params.distances[5] = params.distances[6] = 0;
 				params.phaseClocks[1] = params.phaseClocks[2] = params.phaseClocks[3] = params.phaseClocks[4] = params.phaseClocks[5] = params.phaseClocks[6] = 0;
-				afterPrepare.peakDeceleration = params.initialDeceleration = params.peakDeceleration = 0.0;
+				params.initialDeceleration = params.peakDeceleration = 0.0;
+				afterPrepare.peakDeceleration = 0.0;
 				lastPhaseNumber = 0;
 				break;
 			}
@@ -274,7 +277,7 @@ static MovementProfile debugProfile;
 		{
 			const bool lastPhase = (moveDistanceLeft <= plannedProfile.distances[1]);
 			const double t1Distance = (lastPhase) ? moveDistanceLeft : plannedProfile.distances[1];
-			params.distances[1] = (float)(t1Distance * recipMovementRatio);
+			params.distances[1] = (motioncalc_t)(t1Distance * recipMovementRatio);
 			const double t1 = SmallestNonNegativeQuadraticSolution(OneHalfDouble * plannedProfile.peakAcceleration, speed, -t1Distance);
 			if (std::isnan(t1) || t1 < (double)0.0)
 			{
@@ -287,17 +290,19 @@ static MovementProfile debugProfile;
 			{
 				debugPrintf("Phase 1 %.4e %lu %.4e %.4e %.4e %.4e\n", t1Distance, params.phaseClocks[1], speed, acceleration, (double)0.0, (double)plannedProfile.peakAcceleration);
 			}
-			params.peakAcceleration = (float)(acceleration * recipMovementRatio);
+			params.peakAcceleration = (motioncalc_t)(acceleration * recipMovementRatio);
 			speed += t1 * plannedProfile.peakAcceleration;
 			acceleration = plannedProfile.peakAcceleration;
 			if (lastPhase)
 			{
 				plannedProfile.distances[1] -= t1Distance;
-				topSpeed = params.topSpeed = (float)(speed * recipMovementRatio);
-				afterPrepare.peakAcceleration = params.peakAcceleration;
+				params.topSpeed = (motioncalc_t)(speed * recipMovementRatio);
+				topSpeed = (float)params.topSpeed;
+				afterPrepare.peakAcceleration = (float)params.peakAcceleration;
 				params.distances[2] = params.distances[3] = params.distances[4] = params.distances[5] = params.distances[6] = 0;
 				params.phaseClocks[2] = params.phaseClocks[3] = params.phaseClocks[4] = params.phaseClocks[5] = params.phaseClocks[6] = 0;
-				afterPrepare.peakDeceleration = params.initialDeceleration = params.peakDeceleration = 0.0;
+				params.initialDeceleration = params.peakDeceleration = (motioncalc_t)0.0;
+				afterPrepare.peakDeceleration = 0.0;
 				lastPhaseNumber = 1;
 				break;
 			}
@@ -310,14 +315,14 @@ static MovementProfile debugProfile;
 			params.phaseClocks[1] = 0;
 		}
 
-		params.peakAcceleration = (float)(acceleration * recipMovementRatio);
-		afterPrepare.peakAcceleration = max<float>(params.peakAcceleration, 0.0);			// params.peakAcceleration may be negative if we combined the t2 and t4 segments
+		params.peakAcceleration = (motioncalc_t)(acceleration * recipMovementRatio);
+		afterPrepare.peakAcceleration = max<float>((float)params.peakAcceleration, 0.0);			// params.peakAcceleration may be negative if we combined the t2 and t4 segments
 
 		if (plannedProfile.distances[2] > (double)0.0)
 		{
 			const bool lastPhase = (moveDistanceLeft <= plannedProfile.distances[2]);
 			const double t2Distance = (lastPhase) ? moveDistanceLeft : plannedProfile.distances[2];
-			params.distances[2] = (float)(t2Distance * recipMovementRatio);
+			params.distances[2] = (motioncalc_t)(t2Distance * recipMovementRatio);
 			const double t2 = SmallestNonNegativeCubicSolution(-djerk, 3 * acceleration, 6 * speed, -6 * t2Distance);
 			if (std::isnan(t2) || t2 < (double)0.0)
 			{
@@ -336,10 +341,12 @@ static MovementProfile debugProfile;
 			{
 				plannedProfile.distances[2] -= t2Distance;
 				plannedProfile.t2NonDecelDistance = max<double>(plannedProfile.t2NonDecelDistance - t2Distance, (double)0.0);
-				topSpeed = params.topSpeed = (float)(speed * recipMovementRatio);
+				params.topSpeed = (motioncalc_t)(speed * recipMovementRatio);
+				topSpeed = (float)params.topSpeed;
 				params.distances[3] = params.distances[4] = params.distances[5] = params.distances[6] = 0;
 				params.phaseClocks[3] = params.phaseClocks[4] = params.phaseClocks[5] = params.phaseClocks[6] = 0;
-				afterPrepare.peakDeceleration = params.initialDeceleration = params.peakDeceleration = 0.0;
+				params.initialDeceleration = params.peakDeceleration = (motioncalc_t)0.0;
+				afterPrepare.peakDeceleration = 0.0;
 				lastPhaseNumber = 2;
 				break;
 			}
@@ -352,13 +359,14 @@ static MovementProfile debugProfile;
 			params.phaseClocks[2] = 0;
 		}
 
-		topSpeed = params.topSpeed = (float)(speed * recipMovementRatio);
+		params.topSpeed = (motioncalc_t)(speed * recipMovementRatio);
+		topSpeed = (float)params.topSpeed;
 
 		if (plannedProfile.distances[3] > (double)0.0)
 		{
 			const bool lastPhase = (moveDistanceLeft <= plannedProfile.distances[3]);
 			const double t3Distance = (lastPhase) ? moveDistanceLeft : plannedProfile.distances[3];
-			params.distances[3] = (float)(t3Distance * recipMovementRatio);
+			params.distances[3] = (motioncalc_t)(t3Distance * recipMovementRatio);
 			const double t3 = t3Distance/speed;
 			params.phaseClocks[3] = doubleToU32(t3);
 			totalClocks += params.phaseClocks[3];
@@ -372,7 +380,8 @@ static MovementProfile debugProfile;
 				plannedProfile.distances[3] -= t3Distance;
 				params.distances[4] = params.distances[5] = params.distances[6] = 0;
 				params.phaseClocks[4] = params.phaseClocks[5] = params.phaseClocks[6] = 0;
-				afterPrepare.peakDeceleration = params.initialDeceleration = params.peakDeceleration = 0.0;
+				params.initialDeceleration = params.peakDeceleration = (motioncalc_t)0.0;
+				afterPrepare.peakDeceleration = 0.0;
 				lastPhaseNumber = 3;
 				break;
 			}
@@ -385,13 +394,13 @@ static MovementProfile debugProfile;
 			params.phaseClocks[3] = 0;
 		}
 
-		params.initialDeceleration = (float)(acceleration * recipMovementRatio);
+		params.initialDeceleration = (motioncalc_t)(acceleration * recipMovementRatio);
 
 		if (plannedProfile.distances[4] > (double)0.0)
 		{
 			const bool lastPhase = (moveDistanceLeft <= plannedProfile.distances[4]);
 			const double t4Distance = (lastPhase) ? moveDistanceLeft : plannedProfile.distances[4];
-			params.distances[4] = (float)(t4Distance * recipMovementRatio);
+			params.distances[4] = (motioncalc_t)(t4Distance * recipMovementRatio);
 			const double t4 = SmallestNonNegativeCubicSolution(-djerk, 3 * acceleration, 6 * speed, -6 * t4Distance);
 			if (std::isnan(t4) || t4 < (double)0.0)
 			{
@@ -415,7 +424,8 @@ static MovementProfile debugProfile;
 				plannedProfile.distances[4] -= t4Distance;
 				params.distances[5] = params.distances[6] = 0.0;
 				params.phaseClocks[5] = params.phaseClocks[6] = 0;
-				afterPrepare.peakDeceleration = params.peakDeceleration = (float)(acceleration * recipMovementRatio);
+				params.peakDeceleration = (motioncalc_t)(acceleration * recipMovementRatio);
+				afterPrepare.peakDeceleration = (float)params.peakDeceleration;
 				lastPhaseNumber = 4;
 				break;
 			}
@@ -428,13 +438,14 @@ static MovementProfile debugProfile;
 			params.phaseClocks[4] = 0;
 		}
 
-		afterPrepare.peakDeceleration = params.peakDeceleration = (float)(acceleration * recipMovementRatio);
+		params.peakDeceleration = (motioncalc_t)(acceleration * recipMovementRatio);
+		afterPrepare.peakDeceleration = (float)params.peakDeceleration;
 
 		if (plannedProfile.distances[5] > (double)0.0)
 		{
 			const bool lastPhase = (moveDistanceLeft <= plannedProfile.distances[5]);
 			const double t5Distance = (lastPhase) ? moveDistanceLeft : plannedProfile.distances[5];
-			params.distances[5] = (float)(t5Distance * recipMovementRatio);
+			params.distances[5] = (motioncalc_t)(t5Distance * recipMovementRatio);
 			const double t5 = SmallestNonNegativeQuadraticSolution(OneHalfDouble * plannedProfile.peakDeceleration, speed, -t5Distance);
 			if (std::isnan(t5) || t5 < (double)0.0)
 			{
@@ -472,7 +483,7 @@ static MovementProfile debugProfile;
 
 		// Anything left must go in phase 6
 		const double t6Distance = moveDistanceLeft;
-		params.distances[6] = (float)(t6Distance * recipMovementRatio);
+		params.distances[6] = (motioncalc_t)(t6Distance * recipMovementRatio);
 
 		// If this is the last move in the plan, calculate from the end so as to get the final speed and acceleration correct
 		// This also avoids the cubic solution failing due to rounding error when the move ands at standstill.
@@ -512,20 +523,20 @@ static MovementProfile debugProfile;
 	// So we eliminate very short phases by merging them with adjacent phases. This will result in very small speed discontinuities.
 	// First find the first and non-empty segment number (we already have the last non-empty segment number)
 	size_t firstPhaseNumber = 0;
-	while (firstPhaseNumber < lastPhaseNumber && params.distances[firstPhaseNumber] == 0.0) { ++firstPhaseNumber; }
+	while (firstPhaseNumber < lastPhaseNumber && params.distances[firstPhaseNumber] == (motioncalc_t)0.0) { ++firstPhaseNumber; }
 
 	// If the first non-empty segment is very short, move it into the next non-empty segment
 	if (firstPhaseNumber < lastPhaseNumber && params.phaseClocks[firstPhaseNumber] < MinimumPhaseClocks)
 	{
 		// Find the next non-empty segment
 		size_t nextPhaseNumber = firstPhaseNumber + 1;
-		while (nextPhaseNumber < lastPhaseNumber && params.distances[nextPhaseNumber] == 0.0)
+		while (nextPhaseNumber < lastPhaseNumber && params.distances[nextPhaseNumber] == (motioncalc_t)0.0)
 		{
 			++nextPhaseNumber;
 		}
 		params.distances[nextPhaseNumber] += params.distances[firstPhaseNumber];
 		params.phaseClocks[nextPhaseNumber] += params.phaseClocks[firstPhaseNumber];
-		params.distances[firstPhaseNumber] = 0.0;
+		params.distances[firstPhaseNumber] = (motioncalc_t)0.0;
 		params.phaseClocks[firstPhaseNumber] = 0;
 		firstPhaseNumber = nextPhaseNumber;
 	}
@@ -535,13 +546,13 @@ static MovementProfile debugProfile;
 	{
 		// Find the previous non-empty segment
 		size_t prevPhaseNumber = lastPhaseNumber - 1;
-		while (prevPhaseNumber > firstPhaseNumber && params.distances[prevPhaseNumber] == 0.0)
+		while (prevPhaseNumber > firstPhaseNumber && params.distances[prevPhaseNumber] == (motioncalc_t)0.0)
 		{
 			--prevPhaseNumber;
 		}
 		params.distances[prevPhaseNumber] += params.distances[lastPhaseNumber];
 		params.phaseClocks[prevPhaseNumber] += params.phaseClocks[lastPhaseNumber];
-		params.distances[lastPhaseNumber] = 0.0;
+		params.distances[lastPhaseNumber] = (motioncalc_t)0.0;
 		params.phaseClocks[lastPhaseNumber] = 0;
 	}
 

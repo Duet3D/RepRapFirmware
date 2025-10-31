@@ -29,36 +29,36 @@ class MovementProfile;
 struct PrepParams
 {
 #if SUPPORT_S_CURVE
-	uint32_t phaseClocks[7];						// the number of step clocks for each phase
-    float initialAcceleration, peakAcceleration;	// the accelerations, always positive
-    float initialDeceleration, peakDeceleration;	// the decelerations, always negative
-    float distances[7];								// the distances of each phase
-	float jerk;										// the magnitude of the rate of change of acceleration or deceleration, always positive; or zero if not using S-curve acceleration
+	uint32_t phaseClocks[7];							// the number of step clocks for each phase
+	motioncalc_t initialAcceleration, peakAcceleration;	// the accelerations, always positive
+	motioncalc_t initialDeceleration, peakDeceleration;	// the decelerations, always negative
+    motioncalc_t distances[7];							// the distances of each phase
+    motioncalc_t jerk;									// the magnitude of the rate of change of acceleration or deceleration, always positive; or zero if not using S-curve acceleration
 
 	uint32_t SteadyClocks() const noexcept { return phaseClocks[3]; }
 #else
 	uint32_t accelClocks, steadyClocks, decelClocks;
-	float acceleration;								// the acceleration to use, always positive
-	float deceleration;								// the deceleration to use, always negative
+	motioncalc_t acceleration;							// the acceleration to use, always positive
+	motioncalc_t deceleration;							// the deceleration to use, always negative
 # define peakAcceleration	acceleration
 # define peakDeceleration	deceleration
-	float accelDistance;
-	float decelStartDistance;
+	motioncalc_t accelDistance;
+	motioncalc_t decelStartDistance;
 	uint32_t SteadyClocks() const noexcept { return steadyClocks; }
 #endif
-	float totalDistance;
-	float topSpeed;									// the top speed reached
+	motioncalc_t totalDistance;
+	motioncalc_t topSpeed;								// the top speed reached
 	bool useInputShaping;
 
 #if SUPPORT_S_CURVE
 	uint32_t TotalAccelClocks() const noexcept { return phaseClocks[0] + phaseClocks[1] + phaseClocks[2]; }
 	uint32_t TotalDecelClocks() const noexcept { return phaseClocks[4] + phaseClocks[5] + phaseClocks[6]; }
-	float TotalAccelDistance() const noexcept { return distances[0] + distances[1] + distances[2]; }
-	float TotalDecelDistance() const noexcept { return distances[4] + distances[5] + distances[6]; }
+	motioncalc_t TotalAccelDistance() const noexcept { return distances[0] + distances[1] + distances[2]; }
+	motioncalc_t TotalDecelDistance() const noexcept { return distances[4] + distances[5] + distances[6]; }
 #else
 	uint32_t TotalAccelClocks() const noexcept { return accelClocks; }
 	uint32_t TotalDecelClocks() const noexcept { return decelClocks; }
-	float TotalAccelDistance() const noexcept { return accelDistance; }
+	motioncalc_t TotalAccelDistance() const noexcept { return accelDistance; }
 #endif
 
 	// Get the total clocks needed

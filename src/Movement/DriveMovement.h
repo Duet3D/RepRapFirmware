@@ -208,7 +208,7 @@ inline int32_t DriveMovement::GetNetStepsTakenThisSegment() const noexcept
 #if SUPPORT_PHASE_STEPPING
 	if (phaseStepControl.IsEnabled())
 	{
-		return lrintf(GetPhaseStepsTakenThisSegment());
+		return std::lrint(GetPhaseStepsTakenThisSegment());
 	}
 #endif
 	return currentMotorPosition - positionAtSegmentStart;
@@ -302,7 +302,7 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, float multiplier, Mot
 					if (seg->GetNext() == nullptr && !seg->GetFlags().isExtruder)
 					{
 						// This is an axis and there are no further segments, so we may need to round the current position to the nearest microstep
-						if (std::fabs(provisionalDistanceCarriedForwards) < 0.05)
+						if (std::fabs(provisionalDistanceCarriedForwards) < (motioncalc_t)0.05)
 						{
 							provisionalDistanceCarriedForwards = (motioncalc_t)0.0;						// just remove the rounding error
 						}

@@ -156,8 +156,8 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 # define DEBUG_DISCONTINUITIES	(1)			// set nonzero to generate debug messages if extruder 0 has discontinuous speed or acceleration
 
 # if DEBUG_DISCONTINUITIES
-constexpr float MaxSpeedChange = ConvertSpeedFromMmPerSec(0.1 * 420);		// 420 is extruder steps/mm in test config
-constexpr float MaxAccChange = ConvertAcceleration(5.0 * 420);				// 420 is extruder steps/mm in test config
+constexpr motioncalc_t MaxSpeedChange = ConvertSpeedFromMmPerSec(0.1 * 420);		// 420 is extruder steps/mm in test config
+constexpr motioncalc_t MaxAccChange = ConvertAcceleration(5.0 * 420);				// 420 is extruder steps/mm in test config
 # endif
 
 void DriveMovement::PrintRetiredSegment() const noexcept
@@ -471,7 +471,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 			// It's an axis and we are soon to stop movement, so we should end on an exact microstep.
 			// Check whether taking the last step would end up going a little too far or not quite far enough
 			const motioncalc_t provisionalDistanceCarriedForwards = distanceCarriedForwards + currentSegment->GetLength() - (motioncalc_t)netStepsThisSegment;
-			if (std::fabs(provisionalDistanceCarriedForwards) < 0.05)
+			if (std::fabs(provisionalDistanceCarriedForwards) < (motioncalc_t)0.05)
 			{
 				currentSegment->AdjustLength(-provisionalDistanceCarriedForwards);				// just correct the segment length
 			}
@@ -520,7 +520,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 		if (stepsToLimit <= 0)
 		{
 			distanceCarriedForwards += currentSegment->GetLength() - (motioncalc_t)netStepsThisSegment;
-			if (fabsf(distanceCarriedForwards) > (motioncalc_t)1.0)
+			if (std::fabs(distanceCarriedForwards) > (motioncalc_t)1.0)
 			{
 				return LogStepError(5, (float)distanceCarriedForwards, currentSegment);
 			}
@@ -725,7 +725,7 @@ void DriveMovement::TakeStepsAndCalcStepTimeRarely(uint32_t clocksNow) noexcept
 
 	// We may be invoked slightly before the move started, so allow for that
 	const uint32_t timeFromStart = (uint32_t)max<int32_t>((int32_t)(clocksNow - currentSegment->GetStartTime()), 0);
-	currentMotorPosition = positionAtSegmentStart + lrintf((currentSegment->CalcU() + ((motioncalc_t)0.5 * currentSegment->GetA() * (motioncalc_t)timeFromStart)) * (motioncalc_t)timeFromStart + distanceCarriedForwards);
+	currentMotorPosition = positionAtSegmentStart + std::lrint((currentSegment->CalcU() + ((motioncalc_t)0.5 * currentSegment->GetA() * (motioncalc_t)timeFromStart)) * (motioncalc_t)timeFromStart + distanceCarriedForwards);
 	uint32_t targetTime;
 	if (currentSegment->GetDuration() <= timeFromStart + MoveTiming::MaxRemoteDriverPositionUpdateInterval)
 	{
@@ -832,7 +832,7 @@ motioncalc_t DriveMovement::GetPhaseStepsTakenThisSegment() const noexcept
 		timeSinceStart = seg->GetDuration();
 	}
 
-	return (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart;
+	return (u + seg->GetA() * timeSinceStart * (motioncalc_t)0.5) * timeSinceStart;
 }
 
 #endif

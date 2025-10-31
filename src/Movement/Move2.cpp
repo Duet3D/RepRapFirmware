@@ -1322,13 +1322,13 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 		clocksNeeded = params.steadyClocks = 1;
 	}
 
-	const float accelDistanceExTopSpeed = -0.5 * params.acceleration * fsquare((float)params.accelClocks);
-	const float decelDistanceExTopSpeed = 0.5 * params.deceleration * fsquare((float)params.decelClocks);
-	const float topSpeed = (params.totalDistance - accelDistanceExTopSpeed - decelDistanceExTopSpeed)/clocksNeeded;
+	const motioncalc_t accelDistanceExTopSpeed = -(motioncalc_t)0.5 * params.acceleration * msquare((motioncalc_t)params.accelClocks);
+	const motioncalc_t decelDistanceExTopSpeed = (motioncalc_t)0.5 * params.deceleration * msquare((motioncalc_t)params.decelClocks);
+	const motioncalc_t topSpeed = (params.totalDistance - accelDistanceExTopSpeed - decelDistanceExTopSpeed)/clocksNeeded;
 
 	params.accelDistance =      accelDistanceExTopSpeed + topSpeed * params.accelClocks;
-	const float decelDistance = decelDistanceExTopSpeed + topSpeed * params.decelClocks;
-	params.decelStartDistance =  1.0 - decelDistance;
+	const motioncalc_t decelDistance = decelDistanceExTopSpeed + topSpeed * params.decelClocks;
+	params.decelStartDistance =  (motioncalc_t)1.0 - decelDistance;
 
 	MovementFlags segFlags;
 	segFlags.nonPrintingMove = !msg.usePressureAdvance;

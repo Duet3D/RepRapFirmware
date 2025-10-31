@@ -129,24 +129,24 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 	peakAcceleration = dda.maxAcceleration;
 	peakDeceleration = -dda.maxAcceleration;
 	phaseClocks[0] = phaseClocks[2] = phaseClocks[4] = phaseClocks[6] = 0;
-	phaseClocks[1] = lrintf((dda.topSpeed - dda.startSpeed)/peakAcceleration);
-	phaseClocks[5] = lrintf((dda.endSpeed - dda.topSpeed)/peakDeceleration);
+	phaseClocks[1] = std::lrint((motioncalc_t)(dda.topSpeed - dda.startSpeed)/peakAcceleration);
+	phaseClocks[5] = std::lrint((motioncalc_t)(dda.endSpeed - dda.topSpeed)/peakDeceleration);
 	distances[0] = distances[2] = distances[4] = distances[6] = 0.0;
 	distances[5] = dda.beforePrepare.decelDistance;
-	const float decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
-	distances[1] = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
+	const motioncalc_t decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
+	distances[1] = min<motioncalc_t>(dda.beforePrepare.accelDistance, decelStartDistance);
 	distances[3] = decelStartDistance - distances[1];
-	phaseClocks[3] = (distances[3] <= 0.0) ? 0 : lrintf(distances[3]/dda.topSpeed);
+	phaseClocks[3] = (distances[3] <= (motioncalc_t)0.0) ? 0 : std::lrint(distances[3]/(motioncalc_t)dda.topSpeed);
 	dda.clocksNeeded = phaseClocks[1] + phaseClocks[3] + phaseClocks[5];
 #else
 	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
-	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
+	accelDistance = min<motioncalc_t>(dda.beforePrepare.accelDistance, decelStartDistance);
 	acceleration = dda.maxAcceleration;
 	deceleration = -dda.maxAcceleration;
-	accelClocks = lrintf((dda.topSpeed - dda.startSpeed)/acceleration);
-	decelClocks = lrintf((dda.endSpeed - dda.topSpeed)/deceleration);
-	const float steadyDistance = decelStartDistance - accelDistance;
-	steadyClocks = (steadyDistance <= 0.0) ? 0 : lrintf(steadyDistance/dda.topSpeed);
+	accelClocks = std::lrint((motioncalc_t)(dda.topSpeed - dda.startSpeed)/acceleration);
+	decelClocks = std::lrint((motioncalc_t)(dda.endSpeed - dda.topSpeed)/deceleration);
+	const motioncalc_t steadyDistance = decelStartDistance - accelDistance;
+	steadyClocks = (steadyDistance <= (motioncalc_t)0.0) ? 0 : std::lrint(steadyDistance/(motioncalc_t)dda.topSpeed);
 	dda.clocksNeeded = accelClocks + steadyClocks + decelClocks;
 #endif
 }
@@ -1310,7 +1310,7 @@ void DDA::Prepare(DDARing& ring,
 							if (driver.IsRemote())
 							{
 								// The MovementLinearShaped message requires the extrusion amount in steps to be passed as a float. The remote board adds the PA and handles fractional steps.
-								CanMotion::AddExtruderMovement(params, driver, delta, flags.usePressureAdvance);
+								CanMotion::AddExtruderMovement(params, driver, (float)delta, flags.usePressureAdvance);
 							}
 #endif
 							afterPrepare.drivesMoving.SetBit(drive);
