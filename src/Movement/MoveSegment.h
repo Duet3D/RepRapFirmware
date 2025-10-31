@@ -125,13 +125,10 @@ public:
 	// Get the initial speed
 	motioncalc_t CalcU() const noexcept;
 
-	// Get the initial speed assuming this move has no acceleration
-	motioncalc_t CalcLinearU() const noexcept { return distance/(motioncalc_t)duration; }
+	// Get the reciprocal of the initial speed assuming this move has no acceleration, and no jerk if we are supporting 3rd order motion control
+	motioncalc_t CalcLinearRecipU() const noexcept pre(a == (motioncalc_t)0.0) { return (motioncalc_t)duration/distance; }
 
-	// Get the reciprocal of the initial speed assuming this move has no acceleration
-	motioncalc_t CalcLinearRecipU() const noexcept pre(a == 0.0) { return (motioncalc_t)duration/distance; }
-
-	// Get the acceleration
+	// Get the acceleration (the initial acceleration f we are supporting 3rd order motion control)
 	motioncalc_t GetA() const noexcept { return a; }
 
 #if SUPPORT_S_CURVE
@@ -139,7 +136,7 @@ public:
 	motioncalc_t GetJ() const noexcept { return j; }
 
 	// Get the speed change
-	motioncalc_t GetSpeedChange() const noexcept { return (a + 0.5 * j * (motioncalc_t)duration) * (motioncalc_t)duration; }
+	motioncalc_t GetSpeedChange() const noexcept { return (a + j * (motioncalc_t)duration * OneHalf) * (motioncalc_t)duration; }
 
 	// Get the acceleration change
 	motioncalc_t GetAccChange() const noexcept { return j * (motioncalc_t)duration; }
@@ -310,7 +307,7 @@ inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 {
 	MoveSegment *const secondSeg = Allocate(next);
 #if SUPPORT_S_CURVE
-	const motioncalc_t firstDistance = (CalcU() + (OneHalf * a + OneSixth * j * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
+	const motioncalc_t firstDistance = (CalcU() + (OneHalf * a + j * (motioncalc_t)firstDuration * OneSixth) * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
 	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, a + j * (motioncalc_t)firstDuration, j, flags);
 #else
 	const motioncalc_t firstDistance = (CalcU() + OneHalf * a * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
