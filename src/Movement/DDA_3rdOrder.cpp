@@ -474,40 +474,30 @@ static MovementProfile debugProfile;
 		const double t6Distance = moveDistanceLeft;
 		params.distances[6] = (float)(t6Distance * recipMovementRatio);
 
-		// If we are ending at zero speed then we only just achieve the distance, and due to rounding error the cubic solution may fail.
-		double t6 = SmallestNonNegativeCubicSolution(djerk, 3 * acceleration, 6 * speed, -6 * t6Distance);
-		if (std::isnan(t6))
+		// If this is the last move in the plan, calculate from the end so as to get the final speed and acceleration correct
+		// This also avoids the cubic solution failing due to rounding error when the move ands at standstill.
+		double t6;
+		if (plannedProfile.numberOfMovesCovered == 1)
 		{
-			t6 = SmallestNonNegativeQuadraticSolution(OneHalfDouble * djerk, acceleration, speed);
-			if (std::isnan(t6) || t6 < (double)0.0)
+			t6 = SmallestNonNegativeCubicSolution(djerk, (double)0.0, 6 * plannedProfile.endSpeed, -6 * t6Distance);
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
 			{
-				debugPrintf("Failed at %d, t6=%.7e\n", __LINE__, t6);
-				//TODO
-			}
-			else
-			{
-				const double actualDistance = (speed + OneHalfDouble * acceleration * t6) * t6;
-				if (fabs(plannedProfile.distances[6] - actualDistance) > fabs(plannedProfile.distances[6]) * (double)0.0001)
-				{
-					debugPrintf("Failed at %d\n", __LINE__);
-					//TODO
-				}
+				debugPrintf("Phase 6 %.4e %lu %.4e %.4e %.4e\n", t6Distance, params.phaseClocks[6], speed, acceleration, djerk);
 			}
 		}
-		else if (t6 < (double)0.0)
+		else
 		{
-			debugPrintf("Failed at %d, t6=%.7e\n", __LINE__, t6);
-			//TODO
+			t6 = SmallestNonNegativeCubicSolution(djerk, 3 * acceleration, 6 * speed, -6 * t6Distance);
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+			{
+				debugPrintf("Phase 6 %.4e %lu %.4e %.4e %.4e\n", t6Distance, params.phaseClocks[6], speed, acceleration, djerk);
+			}
+			speed += (acceleration + OneHalfDouble * djerk * t6) * t6;
+			acceleration += djerk * t6;
+			plannedProfile.distances[6] -= t6Distance;
 		}
 		params.phaseClocks[6] = doubleToU32(t6);
 		totalClocks += params.phaseClocks[6];
-		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
-		{
-			debugPrintf("Phase 6 %.4e %lu %.4e %.4e %.4e\n", t6Distance, params.phaseClocks[6], speed, acceleration, djerk);
-		}
-		speed += (acceleration + OneHalfDouble * djerk * t6) * t6;
-		acceleration += djerk * t6;
-		plannedProfile.distances[6] = max<double>(plannedProfile.distances[6] - t6Distance, 0.0);
 		lastPhaseNumber = 6;
 	} while (false);
 
