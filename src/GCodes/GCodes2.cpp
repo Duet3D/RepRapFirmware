@@ -2719,9 +2719,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							break;
 						}
 
+						MovementState& ms = GetMovementState(gb);
+#if SUPPORT_ASYNC_MOVES
+						// Allocate the axes that were mentioned
+						if (!ms.AllocateAxes(axesMentioned, gb.AllParameters() & allAxisLetters).IsEmpty())
+						{
+							reply.copy("cannot allocate axes to babystep");
+							result = GCodeResult::error;
+							break;
+						}
+#endif
 						// Perform babystepping synchronously with moves. Only move axes that have been flagged as homed.
 						bool haveResidual = false;
-						MovementState& ms = GetMovementState(gb);
 						for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 						{
 							currentBabyStepOffsets[axis] += differences[axis];
