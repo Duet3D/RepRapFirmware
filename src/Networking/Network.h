@@ -49,6 +49,7 @@ class WifiFirmwareUploader;
 NamedEnum(NetworkState, uint8_t,
 	disabled,					// Network disabled
 	enabled,					// Network enabled but not started yet
+	initFailed,					// tried to start it but failed initialisation
 	starting1,					// starting up (used by WiFi networking)
 	starting2,					// starting up (used by WiFi networking)
 	changingMode,				// running and in the process of switching between modes (used by WiFi networking)
