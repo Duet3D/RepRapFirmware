@@ -74,7 +74,7 @@ public:
 	bool IsPhaseStepEnabled() const noexcept { return stepMode == StepMode::phase; }
 	// Get the current position relative to the start of this move, speed and acceleration. Units are microsteps and step clocks.
 	// Return true if this drive is moving. Segments are advanced as necessary.
-	bool GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept;
+	bool GetCurrentMotion(uint32_t when, float multiplier, MotionParameters& mParams) noexcept;
 #endif
 
 	void ClearMovementPending() noexcept;
@@ -261,7 +261,7 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 // Get the current position relative to the start of this segment, speed and acceleration. Units are microsteps and step clocks.
 // Return true if this drive is moving. Segments are advanced as necessary if we are in closed loop mode.
 // Inlined because it is only called from one place
-inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept
+inline bool DriveMovement::GetCurrentMotion(uint32_t when, float multiplier, MotionParameters& mParams) noexcept
 {
 	bool hasMotion = false;
 	AtomicCriticalSectionLocker lock;									// we don't want 'segments' changing while we do this
@@ -315,16 +315,17 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 				timeSinceStart = seg->GetDuration();
 			}
 
-			mParams.position = (float)((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
-			currentMotorPosition = (int32_t)mParams.position;			// store the approximate position for OM updates
-			mParams.speed = (float)(u + seg->GetA() * timeSinceStart);
-			mParams.acceleration = (float)seg->GetA();
+			const float rawPosition = (float)((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
+			currentMotorPosition = (int32_t)rawPosition;												// store the approximate position for OM updates
+			mParams.position = rawPosition * multiplier;
+			mParams.speed = (float)(u + seg->GetA() * timeSinceStart) * multiplier;
+			mParams.acceleration = (float)seg->GetA() * multiplier;
 			return true;
 		}
 	}
 
 	// If we get here then no movement is taking place
-	mParams.position = (float)((motioncalc_t)currentMotorPosition + distanceCarriedForwards);
+	mParams.position = (float)((motioncalc_t)currentMotorPosition + distanceCarriedForwards) * multiplier;
 	mParams.speed = mParams.acceleration = 0.0;
 	return hasMotion;
 }

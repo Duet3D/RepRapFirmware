@@ -999,7 +999,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (sparam == 2)
 					{
-						outBuf = reprap.GetFilesResponse(dir.c_str(), rparam, cparam, true);	// send the file list in JSON format
+						outBuf = reprap.GetFilesResponse(&gb, dir.c_str(), rparam, cparam, true);	// send the file list in JSON format
 						if (outBuf == nullptr)
 						{
 							reply.copy("{\"err\":-1}");
@@ -1007,7 +1007,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else if (sparam == 3)
 					{
-						outBuf = reprap.GetFilelistResponse(dir.c_str(), rparam, cparam);
+						outBuf = reprap.GetFilelistResponse(&gb, dir.c_str(), rparam, cparam);
 						if (outBuf == nullptr)
 						{
 							reply.copy("{\"err\":-1}");
@@ -1389,7 +1389,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 # if HAS_SBC_INTERFACE
 						if (reprap.UsingSbcInterface())
 						{
-							reprap.GetFileInfoResponse(nullptr, outBuf, true);
+							reprap.GetFileInfoResponse(&gb, nullptr, outBuf, true);
 						}
 						else
 # endif
@@ -1402,7 +1402,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 							String<MaxFilenameLength> filename;
 							gb.GetUnprecedentedString(filename.GetRef(), true);
-							result = reprap.GetFileInfoResponse((filename.IsEmpty()) ? nullptr : filename.c_str(), outBuf, false);
+							result = reprap.GetFileInfoResponse(&gb, (filename.IsEmpty()) ? nullptr : filename.c_str(), outBuf, false);
 # endif
 						}
 						break;
@@ -1510,7 +1510,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					const MassStorage::InfoResult res = MassStorage::GetCardInfo(slot, returnedInfo);
 					if (format == 2)
 					{
-						reply.printf("{\"SDinfo\":{\"slot\":%" PRIu32 ",\"present\":", slot);
+						reply.copy("{");
+						if (gb.HadExplicitLineNumber())
+						{
+							reply.catf("\"line\":%ld,", gb.GetExplicitLineNumber());
+						}
+						reply.catf("\"SDinfo\":{\"slot\":%" PRIu32 ",\"present\":", slot);
 						if (res == MassStorage::InfoResult::ok)
 						{
 							reply.catf("1,\"capacity\":%" PRIu64 ",\"partitionSize\":%" PRIu64 ",\"free\":%" PRIu64 ",\"speed\":%" PRIu32 ",\"clsize\":%" PRIu32 "}}",
@@ -2716,9 +2721,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							break;
 						}
 
+						MovementState& ms = GetMovementState(gb);
+#if SUPPORT_ASYNC_MOVES
+						// Allocate the axes that were mentioned
+						if (!ms.AllocateAxes(axesMentioned, gb.AllParameters() & allAxisLetters).IsEmpty())
+						{
+							reply.copy("cannot allocate axes to babystep");
+							result = GCodeResult::error;
+							break;
+						}
+#endif
 						// Perform babystepping synchronously with moves. Only move axes that have been flagged as homed.
 						bool haveResidual = false;
-						MovementState& ms = GetMovementState(gb);
 						for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 						{
 							currentBabyStepOffsets[axis] += differences[axis];
@@ -4570,12 +4584,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							gb.GetQuotedString(eraseString.GetRef());
 							if (eraseString.Equals("ERASE"))
 							{
-								platform.AppendAuxReply(auxChannel, panelDueCommandEraseAndReset, true);
+								platform.AppendAuxReply(auxChannel, nullptr, panelDueCommandEraseAndReset, true);
 							}
 						}
 						else
 						{
-							platform.AppendAuxReply(auxChannel, panelDueCommandReset, true);
+							platform.AppendAuxReply(auxChannel, nullptr, panelDueCommandReset, true);
 						}
 						break;
 					}

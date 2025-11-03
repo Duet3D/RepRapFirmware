@@ -43,8 +43,8 @@ public:
 	bool IsRaw() const noexcept { return mode == AuxMode::raw; }
 
 	void SendPanelDueMessage(const char *_ecv_array msg) noexcept;
-	void AppendAuxReply(const char *_ecv_array msg, bool rawMessage) noexcept;
-	void AppendAuxReply(OutputBuffer *_ecv_null reply, bool rawMessage) noexcept;
+	void AppendAuxReply(const GCodeBuffer *_ecv_null gb, const char *_ecv_array msg, bool rawMessage) noexcept;
+	void AppendAuxReply(const GCodeBuffer *_ecv_null gb, OutputBuffer *_ecv_null reply, bool rawMessage) noexcept;
 	bool Flush() noexcept;
 
 	void Diagnostics(const StringRef& reply, unsigned int index) noexcept;

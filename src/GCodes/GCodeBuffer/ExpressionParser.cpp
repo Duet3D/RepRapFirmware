@@ -121,7 +121,7 @@ void ExpressionParser::ApplyObjectModelArrayIndex(ExpressionValue& rslt, int ind
 	}
 	else if (evaluate)
 	{
-		throw GCodeException(gb, indexCol, "array index out of range");
+		throw GCodeException(gb, indexCol, ArrayIndexOutOfRangeText);
 	}
 	else
 	{
@@ -287,7 +287,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 				{
 					if (evaluate)
 					{
-						throw GCodeException(gb, indexCol, "array index out of range");
+						throw GCodeException(gb, indexCol, ArrayIndexOutOfRangeText);
 					}
 					else
 					{
@@ -302,7 +302,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 				const size_t len = strlen(val.sVal);
 				if (indexValue >= len)
 				{
-					throw GCodeException(gb, indexCol, "array index out of range");
+					throw GCodeException(gb, indexCol, ArrayIndexOutOfRangeText);
 				}
 				val.SetChar(val.sVal[indexValue]);
 			}
@@ -313,7 +313,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 				ReadLockedPointer<const char> p = val.shVal.Get();
 				if (p.IsNull() || indexValue >= strlen(p.Ptr()))
 				{
-					throw GCodeException(gb, indexCol, "array index out of range");
+					throw GCodeException(gb, indexCol, ArrayIndexOutOfRangeText);
 				}
 				val.SetChar(p.Ptr()[indexValue]);
 			}
@@ -2247,7 +2247,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 							rslt.SetBool(false);
 							return;
 						}
-						ThrowParseException("Index out of range");
+						ThrowParseException(ArrayIndexOutOfRangeText);
 					}
 				}
 

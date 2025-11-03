@@ -4160,7 +4160,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 		// DWC expects a reply from every code, so we must even send empty responses
 		if (reply[0] != 0 || gb.IsLastCommand() || &gb == HttpGCode())
 		{
-			platform.MessageF(mt, "%s\n", reply);
+			platform.MessageF(&gb, mt, "%s\n", reply);
 		}
 		break;
 
@@ -5089,7 +5089,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 				OutputBuffer *_ecv_null statusBuf = GenerateJsonStatusResponse(0, -1, ResponseSource::AUX);		// older PanelDueFirmware using M408
 				if (statusBuf != nullptr)
 				{
-					platform.AppendAuxReply(0, statusBuf, true);
+					platform.AppendAuxReply(0, nullptr, statusBuf, true);
 				}
 			}
 			break;
@@ -5105,7 +5105,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 				}
 				if (statusBuf != nullptr)
 				{
-					platform.AppendAuxReply(0, statusBuf, true);
+					platform.AppendAuxReply(0, nullptr, statusBuf, true);
 				}
 			}
 			catch (const GCodeException&)

@@ -72,7 +72,7 @@ void AuxDevice::SendPanelDueMessage(const char *_ecv_array msg) noexcept
 	}
 }
 
-void AuxDevice::AppendAuxReply(const char *_ecv_array msg, bool rawMessage) noexcept
+void AuxDevice::AppendAuxReply(const GCodeBuffer *_ecv_null gb, const char *_ecv_array msg, bool rawMessage) noexcept
 {
 	// Discard this response if either no aux device is attached or if the response is empty
 	if (msg[0] != 0 && IsEnabledForGCodeIo())
@@ -88,14 +88,15 @@ void AuxDevice::AppendAuxReply(const char *_ecv_array msg, bool rawMessage) noex
 			else
 			{
 				seq++;
-				buf->printf("{\"seq\":%" PRIu32 ",\"resp\":\"%.s\"}\n", seq, msg);
+				RepRap::StartJsonResponse(gb, buf);
+				buf->catf("\"seq\":%" PRIu32 ",\"resp\":\"%.s\"}\n", seq, msg);
 			}
 			outStack.Push(buf);
 		}
 	}
 }
 
-void AuxDevice::AppendAuxReply(OutputBuffer *_ecv_null reply, bool rawMessage) noexcept
+void AuxDevice::AppendAuxReply(const GCodeBuffer *_ecv_null gb, OutputBuffer *_ecv_null reply, bool rawMessage) noexcept
 {
 	// Discard this response if either no aux device is attached or if the response is empty
 	if (reply == nullptr || reply->Length() == 0 || !IsEnabledForGCodeIo())
@@ -115,7 +116,8 @@ void AuxDevice::AppendAuxReply(OutputBuffer *_ecv_null reply, bool rawMessage) n
 			if (OutputBuffer::Allocate(buf))
 			{
 				seq++;
-				buf->printf("{\"seq\":%" PRIu32 ",\"resp\":", seq);
+				RepRap::StartJsonResponse(gb, buf);
+				buf->catf("\"seq\":%" PRIu32 ",\"resp\":", seq);
 				buf->EncodeReply(reply);
 				buf->cat("}\n");
 				outStack.Push(buf);
