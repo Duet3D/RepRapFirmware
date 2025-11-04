@@ -1165,11 +1165,15 @@ void SbcInterface::ExchangeData() noexcept
 			continue;
 		}
 
-		// Invalidate buffered codes if required
+		// Invalidate buffered codes if required. It may take multiple transfers before a
+		// print is actually paused, so make sure no more job codes are accepted until then
 		if (gb->IsInvalidated())
 		{
-			InvalidateBufferedCodes(gb->GetChannel());
-			gb->Invalidate(false);
+			InvalidateBufferedCodes(channel);
+			if (!reportPause || (channel != GCodeChannel::File && channel != GCodeChannel::File2))
+			{
+				gb->Invalidate(false);
+			}
 		}
 
 		// Deal with macro files being closed
