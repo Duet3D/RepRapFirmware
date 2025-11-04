@@ -49,6 +49,8 @@
 # include <CAN/CanInterface.h>
 #endif
 
+constexpr const char *_ecv_array TargetUnreachableText = "target position outside machine limits";		// message used for both G0/1 and G2/3 moves
+
 #if HAS_AUX_DEVICES
 // Support for emergency stop from PanelDue
 bool GCodes::emergencyStopCommanded = false;
@@ -2498,7 +2500,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		case LimitPositionResult::adjustedAndIntermediateUnreachable:
 			if (machineType != MachineType::fff)
 			{
-				gb.ThrowGCodeException("target position outside machine limits");	// it's a laser or CNC so this is a definite error
+				gb.ThrowGCodeException(TargetUnreachableText);				// it's a laser or CNC so this is a definite error
 			}
 			ToolOffsetInverseTransform(ms);									// make sure the limits are reflected in the user position
 			if (lp == LimitPositionResult::adjusted)
@@ -2909,7 +2911,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 
 	if (reprap.GetMove().GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, true, limitAxes) != LimitPositionResult::ok)
 	{
-		gb.ThrowGCodeException("outside machine limits");				// abandon the move
+		gb.ThrowGCodeException(TargetUnreachableText);							// abandon the move
 	}
 
 	// Set up the arc centre coordinates and record which axes behave like an X axis.
