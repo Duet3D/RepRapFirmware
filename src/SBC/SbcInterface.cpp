@@ -1270,9 +1270,20 @@ void SbcInterface::ExchangeData() noexcept
 				}
 
 				// Send pending firmware codes
-				if (gb->IsSendRequested() && transfer.WriteDoCode(channel, gb->DataStart(), gb->DataLength()))
+				if (gb->IsSendRequested())
 				{
-					gb->SetFinished(true);
+					if (gb->HadExplicitLineNumber())
+					{
+						// Unfortunately, the explicit line number is stripped from the G-code data when we get here.
+						// That means we need to prepend it again before the full code is sent over to the SBC
+						String<MaxGCodeLength> code;
+						code.printf("N%" PRIu32 " %s", gb->GetExplicitLineNumber(), gb->DataStart());
+						gb->SetFinished(transfer.WriteDoCode(channel, code.c_str(), code.strlen()));
+					}
+					else
+					{
+						gb->SetFinished(transfer.WriteDoCode(channel, gb->DataStart(), gb->DataLength()));
+					}
 				}
 			}
 		}

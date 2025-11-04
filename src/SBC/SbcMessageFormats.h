@@ -285,7 +285,8 @@ enum CodeFlags : uint8_t
 	HasMajorCommandNumber = 1,
 	HasMinorCommandNumber = 2,
 	HasFilePosition = 4,
-	EnforceAbsolutePosition = 8
+	EnforceAbsolutePosition = 8,
+	HasExplicitLineNumber = 16
 };
 
 // Not used during data transfers
