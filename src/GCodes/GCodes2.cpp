@@ -1416,7 +1416,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							gb.GetQuotedString(filename.GetRef(), false);
 							gb.MustSee('S');
 							const FilePosition offset = gb.GetUIValue();
-							outBuf = reprap.GetFileFragment(filename.c_str(), offset, true, frac == 1);
+							outBuf = reprap.GetFileFragment(&gb, filename.c_str(), offset, true, frac == 1);
 							if (outBuf == nullptr)
 							{
 								return false;											// cannot allocate an output buffer, try again later
