@@ -35,6 +35,8 @@ public:
 	int GetCommandNumber() const noexcept;
 	int8_t GetCommandFraction() const noexcept;
 	bool ContainsExpression() const noexcept;
+	bool HadExplicitLineNumber() const noexcept;
+	uint32_t GetExplicitLineNumber() const noexcept;
 
 	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;					// Get a float after a key letter
 	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;					// Get an integer after a key letter

@@ -149,6 +149,16 @@ bool BinaryParser::ContainsExpression() const noexcept
 	return false;
 }
 
+bool BinaryParser::HadExplicitLineNumber() const noexcept
+{
+	return (bufferLength != 0 && (header->flags & CodeFlags::HasExplicitLineNumber) != 0);
+}
+
+uint32_t BinaryParser::GetExplicitLineNumber() const noexcept
+{
+	return HadExplicitLineNumber() ? header->lineNumber : 0;
+}
+
 float BinaryParser::GetFValue() THROWS(GCodeException)
 {
 	if (seenParameter == nullptr)

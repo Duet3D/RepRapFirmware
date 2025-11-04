@@ -207,16 +207,13 @@ bool GCodeBuffer::IsReportDue() noexcept
 // Return true if this GCode command had an explicit line number
 bool GCodeBuffer::HadExplicitLineNumber() const noexcept
 {
-	return NOT_BINARY_AND(stringParser.HadExplicitLineNumber());
+	return PARSER_OPERATION(HadExplicitLineNumber());
 }
 
 // Get the explicit line number
 uint32_t GCodeBuffer::GetExplicitLineNumber() const noexcept
 {
-	IF_NOT_BINARY(return stringParser.GetExplicitLineNumber());
-#if HAS_SBC_INTERFACE
-	return 0;
-#endif
+	return PARSER_OPERATION(GetExplicitLineNumber());
 }
 
 // Check if this GB is waiting for temperatures to be reached
