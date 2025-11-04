@@ -13,6 +13,7 @@ extern "C" {
 #include "lwip/ip_addr.h"
 #include "lwip/netif.h"
 #include "netif/etharp.h"
+#include "ksz8081rna/gmac.h"
 }
 
 #include <Platform/MessageType.h>
@@ -33,5 +34,7 @@ bool ethernetif_link_established() noexcept;				// asks the PHY if the link is s
 void ethernetif_set_mac_address(const uint8_t macAddress[]) noexcept;
 
 void ethernetif_diagnostics(const StringRef& reply) noexcept;
+
+gmac_status_t ethernetif_GetPhyInitResult() noexcept;
 
 #endif /* SRC_HARDWARE_SAME5X_ETHERNET_GMACINTERFACE_H_ */

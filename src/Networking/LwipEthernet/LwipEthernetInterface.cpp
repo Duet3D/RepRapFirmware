@@ -395,15 +395,22 @@ void LwipEthernetInterface::Start() noexcept
 		ethernet_configure_interface(macAddress.bytes, hostname);
 		init_ethernet(DefaultIpAddress, DefaultNetMask, DefaultGateway);
 
-		// Initialise mDNS subsystem
-		mdns_resp_init();
-		mdns_resp_add_netif(&gs_net_if, hostname, MdnsTtl);
+		if (ethernetif_GetPhyInitResult() != GMAC_OK)
+		{
+			SetState(NetworkState::initFailed);
+		}
+		else
+		{
+			// Initialise mDNS subsystem
+			mdns_resp_init();
+			mdns_resp_add_netif(&gs_net_if, hostname, MdnsTtl);
 
-		// Initialise NetBIOS responder
-		netbiosns_init();
-		netbiosns_set_name(hostname);
+			// Initialise NetBIOS responder
+			netbiosns_init();
+			netbiosns_set_name(hostname);
 
-		initialised = true;
+			initialised = true;
+		}
 	}
 
 	SetState(NetworkState::establishingLink);

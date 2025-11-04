@@ -45,7 +45,7 @@
  */
 
 #include "ethernet_phy.h"
-#include "../gmac.h"		// ASF3 gmac driver
+#include "gmac.h"		// ASF3 gmac driver
 #include "conf_eth.h"
 
 /// @cond 0
@@ -86,7 +86,7 @@ extern void debugPrintf(const char *fmt, ...) noexcept;
  *
  * \return 0xFF when no valid PHY address is found.
  */
-static uint8_t ethernet_phy_find_valid(Gmac *p_gmac, uint8_t uc_phy_addr, uint8_t uc_start_addr)
+static gmac_status_t ethernet_phy_find_valid(Gmac *p_gmac, uint8_t uc_phy_addr, uint8_t uc_start_addr)
 {
 	uint32_t ul_value = 0;
 	uint8_t uc_rc = 0;
@@ -136,7 +136,7 @@ static uint8_t ethernet_phy_find_valid(Gmac *p_gmac, uint8_t uc_phy_addr, uint8_
  *
  * Return GMAC_OK if successfully, GMAC_TIMEOUT if timeout.
  */
-uint8_t ethernet_phy_init(Gmac *p_gmac, uint8_t uc_phy_addr, uint32_t mck)
+gmac_status_t ethernet_phy_init(Gmac *p_gmac, uint8_t uc_phy_addr, uint32_t mck)
 {
 	uint8_t uc_rc;
 	uint8_t uc_phy;
@@ -146,13 +146,13 @@ uint8_t ethernet_phy_init(Gmac *p_gmac, uint8_t uc_phy_addr, uint32_t mck)
 	/* Configure GMAC runtime clock */
 	uc_rc = gmac_set_mdc_clock(p_gmac, mck);
 	if (uc_rc != GMAC_OK) {
-		return 0;
+		return uc_rc;
 	}
 
 	/* Check PHY Address */
 	uc_phy = ethernet_phy_find_valid(p_gmac, uc_phy_addr, 0);
 	if (uc_phy == 0xFF) {
-		return 0;
+		return GMAC_INVALID;
 	}
 	if (uc_phy != uc_phy_addr) {
 		ethernet_phy_reset(p_gmac, uc_phy_addr);
@@ -171,7 +171,7 @@ uint8_t ethernet_phy_init(Gmac *p_gmac, uint8_t uc_phy_addr, uint32_t mck)
  * Return GMAC_OK if successfully, GMAC_TIMEOUT if timeout.
  */
 static bool phyInitialized = false;
-uint8_t ethernet_phy_auto_negotiate(Gmac *p_gmac, uint8_t uc_phy_addr)
+gmac_status_t ethernet_phy_auto_negotiate(Gmac *p_gmac, uint8_t uc_phy_addr)
 {
 	uint32_t ul_value;
 	uint32_t ul_phy_anar;
@@ -301,7 +301,7 @@ uint8_t ethernet_phy_auto_negotiate(Gmac *p_gmac, uint8_t uc_phy_addr)
  *
  * \Return GMAC_OK if successfully, GMAC_TIMEOUT if timeout.
  */
-uint8_t ethernet_phy_reset(Gmac *p_gmac, uint8_t uc_phy_addr)
+gmac_status_t ethernet_phy_reset(Gmac *p_gmac, uint8_t uc_phy_addr)
 {
 	uint32_t ul_bmcr;
 	uint8_t uc_phy_address = uc_phy_addr;

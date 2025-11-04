@@ -48,6 +48,7 @@
 #define ETHERNET_PHY_H_INCLUDED
 
 #include <Core.h>
+#include <gmac/gmac.h>
 
 // IEEE defined Registers
 #define GMII_BMCR        0x00   // Basic Control
@@ -155,7 +156,7 @@
  *
  * Return GMAC_OK if successfully, GMAC_TIMEOUT if timeout.
  */
-uint8_t ethernet_phy_init(Gmac *p_gmac, uint8_t uc_phy_addr, uint32_t ul_mck);
+gmac_status_t ethernet_phy_init(Gmac *p_gmac, uint8_t uc_phy_addr, uint32_t ul_mck);
 
 
 /**
@@ -168,7 +169,7 @@ uint8_t ethernet_phy_init(Gmac *p_gmac, uint8_t uc_phy_addr, uint32_t ul_mck);
  *
  * Return GMAC_OK if successfully, GMAC_TIMEOUT if timeout.
  */
-uint8_t ethernet_phy_set_link(Gmac *p_gmac, uint8_t uc_phy_addr,
+gmac_status_t ethernet_phy_set_link(Gmac *p_gmac, uint8_t uc_phy_addr,
 		uint8_t uc_apply_setting_flag);
 
 
@@ -180,7 +181,7 @@ uint8_t ethernet_phy_set_link(Gmac *p_gmac, uint8_t uc_phy_addr,
  *
  * Return GMAC_OK if successfully, GMAC_TIMEOUT if timeout.
  */
-uint8_t ethernet_phy_auto_negotiate(Gmac *p_gmac, uint8_t uc_phy_addr);
+gmac_status_t ethernet_phy_auto_negotiate(Gmac *p_gmac, uint8_t uc_phy_addr);
 
 /**
  * \brief Issue a SW reset to reset all registers of the PHY.
@@ -190,6 +191,6 @@ uint8_t ethernet_phy_auto_negotiate(Gmac *p_gmac, uint8_t uc_phy_addr);
  *
  * \Return GMAC_OK if successfully, GMAC_TIMEOUT if timeout.
  */
-uint8_t ethernet_phy_reset(Gmac *p_gmac, uint8_t uc_phy_addr);
+gmac_status_t ethernet_phy_reset(Gmac *p_gmac, uint8_t uc_phy_addr);
 
 #endif /* #ifndef ETHERNET_PHY_H_INCLUDED */
