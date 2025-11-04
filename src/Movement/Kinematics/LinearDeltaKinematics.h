@@ -19,9 +19,11 @@
 class LinearDeltaKinematics : public RoundBedKinematics
 {
 public:
-	static Kinematics *_ecv_from _ecv_null Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept;
+	// Constructors
+	LinearDeltaKinematics() noexcept;
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
+	const char *_ecv_array GetName(bool forStatusReport) const noexcept override;
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException) override;
 	MovementError CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
@@ -52,11 +54,6 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
-	static KinematicsTypeDescriptor linearDeltaKinematicsDescriptor;
-
-	// Constructors
-	LinearDeltaKinematics() noexcept;
-
 	void Init() noexcept;
 	void Recalc() noexcept;
 	void NormaliseEndstopAdjustments() noexcept;													// Make the average of the endstop adjustments zero

@@ -51,14 +51,13 @@ public:
 	void GetUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCodeException);				// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);				// Get a :-separated list of drivers after a key letter
 	ExpressionValue GetExpression() THROWS(GCodeException);										// Get an expression after a key letter
-	bool GetStringOrUIValue(uint32_t& uival, const StringRef& str) THROWS(GCodeException);		// Get an unsigned integer or nonempty string after a key letter
 
 	void SetFinished() noexcept;									// Set the G Code finished
 
 	FilePosition GetFilePosition() const noexcept;					// Get the file position at the start of the current command
 	void SetFilePosition(FilePosition fpos) noexcept;				// Overwrite the file position, e.g. when a macro finishes
 
-	const char* _ecv_array _ecv_null DataStart() const noexcept;	// Get the start of the current command
+	const char* DataStart() const noexcept;							// Get the start of the current command
 	size_t DataLength() const noexcept;								// Get the length of the current command
 
 	void PrintCommand(const StringRef& s) const noexcept;

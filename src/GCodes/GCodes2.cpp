@@ -79,7 +79,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (&gb == FileGCode() && gb.ExecutingAll())
 		{
 			const FilePosition offsetToSkipTo = GetMovementState(gb).fileOffsetToSkipTo;
-			if (offsetToSkipTo != 0)
+			if (offsetToSkipTo != 0 && offsetToSkipTo != noFilePosition)
 			{
 				const FilePosition jobFilePos = gb.GetJobFilePosition();
 				if (jobFilePos < offsetToSkipTo)
@@ -87,6 +87,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 					// Skip any command except M596
 					if (!(gb.GetCommandLetter() == 'M' && gb.HasCommandNumber() && gb.GetCommandNumber() == 596))
 					{
+						HandleReply(gb, GCodeResult::ok, "");
 						return true;
 					}
 				}
@@ -98,6 +99,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 						&& ((commandNumber = gb.GetCommandNumber()) == 226 || commandNumber == 600 || commandNumber == 601 || commandNumber == 25)
 					   )
 					{
+						HandleReply(gb, GCodeResult::ok, "");
 						return true;
 					}
 				}
@@ -112,14 +114,6 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	try
 	{
-#if HAS_SBC_INTERFACE
-		if (gb.IsBinary() && gb.HadOverflow())
-		{
-			// Too long G-codes in SBC mode are not stored to avoid access to invalid memory regions, so there are no details available here
-			throw GCodeException("GCode command too long");
-		}
-#endif
-
 		switch (gb.GetCommandLetter())
 		{
 		case 'G':
@@ -1005,7 +999,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (sparam == 2)
 					{
-						outBuf = reprap.GetFilesResponse(dir.c_str(), rparam, cparam, true);	// send the file list in JSON format
+						outBuf = reprap.GetFilesResponse(&gb, dir.c_str(), rparam, cparam, true);	// send the file list in JSON format
 						if (outBuf == nullptr)
 						{
 							reply.copy("{\"err\":-1}");
@@ -1013,7 +1007,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else if (sparam == 3)
 					{
-						outBuf = reprap.GetFilelistResponse(dir.c_str(), rparam, cparam);
+						outBuf = reprap.GetFilelistResponse(&gb, dir.c_str(), rparam, cparam);
 						if (outBuf == nullptr)
 						{
 							reply.copy("{\"err\":-1}");
@@ -1395,7 +1389,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 # if HAS_SBC_INTERFACE
 						if (reprap.UsingSbcInterface())
 						{
-							reprap.GetFileInfoResponse(nullptr, outBuf, true);
+							reprap.GetFileInfoResponse(&gb, nullptr, outBuf, true);
 						}
 						else
 # endif
@@ -1408,7 +1402,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 							String<MaxFilenameLength> filename;
 							gb.GetUnprecedentedString(filename.GetRef(), true);
-							result = reprap.GetFileInfoResponse((filename.IsEmpty()) ? nullptr : filename.c_str(), outBuf, false);
+							result = reprap.GetFileInfoResponse(&gb, (filename.IsEmpty()) ? nullptr : filename.c_str(), outBuf, false);
 # endif
 						}
 						break;
@@ -1516,7 +1510,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					const MassStorage::InfoResult res = MassStorage::GetCardInfo(slot, returnedInfo);
 					if (format == 2)
 					{
-						reply.printf("{\"SDinfo\":{\"slot\":%" PRIu32 ",\"present\":", slot);
+						reply.copy("{");
+						if (gb.HadExplicitLineNumber())
+						{
+							reply.catf("\"line\":%ld,", gb.GetExplicitLineNumber());
+						}
+						reply.catf("\"SDinfo\":{\"slot\":%" PRIu32 ",\"present\":", slot);
 						if (res == MassStorage::InfoResult::ok)
 						{
 							reply.catf("1,\"capacity\":%" PRIu64 ",\"partitionSize\":%" PRIu64 ",\"free\":%" PRIu64 ",\"speed\":%" PRIu32 ",\"clsize\":%" PRIu32 "}}",
@@ -2068,7 +2067,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 118:	// Echo message on host
 				{
 					gb.MustSee('S');
-					String<MaxGCodeStringLength> message;
+					String<MaxGCodeLength> message;
 					gb.GetQuotedString(message.GetRef());
 
 					MessageType type = GenericMessage;
@@ -2146,7 +2145,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_MQTT
 					if ((type & MqttMessage) && (result != GCodeResult::error))
 					{
-						String<MaxGCodeStringLength> topic;
+						String<MaxGCodeLength> topic;
 						gb.MustSee('T');
 						gb.GetQuotedString(topic.GetRef());
 
@@ -2752,9 +2751,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							break;
 						}
 
+						MovementState& ms = GetMovementState(gb);
+#if SUPPORT_ASYNC_MOVES
+						// Allocate the axes that were mentioned
+						if (!ms.AllocateAxes(axesMentioned, gb.AllParameters() & allAxisLetters).IsEmpty())
+						{
+							reply.copy("cannot allocate axes to babystep");
+							result = GCodeResult::error;
+							break;
+						}
+#endif
 						// Perform babystepping synchronously with moves. Only move axes that have been flagged as homed.
 						bool haveResidual = false;
-						MovementState& ms = GetMovementState(gb);
 						for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 						{
 							currentBabyStepOffsets[axis] += differences[axis];
@@ -3095,6 +3103,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
+#if SUPPORT_OBJECT_MODEL
 			case 409: // Get object model values in JSON format
 				{
 					String<StringLength100> key;
@@ -3148,6 +3157,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
+#endif
 
 			case 425: // Backlash compensation
 				result = reprap.GetMove().ConfigureBacklashCompensation(gb, reply);
@@ -3979,11 +3989,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					Move& move = reprap.GetMove();
 
 					bool changedMode = false;
-					if ((gb.Seen('L') || gb.Seen('D')) && move.GetKinematics().GetLegacyType() != KinematicsType::linearDelta)
+					if ((gb.Seen('L') || gb.Seen('D')) && move.GetKinematics().GetKinematicsType() != KinematicsType::linearDelta)
 					{
 						// Not in delta mode, so switch to it
 						changedMode = true;
-						move.SetKinematics(nullptr, (int)KinematicsType::linearDelta);
+						move.SetKinematics(KinematicsType::linearDelta);
 					}
 					bool error = false;
 					const bool changed = move.GetKinematics().Configure(code, gb, reply, error);
@@ -4028,43 +4038,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					return false;
 				}
 				{
-					bool seen = false;
-					bool kinematicsChanged = false;
 					Move& move = reprap.GetMove();
+					const KinematicsType oldK = move.GetKinematics().GetKinematicsType();		// get the current kinematics type so we can tell whether it changed
 
-					// Try to get the requested kinematics from the K parameter
-					uint32_t kn = (uint32_t)-1;
-					String<StringLength50> ks;
+					bool seen = false;
 					if (gb.Seen('K'))
 					{
-						bool ok = false;
-						if (gb.GetStringOrUIValue(kn, ks.GetRef()))				// if string value found
+						const unsigned int nk = gb.GetUIValue();
+						if (nk >= (unsigned int)KinematicsType::unknown || !move.SetKinematics(static_cast<KinematicsType>(nk)))
 						{
-							ok = true;
-							kinematicsChanged = !ReducedStringEquals(ks.c_str(),  move.GetKinematics().GetName());
-						}
-						else 													// else unsigned value found
-						{
-							ok = true;
-							kinematicsChanged = (kn != (int32_t)move.GetKinematics().GetLegacyType().ToBaseType());
-						}
-
-						if (kinematicsChanged)
-						{
-							ok = move.SetKinematics(ks.c_str(), kn);
-						}
-
-						if (!ok)
-						{
-							reply.copy("Unknown kinematics type");
+							reply.printf("Unknown kinematics type %d", nk);
 							result = GCodeResult::error;
 							break;
 						}
-
 						seen = true;
 					}
-
-					// Now try to configure the parameters of the selected kinematics
 					bool error = false;
 					if (move.GetKinematics().Configure(code, gb, reply, error))
 					{
@@ -4076,7 +4064,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						// We changed something significant, so reset the positions and set all axes not homed
 						SetAllAxesNotHomed();
-						if (kinematicsChanged)
+						if (move.GetKinematics().GetKinematicsType() != oldK)
 						{
 							SetInitialAxisAndDrivePositions();
 						}
@@ -4625,12 +4613,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							gb.GetQuotedString(eraseString.GetRef());
 							if (eraseString.Equals("ERASE"))
 							{
-								platform.AppendAuxReply(auxChannel, panelDueCommandEraseAndReset, true);
+								platform.AppendAuxReply(auxChannel, nullptr, panelDueCommandEraseAndReset, true);
 							}
 						}
 						else
 						{
-							platform.AppendAuxReply(auxChannel, panelDueCommandReset, true);
+							platform.AppendAuxReply(auxChannel, nullptr, panelDueCommandReset, true);
 						}
 						break;
 					}

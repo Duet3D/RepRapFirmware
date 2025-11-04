@@ -152,6 +152,8 @@ LwipEthernetInterface::LwipEthernetInterface(Platform& p) noexcept
 	}
 }
 
+#if SUPPORT_OBJECT_MODEL
+
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -173,6 +175,8 @@ constexpr ObjectModelTableEntry LwipEthernetInterface::objectModelTable[] =
 constexpr uint8_t LwipEthernetInterface::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(LwipEthernetInterface)
+
+#endif
 
 void LwipEthernetInterface::Init() noexcept
 {
@@ -391,15 +395,22 @@ void LwipEthernetInterface::Start() noexcept
 		ethernet_configure_interface(macAddress.bytes, hostname);
 		init_ethernet(DefaultIpAddress, DefaultNetMask, DefaultGateway);
 
-		// Initialise mDNS subsystem
-		mdns_resp_init();
-		mdns_resp_add_netif(&gs_net_if, hostname, MdnsTtl);
+		if (ethernetif_GetPhyInitResult() != GMAC_OK)
+		{
+			SetState(NetworkState::initFailed);
+		}
+		else
+		{
+			// Initialise mDNS subsystem
+			mdns_resp_init();
+			mdns_resp_add_netif(&gs_net_if, hostname, MdnsTtl);
 
-		// Initialise NetBIOS responder
-		netbiosns_init();
-		netbiosns_set_name(hostname);
+			// Initialise NetBIOS responder
+			netbiosns_init();
+			netbiosns_set_name(hostname);
 
-		initialised = true;
+			initialised = true;
+		}
 	}
 
 	SetState(NetworkState::establishingLink);

@@ -15,9 +15,11 @@
 class RotaryDeltaKinematics : public RoundBedKinematics
 {
 public:
-	static Kinematics *_ecv_from _ecv_null Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept;
+	// Constructors
+	RotaryDeltaKinematics() noexcept;
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
+	const char *GetName(bool forStatusReport) const noexcept override;
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException) override;
 	MovementError CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
@@ -44,11 +46,6 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	static KinematicsTypeDescriptor rotaryDeltaKinematicsDescriptor;
-
-	// Constructors
-	RotaryDeltaKinematics() noexcept;
-
 	void Init() noexcept;
 	void Recalc() noexcept;
     float Transform(const float headPos[], size_t axis) const noexcept;								// Calculate the motor position for a single tower from a Cartesian coordinate

@@ -1048,7 +1048,7 @@ pre(driver.IsRemote())
 	case 3:			// read driver encoder via secondary CAN
 		{
 			Kinematics& kin = reprap.GetMove().GetKinematics();
-			if (kin.GetLegacyType() == KinematicsType::hangprinter)
+			if (kin.GetKinematicsType() == KinematicsType::hangprinter)
 			{
 				return ((HangprinterKinematics&)kin).ReadODrive3Encoder(driver, gb, reply);
 			}
@@ -1072,7 +1072,7 @@ pre(driver.IsRemote())
 #if DUAL_CAN
 		{
 			Kinematics& kin = reprap.GetMove().GetKinematics();
-			if (kin.GetLegacyType() == KinematicsType::hangprinter)
+			if (kin.GetKinematicsType() == KinematicsType::hangprinter)
 			{
 				gb.MustSee('T');
 				const float torque = gb.GetFValue();
@@ -1133,7 +1133,7 @@ pre(driver.IsRemote())
 	case 8:			// read axis force via secondary CAN
 		{
 			Kinematics& kin = reprap.GetMove().GetKinematics();
-			if (kin.GetLegacyType() == KinematicsType::hangprinter)
+			if (kin.GetKinematicsType() == KinematicsType::hangprinter)
 			{
 				return ((HangprinterKinematics&)kin).ReadODrive3AxisForce(driver, reply);
 			}

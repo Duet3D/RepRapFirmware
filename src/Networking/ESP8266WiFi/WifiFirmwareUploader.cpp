@@ -21,7 +21,7 @@ constexpr uint32_t Esp32FlashModuleSize = 4 * 1024 * 1024;		// assume at least 4
 // ESP8266 command codes
 const uint8_t ESP_FLASH_BEGIN = 0x02;		// Four 32-bit words: size to erase, number of data packets, data size in one packet, flash offset.
 const uint8_t ESP_FLASH_DATA = 0x03;		// Four 32-bit words: data size, sequence number, 0, 0, then data. Uses Checksum.
-const uint8_t ESP_FLASH_END = 0x04;			// One 32-bit word: 0 to reboot, 1 “run to user code”. Not necessary to send this command if you wish to stay in the loader
+const uint8_t ESP_FLASH_END = 0x04;			// One 32-bit word: 0 to reboot, 1 ï¿½run to user codeï¿½. Not necessary to send this command if you wish to stay in the loader
 const uint8_t ESP_MEM_BEGIN = 0x05;			// total size, number of data packets, data size in one packet, memory offset
 const uint8_t ESP_MEM_END = 0x06;			// Two 32-bit words: execute flag, entry point address
 const uint8_t ESP_MEM_DATA = 0x07;			// Four 32-bit words: data size, sequence number, 0, 0, then data. Uses Checksum.
@@ -101,7 +101,7 @@ void WifiFirmwareUploader::MessageF(const char *_ecv_array fmt, ...) noexcept
 {
 	va_list vargs;
 	va_start(vargs, fmt);
-	reprap.GetPlatform().MessageV(FirmwareUpdateMessage, fmt, vargs);
+	reprap.GetPlatform().MessageV(nullptr, FirmwareUpdateMessage, fmt, vargs);
 	va_end(vargs);
 }
 

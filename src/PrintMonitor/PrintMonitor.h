@@ -80,9 +80,11 @@ private:
 	void Reset() noexcept;
 	void PrintingFileInfoUpdated() noexcept;
 
+#if SUPPORT_OBJECT_MODEL
 	ExpressionValue EstimateTimeLeftAsExpression(PrintEstimationMethod method) const noexcept;
 	ExpressionValue EstimateTimeToPause() const noexcept;
 	int32_t GetPrintOrSimulatedDuration() const noexcept;
+#endif
 
 	Platform& platform;
 	GCodes& gCodes;

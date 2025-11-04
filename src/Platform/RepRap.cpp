@@ -1995,11 +1995,21 @@ OutputBuffer *_ecv_null RepRap::GetLegacyStatusResponse(uint8_t type, int seq) c
 	return response;
 }
 
+// Start constructing a JSON response in the provided output buffer. If there was a line number, put it in the response.
+/*static*/ void RepRap::StartJsonResponse(const GCodeBuffer *_ecv_null gb, OutputBuffer *outbuf) noexcept
+{
+	outbuf->copy('{');
+	if (gb != nullptr && gb->HadExplicitLineNumber())
+	{
+		outbuf->catf("\"line\":%ld,", gb->GetExplicitLineNumber());
+	}
+}
+
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 // Get the list of files in the specified directory in JSON format. PanelDue uses this one, so include a newline at the end.
 // If flagDirs is true then we prefix each directory with a * character.
-OutputBuffer *_ecv_null RepRap::GetFilesResponse(c_string dir, unsigned int startAt, int maxItems, bool flagsDirs) noexcept
+OutputBuffer *_ecv_null RepRap::GetFilesResponse(const GCodeBuffer *_ecv_null gb, c_string dir, unsigned int startAt, int maxItems, bool flagsDirs) noexcept
 {
 	// Need something to write to...
 	OutputBuffer *_ecv_null response;
@@ -2008,7 +2018,8 @@ OutputBuffer *_ecv_null RepRap::GetFilesResponse(c_string dir, unsigned int star
 		return nullptr;
 	}
 
-	response->printf("{\"dir\":\"%.s\",\"first\":%u,\"files\":[", dir, startAt);
+	StartJsonResponse(gb, response);
+	response->catf("\"dir\":\"%.s\",\"first\":%u,\"files\":[", dir, startAt);
 	unsigned int err;
 	unsigned int nextFile = 0;
 
@@ -2078,7 +2089,7 @@ OutputBuffer *_ecv_null RepRap::GetFilesResponse(c_string dir, unsigned int star
 }
 
 // Get a JSON-style filelist including file types and sizes
-OutputBuffer *_ecv_null RepRap::GetFilelistResponse(c_string dir, unsigned int startAt, int maxItems) noexcept
+OutputBuffer *_ecv_null RepRap::GetFilelistResponse(const GCodeBuffer *_ecv_null gb, c_string dir, unsigned int startAt, int maxItems) noexcept
 {
 	// Need something to write to...
 	OutputBuffer *response;
@@ -2087,7 +2098,8 @@ OutputBuffer *_ecv_null RepRap::GetFilelistResponse(c_string dir, unsigned int s
 		return nullptr;
 	}
 
-	response->printf("{\"dir\":\"%.s\",\"first\":%u,\"files\":[", dir, startAt);
+	StartJsonResponse(gb, response);
+	response->catf("\"dir\":\"%.s\",\"first\":%u,\"files\":[", dir, startAt);
 	unsigned int err;
 	unsigned int nextFile = 0;
 
@@ -2211,7 +2223,7 @@ OutputBuffer *_ecv_null RepRap::GetFileFragment(c_string filename, FilePosition 
 			for (unsigned int charsWrittenThisCall = 0; charsWrittenThisCall < thumbnailMaxDataSize; )
 			{
 				// Read a line
-				char lineBuffer[MaxGCodeStringLength];
+				char lineBuffer[MaxGCodeLength];
 				const int charsRead = f->ReadLine(lineBuffer, sizeof(lineBuffer));
 				if (charsRead < 0 || (isThumbnail && charsRead == 0))
 				{
@@ -2309,7 +2321,7 @@ OutputBuffer *_ecv_null RepRap::GetFileFragment(c_string filename, FilePosition 
 
 // Get information for the specified file, or the currently printing file (if 'filename' is null or empty), in JSON format
 // Return GCodeResult::Warning if the file doesn't exist, else GCodeResult::ok or GCodeResult::notFinished
-GCodeResult RepRap::GetFileInfoResponse(c_string _ecv_null filename, OutputBuffer *_ecv_null &response, bool quitEarly) noexcept
+GCodeResult RepRap::GetFileInfoResponse(const GCodeBuffer *_ecv_null gb, c_string _ecv_null filename, OutputBuffer *_ecv_null &response, bool quitEarly) noexcept
 {
 	const bool specificFile = (filename != nullptr && filename[0] != 0);
 	GCodeFileInfo info;
@@ -2344,9 +2356,10 @@ GCodeResult RepRap::GetFileInfoResponse(c_string _ecv_null filename, OutputBuffe
 		return GCodeResult::notFinished;
 	}
 
+	StartJsonResponse(gb, response);
 	if (info.isValid)
 	{
-		response->printf("{\"err\":0,\"fileName\":\"%.s\",\"size\":%lu,", ((specificFile) ? filename : printMonitor->GetPrintingFilename()), info.fileSize);
+		response->catf("\"err\":0,\"fileName\":\"%.s\",\"size\":%lu,", ((specificFile) ? filename : printMonitor->GetPrintingFilename()), info.fileSize);
 		tm timeInfo;
 		gmtime_r(&info.lastModifiedTime, &timeInfo);
 		if (timeInfo.tm_year > /*19*/80)
@@ -2411,7 +2424,7 @@ GCodeResult RepRap::GetFileInfoResponse(c_string _ecv_null filename, OutputBuffe
 		return GCodeResult::ok;
 	}
 
-	response->printf("{\"err\":1,\"fileName\":\"%.s\"}", ((specificFile) ? filename : printMonitor->GetPrintingFilename()));
+	response->catf("\"err\":1,\"fileName\":\"%.s\"}", ((specificFile) ? filename : printMonitor->GetPrintingFilename()));
 	return GCodeResult::warning;
 }
 
@@ -2482,7 +2495,8 @@ OutputBuffer *RepRap::GetModelResponse(const GCodeBuffer *_ecv_null gb, c_string
 		if (key == nullptr) { key = ""; }
 		if (flags == nullptr) { flags = ""; }
 
-		outBuf->printf("{\"key\":\"%.s\",\"flags\":\"%.s\",\"result\":", key, flags);
+		StartJsonResponse(gb, outBuf);
+		outBuf->catf("\"key\":\"%.s\",\"flags\":\"%.s\",\"result\":", key, flags);
 
 		const bool wantArrayLength = (*key == '#');
 		if (wantArrayLength)

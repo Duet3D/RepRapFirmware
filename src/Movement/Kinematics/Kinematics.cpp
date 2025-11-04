@@ -22,6 +22,8 @@
 
 const char *_ecv_array const Kinematics::HomeAllFileName = "homeall.g";
 
+#if SUPPORT_OBJECT_MODEL
+
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -34,7 +36,6 @@ constexpr ObjectModelTableEntry Kinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "name",				OBJECT_MODEL_FUNC(self->GetName()), 									ObjectModelEntryFlags::none },
 	{ "segmentation",		OBJECT_MODEL_FUNC_IF(self->segmentationType.useSegmentation, self, 1), 	ObjectModelEntryFlags::none },
 
 	// 1. segmentation members
@@ -42,25 +43,16 @@ constexpr ObjectModelTableEntry Kinematics::objectModelTable[] =
 	{ "segmentsPerSec",		OBJECT_MODEL_FUNC(self->segmentsPerSecond, 1), 							ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Kinematics::objectModelTableDescriptor[] = { 2, 2, 2 };
+constexpr uint8_t Kinematics::objectModelTableDescriptor[] = { 2, 1, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Kinematics)
 
-// Root of the sensor types list
-Kinematics::KinematicsTypeDescriptor *_ecv_null Kinematics::KinematicsTypeDescriptor::kinematicsTypeListRoot = nullptr;
-
-// Constructor for the type descriptor. This links the type descriptor into the sensor type list.
-Kinematics::KinematicsTypeDescriptor::KinematicsTypeDescriptor(CreationFunction p_creationFunction) noexcept
-	: createFunction(p_creationFunction)
-{
-	next = kinematicsTypeListRoot;
-	kinematicsTypeListRoot = this;
-}
+#endif
 
 // Constructor. Pass segsPerSecond <= 0.0 to get non-segmented kinematics.
 Kinematics::Kinematics(KinematicsType t, SegmentationType segType) noexcept
 	: segmentsPerSecond(DefaultSegmentsPerSecond), minSegmentLength(DefaultMinSegmentLength), reciprocalMinSegmentLength(1.0/DefaultMinSegmentLength),
-	  segmentationType(segType), legacyType(t.RawValue())
+	  segmentationType(segType), type(t)
 {
 }
 
@@ -287,14 +279,51 @@ void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *_ecv_array nor
 	}
 }
 
-/*static*/ Kinematics *_ecv_from _ecv_null Kinematics::Create(const char *_ecv_array _ecv_null name, int legacyTypeNumber) noexcept
+/*static*/ Kinematics *_ecv_from Kinematics::Create(KinematicsType k) noexcept
 {
-	for (const KinematicsTypeDescriptor *k = KinematicsTypeDescriptor::GetRoot(); k != nullptr; k = k->GetNext())
+	switch (k)
 	{
-		Kinematics *_ecv_from _ecv_null const ret = k->Create(name, legacyTypeNumber);
-		if (ret != nullptr) { return ret; }
+	default:
+		return nullptr;
+
+	case KinematicsType::cartesian:
+	case KinematicsType::coreXY:
+	case KinematicsType::coreXZ:
+	case KinematicsType::coreXYU:
+	case KinematicsType::coreXYUV:
+	case KinematicsType::markForged:
+		return new CoreKinematics(k);
+
+#if SUPPORT_LINEAR_DELTA
+	case KinematicsType::linearDelta:
+		return new LinearDeltaKinematics();
+#endif
+
+#if SUPPORT_SCARA
+	case KinematicsType::scara:
+		return new ScaraKinematics();
+#endif
+
+#if SUPPORT_HANGPRINTER
+	case KinematicsType::hangprinter:
+		return new HangprinterKinematics();
+#endif
+
+#if SUPPORT_POLAR
+	case KinematicsType::polar:
+		return new PolarKinematics();
+#endif
+
+#if SUPPORT_ROTARY_DELTA
+	case KinematicsType::rotaryDelta:
+		return new RotaryDeltaKinematics();
+#endif
+
+#if SUPPORT_FIVEBARSCARA
+	case KinematicsType::fiveBarScara:
+		return new FiveBarScaraKinematics();
+#endif
 	}
-	return nullptr;
 }
 
 /*static*/ void Kinematics::PrintMatrix(const char *_ecv_array s, const MathMatrix<float>& m, size_t maxRows, size_t maxCols) noexcept
@@ -372,19 +401,6 @@ void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *_ecv_array nor
 	{
 		errorCode = MovementError::microstep_position_too_large;
 	}
-}
-
-// Return the name of the current kinematics
-// This default implementation will only work for legacy kinematics types. It must be overridden in new kinematics classes that do not have type codes.
-const char *_ecv_array Kinematics::GetName() const noexcept
-{
-	return KinematicsType::ToString(legacyType);
-}
-
-// Check whether a requested name or code number matches a particular legacy type
-/*static*/ bool Kinematics::MatchesLegacyType(const char *_ecv_array _ecv_null name, int requestedLegacyType, KinematicsType::RawType t) noexcept
-{
-	return (name != nullptr && ReducedStringEquals(name, KinematicsType::ToString(t))) || requestedLegacyType == (int)t;
 }
 
 // End

@@ -71,4 +71,6 @@ void ethernetif_set_mac_address(const uint8_t macAddress[]) noexcept;
 
 void ethernetif_diagnostics(const StringRef& reply) noexcept;
 
+gmac_status_t ethernetif_GetPhyInitResult() noexcept;
+
 #endif /* SAME70_ETHERNET_GMACINTERFACE_H_INCLUDED */

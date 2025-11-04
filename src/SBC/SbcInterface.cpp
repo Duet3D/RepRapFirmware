@@ -526,7 +526,7 @@ void SbcInterface::ExchangeData() noexcept
 		// Evaluate an expression
 		case SbcRequest::EvaluateExpression:
 		{
-			String<MaxSbcExpressionLength> expression;
+			String<MaxGCodeLength> expression;
 			const GCodeChannel channel = transfer.ReadEvaluateExpression(packet->length, expression.GetRef());
 			if (channel.IsValid())
 			{
@@ -716,7 +716,7 @@ void SbcInterface::ExchangeData() noexcept
 		{
 			bool createVariable;
 			String<MaxVariableNameLength> varName;
-			String<MaxGCodeStringLength> expression;
+			String<MaxGCodeLength> expression;
 			const GCodeChannel channel = transfer.ReadSetVariable(createVariable, varName.GetRef(), expression.GetRef());
 
 			// Make sure we can access the gb safely...
@@ -1165,11 +1165,15 @@ void SbcInterface::ExchangeData() noexcept
 			continue;
 		}
 
-		// Invalidate buffered codes if required
+		// Invalidate buffered codes if required. It may take multiple transfers before a
+		// print is actually paused, so make sure no more job codes are accepted until then
 		if (gb->IsInvalidated())
 		{
-			InvalidateBufferedCodes(gb->GetChannel());
-			gb->Invalidate(false);
+			InvalidateBufferedCodes(channel);
+			if (!reportPause || (channel != GCodeChannel::File && channel != GCodeChannel::File2))
+			{
+				gb->Invalidate(false);
+			}
 		}
 
 		// Deal with macro files being closed
@@ -1871,7 +1875,7 @@ void SbcInterface::DefragmentBufferedCodes() noexcept
 	if (rxPointer != txPointer || txEnd != 0)
 	{
 		const uint16_t bufferSpace = (txEnd == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
-		if (bufferSpace > MaxGCodeBinaryLength)
+		if (bufferSpace > MaxCodeBufferSize)
 		{
 			// There is still enough space left for at least one more code, don't worry about fragmentation yet
 			return;
@@ -1887,7 +1891,7 @@ void SbcInterface::DefragmentBufferedCodes() noexcept
 			// Ring buffer overlapped (rxPointer..txEnd, 0..txPointer)
 			if (!DefragmentCodeBlock(rxPointer, txEnd) &&
 				!DefragmentCodeBlock(0, txPointer) &&
-				SpiCodeBufferSize - (size_t)txEnd > MaxGCodeBinaryLength)
+				SpiCodeBufferSize - (size_t)txEnd > MaxCodeBufferSize)
 			{
 				size_t endBufferSize = txEnd - rxPointer;
 				memmoveu32(reinterpret_cast<uint32_t*>(codeBuffer + SpiCodeBufferSize - endBufferSize), reinterpret_cast<uint32_t*>(codeBuffer + rxPointer), endBufferSize / sizeof(uint32_t));

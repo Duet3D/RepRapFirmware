@@ -49,6 +49,8 @@
 # include <CAN/CanInterface.h>
 #endif
 
+constexpr const char *_ecv_array TargetUnreachableText = "target position outside machine limits";		// message used for both G0/1 and G2/3 moves
+
 #if HAS_AUX_DEVICES
 // Support for emergency stop from PanelDue
 bool GCodes::emergencyStopCommanded = false;
@@ -2250,7 +2252,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		if (gb.Seen(axisLetters[axis]))
 		{
 			// If it is a special move on a delta, movement must be relative.
-			if (ms.moveType != 0 && !gb.LatestMachineState().axesRelative && reprap.GetMove().GetKinematics().GetLegacyType() == KinematicsType::linearDelta)
+			if (ms.moveType != 0 && !gb.LatestMachineState().axesRelative && reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta)
 			{
 				gb.ThrowGCodeException("attempt to move individual motors of a delta machine to absolute positions");
 			}
@@ -2498,7 +2500,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		case LimitPositionResult::adjustedAndIntermediateUnreachable:
 			if (machineType != MachineType::fff)
 			{
-				gb.ThrowGCodeException("target position outside machine limits");	// it's a laser or CNC so this is a definite error
+				gb.ThrowGCodeException(TargetUnreachableText);				// it's a laser or CNC so this is a definite error
 			}
 			ToolOffsetInverseTransform(ms);									// make sure the limits are reflected in the user position
 			if (lp == LimitPositionResult::adjusted)
@@ -2907,7 +2909,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 
 	if (reprap.GetMove().GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, true, limitAxes) != LimitPositionResult::ok)
 	{
-		gb.ThrowGCodeException("outside machine limits");				// abandon the move
+		gb.ThrowGCodeException(TargetUnreachableText);							// abandon the move
 	}
 
 	// Set up the arc centre coordinates and record which axes behave like an X axis.
@@ -4158,7 +4160,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 		// DWC expects a reply from every code, so we must even send empty responses
 		if (reply[0] != 0 || gb.IsLastCommand() || &gb == HttpGCode())
 		{
-			platform.MessageF(mt, "%s\n", reply);
+			platform.MessageF(&gb, mt, "%s\n", reply);
 		}
 		break;
 
@@ -5087,7 +5089,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 				OutputBuffer *_ecv_null statusBuf = GenerateJsonStatusResponse(0, -1, ResponseSource::AUX);		// older PanelDueFirmware using M408
 				if (statusBuf != nullptr)
 				{
-					platform.AppendAuxReply(0, statusBuf, true);
+					platform.AppendAuxReply(0, nullptr, statusBuf, true);
 				}
 			}
 			break;
@@ -5103,7 +5105,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 				}
 				if (statusBuf != nullptr)
 				{
-					platform.AppendAuxReply(0, statusBuf, true);
+					platform.AppendAuxReply(0, nullptr, statusBuf, true);
 				}
 			}
 			catch (const GCodeException&)

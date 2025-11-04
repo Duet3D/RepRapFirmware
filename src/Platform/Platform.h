@@ -259,8 +259,10 @@ public:
 	const char *_ecv_array GetElectronicsString() const noexcept;
 	const char *_ecv_array GetBoardString() const noexcept;
 
+#if SUPPORT_OBJECT_MODEL
 	size_t GetNumGpInputsToReport() const noexcept;
 	size_t GetNumGpOutputsToReport() const noexcept;
+#endif
 
 #if defined(DUET_NG) || defined(DUET3MINI)
 	bool IsDuetWiFi() const noexcept;
@@ -293,8 +295,8 @@ public:
 
   	// Communications and data storage
 	void AppendUsbReply(OutputBuffer *buffer, bool rawMessage) noexcept;
-	void AppendAuxReply(size_t auxNumber, OutputBuffer *buf, bool rawMessage) noexcept;
-	void AppendAuxReply(size_t auxNumber, const char *_ecv_array msg, bool rawMessage) noexcept;
+	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, bool rawMessage) noexcept;
+	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, const char *_ecv_array msg, bool rawMessage) noexcept;
 
 	void ResetChannel(size_t chan) noexcept;						// Re-initialise a serial channel
 	bool IsChanEnabled(size_t chan) const noexcept;					// Any device on the serial line?
@@ -344,8 +346,9 @@ public:
 	// Message output (see MessageType for further details)
 	void Message(MessageType type, const char *_ecv_array message) noexcept;
 	void Message(MessageType type, OutputBuffer *buffer) noexcept;
+	void MessageF(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array fmt, ...) noexcept __attribute__ ((format (printf, 4, 5)));
 	void MessageF(MessageType type, const char *_ecv_array fmt, ...) noexcept __attribute__ ((format (printf, 3, 4)));
-	void MessageV(MessageType type, const char *_ecv_array fmt, va_list vargs) noexcept;
+	void MessageV(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array fmt, va_list vargs) noexcept;
 	void DebugMessage(const char *_ecv_array fmt, va_list vargs) noexcept;
 	bool FlushMessages() noexcept;								// Flush messages to USB and aux, returning true if there is more to send
 	void StopLogging() noexcept;
@@ -512,7 +515,7 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
-	void RawMessage(MessageType type, const char *_ecv_array message) noexcept;	// called by Message after handling error/warning flags
+	void RawMessage(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array message) noexcept;	// called by Message after handling error/warning flags
 	float GetCpuTemperature() const noexcept;
 	GCodeResult PrintTestReport(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) const THROWS(GCodeException);
 

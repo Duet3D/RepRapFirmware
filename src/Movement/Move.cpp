@@ -370,7 +370,7 @@ Move::Move() noexcept
 #endif
 
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
-	kinematics = Kinematics::Create(nullptr, KinematicsType::cartesian);	// default to Cartesian
+	kinematics = Kinematics::Create(KinematicsType::cartesian);		// default to Cartesian
 	for (DDARing& ring : rings)
 	{
 		ring.Init(InitialDdaRingLength);
@@ -895,19 +895,23 @@ float Move::PushBabyStepping(MovementSystemNumber msNumber,size_t axis, float am
 	return rings[msNumber].PushBabyStepping(axis, amount);
 }
 
-// Change the kinematics to the specified type. We have already checked that the type has changed.
+// Change the kinematics to the specified type if it isn't already
+// If it is already correct leave its parameters alone.
 // This violates our rule on no dynamic memory allocation after the initialisation phase,
 // however this function is normally called only when M665, M667 and M669 commands in config.g are processed.
-bool Move::SetKinematics(const char *_ecv_array _ecv_null name, int legacyType) noexcept
+bool Move::SetKinematics(KinematicsType k) noexcept
 {
-	Kinematics *_ecv_from _ecv_null const nk = Kinematics::Create(name, legacyType);
-	if (nk == nullptr)
+	if (kinematics->GetKinematicsType() != k)
 	{
-		return false;
+		Kinematics *_ecv_from _ecv_null const nk = Kinematics::Create(k);
+		if (nk == nullptr)
+		{
+			return false;
+		}
+		delete kinematics;
+		kinematics = _ecv_not_null(nk);
+		reprap.MoveUpdated();
 	}
-	delete kinematics;
-	kinematics = _ecv_not_null(nk);
-	reprap.MoveUpdated();
 	return true;
 }
 

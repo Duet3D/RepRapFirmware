@@ -156,6 +156,8 @@ static uint8_t gs_uc_mac_address[] =
 	ETHERNET_CONF_ETHADDR5
 };
 
+static gmac_status_t phyInitResult = GMAC_OK;
+
 #if LWIP_STATS
 /** Used to compute lwIP bandwidth. */
 uint32_t lwip_tx_count = 0;
@@ -176,6 +178,12 @@ extern "C" void GMAC_Handler() noexcept
 	{
 		ethernetTask.GiveFromISR(NotifyIndices::EthernetHardware);
 	}
+}
+
+// Get the low-level initialisation result. 0 (aka GMAC_OK) = OK, anything else is an error.
+gmac_status_t ethernetif_GetPhyInitResult() noexcept
+{
+	return phyInitResult;
 }
 
 /**
@@ -320,7 +328,8 @@ static void gmac_low_level_init(struct netif *netif) noexcept
 	netif->flags |= NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP | NETIF_FLAG_IGMP;
 
 	/* Init MAC PHY driver. */
-	if (ethernet_phy_init(GMAC, BOARD_GMAC_PHY_ADDR, SystemCoreClockFreq/2) != GMAC_OK)		// MCLK is half the core clock on the SAME70
+	phyInitResult = ethernet_phy_init(GMAC, BOARD_GMAC_PHY_ADDR, SystemCoreClockFreq/2);
+	if (phyInitResult != GMAC_OK)		// MCLK is half the core clock on the SAME70
 	{
 		LWIP_DEBUGF(NETIF_DEBUG, ("gmac_low_level_init: PHY init ERROR!\n"));
 		return;

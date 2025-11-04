@@ -17,10 +17,7 @@ enum class MovementError : uint8_t
 	noMovement,								// no significant movement was commanded so the move can be ignored
 	microstep_position_too_large,			// exceeded about +/- 2^31 microsteps from zero position
 	unreachable_position,					// the kinematics can't reach the requested position
-	move_duration_too_long,					// the move would take more than about 2^31 step clocks
-#if SUPPORT_S_CURVE
-	move_speed_reduced						// we were asked to reduce speed of a move, which should not happen
-#endif
+	move_duration_too_long					// the move would take more than about 2^31 step clocks
 };
 
 const char *_ecv_array GetMovementErrorText(MovementError err) noexcept;

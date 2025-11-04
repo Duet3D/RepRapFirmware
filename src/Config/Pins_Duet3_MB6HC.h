@@ -55,9 +55,10 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_BME280			1
 #define SUPPORT_ADS131A02		1
+#define SUPPORT_OBJECT_MODEL	1
 
 #ifdef USE_EMBEDDED_FILES
-# define SUPPORT_ACCELEROMETERS	0
+#define SUPPORT_ACCELEROMETERS	0
 # define SUPPORT_FTP			0
 # define SUPPORT_MULTICAST_DISCOVERY	0
 # define SUPPORT_REMOTE_COMMANDS		0

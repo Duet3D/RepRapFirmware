@@ -65,12 +65,11 @@ public:
 #if HAS_SBC_INTERFACE
 	void PutBinary(const uint32_t *data, size_t len) noexcept;					// Add an entire binary G-Code, overwriting any existing content
 #endif
-	void PutAndDecode(const char *_ecv_array data, size_t len) noexcept;		// Add an entire G-Code, overwriting any existing content
-	void PutAndDecode(const char *_ecv_array str) noexcept;						// Add a null-terminated string, overwriting any existing content
+	void PutAndDecode(const char *_ecv_array data, size_t len) noexcept;					// Add an entire G-Code, overwriting any existing content
+	void PutAndDecode(const char *_ecv_array str) noexcept;								// Add a null-terminated string, overwriting any existing content
 	void StartNewFile() noexcept;												// Called when we start a new file
 	bool FileEnded() noexcept;													// Called when we reach the end of the file we are reading from
 	void DecodeCommand() noexcept;												// Decode the command in the buffer when it is complete
-	bool HadOverflow() noexcept { return overflowed; }							// Indicates if the previous binary G-code was too long
 	bool CheckMetaCommand(const StringRef& reply) THROWS(GCodeException);		// Check whether the current command is a meta command, or we are skipping a block
 
 	char GetCommandLetter() const noexcept;
@@ -80,6 +79,8 @@ public:
 	bool ContainsExpression() const noexcept;
 	void GetCompleteParameters(const StringRef& str) THROWS(GCodeException);		// Get all of the line following the command. Currently called only for the Q0 command.
 	int32_t GetLineNumber() const noexcept { return CurrentFileMachineState().lineNumber; }
+	bool HadExplicitLineNumber() const noexcept;
+	uint32_t GetExplicitLineNumber() const noexcept;
 	bool IsLastCommand() const noexcept;
 	GCodeResult GetLastResult() const noexcept { return lastResult; }
 	void SetLastResult(GCodeResult r) noexcept { lastResult = r; }
@@ -104,16 +105,16 @@ public:
 	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get an integer after a key letter
 	int32_t GetLimitedIValue(char c, int32_t minValue, int32_t maxValue) THROWS(GCodeException)
 		pre(minValue <= maxValue)
-		post(minValue <= _ecv_result; _ecv_result <= maxValue);						// Get an integer after a key letter
+		post(minValue <= _ecv_result; _ecv_result <= maxValue);								// Get an integer after a key letter
 	uint32_t GetUIValue() THROWS(GCodeException);									// Get an unsigned integer value
-	uint32_t GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException)	// Get an unsigned integer value, throw if outside limits
+	uint32_t GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException)		// Get an unsigned integer value, throw if outside limits
 		pre(maxValuePlusOne > minValue)												// Get an unsigned integer value, throw if outside limits
 		post(_ecv_result >= minValue; _ecv_result < maxValuePlusOne);
 	uint32_t GetLimitedUIValue(char c, uint32_t maxValuePlusOne) THROWS(GCodeException)
 		post(_ecv_result < maxValuePlusOne) { return GetLimitedUIValue(c, 0, maxValuePlusOne); }
 	float GetLimitedFValue(char c, float minValue, float maxValue) THROWS(GCodeException)
 		pre(minValue <= maxValue)
-		post(minValue <= _ecv_result; _ecv_result <= maxValue);						// Get a float after a key letter
+		post(minValue <= _ecv_result; _ecv_result <= maxValue);								// Get a float after a key letter
 	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);				// Get an IP address quad after a key letter
 	void GetMacAddress(MacAddress& mac) THROWS(GCodeException);						// Get a MAC address sextet after a key letter
 	PwmFrequency GetPwmFrequency() THROWS(GCodeException);							// Get a PWM frequency
@@ -127,8 +128,7 @@ public:
 	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);		// Get a :-separated list of ints after a key letter
 	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);	// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);	// Get a :-separated list of drivers after a key letter
-	ExpressionValue GetExpression() THROWS(GCodeException);							// Get a general expression enclosed in { } after a key letter
-	bool GetStringOrUIValue(uint32_t& ival, const StringRef& str) THROWS(GCodeException);	// Get an unsigned integer or nonempty string after a key letter
+	ExpressionValue GetExpression() THROWS(GCodeException);							// Get a general expression after a key letter
 
 	bool TryGetFValue(char c, float& val, bool& seen) THROWS(GCodeException);
 	bool TryGetIValue(char c, int32_t& val, bool& seen) THROWS(GCodeException);
@@ -270,8 +270,8 @@ public:
 	void FinishWritingBinary() noexcept;
 #endif
 
-	const char *_ecv_array _ecv_null DataStart() const noexcept;	// Get the start of the current command
-	size_t DataLength() const noexcept;								// Get the length of the current command
+	const char *_ecv_array DataStart() const noexcept;			// Get the start of the current command
+	size_t DataLength() const noexcept;							// Get the length of the current command
 
 	void PrintCommand(const StringRef& s) const noexcept;
 	void AppendFullCommand(const StringRef &s) const noexcept;
@@ -326,7 +326,10 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
+
+#if SUPPORT_OBJECT_MODEL
 	const char *_ecv_array GetStateText() const noexcept;
+#endif
 
 	FilePosition printFilePositionAtMacroStart;			// the saved file position when we started executing a macro
 	GCodeInput *_ecv_from normalInput;					// Our normal input stream, or nullptr if there isn't one
@@ -359,11 +362,11 @@ private:
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
 	bool cancelWait;									// true to stop waiting for temperatures to be reached
 
-	char *_ecv_array _ecv_null buffer;					// if allocated must be aligned because in SBC binary mode we do dword fetches from it
-	size_t bufferLength;								// length of the allocated buffer in bytes
-	bool overflowed;									// true if the buffer overflowed
+	alignas(4) char buffer[MaxGCodeLength];				// must be aligned because in SBC binary mode we do dword fetches from it
 
 #if HAS_SBC_INTERFACE
+	static_assert(MaxGCodeLength >= MaxCodeBufferSize);	// make sure the GCodeBuffer is large enough to hold a command received from the SBC in binary
+
 	// Accessed by both the Main and SBC tasks
 	BinarySemaphore macroSemaphore;
 	volatile bool isWaitingForMacro;	// Is this GB waiting in DoFileMacro?

@@ -34,7 +34,7 @@
  * Support and FAQ: visit <a href="https://www.microchip.com/support/">Microchip Support</a>
  */
 
-#include "gmac.h"
+#include "ksz8081rna/gmac.h"
 #include <string.h>
 #include "conf_eth.h"
 
