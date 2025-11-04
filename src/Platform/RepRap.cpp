@@ -2224,7 +2224,7 @@ OutputBuffer *_ecv_null RepRap::GetFileFragment(const GCodeBuffer *_ecv_null gb,
 			for (unsigned int charsWrittenThisCall = 0; charsWrittenThisCall < thumbnailMaxDataSize; )
 			{
 				// Read a line
-				char lineBuffer[MaxGCodeLength];
+				char lineBuffer[MaxGCodeStringLength];
 				const int charsRead = f->ReadLine(lineBuffer, sizeof(lineBuffer));
 				if (charsRead < 0 || (isThumbnail && charsRead == 0))
 				{

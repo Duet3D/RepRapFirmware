@@ -114,6 +114,13 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	try
 	{
+#if HAS_SBC_INTERFACE
+		if (gb.IsBinary() && gb.HadOverflow())
+		{
+			// Too long G-codes in SBC mode are not stored to avoid access to invalid memory regions, so there are no details available here
+			throw GCodeException("GCode command too long");
+		}
+#endif
 		switch (gb.GetCommandLetter())
 		{
 		case 'G':
@@ -2067,7 +2074,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 118:	// Echo message on host
 				{
 					gb.MustSee('S');
-					String<MaxGCodeLength> message;
+					String<MaxGCodeStringLength> message;
 					gb.GetQuotedString(message.GetRef());
 
 					MessageType type = GenericMessage;
@@ -2145,7 +2152,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_MQTT
 					if ((type & MqttMessage) && (result != GCodeResult::error))
 					{
-						String<MaxGCodeLength> topic;
+						String<MaxGCodeStringLength> topic;
 						gb.MustSee('T');
 						gb.GetQuotedString(topic.GetRef());
 

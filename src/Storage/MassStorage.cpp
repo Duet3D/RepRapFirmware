@@ -1428,20 +1428,10 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, SdCardReturnedInfo
 	return InfoResult::ok;
 }
 
-Mutex& MassStorage::GetVolumeMutex(size_t vol) noexcept
-{
-	return info[vol].volMutex;
-}
-
-# if SUPPORT_OBJECT_MODEL
-
 const ObjectModel *_ecv_from MassStorage::GetVolume(size_t vol) noexcept
 {
 	return &info[vol];
 }
-
-# endif
-
 
 // Functions called by FatFS to acquire/release mutual exclusion
 extern "C"
