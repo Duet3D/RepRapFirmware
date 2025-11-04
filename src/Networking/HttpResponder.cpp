@@ -639,7 +639,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		if (nameVal != nullptr && offsetVal != nullptr && (offset = StrToU32(offsetVal)) != 0)
 		{
 			OutputBuffer::ReleaseAll(response);
-			response = reprap.GetFileFragment(nameVal, offset, false, true);
+			response = reprap.GetFileFragment(nullptr, nameVal, offset, false, true);
 		}
 		else
 		{

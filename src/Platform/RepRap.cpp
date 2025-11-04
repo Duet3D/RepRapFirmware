@@ -2179,7 +2179,7 @@ OutputBuffer *_ecv_null RepRap::GetFilelistResponse(const GCodeBuffer *_ecv_null
 // 'offset' is the offset into the file of the thumbnail data that the caller wants.
 // It is up to the caller to get the offset right, however we must fail gracefully if the caller passes us a bad offset.
 // The offset should always be either the initial offset or the 'next' value passed in a previous call, so it should always be the start of a line.
-OutputBuffer *_ecv_null RepRap::GetFileFragment(c_string filename, FilePosition offset, bool forM36point1or2, bool isThumbnail) noexcept
+OutputBuffer *_ecv_null RepRap::GetFileFragment(const GCodeBuffer *_ecv_null gb, c_string filename, FilePosition offset, bool forM36point1or2, bool isThumbnail) noexcept
 {
 	constexpr unsigned int MaxFileFragmentSizeM31 = 1024;			// small enough for PanelDue to buffer
 	constexpr unsigned int ThumbnailMaxDataSizeRr = 2600;			// about two TCP messages
@@ -2193,11 +2193,12 @@ OutputBuffer *_ecv_null RepRap::GetFileFragment(c_string filename, FilePosition 
 		return nullptr;
 	}
 
+	StartJsonResponse(gb, response);
 	if (forM36point1or2)
 	{
-		response->cat((isThumbnail) ? "{\"thumbnail\":" : "{\"fragment\":");
+		response->cat((isThumbnail) ? "\"thumbnail\":{" : "\"fragment\":{");
 	}
-	response->catf("{\"fileName\":\"%.s\",\"offset\":%" PRIu32 ",", filename, offset);
+	response->catf("\"fileName\":\"%.s\",\"offset\":%" PRIu32 ",", filename, offset);
 
 	FileStore *_ecv_null const f = (isThumbnail) ? platform->OpenFile(Platform::GetGCodeDir(), filename, OpenMode::read)
 													: platform->OpenSysFile(filename, OpenMode::read);

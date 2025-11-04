@@ -121,7 +121,7 @@ public:
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	OutputBuffer *_ecv_null GetFilesResponse(const GCodeBuffer *_ecv_null gb, c_string dir, unsigned int startAt, int maxItems, bool flagsDirs) noexcept;
 	OutputBuffer *_ecv_null GetFilelistResponse(const GCodeBuffer *_ecv_null gb, c_string dir, unsigned int startAt, int maxItems) noexcept;
-	OutputBuffer *_ecv_null GetFileFragment(c_string filename, FilePosition offset, bool forM36point1or2, bool isThumbnail) noexcept;
+	OutputBuffer *_ecv_null GetFileFragment(const GCodeBuffer *_ecv_null gb, c_string filename, FilePosition offset, bool forM36point1or2, bool isThumbnail) noexcept;
 #endif
 
 	GCodeResult GetFileInfoResponse(const GCodeBuffer *_ecv_null gb, c_string _ecv_null filename, OutputBuffer *_ecv_null &response, bool quitEarly) noexcept;
