@@ -4161,9 +4161,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						// Get the feedrate (if any) and kick off a new move
 						if (gb.Seen(feedrateLetter))
 						{
-							gb.LatestMachineState().feedRate = gb.GetSpeed(ms.linearAxesMentioned);		// don't apply the speed factor
+							gb.LatestMachineState().feedRate = gb.GetFValue();
 						}
-						ms.feedRate = gb.LatestMachineState().feedRate;
+						ms.feedRate = gb.ConvertSpeed(gb.LatestMachineState().feedRate, ms.linearAxesMentioned);		// don't apply the speed factor
 						ms.usingStandardFeedrate = true;
 						NewSingleSegmentMoveAvailable(ms);
 

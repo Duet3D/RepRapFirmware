@@ -99,7 +99,6 @@ public:
 	float GetPositiveFValue() THROWS(GCodeException) SPEED_CRITICAL;				// Get a float after a key letter and check that it is greater than zero
 	float GetNonNegativeFValue() THROWS(GCodeException) SPEED_CRITICAL;				// Get a float after a key letter and check that it is greater than or equal to zero
 	float GetDistance() THROWS(GCodeException);										// Get a distance or coordinate and convert it from inches to mm if necessary
-	float GetSpeed(bool convertInches) THROWS(GCodeException);						// Get a speed in mm/min or inches/min and convert it to mm/step_clock
 	float GetSpeedFromMm(bool useSeconds) THROWS(GCodeException);					// Get a speed in mm/min or optionally /sec and convert it to mm/step_clock
 	float GetAcceleration() THROWS(GCodeException);									// Get an acceleration in mm/sec^2 or inches/sec^2 and convert it to mm/step_clock^2
 	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get an integer after a key letter

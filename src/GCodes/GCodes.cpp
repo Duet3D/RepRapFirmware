@@ -1874,11 +1874,12 @@ void GCodes::LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(GC
 		{
 			if (gb.Seen(feedrateLetter))
 			{
-				gb.LatestMachineState().feedRate = gb.GetSpeed(ms.linearAxesMentioned || !ms.rotationalAxesMentioned);	// update requested speed in mm per step clock, not allowing for speed factor
+				gb.LatestMachineState().feedRate = gb.GetFValue();						// we now keep the raw value in the GCodeBuffer as we don't know whether to convert from inches yet, maybe not until the next command
 			}
+			const float convertedFeedRate = gb.ConvertSpeed(gb.LatestMachineState().feedRate, ms.linearAxesMentioned || !ms.rotationalAxesMentioned);
 			ms.feedRate = (ms.applyM220M221)
-							?  gb.LatestMachineState().feedRate * ms.speedFactor
-								: gb.LatestMachineState().feedRate;
+							?  convertedFeedRate * ms.speedFactor
+								: convertedFeedRate;
 		}
 		ms.usingStandardFeedrate = true;
 	}

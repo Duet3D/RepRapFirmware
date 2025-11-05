@@ -747,7 +747,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	m585Settings.offset = (rotational) ? gb.GetFValue() : gb.GetDistance();
 
 	gb.MustSee(feedrateLetter);
-	m585Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetSpeed(!rotational);		// don't apply the speed factor to homing and other special moves
+	m585Settings.feedRate = gb.LatestMachineState().feedRate = gb.ConvertSpeed(gb.GetFValue(), !rotational);		// don't apply the speed factor to homing and other special moves
 
 #if SUPPORT_ASYNC_MOVES
 	AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(m585Settings.axisNumber), ParameterLettersBitmap());
@@ -855,7 +855,7 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) 
 	m675Settings.axisNumber = FindAxisLetter(gb);
 	const bool rotational = reprap.GetMove().IsAxisLinear(m675Settings.axisNumber);
 	gb.MustSee(feedrateLetter);
-	m675Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetSpeed(!rotational);		// don't apply the speed factor to homing and other special moves
+	m675Settings.feedRate = gb.LatestMachineState().feedRate = gb.ConvertSpeed(gb.GetFValue(), !rotational);		// don't apply the speed factor to homing and other special moves
 	m675Settings.backoffDistance = gb.Seen('R') ? ((rotational) ? gb.GetFValue() : gb.GetDistance()) : 5.0;
 
 #if SUPPORT_ASYNC_MOVES
