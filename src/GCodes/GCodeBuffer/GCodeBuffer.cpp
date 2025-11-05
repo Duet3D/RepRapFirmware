@@ -540,9 +540,9 @@ float GCodeBuffer::GetDistance() THROWS(GCodeException)
 }
 
 // Get a speed in mm/min or inches/min and convert it to mm/step_clock
-float GCodeBuffer::GetSpeed() THROWS(GCodeException)
+float GCodeBuffer::GetSpeed(bool convertInches) THROWS(GCodeException)
 {
-	return ConvertSpeed(GetFValue());
+	return ConvertSpeed(GetFValue(), convertInches);
 }
 
 // Get a speed in mm/min mm/sec and convert it to mm/step_clock
@@ -983,15 +983,9 @@ float GCodeBuffer::InverseConvertDistance(float distance) const noexcept
 }
 
 // Convert speed from mm/min or inches/min to mm per step clock
-float GCodeBuffer::ConvertSpeed(float speed) const noexcept
+float GCodeBuffer::ConvertSpeed(float speed, bool convertInches) const noexcept
 {
-	return speed * ((UsingInches()) ? InchToMm/(StepClockRate * iMinutesToSeconds) : 1.0/(StepClockRate * iMinutesToSeconds));
-}
-
-// Convert speed to mm/min or inches/min
-float GCodeBuffer::InverseConvertSpeed(float speed) const noexcept
-{
-	return speed * ((UsingInches()) ? (StepClockRate * iMinutesToSeconds)/InchToMm : (float)(StepClockRate * iMinutesToSeconds));
+	return speed * ((convertInches && UsingInches()) ? InchToMm/(StepClockRate * iMinutesToSeconds) : 1.0/(StepClockRate * iMinutesToSeconds));
 }
 
 const char *_ecv_array GCodeBuffer::GetDistanceUnits() const noexcept

@@ -443,8 +443,8 @@ private:
 
 	bool ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Process a whole-line comment
 
-	void LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool axesMoving) THROWS(GCodeException);		// Set up the feed rate of a move
-	bool LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool axesMoving) THROWS(GCodeException);	// Set up the extrusion of a move, returning true if there is any extrusion
+	void LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(GCodeException);			// Set up the feed rate of a move
+	bool LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(GCodeException);			// Set up the extrusion of a move, returning true if there is any extrusion
 
 	bool Push(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Pop feedrate etc
