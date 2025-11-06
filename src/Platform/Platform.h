@@ -290,7 +290,7 @@ public:
 	bool SetDateTime(time_t t) noexcept;							// Sets the current RTC date and time or returns false on error
 
   	// Communications and data storage
-	void AppendUsbReply(OutputBuffer *buffer, bool rawMessage) noexcept;
+	void AppendUsbReply(const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept;
 	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, bool rawMessage) noexcept;
 	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, const char *_ecv_array msg, bool rawMessage) noexcept;
 
@@ -341,6 +341,7 @@ public:
 
 	// Message output (see MessageType for further details)
 	void Message(MessageType type, const char *_ecv_array message) noexcept;
+	void Message(const GCodeBuffer *_ecv_null gb, MessageType type, OutputBuffer *buffer) noexcept;
 	void Message(MessageType type, OutputBuffer *buffer) noexcept;
 	void MessageF(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array fmt, ...) noexcept __attribute__ ((format (printf, 4, 5)));
 	void MessageF(MessageType type, const char *_ecv_array fmt, ...) noexcept __attribute__ ((format (printf, 3, 4)));

@@ -4244,7 +4244,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *_ecv_null reply) noexcep
 	{
 	case Compatibility::Default:
 	case Compatibility::RepRapFirmware:
-		platform.Message(type, reply);
+		platform.Message(&gb, type, reply);
 		return;
 
 	case Compatibility::Marlin:
