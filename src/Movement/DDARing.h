@@ -96,8 +96,6 @@ private:
 	uint32_t completedMoves;													// Number of moves completed in this ring
 
 	unsigned int numLookaheadUnderruns;											// How many times we have run out of moves to adjust during lookahead
-	unsigned int numPrepareUnderruns;											// How many times we wanted a new move but there were only un-prepared moves in the queue
-	unsigned int numNoMoveUnderruns;											// How many times we wanted a new move but there were none
 	unsigned int numLookaheadErrors;											// How many times our lookahead algorithm failed
 
 	float simulationTime;														// Print time since we started simulating
