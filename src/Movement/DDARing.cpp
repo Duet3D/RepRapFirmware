@@ -91,7 +91,7 @@ void DDARing::Init1(unsigned int numDdas) noexcept
 // This must be called from Move::Init, not from the Move constructor, because it indirectly refers to the GCodes module which must therefore be initialised first
 void DDARing::Init2() noexcept
 {
-	numLookaheadUnderruns = numLookaheadErrors = 0;
+	numLookaheadUnderruns = numNoMoveUnderruns = numLookaheadErrors = 0;
 	waitingForRingToEmpty = false;
 	simulationTime = 0.0;
 }
@@ -264,17 +264,25 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 
 		// Count how many prepared or executing moves we have and how long they will take
 		uint32_t preparedTime = 0;
-		unsigned int preparedCount = 0;
 		while (cdda->IsCommitted())
 		{
 			preparedTime += cdda->GetTimeLeft();
-			++preparedCount;
 			cdda = cdda->GetNext();
 		}
 
-		const uint32_t ret = (cdda->GetState() == DDA::provisional)
-						? PrepareMoves(cdda, prepareAdvanceTime, preparedTime, preparedCount, simulationMode)
-							: MoveTiming::StandardMoveWakeupInterval;
+		uint32_t ret;
+		if (cdda->GetState() == DDA::provisional)
+		{
+			ret = PrepareMoves(cdda, prepareAdvanceTime, preparedTime, simulationMode);
+		}
+		else
+		{
+			if (!waitingForRingToEmpty && IsTimeToPrepareMove(prepareAdvanceTime, preparedTime))
+			{
+				++numNoMoveUnderruns;
+			}
+			ret = MoveTiming::StandardMoveWakeupInterval;
+		}
 
 		if (simulationMode != SimulationMode::off)
 		{
@@ -306,7 +314,7 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 		|| cdda->IsIsolatedMove()									// ...or checking endstops or another isolated move, so we can't schedule the following move
 	   )
 	{
-		const uint32_t ret = PrepareMoves(cdda, prepareAdvanceTime, 0, 0, simulationMode);
+		const uint32_t ret = PrepareMoves(cdda, prepareAdvanceTime, 0, simulationMode);
 		if (cdda->IsCommitted())
 		{
 			if (simulationMode != SimulationMode::off)
@@ -339,15 +347,20 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 				: MoveTiming::StandardMoveWakeupInterval;			// the queue is empty, nothing to do until new moves arrive
 }
 
+// Return true if it is time to prepare some moves
+inline bool DDARing::IsTimeToPrepareMove(uint32_t prepareAdvanceTime, uint32_t moveTimeLeft) const noexcept
+{
+	return moveTimeLeft < prepareAdvanceTime;						// prepare moves one tenth of a second ahead of when they will be needed
+}
+
 // Prepare some moves. moveTimeLeft is the total length remaining of moves that are already executing or prepared.
 // Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or MoveTiming::StandardMoveWakeupInterval if there are no unprepared moves left.
-uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept
+uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, SimulationMode simulationMode) noexcept
 {
 	// If the already-prepared moves will execute in less than the minimum time, prepare another move.
 	// Try to avoid preparing deceleration-only moves too early
 	while (	  firstUnpreparedMove->GetState() == DDA::provisional
-		   && moveTimeLeft < prepareAdvanceTime	// prepare moves one tenth of a second ahead of when they will be needed
-		   && alreadyPrepared * 2 < numDdasInRing					// but don't prepare more than half the ring, to handle accelerate/decelerate moves in small segments
+		   && IsTimeToPrepareMove(prepareAdvanceTime, moveTimeLeft)
 #if SUPPORT_CAN_EXPANSION
 		   && CanMotion::CanPrepareMove()
 #endif
@@ -355,7 +368,6 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 	{
 		firstUnpreparedMove->Prepare(*this, prepareAdvanceTime, simulationMode);
 		moveTimeLeft += firstUnpreparedMove->GetTimeLeft();
-		++alreadyPrepared;
 		firstUnpreparedMove = firstUnpreparedMove->GetNext();
 	}
 
@@ -671,10 +683,10 @@ bool DDARing::LowPowerOrStallPause(MovementState& ms) noexcept
 
 void DDARing::Diagnostics(const StringRef& reply, unsigned int ringNumber) noexcept
 {
-	reply.lcatf("=== DDARing %u ===\nScheduled moves %" PRIu32 ", completed %" PRIu32 ", LaErrors %u, Underruns %u\n",
-				ringNumber, scheduledMoves, completedMoves, numLookaheadErrors, numLookaheadUnderruns
+	reply.lcatf("=== DDARing %u ===\nScheduled moves %" PRIu32 ", completed %" PRIu32 ", LaErrors %u, Underruns [%u, %u]\n",
+				ringNumber, scheduledMoves, completedMoves, numLookaheadErrors, numLookaheadUnderruns, numNoMoveUnderruns
 			   );
-	numLookaheadUnderruns = numLookaheadErrors = 0;
+	numLookaheadUnderruns = numNoMoveUnderruns = numLookaheadErrors = 0;
 	reprap.GetGCodes().GetMovementState(ringNumber).Diagnostics(reply);
 }
 

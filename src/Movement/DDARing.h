@@ -81,7 +81,8 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept;
+	bool IsTimeToPrepareMove(uint32_t prepareAdvanceTime, uint32_t moveTimeLeft) const noexcept;
+	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, SimulationMode simulationMode) noexcept;
 
 	DDA* addPointer;															// Pointer to the next DDA that we can use to add a new move, if this DDA is free
 	DDA* volatile getPointer;													// Pointer to the oldest committed or provisional move, if not equal to addPointer
@@ -96,6 +97,7 @@ private:
 	uint32_t completedMoves;													// Number of moves completed in this ring
 
 	unsigned int numLookaheadUnderruns;											// How many times we have run out of moves to adjust during lookahead
+	unsigned int numNoMoveUnderruns;											// How many times we wanted a new move but there were none
 	unsigned int numLookaheadErrors;											// How many times our lookahead algorithm failed
 
 	float simulationTime;														// Print time since we started simulating
