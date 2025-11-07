@@ -716,7 +716,7 @@ void Move::Exit() noexcept
 		// To avoid this we must ensure that we prepare moves at least half an input shaper period in advance. This avoids the problem because any delayed segment of the first move
 		// will be half a shaper period long. In order to handle CAN delays etc. we prepare moves [half a shaper period plus MoveTiming::AbsoluteMinimumPreparedTime] in advance,
 		// with a minimum of MoveTiming::UsualMinimumPreparedTime.
-		const uint32_t prepareAdvanceTime = max<uint32_t>(axisShaper.GetLongestSegment() + MoveTiming::AbsoluteMinimumPreparedTime, MoveTiming::UsualMinimumPreparedTime);
+		const uint32_t prepareAdvanceTime = axisShaper.GetPrepareAdvanceTime();
 		uint32_t nextPrepareDelay = rings[0].Spin(prepareAdvanceTime, simulationMode, !canAddRing0Move, millis() - whenLastMoveAdded[0] >= rings[0].GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
