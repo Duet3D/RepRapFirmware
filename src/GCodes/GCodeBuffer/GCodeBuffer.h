@@ -55,22 +55,22 @@ public:
 	friend class StringParser;
 
 	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *_ecv_null fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
-	void Reset() noexcept;														// Reset it to its state after start-up
-	void Init() noexcept;														// Set it up to parse another G-code
-	void Disable() noexcept;													// Disable input from the associated port
-	void Enable(uint32_t commsProperties) noexcept;								// Enable input and set the CRC or checksum requirements
-	void Diagnostics(const StringRef& reply) noexcept;							// Write some debug info
+	void Reset() noexcept;															// Reset it to its state after start-up
+	void Init() noexcept;															// Set it up to parse another G-code
+	void Disable() noexcept;														// Disable input from the associated port
+	void Enable(uint32_t commsProperties) noexcept;									// Enable input and set the CRC or checksum requirements
+	void Diagnostics(const StringRef& reply) noexcept;								// Write some debug info
 
-	bool Put(char c) noexcept SPEED_CRITICAL;									// Add a character to the end
+	bool Put(char c) noexcept SPEED_CRITICAL;										// Add a character to the end
 #if HAS_SBC_INTERFACE
-	void PutBinary(const uint32_t *data, size_t len) noexcept;					// Add an entire binary G-Code, overwriting any existing content
+	void PutBinary(const uint32_t *data, size_t len) noexcept;						// Add an entire binary G-Code, overwriting any existing content
 #endif
-	void PutAndDecode(const char *_ecv_array data, size_t len) noexcept;					// Add an entire G-Code, overwriting any existing content
-	void PutAndDecode(const char *_ecv_array str) noexcept;								// Add a null-terminated string, overwriting any existing content
-	void StartNewFile() noexcept;												// Called when we start a new file
-	bool FileEnded() noexcept;													// Called when we reach the end of the file we are reading from
-	void DecodeCommand() noexcept;												// Decode the command in the buffer when it is complete
-	bool CheckMetaCommand(const StringRef& reply) THROWS(GCodeException);		// Check whether the current command is a meta command, or we are skipping a block
+	void PutAndDecode(const char *_ecv_array data, size_t len) noexcept;			// Add an entire G-Code, overwriting any existing content
+	void PutAndDecode(const char *_ecv_array str) noexcept;							// Add a null-terminated string, overwriting any existing content
+	void StartNewFile() noexcept;													// Called when we start a new file
+	bool FileEnded() noexcept;														// Called when we reach the end of the file we are reading from
+	void DecodeCommand() noexcept;													// Decode the command in the buffer when it is complete
+	bool CheckMetaCommand(const StringRef& reply) THROWS(GCodeException);			// Check whether the current command is a meta command, or we are skipping a block
 
 	char GetCommandLetter() const noexcept;
 	bool HasCommandNumber() const noexcept;
@@ -104,7 +104,7 @@ public:
 	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get an integer after a key letter
 	int32_t GetLimitedIValue(char c, int32_t minValue, int32_t maxValue) THROWS(GCodeException)
 		pre(minValue <= maxValue)
-		post(minValue <= _ecv_result; _ecv_result <= maxValue);								// Get an integer after a key letter
+		post(minValue <= _ecv_result; _ecv_result <= maxValue);						// Get an integer after a key letter
 	uint32_t GetUIValue() THROWS(GCodeException);									// Get an unsigned integer value
 	uint32_t GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException)		// Get an unsigned integer value, throw if outside limits
 		pre(maxValuePlusOne > minValue)												// Get an unsigned integer value, throw if outside limits
@@ -113,7 +113,7 @@ public:
 		post(_ecv_result < maxValuePlusOne) { return GetLimitedUIValue(c, 0, maxValuePlusOne); }
 	float GetLimitedFValue(char c, float minValue, float maxValue) THROWS(GCodeException)
 		pre(minValue <= maxValue)
-		post(minValue <= _ecv_result; _ecv_result <= maxValue);								// Get a float after a key letter
+		post(minValue <= _ecv_result; _ecv_result <= maxValue);						// Get a float after a key letter
 	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);				// Get an IP address quad after a key letter
 	void GetMacAddress(MacAddress& mac) THROWS(GCodeException);						// Get a MAC address sextet after a key letter
 	PwmFrequency GetPwmFrequency() THROWS(GCodeException);							// Get a PWM frequency
