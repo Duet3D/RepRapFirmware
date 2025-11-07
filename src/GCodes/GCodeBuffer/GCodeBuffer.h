@@ -79,8 +79,10 @@ public:
 	bool ContainsExpression() const noexcept;
 	void GetCompleteParameters(const StringRef& str) THROWS(GCodeException);		// Get all of the line following the command. Currently called only for the Q0 command.
 	int32_t GetLineNumber() const noexcept { return CurrentFileMachineState().lineNumber; }
-	bool HadExplicitLineNumber() const noexcept;
-	uint32_t GetExplicitLineNumber() const noexcept;
+	bool HadExplicitLineNumber() const noexcept { return hadExplicitLineNumber; }
+	uint32_t GetExplicitLineNumber() const noexcept { return receivedLineNumber; }
+	void SetExplicitLineNumber(uint32_t ln) noexcept { receivedLineNumber = ln; hadExplicitLineNumber = true; }
+	void ClearExplicitLineNumber() noexcept { hadExplicitLineNumber = false; }
 	bool IsLastCommand() const noexcept;
 	GCodeResult GetLastResult() const noexcept { return lastResult; }
 	void SetLastResult(GCodeResult r) noexcept { lastResult = r; }
@@ -347,6 +349,7 @@ private:
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 	ExpressionValue m291Result;							// the value entered or choice selected in response to a M291 command
 
+	uint32_t receivedLineNumber;						// The line number received explicitly in the N field of the GCode command line
 	uint32_t whenTimerStarted;							// When we started waiting
 	uint32_t whenReportDueTimerStarted;					// When the report-due-timer has been started
 	StatusReportType lastStatusReportType;				// the type of the last status report sent on this channel
@@ -359,6 +362,7 @@ private:
 	bool timerRunning;									// true if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
 	bool cancelWait;									// true to stop waiting for temperatures to be reached
+	bool hadExplicitLineNumber;							// true if the N field of the GCode command line was present
 
 	alignas(4) char buffer[MaxGCodeLength];				// must be aligned because in SBC binary mode we do dword fetches from it
 

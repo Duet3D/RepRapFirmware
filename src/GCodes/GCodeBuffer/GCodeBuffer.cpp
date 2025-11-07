@@ -115,7 +115,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from no
 	  stringParser(*this),
 	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()), lastStatusReportType(StatusReportType::none),
 	  codeChannel(channel), lastResult(GCodeResult::ok),
-	  disabled(false), timerRunning(false), motionCommanded(false)
+	  disabled(false), timerRunning(false), motionCommanded(false), hadExplicitLineNumber(false)
 
 #if HAS_SBC_INTERFACE
 	  , isWaitingForMacro(false), isBinaryBuffer(false), invalidated(false)
@@ -202,18 +202,6 @@ bool GCodeBuffer::IsReportDue() noexcept
 		return true;
 	}
 	return false;
-}
-
-// Return true if this GCode command had an explicit line number
-bool GCodeBuffer::HadExplicitLineNumber() const noexcept
-{
-	return PARSER_OPERATION(HadExplicitLineNumber());
-}
-
-// Get the explicit line number
-uint32_t GCodeBuffer::GetExplicitLineNumber() const noexcept
-{
-	return PARSER_OPERATION(GetExplicitLineNumber());
 }
 
 // Check if this GB is waiting for temperatures to be reached
