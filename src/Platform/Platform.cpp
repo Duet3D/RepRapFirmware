@@ -2182,9 +2182,8 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			gbp->Disable();				// disable I/O for this serial channel
 		}
 
-		commsParams[chan] = val;		// we limited the value of 'chan' when we fetched it, so no need for a range-check here
-
 #if HAS_AUX_DEVICES
+		commsParams[chan] = val;		// we limited the value of 'chan' when we fetched it, so no need for a range-check here
 		if (chan != 0)
 		{
 			AuxDevice& dev = auxDevices[chan - FirstAuxChannel];
@@ -2194,6 +2193,8 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			}
 			dev.SetMode(newMode);
 		}
+#else
+		commsParams[0] = val;			// gcc thinks chan is 1 here so use 0 explicitly
 #endif
 
 		if (   gbp != nullptr
@@ -3024,6 +3025,7 @@ void Platform::RawMessage(const GCodeBuffer *_ecv_null gb, MessageType type, con
 		}
 		else
 		{
+			// We need to wrap the message in JSON before sensing it to USB
 			OutputBuffer *buf;
 			if (OutputBuffer::Allocate(buf))
 			{
