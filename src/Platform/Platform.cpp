@@ -3025,7 +3025,7 @@ void Platform::RawMessage(const GCodeBuffer *_ecv_null gb, MessageType type, con
 		}
 		else
 		{
-			// We need to wrap the message in JSON before sensing it to USB
+			// We need to wrap the message in JSON before sending it to USB
 			OutputBuffer *buf;
 			if (OutputBuffer::Allocate(buf))
 			{
