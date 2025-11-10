@@ -543,7 +543,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 							bResult = val.Get56BitValue() > val2.Get56BitValue();
 							break;
 
-						case TypeCode::Bool:
+						case TypeCode::Bool_tc:
 							bResult = (val.bVal && !val2.bVal);
 							break;
 
@@ -577,7 +577,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 							bResult = val.Get56BitValue() < val2.Get56BitValue();
 							break;
 
-						case TypeCode::Bool:
+						case TypeCode::Bool_tc:
 							bResult = (!val.bVal && val2.bVal);
 							break;
 
@@ -629,7 +629,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 								bResult = val.Get56BitValue() == val2.Get56BitValue();
 								break;
 
-							case TypeCode::Bool:
+							case TypeCode::Bool_tc:
 								bResult = (val.bVal == val2.bVal);
 								break;
 
@@ -1117,11 +1117,11 @@ void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2
 	}
 
 	// Convert any port or unique ID values to string
-	if (val1.GetType() == TypeCode::Port || val1.GetType() == TypeCode::UniqueId_tc)
+	if (val1.GetType() == TypeCode::Port_tc || val1.GetType() == TypeCode::UniqueId_tc)
 	{
 		ConvertToString(val1, evaluate);
 	}
-	if (val2.GetType() == TypeCode::Port || val2.GetType() == TypeCode::UniqueId_tc)
+	if (val2.GetType() == TypeCode::Port_tc || val2.GetType() == TypeCode::UniqueId_tc)
 	{
 		ConvertToString(val2, evaluate);
 	}
@@ -1243,7 +1243,7 @@ void ExpressionParser::ConvertToUnsigned(ExpressionValue& val, bool evaluate) co
 
 void ExpressionParser::ConvertToBool(ExpressionValue& val, bool evaluate) const THROWS(GCodeException)
 {
-	if (val.GetType() != TypeCode::Bool)
+	if (val.GetType() != TypeCode::Bool_tc)
 	{
 		if (evaluate)
 		{
@@ -1970,18 +1970,18 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					case TypeCode::ObjectModelArray:
 						{
 							const ObjectModelArrayTableEntry *const entry = _ecv_not_null(rslt.omVal->FindObjectModelArrayEntry(rslt.param & 0xFF));
-							ObjectExplorationContext context;
+							ObjectExplorationContext localContext;
 							ReadLocker locker(entry->lockPointer);
-							const size_t len = min<size_t>(entry->GetNumElements(rslt.omVal, context), nextOperand.uVal);
+							const size_t len = min<size_t>(entry->GetNumElements(rslt.omVal, localContext), nextOperand.uVal);
 							ArrayHandle ah;
 							WriteLocker lock(Heap::heapLock);
 							ah.Allocate(len);
 							for (size_t i = 0; i < len; ++i)
 							{
-								context.AddIndex(i);
-								ExpressionValue elem(entry->GetElement(rslt.omVal, context));
+								localContext.AddIndex(i);
+								ExpressionValue elem(entry->GetElement(rslt.omVal, localContext));
 								ah.AssignElement(i, elem);
-								context.RemoveIndex();
+								localContext.RemoveIndex();
 							}
 							rslt.SetArrayHandle(ah);
 						}
@@ -2040,9 +2040,9 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					case TypeCode::ObjectModelArray:
 						{
 							const ObjectModelArrayTableEntry *const entry = _ecv_not_null(rslt.omVal->FindObjectModelArrayEntry(rslt.param & 0xFF));
-							ObjectExplorationContext context;
+							ObjectExplorationContext context1;
 							ReadLocker locker(entry->lockPointer);
-							const size_t numOriginalElements = entry->GetNumElements(rslt.omVal, context);
+							const size_t numOriginalElements = entry->GetNumElements(rslt.omVal, context1);
 							const size_t offset = min<size_t>(numOriginalElements, nextOperand.uVal);
 							const size_t len = numOriginalElements - offset;
 							ArrayHandle ah;
@@ -2050,13 +2050,13 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 							{
 								WriteLocker lock(Heap::heapLock);
 								ah.Allocate(len);
-								ObjectExplorationContext context;
+								ObjectExplorationContext context2;
 								for (size_t i = 0; i < len; ++i)
 								{
-									context.AddIndex(i + offset);
-									ExpressionValue elem(entry->GetElement(rslt.omVal, context));
+									context2.AddIndex(i + offset);
+									ExpressionValue elem(entry->GetElement(rslt.omVal, context2));
 									ah.AssignElement(i, elem);
-									context.RemoveIndex();
+									context2.RemoveIndex();
 								}
 							}
 							rslt.SetArrayHandle(ah);

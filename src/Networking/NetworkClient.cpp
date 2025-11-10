@@ -54,7 +54,7 @@ void NetworkClient::Stop(NetworkProtocol protocol, NetworkInterface *iface) noex
 	}
 }
 
-bool NetworkClient::Accept(Socket *socket, NetworkProtocol protocol) noexcept
+bool NetworkClient::TryAccept(Socket *socket, NetworkProtocol protocol) noexcept
 {
 	if (HandlesProtocol(protocol))
 	{
@@ -64,7 +64,7 @@ bool NetworkClient::Accept(Socket *socket, NetworkProtocol protocol) noexcept
 	return false;
 }
 
-void NetworkClient::Terminate(NetworkProtocol protocol, const NetworkInterface *iface) noexcept
+void NetworkClient::TryTerminate(NetworkProtocol protocol, const NetworkInterface *iface) noexcept
 {
 	if ((HandlesProtocol(protocol) || protocol == AnyProtocol) && (skt && skt->GetInterface() == iface))
 	{

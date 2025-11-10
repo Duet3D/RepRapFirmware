@@ -395,8 +395,8 @@ GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 	Platform& pfm = platform;
 	const bool ok = endstopsToWaitFor.IterateWhile([&pfm, activeHigh](unsigned int axis, unsigned int) noexcept -> bool
 								{
-									const bool stopped = pfm.GetEndstops().Stopped(axis);
-									return stopped == activeHigh;
+									const bool isStopped = pfm.GetEndstops().Stopped(axis);
+									return isStopped == activeHigh;
 								}
 							 )
 				&& portsToWaitFor.IterateWhile([&pfm, activeHigh](unsigned int port, unsigned int) noexcept -> bool

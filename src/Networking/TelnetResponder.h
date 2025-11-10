@@ -15,8 +15,8 @@ class TelnetResponder : public NetworkResponder
 public:
 	explicit TelnetResponder(NetworkResponder *_ecv_from n) noexcept;
 	bool Spin() noexcept override;								// do some work, returning true if we did anything significant
-	bool Accept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept override;	// ask the responder to accept this connection, returns true if it did
-	void Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept override;	// terminate the responder if it is serving the specified protocol on the specified interface
+	bool TryAccept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept override;	// ask the responder to accept this connection, returns true if it did
+	void TryTerminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept override;	// terminate the responder if it is serving the specified protocol on the specified interface
 
 	static void InitStatic() noexcept;
 	static void Disable() noexcept;

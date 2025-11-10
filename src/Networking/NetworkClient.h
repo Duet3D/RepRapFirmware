@@ -28,8 +28,8 @@ public:
 
 	bool Start(NetworkProtocol protocol, NetworkInterface *iface) noexcept;
 	void Stop(NetworkProtocol protocol, NetworkInterface *iface) noexcept;
-	bool Accept(Socket *s, NetworkProtocol protocol) noexcept override;
-	void Terminate(NetworkProtocol protocol, const NetworkInterface *iface) noexcept override;
+	bool TryAccept(Socket *s, NetworkProtocol protocol) noexcept override;
+	void TryTerminate(NetworkProtocol protocol, const NetworkInterface *iface) noexcept override;
 
 	NetworkClient *GetNext() const noexcept { return next; }
 

@@ -934,7 +934,7 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 					val += sizeof(uint32_t);
 				}
 				break;
-			case DataType::Bool:
+			case DataType::Boolean:
 				s.catf("%c%c", param->letter, (param->intValue != 0) ? '1' : '0');
 				break;
 			case DataType::BoolArray:

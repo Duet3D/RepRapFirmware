@@ -43,7 +43,7 @@ HttpResponder::HttpResponder(NetworkResponder *_ecv_from _ecv_null n) noexcept :
 }
 
 // Ask the responder to accept this connection, returns true if it did
-bool HttpResponder::Accept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept
+bool HttpResponder::TryAccept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept
 {
 	if (responderState == ResponderState::free && protocol == HttpProtocol)
 	{
@@ -1442,7 +1442,7 @@ void HttpResponder::DoUpload() noexcept
 #endif
 
 // This is called to force termination if we implement the specified protocol
-void HttpResponder::Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept
+void HttpResponder::TryTerminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept
 {
 	if (responderState != ResponderState::free && (protocol == HttpProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{

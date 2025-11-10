@@ -61,7 +61,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		str.catf("%" PRIi32, uVal);			// convert signed integer to string
 		break;
 
-	case TypeCode::Bool:
+	case TypeCode::Bool_tc:
 		str.cat((bVal) ? "true" : "false");	// convert bool to string
 		break;
 
@@ -177,7 +177,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		str.cat('}');
 		break;
 
-	case TypeCode::Port:
+	case TypeCode::Port_tc:
 		iopVal->AppendPinName(str);
 		break;
 
@@ -216,7 +216,7 @@ bool ExpressionValue::operator==(const ExpressionValue& other) const noexcept
 		case TypeCode::None:
 			return true;
 
-		case TypeCode::Bool:
+		case TypeCode::Bool_tc:
 			return bVal == other.bVal;
 
 		case TypeCode::Char:
@@ -251,7 +251,7 @@ bool ExpressionValue::operator==(const ExpressionValue& other) const noexcept
 		case TypeCode::DriverId_tc:
 			return uVal == other.uVal && param == other.param;
 
-		case TypeCode::Port:
+		case TypeCode::Port_tc:
 			return iopVal == other.iopVal;
 
 		// We don't handle the remaining types
@@ -346,7 +346,7 @@ void ExpressionValue::Release() noexcept
 void ExpressionValue::SetBool(bool b) noexcept
 {
 	Release();
-	type = (uint32_t)TypeCode::Bool;
+	type = (uint32_t)TypeCode::Bool_tc;
 	bVal = b;
 }
 
@@ -977,7 +977,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 				}
 				break;
 
-			case TypeCode::Bool:
+			case TypeCode::Bool_tc:
 				buf->cat((val.bVal) ? "true" : "false");
 				break;
 
@@ -1045,7 +1045,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 				buf->cat("null");
 				break;
 
-			case TypeCode::Port:
+			case TypeCode::Port_tc:
 				ReportPinNameAsJson(buf, val);
 				break;
 
