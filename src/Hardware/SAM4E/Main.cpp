@@ -19,7 +19,7 @@ void AppInit() noexcept
 	for (size_t drive = 0; drive < MaxSmartDrivers; ++drive)
 	{
 		SetPinMode(STEP_PINS[drive], OUTPUT_LOW);
-		SetPinMode(ENABLE_PINS[drive], OUTPUT_HIGH);
+		SetPinMode(DriverEnablePins[drive], OUTPUT_HIGH);
 	}
 }
 

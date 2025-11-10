@@ -145,7 +145,7 @@ constexpr Pin AdditionalIoExpansionStart = DueXnExpansionStart+16;		// Pin numbe
 
 // Drives
 constexpr Pin GlobalTmc2660EnablePin = PortCPin(6);	// The pin that drives ENN of all TMC2660 drivers on production boards (on pre-production boards they are grounded)
-constexpr Pin ENABLE_PINS[NumDirectDrivers] =
+constexpr Pin DriverEnablePins[NumDirectDrivers] =
 {
 	PortDPin(14), PortCPin(9), PortCPin(10), PortCPin(17), PortCPin(25),	// Duet
 	PortDPin(23), PortDPin(24), PortDPin(25), PortDPin(26), PortBPin(14),	// DueX5

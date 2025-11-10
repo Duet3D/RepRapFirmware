@@ -409,18 +409,18 @@ void Move::Init() noexcept
 	// Motors
 
 #ifdef DUET3_MB6XD
-	ENABLE_PINS = (reprap.GetPlatform().GetBoardType() == BoardType::Duet3_6XD_v01) ? ENABLE_PINS_v01 : ENABLE_PINS_v100;
+	DriverEnablePins = (reprap.GetPlatform().GetBoardType() == BoardType::Duet3_6XD_v01) ? ENABLE_PINS_v01 : ENABLE_PINS_v100;
 	unsigned int numErrorHighDrivers = 0;
 #endif
 	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
 		directions[driver] = true;														// drive moves forwards by default
 #ifdef DUET3_MB6XD
-		SetPinMode(ENABLE_PINS[driver], INPUT, false);									// temporarily set up the enable pin for reading
+		SetPinMode(DriverEnablePins[driver], INPUT, false);								// temporarily set up the enable pin for reading
 		SetPinMode(DRIVER_ERR_PINS[driver], INPUT, false);								// set up the error pin for reading
-		const bool activeHighEnable = !digitalRead(ENABLE_PINS[driver]);				// test whether we have a pullup or pulldown on the Enable pin
+		const bool activeHighEnable = !digitalRead(DriverEnablePins[driver]);			// test whether we have a pullup or pulldown on the Enable pin
 		enableValues[driver] = activeHighEnable;
-		SetPinMode(ENABLE_PINS[driver], (activeHighEnable) ? OUTPUT_LOW : OUTPUT_HIGH);	// set driver disabled
+		SetPinMode(DriverEnablePins[driver], (activeHighEnable) ? OUTPUT_LOW : OUTPUT_HIGH);	// set driver disabled
 		if (digitalRead(DRIVER_ERR_PINS[driver]))
 		{
 			++numErrorHighDrivers;
@@ -438,7 +438,7 @@ void Move::Init() noexcept
 		SetPinMode(STEP_PINS[driver], OUTPUT_LOW);
 		SetPinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
 #if !defined(DUET3) && !defined(DUET3MINI)
-		SetPinMode(ENABLE_PINS[driver], OUTPUT_HIGH);									// this is OK for the TMC2660 CS pins too
+		SetPinMode(DriverEnablePins[driver], OUTPUT_HIGH);									// this is OK for the TMC2660 CS pins too
 #endif
 
 		brakeOffDelays[driver] = 0;
@@ -539,7 +539,7 @@ void Move::Init() noexcept
 	SmartDrivers::Init();
 #  endif
 # else
-	SmartDrivers::Init(ENABLE_PINS, numSmartDrivers);
+	SmartDrivers::Init(DriverEnablePins, numSmartDrivers);
 # endif
 	temperatureShutdownDrivers.Clear();
 	temperatureWarningDrivers.Clear();
