@@ -161,7 +161,8 @@ public:
 	bool IsSCurveMove() const noexcept { return flags.useScurve; }
 	bool IsFullyPlanned() const noexcept { return flags.fullyPlanned; }
 	float GetMovementRatio() const noexcept { return movementRatio; }
-	void SetSpeedRatioForPrintingMoves(const Move& move) noexcept;
+	void SetSpeedRatioAndMaxJunctionSpeedForPrintingMoves(const Move& move) noexcept;
+	void SetSpeedRatioAndMaxJunctionSpeedForNonPrintingMoves(const Move& move) noexcept;
 	void SetStartSpeedAndAcceleration(float speed, float acceleration) noexcept { startSpeed = speed; startAcceleration = acceleration; }
 
 	static void PlanMoves(DDA *firstUnpreparedMove, MovementProfile& plannedProfile, bool stopping) noexcept;

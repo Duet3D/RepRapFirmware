@@ -574,12 +574,11 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 		// We may be able to meld this move with the previous one
 		if (flags.isPrintingMove)
 		{
-			SetSpeedRatioForPrintingMoves(move);
+			SetSpeedRatioAndMaxJunctionSpeedForPrintingMoves(move);
 		}
 		else
 		{
-			beforePrepare.startSpeedRatio = 1.0;
-			beforePrepare.maxPrevEndSpeed = min<float>(requestedSpeed, prev->requestedSpeed);
+			SetSpeedRatioAndMaxJunctionSpeedForNonPrintingMoves(move);
 		}
 	}
 	else

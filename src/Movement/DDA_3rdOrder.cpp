@@ -70,7 +70,7 @@ static inline uint32_t doubleToU32(double f) noexcept
 }
 
 // If the extrusion mix hasn't changed, calculate the feed rate ratio needed to maintain constant extrusion speed and the maximum end speed of the previous move
-void DDA::SetSpeedRatioForPrintingMoves(const Move& move) noexcept
+void DDA::SetSpeedRatioAndMaxJunctionSpeedForPrintingMoves(const Move& move) noexcept
 {
 	float extrusionRatio = 1.0;
 	bool found = false;
@@ -124,6 +124,23 @@ void DDA::SetSpeedRatioForPrintingMoves(const Move& move) noexcept
 	beforePrepare.maxPrevEndSpeed = provisionalMaxEndSpeed;
 }
 
+void DDA::SetSpeedRatioAndMaxJunctionSpeedForNonPrintingMoves(const Move& move) noexcept
+{
+	beforePrepare.startSpeedRatio = 1.0;
+
+	// Now calculate the maximum previous move end speed that doesn't exceed the jerk limit for any axis
+	float provisionalMaxEndSpeed = min<float>(requestedSpeed, prev->requestedSpeed);
+	for (size_t axis = 0; axis < reprap.GetGCodes().GetVisibleAxes(); ++axis)
+	{
+		const float axisDv = directionVector[axis] - prev->directionVector[axis];
+		if (fabsf(provisionalMaxEndSpeed * axisDv) > move.GetMaxInstantDv(axis))
+		{
+			provisionalMaxEndSpeed = move.GetMaxInstantDv(axis)/axisDv;
+		}
+	}
+	beforePrepare.maxPrevEndSpeed = provisionalMaxEndSpeed;
+}
+
 #if COPY_PLAN	//DEBUG
 // WARNING: this variable is static, so it's not going to work with multiple motion systems.
 // However, it's for debugging only, so as long as we only run one motion system while debugging with COPY_PLAN set then that's OK.
@@ -147,17 +164,18 @@ static MovementProfile debugProfile;
 	unsigned int numMoves = 1;
 	while ((nextMove = lastMoveToPlan->next)->IsProvisional() && nextMove->IsSCurveMove() && nextMove->beforePrepare.maxPrevEndSpeed != 0.0)
 	{
-		// See whether we can reasonably include this move in the plan
-		const float requestedSpeedThisMove = min<float>(nextMove->requestedSpeed, nextMove->beforePrepare.maxPrevEndSpeed) * nextMove->movementRatio;
-		if (requestedSpeedThisMove < fminReqSpeed)
+		// See whether we can reasonably include this move in the plan.
+		// First test whether its requested speed is more or less the same as the requested speed of the move(s) so far.
+		const float requestedSpeedNextMove = min<float>(nextMove->requestedSpeed, nextMove->beforePrepare.maxPrevEndSpeed) * nextMove->movementRatio;
+		if (requestedSpeedNextMove < fminReqSpeed)
 		{
-			if (requestedSpeedThisMove < maxReqSpeedForPlan * 0.7) { break; }
-			fminReqSpeed = requestedSpeedThisMove;
+			if (requestedSpeedNextMove < maxReqSpeedForPlan * 0.7) { break; }
+			fminReqSpeed = requestedSpeedNextMove;
 		}
-		else if (requestedSpeedThisMove > maxReqSpeedForPlan)
+		else if (requestedSpeedNextMove > maxReqSpeedForPlan)
 		{
-			if (requestedSpeedThisMove > fminReqSpeed * (1.0/0.7)) { break; }
-			maxReqSpeedForPlan = requestedSpeedThisMove;
+			if (requestedSpeedNextMove > fminReqSpeed * (1.0/0.7)) { break; }
+			maxReqSpeedForPlan = requestedSpeedNextMove;
 		}
 
 		// We can include nextMove in the plan
