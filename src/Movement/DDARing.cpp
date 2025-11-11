@@ -261,7 +261,7 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 		}
 
 		uint32_t ret;
-		if (cdda->GetState() == DDA::provisional)
+		if (cdda->IsProvisional())
 		{
 			ret = PrepareMoves(cdda, prepareAdvanceTime, preparedTime, simulationMode);
 		}
@@ -382,7 +382,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 {
 	// If the already-prepared moves will execute in less than the minimum time, prepare another move.
 	// Try to avoid preparing deceleration-only moves too early
-	while (	  firstUnpreparedMove->GetState() == DDA::provisional
+	while (	  firstUnpreparedMove->IsProvisional()
 		   && IsTimeToPrepareMove(prepareAdvanceTime, moveTimeLeft)
 #if SUPPORT_CAN_EXPANSION
 		   && CanMotion::CanPrepareMove()
