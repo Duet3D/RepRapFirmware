@@ -955,7 +955,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					if (zp->Stopped())
 					{
 						reprap.GetHeat().SuspendHeaters(false);
-						gb.LatestMachineState().SetError("Probe already triggered before probing move started");
+						gb.LatestMachineState().SetError("probe already triggered before probing move started");
 						gb.SetState(GCodeState::checkError);
 						RetractZProbe(gb);
 						break;
@@ -966,7 +966,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						SetMoveBufferDefaults(ms);
 						if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
 						{
-							gb.LatestMachineState().SetError("Failed to enable probe");
+							gb.LatestMachineState().SetError("failed to enable probe");
 							gb.SetState(GCodeState::checkError);
 							RetractZProbe(gb);
 							break;
@@ -1359,7 +1359,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					{
 						// Z probe is already triggered at the start of the move, so abandon the probe and record an error
 						reprap.GetHeat().SuspendHeaters(false);
-						gb.LatestMachineState().SetError("Probe already triggered at start of probing move");
+						gb.LatestMachineState().SetError("probe already triggered before probing move started");
 						if (g30ProbePointIndex >= 0)
 						{
 							move.SetZBedProbePoint(g30ProbePointIndex, zp->GetDiveHeight(tapsDone), true, true);
@@ -1373,7 +1373,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						SetMoveBufferDefaults(ms);
 						if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
 						{
-							gb.LatestMachineState().SetError("Failed to enable probe");
+							gb.LatestMachineState().SetError("failed to enable probe");
 							gb.SetState(GCodeState::checkError);
 							RetractZProbe(gb);
 							break;
@@ -1629,7 +1629,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						reprap.GetHeat().SuspendHeaters(false);
 						if (straightProbeSettings.SignalError())
 						{
-							gb.LatestMachineState().SetError((probingAway) ? "Probe not triggered at start of probing move" : "Probe already triggered at start of probing move");
+							gb.LatestMachineState().SetError((probingAway) ? "probe not triggered at start of probing move" : "probe already triggered before probing move started");
 						}
 						gb.SetState(GCodeState::checkError);								// no point in doing anything else
 						RetractZProbe(gb);
@@ -1640,7 +1640,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						SetMoveBufferDefaults(ms);
 						if (!platform.GetEndstops().EnableZProbe(straightProbeSettings.GetZProbeToUse(), probingAway) || !zp->SetProbing(true))
 						{
-							gb.LatestMachineState().SetError("Failed to enable probe");
+							gb.LatestMachineState().SetError("failed to enable probe");
 							gb.SetState(GCodeState::checkError);
 							RetractZProbe(gb);
 							break;

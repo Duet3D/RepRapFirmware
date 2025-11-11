@@ -4106,7 +4106,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 673: // Align plane on rotary axis
 				if (numTotalAxes <= U_AXIS)
 				{
-					reply.copy("Insufficient axes configured");
+					reply.copy("insufficient axes configured");
 					result = GCodeResult::error;
 				}
 				else if (!LockAllMovementSystemsAndWaitForStandstill(gb))
@@ -4115,7 +4115,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				else if (!AllAxesAreHomed())
 				{
-					reply.copy("Home the axes first");
+					reply.copy("home the axes first");
 					result = GCodeResult::error;
 				}
 				else
@@ -4123,7 +4123,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					Move& move = reprap.GetMove();
 					if (move.GetNumProbedProbePoints() < 2)
 					{
-						reply.copy("Insufficient probe points");
+						reply.copy("insufficient probe points");
 						result = GCodeResult::error;
 					}
 					else
@@ -4189,7 +4189,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 						else
 						{
-							reply.copy("No rotary axis letter and/or not enough probe points for rotary axis alignment");
+							reply.copy("no rotary axis letter and/or not enough probe points for rotary axis alignment");
 							result = GCodeResult::error;
 							break;
 						}
@@ -4197,9 +4197,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						// Get the feedrate (if any) and kick off a new move
 						if (gb.Seen(feedrateLetter))
 						{
-							gb.LatestMachineState().feedRate = gb.GetSpeed();		// don't apply the speed factor
+							gb.LatestMachineState().feedRate = gb.GetFValue();
 						}
-						ms.feedRate = gb.LatestMachineState().feedRate;
+						ms.feedRate = gb.ConvertSpeed(gb.LatestMachineState().feedRate, ms.linearAxesMentioned);		// don't apply the speed factor
 						ms.usingStandardFeedrate = true;
 						NewSingleSegmentMoveAvailable(ms);
 

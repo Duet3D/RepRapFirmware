@@ -86,7 +86,8 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept;
+	bool IsTimeToPrepareMove(uint32_t prepareAdvanceTime, uint32_t moveTimeLeft) const noexcept;
+	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, SimulationMode simulationMode) noexcept;
 #if SUPPORT_S_CURVE
 	void PlanMoves(DDA *firstUnpreparedMove, bool stopping) noexcept;
 	bool NeedNewPlan(DDA *moveToPrepare) const noexcept;
@@ -109,7 +110,6 @@ private:
 	uint32_t completedMoves = 0;												// Number of moves completed in this ring
 
 	unsigned int numLookaheadUnderruns = 0;										// How many times we have run out of moves to adjust during lookahead
-	unsigned int numPrepareUnderruns = 0;										// How many times we wanted a new move but there were only un-prepared moves in the queue
 	unsigned int numNoMoveUnderruns = 0;										// How many times we wanted a new move but there were none
 	unsigned int numLookaheadErrors = 0;										// How many times our lookahead algorithm failed
 

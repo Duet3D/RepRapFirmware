@@ -1851,14 +1851,13 @@ void GCodes::Pop(GCodeBuffer& gb, bool withinSameFile) noexcept
 }
 
 // Set up the feed rate of a move for the Move class
-// 'moveBuffer.moveType' and 'moveBuffer.isCoordinated' must be set up before calling this
-// 'isPrintingMove' is true if there is any axis movement
-void GCodes::LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool axesMoving) THROWS(GCodeException)
+// ms.moveType, ms.isCoordinated, ms.linearAxesMentioned and ms.rotationalAxesMentioned must be set up before calling this
+void GCodes::LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(GCodeException)
 {
 	// Deal with feed rate, also determine whether M220 and M221 speed and extrusion factors apply to this move
 	if (ms.isCoordinated || machineType == MachineType::fff)
 	{
-		ms.applyM220M221 = (ms.moveType == 0 && axesMoving && !gb.LatestMachineState().runningSystemMacro);
+		ms.applyM220M221 = (ms.moveType == 0 && (ms.linearAxesMentioned || ms.rotationalAxesMentioned) && !gb.LatestMachineState().runningSystemMacro);
 		ms.inverseTimeMode = gb.LatestMachineState().inverseTimeMode;
 		if (ms.inverseTimeMode)
 		{
@@ -1875,26 +1874,26 @@ void GCodes::LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool axes
 		{
 			if (gb.Seen(feedrateLetter))
 			{
-				gb.LatestMachineState().feedRate = gb.GetSpeed();						// update requested speed in mm per step clock, not allowing for speed factor
+				gb.LatestMachineState().feedRate = gb.GetFValue();						// we now keep the raw value in the GCodeBuffer as we don't know whether to convert from inches yet, maybe not until the next command
 			}
+			const float convertedFeedRate = gb.ConvertSpeed(gb.LatestMachineState().feedRate, ms.linearAxesMentioned || !ms.rotationalAxesMentioned);
 			ms.feedRate = (ms.applyM220M221)
-							?  gb.LatestMachineState().feedRate * ms.speedFactor
-								: gb.LatestMachineState().feedRate;
+							?  convertedFeedRate * ms.speedFactor
+								: convertedFeedRate;
 		}
 		ms.usingStandardFeedrate = true;
 	}
 	else
 	{
 		ms.applyM220M221 = false;
-		ms.feedRate = ConvertSpeedFromMmPerMin(MaximumG0FeedRate);			// use maximum feed rate, the M203 parameters will limit it
+		ms.feedRate = ConvertSpeedFromMmPerMin(MaximumG0FeedRate);						// use maximum feed rate, the M203 parameters will limit it
 		ms.usingStandardFeedrate = false;
 	}
 }
 
 // Set up the extrusion of a move, returning true if there is any extrusion
-// 'moveBuffer.moveType', 'moveBuffer.isCoordinated', ms.moveType and ms.feedRate must be set up before calling this
-// 'isPrintingMove' is true if there is any axis movement
-bool GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool axesMoving) THROWS(GCodeException)
+// moveBuffer.moveType, moveBuffer.isCoordinated, ms.moveType, ms.feedRate, ms.linearAxesMentioned and ms.rotationalAxesMentioned must be set up before calling this
+bool GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(GCodeException)
 {
 	// Zero every extruder drive as some drives may not be moved
 	for (size_t drive = numTotalAxes; drive < MaxAxesPlusExtruders; drive++)
@@ -1989,7 +1988,7 @@ bool GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool axe
 #endif
 					}
 				}
-				if (!axesMoving && ms.usingStandardFeedrate)
+				if (!(ms.linearAxesMentioned || ms.rotationalAxesMentioned) && ms.usingStandardFeedrate)
 				{
 					// For E3D: If the total mix ratio is greater than 1.0 then we should scale the feed rate accordingly, e.g. for dual serial extruder drives
 					ms.feedRate *= totalMix;
@@ -2087,7 +2086,7 @@ bool GCodes::IsUsingMeshCompensation(const MovementState& ms, ParameterLettersBi
 }
 
 // Execute a straight move. We have already acquired the movement lock and waited for the previous move to be taken.
-// Return false if we can't execute it yet, throw an exception if we can't execute it at all, and return true if we have queued it.
+// Return false if we can't execute it yet, throw an exception if we can't execute it at all, and return true if we have queued it or it contains no movement.
 bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeException)
 {
 	MovementState& ms = GetMovementState(gb);
@@ -2099,6 +2098,8 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	ms.checkEndstops = false;
 	ms.reduceAcceleration = false;
 	ms.usePressureAdvance = false;
+	ms.linearAxesMentioned = false;
+	ms.rotationalAxesMentioned = false;
 
 #if SUPPORT_SCANNING_PROBES
 	ms.scanningProbeMove = false;
@@ -2125,11 +2126,13 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		}
 	}
 
+	Move& move = reprap.GetMove();
+
 #if SUPPORT_ASYNC_MOVES
 	// We need to check for moving unowned axes right at the start in case we need to fetch axis positions before processing the command
 	ParameterLettersBitmap axisLettersMentioned = gb.AllParameters() & allAxisLetters;
 	const bool meshCompensationInUse = (ms.moveType == 0) && IsUsingMeshCompensation(ms, axisLettersMentioned);
-	if (ms.moveType == 0 || !reprap.GetMove().IsRawMotorMove(ms.moveType))
+	if (ms.moveType == 0 || !move.IsRawMotorMove(ms.moveType))
 	{
 		if (meshCompensationInUse)
 		{
@@ -2221,7 +2224,6 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	if (ms.moveType != 0)
 	{
 		// This may be a raw motor move, in which case we need the current raw motor positions in moveBuffer.coords.
-		Move& move = reprap.GetMove();
 		if (move.IsRawMotorMove(ms.moveType))
 		{
 			int32_t endPoints[MaxAxesPlusExtruders];
@@ -2235,7 +2237,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		{
 			// It isn't a raw motor move, but it will still be applied without axis or bed transform applied,
 			// so make sure the initial coordinates don't have those either to avoid unwanted Z movement.
-			reprap.GetMove().GetCurrentMachinePosition(ms.coords, ms.GetNumber());
+			move.GetCurrentMachinePosition(ms.coords, ms.GetNumber());
 		}
 	}
 
@@ -2252,13 +2254,23 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		if (gb.Seen(axisLetters[axis]))
 		{
 			// If it is a special move on a delta, movement must be relative.
-			if (ms.moveType != 0 && !gb.LatestMachineState().axesRelative && reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta)
+			if (ms.moveType != 0 && !gb.LatestMachineState().axesRelative && move.GetKinematics().GetKinematicsType() == KinematicsType::linearDelta)
 			{
 				gb.ThrowGCodeException("attempt to move individual motors of a delta machine to absolute positions");
 			}
 
 			axesMentioned.SetBit(axis);
-			const float moveArg = gb.GetDistance();
+			float moveArg;
+			if (move.IsAxisRotational(axis))
+			{
+				ms.rotationalAxesMentioned = true;
+				moveArg = gb.GetFValue();
+			}
+			else
+			{
+				ms.linearAxesMentioned = true;
+				moveArg = gb.GetDistance();
+			}
 			if (ms.moveType != 0)
 			{
 				// Special moves update the move buffer directly, bypassing the user coordinates
@@ -2297,9 +2309,9 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		}
 	}
 
-	LoadFeedrateFromGCode(gb, ms, axesMentioned.IsNonEmpty());							// set up feedrate before we do the endstop calculations
+	LoadFeedrateFromGCode(gb, ms);														// set up feedrate before we do the endstop calculations
 
-	AxesBitmap realAxesMoving;				// we'll need this later but only if ms.moveType == 0
+	AxesBitmap realAxesMoving;															// we'll need this later but only if ms.moveType == 0
 	if (ms.moveType ==  0)
 	{
 #if SUPPORT_COORDINATE_ROTATION
@@ -2366,7 +2378,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		// We assume that the homing move hasn't been commanded at a speed that exceeds any of the individual axis maximum speeds.
 		// The feed rate refers to the composite linear axis movement. We assume hat we don't have both linear and rotational movement.
 		float speeds[MaxAxes];
-		const Kinematics& kin = reprap.GetMove().GetKinematics();
+		const Kinematics& kin = move.GetKinematics();
 		if (kin.GetHomingMode() == HomingMode::homeCartesianAxes)
 		{
 			// The endstops are on axes, so calculate the axis speeds and then convert them to drive speeds
@@ -2415,200 +2427,203 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		ms.endstopsTriggered.Clear();
 	}
 
-	const bool hasExtrusion = LoadExtrusionFromGCode(gb, ms, axesMentioned.IsNonEmpty());	// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
-	if (ms.IsFirstMoveSincePrintingResumed())												// if this is the first move after skipping an object
+	const bool hasExtrusion = LoadExtrusionFromGCode(gb, ms);								// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
+	if (hasExtrusion || !axesMentioned.IsEmpty())											// if there is no movement at all, skip further processing and don't pass the move on the the Move system
 	{
-		if (!LockCurrentMovementSystemAndWaitForStandstill(gb))								// update the user position from the machine position
+		if (ms.IsFirstMoveSincePrintingResumed())											// if this is the first move after skipping an object
 		{
-			return false;
+			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))							// update the user position from the machine position
+			{
+				return false;
+			}
+			ms.DoneMoveSincePrintingResumed();
+			if (hasExtrusion)
+			{
+				TravelToStartPoint(gb);														// don't start a printing move from the wrong place
+				return false;
+			}
 		}
-		ms.DoneMoveSincePrintingResumed();
-		if (hasExtrusion)
+
+		if (ms.hasPositiveExtrusion && axesMentioned.IsNonEmpty())
 		{
-			TravelToStartPoint(gb);															// don't start a printing move from the wrong place
-			return false;
+			// Update the object coordinates limits. For efficiency, we only update the final coordinate.
+			// Except in the case of a straight line that is only one extrusion width wide, this is sufficient.
+			buildObjects.UpdateObjectCoordinates(ms.currentObjectNumber, ms.currentUserPosition, axesMentioned);
 		}
-	}
 
-	if (ms.hasPositiveExtrusion && axesMentioned.IsNonEmpty())
-	{
-		// Update the object coordinates limits. For efficiency, we only update the final coordinate.
-		// Except in the case of a straight line that is only one extrusion width wide, this is sufficient.
-		buildObjects.UpdateObjectCoordinates(ms.currentObjectNumber, ms.currentUserPosition, axesMentioned);
-	}
-
-	// Set up the move. We must assign segmentsLeft last, so that when Move runs as a separate task the move won't be picked up by the Move process before it is complete.
-	// Note that if this is an extruder-only move, we don't do axis movements to allow for tool offset changes, we defer those until an axis moves.
-	if (ms.moveType != 0)
-	{
-		// It's a raw motor move, so do it in a single segment and wait for it to complete
-		ms.totalSegments = 1;
-		gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
-	}
-	else if (axesMentioned.IsEmpty())
-	{
-		ms.totalSegments = 1;												// it's an extruder only move
-	}
-	else
-	{
-#if SUPPORT_COORDINATE_ROTATION
-		if (ms.g68Angle != 0.0 && gb.DoingCoordinateRotation())
+		// Set up the move. We must assign segmentsLeft last, so that when Move runs as a separate task the move won't be picked up by the Move process before it is complete.
+		// Note that if this is an extruder-only move, we don't do axis movements to allow for tool offset changes, we defer those until an axis moves.
+		if (ms.moveType != 0)
 		{
-			float coords[MaxAxes];
-			memcpyf(coords, ms.currentUserPosition, MaxAxes);
-			RotateCoordinates(ms, ms.g68Angle, coords);
-			ToolOffsetTransform(ms, coords, ms.coords, axesMentioned);
+			// It's a raw motor move, so do it in a single segment and wait for it to complete
+			ms.totalSegments = 1;
+			gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
+		}
+		else if (axesMentioned.IsEmpty())
+		{
+			ms.totalSegments = 1;												// it's an extruder only move
 		}
 		else
-#endif
 		{
-			ToolOffsetTransform(ms, axesMentioned);							// apply tool offset, baby stepping, Z hop and axis scaling
-		}
+#if SUPPORT_COORDINATE_ROTATION
+			if (ms.g68Angle != 0.0 && gb.DoingCoordinateRotation())
+			{
+				float coords[MaxAxes];
+				memcpyf(coords, ms.currentUserPosition, MaxAxes);
+				RotateCoordinates(ms, ms.g68Angle, coords);
+				ToolOffsetTransform(ms, coords, ms.coords, axesMentioned);
+			}
+			else
+#endif
+			{
+				ToolOffsetTransform(ms, axesMentioned);							// apply tool offset, baby stepping, Z hop and axis scaling
+			}
 
 #if SUPPORT_KEEPOUT_ZONES
-		if (keepoutZone.DoesLineIntrude(ms.initialCoords, ms.coords))
-		{
-			gb.ThrowGCodeException("straight move would enter keepout zone");
-		}
+			if (keepoutZone.DoesLineIntrude(ms.initialCoords, ms.coords))
+			{
+				gb.ThrowGCodeException("straight move would enter keepout zone");
+			}
 #endif
 
 #if SUPPORT_ASYNC_MOVES
-		if (!collisionChecker.UpdatePositions(ms.coords, axesHomed))
-		{
-			gb.ThrowGCodeException("potential collision detected");
-		}
+			if (!collisionChecker.UpdatePositions(ms.coords, axesHomed))
+			{
+				gb.ThrowGCodeException("potential collision detected");
+			}
 #endif
 
-		// Only limit the positions of axes that have been mentioned explicitly.
-		// This avoids at least two problems:
-		// 1. When supporting multiple motion systems, if a M208 axis limit was changed and an axis coordinate was outside that limit,
-		//    but we don't own the axis, then if we move that axis there will be a problem when SaveOwnAxisCoordinates is called
-		//    because the new coordinate won't be saved.
-		// 2. If a linear axis is being limited, but the move is for a rotational axis that is already in the correct position,
-		//    then the code in DDA::InitStandardMove will throw it away because neither linearAxesMoving nor rotationalAxesMoving will be set.
-		//    This was an actual problem on my tool changer.
-		AxesBitmap axesToLimit = axesVirtuallyHomed & realAxesMoving;
-		if (doingManualBedProbe)
-		{
-			axesToLimit.ClearBit(Z_AXIS);									// if doing a manual Z probe, don't limit the Z movement
-		}
+			// Only limit the positions of axes that have been mentioned explicitly.
+			// This avoids at least two problems:
+			// 1. When supporting multiple motion systems, if a M208 axis limit was changed and an axis coordinate was outside that limit,
+			//    but we don't own the axis, then if we move that axis there will be a problem when SaveOwnAxisCoordinates is called
+			//    because the new coordinate won't be saved.
+			// 2. If a linear axis is being limited, but the move is for a rotational axis that is already in the correct position,
+			//    then the code in DDA::InitStandardMove will throw it away because neither linearAxesMoving nor rotationalAxesMoving will be set.
+			//    This was an actual problem on my tool changer.
+			AxesBitmap axesToLimit = axesVirtuallyHomed & realAxesMoving;
+			if (doingManualBedProbe)
+			{
+				axesToLimit.ClearBit(Z_AXIS);									// if doing a manual Z probe, don't limit the Z movement
+			}
 
-		const LimitPositionResult lp = reprap.GetMove().GetKinematics().LimitPosition(ms.coords, ms.initialCoords, numVisibleAxes, axesToLimit, ms.isCoordinated, limitAxes);
-		switch (lp)
-		{
-		case LimitPositionResult::adjusted:
-		case LimitPositionResult::adjustedAndIntermediateUnreachable:
-			if (machineType != MachineType::fff)
+			const LimitPositionResult lp = move.GetKinematics().LimitPosition(ms.coords, ms.initialCoords, numVisibleAxes, axesToLimit, ms.isCoordinated, limitAxes);
+			switch (lp)
 			{
-				gb.ThrowGCodeException(TargetUnreachableText);				// it's a laser or CNC so this is a definite error
-			}
-			ToolOffsetInverseTransform(ms);									// make sure the limits are reflected in the user position
-			if (lp == LimitPositionResult::adjusted)
-			{
-				break;														// we can reach the intermediate positions, so nothing more to do
-			}
-			[[fallthrough]];
-		case LimitPositionResult::intermediateUnreachable:
-			if (   ms.isCoordinated
-				&& (   (machineType == MachineType::fff && !ms.hasPositiveExtrusion)
-#if SUPPORT_LASER || SUPPORT_IOBITS
-					|| (machineType == MachineType::laser && ms.laserPixelData.numPixels == 0)
-#endif
-				   )
-			   )
-			{
-				// It's a coordinated travel move on a 3D printer or laser cutter, with no extrusion or laser, so see whether an uncoordinated move will work
-				const LimitPositionResult lp2 = reprap.GetMove().GetKinematics().LimitPosition(ms.coords, ms.initialCoords, numVisibleAxes, axesToLimit, false, limitAxes);
-				if (lp2 == LimitPositionResult::ok)
+			case LimitPositionResult::adjusted:
+			case LimitPositionResult::adjustedAndIntermediateUnreachable:
+				if (machineType != MachineType::fff)
 				{
-					ms.isCoordinated = false;								// change it to an uncoordinated move
-					break;
+					gb.ThrowGCodeException(TargetUnreachableText);				// it's a laser or CNC so this is a definite error
 				}
+				ToolOffsetInverseTransform(ms);									// make sure the limits are reflected in the user position
+				if (lp == LimitPositionResult::adjusted)
+				{
+					break;														// we can reach the intermediate positions, so nothing more to do
+				}
+				[[fallthrough]];
+
+			case LimitPositionResult::intermediateUnreachable:
+				if (   ms.isCoordinated
+					&& (   (machineType == MachineType::fff && !ms.hasPositiveExtrusion)
+#if SUPPORT_LASER || SUPPORT_IOBITS
+						|| (machineType == MachineType::laser && ms.laserPixelData.numPixels == 0)
+#endif
+					   )
+				   )
+				{
+					// It's a coordinated travel move on a 3D printer or laser cutter, with no extrusion or laser, so see whether an uncoordinated move will work
+					const LimitPositionResult lp2 = move.GetKinematics().LimitPosition(ms.coords, ms.initialCoords, numVisibleAxes, axesToLimit, false, limitAxes);
+					if (lp2 == LimitPositionResult::ok)
+					{
+						ms.isCoordinated = false;								// change it to an uncoordinated move
+						break;
+					}
+				}
+				gb.ThrowGCodeException("target position not reachable from current position");		// we can't bring the move within limits, so this is a definite error
+				[[fallthrough]];
+
+			case LimitPositionResult::ok:
+			default:
+				break;
 			}
-			gb.ThrowGCodeException("target position not reachable from current position");		// we can't bring the move within limits, so this is a definite error
-			[[fallthrough]];
-		case LimitPositionResult::ok:
-		default:
-			break;
-		}
 
-		// If we are emulating Marlin for nanoDLP then we need to set a special end state
-		if (gb.LatestMachineState().compatibility == Compatibility::NanoDLP && !DoingFileMacro())
-		{
-			gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
-		}
+			// If we are emulating Marlin for nanoDLP then we need to set a special end state
+			if (gb.LatestMachineState().compatibility == Compatibility::NanoDLP && !DoingFileMacro())
+			{
+				gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
+			}
 
-		// Flag whether we should use pressure advance, if there is any extrusion in this move.
-		// We assume it is a normal printing move needing pressure advance if there is forward extrusion and XYU... movement (we don't count Z).
-		// The movement code will only apply pressure advance if there is forward extrusion, so we only need to check for XYU... movement here.
-		if (ms.hasPositiveExtrusion)
-		{
-			AxesBitmap axesMentionedExceptZ = axesMentioned;
-			axesMentionedExceptZ.ClearBit(Z_AXIS);
-			ms.usePressureAdvance = axesMentionedExceptZ.IsNonEmpty();
-		}
+			// Flag whether we should use pressure advance, if there is any extrusion in this move.
+			// We assume it is a normal printing move needing pressure advance if there is forward extrusion and XYU... movement (we don't count Z).
+			// The movement code will only apply pressure advance if there is forward extrusion, so we only need to check for XYU... movement here.
+			if (ms.hasPositiveExtrusion)
+			{
+				AxesBitmap axesMentionedExceptZ = axesMentioned;
+				axesMentionedExceptZ.ClearBit(Z_AXIS);
+				ms.usePressureAdvance = axesMentionedExceptZ.IsNonEmpty();
+			}
 
-		// Apply segmentation if necessary
-		// As soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
-		const Kinematics &_ecv_from kin = reprap.GetMove().GetKinematics();
-		const SegmentationType st = kin.GetSegmentationType();
-		float moveLengthSquared = fsquare(ms.currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(ms.currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]);
-		if (st.useZSegmentation)
-		{
-			moveLengthSquared += fsquare(ms.currentUserPosition[Z_AXIS] - initialUserPosition[Z_AXIS]);
-		}
-		const float moveLength = fastSqrtf(moveLengthSquared);
-		const float moveTime = moveLength/(ms.feedRate * StepClockRate);		// this is a best-case time, often the move will take longer
+			// Apply segmentation if necessary
+			// As soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
+			const Kinematics &_ecv_from kin = move.GetKinematics();
+			const SegmentationType st = kin.GetSegmentationType();
+			float moveLengthSquared = fsquare(ms.currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(ms.currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]);
+			if (st.useZSegmentation)
+			{
+				moveLengthSquared += fsquare(ms.currentUserPosition[Z_AXIS] - initialUserPosition[Z_AXIS]);
+			}
+			const float moveLength = fastSqrtf(moveLengthSquared);
+			const float moveTime = moveLength/(ms.feedRate * StepClockRate);		// this is a best-case time, often the move will take longer
 
 #if SUPPORT_LASER
-		if (machineType == MachineType::laser && isCoordinated && ms.laserPixelData.numPixels > 1)
-		{
-			ms.totalSegments = ms.laserPixelData.numPixels;			// we must use one segment per pixel
-		}
-		else
-#endif
-		{
-
-			// To speed up simulation on SCARA printers, we don't apply kinematics segmentation when simulating.
-			if (st.useSegmentation && simulationMode != SimulationMode::normal && (ms.hasPositiveExtrusion || ms.isCoordinated || st.useG0Segmentation))
+			if (machineType == MachineType::laser && isCoordinated && ms.laserPixelData.numPixels > 1)
 			{
-				// This kinematics approximates linear motion by means of segmentation
-				ms.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(moveLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
+				ms.totalSegments = ms.laserPixelData.numPixels;			// we must use one segment per pixel
 			}
 			else
-			{
-				ms.totalSegments = 1;
-			}
-
-			// If we are applying mesh compensation, set the segment size to be smaller than the mesh spacing.
-			// Do not use segmentation if the requested tool Z position is higher than the configured taper height
-#if !SUPPORT_ASYNC_MOVES
-			const bool meshCompensationInUse = IsUsingMeshCompensation(ms, gb.AllParameters() & allAxisLetters);
 #endif
-			if (meshCompensationInUse)
 			{
-				const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
-				const GridDefinition& grid = heightMap.GetGrid();
-				const unsigned int minMeshSegments = heightMap.GetMinimumSegments(
-						ms.currentUserPosition[grid.GetAxisNumber(0)] - initialUserPosition[grid.GetAxisNumber(0)],
-						ms.currentUserPosition[grid.GetAxisNumber(1)] - initialUserPosition[grid.GetAxisNumber(1)]
-				);
-				if (minMeshSegments > ms.totalSegments)
+
+				// To speed up simulation on SCARA printers, we don't apply kinematics segmentation when simulating.
+				if (st.useSegmentation && simulationMode != SimulationMode::normal && (ms.hasPositiveExtrusion || ms.isCoordinated || st.useG0Segmentation))
 				{
-					ms.totalSegments = minMeshSegments;
+					// This kinematics approximates linear motion by means of segmentation
+					ms.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(moveLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
+				}
+				else
+				{
+					ms.totalSegments = 1;
+				}
+
+				// If we are applying mesh compensation, set the segment size to be smaller than the mesh spacing.
+				// Do not use segmentation if the requested tool Z position is higher than the configured taper height
+#if !SUPPORT_ASYNC_MOVES
+				const bool meshCompensationInUse = IsUsingMeshCompensation(ms, gb.AllParameters() & allAxisLetters);
+#endif
+				if (meshCompensationInUse)
+				{
+					const HeightMap& heightMap = move.AccessHeightMap();
+					const GridDefinition& grid = heightMap.GetGrid();
+					const unsigned int minMeshSegments = heightMap.GetMinimumSegments(
+							ms.currentUserPosition[grid.GetAxisNumber(0)] - initialUserPosition[grid.GetAxisNumber(0)],
+							ms.currentUserPosition[grid.GetAxisNumber(1)] - initialUserPosition[grid.GetAxisNumber(1)]
+					);
+					if (minMeshSegments > ms.totalSegments)
+					{
+						ms.totalSegments = minMeshSegments;
+					}
 				}
 			}
+
+			// The step clock wraps around every ~45 minutes (a bit less on Duet 2) which causes issues if the move will take more than about half this time.
+			// So if the move will take more than about 5 minutes, segment it.
+			ms.totalSegments = max<unsigned int>(ms.totalSegments, (unsigned int)(moveTime * (1.0/(float)MaxSegmentTime)));
 		}
 
-		// The step clock wraps around every ~45 minutes (a bit less on Duet 2) which causes issues if the move will take more than about half this time.
-		// So if the move will take more than about 5 minutes, segment it.
-		ms.totalSegments = max<unsigned int>(ms.totalSegments, (unsigned int)(moveTime * (1.0/(float)MaxSegmentTime)));
+		ms.doingArcMove = false;
+		FinaliseMove(gb, ms);
 	}
-
-	ms.doingArcMove = false;
-	ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetLinearAxes());
-	ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetRotationalAxes());
-	FinaliseMove(gb, ms);
 	UnlockAll(gb);			// allow pause
 	return true;
 }
@@ -2628,6 +2643,8 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 	ms.isCoordinated = true;													// must set this before calling IsUsingMeshCompensation
 	ms.checkEndstops = false;
 	ms.reduceAcceleration = false;
+	ms.linearAxesMentioned = false;
+	ms.rotationalAxesMentioned = false;
 
 #if SUPPORT_SCANNING_PROBES
 	ms.scanningProbeMove = false;
@@ -2820,6 +2837,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 	AxesBitmap axesMentioned;
 	axesMentioned.SetBit(axis0);
 	axesMentioned.SetBit(axis1);
+	ms.linearAxesMentioned = true;														// XYZ axes are always linear
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
 		if (axis != axis0 && axis != axis1 && gb.Seen(axisLetters[axis]))
@@ -2842,6 +2860,10 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 				ms.currentUserPosition[axis] = moveArg + GetWorkplaceOffset(gb, axis);
 			}
 			axesMentioned.SetBit(axis);
+			if (reprap.GetMove().IsAxisRotational(axis))
+			{
+				ms.rotationalAxesMentioned = true;
+			}
 		}
 	}
 
@@ -2936,9 +2958,9 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 	}
 #endif
 
-	LoadFeedrateFromGCode(gb, ms, true);
+	LoadFeedrateFromGCode(gb, ms);
 
-	const bool hasExtrusion = LoadExtrusionFromGCode(gb, ms, true);
+	const bool hasExtrusion = LoadExtrusionFromGCode(gb, ms);
 	if (ms.IsFirstMoveSincePrintingResumed())
 	{
 		if (!LockCurrentMovementSystemAndWaitForStandstill(gb))		// update the user position from the machine position
@@ -3035,8 +3057,6 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 	ms.arcAxis1 = axis1;
 	ms.doingArcMove = true;
 	ms.xyPlane = (selectedPlane == 0);
-	ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetLinearAxes());
-	ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetRotationalAxes());
 	FinaliseMove(gb, ms);
 	UnlockAll(gb);			// allow pause
 //	debugPrintf("Radius %.2f, initial angle %.1f, increment %.1f, segments %u\n",
@@ -4224,7 +4244,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *_ecv_null reply) noexcep
 	{
 	case Compatibility::Default:
 	case Compatibility::RepRapFirmware:
-		platform.Message(type, reply);
+		platform.Message(&gb, type, reply);
 		return;
 
 	case Compatibility::Marlin:

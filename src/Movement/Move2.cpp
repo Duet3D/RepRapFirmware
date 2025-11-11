@@ -449,11 +449,11 @@ void Move::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexcept
 # if !defined(DUET3MINI)								// no enable pins on 5LC
 			else
 			{
-				digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
+				digitalWrite(DriverEnablePins[driver], enableValues[driver] > 0);
 			}
 # endif
 #else
-			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
+			digitalWrite(DriverEnablePins[driver], enableValues[driver] > 0);
 #endif
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 		}
@@ -502,11 +502,11 @@ void Move::InternalDisableDriver(size_t driver) noexcept
 # if !defined(DUET3MINI)		// Duet 5LC has no enable pins
 	else
 	{
-		digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
+		digitalWrite(DriverEnablePins[driver], enableValues[driver] <= 0);
 	}
 # endif
 #else
-	digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
+	digitalWrite(DriverEnablePins[driver], enableValues[driver] <= 0);
 #endif
 }
 

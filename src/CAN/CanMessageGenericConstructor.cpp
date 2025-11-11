@@ -52,7 +52,7 @@ void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb) THROWS(G
 	uint32_t paramBit = 1;
 	for (const ParamDescriptor *d = paramTable; d->letter != 0; ++d)
 	{
-		if (d->letter >= 'A' && d->letter <= 'Z' && gb.Seen(d->letter))
+		if (d->letter >= 'A' && d->letter <= 'Z' && gb.Seen(d->letter))			// we use letters outside A..Z to flag a table entry as obsolete
 		{
 			switch (d->type)
 			{

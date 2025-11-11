@@ -13,7 +13,7 @@
 
 // Create a default initialised GCodeMachineState
 GCodeMachineState::GCodeMachineState() noexcept
-	: feedRate(ConvertSpeedFromMmPerMin(DefaultFeedRate)),
+	: feedRate(DefaultFeedRate),
 #if HAS_SBC_INTERFACE
 	  fileId(NoFileId),
 #endif

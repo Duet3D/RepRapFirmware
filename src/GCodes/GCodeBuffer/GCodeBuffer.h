@@ -55,23 +55,23 @@ public:
 	friend class StringParser;
 
 	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *_ecv_null fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
-	void Reset() noexcept;														// Reset it to its state after start-up
-	void Init() noexcept;														// Set it up to parse another G-code
-	void Disable() noexcept;													// Disable input from the associated port
-	void Enable(uint32_t commsProperties) noexcept;								// Enable input and set the CRC or checksum requirements
-	void Diagnostics(const StringRef& reply) noexcept;							// Write some debug info
+	void Reset() noexcept;															// Reset it to its state after start-up
+	void Init() noexcept;															// Set it up to parse another G-code
+	void Disable() noexcept;														// Disable input from the associated port
+	void Enable(uint32_t commsProperties) noexcept;									// Enable input and set the CRC or checksum requirements
+	void Diagnostics(const StringRef& reply) noexcept;								// Write some debug info
 
-	bool Put(char c) noexcept SPEED_CRITICAL;									// Add a character to the end
+	bool Put(char c) noexcept SPEED_CRITICAL;										// Add a character to the end
 #if HAS_SBC_INTERFACE
-	void PutBinary(const uint32_t *data, size_t len) noexcept;					// Add an entire binary G-Code, overwriting any existing content
+	void PutBinary(const uint32_t *data, size_t len) noexcept;						// Add an entire binary G-Code, overwriting any existing content
 #endif
-	void PutAndDecode(const char *_ecv_array data, size_t len) noexcept;		// Add an entire G-Code, overwriting any existing content
-	void PutAndDecode(const char *_ecv_array str) noexcept;						// Add a null-terminated string, overwriting any existing content
-	void StartNewFile() noexcept;												// Called when we start a new file
-	bool FileEnded() noexcept;													// Called when we reach the end of the file we are reading from
-	void DecodeCommand() noexcept;												// Decode the command in the buffer when it is complete
-	bool HadOverflow() noexcept { return overflowed; }							// Indicates if the previous binary G-code was too long
-	bool CheckMetaCommand(const StringRef& reply) THROWS(GCodeException);		// Check whether the current command is a meta command, or we are skipping a block
+	void PutAndDecode(const char *_ecv_array data, size_t len) noexcept;			// Add an entire G-Code, overwriting any existing content
+	void PutAndDecode(const char *_ecv_array str) noexcept;							// Add a null-terminated string, overwriting any existing content
+	void StartNewFile() noexcept;													// Called when we start a new file
+	bool FileEnded() noexcept;														// Called when we reach the end of the file we are reading from
+	void DecodeCommand() noexcept;													// Decode the command in the buffer when it is complete
+	bool HadOverflow() noexcept { return overflowed; }								// Indicates if the previous binary G-code was too long
+	bool CheckMetaCommand(const StringRef& reply) THROWS(GCodeException);			// Check whether the current command is a meta command, or we are skipping a block
 
 	char GetCommandLetter() const noexcept;
 	bool HasCommandNumber() const noexcept;
@@ -80,8 +80,10 @@ public:
 	bool ContainsExpression() const noexcept;
 	void GetCompleteParameters(const StringRef& str) THROWS(GCodeException);		// Get all of the line following the command. Currently called only for the Q0 command.
 	int32_t GetLineNumber() const noexcept { return CurrentFileMachineState().lineNumber; }
-	bool HadExplicitLineNumber() const noexcept;
-	uint32_t GetExplicitLineNumber() const noexcept;
+	bool HadExplicitLineNumber() const noexcept { return hadExplicitLineNumber; }
+	uint32_t GetExplicitLineNumber() const noexcept { return receivedLineNumber; }
+	void SetExplicitLineNumber(uint32_t ln) noexcept { receivedLineNumber = ln; hadExplicitLineNumber = true; }
+	void ClearExplicitLineNumber() noexcept { hadExplicitLineNumber = false; }
 	bool IsLastCommand() const noexcept;
 	GCodeResult GetLastResult() const noexcept { return lastResult; }
 	void SetLastResult(GCodeResult r) noexcept { lastResult = r; }
@@ -100,13 +102,12 @@ public:
 	float GetPositiveFValue() THROWS(GCodeException) SPEED_CRITICAL;				// Get a float after a key letter and check that it is greater than zero
 	float GetNonNegativeFValue() THROWS(GCodeException) SPEED_CRITICAL;				// Get a float after a key letter and check that it is greater than or equal to zero
 	float GetDistance() THROWS(GCodeException);										// Get a distance or coordinate and convert it from inches to mm if necessary
-	float GetSpeed() THROWS(GCodeException);										// Get a speed in mm/min or inches/min and convert it to mm/step_clock
 	float GetSpeedFromMm(bool useSeconds) THROWS(GCodeException);					// Get a speed in mm/min or optionally /sec and convert it to mm/step_clock
 	float GetAcceleration() THROWS(GCodeException);									// Get an acceleration in mm/sec^2 or inches/sec^2 and convert it to mm/step_clock^2
 	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get an integer after a key letter
 	int32_t GetLimitedIValue(char c, int32_t minValue, int32_t maxValue) THROWS(GCodeException)
 		pre(minValue <= maxValue)
-		post(minValue <= _ecv_result; _ecv_result <= maxValue);								// Get an integer after a key letter
+		post(minValue <= _ecv_result; _ecv_result <= maxValue);						// Get an integer after a key letter
 	uint32_t GetUIValue() THROWS(GCodeException);									// Get an unsigned integer value
 	uint32_t GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException)		// Get an unsigned integer value, throw if outside limits
 		pre(maxValuePlusOne > minValue)												// Get an unsigned integer value, throw if outside limits
@@ -115,7 +116,7 @@ public:
 		post(_ecv_result < maxValuePlusOne) { return GetLimitedUIValue(c, 0, maxValuePlusOne); }
 	float GetLimitedFValue(char c, float minValue, float maxValue) THROWS(GCodeException)
 		pre(minValue <= maxValue)
-		post(minValue <= _ecv_result; _ecv_result <= maxValue);								// Get a float after a key letter
+		post(minValue <= _ecv_result; _ecv_result <= maxValue);						// Get a float after a key letter
 	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);				// Get an IP address quad after a key letter
 	void GetMacAddress(MacAddress& mac) THROWS(GCodeException);						// Get a MAC address sextet after a key letter
 	PwmFrequency GetPwmFrequency() THROWS(GCodeException);							// Get a PWM frequency
@@ -184,8 +185,7 @@ public:
 	bool UsingInches() const noexcept { return machineState->usingInches; }
 	float ConvertDistance(float distance) const noexcept;
 	float InverseConvertDistance(float distance) const noexcept;
-	float ConvertSpeed(float speed) const noexcept;
-	float InverseConvertSpeed(float speed) const noexcept;
+	float ConvertSpeed(float speed, bool convertInches) const noexcept;
 	const char *_ecv_array GetDistanceUnits() const noexcept;
 	unsigned int GetStackDepth() const noexcept;
 	bool PushState(bool withinSameFile) noexcept;							// Push state returning true if successful (i.e. stack not overflowed)
@@ -351,6 +351,7 @@ private:
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 	ExpressionValue m291Result;							// the value entered or choice selected in response to a M291 command
 
+	uint32_t receivedLineNumber;						// The line number received explicitly in the N field of the GCode command line
 	uint32_t whenTimerStarted;							// When we started waiting
 	uint32_t whenReportDueTimerStarted;					// When the report-due-timer has been started
 	StatusReportType lastStatusReportType;				// the type of the last status report sent on this channel
@@ -363,6 +364,7 @@ private:
 	bool timerRunning;									// true if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
 	bool cancelWait;									// true to stop waiting for temperatures to be reached
+	bool hadExplicitLineNumber;							// true if the N field of the GCode command line was present
 
 	char *_ecv_array _ecv_null buffer;					// if allocated must be aligned because in SBC binary mode we do dword fetches from it
 	size_t bufferLength;								// length of the allocated buffer in bytes

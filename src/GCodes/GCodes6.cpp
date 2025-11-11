@@ -45,7 +45,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 	{
 		if (g30ProbePointIndex < 0 || g30ProbePointIndex >= (int)MaxProbePoints)
 		{
-			reply.copy("Z probe point index out of range");
+			reply.copy("probe point index out of range");
 			return GCodeResult::error;
 		}
 		else
@@ -128,7 +128,7 @@ ReadLockedPointer<ZProbe> GCodes::SetZProbeNumber(GCodeBuffer& gb, char probeLet
 	auto zp = platform.GetEndstops().GetZProbe(probeNumber);
 	if (zp.IsNull())
 	{
-		gb.ThrowGCodeException("Z probe %u not found", probeNumber);
+		gb.ThrowGCodeException("probe %u not found", probeNumber);
 	}
 	currentZProbeNumber = (uint8_t)probeNumber;
 	return zp;
@@ -240,7 +240,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 			}
 			else if (axesSeenCount > 2)
 			{
-				reply.copy("Mesh leveling expects exactly two axes");
+				reply.copy("mesh leveling expects exactly two axes");
 				return GCodeResult::error;
 			}
 			bool dummy;
@@ -251,7 +251,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 	}
 	if (axesSeenCount == 1)
 	{
-		reply.copy("Specify zero or two axes in M557");
+		reply.copy("specify zero or two axes in M557");
 		return GCodeResult::error;
 	}
 	const bool axesSeen = axesSeenCount > 0;
@@ -276,7 +276,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 		}
 		else
 		{
-			reply.copy("Grid is not defined");
+			reply.copy("grid is not defined");
 		}
 		return GCodeResult::ok;
 	}
@@ -381,13 +381,13 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 {
 	if (!defaultGrid.IsValid())
 	{
-		reply.copy("No valid grid defined for bed probing");
+		reply.copy("no valid grid defined for bed probing");
 		return GCodeResult::error;
 	}
 
 	if (!AllAxesAreHomed())
 	{
-		reply.copy("Must home printer before bed probing");
+		reply.copy("must home printer before bed probing");
 		return GCodeResult::error;
 	}
 
@@ -438,10 +438,10 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) THROW
 	FileStore *_ecv_null const f = MassStorage::OpenFile(fullName.c_str(), OpenMode::read, 0);
 	if (f == nullptr)
 	{
-		reply.printf("Height map file %s not found", fullName.c_str());
+		reply.printf("height map file %s not found", fullName.c_str());
 		return GCodeResult::error;
 	}
-	reply.printf("Failed to load height map from file %s: ", fullName.c_str());	// set up error message to append to
+	reply.printf("failed to load height map from file %s: ", fullName.c_str());	// set up error message to append to
 
 	const bool err = reprap.GetMove().LoadHeightMapFromFile(f, fullName.c_str(), reply);
 	f->Close();
@@ -471,7 +471,7 @@ bool GCodes::TrySaveHeightMap(const char *_ecv_array filename, const StringRef& 
 	bool err;
 	if (f == nullptr)
 	{
-		reply.catf("Failed to create height map file %s", fullName.c_str());
+		reply.catf("failed to create height map file %s", fullName.c_str());
 		err = true;
 	}
 	else
@@ -481,11 +481,11 @@ bool GCodes::TrySaveHeightMap(const char *_ecv_array filename, const StringRef& 
 		if (err)
 		{
 			(void)MassStorage::Delete(fullName.GetRef(), ErrorMessageMode::messageAlways);
-			reply.catf("Failed to save height map to file %s", fullName.c_str());
+			reply.catf("failed to save height map to file %s", fullName.c_str());
 		}
 		else
 		{
-			reply.catf("Height map saved to file %s", fullName.c_str());
+			reply.catf("height map saved to file %s", fullName.c_str());
 		}
 	}
 	return err;
@@ -655,7 +655,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 		// Signal error for G38.2 and G38.4
 		if (straightProbeSettings.SignalError())
 		{
-			reply.copy("No axis specified.");
+			reply.copy("no axis specified.");
 			return GCodeResult::error;
 		}
 		return GCodeResult::ok;
@@ -667,7 +667,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 		// Signal error for G38.2 and G38.4
 		if (straightProbeSettings.SignalError())
 		{
-			reply.copy("Target equals current position.");
+			reply.copy("target equals current position.");
 			return GCodeResult::error;
 		}
 		return GCodeResult::ok;
@@ -693,7 +693,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 	// Check if this probe exists to not run into a nullptr dereference later
 	if (platform.GetEndstops().GetZProbe(probeToUse).IsNull())
 	{
-		reply.catf("Invalid probe number: %d", probeToUse);
+		reply.catf("invalid probe number: %d", probeToUse);
 		return GCodeResult::error;
 	}
 	straightProbeSettings.SetZProbeToUse(probeToUse);
@@ -719,11 +719,11 @@ size_t GCodes::FindAxisLetter(GCodeBuffer& gb) THROWS(GCodeException)
 			{
 				return axis;
 			}
-			throw GCodeException(&gb, -1, "%c axis has not been homed", (uint32_t)axisLetters[axis]);
+			throw GCodeException(&gb, -1, "axis %c has not been homed", (uint32_t)axisLetters[axis]);
 		}
 	}
 
-	throw GCodeException(&gb, -1, "No axis specified");
+	throw GCodeException(&gb, -1, "no axis specified");
 }
 
 // Deal with a M585
@@ -732,7 +732,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	MovementState& ms = GetMovementState(gb);
 	if (ms.currentTool == nullptr)
 	{
-		reply.copy("No tool selected!");
+		reply.copy("no tool selected!");
 		return GCodeResult::error;
 	}
 
@@ -742,10 +742,12 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	}
 
 	// Get the feed rate and axis
-	gb.MustSee(feedrateLetter);
-	m585Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetSpeed();		// don't apply the speed factor to homing and other special moves
 	m585Settings.axisNumber = FindAxisLetter(gb);
-	m585Settings.offset = gb.GetDistance();
+	const bool rotational = reprap.GetMove().IsAxisLinear(m585Settings.axisNumber);
+	m585Settings.offset = (rotational) ? gb.GetFValue() : gb.GetDistance();
+
+	gb.MustSee(feedrateLetter);
+	m585Settings.feedRate = gb.LatestMachineState().feedRate = gb.ConvertSpeed(gb.GetFValue(), !rotational);		// don't apply the speed factor to homing and other special moves
 
 #if SUPPORT_ASYNC_MOVES
 	AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(m585Settings.axisNumber), ParameterLettersBitmap());
@@ -795,12 +797,12 @@ bool GCodes::SetupM585ProbingMove(GCodeBuffer& gb) noexcept
 		const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
 		if (zp->Stopped())
 		{
-			gb.LatestMachineState().SetError("Probe already triggered before probing move started");
+			gb.LatestMachineState().SetError("probe already triggered before probing move started");
 			return false;
 		}
 		if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
 		{
-			gb.LatestMachineState().SetError("Failed to enable probe");
+			gb.LatestMachineState().SetError("failed to enable probe");
 			return false;
 		}
 		reduceAcceleration = true;
@@ -850,10 +852,11 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) 
 	}
 
 	// Get the feed rate, backoff distance, and axis
-	gb.MustSee(feedrateLetter);
-	m675Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetSpeed();		// don't apply the speed factor to homing and other special moves
-	m675Settings.backoffDistance = gb.Seen('R') ? gb.GetDistance() : 5.0;
 	m675Settings.axisNumber = FindAxisLetter(gb);
+	const bool rotational = reprap.GetMove().IsAxisLinear(m675Settings.axisNumber);
+	gb.MustSee(feedrateLetter);
+	m675Settings.feedRate = gb.LatestMachineState().feedRate = gb.ConvertSpeed(gb.GetFValue(), !rotational);		// don't apply the speed factor to homing and other special moves
+	m675Settings.backoffDistance = gb.Seen('R') ? ((rotational) ? gb.GetFValue() : gb.GetDistance()) : 5.0;
 
 #if SUPPORT_ASYNC_MOVES
 	AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(m585Settings.axisNumber), ParameterLettersBitmap());
@@ -875,12 +878,12 @@ bool GCodes::SetupM675ProbingMove(GCodeBuffer& gb, bool towardsMin) noexcept
 	const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
 	if (zp->Stopped())
 	{
-		gb.LatestMachineState().SetError("Probe already triggered before probing move started");
+		gb.LatestMachineState().SetError("probe already triggered before probing move started");
 		return false;
 	}
 	if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
 	{
-		gb.LatestMachineState().SetError("Failed to enable probe");
+		gb.LatestMachineState().SetError("failed to enable probe");
 		return false;
 	}
 

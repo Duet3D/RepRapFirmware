@@ -772,7 +772,7 @@ private:
 	uint32_t stepPulseMinimumPeriodClocks;					// minimum period between leading edges of step pulses, in step clocks
 	uint32_t directionSetupClocks;							// minimum direction change to step high time, in step clocks
 	uint32_t directionHoldClocksFromLeadingEdge;			// minimum step high to direction low step clocks, calculated from the step low to direction change hold time
-	const Pin *ENABLE_PINS;									// 6XD version 0.1 uses different enable pins from version 1.0 and later
+	const Pin *DriverEnablePins;							// 6XD version 0.1 uses different enable pins from version 1.0 and later
 #else
 	uint32_t slowDriversBitmap;								// bitmap of driver port bits that need extended step pulse timing
 	uint32_t slowDriverStepTimingClocks[4];					// minimum step high, step low, dir setup and dir hold timing for slow drivers

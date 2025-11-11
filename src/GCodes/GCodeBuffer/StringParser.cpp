@@ -1077,6 +1077,14 @@ void StringParser::DecodeCommand() noexcept
 		commandEnd = gcodeLineEnd;
 	}
 
+	if (hadLineNumber)
+	{
+		gb.SetExplicitLineNumber(receivedLineNumber);
+	}
+	else
+	{
+		gb.ClearExplicitLineNumber();
+	}
 	gb.bufferState = GCodeBufferState::ready;
 }
 
@@ -1935,9 +1943,9 @@ bool StringParser::FileEnded() noexcept
 #endif
 
 	bool commandCompleted = false;
-	if (gcodeLineEnd != 0)				// if there is something in the buffer
+	if (gcodeLineEnd != 0)					// if there is something in the buffer
 	{
-		Put('\n');						// append a newline in case the file didn't end with one
+		Put('\n');							// append a newline in case the file didn't end with one
 		commandCompleted = true;
 	}
 

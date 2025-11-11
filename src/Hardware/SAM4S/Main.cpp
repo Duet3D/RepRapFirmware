@@ -20,8 +20,8 @@ void AppInit() noexcept
 	pinMode(LcdCSPin, OUTPUT_LOW);
 
 	// On the prototype boards the stepper driver expansion ports don't have external pullup resistors on their enable pins
-	pinMode(ENABLE_PINS[5], OUTPUT_HIGH);
-	pinMode(ENABLE_PINS[6], OUTPUT_HIGH);
+	pinMode(DriverEnablePins[5], OUTPUT_HIGH);
+	pinMode(DriverEnablePins[6], OUTPUT_HIGH);
 #endif
 }
 
