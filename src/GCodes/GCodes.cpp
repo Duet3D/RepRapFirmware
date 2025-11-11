@@ -2842,7 +2842,18 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 	{
 		if (axis != axis0 && axis != axis1 && gb.Seen(axisLetters[axis]))
 		{
-			const float moveArg = gb.GetDistance();
+			axesMentioned.SetBit(axis);
+			float moveArg;
+			if (reprap.GetMove().IsAxisRotational(axis))
+			{
+				ms.rotationalAxesMentioned = true;
+				moveArg = gb.GetFValue();
+			}
+			else
+			{
+				moveArg = gb.GetDistance();
+			}
+
 			if (gb.LatestMachineState().axesRelative)
 			{
 				ms.currentUserPosition[axis] += moveArg * (1.0 - ms.moveFractionToSkip);
@@ -2858,11 +2869,6 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 			else
 			{
 				ms.currentUserPosition[axis] = moveArg + GetWorkplaceOffset(gb, axis);
-			}
-			axesMentioned.SetBit(axis);
-			if (reprap.GetMove().IsAxisRotational(axis))
-			{
-				ms.rotationalAxesMentioned = true;
 			}
 		}
 	}
