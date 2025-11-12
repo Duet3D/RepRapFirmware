@@ -20,6 +20,8 @@
 # include "Movement/StepperDrivers/TMC51xx.h"
 #endif
 
+constexpr uint32_t MinimumExecutingSegmentDuration = 20;
+
 // Static members
 
 int32_t DriveMovement::maxStepsLate = 0;
@@ -261,6 +263,25 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 			MovementStopped();									// say we have stopped. NewSegment will be called again for this segment when the state changes from 'starting' to something else.
 #endif
 			return seg;
+		}
+
+		// If this segment is very short, merge it into the next one. This improves efficiency and avoids reporting speed/acceleration discontinuities caused by rounding error.
+		// This could give poor results if a number of very short segments are merged into a segment that is still quite short.
+		// Typically we merge a very short segment into a much longer segment, which works well.
+		MoveSegment *_ecv_null nextSeg;
+		if (   seg->GetDuration() < MinimumExecutingSegmentDuration
+			&& (nextSeg = seg->GetNext()) != nullptr
+			&& nextSeg->GetFlags() == segmentFlags
+			&& nextSeg->GetStartTime() == seg->GetStartTime() + seg->GetDuration()
+			&& nextSeg->GetDuration() >= seg->GetDuration() * 20
+		   )
+		{
+			// We can and should merge this segment into the next one.
+			// When the segment is executed, the initial speed will be adjusted to match them.
+			nextSeg->CombinePrevious(seg);
+			segments = nextSeg;
+			MoveSegment::Release(seg);							// release the segment, don't retire it
+			seg = nextSeg;
 		}
 
 		seg->SetExecuting();

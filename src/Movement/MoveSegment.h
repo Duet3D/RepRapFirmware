@@ -92,6 +92,11 @@ union MovementFlags final
 		ret.isExtruder = true;
 		return ret;
 	}
+
+	bool operator==(MovementFlags other) const noexcept
+	{
+		return all == other.all;
+	}
 };
 
 // This class stores the characteristics of a segment of a move with constant acceleration.
@@ -168,6 +173,10 @@ public:
 
 	// Set the next segment in this list
 	void SetNext(MoveSegment *_ecv_null p_next) noexcept;
+
+	// Combine the data from a previous short segment with this one. The previous segment must end at the same time that this one begins.
+	void CombinePrevious(const MoveSegment *prev) noexcept
+		pre(prev->startTime + prev->duration == startTime; prev->flags == flags);
 
 	// Print this segment to the debug channel
 	void DebugPrint() const noexcept;
@@ -336,6 +345,15 @@ inline void MoveSegment::Merge(motioncalc_t p_distance, motioncalc_t p_a J_FORMA
 	j += p_j;
 #endif
 	flags |= p_flags;
+}
+
+// Combine the data from a previous short segment with this one. The previous segment must end at the same time that this one begins.
+inline void MoveSegment::CombinePrevious(const MoveSegment *prev) noexcept
+{
+	duration += prev->duration;
+	startTime = prev->startTime;
+	distance += prev->distance;
+	// Ideally we would make a small correction to the acceleration here too
 }
 
 #endif /* SRC_MOVEMENT_MOVESEGMENT_H_ */
