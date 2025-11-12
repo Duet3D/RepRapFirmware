@@ -66,33 +66,39 @@ void MovementProfile::DebugPrint() const noexcept
 
 void MovementProfile::CheckForShortSegments() const noexcept
 {
+	// The code to avoid phases shorter than MinimumPhaseDuration tried to lengthen the phase to exactly MinimumPhaseDuration.
+	// We use (MinimumPhaseDuration - 2) in the following to avoid false short phase detection caused by rounding error in the calculation.
 	bool shortSeg = false;
-	if (distances[3] > (double)0.0 && distances[3] < MinimumPhaseDuration * topSpeed)
-	{
-		shortSeg = true;
-	}
 	if (distances[1] > (double)0.0)
 	{
 		// Assume startAcceleration is zero
 		const double t0 = (peakAcceleration - startAcceleration)/jerk;
 		const double u1 = startSpeed + (startAcceleration + OneHalfDouble * jerk * t0) * t0;
-		if (fastSqrtd(dsquare(u1) + 2 * peakAcceleration * distances[1]) - u1 < MinimumPhaseDuration * peakAcceleration)
+		const double t1TimesPeakAcceleration = fastSqrtd(dsquare(u1) + 2 * peakAcceleration * distances[1]) - u1;
+		if (t1TimesPeakAcceleration < (MinimumPhaseDuration - 2) * peakAcceleration)
 		{
+			debugPrintf("Short t1=%.1f ", t1TimesPeakAcceleration/peakAcceleration);
 			shortSeg = true;
 		}
+	}
+	if (distances[3] > (double)0.0 && distances[3] < (MinimumPhaseDuration - 2) * topSpeed)
+	{
+		debugPrintf("Short t3=%.1f ", distances[3]/topSpeed);
+		shortSeg = true;
 	}
 	if (distances[5] > (double)0.0)
 	{
 		const double t6 = -peakDeceleration/jerk;			// end acceleration is always zero
 		const double v5 = endSpeed + OneHalfDouble * jerk * t6;
-		if (fastSqrtd(dsquare(v5) - 2 * peakDeceleration * distances[5]) - v5 < -MinimumPhaseDuration * peakDeceleration)
+		const double t5TimesMinusPeakDeceleration = fastSqrtd(dsquare(v5) - 2 * peakDeceleration * distances[5]) - v5;
+		if (t5TimesMinusPeakDeceleration < -(MinimumPhaseDuration - 2) * peakDeceleration)
 		{
+			debugPrintf("Short t5=%.1f ", t5TimesMinusPeakDeceleration/-peakDeceleration);
 			shortSeg = true;
 		}
 	}
 	if (shortSeg)
 	{
-		debugPrintf("Short segment, ");
 		DebugPrint();
 	}
 }
