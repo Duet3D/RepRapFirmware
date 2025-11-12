@@ -1720,6 +1720,7 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 			else																// new segment starts before the existing one and can't be delayed/shortened so that it doesn't
 			{
 				// Insert part of the new segment before the existing one, then merge the rest
+				seg = MoveSegment::Allocate(seg);
 				const uint32_t firstDuration = -offset;
 				const motioncalc_t mFirstDuration = (motioncalc_t)firstDuration;
 #if SUPPORT_S_CURVE
@@ -1727,8 +1728,10 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 #else
 				const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + OneHalf * a * mFirstDuration) * mFirstDuration;
 #endif
-				seg = MoveSegment::Allocate(seg);
 				seg->SetParameters(startTime, firstDuration, firstDistance, a J_ACTUAL_PARAMETER(j), moveFlags);
+#if SUPPORT_S_CURVE
+				a += j * mFirstDuration;
+#endif
 				if (prev == nullptr)
 				{
 					list = _ecv_not_null(seg);
@@ -1814,6 +1817,9 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 					debugPrintf("merge1: ");
 #endif
 					seg->Merge(firstDistance, a J_ACTUAL_PARAMETER(j), moveFlags);
+#if SUPPORT_S_CURVE
+					a += j * segDuration;
+#endif
 #if CHECK_SEGMENTS
 					CheckSegment(__LINE__, prev);
 					CheckSegment(__LINE__, seg);
