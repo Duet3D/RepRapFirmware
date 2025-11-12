@@ -232,7 +232,7 @@ void MovementProfile::CalculateSimpleSCurvePlan(double distance) noexcept
 				// Reduce the top speed to make the constant speed segment longer
 				const double oldTopSpeed = topSpeed;
 				topSpeed = SmallestNonNegativeCubicSolution((double)4.0, -dsquare(MinimumPhaseDuration) * jerk, 2 * distance * MinimumPhaseDuration * jerk, -dsquare(distance) * jerk);
-				debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment\n", oldTopSpeed, topSpeed);
+				debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment (5p)\n", oldTopSpeed, topSpeed);
 				CalculateSimpleFivePhasePlan(distance);
 				reachesRequestedSpeed = false;
 				return;
@@ -297,7 +297,7 @@ void MovementProfile::CalculateSimpleSCurvePlan(double distance) noexcept
 						// This isn't possible as a 7-phase profile so generate a 5-phase profile instead
 						const double oldTopSpeed = topSpeed;
 						topSpeed = SmallestNonNegativeCubicSolution((double)4.0, -dsquare(MinimumPhaseDuration) * jerk, 2 * distance * MinimumPhaseDuration * jerk, -dsquare(distance) * jerk);
-						debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment\n", oldTopSpeed, topSpeed);
+						debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment (7p to 5p)\n", oldTopSpeed, topSpeed);
 						CalculateSimpleFivePhasePlan(distance);
 						reachesRequestedSpeed = false;
 						return;
@@ -306,7 +306,7 @@ void MovementProfile::CalculateSimpleSCurvePlan(double distance) noexcept
 					// We can still use a 7-phase profile but we need to reduce top speed and shorten the constant acceleration phases
 					const double oldTopSpeed = topSpeed;
 					topSpeed = (dsquare(jerk) * distance + dcube(peakAcceleration))/(3 * peakAcceleration * jerk + dsquare(jerk) * MinimumPhaseDuration);
-					debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment (7 phase)\n", oldTopSpeed, topSpeed);
+					debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment (7p)\n", oldTopSpeed, topSpeed);
 					revisedConstantAccelerationTime = topSpeed/peakAcceleration - timeToMaxAcceleration;
 					d15 = OneHalfDouble * revisedConstantAccelerationTime * topSpeed;
 					d24 = timeToMaxAcceleration * topSpeed - distances[0];
@@ -386,10 +386,13 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 	simple = false;
 
 	// First make sure we don't have a top speed that is lower than the start or end speed, because that would lead to negative phase times
-	if (topSpeed < startSpeed || topSpeed < startSpeed + OneHalfDouble * dsquare(startAcceleration)/jerk)
+	const double minTopSpeedFromStart = (startAcceleration > (double)0.0)
+											? startSpeed + OneHalfDouble * dsquare(startAcceleration)/jerk
+												: startSpeed;
+	if (topSpeed < minTopSpeedFromStart)
 	{
-		debugPrintf("Increasing top speed from %.4e to %.4e due to start speed/accel\n", topSpeed, startSpeed);
-		topSpeed = startSpeed;
+		debugPrintf("Increasing top speed from %.4e to %.4e due to start speed/accel\n", topSpeed, minTopSpeedFromStart);
+		topSpeed = minTopSpeedFromStart;
 	}
 	if (topSpeed < endSpeed)
 	{
