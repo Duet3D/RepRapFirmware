@@ -20,45 +20,6 @@
 
 #define COPY_PLAN	1
 
-// Return the smallest non-negative root of the equation. Returns the largest solution if there is no nonnegative solution, or NaN if there are no solutions.
-static double SmallestNonNegativeCubicSolution(double a, double b, double c, double d) noexcept
-{
-	double rslt[3];
-	const size_t numSolutions = SolveCubic(a, b, c, d, rslt);
-#if 0
-	debugPrintf("%u solutions:", numSolutions);
-	if (numSolutions >= 1) { debugPrintf(" %.3e", (double)rslt[0]); }
-	if (numSolutions >= 2) { debugPrintf(" %.3e", (double)rslt[1]); }
-	if (numSolutions >= 3) { debugPrintf(" %.3e", (double) rslt[2]); }
-	debugPrintf("\n");
-#endif
-	if (unlikely(numSolutions == 0)) { return std::numeric_limits<double>::quiet_NaN(); }
-	if (rslt[0] >= (double)0.0 || numSolutions == 1) { return rslt[0]; }
-	if (rslt[1] >= (double)0.0 || numSolutions == 2) { return rslt[1]; }
-	return rslt[2];
-}
-
-// Return the smallest non-negative root of the equation. Returns the greatest root if both roots are negative, or NaN if there re no roots.
-static double SmallestNonNegativeQuadraticSolution(double a, double b, double c) noexcept
-{
-	if (a == (double)0.0)
-	{
-		return -c/b;
-	}
-	const double disc = dsquare(b) - 4 * a * c;
-	if (disc < (double)0.0)
-	{
-		debugPrintf("No solutions: a=%.6g b=%.6g c=%.6g\n", a, b, c);
-		return std::numeric_limits<double>::quiet_NaN();
-	}
-	const double temp = fastSqrtd(disc);
-	if (a < 0)
-	{
-		a = -a; b = -b;
-	}
-	return ((b + temp <= 0) ? -(b + temp) : (temp - b))/(2 * a);
-}
-
 // Convert a float to a uint32_t, with negative values converted to zero
 static inline uint32_t doubleToU32(double f) noexcept
 {
@@ -220,6 +181,11 @@ static MovementProfile debugProfile;
 	{
 		plannedProfile.CalculateGeneralSCurvePlan(distanceToPlan);
 	}
+
+#if 1	//DEBUG
+	plannedProfile.CheckForShortSegments();
+#endif
+
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
 	{
 		plannedProfile.DebugPrint();
@@ -254,7 +220,7 @@ static MovementProfile debugProfile;
 			const bool lastPhase = (moveDistanceLeft <= plannedProfile.distances[0]);
 			const double t0Distance = (lastPhase) ? moveDistanceLeft : plannedProfile.distances[0];
 			params.distances[0] = (motioncalc_t)(t0Distance * recipMovementRatio);
-			const double t0 = SmallestNonNegativeCubicSolution(plannedProfile.jerk, 3 * acceleration, 6 * speed, -6 * t0Distance);
+			const double t0 = MovementProfile::SmallestNonNegativeCubicSolution(plannedProfile.jerk, 3 * acceleration, 6 * speed, -6 * t0Distance);
 			if (std::isnan(t0) || t0 < (double)0.0)
 			{
 				debugPrintf("Failed at %d, t0=%.7e\n", __LINE__, t0);
@@ -296,7 +262,7 @@ static MovementProfile debugProfile;
 			const bool lastPhase = (moveDistanceLeft <= plannedProfile.distances[1]);
 			const double t1Distance = (lastPhase) ? moveDistanceLeft : plannedProfile.distances[1];
 			params.distances[1] = (motioncalc_t)(t1Distance * recipMovementRatio);
-			const double t1 = SmallestNonNegativeQuadraticSolution(OneHalfDouble * plannedProfile.peakAcceleration, speed, -t1Distance);
+			const double t1 = MovementProfile::SmallestNonNegativeQuadraticSolution(OneHalfDouble * plannedProfile.peakAcceleration, speed, -t1Distance);
 			if (std::isnan(t1) || t1 < (double)0.0)
 			{
 				debugPrintf("Failed at %d, t1=%.7e\n", __LINE__, t1);
@@ -341,7 +307,7 @@ static MovementProfile debugProfile;
 			const bool lastPhase = (moveDistanceLeft <= plannedProfile.distances[2]);
 			const double t2Distance = (lastPhase) ? moveDistanceLeft : plannedProfile.distances[2];
 			params.distances[2] = (motioncalc_t)(t2Distance * recipMovementRatio);
-			const double t2 = SmallestNonNegativeCubicSolution(-djerk, 3 * acceleration, 6 * speed, -6 * t2Distance);
+			const double t2 = MovementProfile::SmallestNonNegativeCubicSolution(-djerk, 3 * acceleration, 6 * speed, -6 * t2Distance);
 			if (std::isnan(t2) || t2 < (double)0.0)
 			{
 				debugPrintf("Failed at %d, t2=%.7e\n", __LINE__, t2);
@@ -419,7 +385,7 @@ static MovementProfile debugProfile;
 			const bool lastPhase = (moveDistanceLeft <= plannedProfile.distances[4]);
 			const double t4Distance = (lastPhase) ? moveDistanceLeft : plannedProfile.distances[4];
 			params.distances[4] = (motioncalc_t)(t4Distance * recipMovementRatio);
-			const double t4 = SmallestNonNegativeCubicSolution(-djerk, 3 * acceleration, 6 * speed, -6 * t4Distance);
+			const double t4 = MovementProfile::SmallestNonNegativeCubicSolution(-djerk, 3 * acceleration, 6 * speed, -6 * t4Distance);
 			if (std::isnan(t4) || t4 < (double)0.0)
 			{
 				debugPrintf("Failed at %d, t4=%.7e\n", __LINE__, t4);
@@ -464,7 +430,7 @@ static MovementProfile debugProfile;
 			const bool lastPhase = (moveDistanceLeft <= plannedProfile.distances[5]);
 			const double t5Distance = (lastPhase) ? moveDistanceLeft : plannedProfile.distances[5];
 			params.distances[5] = (motioncalc_t)(t5Distance * recipMovementRatio);
-			const double t5 = SmallestNonNegativeQuadraticSolution(OneHalfDouble * plannedProfile.peakDeceleration, speed, -t5Distance);
+			const double t5 = MovementProfile::SmallestNonNegativeQuadraticSolution(OneHalfDouble * plannedProfile.peakDeceleration, speed, -t5Distance);
 			if (std::isnan(t5) || t5 < (double)0.0)
 			{
 				debugPrintf("Failed at %d, t5=%.7e dist=%.7e decl=%.7e speed=%.7e\n", __LINE__, t5, t5Distance, plannedProfile.peakDeceleration, speed);
@@ -508,7 +474,7 @@ static MovementProfile debugProfile;
 		double t6;
 		if (plannedProfile.numberOfMovesCovered == 1)
 		{
-			t6 = SmallestNonNegativeCubicSolution(djerk, (double)0.0, 6 * plannedProfile.endSpeed, -6 * t6Distance);
+			t6 = MovementProfile::SmallestNonNegativeCubicSolution(djerk, (double)0.0, 6 * plannedProfile.endSpeed, -6 * t6Distance);
 			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
 			{
 				debugPrintf("Phase 6 %.4e %lu %.4e %.4e %.4e\n", t6Distance, params.phaseClocks[6], speed, acceleration, djerk);
@@ -516,7 +482,7 @@ static MovementProfile debugProfile;
 		}
 		else
 		{
-			t6 = SmallestNonNegativeCubicSolution(djerk, 3 * acceleration, 6 * speed, -6 * t6Distance);
+			t6 = MovementProfile::SmallestNonNegativeCubicSolution(djerk, 3 * acceleration, 6 * speed, -6 * t6Distance);
 			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
 			{
 				debugPrintf("Phase 6 %.4e %lu %.4e %.4e %.4e\n", t6Distance, params.phaseClocks[6], speed, acceleration, djerk);

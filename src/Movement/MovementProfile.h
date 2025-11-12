@@ -35,10 +35,16 @@ public:
 	double CalculateDecelerationParameters() noexcept;
 	void CalculateSimpleSCurvePlan(double distance) noexcept
 		pre(startSpeed == 0.0; endSpeed == 0.0; topSpeed > 0.0; startAcceleration == 0.0; peakAcceleration > 0.0; peakDeceleration == -peakAcceleration);
+	void CalculateSimpleFivePhasePlan(double distance) noexcept
+		pre(startSpeed == 0.0; endSpeed == 0.0; topSpeed > 0.0; startAcceleration == 0.0; peakAcceleration > 0.0; peakDeceleration == -peakAcceleration);
 	void CalculateGeneralSCurvePlan(double distance) noexcept
 		pre(startSpeed >= 0.0; endSpeed >= 0.0; topSpeed > 0.0; peakAcceleration > 0.0);
 
-	void DebugPrint() noexcept;
+	void DebugPrint() const noexcept;
+	void CheckForShortSegments() const noexcept;
+
+	static double SmallestNonNegativeCubicSolution(double a, double b, double c, double d) noexcept;
+	static double SmallestNonNegativeQuadraticSolution(double a, double b, double c) noexcept;
 
 	double startSpeed;								// the speed at the start of the profile
 	double topSpeed;								// top speed of the profile
