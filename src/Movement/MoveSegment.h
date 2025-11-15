@@ -60,11 +60,14 @@ union MovementFlags final
 	uint32_t all;												// this is to provide a means to clear all the flags in one go
 	struct
 	{
+		// The order of these flags matters, see function SameStaticFlags below. The first 4 flags do not change in a segment.
 		uint32_t nonPrintingMove : 1,							// true if the move that generated this segment does not have both forwards extrusion and associated axis movement; used for filament monitoring
 				 checkEndstops : 1,								// true if we need to check endstops or Z probe while executing this segment
 				 noShaping : 1,									// true if input shaping should be disabled for this move
+				 isExtruder : 1,								// true if this segment is for an extruder
+				 	 	 	 	 	 	 	 	 	 	 	 	// The remaining flags may change as a segment is processed
 				 executing : 1,									// normally clear, set in a MoveSegment when the move starts to be executed
-				 isExtruder : 1;								// true if this segment is for an extruder
+				 combined : 1;	//TEMP!!! for debugging
 	};
 
 	constexpr void Clear() noexcept { all = 0; }
@@ -91,6 +94,11 @@ union MovementFlags final
 		ret.all = all;
 		ret.isExtruder = true;
 		return ret;
+	}
+
+	bool SameStaticFlags(MovementFlags other) const noexcept
+	{
+		return (all & 0x0F) == (other.all & 0x0F);
 	}
 
 	bool operator==(MovementFlags other) const noexcept
@@ -347,13 +355,23 @@ inline void MoveSegment::Merge(motioncalc_t p_distance, motioncalc_t p_a J_FORMA
 	flags |= p_flags;
 }
 
-// Combine the data from a previous short segment with this one. The previous segment must end at the same time that this one begins.
+// Combine the data from a previous short segment with this one. The previous segment ends at the same time that this one begins.
 inline void MoveSegment::CombinePrevious(const MoveSegment *prev) noexcept
 {
+#if SUPPORT_S_CURVE
+	const uint32_t oldDuration = duration;
+#endif
 	duration += prev->duration;
 	startTime = prev->startTime;
 	distance += prev->distance;
-	// Ideally we would make a small correction to the acceleration here too
+#if SUPPORT_S_CURVE
+	if (j != (motioncalc_t)0.0)
+	{
+		// Preserve the final acceleration of the segment. The segment that follows it may be temporarily detached, so don't use its starting acceleration.
+		j *= (motioncalc_t)oldDuration/(motioncalc_t)duration;
+	}
+	flags.combined = true;
+#endif
 }
 
 #endif /* SRC_MOVEMENT_MOVESEGMENT_H_ */

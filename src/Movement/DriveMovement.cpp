@@ -266,18 +266,15 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 		}
 
 		// If this segment is very short, merge it into the next one. This improves efficiency and avoids reporting speed/acceleration discontinuities caused by rounding error.
-		// This could give poor results if a number of very short segments are merged into a segment that is still quite short.
 		// Typically we merge a very short segment into a much longer segment, which works well.
 		MoveSegment *_ecv_null nextSeg;
-		if (   seg->GetDuration() < MinimumExecutingSegmentDuration
-			&& (nextSeg = seg->GetNext()) != nullptr
-			&& nextSeg->GetFlags() == segmentFlags
-			&& nextSeg->GetStartTime() == seg->GetStartTime() + seg->GetDuration()
-			&& nextSeg->GetDuration() >= seg->GetDuration() * 20
-		   )
+		while (   seg->GetDuration() < MinimumExecutingSegmentDuration
+			   && (nextSeg = seg->GetNext()) != nullptr
+			   && nextSeg->GetFlags().SameStaticFlags(segmentFlags)
+			   && nextSeg->GetStartTime() == seg->GetStartTime() + seg->GetDuration()
+			  )
 		{
-			// We can and should merge this segment into the next one.
-			// When the segment is executed, the initial speed will be adjusted to match them.
+			// We can and should merge this segment into the next one. When the segment is executed, the initial speed will be adjusted to match them.
 			nextSeg->CombinePrevious(seg);
 			segments = nextSeg;
 			MoveSegment::Release(seg);							// release the segment, don't retire it
@@ -295,7 +292,7 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		if (IsPhaseStepEnabled())
 		{
-# if !SUPPORT_S_CURVE							// we already calculated and set u if we are supporting 3rd order motion control
+# if !SUPPORT_S_CURVE											// we already calculated and set u if we are supporting 3rd order motion control
 			u = seg->CalcU();
 # endif
 			state = DMState::phaseStepping;
