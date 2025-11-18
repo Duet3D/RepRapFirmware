@@ -48,6 +48,7 @@ public:
 	motioncalc_t GetImpulseSize(size_t n) const noexcept { return coefficients[n]; }
 	uint32_t GetImpulseDelay(size_t n) const noexcept { return delays[n]; }
 	uint32_t GetPrepareAdvanceTime() const noexcept { return prepareAdvanceTime; }
+	uint32_t GetInputShapingDelay() const noexcept { return inputShapingDelay; }
 
 #if SUPPORT_REMOTE_COMMANDS
 	// Handle a request from the master board to set input shaping parameters
@@ -79,6 +80,7 @@ private:
 	motioncalc_t coefficients[MaxImpulses];				// the coefficients of all the impulses, must add up to 1.0
 	uint32_t delays[MaxImpulses];						// the start delay in step clocks of each impulse, first one is normally zero
 	uint32_t prepareAdvanceTime;						// how far in advance we need to prepare moves, which depends on input shaping
+	uint32_t inputShapingDelay;							// how much extra time a move takes before it is finished because of input shaping
 };
 
 #endif /* SRC_MOVEMENT_AXISSHAPER_H_ */

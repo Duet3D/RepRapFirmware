@@ -228,6 +228,7 @@ private:
 	void MatchSpeeds() noexcept SPEED_CRITICAL;
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be an acceleration-only move
+	bool UsesInputShaping() const noexcept;									// return true if this move should use input shaping
 	void DebugPrintVector(const char *_ecv_array name, const float *_ecv_array vec, size_t len) const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
@@ -368,6 +369,18 @@ inline bool DDA::IsProvisional() const noexcept
 #else
 	return state == planned;
 #endif
+}
+
+// Return true if this move should use input shaping
+inline bool DDA::UsesInputShaping() const noexcept
+{
+	return flags.xyMoving
+			&& !(   flags.isolatedMove
+				 || flags.isLeadscrewAdjustmentMove
+#if SUPPORT_SCANNING_PROBES
+				 || flags.scanningProbeMove
+#endif
+				);
 }
 
 #endif /* DDA_H_ */
