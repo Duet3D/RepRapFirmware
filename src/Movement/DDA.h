@@ -134,6 +134,7 @@ public:
 	uint32_t GetMoveFinishTime() const noexcept { return afterPrepare.moveStartTime + clocksNeeded; }
 
 	float GetAverageExtrusionSpeed() const noexcept pre(IsCommitted()) { return afterPrepare.averageExtrusionSpeed; }
+	bool HasForwardExtrusion() const noexcept { return flags.hasForwardExtrusion; }
 	bool HaveDoneIoBits() const noexcept { return flags.doneIoBits; }
 	bool HaveDoneFeedForward() const noexcept { return flags.doneFeedForward; }
 	bool HaveDoneOutputOnExtrude() const noexcept { return flags.doneOutputOnExtrude; }
@@ -222,6 +223,7 @@ private:
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
 					 controlLaserOrIoBits : 1,		// True if this move controls the laser or iobits
 					 isolatedMove : 1,				// set if we disable input shaping for this move and wait for it to finish e.g. for a G1 H2 move
+					 hasForwardExtrusion : 1,		// set if any extruder has forward movement (used by M571)
 
 					 // These bits are modified during processing of the move
 					 doneIoBits : 1,				// set if we have written the IOBITS ports for this move

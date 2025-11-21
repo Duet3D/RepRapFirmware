@@ -814,7 +814,7 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 					if (!cdda->HaveDoneOutputOnExtrude())
 					{
 						cdda->SetDoneOutputOnExtrude();
-						if (cdda->GetAverageExtrusionSpeed() != 0.0)
+						if (cdda->HasForwardExtrusion())
 						{
 							platform.ExtrudeOn();
 						}

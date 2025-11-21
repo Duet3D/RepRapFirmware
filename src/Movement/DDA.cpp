@@ -356,7 +356,6 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	float accelerations[MaxAxesPlusExtruders];
 	memcpyf(accelerations, move.Accelerations(nextMove.reduceAcceleration), MaxAxesPlusExtruders);
 	bool extrudersMoving = false;
-	bool forwardExtruding = false;
 
 	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
 	{
@@ -373,7 +372,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 				extrudersMoving = true;
 				if (movement > 0.0)
 				{
-					forwardExtruding = true;
+					flags.hasForwardExtrusion = true;
 				}
 				if (flags.xyMoving && nextMove.usePressureAdvance)
 				{
@@ -427,8 +426,8 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 #endif
 
 	flags.isolatedMove = nextMove.checkEndstops || nextMove.moveType != 0;
-	flags.isPrintingMove = flags.xyMoving && forwardExtruding;					// require forward extrusion so that wipe-while-retracting doesn't count
-	flags.isNonPrintingExtruderMove = extrudersMoving && !flags.isPrintingMove;	// flag used by filament monitors - we can ignore Z movement
+	flags.isPrintingMove = flags.xyMoving && flags.hasForwardExtrusion;				// require forward extrusion so that wipe-while-retracting doesn't count
+	flags.isNonPrintingExtruderMove = extrudersMoving && !flags.isPrintingMove;		// flag used by filament monitors - we can ignore Z movement
 	flags.controlLaserOrIoBits = nextMove.isCoordinated && !nextMove.checkEndstops;
 
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a raw motor move
