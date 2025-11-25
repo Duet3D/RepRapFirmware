@@ -843,8 +843,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::stopped:
-		reprap.GetPrintMonitor().StoppedPrint();
-		gb.SetState(GCodeState::normal);
+		if (LockAllMovementSystemsAndWaitForStandstill(gb))
+		{
+			reprap.GetPrintMonitor().StoppedPrint();
+			gb.SetState(GCodeState::normal);
+		}
 		break;
 
 	// States used for grid probing
