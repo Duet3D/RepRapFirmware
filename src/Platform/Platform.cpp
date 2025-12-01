@@ -4174,16 +4174,20 @@ GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply
 	bool seen = gb.TryGetLimitedIValue('P', tempPort, seen, -1, MaxGpOutPorts - 1);
 	if (seen)
 	{
-		if (   tempPort >= 0
-			&& (   GetGpOutPort(tempPort).IsUnused()
-#if SUPPORT_CAN_EXPANSION
-				|| !GetGpOutPort(tempPort).IsLocal()
-#endif
-			   )
-		   )
+		if (tempPort >= 0)
 		{
-			reply.printf("GpOut port %" PRIu32 " is not valid", tempPort);
-			return GCodeResult::error;
+			if (GetGpOutPort(tempPort).IsUnused())
+			{
+				reply.printf("GpOut port %" PRIu32 " has not been created", tempPort);
+				return GCodeResult::error;
+			}
+#if SUPPORT_CAN_EXPANSION
+			if (!GetGpOutPort(tempPort).IsLocal())
+			{
+				reply.printf("Remote GpOut port %" PRIu32 " not allowed here", tempPort);
+				return GCodeResult::error;
+			}
+#endif
 		}
 
 		extrusionAncilliaryPwmGpOutNumber = tempPort;
