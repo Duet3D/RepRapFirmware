@@ -435,6 +435,24 @@ bool GCodeBuffer::IsLaterThan(const GCodeBuffer& other) const noexcept
 
 #endif
 
+// Set the line number, if we are at the top level of the stack excluding any local pushes
+void GCodeBuffer::SetExplicitLineNumber(uint32_t ln) noexcept
+{
+	if (CurrentFileMachineState().GetPrevious() == nullptr)
+	{
+		receivedLineNumber = ln; hadExplicitLineNumber = true;
+	}
+}
+
+// Clear the line number, if we are at the top level of the stack excluding any local pushes
+void GCodeBuffer::ClearExplicitLineNumber() noexcept
+{
+	if (CurrentFileMachineState().GetPrevious() == nullptr)
+	{
+		hadExplicitLineNumber = false;
+	}
+}
+
 // Return true if the command we have just completed was the last command in the line of GCode.
 // If the command was or called a macro then there will be no command in the buffer, so we must return true for this case also.
 bool GCodeBuffer::IsLastCommand() const noexcept
