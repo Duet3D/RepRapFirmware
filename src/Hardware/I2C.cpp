@@ -46,8 +46,8 @@ extern "C" void WIRE_ISR_HANDLER() noexcept
 uint32_t I2C::statusWaitFunc(Twi *twi, uint32_t bitsToWaitFor) noexcept
 {
 	bool ok = true;
-	uint32_t sr = twi->TWI_SR;
-	while (ok && (sr & bitsToWaitFor) == 0)
+	uint32_t sr;
+	while (ok && ((sr = twi->TWI_SR) & bitsToWaitFor) == 0)
 	{
 		// Suspend this task until we get an interrupt indicating that a status bit that we are interested in has been set
 		twiTask = TaskBase::GetCallerTaskHandle();
@@ -57,7 +57,6 @@ uint32_t I2C::statusWaitFunc(Twi *twi, uint32_t bitsToWaitFor) noexcept
 		ok = TaskBase::TakeIndexed(NotifyIndices::I2C, 2);
 		twiTask = nullptr;
 		twi->TWI_IDR = 0xFFFFFFFFu;
-		sr = twi->TWI_SR;
 	}
 	return sr;
 }
