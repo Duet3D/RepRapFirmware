@@ -80,11 +80,9 @@ constexpr uint32_t MaxBitRate = 5000;
 
 constexpr float MinSamplePoint = 0.5;
 constexpr float MaxSamplePoint = 0.95;
-constexpr float DefaultSamplePoint = 0.75;
 
 constexpr float MinJumpWidth = 0.05;
 constexpr float MaxJumpWidth = 0.5;
-constexpr float DefaultJumpWidth = 0.25;
 
 static Mutex transactionMutex;
 
