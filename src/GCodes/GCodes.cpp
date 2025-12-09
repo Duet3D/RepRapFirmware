@@ -2441,7 +2441,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			ms.DoneMoveSincePrintingResumed();
 			if (hasExtrusion)
 			{
-				TravelToStartPoint(gb);														// don't start a printing move from the wrong place
+				TravelToStartPoint(gb, ms);													// don't start a printing move from the wrong place
 				return false;
 			}
 		}
@@ -2978,7 +2978,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 		ms.DoneMoveSincePrintingResumed();
 		if (hasExtrusion)											// check whether this is the first move after skipping an object and is extruding
 		{
-			TravelToStartPoint(gb);									// don't start a printing move from the wrong point
+			TravelToStartPoint(gb, ms);								// don't start a printing move from the wrong point
 			return false;
 		}
 	}
@@ -2986,7 +2986,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 	if (ms.hasPositiveExtrusion)
 	{
 		//TODO ideally we should calculate the min and max X and Y coordinates of the entire arc here and call UpdateObjectCoordinates twice.
-		// But it is currently very rare to use G2/G3 with extrusion, so for now we don't bother.
+		// But it is currently rare to use G2/G3 with extrusion, so for now we don't bother.
 		buildObjects.UpdateObjectCoordinates(ms.currentObjectNumber, ms.currentUserPosition, AxesBitmap::MakeLowestNBits(2));
 	}
 
@@ -3124,9 +3124,8 @@ void GCodes::FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept
 // Set up a move to travel to the resume point. Return true if successful, false if needs to be called again.
 // By the time this is called, the user position has been overwritten with the final position of the pending move, so we can't use it.
 // But the expected position was saved by buildObjects when the state changed from printing a cancelled object to printing a live object.
-void GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
+void GCodes::TravelToStartPoint(GCodeBuffer& gb, MovementState& ms) noexcept
 {
-	MovementState& ms = GetMovementState(gb);
 	ms.SetDefaults(numTotalAxes);
 	SetMoveBufferDefaults(ms);
 	ToolOffsetTransform(ms);
