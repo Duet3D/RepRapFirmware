@@ -2430,7 +2430,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	}
 
 	const bool hasExtrusion = LoadExtrusionFromGCode(gb, ms);								// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
-	if (hasExtrusion || !axesMentioned.IsEmpty())											// if there is no movement at all, skip further processing and don't pass the move on the the Move system
+	if (hasExtrusion || axesMentioned.IsNonEmpty())											// if there is no movement at all, skip further processing and don't pass the move on the the Move system
 	{
 		if (ms.IsFirstMoveSincePrintingResumed())											// if this is the first move after skipping an object
 		{
@@ -3130,7 +3130,7 @@ void GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 	ms.SetDefaults(numTotalAxes);
 	SetMoveBufferDefaults(ms);
 	ToolOffsetTransform(ms);
-	const RestorePoint& rp = ms.restorePoints[ResumeObjectRestorePointNumber];
+	const RestorePoint& rp = ms.GetResumeObjectRestorePoint();
 	ToolOffsetTransform(ms, rp.moveCoords, ms.coords);
 	ms.originalFeedRate = rp.originalFeedRate;
 	ms.feedRate = gb.ConvertSpeed(rp.originalFeedRate, true);
