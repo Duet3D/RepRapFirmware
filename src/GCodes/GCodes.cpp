@@ -844,7 +844,7 @@ void GCodes::EndSimulation(GCodeBuffer *null gb) noexcept
 		RestorePosition(ms, rp);										// this restores the tool and the position, although we don't need to restore the position because we are going to overwrite it
 		if (gb != nullptr && ms.GetNumber() != 0)
 		{
-			gb->LatestMachineState().feedRate = rp.feedRate;			// restore the feed rate
+			gb->LatestMachineState().feedRate = rp.originalFeedRate;	// restore the feed rate
 		}
 		ms.SelectTool(rp.toolNumber, true);								// set the restored tool number as selected
 
@@ -1016,7 +1016,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 			// We were not able to skip any moves, however we can skip the move that is waiting
 			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.moveStartVirtualExtruderPosition;
 			ms.GetPauseRestorePoint().filePos = ms.filePos;
-			ms.GetPauseRestorePoint().feedRate = ms.feedRate/ms.speedFactor;
+			ms.GetPauseRestorePoint().originalFeedRate = ms.originalFeedRate;
 			ms.GetPauseRestorePoint().proportionDone = ms.GetProportionDone();
 			ms.GetPauseRestorePoint().initialUserC0 = ms.initialUserC0;
 			ms.GetPauseRestorePoint().initialUserC1 = ms.initialUserC1;
@@ -1026,7 +1026,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 		else
 		{
 			// We were not able to skip any moves, and there is no move waiting
-			ms.GetPauseRestorePoint().feedRate = fgb.LatestMachineState().feedRate;
+			ms.GetPauseRestorePoint().originalFeedRate = fgb.LatestMachineState().feedRate;
 			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.latestVirtualExtruderPosition;
 			ms.GetPauseRestorePoint().proportionDone = 0.0;
 
@@ -1224,7 +1224,7 @@ bool GCodes::DoEmergencyPause() noexcept
 		{
 			// We were not able to skip any moves, however we can skip the remaining segments of this current move
 			ToolOffsetInverseTransform(ms, ms.initialCoords, ms.currentUserPosition);
-			ms.GetPauseRestorePoint().feedRate = ms.feedRate;
+			ms.GetPauseRestorePoint().originalFeedRate = ms.originalFeedRate;
 			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.moveStartVirtualExtruderPosition;
 			ms.GetPauseRestorePoint().filePos = ms.filePos;
 			ms.GetPauseRestorePoint().proportionDone = ms.GetProportionDone();
@@ -1238,7 +1238,7 @@ bool GCodes::DoEmergencyPause() noexcept
 		else
 		{
 			// We were not able to skip any moves, and if there is a move waiting then we can't skip that one either
-			ms.GetPauseRestorePoint().feedRate = FileGCode()->LatestMachineState().feedRate;
+			ms.GetPauseRestorePoint().originalFeedRate = FileGCode()->LatestMachineState().feedRate;
 			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.latestVirtualExtruderPosition;
 
 			ms.GetPauseRestorePoint().filePos = FileGCode()->GetPrintingFilePosition(true);	//TODO separate restore point per channel
@@ -1660,7 +1660,7 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 	if (ok)
 	{
 		// Set the feed rate
-		buf.printf("G1 F%.1f", (double)InverseConvertSpeedToMmPerMin(pauseRestorePoint.feedRate));
+		buf.printf("G1 F%.1f", (double)pauseRestorePoint.originalFeedRate);
 #if SUPPORT_LASER
 		if (machineType == MachineType::laser)
 		{
@@ -1889,6 +1889,8 @@ void GCodes::LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(GC
 		ms.feedRate = ConvertSpeedFromMmPerMin(MaximumG0FeedRate);						// use maximum feed rate, the M203 parameters will limit it
 		ms.usingStandardFeedrate = false;
 	}
+
+	ms.originalFeedRate = gb.LatestMachineState().feedRate;
 }
 
 // Set up the extrusion of a move, returning true if there is any extrusion
@@ -3130,7 +3132,8 @@ void GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 	ToolOffsetTransform(ms);
 	const RestorePoint& rp = ms.restorePoints[ResumeObjectRestorePointNumber];
 	ToolOffsetTransform(ms, rp.moveCoords, ms.coords);
-	ms.feedRate = rp.feedRate;
+	ms.originalFeedRate = rp.originalFeedRate;
+	ms.feedRate = gb.ConvertSpeed(rp.originalFeedRate, true);
 	ms.movementTool = ms.currentTool;
 	ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;			// assume that both linear and rotational axes might be moving
 	NewSegmentableMoveAvailable(ms);

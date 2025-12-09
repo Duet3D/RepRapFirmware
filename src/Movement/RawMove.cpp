@@ -196,7 +196,7 @@ void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes
 		rp.moveCoords[axis] = currentUserPosition[axis];
 	}
 
-	rp.feedRate = p_feedRate;
+	rp.originalFeedRate = p_feedRate;
 	rp.virtualExtruderPosition = latestVirtualExtruderPosition;
 	rp.filePos = p_filePos;
 	rp.toolNumber = GetCurrentToolNumber();

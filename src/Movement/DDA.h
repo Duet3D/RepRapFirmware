@@ -95,8 +95,9 @@ public:
 	bool IsScanningProbeMove() const noexcept { return flags.scanningProbeMove; }
 #endif
 
-	DDAState GetState() const noexcept { return state; }
-	bool IsCommitted() const noexcept { return state == DDA::committed; }
+	DDAState GetState() const noexcept { return (DDAState)flags.stateBits; }
+	void SetState(DDAState state) noexcept { flags.stateBits = (uint32_t)state; }
+	bool IsCommitted() const noexcept { return GetState() == DDA::committed; }
 	DDA* GetNext() const noexcept { return next; }
 	DDA* GetPrevious() const noexcept { return prev; }
 	uint32_t GetTimeLeft() const noexcept;
@@ -125,6 +126,7 @@ public:
 	float GetProportionDone() const noexcept;										// Return the proportion of extrusion for the complete multi-segment move already done
 	float GetInitialUserC0() const noexcept { return initialUserC0; }
 	float GetInitialUserC1() const noexcept { return initialUserC1; }
+	float GetOriginalFeedRate() const noexcept { return (float)originalFeedRate; }
 
 	uint32_t GetClocksNeeded() const noexcept { return clocksNeeded; }
 	bool HasExpired() const noexcept pre(IsCommitted());
@@ -200,14 +202,15 @@ private:
 	LaserPwmOrIoBits laserPwmOrIoBits;				// laser PWM required or port state required during this move (here because it is currently 16 bits)
 #endif
 
-	volatile DDAState state;						// What state this DDA is in
+	float16_t originalFeedRate;						// the feedrate in original units when this move was created
 
 	union
 	{
 		struct
 		{
 			// Flag bits. The first 4 or 5 are copied from similar flag bits in RawMove, so keep them together and in the same order so that the compiler can copy them using a ubfx instruction.
-			uint32_t canPauseAfter : 1,				// True if we can pause at the end of this move
+			uint32_t stateBits : 3,					// What state this DDA is in
+					 canPauseAfter : 1,				// True if we can pause at the end of this move
 			 	 	 checkEndstops : 1,				// True if this move monitors endstops or Z probe
 					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
 					 usePressureAdvance : 1,		// True if pressure advance should be applied to any forward extrusion
@@ -286,12 +289,7 @@ private:
 
 inline bool DDA::CanPauseAfter() const noexcept
 {
-	return flags.canPauseAfter
-#if SUPPORT_CAN_EXPANSION
-		// We can't easily cancel moves that have already been sent to CAN expansion boards
-		&& next->state == DDAState::provisional
-#endif
-		;
+	return flags.canPauseAfter && next->GetState() == DDAState::provisional;
 }
 
 #endif /* DDA_H_ */

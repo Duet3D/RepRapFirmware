@@ -580,8 +580,7 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 	rp.proportionDone = dda->GetProportionDone();			// get the proportion of the current multi-segment move that has been completed
 	rp.initialUserC0 = dda->GetInitialUserC0();
 	rp.initialUserC1 = dda->GetInitialUserC1();
-	const float rawFeedRate = (dda->UsingStandardFeedrate()) ? dda->GetRequestedSpeedMmPerClock() : ms.feedRate;	// this is the requested feed rate after applying the speed factor
-	rp.feedRate = rawFeedRate/ms.speedFactor;				// correct it for the speed factor, assuming that the speed factor hasn't changed
+	rp.originalFeedRate = dda->GetOriginalFeedRate();
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
 
@@ -649,7 +648,7 @@ bool DDARing::LowPowerOrStallPause(MovementState& ms) noexcept
 	// We are going to skip some moves, or part of a move.
 	// Store the parameters of the first move we are going to execute when we resume
 	RestorePoint& rp = ms.GetPauseRestorePoint();
-	rp.feedRate = dda->GetRequestedSpeedMmPerClock();
+	rp.originalFeedRate = dda->GetOriginalFeedRate();
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
 	rp.proportionDone = dda->GetProportionDone();		// store how much of the complete multi-segment move's extrusion has been done

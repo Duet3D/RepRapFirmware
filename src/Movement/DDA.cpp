@@ -157,7 +157,7 @@ void PrepParams::DebugPrint() const noexcept
 				);
 }
 
-DDA::DDA(DDA *_ecv_null n) noexcept : next(n), prev(nullptr), state(empty)
+DDA::DDA(DDA *_ecv_null n) noexcept : next(n), prev(nullptr)
 {
 	tool = nullptr;						// needed in case we pause before any moves have been done
 
@@ -168,7 +168,8 @@ DDA::DDA(DDA *_ecv_null n) noexcept : next(n), prev(nullptr), state(empty)
 		ep = 0;
 	}
 
-	flags.all = 0;						// in particular we need to set endCoordinatesValid and usePressureAdvance to false, also checkEndstops false for the ATE build
+	flags.all = 0;						// in particular we need to set endCoordinatesValid, usePressureAdvance to false, stateBits to empty, also checkEndstops false for the ATE build
+	SetState(empty);					// should alrrady be covered by the above
 	virtualExtruderPosition = 0.0;
 	filePos = noFilePosition;
 
@@ -180,7 +181,7 @@ DDA::DDA(DDA *_ecv_null n) noexcept : next(n), prev(nullptr), state(empty)
 // Return the number of clocks this DDA still needs to execute.
 uint32_t DDA::GetTimeLeft() const noexcept
 {
-	switch (state)
+	switch (GetState())
 	{
 	case provisional:
 		return clocksNeeded;
@@ -217,7 +218,7 @@ void DDA::DebugPrintVector(const char *_ecv_array name, const float *_ecv_array 
 // Print the text followed by the DDA only
 void DDA::DebugPrint(const char *_ecv_array tag) const noexcept
 {
-	debugPrintf("%s %u ts=%" PRIu32 " DDA: s=%.4g", tag, (unsigned int)state, afterPrepare.moveStartTime, (double)totalDistance);
+	debugPrintf("%s %u ts=%" PRIu32 " DDA: s=%.4g", tag, (unsigned int)GetState(), afterPrepare.moveStartTime, (double)totalDistance);
 	DebugPrintVector(" vec", directionVector, MaxAxesPlusExtruders);
 	debugPrintf("\n"
 				"a=%.4e d=%.4e"
@@ -415,6 +416,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	proportionDone = nextMove.proportionDone;
 	initialUserC0 = nextMove.initialUserC0;
 	initialUserC1 = nextMove.initialUserC1;
+	originalFeedRate = nextMove.originalFeedRate;
 
 	// These 4 or 5 bits can be copied in one go by the compiler generating a ubfx instruction
 	flags.canPauseAfter = nextMove.canPauseAfter;
@@ -527,7 +529,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	MovementError rslt;															// this will hold the return value
 
 	// See if we can meld this with the end of the previous one (which must currently have the end speed set to zero)
-	if (   prev->state == provisional											// if previous move has not started yet
+	if (   prev->GetState() == provisional										// if previous move has not started yet
 		&& (   move.GetJerkPolicy() != 0										// and melding is allowed
 			|| (   flags.isPrintingMove == prev->flags.isPrintingMove
 				&& flags.xyMoving == prev->flags.xyMoving
@@ -551,7 +553,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 
 	if (rslt == MovementError::ok)
 	{
-		state = provisional;
+		SetState(provisional);
 	}
 	return rslt;
 }
@@ -591,6 +593,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	flags.isolatedMove = true;
 	virtualExtruderPosition = prev->virtualExtruderPosition;
 	tool = nullptr;
+	originalFeedRate = 0.0;
 	filePos = prev->filePos;
 	maxAcceleration = maxDeceleration = move.NormalAcceleration(Z_AXIS);
 
@@ -620,7 +623,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	startSpeed = endSpeed = 0.0;
 
 	RecalculateMove(ring);
-	state = provisional;
+	SetState(provisional);
 	return true;
 }
 
@@ -661,6 +664,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 	virtualExtruderPosition = 0;
 	tool = nullptr;
 	filePos = noFilePosition;
+	originalFeedRate = 0.0;
 
 	startSpeed = nextMove.startSpeed;
 	endSpeed = nextMove.endSpeed;
@@ -675,7 +679,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 	totalDistance = Normalise(directionVector);
 
 	RecalculateMove(ring);
-	state = provisional;
+	SetState(provisional);
 	return true;
 }
 
@@ -737,7 +741,7 @@ bool DDA::IsAccelerationMove() const noexcept
 			 && laDDA->prev->beforePrepare.decelDistance > 0.0						// if the previous move has no deceleration phase then no point in adjusting it
 			)
 		{
-			const DDAState st = laDDA->prev->state;
+			const DDAState st = laDDA->prev->GetState();
 			// This is a deceleration-only move, and the previous one has a deceleration phase. We may have to adjust the previous move as well to get optimum behaviour.
 			if (   st == provisional
 				&& (   reprap.GetMove().GetJerkPolicy() != 0
@@ -841,7 +845,7 @@ float DDA::AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcep
 
 	// Find the oldest un-prepared move
 	DDA *cdda = this;
-	while (cdda->prev->state == DDAState::provisional)
+	while (cdda->prev->GetState() == DDAState::provisional)
 	{
 		cdda = _ecv_not_null(cdda->prev);
 	}
@@ -1045,7 +1049,7 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 	// Decide when this move should start.
 	// Avoid setting the move start time in the past or with very little time before it starts, because this can lead to us trying to modify a segment that is already executing
 	const uint32_t now = StepTimer::GetMovementTimerTicks();
-	if (prev->state == committed)
+	if (prev->GetState() == committed)
 	{
 		const uint32_t prevEndTime = prev->afterPrepare.moveStartTime + prev->clocksNeeded;
 		if ((int32_t)(prevEndTime - now) >= (int32_t)MoveTiming::AbsoluteMinimumPreparedTime)
@@ -1222,7 +1226,7 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 
 		afterPrepare.averageExtrusionSpeed = (extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded;
 
-		state = committed;																// must do this before we call CheckEndstops
+		SetState(committed);															// must do this before we call CheckEndstops
 #if SUPPORT_SCANNING_PROBES
 		if (flags.scanningProbeMove)
 		{
@@ -1271,7 +1275,7 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 	}
 	else
 	{
-		state = committed;
+		SetState(committed);
 	}
 }
 
@@ -1427,7 +1431,7 @@ float DDA::GetProportionDone() const noexcept
 // Free up this DDA, returning true if the lookahead underrun flag was set
 bool DDA::Free() noexcept
 {
-	state = empty;
+	SetState(empty);
 	return flags.hadLookaheadUnderrun;
 }
 

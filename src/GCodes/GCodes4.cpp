@@ -521,7 +521,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::m109ToolChangeComplete:
 		if (LockCurrentMovementSystemAndWaitForStandstill(gb))	// wait for the move to height to finish
 		{
-			gb.LatestMachineState().feedRate = ms.GetToolChangeRestorePoint().feedRate;
+			gb.LatestMachineState().feedRate = ms.GetToolChangeRestorePoint().originalFeedRate;
 			// We don't restore the default fan speed in case the user wants to use a different one for the new tool
 			doingToolChange = false;
 
@@ -712,7 +712,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					}
 					if (tempMs.GetNumber() == 0 || !FileGCode()->ExecutingAll())
 					{
-						fgb->LatestMachineState().feedRate = tempMs.GetPauseRestorePoint().feedRate;
+						fgb->LatestMachineState().feedRate = tempMs.GetPauseRestorePoint().originalFeedRate;
 						if (tempMs.pausedInMacro)
 						{
 							fgb->OriginalMachineState().firstCommandAfterRestart = true;
@@ -733,7 +733,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 #else
 			ms.ResumeAfterPause();
-			FileGCode()->LatestMachineState().feedRate = ms.GetPauseRestorePoint().feedRate;
+			FileGCode()->LatestMachineState().feedRate = ms.GetPauseRestorePoint().originalFeedRate;
 			if (ms.pausedInMacro)
 			{
 				FileGCode()->OriginalMachineState().firstCommandAfterRestart = true;
