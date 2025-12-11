@@ -202,6 +202,9 @@ void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes
 	rp.toolNumber = GetCurrentToolNumber();
 	rp.fanSpeed = virtualFanSpeed;
 
+#if SUPPORT_ASYNC_MOVES
+	rp.axesAndExtrudersOwned = axesAndExtrudersOwned;
+#endif
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	rp.laserPwmOrIoBits = laserPwmOrIoBits;
 #endif

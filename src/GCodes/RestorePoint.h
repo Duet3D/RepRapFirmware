@@ -22,6 +22,9 @@ public:
 	float initialUserC0, initialUserC1;		// If we paused during an arc move and proportionDone is nonzero, the X and Y user coordinates at the start of the move
 	int toolNumber;							// The tool number that was active
 	float fanSpeed;							// the last fan speed that was set by M106 with no P parameter
+#if SUPPORT_ASYNC_MOVES
+	AxesBitmap axesAndExtrudersOwned;		// axes and extruders that this movement system owned when we saved the restore point. Only used when resuming after skipped objects.
+#endif
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;		// The output port bits setting for this move, or the laser power

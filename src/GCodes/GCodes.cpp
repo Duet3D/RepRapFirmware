@@ -3122,8 +3122,9 @@ void GCodes::FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept
 }
 
 // Set up a move to travel to the resume point. Return true if successful, false if needs to be called again.
+// This is only called if the first move commanded since changing from a cancelled object to a non-cancelled object or to no object involves extrusion.
 // By the time this is called, the user position has been overwritten with the final position of the pending move, so we can't use it.
-// But the expected position was saved by buildObjects when the state changed from printing a cancelled object to printing a live object.
+// But the expected position was saved in the resume object restore point when the state changed from printing a cancelled object to printing a live object.
 void GCodes::TravelToStartPoint(GCodeBuffer& gb, MovementState& ms) noexcept
 {
 	ms.SetDefaults(numTotalAxes);
@@ -3135,6 +3136,9 @@ void GCodes::TravelToStartPoint(GCodeBuffer& gb, MovementState& ms) noexcept
 	ms.feedRate = gb.ConvertSpeed(rp.originalFeedRate, true);
 	ms.movementTool = ms.currentTool;
 	ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;			// assume that both linear and rotational axes might be moving
+#if SUPPORT_ASYNC_MOVES
+	ms.AllocateAxes(rp.axesAndExtrudersOwned, ParameterLettersBitmap());
+#endif
 	NewSegmentableMoveAvailable(ms);
 }
 
