@@ -1890,7 +1890,7 @@ void GCodes::LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(GC
 		ms.usingStandardFeedrate = false;
 	}
 
-	ms.originalFeedRate = gb.LatestMachineState().feedRate;
+	ms.originalFeedRate = (float16_t)gb.LatestMachineState().feedRate;
 }
 
 // Set up the extrusion of a move, returning true if there is any extrusion
@@ -3132,7 +3132,7 @@ void GCodes::TravelToStartPoint(GCodeBuffer& gb, MovementState& ms) noexcept
 	ToolOffsetTransform(ms);
 	const RestorePoint& rp = ms.GetResumeObjectRestorePoint();
 	ToolOffsetTransform(ms, rp.moveCoords, ms.coords);
-	ms.originalFeedRate = rp.originalFeedRate;
+	ms.originalFeedRate = (float16_t)rp.originalFeedRate;
 	ms.feedRate = gb.ConvertSpeed(rp.originalFeedRate, true);
 	ms.movementTool = ms.currentTool;
 	ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;			// assume that both linear and rotational axes might be moving

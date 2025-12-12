@@ -599,7 +599,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	if (flags.useScurve)
 	{
 		startSpeed = startAcceleration = 0.0;										// in case there is no previous move
-		state = DDAState::created;													// postpone planning this move until preparation
+		SetState(created);															// postpone planning this move until preparation
 		// We need to store an estimate of the time needed to execute the move because the Move task uses it when deciding whether to add more moves to the ring
 		clocksNeeded = (uint32_t)(totalDistance/requestedSpeed);
 		rslt = MovementError::ok;
@@ -641,7 +641,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 #endif
 
 		rslt = RecalculateMove(ring);
-		state = planned;
+		SetState(planned);
 	}
 	return rslt;
 }
@@ -851,7 +851,7 @@ bool DDA::IsAccelerationMove() const noexcept
 			}
 
 			// This move is a deceleration-only move but we can't adjust the previous one
-			if (laDDA->prev->state == committed)
+			if (laDDA->prev->IsCommitted())
 			{
 				laDDA->flags.hadLookaheadUnderrun = true;
 			}

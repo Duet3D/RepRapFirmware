@@ -1260,6 +1260,7 @@ void RepRap::Tick() noexcept
 #if 1
 				// Record the stack of the running task
 				const TaskHandle relevantTask = RTOSIface::GetCurrentTask();
+				if (relevantTask != nullptr)
 #else
 				// Record the stack of the stuck task
 				const TaskHandle relevantTask = (heatTaskStuck) ? Heat::GetHeatTask() : Tasks::GetMainTask();

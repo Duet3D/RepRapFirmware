@@ -147,7 +147,7 @@ static MovementProfile debugProfile;
 		++numMoves;
 	}
 
-	plannedProfile.usesAllMoves = (nextMove->state == DDA::empty);
+	plannedProfile.usesAllMoves = (nextMove->GetState() == DDA::empty);
 	plannedProfile.startSpeed = firstUnpreparedMove->startSpeed * firstUnpreparedMove->movementRatio;
 	plannedProfile.startAcceleration = firstUnpreparedMove->startAcceleration * firstUnpreparedMove->movementRatio;
 	plannedProfile.numberOfMovesCovered = numMoves;
@@ -496,7 +496,7 @@ static MovementProfile debugProfile;
 		lastPhaseNumber = 6;
 	} while (false);
 
-	state = DDA::planned;
+	SetState(planned);
 	--plannedProfile.numberOfMovesCovered;
 	plannedProfile.startSpeed = speed;
 	plannedProfile.startAcceleration = acceleration;

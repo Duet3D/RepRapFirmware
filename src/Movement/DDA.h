@@ -365,9 +365,9 @@ inline bool DDA::CanPauseAfter() const noexcept
 inline bool DDA::IsProvisional() const noexcept
 {
 #if SUPPORT_S_CURVE
-	return state == created || state == planned;
+	return GetState() == created || GetState() == planned;
 #else
-	return state == planned;
+	return GetState() == planned;
 #endif
 }
 
