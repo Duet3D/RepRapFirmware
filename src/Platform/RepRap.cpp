@@ -1255,10 +1255,14 @@ void RepRap::Tick() noexcept
 
 				// Save the stack of the stuck task when we get stuck in a spin loop
 				const uint32_t *_ecv_array relevantStackPtr;
+
+				// When a task gets stuck, sometimes we want the stack of that task and sometimes we want the stack of the running task instead
+#if 1
+				// Record the stack of the running task
+				const TaskHandle relevantTask = RTOSIface::GetCurrentTask();
+#else
+				// Record the stack of the stuck task
 				const TaskHandle relevantTask = (heatTaskStuck) ? Heat::GetHeatTask() : Tasks::GetMainTask();
-#if 1	// record the stack of the executing task, useful if a higher priority task monopolised the CPU
-				if (RTOSIface::GetCurrentTask() != nullptr)
-#else	// record the stack of the stuck task, useful if the task itself got stuck
 				if (relevantTask == RTOSIface::GetCurrentTask())
 #endif
 				{

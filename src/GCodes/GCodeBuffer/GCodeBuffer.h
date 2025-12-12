@@ -82,8 +82,8 @@ public:
 	int32_t GetLineNumber() const noexcept { return CurrentFileMachineState().lineNumber; }
 	bool HadExplicitLineNumber() const noexcept { return hadExplicitLineNumber; }
 	uint32_t GetExplicitLineNumber() const noexcept { return receivedLineNumber; }
-	void SetExplicitLineNumber(uint32_t ln) noexcept { receivedLineNumber = ln; hadExplicitLineNumber = true; }
-	void ClearExplicitLineNumber() noexcept { hadExplicitLineNumber = false; }
+	void SetExplicitLineNumber(uint32_t ln) noexcept;
+	void ClearExplicitLineNumber() noexcept;
 	bool IsLastCommand() const noexcept;
 	GCodeResult GetLastResult() const noexcept { return lastResult; }
 	void SetLastResult(GCodeResult r) noexcept { lastResult = r; }

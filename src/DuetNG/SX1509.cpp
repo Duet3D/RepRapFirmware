@@ -432,7 +432,7 @@ uint16_t SX1509::readWord(uint8_t registerAddress) noexcept
 	data[0] = registerAddress;
 	if (I2C::Transfer(deviceAddress, data, 1, 2) == 3)
 	{
-		return (data[1] << 8) | data[2];
+		return ((uint32_t)data[1] << 8) | (uint32_t)data[2];
 	}
 	return 0;
 }
@@ -441,14 +441,14 @@ uint16_t SX1509::readWord(uint8_t registerAddress) noexcept
 //	This function will read a four-uint8_t word beginning at registerAddress
 //	- A 32-bit unsigned int will be returned.
 //		- The msb of the return value will contain the value read from registerAddress
-//		- The lsb of the return value will contain the value read from registerAddress + 1
+//		- The lsb of the return value will contain the value read from registerAddress + 3
 uint32_t SX1509::readDword(uint8_t registerAddress) noexcept
 {
 	uint8_t data[5];
 	data[0] = registerAddress;
 	if (I2C::Transfer(deviceAddress, data, 1, 4) == 5)
 	{
-		return (data[1] << 24) | (data[2] << 16) | (data[3] << 8) | data[4];
+		return ((uint32_t)data[1] << 24) | ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 8) | (uint32_t)data[4];
 	}
 	return 0;
 }

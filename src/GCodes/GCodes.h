@@ -408,7 +408,7 @@ private:
 	bool DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException);							// Execute an arc move
 	void FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
 	bool CheckEnoughAxesHomed(AxesBitmap axesToMove) noexcept;										// Check that enough axes have been homed
-	void TravelToStartPoint(GCodeBuffer& gb) noexcept;												// Set up a move to travel to the resume point
+	void TravelToStartPoint(GCodeBuffer& gb, MovementState& ms) noexcept;							// Set up a move to travel to the resume point
 
 	GCodeResult DoDwell(GCodeBuffer& gb) THROWS(GCodeException);														// Wait for a bit
 	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);									// Home some axes

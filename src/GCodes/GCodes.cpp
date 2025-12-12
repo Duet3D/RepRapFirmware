@@ -844,7 +844,7 @@ void GCodes::EndSimulation(GCodeBuffer *null gb) noexcept
 		RestorePosition(ms, rp);										// this restores the tool and the position, although we don't need to restore the position because we are going to overwrite it
 		if (gb != nullptr && ms.GetNumber() != 0)
 		{
-			gb->LatestMachineState().feedRate = rp.feedRate;			// restore the feed rate
+			gb->LatestMachineState().feedRate = rp.originalFeedRate;	// restore the feed rate
 		}
 		ms.SelectTool(rp.toolNumber, true);								// set the restored tool number as selected
 
@@ -1016,7 +1016,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 			// We were not able to skip any moves, however we can skip the move that is waiting
 			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.moveStartVirtualExtruderPosition;
 			ms.GetPauseRestorePoint().filePos = ms.filePos;
-			ms.GetPauseRestorePoint().feedRate = ms.feedRate/ms.speedFactor;
+			ms.GetPauseRestorePoint().originalFeedRate = ms.originalFeedRate;
 			ms.GetPauseRestorePoint().proportionDone = ms.GetProportionDone();
 			ms.GetPauseRestorePoint().initialUserC0 = ms.initialUserC0;
 			ms.GetPauseRestorePoint().initialUserC1 = ms.initialUserC1;
@@ -1026,7 +1026,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 		else
 		{
 			// We were not able to skip any moves, and there is no move waiting
-			ms.GetPauseRestorePoint().feedRate = fgb.LatestMachineState().feedRate;
+			ms.GetPauseRestorePoint().originalFeedRate = fgb.LatestMachineState().feedRate;
 			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.latestVirtualExtruderPosition;
 			ms.GetPauseRestorePoint().proportionDone = 0.0;
 
@@ -1224,7 +1224,7 @@ bool GCodes::DoEmergencyPause() noexcept
 		{
 			// We were not able to skip any moves, however we can skip the remaining segments of this current move
 			ToolOffsetInverseTransform(ms, ms.initialCoords, ms.currentUserPosition);
-			ms.GetPauseRestorePoint().feedRate = ms.feedRate;
+			ms.GetPauseRestorePoint().originalFeedRate = ms.originalFeedRate;
 			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.moveStartVirtualExtruderPosition;
 			ms.GetPauseRestorePoint().filePos = ms.filePos;
 			ms.GetPauseRestorePoint().proportionDone = ms.GetProportionDone();
@@ -1238,7 +1238,7 @@ bool GCodes::DoEmergencyPause() noexcept
 		else
 		{
 			// We were not able to skip any moves, and if there is a move waiting then we can't skip that one either
-			ms.GetPauseRestorePoint().feedRate = FileGCode()->LatestMachineState().feedRate;
+			ms.GetPauseRestorePoint().originalFeedRate = FileGCode()->LatestMachineState().feedRate;
 			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.latestVirtualExtruderPosition;
 
 			ms.GetPauseRestorePoint().filePos = FileGCode()->GetPrintingFilePosition(true);	//TODO separate restore point per channel
@@ -1660,7 +1660,7 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 	if (ok)
 	{
 		// Set the feed rate
-		buf.printf("G1 F%.1f", (double)InverseConvertSpeedToMmPerMin(pauseRestorePoint.feedRate));
+		buf.printf("G1 F%.1f", (double)pauseRestorePoint.originalFeedRate);
 #if SUPPORT_LASER
 		if (machineType == MachineType::laser)
 		{
@@ -1889,6 +1889,8 @@ void GCodes::LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(GC
 		ms.feedRate = ConvertSpeedFromMmPerMin(MaximumG0FeedRate);						// use maximum feed rate, the M203 parameters will limit it
 		ms.usingStandardFeedrate = false;
 	}
+
+	ms.originalFeedRate = gb.LatestMachineState().feedRate;
 }
 
 // Set up the extrusion of a move, returning true if there is any extrusion
@@ -2428,7 +2430,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	}
 
 	const bool hasExtrusion = LoadExtrusionFromGCode(gb, ms);								// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
-	if (hasExtrusion || !axesMentioned.IsEmpty())											// if there is no movement at all, skip further processing and don't pass the move on the the Move system
+	if (hasExtrusion || axesMentioned.IsNonEmpty())											// if there is no movement at all, skip further processing and don't pass the move on the the Move system
 	{
 		if (ms.IsFirstMoveSincePrintingResumed())											// if this is the first move after skipping an object
 		{
@@ -2439,7 +2441,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			ms.DoneMoveSincePrintingResumed();
 			if (hasExtrusion)
 			{
-				TravelToStartPoint(gb);														// don't start a printing move from the wrong place
+				TravelToStartPoint(gb, ms);													// don't start a printing move from the wrong place
 				return false;
 			}
 		}
@@ -2976,7 +2978,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 		ms.DoneMoveSincePrintingResumed();
 		if (hasExtrusion)											// check whether this is the first move after skipping an object and is extruding
 		{
-			TravelToStartPoint(gb);									// don't start a printing move from the wrong point
+			TravelToStartPoint(gb, ms);								// don't start a printing move from the wrong point
 			return false;
 		}
 	}
@@ -2984,7 +2986,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 	if (ms.hasPositiveExtrusion)
 	{
 		//TODO ideally we should calculate the min and max X and Y coordinates of the entire arc here and call UpdateObjectCoordinates twice.
-		// But it is currently very rare to use G2/G3 with extrusion, so for now we don't bother.
+		// But it is currently rare to use G2/G3 with extrusion, so for now we don't bother.
 		buildObjects.UpdateObjectCoordinates(ms.currentObjectNumber, ms.currentUserPosition, AxesBitmap::MakeLowestNBits(2));
 	}
 
@@ -3120,19 +3122,23 @@ void GCodes::FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept
 }
 
 // Set up a move to travel to the resume point. Return true if successful, false if needs to be called again.
+// This is only called if the first move commanded since changing from a cancelled object to a non-cancelled object or to no object involves extrusion.
 // By the time this is called, the user position has been overwritten with the final position of the pending move, so we can't use it.
-// But the expected position was saved by buildObjects when the state changed from printing a cancelled object to printing a live object.
-void GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
+// But the expected position was saved in the resume object restore point when the state changed from printing a cancelled object to printing a live object.
+void GCodes::TravelToStartPoint(GCodeBuffer& gb, MovementState& ms) noexcept
 {
-	MovementState& ms = GetMovementState(gb);
 	ms.SetDefaults(numTotalAxes);
 	SetMoveBufferDefaults(ms);
 	ToolOffsetTransform(ms);
-	const RestorePoint& rp = ms.restorePoints[ResumeObjectRestorePointNumber];
+	const RestorePoint& rp = ms.GetResumeObjectRestorePoint();
 	ToolOffsetTransform(ms, rp.moveCoords, ms.coords);
-	ms.feedRate = rp.feedRate;
+	ms.originalFeedRate = rp.originalFeedRate;
+	ms.feedRate = gb.ConvertSpeed(rp.originalFeedRate, true);
 	ms.movementTool = ms.currentTool;
 	ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;			// assume that both linear and rotational axes might be moving
+#if SUPPORT_ASYNC_MOVES
+	ms.AllocateAxes(rp.axesAndExtrudersOwned, ParameterLettersBitmap());
+#endif
 	NewSegmentableMoveAvailable(ms);
 }
 
@@ -4118,7 +4124,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 {
 #if HAS_SBC_INTERFACE
 	// Deal with replies to the SBC
-	if (gb.LatestMachineState().lastCodeFromSbc || (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 121))
+	if (gb.LatestMachineState().lastCodeFromSbc)
 	{
 		MessageType type = gb.GetResponseMessageType();
 		if (rslt == GCodeResult::notFinished || gb.HasJustStartedMacro() ||

@@ -16,7 +16,7 @@ struct RawMove
 {
 	float coords[MaxAxesPlusExtruders];								// new positions for the axes, amount of movement for the extruders
 	float initialUserC0, initialUserC1;								// if this is a segment of an arc move, the user XYZ coordinates at the start
-	float feedRate;													// feed rate of this move
+	float feedRate;													// feed rate of this move in units per step clock
 	float moveStartVirtualExtruderPosition;							// the virtual extruder position at the start of this move, for normal moves
 	FilePosition filePos;											// offset in the file being printed at the start of reading this move
 	float proportionDone;											// what proportion of the entire move has been done when this segment is complete
@@ -47,6 +47,7 @@ struct RawMove
 #if SUPPORT_SCANNING_PROBES
 			scanningProbeMove : 1,									// true if the laser task should be woken at the end of each segment to capture a height reading
 #endif
+			// End of flags copied to DDA
 
 			applyM220M221 : 1,										// true if this move is affected by M220 and M221 (this could be moved to ExtendedRawMove)
 			hasPositiveExtrusion : 1,								// true if the move includes extrusion; only valid if the move was set up by SetupMove
@@ -56,14 +57,15 @@ struct RawMove
 			linearAxesMentioned : 1,								// true if any linear axes were mentioned in the movement command
 			rotationalAxesMentioned: 1;								// true if any rotational axes were mentioned in the movement command
 
-	// Note that this point is an odd multiple of 2 bytes from the start of the struct in all configurations
+	float16_t originalFeedRate;										// the feed rate in original units, for pause/resume
+
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
-#else
-	uint16_t padding;												// pad to make the length a multiple of 4 bytes
 #endif
 
-	// If adding any more fields, keep the total size a multiple of 4 bytes so that we can use our optimised assignment operator
+	// Depending on configuration, this point may be an odd multiple of 2 bytes from the start.
+	// Add 2 bytes of padding so that the amount to be copied is always a multiple of 4 bytes, so that we can use our optimised assignment operator.
+	uint16_t padding;
 
 	// GCC normally calls memcpy to assign objects of this class. We can do better because we know they must be 32-bit aligned.
 	RawMove &_ecv_from operator=(const RawMove& arg) noexcept

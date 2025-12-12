@@ -176,7 +176,7 @@ void PrepParams::DebugPrint() const noexcept
 				);
 }
 
-DDA::DDA(DDA *_ecv_null n) noexcept : next(n), prev(nullptr), state(empty)
+DDA::DDA(DDA *_ecv_null n) noexcept : next(n), prev(nullptr)
 {
 	tool = nullptr;						// needed in case we pause before any moves have been done
 
@@ -187,7 +187,8 @@ DDA::DDA(DDA *_ecv_null n) noexcept : next(n), prev(nullptr), state(empty)
 		ep = 0;
 	}
 
-	flags.all = 0;						// in particular we need to set endCoordinatesValid and usePressureAdvance to false, also checkEndstops false for the ATE build
+	flags.all = 0;						// in particular we need to set endCoordinatesValid, usePressureAdvance to false, stateBits to empty, also checkEndstops false for the ATE build
+	SetState(empty);					// should alrrady be covered by the above
 	virtualExtruderPosition = 0.0;
 	filePos = noFilePosition;
 
@@ -199,7 +200,7 @@ DDA::DDA(DDA *_ecv_null n) noexcept : next(n), prev(nullptr), state(empty)
 // Return the number of clocks this DDA still needs to execute.
 uint32_t DDA::GetTimeLeft() const noexcept
 {
-	switch (state)
+	switch (GetState())
 	{
 	case planned:
 		return clocksNeeded;
@@ -236,7 +237,7 @@ void DDA::DebugPrintVector(const char *_ecv_array name, const float *_ecv_array 
 // Print the text followed by the DDA only
 void DDA::DebugPrint(const char *_ecv_array tag) const noexcept
 {
-	debugPrintf("%s %u ts=%" PRIu32 " DDA: s=%.4g", tag, (unsigned int)state, afterPrepare.moveStartTime, (double)totalDistance);
+	debugPrintf("%s %u ts=%" PRIu32 " DDA: s=%.4g", tag, (unsigned int)GetState(), afterPrepare.moveStartTime, (double)totalDistance);
 	DebugPrintVector(" vec", directionVector, MaxAxesPlusExtruders);
 	debugPrintf("\n"
 #if SUPPORT_S_CURVE
@@ -444,6 +445,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	proportionDone = nextMove.proportionDone;
 	initialUserC0 = nextMove.initialUserC0;
 	initialUserC1 = nextMove.initialUserC1;
+	originalFeedRate = nextMove.originalFeedRate;
 
 	// These 4 or 5 bits can be copied in one go by the compiler generating a ubfx instruction
 	flags.canPauseAfter = nextMove.canPauseAfter;
@@ -679,6 +681,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	flags.isolatedMove = true;
 	virtualExtruderPosition = prev->virtualExtruderPosition;
 	tool = nullptr;
+	originalFeedRate = 0.0;
 	filePos = prev->filePos;
 	maxAcceleration = move.NormalAcceleration(Z_AXIS);
 
@@ -708,7 +711,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	startSpeed = endSpeed = 0.0;
 
 	RecalculateMove(ring);
-	state = planned;
+	SetState(planned);
 	return true;
 }
 
@@ -749,6 +752,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 	virtualExtruderPosition = 0;
 	tool = nullptr;
 	filePos = noFilePosition;
+	originalFeedRate = 0.0;
 
 	startSpeed = nextMove.startSpeed;
 	endSpeed = nextMove.endSpeed;
@@ -763,7 +767,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 	totalDistance = Normalise(directionVector);
 
 	RecalculateMove(ring);
-	state = planned;
+	SetState(planned);
 	return true;
 }
 
@@ -1145,7 +1149,7 @@ void DDA::Prepare(DDARing& ring,
 	// Avoid setting the move start time in the past or with very little time before it starts, because this can lead to us trying to modify a segment that is already executing
 	Move& move = reprap.GetMove();
 	const uint32_t now = StepTimer::GetMovementTimerTicks();
-	if (prev->state == committed)
+	if (prev->GetState() == committed)
 	{
 		uint32_t prevEndTime = prev->afterPrepare.moveStartTime + prev->clocksNeeded;
 		// Don't allow the start of a move without input shaping (e.g. retraction/repriming) to overlap a move with input shaping
@@ -1326,7 +1330,7 @@ void DDA::Prepare(DDARing& ring,
 
 		afterPrepare.averageExtrusionSpeed = (extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded;
 
-		state = committed;																// must do this before we call CheckEndstops
+		SetState(committed);															// must do this before we call CheckEndstops
 #if SUPPORT_SCANNING_PROBES
 		if (flags.scanningProbeMove)
 		{
@@ -1375,7 +1379,7 @@ void DDA::Prepare(DDARing& ring,
 	}
 	else
 	{
-		state = committed;
+		SetState(committed);
 	}
 }
 
@@ -1531,7 +1535,7 @@ float DDA::GetProportionDone() const noexcept
 // Free up this DDA, returning true if the lookahead underrun flag was set
 bool DDA::Free() noexcept
 {
-	state = empty;
+	SetState(empty);
 	return flags.hadLookaheadUnderrun;
 }
 
