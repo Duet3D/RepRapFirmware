@@ -45,7 +45,7 @@ void MoveSegment::ReleaseAll(MoveSegment *_ecv_null item) noexcept
 
 void MoveSegment::DebugPrint() const noexcept
 {
-	debugPrintf("s=%" PRIu32 " t=%" PRIu32 " d=%.2f u=%.4e a=%.4e"
+	debugPrintf("s=%" PRIu32 " t=%" PRIu32 " d=%.4f u=%.4e a=%.4e"
 #if SUPPORT_S_CURVE
 				" j=%.4e"
 #endif
@@ -60,7 +60,7 @@ void MoveSegment::DebugPrint() const noexcept
 // Append details of this segment to a string buffer
 void MoveSegment::AppendDetails(const StringRef& str) const noexcept
 {
-	str.catf("s=%" PRIu32 " t=%" PRIu32 " d=%.2f u=%.4e a=%.4e"
+	str.catf("s=%" PRIu32 " t=%" PRIu32 " d=%.4f u=%.4e a=%.4e"
 #if SUPPORT_S_CURVE
 				" j=%.4e"
 #endif
