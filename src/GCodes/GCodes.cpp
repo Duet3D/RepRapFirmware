@@ -5111,7 +5111,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 			if (reply.strlen() > 0)
 			{
 				reply.cat('\n');
-				platform.Message(UsbMessage, reply.c_str());
+				platform.Message(gb.GetResponseMessageType(), reply.c_str());
 				reply.Clear();
 			}
 			break;
@@ -5121,7 +5121,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 				OutputBuffer *_ecv_null statusBuf = GenerateJsonStatusResponse(0, -1, ResponseSource::AUX);		// older PanelDueFirmware using M408
 				if (statusBuf != nullptr)
 				{
-					platform.AppendAuxReply(0, nullptr, statusBuf, true);
+					platform.Message(gb.GetResponseMessageType(), statusBuf);
 				}
 			}
 			break;
@@ -5137,7 +5137,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 				}
 				if (statusBuf != nullptr)
 				{
-					platform.AppendAuxReply(0, nullptr, statusBuf, true);
+					platform.Message(gb.GetResponseMessageType(), statusBuf);
 				}
 			}
 			catch (const GCodeException&)
