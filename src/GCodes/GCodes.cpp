@@ -5116,16 +5116,6 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 			}
 			break;
 
-		case StatusReportType::m408:
-			{
-				OutputBuffer *_ecv_null statusBuf = GenerateJsonStatusResponse(0, -1, ResponseSource::AUX);		// older PanelDueFirmware using M408
-				if (statusBuf != nullptr)
-				{
-					platform.Message(gb.GetResponseMessageType(), statusBuf);
-				}
-			}
-			break;
-
 		case StatusReportType::m409:
 			try
 			{
@@ -5150,46 +5140,6 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 			break;
 		}
 	}
-}
-
-// Generate a M408 response
-// Return the output buffer containing the response, or nullptr if we failed
-OutputBuffer *_ecv_null GCodes::GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept
-{
-	OutputBuffer *_ecv_null statusResponse = nullptr;
-#if 0	// removed support for types > 1because we ran out of flash memory on Duet 2
-	switch (type)
-	{
-		case 0:
-		case 1:
-			statusResponse = reprap.GetLegacyStatusResponse(type + 2, seq);
-			break;
-
-		default:				// need a default clause to prevent the command hanging by always returning a null buffer
-			type = 2;
-			[[fallthrough]];
-		case 2:
-		case 3:
-		case 4:
-			statusResponse = reprap.GetStatusResponse(type - 1, source);
-			break;
-
-		case 5:
-			statusResponse = reprap.GetConfigResponse();
-			break;
-	}
-#else
-	statusResponse = reprap.GetLegacyStatusResponse(type + 2, seq);
-#endif
-	if (statusResponse != nullptr)
-	{
-		statusResponse->cat('\n');
-		if (statusResponse->HadOverflow())
-		{
-			OutputBuffer::ReleaseAll(statusResponse);
-		}
-	}
-	return statusResponse;
 }
 
 // Initiate a tool change. Caller has already checked that the correct tool isn't loaded and set up ms.newToolNumber.

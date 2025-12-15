@@ -611,7 +611,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 // Return true if the M-code number passed is a request for status
 static bool IsStatusRequestMCode(int code) noexcept
 {
-	return code == 105 || code == 109 || code == 114 || code == 115 || code == 122 || code == 408 || code == 409;
+	return code == 105 || code == 109 || code == 114 || code == 115 || code == 122 || code == 409;
 }
 
 bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
@@ -3080,35 +3080,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				reply.printf("Filament width %.2fmm", (double)platform.GetFilamentWidth());
 				break;
 
-			case 408: // Get status in JSON format
-				{
-#if 0	// removed support for M408 with S > 1 because we ran out of flash memory on Duet 2
-					const unsigned int type = gb.Seen('S') ? gb.GetUIValue() : 0;
-#else
-					const unsigned int type = gb.Seen('S') ? gb.GetLimitedUIValue('S', 2) : 0;
-#endif
-#if SUPPORT_CAN_EXPANSION
-					const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : 0;
-					if (board != 0)
-					{
-						result = CanInterface::RemoteM408(board, type, gb, reply);
-						break;
-					}
-#endif
-					const int seq = gb.Seen('R') ? gb.GetIValue() : -1;
-
-					outBuf = GenerateJsonStatusResponse(type, seq, (&gb == AuxGCode()) ? ResponseSource::AUX : ResponseSource::Generic);
-					if (outBuf == nullptr)
-					{
-						result = GCodeResult::notFinished;			// we ran out of buffers, so try again later
-					}
-					else if (type == 0)
-					{
-						gb.RespondedToStatusRequest(StatusReportType::m408);
-						gb.ResetReportDueTimer();
-					}
-				}
-				break;
+			// Support for M408 was withdrawn at version 3.7
 
 #if SUPPORT_OBJECT_MODEL
 			case 409: // Get object model values in JSON format

@@ -43,7 +43,6 @@ enum class StatusReportType : uint8_t
 {
 	none = 0,
 	m105,
-	m408,
 	m409
 };
 

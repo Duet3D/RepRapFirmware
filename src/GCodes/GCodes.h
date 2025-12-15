@@ -464,7 +464,6 @@ private:
 	bool ToolHeatersAtSetTemperatures(const Tool *_ecv_null tool, bool waitWhenCooling, float tolerance, bool waitOnFault) const noexcept;
 																							// Wait for the heaters associated with the specified tool to reach their set temperatures
 	void GenerateTemperatureReport(const GCodeBuffer& gb, const StringRef& reply) const noexcept;	// Store a standard-format temperature report in reply
-	OutputBuffer *_ecv_null GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
 	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexcept;			// Check whether we need to report temperatures or status
 
 	void RestorePosition(MovementState& ms, const RestorePoint& rp) noexcept;				// Restore user position from a restore point
@@ -792,8 +791,6 @@ private:
 	char filamentToLoad[FilamentNameLength];	// Name of the filament being loaded
 
 	static constexpr const float MinServoPulseWidth = 544.0, MaxServoPulseWidth = 2400.0;
-
-	static constexpr int8_t ObjectModelAuxStatusReportType = 100;		// A non-negative value distinct from any M408 report type
 };
 
 // Called by the Move task to report that a move could not be queued

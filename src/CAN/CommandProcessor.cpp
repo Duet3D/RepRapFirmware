@@ -223,27 +223,6 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		reply.copy("(n/a)");
 		break;
 
-	case CanMessageReturnInfo::typeM408:
-		// For now we ignore the parameter and always return the same set of info
-		// This command is only used by the old ATE, which needs the board type and the voltages
-		reply.printf("{\"firmwareElectronics\":\"Duet 3 %.0s\"", BOARD_NAME);
-#if HAS_VOLTAGE_MONITOR
-		{
-			const MinCurMax voltages = reprap.GetPlatform().GetPowerVoltages();
-			reply.catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}",
-					(double)voltages.minimum, (double)voltages.current, (double)voltages.maximum);
-		}
-#endif
-#if HAS_12V_MONITOR
-		{
-			const MinCurMax voltages = reprap.GetPlatform().GetV12Voltages();
-			reply.catf(",\"v12\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}",
-					(double)voltages.minimum, (double)voltages.current, (double)voltages.maximum);
-		}
-#endif
-		reply.cat('}');
-		break;
-
 	case CanMessageReturnInfo::typeBoardUniqueId:
 		reprap.GetPlatform().GetUniqueId().AppendCharsToString(reply);
 		break;

@@ -116,8 +116,6 @@ public:
 	OutputBuffer *_ecv_null GetConfigResponse() noexcept;
 #endif
 
-	OutputBuffer *_ecv_null GetLegacyStatusResponse(uint8_t type, int seq) const noexcept;
-
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	OutputBuffer *_ecv_null GetFilesResponse(const GCodeBuffer *_ecv_null gb, c_string dir, unsigned int startAt, int maxItems, bool flagsDirs) noexcept;
 	OutputBuffer *_ecv_null GetFilelistResponse(const GCodeBuffer *_ecv_null gb, c_string dir, unsigned int startAt, int maxItems) noexcept;
