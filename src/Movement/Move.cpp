@@ -61,7 +61,7 @@
 
 #include <limits>
 
-#define AVOID_SHORT_SEGMENTS	(1)
+#define AVOID_SHORT_SEGMENTS	(0)
 
 constexpr float MinStepPulseTiming = 0.2;												// we assume that we always generate step high and low times at least this wide without special action
 

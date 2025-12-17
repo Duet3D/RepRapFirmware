@@ -67,7 +67,7 @@ union MovementFlags final
 				 isExtruder : 1,								// true if this segment is for an extruder
 				 	 	 	 	 	 	 	 	 	 	 	 	// The remaining flags may change as a segment is processed
 				 executing : 1,									// normally clear, set in a MoveSegment when the move starts to be executed
-				 combined : 1;	//TEMP!!! for debugging
+				 combined : 1;									// this is for debugging
 	};
 
 	constexpr void Clear() noexcept { all = 0; }
@@ -358,20 +358,19 @@ inline void MoveSegment::Merge(motioncalc_t p_distance, motioncalc_t p_a J_FORMA
 // Combine the data from a previous short segment with this one. The previous segment ends at the same time that this one begins.
 inline void MoveSegment::CombinePrevious(const MoveSegment *prev) noexcept
 {
-#if SUPPORT_S_CURVE
-	const uint32_t oldDuration = duration;
+#if 0 //SUPPORT_S_CURVE
+	const motioncalc_t finalAcc = a + j * (motioncalc_t)duration;
 #endif
 	duration += prev->duration;
 	startTime = prev->startTime;
 	distance += prev->distance;
-#if SUPPORT_S_CURVE
-	if (j != (motioncalc_t)0.0)
-	{
-		// Preserve the final acceleration of the segment. The segment that follows it may be temporarily detached, so don't use its starting acceleration.
-		j *= (motioncalc_t)oldDuration/(motioncalc_t)duration;
-	}
-	flags.combined = true;
+#if 0// SUPPORT_S_CURVE
+	// Preserve the final acceleration of the segment. The segment that follows it may be temporarily detached, so don't use its starting acceleration.
+	// However, this causes speed changes, so  it's disabled.
+	a = prev->a;
+	j = (finalAcc - a)/(motioncalc_t)duration;
 #endif
+	flags.combined = true;
 }
 
 #endif /* SRC_MOVEMENT_MOVESEGMENT_H_ */

@@ -2,9 +2,10 @@
 
 - [done] MovementProfile::NonDecelDistance returns incorrect value when T4 segment has been combined with T2
 - [done] PlanMoves doesn't maintain constant extrusion speed. When the moves are extruding, PlanMoves should construct the movement plan in terms of extrusion distance.
-  [done anoither way] Perhaps we should normalise the moves so that totalDistance is the extrusion distance, not the axis dstance?
+  [done another way] Perhaps we should normalise the moves so that totalDistance is the extrusion distance, not the axis dstance?
 - [done] PlanMoves allows speed to be increased above requestedSpeed because it takes maximum requestedSpeed of the set of moves
-- Sometimes the plan has a tiny constant speed segment (e.g. 8 clocks). This resuts in a speed discontinuity due to rounding error. Avoid tiny constant speed segments.
+- [done] Sometimes the plan has a tiny constant speed segment (e.g. 8 clocks). This resuts in a speed discontinuity due to rounding error. Avoid tiny constant speed segments.
+
 - When IS is enabled we get quite a lot of speed discontinuities.
 - Setting PA to 0 or much below 0.2 makes it sound horrible.
 - Could some of the discontuuities be caused by PA being on/off for adjacent printing moves and retraction moves?

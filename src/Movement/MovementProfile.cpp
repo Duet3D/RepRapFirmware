@@ -55,7 +55,7 @@ constexpr double MinimumPhaseDuration = (double)1000.0;			// minimum duration of
 
 void MovementProfile::DebugPrint() const noexcept
 {
-	debugPrintf("Plan: d=[%.4g %.4g %.4g %.4g %.4g %.4g %.4g] v=[%.4g %.4g %.4g] a=[%.4g %.4g %.4g 0.0] j=%.4g ndd=%.4g num=%u all=%u rrs=%u simple=%u\n",
+	debugPrintf("Plan: d=[%.4e %.4e %.4e %.4e %.4e %.4e %.4e] v=[%.4e %.4e %.4e] a=[%.4e %.4e %.4e 0.0] j=%.4e ndd=%.4e num=%u all=%u rrs=%u simple=%u\n",
 				distances[0], distances[1], distances[2], distances[3], distances[4], distances[5], distances[6],
 				startSpeed, topSpeed, endSpeed,
 				startAcceleration, peakAcceleration, peakDeceleration,
@@ -66,13 +66,17 @@ void MovementProfile::DebugPrint() const noexcept
 
 void MovementProfile::CheckForShortSegments() const noexcept
 {
-	// The code to avoid phases shorter than MinimumPhaseDuration tried to lengthen the phase to exactly MinimumPhaseDuration.
+	// The code to avoid phases shorter than MinimumPhaseDuration tries to lengthen the phase to exactly MinimumPhaseDuration.
 	// We use (MinimumPhaseDuration - 2) in the following to avoid false short phase detection caused by rounding error in the calculation.
 	bool shortSeg = false;
 	if (distances[1] > (double)0.0)
 	{
-		// Assume startAcceleration is zero
 		const double t0 = (peakAcceleration - startAcceleration)/jerk;
+		if (t0 < MinimumPhaseDuration - 2)
+		{
+			debugPrintf("Short t0=%.1f ", t0);
+			shortSeg = true;
+		}
 		const double u1 = startSpeed + (startAcceleration + OneHalfDouble * jerk * t0) * t0;
 		const double t1TimesPeakAcceleration = fastSqrtd(dsquare(u1) + 2 * peakAcceleration * distances[1]) - u1;
 		if (t1TimesPeakAcceleration < (MinimumPhaseDuration - 2) * peakAcceleration)
@@ -96,7 +100,13 @@ void MovementProfile::CheckForShortSegments() const noexcept
 			debugPrintf("Short t5=%.1f ", t5TimesMinusPeakDeceleration/-peakDeceleration);
 			shortSeg = true;
 		}
+		if (t6 < MinimumPhaseDuration - 2)
+		{
+			debugPrintf("Short t6=%.1f ", t6);
+			shortSeg = true;
+		}
 	}
+
 	if (shortSeg)
 	{
 		DebugPrint();
@@ -254,7 +264,7 @@ void MovementProfile::CalculateSimpleSCurvePlan(double distance) noexcept
 	else
 	{
 		// We can't reach the requested speed without inserting a constant acceleration segment to avoid exceeding maximum acceleration
-		const double basicDistance = 2 * dcube(peakAcceleration)/dsquare(jerk);	// distance if we reach max acceleration but have no constant acceleration segment
+		const double basicDistance = 2 * dcube(peakAcceleration)/dsquare(jerk);		// distance if we reach max acceleration/deceleration but have no constant acceleration/deceleration segments
 		if (basicDistance < distance)
 		{
 			// We need to insert a constant acceleration segment. We may also need to limit the top speed.
@@ -268,6 +278,17 @@ void MovementProfile::CalculateSimpleSCurvePlan(double distance) noexcept
 			const double timeToMaxAcceleration = peakAcceleration/jerk;
 			distances[0] = distances[6] = OneSixthDouble * jerk * dcube(timeToMaxAcceleration);
 			const double constantAccelerationTime = -(double)1.5 * timeToMaxAcceleration + fastSqrtd(OneQuarterDouble * dsquare(timeToMaxAcceleration) + distance/peakAcceleration);
+			if (constantAccelerationTime < MinimumPhaseDuration)
+			{
+				// Reduce the top speed to avoid the constant acceleration segment
+				const double oldTopSpeed = topSpeed;
+				topSpeed = timeToMaxAcceleration * peakAcceleration;
+				debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant acceleration segment\n", oldTopSpeed, topSpeed);
+				CalculateSimpleFivePhasePlan(distance);
+				reachesRequestedSpeed = false;
+				return;
+			}
+
 			const double newTopSpeed = jerk * timeToMaxAcceleration * (timeToMaxAcceleration + constantAccelerationTime);
 			if (newTopSpeed <= topSpeed)
 			{
@@ -278,59 +299,73 @@ void MovementProfile::CalculateSimpleSCurvePlan(double distance) noexcept
 				distances[2] = 2 * t2NonDecelDistance;
 				distances[3] = distances[4] = (double)0.0;
 				reachesRequestedSpeed = false;
+				return;
 //				debugPrintf("Ss, not rrs, cas\n");
 			}
-			else
+
+			// If we get here, we need to limit the constant acceleration time in order to limit the top speed, and add a constant speed phase. Generate a 7-phase move.
+			//	v = j * t0 * (t0 + t1) therefore t1 = v/(j * t0) - t0 = v/a - t0
+			double revisedConstantAccelerationTime = topSpeed/peakAcceleration - timeToMaxAcceleration;
+
+			// Check whether the constant acceleration time would be shorter than the minimum
+			if (revisedConstantAccelerationTime < MinimumPhaseDuration)
 			{
-				// We need to limit the constant acceleration time in order to limit the top speed, and add a constant speed phase. Generate a 7-phase move.
-				//	v = j * t0 * (t0 + t1) therefore t1 = v/(j * t0) - t0 = v/a - t0
-				double revisedConstantAccelerationTime = topSpeed/peakAcceleration - timeToMaxAcceleration;
-				double d15 = OneHalfDouble * revisedConstantAccelerationTime * topSpeed;
-				double d24 = timeToMaxAcceleration * topSpeed - distances[0];
-				double steadySpeedDistance = distance - 2 * (distances[0] + d15 + d24);
-				if (steadySpeedDistance < MinimumPhaseDuration * topSpeed)
-				{
-					// Reduce the top speed to make the constant speed segment longer
-					const double maxSteadyDistance = distance - basicDistance;			// the maximum constant speed distance if we still reach maximum acceleration/deceleration
-					if (maxSteadyDistance < MinimumPhaseDuration * topSpeed)
-					{
-						// This isn't possible as a 7-phase profile so generate a 5-phase profile instead
-						const double oldTopSpeed = topSpeed;
-						topSpeed = SmallestNonNegativeCubicSolution((double)4.0, -dsquare(MinimumPhaseDuration) * jerk, 2 * distance * MinimumPhaseDuration * jerk, -dsquare(distance) * jerk);
-						debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment (7p to 5p)\n", oldTopSpeed, topSpeed);
-						CalculateSimpleFivePhasePlan(distance);
-						reachesRequestedSpeed = false;
-						return;
-					}
+				// Reduce top speed to avoid the need for a short constant acceleration segment
+				const double oldTopSpeed = topSpeed;
+				topSpeed = timeToMaxAcceleration * peakAcceleration;
+				debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant acceleration segment\n", oldTopSpeed, topSpeed);
+				CalculateSimpleFivePhasePlan(distance);
+				reachesRequestedSpeed = false;
+				return;
+			}
 
-					// We can still use a 7-phase profile but we need to reduce top speed and shorten the constant acceleration phases
-					const double oldTopSpeed = topSpeed;
-					topSpeed = (dsquare(jerk) * distance + dcube(peakAcceleration))/(3 * peakAcceleration * jerk + dsquare(jerk) * MinimumPhaseDuration);
-					debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment (7p)\n", oldTopSpeed, topSpeed);
-					revisedConstantAccelerationTime = topSpeed/peakAcceleration - timeToMaxAcceleration;
-					d15 = OneHalfDouble * revisedConstantAccelerationTime * topSpeed;
-					d24 = timeToMaxAcceleration * topSpeed - distances[0];
-					steadySpeedDistance = distance - 2 * (distances[0] + d15 + d24);
-				}
+			double d15 = OneHalfDouble * revisedConstantAccelerationTime * topSpeed;
+			double d24 = timeToMaxAcceleration * topSpeed - distances[0];
+			double steadySpeedDistance = distance - 2 * (distances[0] + d15 + d24);
 
-				// Check that the constant acceleration phases d15 are not too short
-				if (revisedConstantAccelerationTime < MinimumPhaseDuration)
-				{
-					// Reduce top speed to eliminate the constant acceleration phases
-					const double oldTopSpeed = topSpeed;
-					topSpeed = dsquare(peakAcceleration)/jerk;
-					debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant acceleration segments\n", oldTopSpeed, topSpeed);
-					CalculateSimpleFivePhasePlan(distance);
-					reachesRequestedSpeed = false;
-					return;
-				}
-
+			// Check whether the steady speed time would be shorter than we like a segment to be
+			if (steadySpeedDistance >= MinimumPhaseDuration * topSpeed)
+			{
 				distances[1] = distances[5] = d15;
 				distances[2] = distances[4] = t2NonDecelDistance = d24;
 				distances[3] = steadySpeedDistance;
 				reachesRequestedSpeed = true;
-//				debugPrintf("Ss, rrs, cas\n");
+				return;
 			}
+
+			// Reduce the top speed to make the constant speed segment longer. Maxima gives this solution for the new constant acceleration time:
+			// [t1=-((sqrt(a1^2*j^2*t3^2 + 2*a1^3*j*t3 + 4*a1*d*j^2 + a1^4) + a1*j*t 3 + 3*a1^2)/(2*a1*j)), t1=(sqrt(a1^2*j^2*t3^2 + 2*a1^3*j*t3 + 4*a1*d*j^2 + a1^4) - a1*j*t3 - 3*a1^2)/(2*a1*j)]
+			const double discriminant = peakAcceleration * (peakAcceleration * dsquare(jerk * MinimumPhaseDuration)
+															+ 2 * dsquare(peakAcceleration) * (jerk * MinimumPhaseDuration)
+															+ 4 * distance * dsquare(jerk)
+															+ dcube(peakAcceleration)
+														   );
+			if (discriminant >= (double)0.0)
+			{
+				revisedConstantAccelerationTime = (fastSqrtd(discriminant) - peakAcceleration * (jerk * MinimumPhaseDuration) - 3 * dsquare(peakAcceleration))/(2 * peakAcceleration * jerk);
+				if (revisedConstantAccelerationTime >= MinimumPhaseDuration)
+				{
+					// This still works as a 7-phase move
+					const double oldTopSpeed = topSpeed;
+					topSpeed = jerk * timeToMaxAcceleration * (timeToMaxAcceleration + revisedConstantAccelerationTime);
+					debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment (7p)\n", oldTopSpeed, topSpeed);
+					d15 = OneHalfDouble * revisedConstantAccelerationTime * topSpeed;
+					d24 = timeToMaxAcceleration * topSpeed - distances[0];
+					steadySpeedDistance = distance - 2 * (distances[0] + d15 + d24);
+					distances[1] = distances[5] = d15;
+					distances[2] = distances[4] = t2NonDecelDistance = d24;
+					distances[3] = steadySpeedDistance;
+					reachesRequestedSpeed = false;
+					return;
+				}
+			}
+
+			// If we get here then this isn't possible as a 7-phase profile meeting the minimum phase durations, so generate a 5-phase profile instead
+			const double oldTopSpeed = topSpeed;
+			topSpeed = SmallestNonNegativeCubicSolution((double)4.0, -dsquare(MinimumPhaseDuration) * jerk, 2 * distance * MinimumPhaseDuration * jerk, -dsquare(distance) * jerk);
+			debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment (7p to 5p)\n", oldTopSpeed, topSpeed);
+			CalculateSimpleFivePhasePlan(distance);
+			reachesRequestedSpeed = false;
 			return;
 		}
 		// Else fall through
