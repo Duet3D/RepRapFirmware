@@ -12,7 +12,7 @@
 #include <Platform/RepRap.h>
 #include "MoveDebugFlags.h"
 
-constexpr double MinimumPhaseDuration = (double)1000.0;			// minimum duration of a planned phase, about 1.33ms
+constexpr double MinimumPhaseDuration = (double)(StepClockRate/2000);			// minimum duration of a planned phase, about 0.5ms
 
 // Return the smallest non-negative root of the equation. Returns the largest solution if there is no nonnegative solution, or NaN if there are no solutions.
 /*static*/ double MovementProfile::SmallestNonNegativeCubicSolution(double a, double b, double c, double d) noexcept
