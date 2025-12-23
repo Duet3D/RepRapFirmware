@@ -698,7 +698,7 @@ void ethernetif_hardware_init() noexcept
 {
 	// Set up PHY clock
 	// GCLK2: XOSC1 direct, 25MHz output for Ethernet PHY
-	ConfigureGclk(GclkNumEthernetPhy, GclkSource::xosc1, 1, true);
+	ConfigureGclk(GclkNum25MHz, GclkSource::xosc1, 1, true);
 	SetPinFunction(EthernetClockOutPin, EthernetClockOutPinFunction);
 
 	// Set up GMAC clock
