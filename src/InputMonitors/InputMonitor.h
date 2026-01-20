@@ -41,14 +41,14 @@ public:
 #endif
 
 	static void CommonDigitalPortInterrupt(CallbackParameter cbp) noexcept;
-	static void CommonAnalogPortInterrupt(CallbackParameter cbp, uint32_t reading) noexcept;
+	static void CommonAnalogPortInterrupt(CallbackParameter cbp, int32_t reading) noexcept;
 
 private:
 	bool IsDigital() const noexcept { return threshold == 0; }
 	bool Activate(bool useInterrupt) noexcept;
 	void Deactivate() noexcept;
 	void DigitalInterrupt() noexcept;
-	void AnalogInterrupt(uint32_t reading) noexcept;
+	void AnalogInterrupt(int32_t reading) noexcept;
 	uint32_t GetAnalogValue() const noexcept;
 
 	static bool Delete(uint16_t hndl) noexcept;
@@ -59,7 +59,7 @@ private:
 	IoPort port;
 	uint16_t handle;
 	uint16_t minInterval;
-	uint32_t threshold;
+	int32_t threshold;
 	bool active;
 	volatile bool state;
 	volatile bool sendDue;

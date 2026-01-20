@@ -1425,10 +1425,10 @@ GCodeResult CanInterface::ChangeHandleResponseTime(CanAddress boardAddress, Remo
 	return ret;
 }
 
-GCodeResult CanInterface::ChangeHandleThreshold(CanAddress boardAddress, RemoteInputHandle h, uint32_t threshold, bool *_ecv_null currentState, const StringRef &reply) noexcept
+GCodeResult CanInterface::ChangeHandleThreshold(CanAddress boardAddress, RemoteInputHandle h, int32_t threshold, bool *_ecv_null currentState, const StringRef &reply) noexcept
 {
 	uint8_t rVal;
-	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionChangeThreshold, threshold, &rVal, reply);
+	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionChangeThreshold, (uint32_t)threshold, &rVal, reply);
 	if (ret < GCodeResult::error && currentState != nullptr)
 	{
 		*currentState = (rVal != 0);

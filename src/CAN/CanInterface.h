@@ -97,7 +97,7 @@ namespace CanInterface
 	GCodeResult GetHandlePinName(CanAddress boardAddress, RemoteInputHandle h, bool *_ecv_null currentState, const StringRef& reply) noexcept;
 	GCodeResult EnableHandle(CanAddress boardAddress, RemoteInputHandle h, bool enable, bool *_ecv_null currentState, const StringRef& reply) noexcept;
 	GCodeResult ChangeHandleResponseTime(CanAddress boardAddress, RemoteInputHandle h, uint32_t responseMillis, bool *_ecv_null currentState, const StringRef &reply) noexcept;
-	GCodeResult ChangeHandleThreshold(CanAddress boardAddress, RemoteInputHandle h, uint32_t threshold, bool *_ecv_null currentState, const StringRef &reply) noexcept;
+	GCodeResult ChangeHandleThreshold(CanAddress boardAddress, RemoteInputHandle h, int32_t threshold, bool *_ecv_null currentState, const StringRef &reply) noexcept;
 	GCodeResult ChangeHandleSetTouchMode(CanAddress boardAddress, RemoteInputHandle h, uint32_t sensitivity, const StringRef &reply) noexcept;
 	GCodeResult SetHandleDriveLevel(CanAddress boardAddress, RemoteInputHandle h, uint32_t driveLevel, uint8_t &returnedDriveLevel, const StringRef &reply) noexcept;
 	typedef void (*ReadHandlesCallbackFunction)(CallbackParameter param, RemoteInputHandle h, uint32_t val) noexcept;
