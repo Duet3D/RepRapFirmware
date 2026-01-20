@@ -97,9 +97,9 @@ bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 // Create a remote Z probe
 GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& reply) noexcept
 {
-	if (type != ZProbeType::unfilteredDigital && type != ZProbeType::blTouch && type != ZProbeType::scanningAnalog)
+	if (type != ZProbeType::analog && type != ZProbeType::unfilteredDigital && type != ZProbeType::blTouch && type != ZProbeType::scanningAnalog)
 	{
-		reply.copy("only Z probe types 8, 9 and 11 are supported on expansion boards");
+		reply.copy("only Z probe types 1, 8, 9 and 11 are supported on expansion boards");
 		return GCodeResult::error;
 	}
 
@@ -112,7 +112,7 @@ GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& rep
 	RemoteInputHandle h;
 	h.Set(RemoteInputHandle::typeZprobe, number, 0);
 	bool state = false;
-	const uint16_t threshold = (type == ZProbeType::scanningAnalog) ? DefaultZProbeADValue : 0;		// nonzero threshold makes it an analog handle
+	const uint16_t threshold = (type == ZProbeType::analog || type == ZProbeType::scanningAnalog) ? DefaultZProbeADValue : 0;		// nonzero threshold makes it an analog handle
 	const GCodeResult rc = CanInterface::CreateHandle(boardAddress, h, pinNames.c_str(), threshold, ActiveProbeReportInterval, &state, reply);
 	if (rc < GCodeResult::error)								// don't set the handle unless it is valid, or we will get an error when this probe is deleted
 	{
@@ -159,7 +159,7 @@ GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, boo
 GCodeResult RemoteZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) /*override*/ THROWS(GCodeException)
 {
 	GCodeResult rslt = ZProbe::HandleG31(gb, reply);
-	if (type == ZProbeType::scanningAnalog && gb.Seen('P') && (rslt == GCodeResult::ok || rslt <= GCodeResult::warning))
+	if ((type == ZProbeType::analog || type == ZProbeType::scanningAnalog) && gb.Seen('P') && (rslt == GCodeResult::ok || rslt <= GCodeResult::warning))
 	{
 		const GCodeResult rslt2 = CanInterface::ChangeHandleThreshold(boardAddress, handle, targetAdcValue, nullptr, reply);
 		if (rslt2 > rslt) { rslt = rslt2; }
