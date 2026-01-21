@@ -72,8 +72,8 @@ public:
 	// Initialise the output buffers manager
 	static void Init() noexcept;
 
-	// Allocate an unused OutputBuffer instance. Returns true on success or false if no instance could be allocated.
-	static bool Allocate(OutputBuffer *_ecv_null &buf) noexcept;
+	// Allocate an unused OutputBuffer instance, optionally from the reserve. Returns true on success or false if no instance could be allocated.
+	static bool Allocate(OutputBuffer *_ecv_null &buf, bool allowReserved = true) noexcept;
 
 	// Get the number of bytes left for allocation. If writingBuffer is not NULL, this returns the number of free bytes for
 	// continuous writes, i.e. for writes that need to allocate an extra OutputBuffer instance to finish the message.
@@ -88,7 +88,7 @@ public:
 	// Release all OutputBuffer objects in a chain
 	static void ReleaseAll(OutputBuffer *_ecv_null volatile &buf) noexcept;
 
-	static void Diagnostics(MessageType mtype) noexcept;
+	static void Diagnostics(const StringRef& reply) noexcept;
 
 	static unsigned int GetFreeBuffers() noexcept { return OUTPUT_BUFFER_COUNT - usedOutputBuffers; }
 

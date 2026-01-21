@@ -10,7 +10,7 @@
 
 #include "RepRapFirmware.h"
 
-// Struct to hold Gcode file information
+// Struct to hold GCode file information
 struct GCodeFileInfo
 {
 	struct ThumbnailInfo

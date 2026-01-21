@@ -129,7 +129,7 @@ void SerialWiFiPortDeinit(AsyncSerial*) noexcept
 {
 	for (Pin p : WiFiUartSercomPins)
 	{
-		pinMode(p, INPUT_PULLUP);								// just enable pullups on TxD and RxD pins
+		SetPinMode(p, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
 	}
 }
 
@@ -558,25 +558,25 @@ void WiFiInterface::Start() noexcept
 	// The ESP8266 is held in a reset state by a pulldown resistor until we enable it.
 	// Make sure the ESP8266 is in the reset state
 #if !WIFI_USES_ESP32
-	pinMode(EspResetPin, OUTPUT_LOW);
+	SetPinMode(EspResetPin, OUTPUT_LOW);
 #endif
 
-	pinMode(EspEnablePin, OUTPUT_LOW);
+	SetPinMode(EspEnablePin, OUTPUT_LOW);
 
 	// Set up our transfer request pin (GPIO4) as an output and set it low
-	pinMode(SamTfrReadyPin, OUTPUT_LOW);
+	SetPinMode(SamTfrReadyPin, OUTPUT_LOW);
 
 	// Set up our data ready pin (ESP8266 and ESP32 GPIO0) as an output and set it high ready to boot the ESP from flash
-	pinMode(EspDataReadyPin, OUTPUT_HIGH);
+	SetPinMode(EspDataReadyPin, OUTPUT_HIGH);
 
 #if WIFI_USES_ESP32
-	pinMode(SamCsPin, INPUT_PULLUP);		// ensure that SS is pulled high
+	SetPinMode(SamCsPin, INPUT_PULLUP);		// ensure that SS is pulled high
 #else
 	// Set our CS input (ESP8266 GPIO15) low ready for booting the ESP. This also clears the transfer ready latch on older Duet 2 boards.
-	pinMode(SamCsPin, OUTPUT_LOW);
+	SetPinMode(SamCsPin, OUTPUT_LOW);
 
 	// ESP8266 GPIO2 also needs to be high to boot. It's connected to MISO on the SAM, so set the pullup resistor on that pin
-	pinMode(APIN_ESP_SPI_MISO, INPUT_PULLUP);
+	SetPinMode(APIN_ESP_SPI_MISO, INPUT_PULLUP);
 #endif
 
 	// Make sure it has time to reset - no idea how long it needs, but 20ms should be plenty
@@ -594,11 +594,11 @@ void WiFiInterface::Start() noexcept
 
 #if !WIFI_USES_ESP32
 	// Relinquish control of our CS pin so that the ESP can take it over
-	pinMode(SamCsPin, INPUT);
+	SetPinMode(SamCsPin, INPUT, false);
 #endif
 
 	// Set the data request pin to be an input
-	pinMode(EspDataReadyPin, INPUT_PULLUP);
+	SetPinMode(EspDataReadyPin, INPUT_PULLUP, false);
 
 	// The ESP takes about 300ms before it starts talking to us, so don't wait for it here, do that in Spin()
 	spiTxUnderruns = spiRxOverruns = 0;
@@ -945,16 +945,15 @@ const char *_ecv_array WiFiInterface::TranslateEspResetReason(uint32_t reason) n
 			: "Unrecognised";
 }
 
-void WiFiInterface::Diagnostics(MessageType mtype) noexcept
+void WiFiInterface::Diagnostics(const StringRef& reply) noexcept
 {
-	platform.MessageF(mtype,
-						"=== WiFi ===\nInterface state: %s\n"
-						"Module is %s\n"
-						"Failed messages: pending %u, notrdy %u, noresp %u\n",
-						 	 GetStateName(),
-							 TranslateWiFiState(currentMode),
-							 transferAlreadyPendingCount, readyTimeoutCount, responseTimeoutCount
-					 );
+	reply.lcatf("=== WiFi ===\nInterface state: %s\n"
+				"Module is %s\n"
+				"Failed messages: pending %u, notrdy %u, noresp %u",
+					 GetStateName(),
+					 TranslateWiFiState(currentMode),
+					 transferAlreadyPendingCount, readyTimeoutCount, responseTimeoutCount
+			   );
 
 	if (GetState() != NetworkState::disabled && GetState() != NetworkState::starting1 && GetState() != NetworkState::starting2)
 	{
@@ -964,47 +963,46 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 		{
 			NetworkStatusResponse& r = status.Value();
 			r.versionText[ARRAY_UPB(r.versionText)] = 0;
-			platform.MessageF(mtype, "Firmware version %s\n", r.versionText);
-			platform.MessageF(mtype, "MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
-								r.macAddress[0], r.macAddress[1], r.macAddress[2], r.macAddress[3], r.macAddress[4], r.macAddress[5]);
-			platform.MessageF(mtype, "Module reset reason: %s, Vcc %.2f, flash size %" PRIu32 ", free heap %" PRIu32 "\n",
+			reply.lcatf("Firmware version %s", r.versionText);
+			reply.lcatf("Module reset reason: %s, Vcc %.2f, flash size %" PRIu32 ", free heap %" PRIu32,
 								TranslateEspResetReason(r.resetReason), (double)((float)r.vcc/1024), r.flashSize, r.freeHeap);
+			reply.lcatf("MAC address %02x:%02x:%02x:%02x:%02x:%02x",
+								r.macAddress[0], r.macAddress[1], r.macAddress[2], r.macAddress[3], r.macAddress[4], r.macAddress[5]);
 
 			if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 			{
-				platform.MessageF(mtype, "WiFi IP address %s\n", IP4String(r.ipAddress).c_str());
+				reply.lcatf("IP address %s", IP4String(r.ipAddress).c_str());
 			}
 
 			if (currentMode == WiFiState::connected)
 			{
 				constexpr const char *_ecv_array ConnectionModes[4] =  { "none", "802.11b", "802.11g", "802.11n" };
-				platform.MessageF(mtype, "Signal strength %ddBm, channel %u, mode %s, reconnections %u\n",
+				reply.lcatf("Signal strength %ddBm, channel %u, mode %s, reconnections %u",
 											(int)r.rssi, r.channel, ConnectionModes[r.phyMode], reconnectCount);
 			}
 			else if (currentMode == WiFiState::runningAsAccessPoint)
 			{
-				platform.MessageF(mtype, "Connected clients %u\n", (unsigned int)r.numClients);
+				reply.lcatf("Connected clients %u", (unsigned int)r.numClients);
 			}
 			// status, ssid and hostName not displayed
-			platform.MessageF(mtype, "Clock register %08" PRIx32 "\n", r.clockReg);
+			reply.lcatf("Clock register %08" PRIx32, r.clockReg);
 
 			// Print LwIP stats and other values over the ESP's UART line
 			if (SendCommand(NetworkCommand::diagnostics, 0, 0, 0, nullptr, 0, nullptr, 0) != ResponseEmpty)
 			{
-				platform.Message(mtype, "Failed to request ESP stats\n");
+				reply.lcatf("Failed to request ESP stats");
 			}
 		}
 		else
 		{
-			platform.Message(mtype, "Failed to get WiFi status\n");
+			reply.lcatf("Failed to get WiFi status");
 		}
 	}
-	platform.Message(mtype, "Socket states:");
+	reply.lcat("Socket states:");
 	for (size_t i = 0; i < NumWiFiTcpSockets; i++)
 	{
-		platform.MessageF(mtype, " %d", sockets[i]->State());
+		reply.catf(" %d", sockets[i]->State());
 	}
-	platform.Message(mtype, "\n");
 }
 
 // Enable or disable the network
@@ -2486,10 +2484,10 @@ void WiFiInterface::StartWiFi() noexcept
 void WiFiInterface::ResetWiFi() noexcept
 {
 #if !WIFI_USES_ESP32
-	pinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
+	SetPinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
 #endif
 
-	pinMode(EspEnablePin, OUTPUT_LOW);
+	SetPinMode(EspEnablePin, OUTPUT_LOW);
 
 #if !defined(SAME5x)
 	pinMode(APIN_SerialWiFi_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
@@ -2520,24 +2518,24 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 
 #if !WIFI_USES_ESP32
 	// Make sure the ESP8266 is in the reset state
-	pinMode(EspResetPin, OUTPUT_LOW);
+	SetPinMode(EspResetPin, OUTPUT_LOW);
 #endif
 
 	// Power down the ESP8266
-	pinMode(EspEnablePin, OUTPUT_LOW);
+	SetPinMode(EspEnablePin, OUTPUT_LOW);
 
 	// Set up our transfer request pin (GPIO4) as an output and set it low
-	pinMode(SamTfrReadyPin, OUTPUT_LOW);
+	SetPinMode(SamTfrReadyPin, OUTPUT_LOW);
 
 	// Set up our data ready pin (ESP GPIO0) as an output and set it low ready to boot the ESP from UART
-	pinMode(EspDataReadyPin, OUTPUT_LOW);
+	SetPinMode(EspDataReadyPin, OUTPUT_LOW);
 
 	// GPIO2 also needs to be high to boot up. It's connected to MISO on the SAM, so set the pullup resistor on that pin
-	pinMode(APIN_ESP_SPI_MISO, INPUT_PULLUP);
+	SetPinMode(APIN_ESP_SPI_MISO, INPUT_PULLUP);
 
 #if !WIFI_USES_ESP32
 	// Set our CS input (ESP GPIO15) low ready for booting the ESP. This also clears the transfer ready latch.
-	pinMode(SamCsPin, OUTPUT_LOW);
+	SetPinMode(SamCsPin, OUTPUT_LOW);
 #endif
 
 	// Make sure it has time to reset - no idea how long it needs, but 50ms should be plenty
@@ -2546,8 +2544,8 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	if (external)
 	{
 #if !defined(DUET3MINI)
-		pinMode(APIN_SerialWiFi_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
-		pinMode(APIN_SerialWiFi_RXD, INPUT_PULLUP);
+		SetPinMode(APIN_SerialWiFi_TXD, INPUT_PULLUP);				// just enable pullups on TxD and RxD pins
+		SetPinMode(APIN_SerialWiFi_RXD, INPUT_PULLUP);
 #endif
 	}
 	else

@@ -19,7 +19,7 @@ class RemoteZProbe final : public ZProbe
 public:
 	DECLARE_FREELIST_NEW_DELETE(RemoteZProbe)
 
-	RemoteZProbe(unsigned int num, CanAddress bn, ZProbeType p_type) noexcept : ZProbe(num, p_type), boardAddress(bn), lastValue(0), state(false) { }
+	RemoteZProbe(unsigned int num, CanAddress bn, ZProbeType p_type) noexcept : ZProbe(num, p_type), boardAddress(bn), lastValue(0) { }
 	~RemoteZProbe() noexcept override;
 
 	uint32_t GetRawReading() const noexcept override;
@@ -50,7 +50,6 @@ private:
 	CanAddress boardAddress;
 	RemoteInputHandle handle;
 	uint32_t lastValue;							// the most recent value received from a scanning analog Z probe
-	bool state;									// the state of a digital Z probe
 
 	static constexpr uint32_t ActiveProbeReportInterval = 2;
 	static constexpr uint32_t InactiveProbeReportInterval = 25;

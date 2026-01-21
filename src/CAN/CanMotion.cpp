@@ -47,7 +47,7 @@ namespace CanMotion
 	static Mutex stopListMutex;
 	static uint8_t nextSeq[CanId::MaxCanAddress + 1] = { 0 };
 
-	static CanMessageBuffer *GetBuffer(const PrepParams& params, DriverId canDriver) noexcept;
+	static CanMessageBuffer *_ecv_null GetBuffer(const PrepParams& params, DriverId canDriver) noexcept;
 	static void FreeMovementBuffers() noexcept;
 }
 
@@ -92,13 +92,15 @@ void CanMotion::StartMovement() noexcept
 	}
 }
 
-CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDriver) noexcept
+// If there is an existing CAN buffer for this move and CAN address, return it; otherwise create one
+CanMessageBuffer *_ecv_null CanMotion::GetBuffer(const PrepParams& params, DriverId canDriver) noexcept
 {
 	if (canDriver.localDriver >= MaxLinearDriversPerCanSlave)
 	{
-		return nullptr;
+		return nullptr;						// can't handle a local driver number this large, the message isn't big enough
 	}
 
+	// Search for an existing buffer
 	CanMessageBuffer* buf = movementBufferList;
 	while (buf != nullptr && buf->id.Dst() != canDriver.boardAddress)
 	{
@@ -112,7 +114,7 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 		if (buf == nullptr)
 		{
 			reprap.GetPlatform().Message(ErrorMessage, "Out of CAN buffers\n");
-			return nullptr;		//TODO error handling
+			return nullptr;
 		}
 
 		buf->next = movementBufferList;
@@ -123,9 +125,9 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 		if (buf->next == nullptr)
 		{
 			// This is the first CAN-connected board for this movement
-			move->accelerationClocks = params.accelClocks;
+			move->accelerationClocks = params.TotalAccelClocks();
 			move->steadyClocks = params.steadyClocks;
-			move->decelClocks = params.decelClocks;
+			move->decelClocks = params.TotalDecelClocks();
 			currentMoveClocks = params.TotalClocks();
 		}
 		else
@@ -135,8 +137,9 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 			move->steadyClocks = buf->next->msg.moveLinearShaped.steadyClocks;
 			move->decelClocks = buf->next->msg.moveLinearShaped.decelClocks;
 		}
-		move->acceleration = params.acceleration/params.totalDistance;			// scale the acceleration to correspond to unit distance
-		move->deceleration = params.deceleration/params.totalDistance;			// scale the deceleration to correspond to unit distance
+
+		move->acceleration = params.acceleration/params.totalDistance;					// scale the acceleration to correspond to unit distance
+		move->deceleration = -params.deceleration/params.totalDistance;					// scale the deceleration to correspond to unit distance
 		move->extruderDrives = 0;
 		move->numDrivers = canDriver.localDriver + 1;
 		move->zero1 = move->zero2 = 0;
@@ -280,7 +283,7 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 				{
 					sl->sentRevertRequest = true;
 					revertMsg->whichDrives = driversToRevert;
-					revertMsg->clocksAllowed = (StepClockRate * BasicDriverPositionRevertMillis)/1000;
+					revertMsg->clocksAllowed = MillisToStepClocks(BasicDriverPositionRevertMillis);
 					urgentMessageBuffer.dataLength = revertMsg->GetActualDataLength(numDriversReverted);
 					//debugPrintf("Reverting drivers %u by %" PRIi32 " on board %u\n", driversToRevert,revertMsg->finalStepCounts[0], sl->boardAddress);
 					return &urgentMessageBuffer;
@@ -300,13 +303,6 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 }
 
 // The next 4 functions may be called from the step ISR, so they can't send CAN messages directly
-
-void CanMotion::InsertHiccup(uint32_t numClocks) noexcept
-{
-	//TODO sort out how we tell expansion boards about hiccups
-//	hiccupToInsert += numClocks;
-//	CanInterface::WakeAsyncSender();
-}
 
 // Flag a CAN-connected driver as not moving when we haven't sent the movement message yet
 void CanMotion::StopDriverWhenProvisional(DriverId driver) noexcept

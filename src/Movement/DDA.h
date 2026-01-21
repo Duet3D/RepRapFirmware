@@ -12,6 +12,7 @@
 #include "DriveMovement.h"
 #include "StepTimer.h"
 #include "MoveSegment.h"
+#include "MovementError.h"
 #include <Platform/Tasks.h>
 #include "RawMove.h"
 #include <GCodes/SimulationMode.h>
@@ -25,16 +26,23 @@ class CanMessageMovementLinearShaped;
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
 struct PrepParams
 {
-	float totalDistance;
+	uint32_t accelClocks, steadyClocks, decelClocks;
+	float acceleration;								// the acceleration to use, always positive
+	float deceleration;								// the deceleration to use, always negative
+# define peakAcceleration	acceleration
+# define peakDeceleration	deceleration
 	float accelDistance;
 	float decelStartDistance;
-	uint32_t accelClocks, steadyClocks, decelClocks;
-	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
-	float topSpeed;									// the top speed, may be modified by the input shaper
+	float totalDistance;
+	float topSpeed;									// the top speed reached
 	bool useInputShaping;
 
+	uint32_t TotalAccelClocks() const noexcept { return accelClocks; }
+	uint32_t TotalDecelClocks() const noexcept { return decelClocks; }
+	float TotalAccelDistance() const noexcept { return accelDistance; }
+
 	// Get the total clocks needed
-	uint32_t TotalClocks() const noexcept { return accelClocks + steadyClocks + decelClocks; }
+	uint32_t TotalClocks() const noexcept { return TotalAccelClocks() + steadyClocks + TotalDecelClocks(); }
 
 	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
 	void SetFromDDA(const DDA& dda) noexcept;
@@ -66,16 +74,16 @@ public:
 	void operator delete(void* ptr) noexcept {}
 	void operator delete(void* ptr, std::align_val_t align) noexcept {}
 
-	bool InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) noexcept SPEED_CRITICAL;	// Set up a new move, returning true if it represents real movement
+	MovementError InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) noexcept SPEED_CRITICAL;	// Set up a new move, returning true if it represents real movement
 	bool InitLeadscrewMove(DDARing& ring, float feedrate, const float amounts[MaxDriversPerAxis]) noexcept;		// Set up a leadscrew motor move
 #if SUPPORT_ASYNC_MOVES
-	bool InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept;			// Set up an async move
+	bool InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept;							// Set up an async move
 #endif
 
 	void SetNext(DDA *n) noexcept { next = n; }
 	void SetPrevious(DDA *p) noexcept { prev = p; }
 	bool Free() noexcept;
-	void Prepare(DDARing& ring, SimulationMode simMode) noexcept SPEED_CRITICAL;					// Calculate all the values and freeze this DDA
+	void Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode simMode) noexcept SPEED_CRITICAL;	// Calculate all the values and freeze this DDA
 	bool CanPauseAfter() const noexcept;
 	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }							// Return true if this involves both XY movement and extrusion
 	bool UsingStandardFeedrate() const noexcept { return flags.usingStandardFeedrate; }
@@ -87,15 +95,12 @@ public:
 	bool IsScanningProbeMove() const noexcept { return flags.scanningProbeMove; }
 #endif
 
-	DDAState GetState() const noexcept { return state; }
-	bool IsCommitted() const noexcept { return state == DDA::committed; }
+	DDAState GetState() const noexcept { return (DDAState)flags.stateBits; }
+	void SetState(DDAState state) noexcept { flags.stateBits = (uint32_t)state; }
+	bool IsCommitted() const noexcept { return GetState() == DDA::committed; }
 	DDA* GetNext() const noexcept { return next; }
 	DDA* GetPrevious() const noexcept { return prev; }
 	uint32_t GetTimeLeft() const noexcept;
-
-#if SUPPORT_REMOTE_COMMANDS
-	bool InitFromRemote(DDARing& ring, const CanMessageMovementLinearShaped& msg) noexcept;
-#endif
 
 	const int32_t *_ecv_array DriveCoordinates() const noexcept { return endPoint; }				// Get endpoints of a move in machine coordinates
 	void SetDriveCoordinate(size_t drive, int32_t ep) noexcept;										// Force an end point
@@ -107,50 +112,44 @@ public:
 	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(requestedSpeed); }
 	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(topSpeed); }
 	float GetAccelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
-#if SUPPORT_S_CURVE
-		{ return InverseConvertAcceleration(peakAcceleration); }
-#else
-		{ return InverseConvertAcceleration(acceleration); }
-#endif
+		{ return InverseConvertAcceleration(maxAcceleration); }
 	float GetDecelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
-#if SUPPORT_S_CURVE
-		{ return InverseConvertAcceleration(peakDeceleration); }
-#else
-		{ return InverseConvertAcceleration(deceleration); }
-#endif
+		{ return InverseConvertAcceleration(maxDeceleration); }
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float GetTotalExtrusionRate() const noexcept;
 
 	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcept;	// Try to push babystepping earlier in the move queue
 	const Tool *_ecv_null GetTool() const noexcept { return tool; }
 	float GetTotalDistance() const noexcept { return totalDistance; }
-	void LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration) noexcept;	// Limit the speed an acceleration of this move
+	void LimitSpeedAndAcceleration(float maxSpeed, float maxAllowedAcceleration) noexcept;	// Limit the speed an acceleration of this move
 
 	float GetProportionDone() const noexcept;										// Return the proportion of extrusion for the complete multi-segment move already done
 	float GetInitialUserC0() const noexcept { return initialUserC0; }
 	float GetInitialUserC1() const noexcept { return initialUserC1; }
+	float GetOriginalFeedRate() const noexcept { return (float)originalFeedRate; }
 
 	uint32_t GetClocksNeeded() const noexcept { return clocksNeeded; }
 	bool HasExpired() const noexcept pre(IsCommitted());
-	bool IsGoodToPrepare() const noexcept;
 	bool IsNonPrintingExtruderMove() const noexcept { return flags.isNonPrintingExtruderMove; }
 	void UpdateMovementAccumulators(volatile int32_t *accumulators) const noexcept;
 	uint32_t GetMoveStartTime() const noexcept { return afterPrepare.moveStartTime; }
 	uint32_t GetMoveFinishTime() const noexcept { return afterPrepare.moveStartTime + clocksNeeded; }
 
 	float GetAverageExtrusionSpeed() const noexcept pre(IsCommitted()) { return afterPrepare.averageExtrusionSpeed; }
+	bool HasForwardExtrusion() const noexcept { return flags.hasForwardExtrusion; }
 	bool HaveDoneIoBits() const noexcept { return flags.doneIoBits; }
 	bool HaveDoneFeedForward() const noexcept { return flags.doneFeedForward; }
+	bool HaveDoneOutputOnExtrude() const noexcept { return flags.doneOutputOnExtrude; }
 	void SetDoneIoBits() noexcept { flags.doneIoBits = true; }
 	void SetDoneFeedForward() noexcept { flags.doneFeedForward = true; }
+	void SetDoneOutputOnExtrude() noexcept { flags.doneOutputOnExtrude = true; }
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }
-	bool ControlLaser() const noexcept { return flags.controlLaser; }
 #endif
 
 #if SUPPORT_LASER
-	uint32_t ManageLaserPower() const noexcept;										// Manage the laser power
+	uint32_t ManageLaserPower(Platform& p) const noexcept;							// Manage the laser power
 #endif
 
 #if SUPPORT_IOBITS
@@ -174,7 +173,9 @@ public:
 private:
 	static constexpr float MinimumAccelOrDecelClocks = 10.0;				// Minimum number of acceleration or deceleration clocks we try to ensure
 
-	void RecalculateMove(DDARing& ring) noexcept SPEED_CRITICAL;
+	MovementError RecalculateMove(DDARing& ring) noexcept SPEED_CRITICAL;
+	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
+
 	void MatchSpeeds() noexcept SPEED_CRITICAL;
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be an acceleration-only move
@@ -184,7 +185,6 @@ private:
 	int32_t PrepareRemoteExtruder(size_t drive, float& extrusionPending, float speedChange) const noexcept;
 #endif
 
-	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
     static float Normalise(float v[], AxesBitmap unitLengthAxes) noexcept;  // Normalise a vector to unit length over the specified axes
     static float Normalise(float v[]) noexcept; 							// Normalise a vector to unit length over all axes
 	float NormaliseLinearMotion(AxesBitmap linearAxes) noexcept;			// Make the direction vector unit-normal in XYZ
@@ -198,37 +198,43 @@ private:
     DDA *_ecv_null next;							// The next one in the ring
 	DDA *_ecv_null prev;							// The previous one in the ring
 
-	volatile DDAState state;						// What state this DDA is in
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	LaserPwmOrIoBits laserPwmOrIoBits;				// laser PWM required or port state required during this move (here because it is currently 16 bits)
+#endif
+
+	float16_t originalFeedRate;						// the feedrate in original units when this move was created
 
 	union
 	{
 		struct
 		{
-			uint16_t canPauseAfter : 1,				// True if we can pause at the end of this move
-					 isPrintingMove : 1,			// True if this move includes XY movement and extrusion
+			// Flag bits. The first 4 or 5 are copied from similar flag bits in RawMove, so keep them together and in the same order so that the compiler can copy them using a ubfx instruction.
+			uint32_t stateBits : 3,					// What state this DDA is in
+					 canPauseAfter : 1,				// True if we can pause at the end of this move
+			 	 	 checkEndstops : 1,				// True if this move monitors endstops or Z probe
+					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
 					 usePressureAdvance : 1,		// True if pressure advance should be applied to any forward extrusion
+#if SUPPORT_SCANNING_PROBES
+					 scanningProbeMove : 1, 	 	// True if this is a scanning Z probe move
+#endif
+
+					 isPrintingMove : 1,			// True if this move includes XY movement and extrusion
 					 hadLookaheadUnderrun : 1,		// True if the lookahead queue was not long enough to optimise this move
 					 xyMoving : 1,					// True if movement along an X axis or a Y axis was requested, even if it's too small to do
 					 isLeadscrewAdjustmentMove : 1,	// True if this is a leadscrews adjustment move
-					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
 					 isNonPrintingExtruderMove : 1,	// True if this move is an extruder-only move, or involves reverse extrusion (and possibly axis movement too)
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
-					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
-					 controlLaser : 1,				// True if this move controls the laser or iobits
+					 controlLaserOrIoBits : 1,		// True if this move controls the laser or iobits
 					 isolatedMove : 1,				// set if we disable input shaping for this move and wait for it to finish e.g. for a G1 H2 move
-					 doneIoBits : 1,				// set if we have written the IOBITS ports for this move
-					 doneFeedForward : 1			// set if we have commanded feedforward for this move
-#if SUPPORT_SCANNING_PROBES
-					 , scanningProbeMove : 1 	 	// True if this is a scanning Z probe move
-#endif
-					 ;
-		};
-		uint16_t all;								// so that we can print all the flags at once for debugging
-	} flags;
+					 hasForwardExtrusion : 1,		// set if any extruder has forward movement (used by M571)
 
-#if SUPPORT_LASER || SUPPORT_IOBITS
-	LaserPwmOrIoBits laserPwmOrIoBits;				// laser PWM required or port state required during this move (here because it is currently 16 bits)
-#endif
+					 // These bits are modified during processing of the move
+					 doneIoBits : 1,				// set if we have written the IOBITS ports for this move
+					 doneFeedForward : 1,			// set if we have commanded feedforward for this move
+					 doneOutputOnExtrude: 1;		// set if we have set/cleared output on extrude for this move
+		};
+		uint32_t all;								// so that we can print all the flags at once for debugging
+	} flags;
 
 	const Tool *_ecv_null tool;						// which tool (if any) is active
 
@@ -237,18 +243,7 @@ private:
 	int32_t endPoint[MaxAxesPlusExtruders];  		// Machine coordinates of the endpoint
 	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;							// How long is the move in hypercuboid space
-#if SUPPORT_S_CURVE
-    float initialAcceleration;
-    float peakAcceleration;
-    float finalAcceleration;
-    float initialDeceleration;
-    float peakDeceleration;
-    float finalDeceleration;
-	float jerk;										// The magnitude of the rate of change of acceleration or deceleration, always positive
-#else
-	float acceleration;								// The acceleration to use, always positive
-	float deceleration;								// The deceleration to use, always positive
-#endif
+    float maxAcceleration, maxDeceleration;			// The maximum acceleration and deceleration to use, always positive
     float requestedSpeed;							// The speed that the user asked for
     float virtualExtruderPosition;					// the virtual extruder position at the end of this move, used for pause/resume
 
@@ -292,20 +287,9 @@ private:
 #endif
 };
 
-// Return true if there is no reason to delay preparing this move
-inline bool DDA::IsGoodToPrepare() const noexcept
-{
-	return endSpeed >= topSpeed;							// if it never decelerates, we can't improve it
-}
-
 inline bool DDA::CanPauseAfter() const noexcept
 {
-	return flags.canPauseAfter
-#if SUPPORT_CAN_EXPANSION
-		// We can't easily cancel moves that have already been sent to CAN expansion boards
-		&& next->state == DDAState::provisional
-#endif
-		;
+	return flags.canPauseAfter && next->GetState() == DDAState::provisional;
 }
 
 #endif /* DDA_H_ */

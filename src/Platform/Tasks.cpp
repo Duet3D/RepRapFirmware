@@ -40,12 +40,12 @@ const char memPattern = (char)0xA5;		// this must be the same pattern as FreeRTO
 // 1. After running delta auto calibration with Move debugging enabled
 // 2. We create an array of (2 * MaxAxes^2) floats when inverting the movement matrix for Core kinematics.
 #if SAME70
-// On the SAME70 we use matrices of doubles when doing auto calibration, so we need 1800 words of stack even when MaxAxes is only 15
-constexpr unsigned int MainTaskStackWords = max<unsigned int>(1800, (MaxAxes * MaxAxes * 2) + 550);
+// On the SAME70 we use matrices of doubles when doing auto calibration, so we need 1800 words of stack even when MaxAxes is only 15 (now 1860 after increasing GCodeReplyLength)
+constexpr unsigned int MainTaskStackWords = max<unsigned int>(1860, (MaxAxes * MaxAxes * 2) + 610);
 #else
 // On other processors we use matrices of floats when doing auto calibration
-// Increase minimum stack words to 1370 for WPA Enterprise support
-constexpr unsigned int MainTaskStackWords = max<unsigned int>(1370, (MaxAxes * MaxAxes * 2) + 550);
+// Increase minimum stack words to 1370 for WPA Enterprise support (now 1430 after increasing GCodeReplyLength)
+constexpr unsigned int MainTaskStackWords = max<unsigned int>(1430, (MaxAxes * MaxAxes * 2) + 610);
 #endif
 
 static Task<MainTaskStackWords> mainTask;
@@ -136,21 +136,21 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array _ecv_null stk) noexcept
 	const bool DiagOnPolarity = (bt >= BoardType::Duet3_6HC_v102) ? DiagOnPolarity102 : DiagOnPolarityPre102;
 	if (bt >= BoardType::Duet3_6HC_v102)
 	{
-		pinMode(UsbPowerSwitchPin, OUTPUT_LOW);								// turn USB power off
-		pinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
+		SetPinMode(UsbPowerSwitchPin, OUTPUT_LOW);							// turn USB power off
+		SetPinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
 	}
 #endif
 #if defined(DUET3_MB6XD)
 	const BoardType bt = Platform::GetMB6XDBoardType();
 	if (bt >= BoardType::Duet3_6XD_v101)
 	{
-		pinMode(UsbPowerSwitchPin, OUTPUT_LOW);								// turn USB power off
-		pinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
+		SetPinMode(UsbPowerSwitchPin, OUTPUT_LOW);							// turn USB power off
+		SetPinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
 	}
 #endif
-	pinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up status LED for debugging and turn it off
+	SetPinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);		// set up status LED for debugging and turn it off
 #if defined(DUET3MINI) || defined(DUET3_MB6HC) || defined(DUET3_MB6XD)
-	pinMode(ActLedPin, (ActOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up activity LED and turn it off
+	SetPinMode(ActLedPin, (ActOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);		// set up activity LED and turn it off
 #endif
 
 #if !defined(DEBUG)		// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
@@ -322,11 +322,10 @@ extern "C" uint64_t TaskResetRunTimeCounter() noexcept
 	return ret;
 }
 
-// Write data about the current task
-void Tasks::Diagnostics(MessageType mtype) noexcept
+// Populate the reply buffer with task diagnostics
+void Tasks::Diagnostics(const StringRef& reply) noexcept
 {
-	Platform& p = reprap.GetPlatform();
-	p.Message(mtype, "=== RTOS ===\n");
+	reply.copy("=== RTOS ===");
 	// Print memory stats
 	{
 		const char *_ecv_array const ramstart =
@@ -335,20 +334,14 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 #else
 			reinterpret_cast<const char *_ecv_array>(IRAM_ADDR);
 #endif
-		p.MessageF(mtype, "Static ram: %d\n", (const char *_ecv_array)&_end - ramstart);
-
 		const struct mallinfo mi = mallinfo();
-		p.MessageF(mtype, "Dynamic ram: %d of which %d recycled\n", mi.uordblks, mi.fordblks);
-		p.MessageF(mtype, "Never used RAM %d, free system stack %d words\n", GetNeverUsedRam(), GetHandlerFreeStack()/4);
-
-		//DEBUG
-		//p.MessageF(mtype, "heap top %.08" PRIx32 ", limit %.08" PRIx32 "\n", (uint32_t)heapTop, (uint32_t)heapLimit);
-		//ENDDB
+		reply.lcatf("RAM: static %d, dynamic %d (%d recycled), never used %d, free sys stack %d",
+					(const char *_ecv_array)&_end - ramstart, mi.uordblks, mi.fordblks, GetNeverUsedRam(), GetHandlerFreeStack()/4);
 	}	// end memory stats scope
 
 	const uint64_t timeSinceLastCall = TaskResetRunTimeCounter();
 	float totalCpuPercent = 0.0;
-	p.Message(mtype, "Tasks:");
+	reply.lcat("Tasks:");
 	for (TaskBase *_ecv_from _ecv_null t = TaskBase::GetTaskList(); t != nullptr; t = t->GetNext())
 	{
 		ExtendedTaskStatus_t taskDetails;
@@ -358,7 +351,7 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 		switch (taskDetails.eCurrentState)
 		{
 		case esRunning:
-			stateText = "running";
+			stateText = "run";
 			break;
 		case esReady:
 			stateText = "ready";
@@ -370,10 +363,10 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 			stateText = "rWait:";
 			break;
 		case esDelaying:
-			stateText = "delaying";
+			stateText = "delay";
 			break;
 		case esSuspended:
-			stateText = "suspended";
+			stateText = "susp";
 			break;
 		case esBlocked:
 			stateText = "blocked";
@@ -385,8 +378,7 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 
 		const float cpuPercent = (100 * (float)taskDetails.ulRunTimeCounter)/(float)timeSinceLastCall;
 		totalCpuPercent += cpuPercent;
-		String<StringLength50> str;
-		str.printf(" %s(%u,%s", taskDetails.pcTaskName, (unsigned int)taskDetails.uxCurrentPriority, stateText);
+		reply.catf(" %s(%u,%s", taskDetails.pcTaskName, (unsigned int)taskDetails.uxCurrentPriority, stateText);
 		switch (taskDetails.eCurrentState)
 		{
 		case esResourceWaiting:
@@ -396,7 +388,7 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 				{
 					if ((const void *)m == taskDetails.pvResource)
 					{
-						str.catf(" %s", m->GetName());
+						reply.catf(" %s", m->GetName());
 						break;
 					}
 					m = m->GetNext();
@@ -405,26 +397,26 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 			break;
 
 		case esNotifyWaiting:
-			str.catf(" %" PRIu32, taskDetails.notifyIndex);
+			reply.catf(" %" PRIu32, taskDetails.notifyIndex);
 			break;
 
 		default:
 			break;
 		}
-		str.catf(",%.1f%%,%u)", (double)cpuPercent, (unsigned int)taskDetails.usStackHighWaterMark);
-		p.Message(mtype, str.c_str());
+
+		// Print the free stack space in words. The -4 is needed because the FreeRTOS stack overflow check is triggered if any of the last 4 words is used.
+		reply.catf(",%.1f%%,%u)", (double)cpuPercent, (unsigned int)taskDetails.usStackHighWaterMark - 4);
 	}
-	p.MessageF(mtype, ", total %.1f%%\nOwned mutexes:", (double)totalCpuPercent);
+	reply.catf(", total %.1f%%\nMutexes:", (double)totalCpuPercent);
 
 	for (const Mutex *_ecv_null m = Mutex::GetMutexList(); m != nullptr; m = m->GetNext())
 	{
 		const TaskHandle _ecv_null holder = m->GetHolder();
 		if (holder != nullptr)
 		{
-			p.MessageF(mtype, " %s(%s)", m->GetName(), pcTaskGetName(holder->GetFreeRTOSHandle()));
+			reply.catf(" %s(%s)", m->GetName(), pcTaskGetName(holder->GetFreeRTOSHandle()));
 		}
 	}
-	p.Message(mtype, "\n");
 }
 
 TaskHandle Tasks::GetMainTask() noexcept

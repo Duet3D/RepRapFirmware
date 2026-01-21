@@ -537,18 +537,6 @@ void SbcInterface::ExchangeData() noexcept
 					break;
 				}
 
-				// If there is a macro file waiting, the first instruction must be conditional. Don't block any longer...
-				if (gb->IsWaitingForMacro())
-				{
-					gb->ResolveMacroRequest(false, false);
-#ifdef TRACK_FILE_CODES
-					if (gb->IsFileChannel())
-					{
-						fileMacrosRunning++;
-					}
-#endif
-				}
-
 				try
 				{
 					// Evaluate the expression and send the result to DSF
@@ -557,6 +545,7 @@ void SbcInterface::ExchangeData() noexcept
 					{
 						ExpressionParser parser(gb, expression.c_str(), expression.c_str() + expression.strlen());
 						const ExpressionValue val = parser.Parse();
+						parser.CheckForExtraCharacters();
 						if (val.GetType() == TypeCode::HeapArray)
 						{
 							// Write heap arrays as JSON
@@ -565,6 +554,22 @@ void SbcInterface::ExchangeData() noexcept
 							{
 								ObjectExplorationContext context;
 								ReportHeapArrayAsJson(json, context, nullptr, val.ahVal, "");
+								packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), json);
+							}
+							else
+							{
+								packetAcknowledged = false;
+							}
+						}
+						else if (val.GetType() == TypeCode::ObjectModelArray)
+						{
+							// Object model arrays need to be output differently
+							OutputBuffer *json;
+							if (OutputBuffer::Allocate(json))
+							{
+								ObjectExplorationContext context;
+								context.AddIndex(val.param >> 8);
+								val.omVal->ReportItemAsJsonFull(json, context, nullptr, val, "");
 								packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), json);
 							}
 							else
@@ -845,6 +850,22 @@ void SbcInterface::ExchangeData() noexcept
 					{
 						ObjectExplorationContext context;
 						ReportHeapArrayAsJson(json, context, nullptr, ev.ahVal, "");
+						packetAcknowledged = transfer.WriteSetVariableResult(varName.c_str(), json);
+					}
+					else
+					{
+						packetAcknowledged = false;
+					}
+				}
+				else if (ev.GetType() == TypeCode::ObjectModelArray)
+				{
+					// Object model arrays need to be output differently
+					OutputBuffer *json;
+					if (OutputBuffer::Allocate(json))
+					{
+						ObjectExplorationContext context;
+						context.AddIndex(ev.param >> 8);
+						ev.omVal->ReportItemAsJsonFull(json, context, nullptr, ev, "");
 						packetAcknowledged = transfer.WriteSetVariableResult(varName.c_str(), json);
 					}
 					else
@@ -1144,11 +1165,15 @@ void SbcInterface::ExchangeData() noexcept
 			continue;
 		}
 
-		// Invalidate buffered codes if required
+		// Invalidate buffered codes if required. It may take multiple transfers before a
+		// print is actually paused, so make sure no more job codes are accepted until then
 		if (gb->IsInvalidated())
 		{
-			InvalidateBufferedCodes(gb->GetChannel());
-			gb->Invalidate(false);
+			InvalidateBufferedCodes(channel);
+			if (!reportPause || (channel != GCodeChannel::File && channel != GCodeChannel::File2))
+			{
+				gb->Invalidate(false);
+			}
 		}
 
 		// Deal with macro files being closed
@@ -1245,9 +1270,20 @@ void SbcInterface::ExchangeData() noexcept
 				}
 
 				// Send pending firmware codes
-				if (gb->IsSendRequested() && transfer.WriteDoCode(channel, gb->DataStart(), gb->DataLength()))
+				if (gb->IsSendRequested())
 				{
-					gb->SetFinished(true);
+					if (gb->HadExplicitLineNumber())
+					{
+						// Unfortunately, the explicit line number is stripped from the G-code data when we get here.
+						// That means we need to prepend it again before the full code is sent over to the SBC
+						String<MaxGCodeLength> code;
+						code.printf("N%" PRIu32 " %s", gb->GetExplicitLineNumber(), gb->DataStart());
+						gb->SetFinished(transfer.WriteDoCode(channel, code.c_str(), code.strlen()));
+					}
+					else
+					{
+						gb->SetFinished(transfer.WriteDoCode(channel, gb->DataStart(), gb->DataLength()));
+					}
 				}
 			}
 		}
@@ -1374,14 +1410,14 @@ void SbcInterface::InvalidateResources() noexcept
 	reprap.GetHeat().SwitchOffAll(true);
 }
 
-void SbcInterface::Diagnostics(MessageType mtype) noexcept
+void SbcInterface::Diagnostics(const StringRef& reply) noexcept
 {
-	reprap.GetPlatform().Message(mtype, "=== SBC interface ===\n");
-	transfer.Diagnostics(mtype);
-	reprap.GetPlatform().MessageF(mtype, "State: %d, disconnects: %" PRIu32 ", timeouts: %" PRIu32 " total, %" PRIu32 " by SBC, IAP RAM available 0x%05" PRIx32 "\n", (int)state, numDisconnects, numTimeouts, numSbcTimeouts, iapRamAvailable);
-	reprap.GetPlatform().MessageF(mtype, "Buffer RX/TX: %d/%d-%d, open files: %u\n", (int)rxPointer, (int)txPointer, (int)txEnd, numOpenFiles);
+	reply.copy( "=== SBC interface ===");
+	transfer.Diagnostics(reply);
+	reply.lcatf("State: %d, disconnects: %" PRIu32 ", timeouts: %" PRIu32 " total, %" PRIu32 " by SBC, IAP RAM available 0x%05" PRIx32, (int)state, numDisconnects, numTimeouts, numSbcTimeouts, iapRamAvailable);
+	reply.lcatf("Buffer RX/TX: %d/%d-%d, open files: %u", (int)rxPointer, (int)txPointer, (int)txEnd, numOpenFiles);
 #ifdef TRACK_FILE_CODES
-	reprap.GetPlatform().MessageF(mtype, "File codes read/handled: %d/%d, file macros open/closing: %d %d\n", (int)fileCodesRead, (int)fileCodesHandled, (int)fileMacrosRunning, (int)fileMacrosClosing);
+	reply.lcatf("File codes read/handled: %d/%d, file macros open/closing: %d %d", (int)fileCodesRead, (int)fileCodesHandled, (int)fileMacrosRunning, (int)fileMacrosClosing);
 #endif
 }
 

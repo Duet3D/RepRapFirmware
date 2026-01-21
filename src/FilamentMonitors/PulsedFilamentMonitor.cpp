@@ -320,11 +320,11 @@ FilamentSensorStatus PulsedFilamentMonitor::Clear() noexcept
 }
 
 // Print diagnostic info for this sensor
-void PulsedFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder) noexcept
+void PulsedFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
 {
 	Poll();
-	const char *_ecv_array const statusText = (samplesReceived < 2) ? "no data received" : "ok";
-	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: %s\n", extruder, statusText);
+	const char* const statusText = (samplesReceived < 2) ? "no data received" : "ok";
+	reply.lcatf("Driver %u: %s", GetDriver(), statusText);
 }
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -402,14 +402,6 @@ void PulsedFilamentMonitor::GetLiveData(FilamentMonitorDataNew2& data) const noe
 	data.ClearReservedFields();
 	data.position = sensorValue & 0x0FFF;
 	data.hasLiveData = false;
-}
-
-// Print diagnostic info for this sensor
-void PulsedFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
-{
-	Poll();
-	const char* const statusText = (samplesReceived < 2) ? "no data received" : "ok";
-	reply.lcatf("Driver %u: %s", GetDriver(), statusText);
 }
 
 #endif

@@ -28,12 +28,12 @@ namespace DuetExpansion
 	void DueXnTaskInit() noexcept;											// Create the DueXn task and enable the associated interrupt from the DueXn
 	const char* _ecv_array null GetExpansionBoardName() noexcept;			// Return the name of the expansion board, or nullptr if no expansion board
 	const char* _ecv_array null GetAdditionalExpansionBoardName() noexcept;	// Return the name of the additional expansion board, or nullptr if no expansion board
-	void SetPinMode(Pin pin, PinMode mode) noexcept;						// Set the I/O mode of a pin
+	void SetPinMode(Pin pin, PinMode mode, bool debounce) noexcept;			// Set the I/O mode of a pin
 	bool DigitalRead(Pin pin) noexcept;										// Read a pin
 	void DigitalWrite(Pin pin, bool high) noexcept;							// Write a pin
 	void AnalogOut(Pin pin, float pwm) noexcept;							// Set the PWM value on this pin
 	uint16_t DiagnosticRead() noexcept;										// Diagnose the SX1509 by setting all pins as inputs and reading them
-	void Diagnostics(MessageType mtype) noexcept;							// Print diagnostic data
+	void Diagnostics(const StringRef& reply) noexcept;						// Print diagnostic data
 }
 
 #endif /* SRC_DUETNG_DUEXN_H_ */

@@ -47,6 +47,11 @@
 # include <Duet3Ate.h>
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+# include <CanMessageGenericTables.h>
+#endif
+
 #if HAS_HIGH_SPEED_SD
 
 # if !SAME5x
@@ -281,7 +286,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "macros",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetMacroDir()),						ObjectModelEntryFlags::verbose },
 	{ "menu",					OBJECT_MODEL_FUNC_NOSELF(MENU_DIR),										ObjectModelEntryFlags::verbose },
 	{ "system",					OBJECT_MODEL_FUNC_NOSELF(ExpressionValue::SpecialType::sysDir, 0),		ObjectModelEntryFlags::none },
-	{ "web",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetWebDir()),						ObjectModelEntryFlags::verbose },
+	{ "web",					OBJECT_MODEL_FUNC_NOSELF(ExpressionValue::SpecialType::webDir, 0),		ObjectModelEntryFlags::none },
 #endif
 
 	// 2. limits
@@ -312,6 +317,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #endif
 	{ "monitorsPerHeater",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxMonitorsPerHeater),				ObjectModelEntryFlags::verbose },
 	{ "portsPerHeater",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxPortsPerHeater),					ObjectModelEntryFlags::verbose },
+	{ "reportedAxes",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxReportedAxes),						ObjectModelEntryFlags::verbose },
 	{ "restorePoints",			OBJECT_MODEL_FUNC_NOSELF((int32_t)NumVisibleRestorePoints),				ObjectModelEntryFlags::verbose },
 	{ "sensors",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxSensors),							ObjectModelEntryFlags::verbose },
 	{ "spindles",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxSpindles),							ObjectModelEntryFlags::verbose },
@@ -420,7 +426,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 #else
 	0,																						// directories
 #endif
-	26 + SUPPORT_LED_STRIPS,																// limits
+	27 + SUPPORT_LED_STRIPS,																// limits
 	22 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
 	2,																						// state.beep
 	12 + (unsigned int)HAS_NETWORKING + (2 * HAS_MASS_STORAGE) + ((unsigned int)HAS_MASS_STORAGE | (unsigned int)HAS_EMBEDDED_FILES | (unsigned int)HAS_SBC_INTERFACE) + SUPPORT_LED_STRIPS,	// seqs
@@ -440,13 +446,12 @@ RepRap::RepRap() noexcept
 	  ticksInSpinState(0), heatTaskIdleTicks(0),
 	  beepFrequency(0), beepDuration(0), beepTimer(0),
 	  diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
-	  spinningModule(Module::none), stopped(false), active(false), processingConfig(true)
+	  spinningModule(Module::numModules), stopped(false), active(false), processingConfig(true)
 #if HAS_SBC_INTERFACE
 	  , usingSbcInterface(false)						// default to not using the SBC interface until we have checked for config.g on an SD card,
 														// because a disconnected SBC interface can generate noise which may trigger interrupts and DMA
 #endif
 {
-	ClearDebug();
 	// Don't call constructors for other objects here
 }
 
@@ -724,12 +729,12 @@ void RepRap::Spin() noexcept
 #endif
 
 	ticksInSpinState = 0;
-	spinningModule = Module::none;
+	spinningModule = Module::numModules;
 
 	// Check if we need to send diagnostics
 	if (diagnosticsDestination != MessageType::NoDestinationMessage)
 	{
-		Diagnostics(diagnosticsDestination);
+		GenerateDeferredDiagnostics(diagnosticsDestination);				// call out to separate function to keep stack usage under control
 		diagnosticsDestination = MessageType::NoDestinationMessage;
 	}
 
@@ -806,114 +811,203 @@ void RepRap::Spin() noexcept
 	RTOSIface::Yield();
 }
 
-void RepRap::Timing(MessageType mtype) noexcept
+// Send diagnostics to the specified destination. This is in a separate function so that the large string doesn't take up main task stack space all the time.
+__attribute__((noinline)) void RepRap::GenerateDeferredDiagnostics(MessageType destination) noexcept
 {
-	platform->MessageF(mtype, "Slowest loop: %.2fms; fastest: %.2fms\n", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+	String<GCodeReplyLength> buf;
+	Diagnostics(destination, buf.GetRef());
+}
+
+void RepRap::Timing(const StringRef& reply) noexcept
+{
+	reply.lcatf("Slowest loop: %.2fms; fastest: %.2fms", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
 }
 
-void RepRap::Diagnostics(MessageType mtype) noexcept
+// Report diagnostics. 'reply' is the buffer normally used for GCode replies, which we can use here as a scratch buffer.
+void RepRap::Diagnostics(MessageType mtype, const StringRef& reply) noexcept
 {
-	platform->Message(mtype, "=== Diagnostics ===\n");
-
-	// Print the firmware version, board type etc.
-
-#ifdef DUET_NG
-	c_string_or_null const expansionName = DuetExpansion::GetExpansionBoardName();
-#endif
-
-	platform->MessageF(mtype,
-		// Format string
-		"%s"											// firmware name
-		" version %s (%s%s) running on %s"				// firmware version, date, time, electronics
-#ifdef DUET_NG
-		"%s%s"											// optional DueX expansion board
-#endif
-#if HAS_SBC_INTERFACE || SUPPORT_REMOTE_COMMANDS
-		" (%s mode)"									// standalone, SBC or expansion mode
-#endif
-		"\n",
-
-		// Parameters to match format string
-		FIRMWARE_NAME,
-		VERSION, DATE, TIME_SUFFIX, platform->GetElectronicsString()
-#ifdef DUET_NG
-		, ((expansionName == nullptr) ? "" : " + ")
-		, ((expansionName == nullptr) ? "" : expansionName)
-#endif
-#if HAS_SBC_INTERFACE || SUPPORT_REMOTE_COMMANDS
-		,
-# if SUPPORT_REMOTE_COMMANDS
-						(CanInterface::InExpansionMode()) ? "expansion" :
-# endif
-# if HAS_SBC_INTERFACE
-						(UsingSbcInterface()) ? "SBC" :
-# endif
-							"standalone"
-#endif
-	);
-
-#if MCU_HAS_UNIQUE_ID
+	for (unsigned int i = 0; i < GetNumberOfDiagnosticParts(); ++i)
 	{
-		String<StringLength50> idChars;
-		platform->GetUniqueId().AppendCharsToString(idChars.GetRef());
-		platform->MessageF(mtype, "Board ID: %s\n", idChars.c_str());
-	}
-#endif
-
-	// Show the used and free buffer counts. Do this early in case we are running out of them and the diagnostics get truncated.
-	OutputBuffer::Diagnostics(mtype);
-
-	// If there was an error running config.g, print it
-	if (!configErrorMessage.IsNull())
-	{
-		auto msg  = configErrorMessage.Get();
-		auto fname = configErrorFilename.Get();
-		platform->MessageF(mtype, "Error in %s line %u while starting up: %s\n", fname.Ptr(), configErrorLine, msg.Ptr());
-	}
-
-	// Now print diagnostics for other modules
-	Tasks::Diagnostics(mtype);
-	platform->Diagnostics(mtype);				// this includes a call to our Timing() function and the software reset data
-
-#ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
-	// Print and clear any disgnostic messages we have accumulated
-	for (DebugLogRecord& r : debugRecords)
-	{
-		if (r.msg != nullptr)
+		reply.Clear();
+		GetDiagnosticsPart(i, reply);
+		if (!reply.IsEmpty())
 		{
-			platform->MessageF(mtype, r.msg, r.data[0], r.data[1], r.data[2], r.data[3]);
-			r.msg = nullptr;
+			reply.cat('\n');
+			platform->Message(mtype, reply.c_str());
 		}
 	}
-#endif
+	justSentDiagnostics = true;
+}
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	MassStorage::Diagnostics(mtype);
-#endif
-	move->Diagnostics(mtype);
-	heat->Diagnostics(mtype);
-	gCodes->Diagnostics(mtype);
-	FilamentMonitor::Diagnostics(mtype);
+// Get a part of the diagnostics info. This is called by GCodes2.cpp when running in normal mode and by CommandProcessor.cpp when running in expansion mode.
+void RepRap::GetDiagnosticsPart(unsigned int partNumber, const StringRef& reply) noexcept
+{
+	switch (partNumber)
+	{
+	case 0:
+		reply.copy("=== Diagnostics ===");
+		{
+		// Print the firmware version, board type etc.
 #ifdef DUET_NG
-	DuetExpansion::Diagnostics(mtype);
+			c_string_or_null const expansionName = DuetExpansion::GetExpansionBoardName();
+#endif
+			reply.lcatf(
+				// Format string
+				"%s"											// firmware name
+				" version %s (%s%s) running on %s"				// firmware version, date, time, electronics
+#ifdef DUET_NG
+				"%s%s"											// optional DueX expansion board
+#endif
+#if HAS_SBC_INTERFACE || SUPPORT_REMOTE_COMMANDS
+				" (%s mode)"									// standalone, SBC or expansion mode
+#endif
+				,
+
+				// Parameters to match format string
+				FIRMWARE_NAME,
+				VERSION, DateText, TimeSuffix, platform->GetElectronicsString()
+#ifdef DUET_NG
+				, ((expansionName == nullptr) ? "" : " + ")
+				, ((expansionName == nullptr) ? "" : expansionName)
+#endif
+#if HAS_SBC_INTERFACE || SUPPORT_REMOTE_COMMANDS
+				,
+# if SUPPORT_REMOTE_COMMANDS
+				(CanInterface::InExpansionMode()) ? "expansion" :
+# endif
+# if HAS_SBC_INTERFACE
+				(UsingSbcInterface()) ? "SBC" :
+# endif
+				"standalone"
+#endif
+			);
+		}
+
+#if MCU_HAS_UNIQUE_ID
+		reply.lcat("Board ID: ");
+		platform->GetUniqueId().AppendCharsToString(reply);
+#endif
+		break;
+
+	case 1:
+		// Show the used and free buffer counts. Do this early in case we are running out of them and the diagnostics get truncated.
+		OutputBuffer::Diagnostics(reply);
+
+		// If there was an error running config.g, print it
+		if (!configErrorMessage.IsNull())
+		{
+			auto msg  = configErrorMessage.Get();
+			auto fname = configErrorFilename.Get();
+			reply.lcatf("Error in %s line %u while starting up: %s\n", fname.Ptr(), configErrorLine, msg.Ptr());
+		}
+		break;
+
+	case 2:
+		Tasks::Diagnostics(reply);
+		break;
+
+	case 3:
+	case 4:
+	case 5:
+	case 6:
+	case 7:
+	case 8:
+	case 9:
+		static_assert(Platform::NumPlatformDiagnosticParts == 9 - 3 + 1);
+		platform->Diagnostics(partNumber - 3, reply);
+		break;
+
+	case 3 + Platform::NumPlatformDiagnosticParts:
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+		MassStorage::Diagnostics(reply);
+#endif
+#ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
+		// Print and clear any diagnostic messages we have accumulated
+		for (DebugLogRecord& r : debugRecords)
+		{
+			if (r.msg != nullptr)
+			{
+				reply.lcatf(r.msg, r.data[0], r.data[1], r.data[2], r.data[3]);
+				r.msg = nullptr;
+			}
+		}
+#endif
+		break;
+
+
+	case 3 + Platform::NumPlatformDiagnosticParts + 1:
+	case 3 + Platform::NumPlatformDiagnosticParts + 2:
+	case 3 + Platform::NumPlatformDiagnosticParts + 3:
+	case 3 + Platform::NumPlatformDiagnosticParts + 4:
+	case 3 + Platform::NumPlatformDiagnosticParts + 5:
+		move->Diagnostics(partNumber - (3 + Platform::NumPlatformDiagnosticParts + 1), reply);
+		break;
+
+	case 3 + Platform::NumPlatformDiagnosticParts + 6:
+		heat->Diagnostics(reply);
+		break;
+
+	case 3 + Platform::NumPlatformDiagnosticParts + 7:
+#if SUPPORT_REMOTE_COMMANDS
+		if (!CanInterface::InExpansionMode())
+#endif
+		{
+			gCodes->Diagnostics(reply);
+		}
+		break;
+
+	case 3 + Platform::NumPlatformDiagnosticParts + 8:
+		FilamentMonitor::AllDiagnostics(reply);
+		break;
+
+	case 3 + Platform::NumPlatformDiagnosticParts + 9:
+#ifdef DUET_NG
+		DuetExpansion::Diagnostics(reply);
 #endif
 #if SUPPORT_CAN_EXPANSION
-	CanInterface::Diagnostics(mtype);
+		CanInterface::Diagnostics(reply);
 #endif
-#if HAS_SBC_INTERFACE
-	if (usingSbcInterface)
-	{
-		sbcInterface->Diagnostics(mtype);
-	}
-	else
-#endif
-	{
-		network->Diagnostics(mtype);
-	}
+		break;
 
-	justSentDiagnostics = true;
+	case 3 + Platform::NumPlatformDiagnosticParts + 10:
+
+#if HAS_SBC_INTERFACE
+		if (usingSbcInterface)
+		{
+			sbcInterface->Diagnostics(reply);
+		}
+		else
+#endif
+#if SUPPORT_REMOTE_COMMANDS
+		if (!CanInterface::InExpansionMode())
+#endif
+		{
+			network->Diagnostics(0, reply);
+		}
+		break;
+
+	case 3 + Platform::NumPlatformDiagnosticParts + 11:
+	case 3 + Platform::NumPlatformDiagnosticParts + 12:
+#if HAS_SBC_INTERFACE
+		if (!usingSbcInterface)
+#endif
+		{
+#if SUPPORT_REMOTE_COMMANDS
+			if (!CanInterface::InExpansionMode())
+#endif
+			{
+				network->Diagnostics(partNumber - (3 + Platform::NumPlatformDiagnosticParts + 10), reply);
+			}
+		}
+		break;
+	}
+}
+
+unsigned int RepRap::GetNumberOfDiagnosticParts() const noexcept
+{
+	return 3 + Platform::NumPlatformDiagnosticParts + 13;
 }
 
 // Turn off the heaters, disable the motors, and deactivate the Heat, Move and GCodes classes. Leave everything else working.
@@ -928,16 +1022,12 @@ void RepRap::EmergencyStop() noexcept
 	// Do not turn off ATX power here. If the nozzles are still hot, don't risk melting any surrounding parts by turning fans off.
 	//platform->SetAtxPower(false);
 
+	move->EmergencyDisableDrivers();				// disable all local drivers - need to do this to ensure that any motor brakes are re-engaged
+
 #if SUPPORT_REMOTE_COMMANDS
-	if (CanInterface::InExpansionMode())
-	{
-		move->EmergencyDisableDrivers();			// disable all local drivers - need to do this to ensure that any motor brakes are re-engaged
-	}
-	else
+	if (!CanInterface::InExpansionMode())
 #endif
 	{
-		move->DisableAllDrivers();					// disable all local and remote drivers - need to do this to ensure that any motor brakes are re-engaged
-
 		switch (gCodes->GetMachineType())
 		{
 		case MachineType::cnc:
@@ -980,12 +1070,23 @@ void RepRap::EmergencyStop() noexcept
 
 GCodeResult RepRap::ProcessM111(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	bool seen = false;
+#if SUPPORT_CAN_EXPANSION
 	if (gb.Seen('B'))
+	{
+		const uint32_t board = gb.GetUIValue();
+		if (board != CanInterface::GetCanAddress())
+		{
+			return CanInterface::HandleM111(board, gb, reply);
+		}
+	}
+#endif
+
+	bool seen = false;
+	if (gb.Seen('F'))
 	{
 		if (!Platform::SetDebugBufferSize(gb.GetUIValue()))
 		{
-			reply.copy("B must be a power of 2");
+			reply.copy("F must be a power of 2");
 			return GCodeResult::error;
 		}
 		seen = true;
@@ -1007,16 +1108,16 @@ GCodeResult RepRap::ProcessM111(GCodeBuffer& gb, const StringRef& reply) THROWS(
 		flags = 0;
 	}
 
-	uint8_t module = Module::none;
+	uint8_t module = Module::numModules;
 	if (gb.Seen('P'))
 	{
-		module = gb.GetLimitedUIValue('P', NumRealModules);
+		module = gb.GetLimitedUIValue('P', Module::numModules);
 		seen = true;
 	}
 
 	if (seen)
 	{
-		if (module != Module::none)
+		if (module != Module::numModules)
 		{
 			debugMaps[module].SetFromRaw(flags);
 		}
@@ -1034,29 +1135,82 @@ GCodeResult RepRap::ProcessM111(GCodeBuffer& gb, const StringRef& reply) THROWS(
 		}
 	}
 
-	// Print the current debug settings
-	const MessageType mt = (MessageType)((uint32_t)gb.GetResponseMessageType() | (uint32_t)PushFlag);
-	platform->Message(mt, "Debugging on for modules:");
-	for (size_t i = 0; i < NumRealModules; i++)
+	ReportDebugSettings(reply);
+	return GCodeResult::ok;
+}
+
+// Report the current debug settings
+void RepRap::ReportDebugSettings(const StringRef& reply) noexcept
+{
+	reply.copy("Debugging on for modules:");
+	for (size_t i = 0; i < Module::numModules; i++)
 	{
 		if (debugMaps[i].IsNonEmpty())
 		{
-			platform->MessageF(mt, " %s(%u - %#" PRIx16 ")", Module(i).ToString(), i, debugMaps[i].GetRaw());
+			reply.catf(" %s(%u - %#" PRIx16 ")", Module(i).ToString(), i, debugMaps[i].GetRaw());
 		}
 	}
 
-	platform->Message(mt, "\nDebugging off for modules:");
-	for (size_t i = 0; i < NumRealModules; i++)
+	reply.lcat("Debugging off for modules:");
+	for (size_t i = 0; i < Module::numModules; i++)
 	{
 		if (debugMaps[i].IsEmpty())
 		{
-			platform->MessageF(mt, " %s(%u)", Module(i).ToString(), i);
+			reply.catf(" %s(%u)", Module(i).ToString(), i);
 		}
 	}
-	platform->Message(mt, "\n");
+}
 
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult RepRap::ProcessRemoteM111(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+	CanMessageGenericParser parser(msg, M111Params);
+
+	// Debug flags are as set by the D parameter. If D is not specified then S0 means all off, S1 means lower 8 bits on.
+	uint32_t flags = 0;
+	bool seen = parser.GetUintParam('D', flags);
+	if (!seen)
+	{
+		uint8_t sParam;
+		seen = parser.GetUintParam('S', sParam);
+		if (seen && sParam != 0)
+		{
+			flags = DefaultDebugFlags;
+		}
+	}
+
+	uint8_t module = Module::numModules;
+	if (parser.GetUintParam('P', module))
+	{
+		seen = true;
+	}
+
+	if (seen)
+	{
+		if (module < Module::numModules)
+		{
+			debugMaps[module].SetFromRaw(flags);
+		}
+		else if (flags != 0)
+		{
+			// Repetier Host sends M111 with various S parameters to enable echo and similar features, which used to turn on all our debugging.
+			// But it's not useful to enable all debugging anyway. So we no longer allow debugging to be enabled without a P parameter.
+			reply.copy("Use P parameter to specify which module to debug");
+			return GCodeResult::error;
+		}
+		else
+		{
+			// M111 S0 with no P parameter still clears all debugging
+			ClearDebug();
+		}
+	}
+
+	ReportDebugSettings(reply);
 	return GCodeResult::ok;
 }
+
+#endif
 
 void RepRap::ClearDebug() noexcept
 {
@@ -1094,7 +1248,15 @@ void RepRap::Tick() noexcept
 
 				// Save the stack of the stuck task when we get stuck in a spin loop
 				const uint32_t *_ecv_array relevantStackPtr;
+
+				// When a task gets stuck, sometimes we want the stack of that task and sometimes we want the stack of the running task instead
+#if 1
+				// Record the stack of the running task
+				const TaskHandle relevantTask = RTOSIface::GetCurrentTask();
+#else
+				// Record the stack of the stuck task
 				const TaskHandle relevantTask = (heatTaskStuck) ? Heat::GetHeatTask() : Tasks::GetMainTask();
+#endif
 				if (relevantTask == RTOSIface::GetCurrentTask())
 				{
 #ifdef __ECV__
@@ -1137,6 +1299,8 @@ bool RepRap::SpinTimeoutImminent() const noexcept
 {
 	return ticksInSpinState >= HighMainTaskTicksInSpinState;
 }
+
+#if 0	// removed because we ran out of flash memory on Duet 2
 
 // Get the JSON status response for the web server or the M408 command.
 // Type 1 is the ordinary JSON status response.
@@ -1245,12 +1409,13 @@ OutputBuffer *_ecv_null RepRap::GetStatusResponse(uint8_t type, ResponseSource s
 		// Z babystepping
 		response->catf(",\"babystep\":%.3f}", (double)gCodes->GetTotalBabyStepOffset(Z_AXIS));
 
+#if 0	// DWC hasn't used rr_status for years so remove it to reduce flash memory usage
 		// G-code reply sequence for webserver (sequence number for AUX is handled later)
 		if (source == ResponseSource::HTTP)
 		{
 			response->catf(",\"seq\":%" PRIu32, network->GetHttpReplySeq());
 		}
-
+#endif
 		// Sensors
 		response->cat(",\"sensors\":{");
 
@@ -1372,7 +1537,7 @@ OutputBuffer *_ecv_null RepRap::GetStatusResponse(uint8_t type, ResponseSource s
 		}
 	}
 
-#if SUPPORT_LASER
+#if 0	// removed to reduce flash memory usage, was if SUPPORT_LASER
 	if (gCodes->GetMachineType() == MachineType::laser)
 	{
 		response->catf(",\"laser\":%.1f", (double)(gCodes->GetLaserPwm() * 100.0));		// 2020-04-24: return the configured laser PWM even if the laser is temporarily turned off
@@ -1406,7 +1571,7 @@ OutputBuffer *_ecv_null RepRap::GetStatusResponse(uint8_t type, ResponseSource s
 				controllableFans.SetBit(fan);
 			}
 		}
-		response->catf(",\"controllableFans\":%lu", controllableFans.GetRaw());
+		response->catf(",\"controllableFans\":%lu", (uint32_t)controllableFans.GetRaw());
 
 		// Maximum hotend temperature - DWC just wants the highest one
 		response->catf(",\"tempLimit\":%.1f", (double)(heat->GetHighestTemperatureLimit()));
@@ -1493,7 +1658,7 @@ OutputBuffer *_ecv_null RepRap::GetStatusResponse(uint8_t type, ResponseSource s
 				response->cat("]]");
 
 				// Fan mapping
-				response->catf(",\"fans\":%lu", tool->GetFanMapping().GetRaw());
+				response->catf(",\"fans\":%lu", (uint32_t)tool->GetFanMapping().GetRaw());
 
 				// Filament (if any)
 				if (tool->GetFilament() != nullptr)
@@ -1576,6 +1741,10 @@ OutputBuffer *_ecv_null RepRap::GetStatusResponse(uint8_t type, ResponseSource s
 	return response;
 }
 
+#endif
+
+#if 0	// removed because we ran out of flash memory on Duet 2
+
 OutputBuffer *_ecv_null RepRap::GetConfigResponse() noexcept
 {
 	// We need some resources to return a valid config response...
@@ -1655,6 +1824,8 @@ OutputBuffer *_ecv_null RepRap::GetConfigResponse() noexcept
 
 	return response;
 }
+
+#endif
 
 // Get the JSON status response for PanelDue
 // Type 0 was the old-style webserver status response, but is no longer supported.
@@ -1821,11 +1992,21 @@ OutputBuffer *_ecv_null RepRap::GetLegacyStatusResponse(uint8_t type, int seq) c
 	return response;
 }
 
+// Start constructing a JSON response in the provided output buffer. If there was a line number, put it in the response.
+/*static*/ void RepRap::StartJsonResponse(const GCodeBuffer *_ecv_null gb, OutputBuffer *outbuf) noexcept
+{
+	outbuf->copy('{');
+	if (gb != nullptr && gb->HadExplicitLineNumber())
+	{
+		outbuf->catf("\"line\":%ld,", gb->GetExplicitLineNumber());
+	}
+}
+
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 // Get the list of files in the specified directory in JSON format. PanelDue uses this one, so include a newline at the end.
 // If flagDirs is true then we prefix each directory with a * character.
-OutputBuffer *_ecv_null RepRap::GetFilesResponse(c_string dir, unsigned int startAt, int maxItems, bool flagsDirs) noexcept
+OutputBuffer *_ecv_null RepRap::GetFilesResponse(const GCodeBuffer *_ecv_null gb, c_string dir, unsigned int startAt, int maxItems, bool flagsDirs) noexcept
 {
 	// Need something to write to...
 	OutputBuffer *_ecv_null response;
@@ -1834,7 +2015,8 @@ OutputBuffer *_ecv_null RepRap::GetFilesResponse(c_string dir, unsigned int star
 		return nullptr;
 	}
 
-	response->printf("{\"dir\":\"%.s\",\"first\":%u,\"files\":[", dir, startAt);
+	StartJsonResponse(gb, response);
+	response->catf("\"dir\":\"%.s\",\"first\":%u,\"files\":[", dir, startAt);
 	unsigned int err;
 	unsigned int nextFile = 0;
 
@@ -1904,7 +2086,7 @@ OutputBuffer *_ecv_null RepRap::GetFilesResponse(c_string dir, unsigned int star
 }
 
 // Get a JSON-style filelist including file types and sizes
-OutputBuffer *_ecv_null RepRap::GetFilelistResponse(c_string dir, unsigned int startAt, int maxItems) noexcept
+OutputBuffer *_ecv_null RepRap::GetFilelistResponse(const GCodeBuffer *_ecv_null gb, c_string dir, unsigned int startAt, int maxItems) noexcept
 {
 	// Need something to write to...
 	OutputBuffer *response;
@@ -1913,7 +2095,8 @@ OutputBuffer *_ecv_null RepRap::GetFilelistResponse(c_string dir, unsigned int s
 		return nullptr;
 	}
 
-	response->printf("{\"dir\":\"%.s\",\"first\":%u,\"files\":[", dir, startAt);
+	StartJsonResponse(gb, response);
+	response->catf("\"dir\":\"%.s\",\"first\":%u,\"files\":[", dir, startAt);
 	unsigned int err;
 	unsigned int nextFile = 0;
 
@@ -2000,15 +2183,15 @@ OutputBuffer *_ecv_null RepRap::GetFilelistResponse(c_string dir, unsigned int s
 
 #if HAS_MASS_STORAGE
 
-// Get thumbnail data
+// Get thumbnail data (M36.1 or rr_thumbnail), or get file fragment (M36.2)
 // 'offset' is the offset into the file of the thumbnail data that the caller wants.
 // It is up to the caller to get the offset right, however we must fail gracefully if the caller passes us a bad offset.
 // The offset should always be either the initial offset or the 'next' value passed in a previous call, so it should always be the start of a line.
-OutputBuffer *_ecv_null RepRap::GetThumbnailResponse(c_string filename, FilePosition offset, bool forM31point1) noexcept
+OutputBuffer *_ecv_null RepRap::GetFileFragment(const GCodeBuffer *_ecv_null gb, c_string filename, FilePosition offset, bool forM36point1or2, bool isThumbnail) noexcept
 {
-	constexpr unsigned int ThumbnailMaxDataSizeM31 = 1024;			// small enough for PanelDue to buffer
+	constexpr unsigned int MaxFileFragmentSizeM31 = 1024;			// small enough for PanelDue to buffer
 	constexpr unsigned int ThumbnailMaxDataSizeRr = 2600;			// about two TCP messages
-	static_assert(ThumbnailMaxDataSizeM31 % 4 == 0, "must be a multiple of to guarantee base64 alignment");
+	static_assert(MaxFileFragmentSizeM31 % 4 == 0, "must be a multiple of to guarantee base64 alignment");
 	static_assert(ThumbnailMaxDataSizeRr % 4 == 0, "must be a multiple of to guarantee base64 alignment");
 
 	// Need something to write to...
@@ -2018,13 +2201,15 @@ OutputBuffer *_ecv_null RepRap::GetThumbnailResponse(c_string filename, FilePosi
 		return nullptr;
 	}
 
-	if (forM31point1)
+	StartJsonResponse(gb, response);
+	if (forM36point1or2)
 	{
-		response->cat("{\"thumbnail\":");
+		response->cat((isThumbnail) ? "\"thumbnail\":{" : "\"fragment\":{");
 	}
-	response->catf("{\"fileName\":\"%.s\",\"offset\":%" PRIu32 ",", filename, offset);
+	response->catf("\"fileName\":\"%.s\",\"offset\":%" PRIu32 ",", filename, offset);
 
-	FileStore *_ecv_null const f = platform->OpenFile(Platform::GetGCodeDir(), filename, OpenMode::read);
+	FileStore *_ecv_null const f = (isThumbnail) ? platform->OpenFile(Platform::GetGCodeDir(), filename, OpenMode::read)
+													: platform->OpenSysFile(filename, OpenMode::read);
 	unsigned int err = 0;
 	if (f != nullptr)
 	{
@@ -2032,15 +2217,15 @@ OutputBuffer *_ecv_null RepRap::GetThumbnailResponse(c_string filename, FilePosi
 		{
 			response->cat("\"data\":\"");
 
-			const unsigned int thumbnailMaxDataSize = (forM31point1) ? ThumbnailMaxDataSizeM31 : ThumbnailMaxDataSizeRr;
+			const unsigned int thumbnailMaxDataSize = (forM36point1or2) ? MaxFileFragmentSizeM31 : ThumbnailMaxDataSizeRr;
 			for (unsigned int charsWrittenThisCall = 0; charsWrittenThisCall < thumbnailMaxDataSize; )
 			{
 				// Read a line
 				char lineBuffer[MaxGCodeLength];
 				const int charsRead = f->ReadLine(lineBuffer, sizeof(lineBuffer));
-				if (charsRead <= 0)
+				if (charsRead < 0 || (isThumbnail && charsRead == 0))
 				{
-					err = 1;
+					if (isThumbnail) { err = 1; }
 					offset = 0;
 					break;
 				}
@@ -2050,49 +2235,74 @@ OutputBuffer *_ecv_null RepRap::GetThumbnailResponse(c_string filename, FilePosi
 
 				c_string p = lineBuffer;
 
-				// Skip white spaces
-				while ((p - lineBuffer <= charsRead) && (*p == ';' || *p == ' ' || *p == '\t'))
+				if (isThumbnail)
 				{
-					++p;
-				}
+					// Skip white spaces
+					while ((p - lineBuffer <= charsRead) && (*p == ';' || *p == ' ' || *p == '\t'))
+					{
+						++p;
+					}
 
-				// Skip empty lines (there shouldn't be any, but just in case there are)
-				if (*p == '\n' || *p == '\0')
-				{
-					continue;
-				}
+					// Skip empty lines (there shouldn't be any, but just in case there are)
+					if (*p == '\n' || *p == '\0')
+					{
+						continue;
+					}
 
-				// Check for end of thumbnail. We'd like to use a regex here but we can't afford the flash space of a regex parser in some build configurations.
-				if (   StringStartsWith(p, "thumbnail end") || StringStartsWith(p, "thumbnail_QOI end") || StringStartsWith(p, "thumbnail_JPG end")
-					// Also stop if the base64 data has ended, to avoid sending to the end of file if the end marker is missing. We don't want to take too long so just look for space.
-					|| strchr(p, ' ') != nullptr
-				   )
-				{
-					offset = 0;
-					break;
+					// Check for end of thumbnail. We'd like to use a regex here but we can't afford the flash space of a regex parser in some build configurations.
+					if (   StringStartsWith(p, "thumbnail end") || StringStartsWith(p, "thumbnail_QOI end") || StringStartsWith(p, "thumbnail_JPG end")
+						// Also stop if the base64 data has ended, to avoid sending to the end of file if the end marker is missing. We don't want to take too long so just look for space.
+						|| strchr(p, ' ') != nullptr
+					   )
+					{
+						offset = 0;
+						break;
+					}
 				}
 
 				const unsigned int charsSkipped = p - lineBuffer;
 				const unsigned int charsAvailable = (unsigned int)charsRead - charsSkipped;
 				unsigned int charsWrittenFromThisLine;
-				if (charsAvailable <= thumbnailMaxDataSize - charsWrittenThisCall)
+
+				if (isThumbnail)
 				{
-					// Write all the data in this line
-					charsWrittenFromThisLine = charsAvailable;
+					if (charsAvailable <= thumbnailMaxDataSize - charsWrittenThisCall)
+					{
+						// Write all the data in this line
+						charsWrittenFromThisLine = charsAvailable;
+					}
+					else
+					{
+						// Write just enough characters to fill the buffer
+						charsWrittenFromThisLine = thumbnailMaxDataSize - charsWrittenThisCall;
+						offset = posOld + charsSkipped + charsWrittenFromThisLine;
+					}
+
+					// Copy the data
+					response->cat(p, charsWrittenFromThisLine);
+					charsWrittenThisCall += charsWrittenFromThisLine;
 				}
 				else
 				{
-					// Write just enough characters to fill the buffer
-					charsWrittenFromThisLine = thumbnailMaxDataSize - charsWrittenThisCall;
-					offset = posOld + charsSkipped + charsWrittenFromThisLine;
-				}
+					if (charsAvailable + 2 <= thumbnailMaxDataSize - charsWrittenThisCall)
+					{
+						// Write this line
+						charsWrittenFromThisLine = charsAvailable;
 
-				// Copy the data
-				response->cat(p, charsWrittenFromThisLine);
-				charsWrittenThisCall += charsWrittenFromThisLine;
+						// Copy the data
+						response->cat(p, charsWrittenFromThisLine);
+						response->cat("\\n");				// the two characters "\n" represent newline in the JSON
+						charsWrittenThisCall += charsWrittenFromThisLine;
+					}
+					else
+					{
+						offset = posOld;
+						break;
+					}
+				}
 			}
 
-			response->catf("\",\"next\":%" PRIu32 ",", offset);
+			response->catf("\",\"next\":%" PRIu32 ",", (offset < f->Length()) ? offset : 0);
 		}
 		f->Close();
 	}
@@ -2101,7 +2311,7 @@ OutputBuffer *_ecv_null RepRap::GetThumbnailResponse(c_string filename, FilePosi
 		err = 1;
 	}
 
-	response->catf(forM31point1 ? "\"err\":%u}}\n" : "\"err\":%u}\n", err);
+	response->catf(forM36point1or2 ? "\"err\":%u}}\n" : "\"err\":%u}\n", err);
 	return response;
 }
 
@@ -2109,10 +2319,12 @@ OutputBuffer *_ecv_null RepRap::GetThumbnailResponse(c_string filename, FilePosi
 
 // Get information for the specified file, or the currently printing file (if 'filename' is null or empty), in JSON format
 // Return GCodeResult::Warning if the file doesn't exist, else GCodeResult::ok or GCodeResult::notFinished
-GCodeResult RepRap::GetFileInfoResponse(c_string _ecv_null filename, OutputBuffer *_ecv_null &response, bool quitEarly) noexcept
+GCodeResult RepRap::GetFileInfoResponse(const GCodeBuffer *_ecv_null gb, c_string _ecv_null filename, OutputBuffer *_ecv_null &response, bool quitEarly) noexcept
 {
 	const bool specificFile = (filename != nullptr && filename[0] != 0);
 	GCodeFileInfo info;
+	GlobalVariables vars;												// if we asked for a specific file then this is the variable set that we fill in for customiNFO
+	const GlobalVariables *p_vars;										// this will be a pointer to whatever GlobalVariables instance holds the customInfo
 	if (specificFile)
 	{
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -2122,28 +2334,30 @@ GCodeResult RepRap::GetFileInfoResponse(c_string _ecv_null filename, OutputBuffe
 		{
 			info.isValid = false;
 		}
-		else if (MassStorage::GetFileInfo(filePath.c_str(), info, quitEarly, nullptr) == GCodeResult::notFinished)
+		else if (MassStorage::GetFileInfo(filePath.c_str(), info, quitEarly, &vars) == GCodeResult::notFinished)
 		{
 			// This may take a few runs...
 			return GCodeResult::notFinished;
 		}
+		p_vars = &vars;
 #else
 		return GCodeResult::warning;
 #endif
 	}
-	else if (!printMonitor->GetPrintingFileInfo(info))
+	else if (!printMonitor->GetPrintingFileInfo(info, p_vars))
 	{
 		return GCodeResult::notFinished;
 	}
 
-	if (!OutputBuffer::Allocate(response))
+	if (!OutputBuffer::Allocate(response, false))
 	{
 		return GCodeResult::notFinished;
 	}
 
+	StartJsonResponse(gb, response);
 	if (info.isValid)
 	{
-		response->printf("{\"err\":0,\"fileName\":\"%.s\",\"size\":%lu,", ((specificFile) ? filename : printMonitor->GetPrintingFilename()), info.fileSize);
+		response->catf("\"err\":0,\"fileName\":\"%.s\",\"size\":%lu,", ((specificFile) ? filename : printMonitor->GetPrintingFilename()), info.fileSize);
 		tm timeInfo;
 		gmtime_r(&info.lastModifiedTime, &timeInfo);
 		if (timeInfo.tm_year > /*19*/80)
@@ -2201,13 +2415,14 @@ GCodeResult RepRap::GetFileInfoResponse(c_string _ecv_null filename, OutputBuffe
 		{
 			response->cat('[');
 		}
-		response->cat(']');
 
-		response->catf(",\"generatedBy\":\"%.s\"}\n", info.generatedBy.c_str());
+		response->catf("],\"generatedBy\":\"%.s\",\"customInfo\":", info.generatedBy.c_str());
+		p_vars->ReportAllAsJson(response);
+		response->cat("}\n");
 		return GCodeResult::ok;
 	}
 
-	response->printf("{\"err\":1,\"fileName\":\"%.s\"}", ((specificFile) ? filename : printMonitor->GetPrintingFilename()));
+	response->catf("\"err\":1,\"fileName\":\"%.s\"}", ((specificFile) ? filename : printMonitor->GetPrintingFilename()));
 	return GCodeResult::warning;
 }
 
@@ -2273,12 +2488,13 @@ void RepRap::AppendStringArray(OutputBuffer *buf, c_string _ecv_null name, size_
 OutputBuffer *RepRap::GetModelResponse(const GCodeBuffer *_ecv_null gb, c_string _ecv_null key, c_string _ecv_null flags) const THROWS(GCodeException)
 {
 	OutputBuffer *outBuf;
-	if (OutputBuffer::Allocate(outBuf))
+	if (OutputBuffer::Allocate(outBuf, false))
 	{
 		if (key == nullptr) { key = ""; }
 		if (flags == nullptr) { flags = ""; }
 
-		outBuf->printf("{\"key\":\"%.s\",\"flags\":\"%.s\",\"result\":", key, flags);
+		StartJsonResponse(gb, outBuf);
+		outBuf->catf("\"key\":\"%.s\",\"flags\":\"%.s\",\"result\":", key, flags);
 
 		const bool wantArrayLength = (*key == '#');
 		if (wantArrayLength)
@@ -2325,7 +2541,7 @@ void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 	}
 #endif
 
-	if (platform->IsAuxEnabled(0) && !platform->IsAuxRaw(0))
+	if (platform->IsChanEnabled(1) && !platform->IsChanRaw(1))
 	{
 		platform->PanelDueBeep(freq, ms);
 		bleeped = true;
@@ -2349,9 +2565,9 @@ void RepRap::SetMessage(c_string msg) noexcept
 #endif
 	StateUpdated();
 
-	if (platform->IsAuxEnabled(0) && !platform->IsAuxRaw(0))
+	if (platform->IsChanEnabled(1) && !platform->IsChanRaw(1))
 	{
-		platform->SendPanelDueMessage(0, msg);
+		platform->SendPanelDueMessage(1, msg);
 	}
 	platform->Message(MessageType::LogInfo, msg);
 }
@@ -2593,6 +2809,7 @@ void RepRap::PrepareToLoadIap() noexcept
 #endif
 }
 
+// Run the IAP. We have already disabled the cache and MPU and loaded the IAP into RAM.
 void RepRap::StartIap(c_string _ecv_null filename) noexcept
 {
 	// Disable all interrupts, then reallocate the vector table and program entry point to the new IAP binary
@@ -2680,6 +2897,17 @@ void RepRap::StartIap(c_string _ecv_null filename) noexcept
 	return a/b;
 }
 
+// Helper function for diagnostic tests in Platform.cpp, to cause a deliberate OOM fault
+/*static*/ void RepRap::DoMemoryLeak() noexcept
+{
+	void * leak;
+	while (true)
+	{
+		leak = Tasks::AllocPermanent(1024); 	// Allocate memory continuously
+		(void)leak;								// Prevent unused variable warning
+	}
+}
+
 // Helper function for diagnostic tests in Platform.cpp, to cause a deliberate bus fault or memory protection error
 /*static*/ void RepRap::GenerateBusFault() noexcept
 {
@@ -2702,12 +2930,6 @@ void RepRap::StartIap(c_string _ecv_null filename) noexcept
 	return sinf(angle) + cosf(angle);
 }
 
-// Helper function for diagnostic tests in Platform.cpp, to calculate square root
-/*static*/ float RepRap::FastSqrtf(float f) noexcept
-{
-	return ::fastSqrtf(f);
-}
-
 // Report an internal error
 void RepRap::ReportInternalError(c_string file, c_string func, int line) const noexcept
 {
@@ -2726,34 +2948,26 @@ uint32_t RepRap::SendAlert(MessageType mt, c_string msg, c_string title, int sPa
 {
 	WriteLocker lock(MessageBox::mboxLock);
 
-	uint32_t seq;
-	if (((uint32_t)mt & ((uint32_t)HttpMessage | (uint32_t)AuxMessage | (uint32_t)LcdMessage | (uint32_t)BinaryCodeReplyFlag)) != 0)
-	{
-		seq = MessageBox::Create(msg, title, sParam, tParam, controls, limits);
-		StateUpdated();
-	}
-	else
-	{
-		seq = 0;
-	}
+	const uint32_t seq = MessageBox::Create(msg, title, sParam, tParam, controls, limits);
+	StateUpdated();
 
 	platform->MessageF(MessageType::LogInfo, "M291: - %s - %s", (strlen(title) > 0 ? title : "[no title]"), msg);
 
 	mt = (MessageType)((uint32_t)mt & ((uint32_t)UsbMessage | (uint32_t)TelnetMessage | (uint32_t)Aux2Message));
 	if (mt != NoDestinationMessage)
 	{
+		// Source was USB, Telnet or serial so also send the message back to the sending channel
 		if (strlen(title) > 0)
 		{
 			platform->MessageF(mt, "- %s -\n", title);
 		}
 		platform->MessageF(mt, "%s\n", msg);
-		if (sParam == 2)
+		if (sParam >= 2)
 		{
-			platform->Message(mt, "Send M292 to continue\n");
-		}
-		else if (sParam == 3)
-		{
-			platform->Message(mt, "Send M292 to continue or M292 P1 to cancel\n");
+			const char *_ecv_array text = (sParam == 2) ?  ", or send M292 to continue\n"
+											: (sParam == 3) ? ", or send M292 to continue or M292 P1 to cancel\n"
+												: "\n";
+			platform->MessageF(mt, "Respond to this request on the web interface or screen%s", text);
 		}
 	}
 	return seq;
@@ -2798,7 +3012,7 @@ void MemoryChecker::Report(uint32_t tag) noexcept
 {
 	if (fault)
 	{
-		constexpr const char *msg = "mem CRC fail between %08" PRIx32 " and %08" PRIx32 ", tag %08" PRIx32 "\n";
+		constexpr const char *msg = "mem CRC fail between %08" PRIx32 " and %08" PRIx32 ", tag %08" PRIx32;
 		if (reprap.Debug(Module::Debug))
 		{
 			debugPrintf(msg, GetStartAddress(), GetEndAddress(), tag);

@@ -49,7 +49,7 @@ private:
 	void Deactivate() noexcept;
 	void DigitalInterrupt() noexcept;
 	void AnalogInterrupt(uint32_t reading) noexcept;
-	uint16_t GetAnalogValue() const noexcept;
+	uint32_t GetAnalogValue() const noexcept;
 
 	static bool Delete(uint16_t hndl) noexcept;
 	static ReadLockedPointer<InputMonitor> Find(uint16_t hndl) noexcept;

@@ -41,7 +41,7 @@ public:
 	DataTransfer() noexcept;
 	void Init() noexcept;
 	void InitFromTask() noexcept;
-	void Diagnostics(MessageType mtype) noexcept;
+	void Diagnostics(const StringRef& reply) noexcept;
 
 	TransferState DoTransfer() noexcept;													// Try to finish the current transfer
 	void StartNextTransfer() noexcept;														// Kick off the next transfer

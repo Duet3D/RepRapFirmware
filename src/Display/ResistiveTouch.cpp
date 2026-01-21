@@ -13,8 +13,8 @@ ResistiveTouch::ResistiveTouch(Pin csp, Pin irqp) noexcept
 	: spiDev(SharedSpiDevice::GetMainSharedSpiDevice(), SpiFrequency, SpiMode::mode0, csp, false),
 	  csPin(csp), irqPin(irqp)
 {
-	pinMode(csPin, OUTPUT_HIGH);
-	pinMode(irqPin, INPUT_PULLUP);
+	SetPinMode(csPin, OUTPUT_HIGH);
+	SetPinMode(irqPin, INPUT_PULLUP, true);
 }
 
 void ResistiveTouch::Init(uint16_t xp, uint16_t yp, DisplayOrientation orientationAdjust) noexcept

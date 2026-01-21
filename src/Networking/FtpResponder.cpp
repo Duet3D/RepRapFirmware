@@ -155,9 +155,9 @@ bool FtpResponder::Spin() noexcept
 	}
 }
 
-void FtpResponder::Diagnostics(MessageType mt) const noexcept
+void FtpResponder::Diagnostics(const StringRef& reply) const noexcept
 {
-	GetPlatform().MessageF(mt, " FTP(%d)", (int)responderState);
+	reply.catf( " FTP(%d)", (int)responderState);
 }
 
 // This must be called only for the main FTP port

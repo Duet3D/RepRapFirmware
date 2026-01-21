@@ -213,29 +213,29 @@ void LinearDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float
 }
 
 // Convert Cartesian coordinates to motor steps
-bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[],
+MovementError LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[],
 													size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
-	bool ok = true;
+	MovementError rslt = MovementError::ok;
 	for (size_t axis = 0; axis < numTowers; ++axis)
 	{
 		const float pos = Transform(machinePos, axis);
 		if (std::isnan(pos) || std::isinf(pos))
 		{
-			ok = false;
+			rslt = MovementError::unreachable_position;
 		}
 		else
 		{
-			motorPos[axis] = lrintf(pos * stepsPerMm[axis]);
+			RoundToInt32(rslt, pos * stepsPerMm[axis], motorPos[axis]);
 		}
 	}
 
 	// Transform any additional axes linearly
 	for (size_t axis = numTowers; axis < numVisibleAxes; ++axis)
 	{
-		motorPos[axis] = lrintf(machinePos[axis] * stepsPerMm[axis]);
+		RoundToInt32(rslt, machinePos[axis] * stepsPerMm[axis], motorPos[axis]);
 	}
-	return ok;
+	return rslt;
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.

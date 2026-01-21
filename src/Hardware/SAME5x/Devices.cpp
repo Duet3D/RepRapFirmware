@@ -35,8 +35,8 @@ void Serial0PortInit(AsyncSerial *) noexcept
 
 void Serial0PortDeinit(AsyncSerial *) noexcept
 {
-	pinMode(Serial0TxPin, INPUT_PULLUP);
-	pinMode(Serial0RxPin, INPUT_PULLUP);
+	SetPinMode(Serial0TxPin, INPUT_PULLUP);
+	SetPinMode(Serial0RxPin, INPUT_PULLUP);
 }
 
 AsyncSerial serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512, Serial0PortInit, Serial0PortDeinit);
@@ -77,8 +77,8 @@ void Serial1PortInit(AsyncSerial *) noexcept
 
 void Serial1PortDeinit(AsyncSerial *) noexcept
 {
-	pinMode(Serial1TxPin, INPUT_PULLUP);
-	pinMode(Serial1RxPin, INPUT_PULLUP);
+	SetPinMode(Serial1TxPin, INPUT_PULLUP);
+	SetPinMode(Serial1RxPin, INPUT_PULLUP);
 }
 
 AsyncSerial serialUart1(Serial1SercomNumber, Sercom1RxPad, 512, 512, Serial1PortInit, Serial1PortDeinit);
@@ -154,12 +154,12 @@ static void SdhcInit() noexcept
 #if defined(DUET3MINI_V04) || defined(FMDC_V02)
 	// Using SDHC 1
 	hri_mclk_set_AHBMASK_SDHC1_bit(MCLK);
-	hri_gclk_write_PCHCTRL_reg(GCLK, SDHC1_GCLK_ID, GCLK_PCHCTRL_GEN(GclkNum90MHz) | GCLK_PCHCTRL_CHEN);
+	hri_gclk_write_PCHCTRL_reg(GCLK, SDHC1_GCLK_ID, GCLK_PCHCTRL_GEN(GclkNumSdhc) | GCLK_PCHCTRL_CHEN);
 	hri_gclk_write_PCHCTRL_reg(GCLK, SDHC1_GCLK_ID_SLOW, GCLK_PCHCTRL_GEN(GclkNum31KHz) | GCLK_PCHCTRL_CHEN);
 #elif defined(FMDC_V03)
 	// Using SDHC 0 on v0.3 board
 	hri_mclk_set_AHBMASK_SDHC0_bit(MCLK);
-	hri_gclk_write_PCHCTRL_reg(GCLK, SDHC0_GCLK_ID, GCLK_PCHCTRL_GEN(GclkNum90MHz) | GCLK_PCHCTRL_CHEN);
+	hri_gclk_write_PCHCTRL_reg(GCLK, SDHC0_GCLK_ID, GCLK_PCHCTRL_GEN(GclkNumSdhc) | GCLK_PCHCTRL_CHEN);
 	hri_gclk_write_PCHCTRL_reg(GCLK, SDHC0_GCLK_ID_SLOW, GCLK_PCHCTRL_GEN(GclkNum31KHz) | GCLK_PCHCTRL_CHEN);
 #else
 # error Unknown board
@@ -177,7 +177,7 @@ static void SdhcInit() noexcept
 void DeviceInit() noexcept
 {
 	// Ensure the Ethernet PHY or WiFi module is held reset
-	pinMode(EspResetPin, OUTPUT_LOW);
+	SetPinMode(EspResetPin, OUTPUT_LOW);
 
 #if HAS_HIGH_SPEED_SD
 	SdhcInit();

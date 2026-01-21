@@ -83,7 +83,7 @@ void DebugObserver::onStatus(const char *_ecv_array message, ...) noexcept
 	va_list ap;
 
 	va_start(ap, message);
-	reprap.GetPlatform().MessageV(GenericMessage, message, ap);
+	reprap.GetPlatform().MessageV(nullptr, GenericMessage, message, ap);
 	va_end(ap);
 }
 

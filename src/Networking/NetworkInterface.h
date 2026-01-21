@@ -21,7 +21,7 @@ public:
 	virtual void Activate() noexcept = 0;
 	virtual void Exit() noexcept = 0;
 	virtual void Spin() noexcept = 0;
-	virtual void Diagnostics(MessageType mtype) noexcept = 0;
+	virtual void Diagnostics(const StringRef& reply) noexcept = 0;
 
 	virtual GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept = 0;
 	virtual GCodeResult GetNetworkState(const StringRef& reply) noexcept = 0;

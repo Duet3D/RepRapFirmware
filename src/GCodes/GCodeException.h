@@ -23,6 +23,9 @@ enum class GCodeExceptionSource : uint8_t
 	macro,
 };
 
+// This message is used in many places. Define it here to ensure consistency.
+constexpr const char *_ecv_array ArrayIndexOutOfRangeText = "array index out of bounds";
+
 // This class is mostly used to throw exceptions when processing GCode. It is also used to store error messages that need to be retrieved later.
 // Field "message" should always point to a constant string in flash memory, or be null.
 // The error message may have a string, int32_t or uint32_t parameter

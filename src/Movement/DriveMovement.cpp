@@ -42,7 +42,6 @@ void DriveMovement::Init(size_t drv) noexcept
 	driversNormallyUsed = driversCurrentlyUsed = driverEndstopsTriggeredAtStart = 0;
 	nextDM = nullptr;
 	segments = nullptr;
-	isExtruder = false;
 	segmentFlags.Init();
 
 #if SUPPORT_PHASE_STEPPING
@@ -116,22 +115,22 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 
 	while (true)
 	{
-		MoveSegment *_ecv_null seg = segments;				// capture volatile variable
+		MoveSegment *_ecv_null seg = segments;					// capture volatile variable
 		if (seg == nullptr)
 		{
 			segmentFlags.Init();
-			state = DMState::idle;					// if we have been round this loop already then we will have changed the state, so reset it to idle
+			state = DMState::idle;								// if we have been round this loop already then we will have changed the state, so reset it to idle
 			return nullptr;
 		}
 
-		segmentFlags = seg->GetFlags();				// assume we are going to execute this segment, or at least generate an interrupt when it is due to begin
+		segmentFlags = seg->GetFlags();							// assume we are going to execute this segment, or at least generate an interrupt when it is due to begin
 
 		if ((int32_t)(seg->GetStartTime() - now) > (int32_t)MoveTiming::MaximumMoveStartAdvanceClocks)
 		{
-			state = DMState::starting;				// the segment is not due to start for a while. To allow it to be changed meanwhile, generate an interrupt when it is due to start.
-			driversCurrentlyUsed = 0;				// don't generate a step on that interrupt
-			driverEndstopsTriggeredAtStart = 0;		// reset since we will be setting this in DDA::Prepare()
-			nextStepTime = seg->GetStartTime();		// this is when we want the interrupt
+			state = DMState::starting;							// the segment is not due to start for a while. To allow it to be changed meanwhile, generate an interrupt when it is due to start.
+			driversCurrentlyUsed = 0;							// don't generate a step on that interrupt
+			driverEndstopsTriggeredAtStart = 0;					// reset since we will be setting this in DDA::Prepare()
+			nextStepTime = seg->GetStartTime();					// this is when we want the interrupt
 			return seg;
 		}
 
@@ -248,7 +247,7 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 				driversCurrentlyUsed = driversNormallyUsed;
 			}
 
-			if (isExtruder)
+			if (segmentFlags.isExtruder)
 			{
 				if (segmentFlags.nonPrintingMove)
 				{
@@ -281,19 +280,16 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 						(unsigned int)state, (double)q, (double)t0, (double)p, nextStep, segmentStepLimit);
 		seg->DebugPrint();
 #endif
+		// nextStep is not less than segmentStepLimit, so we are not going to execute this segment
 		motioncalc_t newDcf = distanceCarriedForwards + seg->GetLength();
 		if (fabsm(newDcf) > (motioncalc_t)1.0)
 		{
-			if (reprap.Debug(Module::Move))
-			{
-				debugPrintf("newDcf=%.3e\n", (double)newDcf);
-			}
-			LogStepError(7, (float)newDcf);
+			(void)LogStepError(7, (float)newDcf, seg);
 			newDcf = constrain<motioncalc_t>(newDcf, -1.0, 1.0);	// to prevent the next segment erroring out
 		}
 		distanceCarriedForwards = newDcf;
 		MoveSegment *oldSeg = seg;
-		segments = seg = seg->GetNext();						// skip this segment
+		segments = seg = seg->GetNext();							// skip this segment
 		MoveSegment::Release(oldSeg);
 	}
 }
@@ -308,18 +304,19 @@ static inline motioncalc_t fastLimSqrtm(motioncalc_t f) noexcept
 #endif
 }
 
-// Tell the Move class that we had a step error. This always returns false so that CalcNextStepTimeFull can tail-chain to it.
-bool DriveMovement::LogStepError(uint8_t type, float extra) noexcept
+// Notify a step error. This always returns false so that CalcNextStepTimeFull can tail-chain to it.
+bool DriveMovement::LogStepError(uint8_t type, float info, const MoveSegment *seg) noexcept
 {
-	state = DMState::stepError;
-	stepErrorType = type;
-	if (reprap.Debug(Module::Move))
+	const StringRef& dbgRef = Platform::genericDebugBuffer.GetRef();
+	dbgRef.printf("Code %u move error: info=%.3g, seg: ", type, (double)info);
+	if (seg != nullptr)
 	{
-		debugPrintf("Step err %u on ", type);
-		DebugPrint();
-		MoveSegment::DebugPrintList(segments);
+		seg->AppendDetails(dbgRef);
 	}
-	reprap.GetMove().LogStepError(type, drive, extra);
+	dbgRef.cat('\n');
+	Platform::shouldTurnOffHeaters = true;
+	Platform::hasGenericDebug = true;
+	reprap.GetMove().StepErrorHalt();
 	return false;
 }
 
@@ -335,22 +332,70 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 	uint32_t shiftFactor = 0;										// assume single stepping
 	{
 		int32_t stepsToLimit = segmentStepLimit - nextStep;
+		if (stepsToLimit == 1 && currentSegment->GetNext() == nullptr && !currentSegment->GetFlags().isExtruder && reverseStartStep != nextStep)
+		{
+			// It's an axis and we are soon to stop movement, so we should end on an exact microstep.
+			// Check whether taking the last step would end up going a little too far or not quite far enough
+			const motioncalc_t provisionalDistanceCarriedForwards = distanceCarriedForwards + currentSegment->GetLength() - (motioncalc_t)netStepsThisSegment;
+			if (fabsm(provisionalDistanceCarriedForwards) < 0.05)
+			{
+				currentSegment->AdjustLength(-provisionalDistanceCarriedForwards);				// just correct the segment length
+			}
+			else if (provisionalDistanceCarriedForwards > (motioncalc_t)0.95)
+			{
+				currentSegment->AdjustLength((motioncalc_t)1.0 - provisionalDistanceCarriedForwards);	// adjust the segment length slightly
+				if (direction)
+				{
+					// Take 1 more step
+					++netStepsThisSegment;														// add 1 step to it
+					const int32_t oldSsl = segmentStepLimit;
+					segmentStepLimit = oldSsl + 1;												// increase the number of steps due
+					if (reverseStartStep == oldSsl) { reverseStartStep = oldSsl + 1; }			// if we didn't reverse already, make sure we don't reverse when we take the extra step
+					++stepsToLimit;																// we can take 1 more step
+				}
+				else
+				{
+					// Take 1 less step
+					--segmentStepLimit;
+					--netStepsThisSegment;
+					stepsToLimit = 0;
+				}
+			}
+			else if (provisionalDistanceCarriedForwards < -(motioncalc_t)0.95)
+			{
+				currentSegment->AdjustLength(-(motioncalc_t)1.0 - provisionalDistanceCarriedForwards);	// adjust the segment length slightly
+				if (direction)
+				{
+					// Take 1 less step
+					--segmentStepLimit;
+					--netStepsThisSegment;
+					stepsToLimit = 0;
+				}
+				else
+				{
+					--netStepsThisSegment;														// add 1 step to it in the backwards direction
+					const int32_t oldSsl = segmentStepLimit;
+					segmentStepLimit = oldSsl + 1;												// increase the number of steps due
+					if (reverseStartStep == oldSsl) { reverseStartStep = oldSsl + 1; }			// if we didn't reverse already, make sure we don't reverse now
+					++stepsToLimit;
+				}
+			}
+		}
+
 		// If there are no more steps left in this segment, skip to the next segment and use single stepping
 		if (stepsToLimit <= 0)
 		{
 			distanceCarriedForwards += currentSegment->GetLength() - (motioncalc_t)netStepsThisSegment;
-			if (distanceCarriedForwards > (motioncalc_t)1.0 || distanceCarriedForwards < (motioncalc_t)-1.0)
+			if (fabsf(distanceCarriedForwards) > (motioncalc_t)1.0)
 			{
-				return LogStepError(5, distanceCarriedForwards);
+				return LogStepError(5, (float)distanceCarriedForwards, currentSegment);
 			}
 			if (currentMotorPosition - positionAtSegmentStart != netStepsThisSegment)
 			{
-				return LogStepError(6, 0.0);
+				return LogStepError(6, (float)(currentMotorPosition - positionAtSegmentStart - netStepsThisSegment), currentSegment);
 			}
-			if (isExtruder)
-			{
-				movementAccumulator += netStepsThisSegment;			// update the amount of extrusion
-			}
+
+			movementAccumulator += netStepsThisSegment;				// update the amount of extrusion
 			segments = currentSegment->GetNext();
 			const uint32_t prevEndTime = currentSegment->GetStartTime() + currentSegment->GetDuration();
 			MoveSegment::Release(currentSegment);
@@ -367,7 +412,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 
 			if (unlikely((int32_t)(currentSegment->GetStartTime() - prevEndTime) < -10))
 			{
-				return LogStepError(1, (float)(int32_t)(currentSegment->GetStartTime() - prevEndTime));
+				return LogStepError(1, (float)(int32_t)(currentSegment->GetStartTime() - prevEndTime), currentSegment);
 			}
 
 			// Leave shiftFactor set to 0 so that we compute a single step time, because the interval will have changed
@@ -449,21 +494,32 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 #if SEGMENT_DEBUG
 		debugPrintf("DMstate %u, quitting\n", (unsigned int)state);
 #endif
-		return LogStepError(4, 0.0);
+		return LogStepError(4, (float)state, currentSegment);
 	}
 
 	nextCalcStepTime += t0;
-
-	if (unlikely(std::isnan(nextCalcStepTime) || nextCalcStepTime < (motioncalc_t)0.0))
+	uint32_t iNextCalcStepTime;
+	// Check that the next step time is reasonable
+	if (unlikely(std::isnan(nextCalcStepTime)))
 	{
-		if (reprap.Debug(Module::Move))
-		{
-			debugPrintf("nextCalcStepTime=%.3e\n", (double)nextCalcStepTime);
-		}
-		return LogStepError(2, (float)nextCalcStepTime);
+		return LogStepError(2, (float)nextCalcStepTime, currentSegment);
 	}
 
-	uint32_t iNextCalcStepTime = (uint32_t)nextCalcStepTime;
+	if (unlikely(nextCalcStepTime < (motioncalc_t)0.0))
+	{
+		// If we are carrying almost a whole step forward to this segment so that the first step is due almost immediately,
+		// then due to floating point rounding error we can get a slightly negative value here for nextCalcStepTime.
+		// The only value we have had reported so far is -0.00195 but we now allow up to two step clocks of error.
+		if (nextCalcStepTime < -(motioncalc_t)2.0)
+		{
+			return LogStepError(2, (float)nextCalcStepTime, currentSegment);
+		}
+		iNextCalcStepTime = 0;
+	}
+	else
+	{
+		iNextCalcStepTime = (uint32_t)nextCalcStepTime;
+	}
 
 	if (iNextCalcStepTime > currentSegment->GetDuration())
 	{
@@ -471,7 +527,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
 		// So if this is the last step and it is late, bring it forward to the expected finish time.
 		// 2023-12-06: we now allow any step to be late but we record the maximum number.
-		// 2024-040-5: we now allow steps to be late on any segment, not just the last one, because a segment may be 0 or 1 step long and on deltas the last 2 steps may be calculated late.
+		// 2024-04-05: we now allow steps to be late on any segment, not just the last one, because a segment may be 0 or 1 step long and on deltas the last 2 steps may be calculated late.
 		iNextCalcStepTime = currentSegment->GetDuration();
 		const int32_t nextCalcStep = nextStep + (int32_t)stepsTillRecalc;
 		const int32_t stepsLate = segmentStepLimit - nextCalcStep;

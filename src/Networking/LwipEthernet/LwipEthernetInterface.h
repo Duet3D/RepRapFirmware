@@ -43,7 +43,7 @@ public:
 	void Activate() noexcept override;
 	void Exit() noexcept override;
 	void Spin() noexcept override;
-	void Diagnostics(MessageType mtype) noexcept override;
+	void Diagnostics(const StringRef& reply) noexcept override;
 
 	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
 

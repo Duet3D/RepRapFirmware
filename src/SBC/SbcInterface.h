@@ -39,7 +39,7 @@ public:
 	// OTOH, calling Init when we don't have a SBC connected may cause problems due to noise pickup on the SPI CS and clock inputs
 	void Init() noexcept;
 	[[noreturn]] void TaskLoop() noexcept;
-	void Diagnostics(MessageType mtype) noexcept;
+	void Diagnostics(const StringRef& reply) noexcept;
 	bool IsConnected() const noexcept { return isConnected; }
 
 	void EventOccurred(bool timeCritical = false) noexcept;						// Called when a new event has happened. It can optionally start off a new transfer immediately

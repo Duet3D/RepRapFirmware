@@ -74,10 +74,10 @@ FilamentSensorStatus SimpleFilamentMonitor::Clear() noexcept
 }
 
 // Print diagnostic info for this sensor
-void SimpleFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder) noexcept
+void SimpleFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
 {
 	Poll();
-	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: %s\n", extruder, (filamentPresent) ? "ok" : "no filament");
+	reply.lcatf("Driver %u: %s", GetDriver(), (filamentPresent) ? "ok" : "no filament");
 }
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -112,13 +112,6 @@ void SimpleFilamentMonitor::GetLiveData(FilamentMonitorDataNew2& data) const noe
 	data.ClearReservedFields();
 	data.position = 0;
 	data.hasLiveData = false;
-}
-
-// Print diagnostic info for this sensor
-void SimpleFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
-{
-	Poll();
-	reply.lcatf("Driver %u: %s", GetDriver(), (filamentPresent) ? "ok" : "no filament");
 }
 
 #endif

@@ -321,8 +321,9 @@ static bool sd_mmc_spi_stop_multiwrite_block() noexcept
 //--------------------- PUBLIC FUNCTIONS ----------------------------
 
 // Get the speed of the SPI SD card interface for reporting purposes, in bytes/sec
-uint32_t spi_mmc_get_speed() noexcept
+uint32_t spi_mmc_get_speed(uint32_t *reqSpeed) noexcept
 {
+	if (reqSpeed != nullptr) { *reqSpeed = 0; }
 	return SD_MMC_SPI_MAX_CLOCK/8;
 }
 

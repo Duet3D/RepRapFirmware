@@ -41,6 +41,7 @@ Licence: GPL
 #include "SimulationMode.h"
 #include <Movement/BedProbing/Grid.h>
 #include <Movement/HomingMode.h>
+#include <Movement/MovementError.h>
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 # include <Storage/CRC32.h>
@@ -104,7 +105,8 @@ public:
 	void Exit() noexcept;														// Shut it down
 	void Reset() noexcept;														// Reset some parameter to defaults
 	bool ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
-		pre(queueNumber < ARRAY_SIZE(moveStates));								// Called by the Move class to get a movement set by the last G Code
+		pre(queueNumber < ARRAY_SIZE(moveStates));								// Called by the Move task to get a movement set by the last G Code
+	void ReportMovementError(MovementError err) noexcept;						// Called by the Move task to report that a move could not be queued
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	bool QueueFileToPrint(const char *_ecv_array fileName, const StringRef& reply) noexcept;	// Open a file of G Codes to run
 #endif
@@ -115,7 +117,7 @@ public:
 	bool WaitingForAcknowledgement() const noexcept;							// Is an input waiting for a message to be acknowledged?
 
 	FilePosition GetPrintingFilePosition() const noexcept;						// Return the current position of the file being printed in bytes. May return noFilePosition if allowNoFilePos is true
-	void Diagnostics(MessageType mtype) noexcept;								// Send helpful information out
+	void Diagnostics(const StringRef& reply) noexcept;							// Send helpful information out
 
 	bool RunConfigFile(const char *_ecv_array fileName, bool isMainConfigFile) noexcept;	// Start running a configuration file
 	bool IsTriggerBusy() const noexcept;										// Return true if the trigger G-code buffer is busy running config.g or a trigger file
@@ -217,9 +219,9 @@ public:
 	size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
 
 #if SUPPORT_SCANNING_PROBES
-	size_t GetNumScanningProbeReadingsToTake() const noexcept;
+	size_t GetNumScanningProbeReadingsLeftToTake() const noexcept;
 	void TakeScanningProbeReading() noexcept;										// Take and store a reading from a scanning Z probe
-	GCodeResult HandleM558Point1or2(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException);	// Calibrate a scanning Z probe
+	GCodeResult HandleM558Point1or2or3(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException);	// Calibrate a scanning Z probe
 #endif
 
 	// These next two are public because they are used by class SbcInterface
@@ -234,10 +236,8 @@ public:
 		pre(restorePointNumber < NumTotalRestorePoints);							// Save position etc. to a restore point
 	void StartToolChange(GCodeBuffer& gb, MovementState& ms, uint8_t param) noexcept;
 
-	unsigned int GetPrimaryWorkplaceCoordinateSystemNumber() const noexcept { return GetPrimaryMovementState().currentCoordinateSystem + 1; }
-
 #if SUPPORT_COORDINATE_ROTATION
-	void RotateCoordinates(float angleDegrees, float coords[2]) const noexcept;		// Account for coordinate rotation
+	void RotateCoordinates(const MovementState& ms, float angleDegrees, float coords[2]) const noexcept;		// Account for coordinate rotation
 #endif
 
 	// This function is called by other functions to account correctly for workplace coordinates
@@ -257,12 +257,10 @@ public:
 	{
 		return workplaceCoordinates[workplaceNumber][axis];
 	}
-	float GetPrimaryMaxPrintingAcceleration() const noexcept { return moveStates[0].maxPrintingAcceleration; }
-	float GetPrimaryMaxTravelAcceleration() const noexcept { return moveStates[0].maxTravelAcceleration; }
 
 # if SUPPORT_COORDINATE_ROTATION
-	float GetRotationAngle() const noexcept { return g68Angle; }
-	float GetRotationCentre(size_t index) const noexcept pre(index < 2) { return g68Centre[index]; }
+	float GetRotationAngle(const MovementState& ms) const noexcept { return ms.g68Angle; }
+	float GetRotationCentre(const MovementState& ms, size_t index) const noexcept pre(index < 2) { return ms.g68Centre[index]; }
 # endif
 
 	size_t GetNumInputs() const noexcept { return NumGCodeChannels; }
@@ -372,6 +370,8 @@ private:
 	void SetInitialAxisAndDrivePositions() noexcept;							// Called at initialisation and when new axes are added
 	void AdjustEndpoint(size_t drive, float ratio) const noexcept;				// Adjust an endpoint following a change to steps/mm
 
+	MovementError GetLastMovementError() noexcept;								// Get and clear the most recent movement error
+
 	bool SpinGCodeBuffer(GCodeBuffer& gb) noexcept;								// Do some work on an input channel
 	bool StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Fetch a new or old GCode and process it
 	void RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Execute a step of the state machine
@@ -404,7 +404,7 @@ private:
 	bool DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException);							// Execute an arc move
 	void FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
 	bool CheckEnoughAxesHomed(AxesBitmap axesToMove) noexcept;										// Check that enough axes have been homed
-	bool TravelToStartPoint(GCodeBuffer& gb) noexcept;												// Set up a move to travel to the resume point
+	void TravelToStartPoint(GCodeBuffer& gb, MovementState& ms) noexcept;							// Set up a move to travel to the resume point
 
 	GCodeResult DoDwell(GCodeBuffer& gb) THROWS(GCodeException);														// Wait for a bit
 	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);									// Home some axes
@@ -419,13 +419,7 @@ private:
 #if SUPPORT_PHASE_STEPPING
 	GCodeResult ConfigureStepMode(GCodeBuffer& gb, const StringRef& ref) THROWS(GCodeException);						// Deal with M970
 #endif
-#if SUPPORT_S_CURVE
-	GCodeResult ConfigureSCurve(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with M971
-#endif
 	GCodeResult ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with M569
-	GCodeResult ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException);	// Deal with M569 for one local driver
-	GCodeResult ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
-		pre(drive < reprap.GetMove().GetNumActualDirectDrivers());														// Deal with M569.0 for one local driver
 	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);					// process M204
 	GCodeResult DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);							// process M291
 	GCodeResult AcknowledgeMessage(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);						// process M292
@@ -445,8 +439,8 @@ private:
 
 	bool ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Process a whole-line comment
 
-	void LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException);		// Set up the feed rate of a move
-	void LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException);	// Set up the extrusion of a move
+	void LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(GCodeException);			// Set up the feed rate of a move
+	bool LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(GCodeException);			// Set up the extrusion of a move, returning true if there is any extrusion
 
 	bool Push(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Pop feedrate etc
@@ -597,6 +591,7 @@ private:
 
 #if SUPPORT_COORDINATE_ROTATION
 	GCodeResult HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle G68
+	bool WriteCoordinateRotation(FileStore *f, const MovementState& ms) const noexcept;
 #endif
 
 #if SUPPORT_DIRECT_LCD
@@ -678,11 +673,6 @@ private:
 	float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
 
 	float workplaceCoordinates[NumCoordinateSystems][MaxAxes];	// Workplace coordinate offsets
-
-#if SUPPORT_COORDINATE_ROTATION
-	float g68Angle;								// the G68 rotation angle in radians
-	float g68Centre[2];							// the XY coordinates of the centre to rotate about
-#endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileData fileToPrint;						// The next file to print
@@ -769,6 +759,7 @@ private:
 
 	// Misc
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
+	std::atomic<MovementError> lastMovementError = MovementError::ok;
 
 #if SUPPORT_ASYNC_MOVES
 	CollisionAvoider collisionChecker;			// currently we support just one collision avoider
@@ -800,6 +791,18 @@ private:
 
 	static constexpr int8_t ObjectModelAuxStatusReportType = 100;		// A non-negative value distinct from any M408 report type
 };
+
+// Called by the Move task to report that a move could not be queued
+inline void GCodes::ReportMovementError(MovementError err) noexcept
+{
+	lastMovementError.store(err);
+}
+
+// Get and clear the most recent movement error
+inline MovementError GCodes::GetLastMovementError() noexcept
+{
+	return lastMovementError.exchange(MovementError::ok);
+}
 
 // Get the total baby stepping offset for an axis
 inline float GCodes::GetTotalBabyStepOffset(size_t axis) const noexcept

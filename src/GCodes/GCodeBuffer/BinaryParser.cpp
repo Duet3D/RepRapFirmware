@@ -73,6 +73,14 @@ void BinaryParser::DecodeCommand() noexcept
 			}
 		}
 
+		if (bufferLength != 0 && (header->flags & CodeFlags::HasExplicitLineNumber) != 0)
+		{
+			gb.SetExplicitLineNumber(header->lineNumber);
+		}
+		else
+		{
+			gb.ClearExplicitLineNumber();
+		}
 		gb.bufferState = GCodeBufferState::executing;
 	}
 }

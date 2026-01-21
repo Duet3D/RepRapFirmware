@@ -61,7 +61,7 @@ namespace FirmwareUpdater
 #if SUPPORT_PANELDUE_FLASH && (HAS_MASS_STORAGE || HAS_EMBEDDED_FILES)
 		if (moduleMap.IsBitSet(PanelDueFirmwareModule))
 		{
-			if (!reprap.GetPlatform().IsAuxEnabled(serialChannel-1) || reprap.GetPlatform().IsAuxRaw(serialChannel-1))
+			if (!reprap.GetPlatform().IsChanEnabled(serialChannel) || reprap.GetPlatform().IsChanRaw(serialChannel))
 			{
 				reply.printf("Aux port %d is not enabled or not in PanelDue mode", serialChannel-1);
 				return GCodeResult::error;

@@ -115,6 +115,7 @@ enum class BoardType : uint8_t
 	Duet3_6HC_v101 = 2,
 	Duet3_6HC_v102 = 3,
 	Duet3_6HC_v102b = 4,
+	Duet3_6HC_v102c = 5,
 #elif defined(DUET3_MB6XD)
 	Duet3_6XD_v01 = 1,
 	Duet3_6XD_v100 = 2,
@@ -168,7 +169,8 @@ enum class DiagnosticTestType : unsigned int
 	DivideByZero = 1004,			// do an integer divide by zero to test exception handling
 	UnalignedMemoryAccess = 1005,	// do an unaligned memory access to test exception handling
 	BusFault = 1006,				// generate a bus fault
-	AccessMemory = 1007				// read or write  memory
+	AccessMemory = 1007,			// read or write  memory
+	MemoryLeak = 1008				// cause an out of memory fault
 };
 
 /***************************************************************************************************************/
@@ -190,6 +192,27 @@ enum class ErrorCode : uint32_t
 	HsmciTimeout = 1u << 4
 };
 
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
+
+// Class to manage a configurable folder, used for the sys and web folders
+class ConfigurableFolder
+{
+public:
+	ConfigurableFolder(const char *_ecv_array defValue) noexcept : userValue(nullptr), defaultValue(defValue) { }
+	ReadLockedPointer<const char> GetLockedPointer() const noexcept;
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	void AppendToString(const StringRef& path) const noexcept;
+	GCodeResult Configure(const char *_ecv_array newPath, const StringRef& reply) noexcept;
+#endif
+private:
+	mutable ReadWriteLock lock;
+	const char *_ecv_array GetUnlockedPointer() const noexcept { return (userValue == nullptr) ? defaultValue : userValue; }
+	const char *_ecv_array _ecv_null userValue;
+	const char *_ecv_array defaultValue;
+};
+
+#endif
+
 // The main class that defines the RepRap machine for the benefit of the other classes
 class Platform final INHERIT_OBJECT_MODEL
 {
@@ -206,10 +229,13 @@ public:
 	void Spin() noexcept;									// This gets called in the main loop and should do any housekeeping needed
 	void Exit() noexcept;									// Shut down tidily. Calling Init after calling this should reset to the beginning
 
-	void Diagnostics(MessageType mtype) noexcept;
-	static const char *_ecv_array GetResetReasonText() noexcept;
+	void Diagnostics(unsigned int part, const StringRef& reply) noexcept;
+	static constexpr unsigned int NumPlatformDiagnosticParts = 7;
+
 	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf, unsigned int d) THROWS(GCodeException);
+	static const char *_ecv_array GetResetReasonText() noexcept;
 	static bool WasDeliberateError() noexcept { return deliberateError; }
+
 	void LogError(ErrorCode e) noexcept { errorCodeBits |= (uint32_t)e; }
 
 	bool GetAtxPowerState() const noexcept;
@@ -266,28 +292,27 @@ public:
 	bool SetDateTime(time_t t) noexcept;							// Sets the current RTC date and time or returns false on error
 
   	// Communications and data storage
-	void AppendUsbReply(OutputBuffer *buffer) noexcept;
-	void AppendAuxReply(size_t auxNumber, OutputBuffer *buf, bool rawMessage) noexcept;
-	void AppendAuxReply(size_t auxNumber, const char *_ecv_array msg, bool rawMessage) noexcept;
+	void AppendUsbReply(const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept;
+	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, bool rawMessage) noexcept;
+	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, const char *_ecv_array msg, bool rawMessage) noexcept;
 
 	void ResetChannel(size_t chan) noexcept;						// Re-initialise a serial channel
-    bool IsAuxEnabled(size_t auxNumber) const noexcept;				// Any device on the AUX line?
-    bool IsAuxRaw(size_t auxNumber) const noexcept;
+	bool IsChanEnabled(size_t chan) const noexcept;					// Any device on the serial line?
+    bool IsChanRaw(size_t chan) const noexcept;						// Is the serial line in raw mode?
+
 #if SUPPORT_PANELDUE_FLASH
 	PanelDueUpdater *_ecv_null GetPanelDueUpdater() noexcept { return panelDueUpdater; }
 	void InitPanelDueUpdater() noexcept;
 #endif
 
 	void SetIPAddress(IPAddress ip) noexcept;
-	IPAddress GetIPAddress() const noexcept;
+	IPAddress GetIPAddress() const noexcept { return ipAddress; }
 	void SetNetMask(IPAddress nm) noexcept;
-	IPAddress NetMask() const noexcept;
+	IPAddress NetMask() const noexcept { return netMask; }
 	void SetGateWay(IPAddress gw) noexcept;
-	IPAddress GateWay() const noexcept;
+	IPAddress GateWay() const noexcept { return gateWay; }
 	void SetBaudRate(size_t chan, uint32_t br) noexcept;
 	uint32_t GetBaudRate(size_t chan) const noexcept;
-	void SetCommsProperties(size_t chan, uint32_t cp) noexcept;
-	uint32_t GetCommsProperties(size_t chan) const noexcept;
 
 	// File functions
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
@@ -297,12 +322,13 @@ public:
 	bool Delete(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
 # endif
 
-	static const char *_ecv_array GetWebDir() noexcept; 		// Where the html etc files are
 	static const char *_ecv_array GetGCodeDir() noexcept; 		// Where the gcodes are
 	static const char *_ecv_array GetMacroDir() noexcept;		// Where the user-defined macros are
 
 	// Functions to work with the system files folder
 	GCodeResult SetSysDir(const char *_ecv_array dir, const StringRef& reply) noexcept;				// Set the system files path
+	GCodeResult SetWebDir(const char *_ecv_array dir, const StringRef& reply) noexcept;				// Set the web files path
+
 	bool SysFileExists(const char *_ecv_array filename) const noexcept;
 	FileStore *_ecv_null OpenSysFile(const char *_ecv_array filename, OpenMode mode) const noexcept;
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -310,14 +336,18 @@ public:
 # endif
 	bool MakeSysFileName(const StringRef& rslt, const char *_ecv_array filename) const noexcept;
 	void AppendSysDir(const StringRef & path) const noexcept;
+	void AppendWebDir(const StringRef & path) const noexcept;
 	ReadLockedPointer<const char> GetSysDir() const noexcept;	// where the system files are
+	ReadLockedPointer<const char> GetWebDir() const noexcept;	// where the web files are
 #endif
 
 	// Message output (see MessageType for further details)
 	void Message(MessageType type, const char *_ecv_array message) noexcept;
+	void Message(const GCodeBuffer *_ecv_null gb, MessageType type, OutputBuffer *buffer) noexcept;
 	void Message(MessageType type, OutputBuffer *buffer) noexcept;
+	void MessageF(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array fmt, ...) noexcept __attribute__ ((format (printf, 4, 5)));
 	void MessageF(MessageType type, const char *_ecv_array fmt, ...) noexcept __attribute__ ((format (printf, 3, 4)));
-	void MessageV(MessageType type, const char *_ecv_array fmt, va_list vargs) noexcept;
+	void MessageV(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array fmt, va_list vargs) noexcept;
 	void DebugMessage(const char *_ecv_array fmt, va_list vargs) noexcept;
 	bool FlushMessages() noexcept;								// Flush messages to USB and aux, returning true if there is more to send
 	void StopLogging() noexcept;
@@ -354,11 +384,11 @@ public:
 
 	// AUX device
 	void PanelDueBeep(int freq, int ms) noexcept;
-	void SendPanelDueMessage(size_t auxNumber, const char *_ecv_array msg) noexcept;
+	void SendPanelDueMessage(size_t chan, const char *_ecv_array msg) noexcept;
 
 	// Hotend configuration
-	float GetFilamentWidth() const noexcept;
-	void SetFilamentWidth(float width) noexcept;
+	float GetFilamentWidth() const noexcept { return filamentWidth; }
+	void SetFilamentWidth(float width) noexcept { filamentWidth = width; }
 
 	// MCU temperature
 #if HAS_CPU_TEMP_SENSOR
@@ -404,6 +434,7 @@ public:
 
 	// Ancillary PWM
 	GCodeResult GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	bool IsOutputOnExtrudeActive() const noexcept { return extrusionAncilliaryPwmGpOutNumber >= 0; }
 	void ExtrudeOn() noexcept;
 	void ExtrudeOff() noexcept;
 
@@ -466,16 +497,24 @@ public:
 	const char *_ecv_array null GetExpansionBoardName() const noexcept { return (hasTmc2240Expansion) ? "Duet3 Mini 2+ (TMC2240)" : nullptr; }
 #endif
 
+	// Debug buffer for M111
 	static bool HasDebugBuffer() noexcept;
 	static bool IsrDebugPutc(char c) noexcept;
 	static bool SetDebugBufferSize(uint32_t size) noexcept;
+
+	// Debug buffer for other purposes, used initially (post 3.6.0-beta.3) for printing move error messages.
+	// Build up a message in genericDebugBuffer, then set haveGenericDebug to true to indicate it is complete and ready to output.
+	// Optionally set shouldTurnOffHeaters before setting hasGenericDebug.
+	// It will be set false again when the message has been output and the buffer is free again.
+	static String<StringLength256> genericDebugBuffer;
+	static bool hasGenericDebug;
+	static bool shouldTurnOffHeaters;
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
-	const char *_ecv_array InternalGetSysDir() const noexcept;  				// where the system files are - not thread-safe!
-	void RawMessage(MessageType type, const char *_ecv_array message) noexcept;	// called by Message after handling error/warning flags
+	void RawMessage(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array message) noexcept;	// called by Message after handling error/warning flags
 	float GetCpuTemperature() const noexcept;
 	GCodeResult PrintTestReport(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) const THROWS(GCodeException);
 
@@ -564,7 +603,9 @@ private:
 	uint32_t lastFanCheckTime;
 
   	// Serial/USB
-	uint8_t commsParams[NumSerialChannels];
+	uint8_t commsParams[NumSerialChannels];							// the M575 S parameter for each serial channel
+	AuxMode GetChannelMode(size_t chan) const noexcept;
+	uint32_t usbMessageSeq = 0;										// message sequence number when in PanelDue mode
 
 	volatile OutputStack usbOutput;
 	Mutex usbMutex;
@@ -578,8 +619,7 @@ private:
 
 	// Files
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	const char *_ecv_array _ecv_null sysDir;
-	mutable ReadWriteLock sysDirLock;
+	ConfigurableFolder sysFolder, webFolder;
 #endif
 
 	// Data used by the tick interrupt handler
@@ -641,8 +681,8 @@ private:
 
 	// CNC and laser support
 	Spindle spindles[MaxSpindles];
-	float extrusionAncilliaryPwmValue;
-	PwmPort extrusionAncilliaryPwmPort;
+	float extrusionAncilliaryPwmValue = 0.0;
+	int32_t extrusionAncilliaryPwmGpOutNumber = -1;		// the GpOut port number used for ancillary extrusion PWM, or -1 if not configured
 
 #if SUPPORT_LASER
 	PwmPort laserPort;
@@ -660,12 +700,6 @@ private:
 };
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-
-// Where the htm etc files are
-inline const char *_ecv_array Platform::GetWebDir() noexcept
-{
-	return WEB_DIR;
-}
 
 // Where the gcodes are
 inline const char *_ecv_array Platform::GetGCodeDir() noexcept
@@ -690,9 +724,9 @@ inline const char *_ecv_array Platform::GetMacroDir() noexcept
 // Caution: this is often called from an ISR, or with interrupts disabled!
 inline void Platform::ExtrudeOn() noexcept
 {
-	if (extrusionAncilliaryPwmValue > 0.0)
+	if (extrusionAncilliaryPwmGpOutNumber >= 0 && extrusionAncilliaryPwmValue > 0.0)
 	{
-		extrusionAncilliaryPwmPort.WriteAnalog(extrusionAncilliaryPwmValue);
+		GetGpOutPort(extrusionAncilliaryPwmGpOutNumber).WriteAnalog(extrusionAncilliaryPwmValue);
 	}
 }
 
@@ -701,39 +735,26 @@ inline void Platform::ExtrudeOn() noexcept
 // Caution: this is often called from an ISR, or with interrupts disabled!
 inline void Platform::ExtrudeOff() noexcept
 {
-	if (extrusionAncilliaryPwmValue > 0.0)
+	if (extrusionAncilliaryPwmGpOutNumber >= 0 && extrusionAncilliaryPwmValue > 0.0)
 	{
-		extrusionAncilliaryPwmPort.WriteAnalog(0.0);
+		GetGpOutPort(extrusionAncilliaryPwmGpOutNumber).WriteAnalog(0.0);
 	}
 }
 
-//********************************************************************************************************
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 
-// Drive the RepRap machine - Heat and temperature
+inline ReadLockedPointer<const char> Platform::GetSysDir() const noexcept { return sysFolder.GetLockedPointer(); }
+inline ReadLockedPointer<const char> Platform::GetWebDir() const noexcept { return webFolder.GetLockedPointer(); }
 
-inline IPAddress Platform::GetIPAddress() const noexcept
-{
-	return ipAddress;
-}
+#endif
 
-inline IPAddress Platform::NetMask() const noexcept
-{
-	return netMask;
-}
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
-inline IPAddress Platform::GateWay() const noexcept
-{
-	return gateWay;
-}
+inline void Platform::AppendSysDir(const StringRef & path) const noexcept { sysFolder.AppendToString(path); }
+inline void Platform::AppendWebDir(const StringRef & path) const noexcept { webFolder.AppendToString(path); }
+inline GCodeResult Platform::SetSysDir(const char *_ecv_array dir, const StringRef& reply) noexcept { return sysFolder.Configure(dir, reply); }
+inline GCodeResult Platform::SetWebDir(const char *_ecv_array dir, const StringRef& reply) noexcept { return webFolder.Configure(dir, reply); }
 
-inline float Platform::GetFilamentWidth() const noexcept
-{
-	return filamentWidth;
-}
-
-inline void Platform::SetFilamentWidth(float width) noexcept
-{
-	filamentWidth = width;
-}
+#endif
 
 #endif

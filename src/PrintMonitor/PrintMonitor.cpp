@@ -28,25 +28,23 @@ Licence: GPL
 
 ReadWriteLock PrintMonitor::printMonitorLock;
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(PrintMonitor, __VA_ARGS__)
-#define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(PrintMonitor, _condition,__VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(PrintMonitor, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition,...)	OBJECT_MODEL_FUNC_IF_BODY(PrintMonitor, _condition,__VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(PrintMonitor, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(PrintMonitor, __VA_ARGS__)
 
 const ObjectModelArrayTableEntry PrintMonitor::objectModelArrayTable[] =
 {
 	// 0. Filaments
-		{
+	{
 		&printMonitorLock,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
-				{ return ((const PrintMonitor*)self)->printingFileInfo.numFilaments; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return  ExpressionValue(((const PrintMonitor*)self)->printingFileInfo.filamentNeeded[context.GetLastIndex()], 1); }
+		OBJECT_MODEL_ARRAY_COUNT(self->printingFileInfo.numFilaments),
+		OBJECT_MODEL_ARRAY_VALUE(self->printingFileInfo.filamentNeeded[context.GetLastIndex()], 1)
 	},
 	// 1. Thumbnails
 	{
@@ -60,7 +58,7 @@ const ObjectModelArrayTableEntry PrintMonitor::objectModelArrayTable[] =
 					}
 					return count;
 				},
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 2); }
+		OBJECT_MODEL_ARRAY_VALUE(self, 2)
 	}
 };
 
@@ -73,17 +71,17 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "build",				OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->gCodes.GetBuildObjects(), 0), 										ObjectModelEntryFlags::liveNotPanelDue },
 	{ "duration",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetPrintOrSimulatedDuration()), 										ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self, 1),							 																ObjectModelEntryFlags::none },
-	{ "filePosition",		OBJECT_MODEL_FUNC(self->gCodes.GetPrintingFilePosition()),															ObjectModelEntryFlags::liveNotPanelDue },
+	{ "filePosition",		OBJECT_MODEL_FUNC(self->gCodes.GetPrintingFilePosition()),															ObjectModelEntryFlags::live },
 	{ "lastDuration",		OBJECT_MODEL_FUNC_IF(!self->IsPrinting(), (int32_t)self->gCodes.GetLastDuration()), 								ObjectModelEntryFlags::none },
 	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty() && !self->IsPrinting(), self->filenameBeingPrinted.c_str()), ObjectModelEntryFlags::none },
 	{ "lastWarmUpDuration",	OBJECT_MODEL_FUNC_IF(!self->IsPrinting(), self->lastWarmUpDuration),												ObjectModelEntryFlags::none },
 	// TODO Add enum about the last file print here (to replace lastFileAborted, lastFileCancelled, lastFileSimulated)
-	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting() && self->currentLayer != 0, (int32_t)self->currentLayer), 					ObjectModelEntryFlags::live },
+	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting() && self->currentLayer != 0, (int32_t)self->currentLayer), 					ObjectModelEntryFlags::liveNotPanelDue },
 	{ "layerTime",			OBJECT_MODEL_FUNC_IF(self->IsPrinting() && self->currentLayer != 0, self->GetCurrentLayerTime(), 1), 				ObjectModelEntryFlags::liveNotPanelDue },
 	{ "pauseDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetPauseDuration())),											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "rawExtrusion",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), ExpressionValue(self->gCodes.GetTotalRawExtrusion(), 1)),					ObjectModelEntryFlags::liveNotPanelDue },
 	{ "timesLeft",			OBJECT_MODEL_FUNC(self, 3),							 																ObjectModelEntryFlags::live },
-	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetWarmUpDuration())),										ObjectModelEntryFlags::liveNotPanelDue },
+	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetWarmUpDuration())),										ObjectModelEntryFlags::live },
 
 	// 1. 'file' members
 	{ "customInfo",			OBJECT_MODEL_FUNC(&self->customInfo, 0),						 													ObjectModelEntryFlags::none },
@@ -110,9 +108,10 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "filament",			OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(filamentBased)),												ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(fileBased)),													ObjectModelEntryFlags::live },
 	{ "slicer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(slicerBased)),													ObjectModelEntryFlags::live },
+	{ "toPause",			OBJECT_MODEL_FUNC(self->EstimateTimeToPause()),																		ObjectModelEntryFlags::liveNotPanelDue },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 13, 12, 5, 3 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 13, 12, 5, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 
@@ -120,8 +119,6 @@ int32_t PrintMonitor::GetPrintOrSimulatedDuration() const noexcept
 {
 	return lrintf((gCodes.IsSimulating()) ? gCodes.GetSimulationTime() + reprap.GetMove().GetSimulationTime() : GetPrintDuration());
 }
-
-#endif
 
 PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) noexcept : platform(p), gCodes(gc), lastWarmUpDuration(0), isPrinting(false), heatingUp(false), paused(false), printingFileParsed(false)
 {
@@ -161,7 +158,7 @@ void PrintMonitor::PrintingFileInfoUpdated() noexcept
 	reprap.JobUpdated();
 }
 
-bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info) noexcept
+bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info, const GlobalVariables *& p_customInfo) noexcept
 {
 	if (IsPrinting())
 	{
@@ -170,6 +167,7 @@ bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info) noexcept
 			return false;					// not ready yet
 		}
 		info = printingFileInfo;
+		p_customInfo = &customInfo;
 	}
 	else
 	{
@@ -192,6 +190,10 @@ GCodeResult PrintMonitor::ProcessM73(GCodeBuffer& gb, const StringRef& reply) TH
 	{
 		SetSlicerTimeLeft(gb.GetFValue() * MinutesToSeconds);
 	}
+	if (gb.Seen('C'))
+	{
+		SetSlicerTimeToPause(gb.GetFValue() * MinutesToSeconds);
+	}
 	// M73 without P Q R or S parameters reports print progress in some implementations, but we don't currently do that
 	return GCodeResult::ok;
 }
@@ -200,6 +202,12 @@ void PrintMonitor::SetSlicerTimeLeft(float seconds) noexcept
 {
 	slicerTimeLeft = seconds;
 	whenSlicerTimeLeftSet = millis64();
+}
+
+void PrintMonitor::SetSlicerTimeToPause(float seconds) noexcept
+{
+	slicerTimeToPause = seconds;
+	whenSlicerTimeToPauseSet = millis64();
 }
 
 void PrintMonitor::Spin() noexcept
@@ -327,6 +335,7 @@ void PrintMonitor::StartingPrint(const char *_ecv_array filename) noexcept
 		{
 			totalFilamentNeeded = 0.0;
 			slicerTimeLeft = 0.0;
+			slicerTimeToPause = 0.0;
 		}
 	}
 	reprap.JobUpdated();
@@ -429,7 +438,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 			break;
 
 		case slicerBased:
-			if (slicerTimeLeft > 0.0 && !gCodes.IsSimulating())				// don't report slicer time if we are simulating
+			if (slicerTimeLeft > 0.0 && !gCodes.IsSimulating())							// don't report slicer time if we are simulating
 			{
 				const uint64_t now = millis64();
 				int64_t adjustment = (int64_t)(now - whenSlicerTimeLeftSet);			// add the time since we stored the slicer time left
@@ -456,6 +465,21 @@ ExpressionValue PrintMonitor::EstimateTimeLeftAsExpression(PrintEstimationMethod
 {
 	const float timeLeft = EstimateTimeLeft(method);
 	return (timeLeft > 0.0) ? ExpressionValue(lrintf(timeLeft)) : ExpressionValue(nullptr);
+}
+
+// Return the estimated time until user interaction is required e.g. to change filament
+ExpressionValue PrintMonitor::EstimateTimeToPause() const noexcept
+{
+	ExpressionValue ret(nullptr);
+	if (isPrinting && !gCodes.IsSimulating() && slicerTimeToPause > 0.0)
+	{
+		const float timeToPause = slicerTimeToPause - (millis64() - whenSlicerTimeToPauseSet) * MillisToSeconds;
+		if (timeToPause > 0.0)
+		{
+			ret.SetInt(lrintf(timeToPause));
+		}
+	}
+	return ret;
 }
 
 #endif

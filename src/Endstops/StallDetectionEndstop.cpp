@@ -108,16 +108,22 @@ void StallDetectionEndstop::AddDriverToMonitoredList(DriverId did, float speed) 
 			DeleteRemoteStallEndstops();
 			throw;
 		}
+
+		bool found = false;
 		for (size_t i = 0; i < remoteDriversMonitored.Size(); ++i)
 		{
 			if (remoteDriversMonitored[i].boardId == did.boardAddress)
 			{
 				remoteDriversMonitored[i].driversMonitored.SetBit(did.localDriver);
-				return;
+				found = true;
+				break;
 			}
 		}
 
-		(void)remoteDriversMonitored.Add(RemoteDriversMonitored(did.boardAddress, RemoteDriversBitmap::MakeFromBits(did.localDriver)));		// we don't expect the vector to overflow
+		if (!found)
+		{
+			(void)remoteDriversMonitored.Add(RemoteDriversMonitored(did.boardAddress, LocalDriversBitmap::MakeFromBits(did.localDriver)));		// we don't expect the vector to overflow
+		}
 	}
 	else
 #endif
@@ -205,7 +211,7 @@ EndstopHitDetails StallDetectionEndstop::CheckTriggered() noexcept
 		for (size_t i = 0; i < remoteDriversMonitored.Size(); ++i)
 		{
 			const RemoteDriversMonitored& elem = remoteDriversMonitored[i];
-			const RemoteDriversBitmap stalledRemoteDrives = elem.driversMonitored & elem.driversStalled;
+			const LocalDriversBitmap stalledRemoteDrives = elem.driversMonitored & elem.driversStalled;
 			if (stalledRemoteDrives.IsNonEmpty())
 			{
 				newStallReported = true;					// there may be more than one stalled drive reported, so make sure we check again
@@ -279,14 +285,14 @@ void StallDetectionEndstop::DeleteRemoteStallEndstops() noexcept
 }
 
 // Record any notifications of stalled remote drivers that we are interested in
-void StallDetectionEndstop::HandleStalledRemoteDrivers(CanAddress boardAddress, RemoteDriversBitmap driversReportedStalled) noexcept
+void StallDetectionEndstop::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled) noexcept
 {
 	remoteDriversMonitored.IterateWhile([this, boardAddress, driversReportedStalled](RemoteDriversMonitored& entry, size_t count) noexcept -> bool
 										{
 											if (boardAddress == entry.boardId)
 											{
-												const RemoteDriversBitmap pending = entry.driversMonitored & ~entry.driversStalled;
-												const RemoteDriversBitmap newStalls = pending & driversReportedStalled;
+												const LocalDriversBitmap pending = entry.driversMonitored & ~entry.driversStalled;
+												const LocalDriversBitmap newStalls = pending & driversReportedStalled;
 												if (newStalls.IsNonEmpty())
 												{
 													entry.driversStalled |= newStalls;

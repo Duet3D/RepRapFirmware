@@ -22,7 +22,7 @@ public:
 	static void Disable() noexcept;
 	static void HandleGCodeReply(const char *_ecv_array _ecv_null reply) noexcept;
 	static void HandleGCodeReply(OutputBuffer *_ecv_null reply) noexcept;
-	void Diagnostics(MessageType mtype) const noexcept override;
+	void Diagnostics(const StringRef& reply) const noexcept override;
 
 protected:
 	void ConnectionLost() noexcept override;

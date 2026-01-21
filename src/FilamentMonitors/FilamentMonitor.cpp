@@ -121,7 +121,7 @@ GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& r
 	if (gb.Seen('C'))
 	{
 		seen = true;
-		if (!port.AssignPort(gb, reply, PinUsedBy::filamentMonitor, PinAccess::read))
+		if (!port.AssignPort(gb, reply, PinUsedBy::filamentMonitor, PinAccess::readNoDebounce))			// debouncing a Duet3D filament monitor results in framing errors
 		{
 			return GCodeResult::error;
 		}
@@ -467,6 +467,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 					}
 					fs.lastRemoteStatus = newStatus;
 					fs.UpdateLiveData(slot);
+					break;
 				}
 			}
 		}
@@ -489,23 +490,26 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 }
 
 // Send diagnostics info
-/*static*/ void FilamentMonitor::Diagnostics(MessageType mtype) noexcept
+/*static*/ void FilamentMonitor::AllDiagnostics(const StringRef& reply) noexcept
 {
 	bool first = true;
-	for (size_t i = 0; i < MaxExtruders; ++i)
+	ReadLocker lock(filamentMonitorsLock);
+
+	for (size_t i = 0; i < NumFilamentMonitors; ++i)
 	{
-		if (filamentSensors[i] != nullptr)
+		FilamentMonitor * const fs = filamentSensors[i];
+		if (fs != nullptr)
 		{
 			if (first)
 			{
-#if 1	//TEMP DEBUG
-				reprap.GetPlatform().MessageF(mtype, "=== Filament sensors ===\ncheck %" PRIu32 " clear %" PRIu32 "\n", checkCalls, clearCalls);
+#if 0	//TEMP DEBUG
+				reply.lcatf("=== Filament sensors ===\ncheck %" PRIu32 " clear %" PRIu32, checkCalls, clearCalls);
 #else
-				reprap.GetPlatform().Message(mtype, "=== Filament sensors ===\n");
+				reply.lcat("=== Filament sensors ===");
 #endif
 				first = false;
 			}
-			filamentSensors[i]->Diagnostics(mtype, i);
+			fs->Diagnostics(reply);
 		}
 	}
 }
@@ -673,31 +677,6 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 		if (fm != nullptr)
 		{
 			DeleteObject(fm);
-		}
-	}
-}
-
-// Send diagnostics info
-/*static*/ void FilamentMonitor::GetDiagnostics(const StringRef& reply) noexcept
-{
-	bool first = true;
-	ReadLocker lock(filamentMonitorsLock);
-
-	for (size_t i = 0; i < NumDirectDrivers; ++i)
-	{
-		FilamentMonitor * const fs = filamentSensors[i];
-		if (fs != nullptr)
-		{
-			if (first)
-			{
-#if 1	//TEMP DEBUG
-				reply.lcatf("=== Filament sensors ===\ncheck %" PRIu32 " clear %" PRIu32 "\n", checkCalls, clearCalls);
-#else
-				reply.lcat("=== Filament sensors ===\n");
-#endif
-				first = false;
-			}
-			fs->Diagnostics(reply);
 		}
 	}
 }

@@ -74,8 +74,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20038000;
 
 // The physical capabilities of the machine
 
-#include <Duet3Common.h>
-
 constexpr size_t NumDirectDrivers = 7;				// The maximum number of drives supported by the electronics
 
 constexpr size_t MaxSmartDrivers = NumDirectDrivers;	// The maximum number of smart drivers
@@ -101,7 +99,7 @@ constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper driv
 constexpr size_t MaxExtruders = 8;					// The maximum number of extruders
 constexpr size_t MaxAxesPlusExtruders = 12;
 
-constexpr size_t MaxHeatersPerTool = 2;
+constexpr size_t MaxHeatersPerTool = 8;
 constexpr size_t MaxExtrudersPerTool = 8;
 
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
@@ -228,7 +226,7 @@ constexpr Pin SdMciPins[] = { PortAPin(20), PortAPin(21), PortBPin(18), PortBPin
 constexpr GpioPinFunction SdMciPinsFunction = GpioPinFunction::I;
 Sdhc * const SdhcDevice = SDHC1;
 constexpr IRQn_Type SdhcIRQn = SDHC1_IRQn;
-constexpr uint32_t ExpectedSdCardSpeed = 22500000;
+constexpr uint32_t ExpectedSdCardSpeed = 24000000;
 
 // 12864 LCD
 // The ST7920 datasheet specifies minimum clock cycle time 400ns @ Vdd=4.5V, min. clock width 200ns high and 20ns low.

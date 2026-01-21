@@ -32,7 +32,7 @@ public:
 	bool StartCollecting(uint8_t axes) noexcept;
 
 	// Collect some data from the FIFO, suspending until the data is available
-	unsigned int CollectData(const uint16_t *_ecv_array *collectedData, uint16_t &dataRate, bool &overflowed) noexcept;
+	unsigned int CollectData(const uint16_t *_ecv_array *collectedData, uint16_t &dataRate, bool &overflowedOrSpuriousInterrupts) noexcept;
 
 	// Stop collecting data
 	void StopCollecting() noexcept;
@@ -68,6 +68,8 @@ private:
 	uint32_t firstInterruptTime;
 	uint32_t lastInterruptTime;
 	uint32_t totalNumRead;
+	unsigned int goodInterrupts;
+	unsigned int spuriousInterrupts;
 	AccelerometerType accelerometerType;
 	bool interruptError;
 	uint8_t currentAxis;

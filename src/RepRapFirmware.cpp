@@ -170,13 +170,37 @@ const char *_ecv_array GetFloatFormatString(float val, unsigned int numDigitsAft
 	// If the value is below 0.1 then use 'g' format and treat the requested number of decimal digits as the number of significant digits needed
 	// f the value is very large then use 'g' format and treat the requested number of decimal digits as the number of significant digits needed
 	// Else use 'f' format.
-	static constexpr const char *_ecv_array FormatStringsF[] = { "%.7f", "%.1f", "%.2f", "%.3f", "%.4f", "%.5f", "%.6f", "%.7f" };
-	static constexpr const char *_ecv_array FormatStringsG[] = { "%.7g", "%.1g", "%.2g", "%.3g", "%.4g", "%.5g", "%.6g", "%.7g" };
-	static_assert(ARRAY_SIZE(FormatStringsF) == MaxFloatDigitsDisplayedAfterPoint + 1);
-	static_assert(ARRAY_SIZE(FormatStringsG) == MaxFloatDigitsDisplayedAfterPoint + 1);
+	static constexpr const char *_ecv_array FormatStringsF[] = { "%.1f", "%.2f", "%.3f", "%.4f", "%.5f", "%.6f", "%.7f" };
+	static constexpr const char *_ecv_array FormatStringsG[] = { "%.1g", "%.2g", "%.3g", "%.4g", "%.5g", "%.6g", "%.7g" };
+	static constexpr float MaxValueToDisplayWithAllDecimals[] = { 999999.9, 99999.99, 9999.99, 999, 99.99, 9.99, 0.99 };
 
-	const char *_ecv_array const *_ecv_array formatStringToUse = (fabsf(val) < 0.1 || fabsf(val) >= 10000.0) ? FormatStringsG : FormatStringsF;
-	return formatStringToUse[min<unsigned int>(numDigitsAfterPoint, MaxFloatDigitsDisplayedAfterPoint)];
+	static_assert(ARRAY_SIZE(FormatStringsF) == MaxFloatDigitsDisplayedAfterPoint);
+	static_assert(ARRAY_SIZE(FormatStringsG) == MaxFloatDigitsDisplayedAfterPoint);
+
+	constexpr float MinValueToDisplayInFFormat = 0.1;
+
+	if (numDigitsAfterPoint == 0)
+	{
+		numDigitsAfterPoint = MaxFloatDigitsDisplayedAfterPoint;
+	}
+	else if (numDigitsAfterPoint > MaxFloatDigitsDisplayedAfterPoint)
+	{
+		numDigitsAfterPoint = MaxFloatDigitsDisplayedAfterPoint;
+	}
+
+	// If the value is small or very large, use 'g' format
+	if (fabsf(val) < MinValueToDisplayInFFormat || fabsf(val) > MaxValueToDisplayWithAllDecimals[0])
+	{
+		return FormatStringsG[numDigitsAfterPoint - 1];
+	}
+
+	// Use 'f' format, but don't print more decimal digits than may conceivably be valid
+	while (fabsf(val) > MaxValueToDisplayWithAllDecimals[numDigitsAfterPoint - 1])
+	{
+		--numDigitsAfterPoint;
+	}
+	// Use 'f' format, but don't print more decimal digits than may conceivably be valid
+	return FormatStringsF[numDigitsAfterPoint - 1];
 }
 
 //*************************************************************************************************

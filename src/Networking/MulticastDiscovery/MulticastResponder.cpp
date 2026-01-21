@@ -104,10 +104,10 @@ void MulticastResponder::Spin() noexcept
 	}
 }
 
-void MulticastResponder::Diagnostics(MessageType mtype) noexcept
+void MulticastResponder::Diagnostics(const StringRef& reply) noexcept
 {
-	reprap.GetPlatform().MessageF(mtype, "=== Multicast handler ===\nResponder is %s, messages received %u, responses %u\n",
-									(active) ? "active" : "inactive", messagesProcessed, responsesSent);
+	reply.lcatf("=== Multicast handler ===\nResponder is %s, messages received %u, responses %u",
+					(active) ? "active" : "inactive", messagesProcessed, responsesSent);
 }
 
 void MulticastResponder::Start(TcpPort port) noexcept

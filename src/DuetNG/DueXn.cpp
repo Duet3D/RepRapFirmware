@@ -18,7 +18,7 @@
 namespace DuetExpansion
 {
 	constexpr uint8_t DueXnAddress = 0x3E;						// address of the SX1509B on the DueX2/DueX5
-	static constexpr unsigned int DueXTaskStackWords = 100;		// task stack size in dwords
+	static constexpr unsigned int DueXTaskStackWords = 128;		// task stack size in dwords, was 100, see https://forum.duet3d.com/topic/38467/frequent-crashing-after-upgrade-to-3-6-0-on-duet-2-wifi-duex-5/2
 
 	static SX1509 dueXnExpander;
 	static uint16_t dueXnInputMask;
@@ -38,7 +38,7 @@ namespace DuetExpansion
 	Task<DueXTaskStackWords> *dueXTask = nullptr;
 
 	// The original DueX2 and DueX5 boards had 2 board ID pins, bits 14 and 15.
-	// The new ones use bit 15 for fan 8, so not we just have bit 14.
+	// The new ones use bit 15 for fan 8, so now we just have bit 14.
 	// If we want any more variants, they will have to use a different I2C address.
 	const uint16_t BoardTypePins = (1u << 14);
 	const unsigned int BoardTypeShift = 14;
@@ -119,7 +119,7 @@ ExpansionBoardType DuetExpansion::DueXnInit() noexcept
 		const uint16_t data = dueXnExpander.digitalReadAll();
 		dueXnBoardType = boardTypes[(data & BoardTypePins) >> BoardTypeShift];
 		// Check whether it is a version 0.11 board
-		pinMode(DIRECTION_PINS[5], INPUT_PULLUP);
+		::SetPinMode(DIRECTION_PINS[5], INPUT_PULLUP, false);
 		delayMicroseconds(10);
 		if (!digitalRead(DIRECTION_PINS[5]))
 		{
@@ -134,8 +134,8 @@ ExpansionBoardType DuetExpansion::DueXnInit() noexcept
 
 	if (dueXnBoardType != ExpansionBoardType::none)
 	{
-		pinMode(DueX_INT, INPUT_PULLUP);
-		pinMode(DueX_SG, INPUT_PULLUP);
+		::SetPinMode(DueX_INT, INPUT_PULLUP, false);
+		::SetPinMode(DueX_SG, INPUT_PULLUP, false);
 
 		dueXnExpander.pinModeMultiple(AllFanBits, OUTPUT_PWM_LOW);		// Initialise the PWM pins
 		const uint16_t stopBits = (dueXnBoardType == ExpansionBoardType::DueX2) ? AllStopBitsX2 : AllStopBitsX5;	// I am assuming that the X0 and original X2 have 2 endstop inputs
@@ -214,7 +214,7 @@ const char* _ecv_array null DuetExpansion::GetAdditionalExpansionBoardName() noe
 }
 
 // Set the I/O mode of a pin
-void DuetExpansion::SetPinMode(Pin pin, PinMode mode) noexcept
+void DuetExpansion::SetPinMode(Pin pin, PinMode mode, bool debounce) noexcept
 {
 	if (pin >= DueXnExpansionStart && pin < DueXnExpansionStart + 16)
 	{
@@ -330,7 +330,7 @@ void DuetExpansion::AnalogOut(Pin pin, float pwm) noexcept
 }
 
 // Print diagnostic data. I2C error counts are now reported by Platform.
-void DuetExpansion::Diagnostics(MessageType mtype) noexcept
+void DuetExpansion::Diagnostics(const StringRef& reply) noexcept
 {
 	if (dueXnBoardType != ExpansionBoardType::none)
 	{
@@ -338,11 +338,10 @@ void DuetExpansion::Diagnostics(MessageType mtype) noexcept
 		const uint32_t readCount = dueXnReadCount;
 		dueXnReadCount = 0;
 
-		reprap.GetPlatform().MessageF(mtype,
-										"=== DueX ===\nRead count %" PRIu32 ", %.02f reads/min\n",
-										readCount,
-										(double)(((float)readCount * (SecondsToMillis * MinutesToSeconds))/(now - dueXnReadCountResetMillis))
-									 );
+		reply.printf("=== DueX ===\nRead count %" PRIu32 ", %.02f reads/min",
+						readCount,
+						(double)(((float)readCount * (SecondsToMillis * MinutesToSeconds))/(now - dueXnReadCountResetMillis))
+					);
 		dueXnReadCountResetMillis = now;
 	}
 }

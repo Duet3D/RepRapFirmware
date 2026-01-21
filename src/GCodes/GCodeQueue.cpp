@@ -218,11 +218,11 @@ void GCodeQueue::Clear() noexcept
 	}
 }
 
-void GCodeQueue::Diagnostics(MessageType mtype) noexcept
+void GCodeQueue::Diagnostics(const StringRef& reply) noexcept
 {
 	if (queuedItems == nullptr)
 	{
-		reprap.GetPlatform().MessageF(mtype, "Code queue is empty\n");
+		reply.lcat("Code queue is empty");
 	}
 	else
 	{
@@ -235,7 +235,7 @@ void GCodeQueue::Diagnostics(MessageType mtype) noexcept
 			if (!reprap.UsingSbcInterface())
 #endif
 			{
-				reprap.GetPlatform().MessageF(mtype, "Code queue has '%.*s' for move %" PRIu32 "\n", item->dataLength, item->data, item->executeAtMove);
+				reply.lcatf("Code queue has '%.*s' for move %" PRIu32, item->dataLength, item->data, item->executeAtMove);
 			}
 		} while ((item = item->Next()) != nullptr);
 	}

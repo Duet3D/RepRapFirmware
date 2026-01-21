@@ -266,9 +266,9 @@ void MqttClient::Terminate() noexcept
 	}
 }
 
-void MqttClient::Diagnostics(MessageType mt) const noexcept
+void MqttClient::Diagnostics(const StringRef& reply) const noexcept
 {
-	GetPlatform().MessageF(mt, " MQTT(%d)", (int)responderState);
+	reply.catf(" MQTT(%d)", (int)responderState);
 }
 
 bool MqttClient::HandlesProtocol(NetworkProtocol protocol) noexcept

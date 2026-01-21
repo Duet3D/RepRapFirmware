@@ -184,8 +184,6 @@ LocalDriversBitmap AxisDriversConfig::GetLocalDriversBitmap() const noexcept
 //*************************************************************************************************
 // Platform class
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
@@ -219,7 +217,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "directDisplay",		OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetDisplay().IsPresent(), &reprap.GetDisplay()),					ObjectModelEntryFlags::none },
 #endif
 	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(0),																			ObjectModelEntryFlags::liveNotPanelDue },
-	{ "firmwareDate",		OBJECT_MODEL_FUNC_NOSELF(DATE),																		ObjectModelEntryFlags::none },
+	{ "firmwareDate",		OBJECT_MODEL_FUNC_NOSELF(DateText),																	ObjectModelEntryFlags::none },
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),														ObjectModelEntryFlags::none },
 	{ "firmwareName",		OBJECT_MODEL_FUNC_NOSELF(FIRMWARE_NAME),															ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(VERSION),																	ObjectModelEntryFlags::none },
@@ -333,9 +331,10 @@ size_t Platform::GetNumGpOutputsToReport() const noexcept
 	return ret;
 }
 
-#endif
-
 bool Platform::deliberateError = false;						// true if we deliberately caused an exception for testing purposes
+String<StringLength256> Platform::genericDebugBuffer;
+bool Platform::hasGenericDebug = false;
+bool Platform::shouldTurnOffHeaters = false;
 
 Platform::Platform() noexcept :
 #if HAS_MASS_STORAGE
@@ -349,7 +348,7 @@ Platform::Platform() noexcept :
 	panelDueUpdater(nullptr),
 #endif
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	sysDir(nullptr),
+	sysFolder(DEFAULT_SYS_DIR), webFolder(DEFAULT_WEB_DIR),
 #endif
 	tickState(0), debugCode(0),
 	lastDriverPollMillis(0),
@@ -399,32 +398,32 @@ bool Platform::SetDebugBufferSize(uint32_t size) noexcept
 void Platform::Init() noexcept
 {
 #if HAS_LWIP_NETWORKING
-	pinMode(EthernetPhyResetPin, OUTPUT_LOW);					// reset the Ethernet Phy chip
+	SetPinMode(EthernetPhyResetPin, OUTPUT_LOW);				// reset the Ethernet Phy chip
 #endif
 
 	// Do any board-specific initialisation that needs to be done early and does not depend on the board revision
 
 	// Make sure the on-board drivers are disabled
 #if defined(DUET_NG) || defined(PCCB_10)
-	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
 #elif defined(DUET_M) || defined(DUET3MINI)
-	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 #elif defined(DUET3_MB6HC)
-	pinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
 #endif
 
 	// Make sure any WiFi module is held in reset
 #if defined(DUET_NG)
-	pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500
-	pinMode(EspEnablePin, OUTPUT_LOW);
+	SetPinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500
+	SetPinMode(EspEnablePin, OUTPUT_LOW);
 #elif defined(DUET3_MB6HC)
-	pinMode(EspEnablePin, OUTPUT_LOW);						// make sure that the Wifi module if present is disabled
+	SetPinMode(EspEnablePin, OUTPUT_LOW);						// make sure that the Wifi module if present is disabled
 #endif
 
 	// Set up the local drivers. Do this after we have read any direction pins that specify the board type.
 #if defined(DUET3MINI) && SUPPORT_TMC2240
 	// Check whether we have a TMC2240 prototype expansion board connected, before we set the driver direction pins to outputs
-	pinMode(DIRECTION_PINS[5], INPUT_PULLUP);
+	SetPinMode(DIRECTION_PINS[5], INPUT_PULLUP, false);
 	delayMicroseconds(20);						// give the pullup resistor time to work
 	hasTmc2240Expansion = !digitalRead(DIRECTION_PINS[5]);
 #endif
@@ -450,7 +449,7 @@ void Platform::Init() noexcept
 	realTime = 0;
 
 	// Comms
-	commsParams[0] = 0;
+	commsParams[0] = 2;							// USB is in raw mode by default
 	usbMutex.Create("USB");
 #if SAME5x && !CORE_USES_TINYUSB
     SERIAL_MAIN_DEVICE.Start();
@@ -469,7 +468,13 @@ void Platform::Init() noexcept
 #endif
 
 #ifdef DUET3_MB6XD
-	pinMode(ModbusTxPin, OUTPUT_LOW);			// turn off the RS485 transmitter
+	SetPinMode(ModbusTxPin, OUTPUT_LOW);		// turn off the RS485 transmitter
+#endif
+#ifdef DUET3_MB6HC
+	if (board == BoardType::Duet3_6HC_v102c)
+	{
+		SetPinMode(ModbusTxPin, OUTPUT_LOW);	// turn off the RS485 transmitter
+	}
 #endif
 
 	// Initialise the IO port subsystem
@@ -481,7 +486,7 @@ void Platform::Init() noexcept
 	// File management and SD card interfaces
 	for (size_t i = 0; i < NumSdCards; ++i)
 	{
-		pinMode(SdCardDetectPins[i], INPUT_PULLUP);
+		SetPinMode(SdCardDetectPins[i], INPUT_PULLUP, true);
 	}
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
@@ -548,14 +553,12 @@ void Platform::Init() noexcept
 	warnDriversNotPowered = false;
 #endif
 
-	extrusionAncilliaryPwmValue = 0.0;
-
 #if SUPPORT_SPI_SENSORS
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
 	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
 	for (Pin p : SpiTempSensorCsPins)
 	{
-		pinMode(p, INPUT_PULLUP);
+		SetPinMode(p, INPUT_PULLUP, false);
 	}
 #endif
 
@@ -564,7 +567,7 @@ void Platform::Init() noexcept
 #if SAME5x
 	// nothing to do here
 #else
-	pinMode(APIN_USART_SSPI_MISO, INPUT_PULLUP);
+	SetPinMode(APIN_USART_SSPI_MISO, INPUT_PULLUP, false);
 #endif
 
 #ifdef PCCB
@@ -578,15 +581,15 @@ void Platform::Init() noexcept
 	for (size_t thermistor = 0; thermistor < NumThermistorInputs; thermistor++)
 	{
 		// TODO use ports for these?
-		pinMode(TEMP_SENSE_PINS[thermistor], AIN);
+		SetPinMode(TEMP_SENSE_PINS[thermistor], AIN);
 		filteredAdcChannels[thermistor] = PinToAdcChannel(TEMP_SENSE_PINS[thermistor]);	// translate the pin number to the SAM ADC channel number;
 	}
 
 #if HAS_VREF_MONITOR
 	// Set up the VSSA and VREF measurement channels
-	pinMode(VssaSensePin, AIN);
+	SetPinMode(VssaSensePin, AIN);
 	filteredAdcChannels[VssaFilterIndex] = PinToAdcChannel(VssaSensePin);		// translate the pin number to the SAM ADC channel number
-	pinMode(VrefSensePin, AIN);
+	SetPinMode(VrefSensePin, AIN);
 	filteredAdcChannels[VrefFilterIndex] = PinToAdcChannel(VrefSensePin);		// translate the pin number to the SAM ADC channel number
 #endif
 
@@ -626,7 +629,7 @@ void Platform::Init() noexcept
 #if HAS_VOLTAGE_MONITOR
 	// Power monitoring
 	vInMonitorAdcChannel = PinToAdcChannel(PowerMonitorVinDetectPin);
-	pinMode(PowerMonitorVinDetectPin, AIN);
+	SetPinMode(PowerMonitorVinDetectPin, AIN);
 	AnalogInEnableChannel(vInMonitorAdcChannel, true);
 	currentVin = 0;
 	highestVin = 0;
@@ -640,7 +643,7 @@ void Platform::Init() noexcept
 #if HAS_12V_MONITOR
 	// Power monitoring
 	v12MonitorAdcChannel = PinToAdcChannel(PowerMonitorV12DetectPin);
-	pinMode(PowerMonitorV12DetectPin, AIN);
+	SetPinMode(PowerMonitorV12DetectPin, AIN);
 	AnalogInEnableChannel(v12MonitorAdcChannel, true);
 	currentV12 = highestV12 = 0;
 	lowestV12 = 9999;
@@ -685,13 +688,17 @@ void Platform::PanelDueBeep(int freq, int ms) noexcept
 }
 
 // Send a short message to the aux channel. There is no flow control on this port, so it can't block for long.
-void Platform::SendPanelDueMessage(size_t auxNumber, const char *_ecv_array msg) noexcept
+void Platform::SendPanelDueMessage(size_t chan, const char *_ecv_array msg) noexcept
 {
+	if (chan == 0)
+	{
+		//TODO
+	}
 #if HAS_AUX_DEVICES
 	// Don't send anything to PanelDue while we are flashing it
 	if (!reprap.GetGCodes().IsFlashingPanelDue())
 	{
-		auxDevices[auxNumber].SendPanelDueMessage(msg);
+		auxDevices[chan - 1].SendPanelDueMessage(msg);
 	}
 #endif
 }
@@ -804,6 +811,7 @@ void Platform::Spin() noexcept
 #if SUPPORT_REMOTE_COMMANDS
 	if (CanInterface::InExpansionMode())
 	{
+		// Update status LED
 		if (StepTimer::CheckSynced())
 		{
 			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetMasterTime() & (1u << 19)) != 0);
@@ -827,29 +835,18 @@ void Platform::Spin() noexcept
 	MassStorage::Spin();
 #endif
 
-	// Check for movement errors
-	Move& move = reprap.GetMove();
-	if (move.HasMovementError())
+	// Check for generic debug
+	if (hasGenericDebug)
 	{
-		const StepErrorDetails details = move.GetStepErrorDetails();
-		MessageF(AddError(MessageType::GenericMessage), "Movement halted because a step timing error occurred on drive %u (code %u). Please reset the controller.\n", details.drive, details.stepErrorType);
-		if (details.stepErrorType == 3)
+		Message(AddError(MessageType::GenericMessage), genericDebugBuffer.c_str());
+		if (shouldTurnOffHeaters)
 		{
-			MessageF(AddError(MessageType::GenericMessage), "Existing: start=%" PRIu32 " length=%" PRIu32 ", new: start=%" PRIu32 ", overlap=%" PRIu32 " time now=%" PRIu32 "\n",
-						details.executingStartTime, details.executingDuration, details.newSegmentStartTime,
-						details.executingStartTime + details.executingDuration - details.newSegmentStartTime,
-						details.timeNow);
+			reprap.GetHeat().SwitchOffAll(true);
 		}
-		else
-		{
-			MessageF(AddError(MessageType::GenericMessage), "Extra info=%.6g\n", (double)details.extra);
-		}
-		move.GenerateMovementErrorDebug();
-		move.ResetAfterError();
-		reprap.GetHeat().SwitchOffAll(true);
+		hasGenericDebug = false;
 	}
 
-	// Check for debug messages
+	// Check for M111 debug messages stored in the optional buffer
 	while (!isrDebugBuffer.IsEmpty())
 	{
 		char buf[101];
@@ -1146,13 +1143,7 @@ void Platform::DisableAutoSave() noexcept
 
 bool Platform::IsPowerOk() const noexcept
 {
-	// FIXME Implement auto-save for the SBC
-	return (   !autoSaveEnabled
-#if HAS_SBC_INTERFACE
-			|| reprap.UsingSbcInterface()
-#endif
-		   )
-		|| currentVin > autoPauseReading;
+	return !autoSaveEnabled || currentVin > autoPauseReading;
 }
 
 void Platform::EnableAutoSave(float saveVoltage, float resumeVoltage) noexcept
@@ -1337,124 +1328,140 @@ void Platform::InitialiseInterrupts() noexcept
 #endif
 }
 
-#if CORE_USES_TINYUSB	//debug
-extern uint32_t numUsbInterrupts;
-#endif
-
-// Return diagnostic information
-void Platform::Diagnostics(MessageType mtype) noexcept
+// Return diagnostic information. Each part must fit in a buffer of length GCodeReplyLength.
+void Platform::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 {
-#if 0	// USE_CACHE && (SAM4E || SAME5x)
-	// Get the cache statistics before we start messing around with the cache
-	const uint32_t cacheCount = Cache::GetHitCount();
-#endif
-
-	Message(mtype, "=== Platform ===\n");
-
-	// Debugging support
-	if (debugLine != 0)
+	switch (part)
 	{
-		MessageF(mtype, "Debug line %d\n", debugLine);
-	}
+	case 0:
+		reply.copy("=== Platform ===");
 
-	// Show the up time and reason for the last reset
-	const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
-	MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: %s\n", (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60), GetResetReasonText());
-
-	// Show the reset code stored at the last software reset
-	{
-		NonVolatileMemory mem;
-		unsigned int slot;
-		const SoftwareResetData *_ecv_null const srd = mem.GetLastWrittenResetData(slot);
-		if (srd == nullptr)
+		// Debugging support
+		if (debugLine != 0)
 		{
-			Message(mtype, "Last software reset details not available\n");
+			reply.lcatf("Debug line %d", debugLine);
 		}
-		else
-		{
-			srd->Printit(mtype, slot);
-		}
-	}
 
-	// Show the current error codes
-	MessageF(mtype, "Error status: 0x%02" PRIx32 "\n", errorCodeBits);		// we only use the bottom 5 bits at present, so print just 2 characters
+		// Show the up time and reason for the last reset
+		{
+			const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
+			reply.lcatf("Last reset %02d:%02d:%02d ago, cause: %s", (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60), GetResetReasonText());
+		}
+		break;
+
+	case 1:
+		// Show the reset code stored at the last software reset
+		{
+			NonVolatileMemory mem;
+			unsigned int slot;
+			const SoftwareResetData *_ecv_null const srd = mem.GetLastWrittenResetData(slot);
+			if (srd == nullptr)
+			{
+				reply.lcat("Last software reset details not available");
+			}
+			else
+			{
+				srd->PrintPart1(slot, reply);
+			}
+		}
+		break;
+
+	case 2:
+		{
+			// Show the reset code stored at the last software reset
+			NonVolatileMemory mem;
+			unsigned int slot;
+			const SoftwareResetData *_ecv_null const srd = mem.GetLastWrittenResetData(slot);
+			if (srd != nullptr)
+			{
+				srd->PrintPart2(reply);
+			}
+		}
+		break;
+
+	case 3:
+		// Show the current error codes
+		reply.printf("Error status: 0x%02" PRIx32, errorCodeBits);		// we only use the bottom 5 bits at present, so print just 2 characters
 
 #if HAS_AUX_DEVICES
-	// Show the aux port status
-	for (size_t i = 0; i < ARRAY_SIZE(auxDevices); ++i)
-	{
-		auxDevices[i].Diagnostics(mtype, i);
-	}
+		// Show the aux port status
+		for (size_t i = 0; i < ARRAY_SIZE(auxDevices); ++i)
+		{
+			auxDevices[i].Diagnostics(reply, i);
+		}
 #endif
+		break;
 
-#if 0	//ifdef DUET3MINI
-	// Report the processor revision level and analogIn status (trying to debug the spurious zero VIN issue)
-	{
-		// The DSU clocks are enabled by default so no need to enable them here
-		const unsigned int chipVersion = DSU->DID.bit.REVISION;
-		uint32_t conversionsStarted, conversionsCompleted, conversionTimeouts, errors;
-		AnalogIn::GetDebugInfo(conversionsStarted, conversionsCompleted, conversionTimeouts, errors);
-		MessageF(mtype, "MCU revision %u, ADC conversions started %" PRIu32 ", completed %" PRIu32 ", timed out %" PRIu32 ", errs %" PRIu32 "\n",
-					chipVersion, conversionsStarted, conversionsCompleted, conversionTimeouts, errors);
-	}
-
-#endif
-
+	case 4:
 #if HAS_CPU_TEMP_SENSOR
-	// Show the MCU temperatures
-	const float currentMcuTemperature = GetCpuTemperature();
-	MessageF(mtype, "MCU temperature: min %.1f, current %.1f, max %.1f\n",
-		(double)lowestMcuTemperature, (double)currentMcuTemperature, (double)highestMcuTemperature);
-	lowestMcuTemperature = highestMcuTemperature = currentMcuTemperature;
-
+		// Show the MCU temperatures
+		{
+			const float currentMcuTemperature = GetCpuTemperature();
+			reply.lcatf("MCU temperature: min %.1f, current %.1f, max %.1f", (double)lowestMcuTemperature, (double)currentMcuTemperature, (double)highestMcuTemperature);
+			lowestMcuTemperature = highestMcuTemperature = currentMcuTemperature;
 # if HAS_VOLTAGE_MONITOR
-	// No need to call reprap.BoardsUpdated() here because that is done in ResetVoltageMonitors which is called later
+			// No need to call reprap.BoardsUpdated() here because that is done in ResetVoltageMonitors which is called later
 # else
-	reprap.BoardsUpdated();
+			reprap.BoardsUpdated();
 # endif
+		}
+
 #endif
 
 #if HAS_VOLTAGE_MONITOR
-	// Show the supply voltage
-	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 ", over voltage events: %" PRIu32 ", power good: %s\n",
-		(double)AdcReadingToPowerVoltage(lowestVin), (double)AdcReadingToPowerVoltage(currentVin), (double)AdcReadingToPowerVoltage(highestVin),
-				numVinUnderVoltageEvents, numVinOverVoltageEvents,
-				(HasDriverPower()) ? "yes" : "no");
+		// Show the supply voltage
+		reply.lcatf("Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 ", over voltage events: %" PRIu32 ", power good: %s",
+			(double)AdcReadingToPowerVoltage(lowestVin), (double)AdcReadingToPowerVoltage(currentVin), (double)AdcReadingToPowerVoltage(highestVin),
+					numVinUnderVoltageEvents, numVinOverVoltageEvents,
+					(HasDriverPower()) ? "yes" : "no");
 #endif
 
 #if HAS_12V_MONITOR
-	// Show the 12V rail voltage
-	MessageF(mtype, "12V rail voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 "\n",
-		(double)AdcReadingToV12Voltage(lowestV12), (double)AdcReadingToV12Voltage(currentV12), (double)AdcReadingToV12Voltage(highestV12), numV12UnderVoltageEvents);
+		// Show the 12V rail voltage
+		reply.lcatf("12V rail voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32,
+			(double)AdcReadingToV12Voltage(lowestV12), (double)AdcReadingToV12Voltage(currentV12), (double)AdcReadingToV12Voltage(highestV12), numV12UnderVoltageEvents);
 #endif
+		ResetVoltageMonitors();
+		break;
 
-	ResetVoltageMonitors();
+	case 5:
+		Heap::Diagnostics(reply, *this);
+		Event::Diagnostics(reply, *this);
+		break;
 
-	Heap::Diagnostics(mtype, *this);
-	Event::Diagnostics(mtype, *this);
+	case 6:
+		// Show current RTC time
+		{
+			reply.lcat("Date/time: ");
+			struct tm timeInfo;
+			if (gmtime_r(&realTime, &timeInfo) != nullptr)
+			{
+				reply.catf("%04u-%02u-%02u %02u:%02u:%02u",
+						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday,
+						timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
+			}
+			else
+			{
+				reply.cat("not set");
+			}
+		}
+		reprap.Timing(reply);
 
-	// Show current RTC time
-	Message(mtype, "Date/time: ");
-	struct tm timeInfo;
-	if (gmtime_r(&realTime, &timeInfo) != nullptr)
-	{
-		MessageF(mtype, "%04u-%02u-%02u %02u:%02u:%02u\n",
-				timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday,
-				timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
-	}
-	else
-	{
-		Message(mtype, "not set\n");
-	}
-
-#if 0	// USE_CACHE && (SAM4E || SAME5x)
-	MessageF(mtype, "Cache data hit count %" PRIu32 "\n", cacheCount);
+#ifdef I2C_IFACE
+		{
+			const TwoWire::ErrorCounts errs = I2C_IFACE.GetErrorCounts(true);
+			reply.lcatf("I2C nak errors %" PRIu32 ", send timeouts %" PRIu32 ", receive timeouts %" PRIu32 ", finishTimeouts %" PRIu32 ", resets %" PRIu32,
+				errs.naks, errs.sendTimeouts, errs.recvTimeouts, errs.finishTimeouts, errs.resets);
+		}
 #endif
+		break;
 
-	reprap.Timing(mtype);
+		static_assert(NumPlatformDiagnosticParts == 7);
+	}
+
 
 #if CORE_USES_TINYUSB	//DEBUG
-	MessageF(mtype, "USB interrupts %" PRIu32 "\n", numUsbInterrupts);
+//	MessageF(mtype, "USB interrupts %" PRIu32 "\n", numUsbInterrupts);
 #endif
 
 #if 0
@@ -1469,11 +1476,6 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 		numSoftTimerInterruptsExecuted, STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RB, lastSoftTimerInterruptScheduledAt, GetTimerTicks());
 #endif
 
-#ifdef I2C_IFACE
-	const TwoWire::ErrorCounts errs = I2C_IFACE.GetErrorCounts(true);
-	MessageF(mtype, "I2C nak errors %" PRIu32 ", send timeouts %" PRIu32 ", receive timeouts %" PRIu32 ", finishTimeouts %" PRIu32 ", resets %" PRIu32 "\n",
-		errs.naks, errs.sendTimeouts, errs.recvTimeouts, errs.finishTimeouts, errs.resets);
-#endif
 }
 
 // Execute a timed square root that takes less than one millisecond
@@ -1501,7 +1503,11 @@ GCodeResult Platform::PrintTestReport(GCodeBuffer& gb, const StringRef& reply, O
 	}
 
 	bool testFailed = false;
+
 #if HAS_MASS_STORAGE
+# if HAS_HIGH_SPEED_SD
+	uint32_t speed;
+# endif
 	// Check the SD card detect and speed
 	if (!MassStorage::IsCardDetected(0))
 	{
@@ -1509,9 +1515,9 @@ GCodeResult Platform::PrintTestReport(GCodeBuffer& gb, const StringRef& reply, O
 		testFailed = true;
 	}
 # if HAS_HIGH_SPEED_SD
-	else if (sd_mmc_get_interface_speed(0) != ExpectedSdCardSpeed)
+	else if ((speed = sd_mmc_get_interface_speed(0, nullptr)) != ExpectedSdCardSpeed)
 	{
-		buf->printf("SD card speed %.2fMbytes/sec is unexpected", (double)((float)sd_mmc_get_interface_speed(0) * 0.000001));
+		buf->printf("SD card speed %.2fMbytes/sec is unexpected", (double)((float)speed * 0.000001));
 		testFailed = true;
 	}
 # endif
@@ -1720,6 +1726,15 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		// We don't actually generate a fault any more, instead we let this function identify existing unaligned accesses in the code
 		break;
 
+	case (unsigned int)DiagnosticTestType::MemoryLeak:			// allocate memory until OOM fault occurs
+		if (!gb.DoDwellTime(1000))								// wait a second to allow the response to be sent back to the web server, otherwise it may retry
+		{
+			return GCodeResult::notFinished;
+		}
+		deliberateError = true;
+		(void)RepRap::DoMemoryLeak();
+		break;
+
 	case (unsigned int)DiagnosticTestType::BusFault:
 #if SAME70 && !USE_MPU
 		Message(WarningMessage, "There is no abort area on the SAME70 with MPU disabled");
@@ -1772,63 +1787,67 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 	case (unsigned int)DiagnosticTestType::TimeCalculations:	// Show the square root calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
 			constexpr uint32_t iterations = 100;				// use a value that divides into one million
-			bool ok1 = true;
-			uint32_t tim1 = 0;
-			for (uint32_t i = 0; i < iterations; ++i)
 			{
-				const uint32_t num1 = 0x7fffffff - (67 * i);
-				const uint64_t sq = (uint64_t)num1 * num1;
-				const uint32_t num1a = TimedSqrt(sq, tim1);
-				if (num1a != num1)
+				bool ok1 = true;
+				uint32_t tim1 = 0;
+				for (uint32_t i = 0; i < iterations; ++i)
 				{
-					ok1 = false;
-				}
-			}
-
-			bool ok2 = true;
-			uint32_t tim2 = 0;
-			for (uint32_t i = 0; i < iterations; ++i)
-			{
-				const uint32_t num2 = 0x0000ffff - (67 * i);
-				const uint64_t sq = (uint64_t)num2 * num2;
-				const uint32_t num2a = TimedSqrt(sq, tim2);
-				if (num2a != num2)
-				{
-					ok2 = false;
-				}
-			}
-
-			// We also time floating point square root so we can compare it with sine/cosine in order to consider various optimisations
-			bool ok3 = true;
-			uint32_t tim3 = 0;
-			float val = 10000.0;
-			for (unsigned int i = 0; i < iterations; ++i)
-			{
-				IrqDisable();
-				asm volatile("":::"memory");
-				uint32_t now1 = SysTick->VAL;
-				const float nval = fastSqrtf(val);
-				uint32_t now2 = SysTick->VAL;
-				asm volatile("":::"memory");
-				IrqEnable();
-				now1 &= 0x00FFFFFF;
-				now2 &= 0x00FFFFFF;
-				tim3 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
-				if (nval != sqrtf(val))
-				{
-					ok3 = false;
-					if (reprap.Debug(Module::Platform))
+					const uint32_t num1 = 0x7fffffff - (67 * i);
+					const uint64_t sq = (uint64_t)num1 * num1;
+					const uint32_t num1a = TimedSqrt(sq, tim1);
+					if (num1a != num1)
 					{
-						debugPrintf("val=%.7e sq=%.7e sqrtf=%.7e\n", (double)val, (double)nval, (double)sqrtf(val));
+						ok1 = false;
 					}
 				}
-				val = nval;
+
+				bool ok2 = true;
+				uint32_t tim2 = 0;
+				for (uint32_t i = 0; i < iterations; ++i)
+				{
+					const uint32_t num2 = 0x0000ffff - (67 * i);
+					const uint64_t sq = (uint64_t)num2 * num2;
+					const uint32_t num2a = TimedSqrt(sq, tim2);
+					if (num2a != num2)
+					{
+						ok2 = false;
+					}
+				}
+
+				// We also time floating point square root so we can compare it with sine/cosine in order to consider various optimisations
+				bool ok3 = true;
+				uint32_t tim3 = 0;
+				float val = 10000.0;
+				for (unsigned int i = 0; i < iterations; ++i)
+				{
+					IrqDisable();
+					asm volatile("":::"memory");
+					uint32_t now1 = SysTick->VAL;
+					const float nval = fastSqrtf(val);
+					uint32_t now2 = SysTick->VAL;
+					asm volatile("":::"memory");
+					IrqEnable();
+					now1 &= 0x00FFFFFF;
+					now2 &= 0x00FFFFFF;
+					tim3 += ((now1 > now2) ? now1 : now1 + (SysTick->LOAD & 0x00FFFFFF) + 1) - now2;
+					const float checkVal = sqrtf(val);
+					if (nval != checkVal)
+					{
+						ok3 = false;
+						if (reprap.Debug(Module::Platform))
+						{
+							debugPrintf("val=%.7e sq=%.7e sqrtf=%.7e\n", (double)val, (double)nval, (double)checkVal);
+						}
+					}
+					val = nval;
+				}
+
+				reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s, float %.2fus %s",
+							(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (ok1) ? "ok" : "ERROR",
+								(double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock), (ok2) ? "ok" : "ERROR",
+									(double)((float)(tim3 * (1'000'000/iterations))/SystemCoreClock), (ok3) ? "ok" : "ERROR");
 			}
 
-			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s, float %.2fus %s",
-						(double)((float)(tim1 * (1'000'000/iterations))/SystemCoreClock), (ok1) ? "ok" : "ERROR",
-							(double)((float)(tim2 * (1'000'000/iterations))/SystemCoreClock), (ok2) ? "ok" : "ERROR",
-								(double)((float)(tim3 * (1'000'000/iterations))/SystemCoreClock), (ok3) ? "ok" : "ERROR");
 		}
 
 		// We now also time sine and cosine in the same test
@@ -1960,7 +1979,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			do
 			{
 				--i;
-				(void)StepTimer::GetTimerTicks();
+				(void)StepTimer::GetTimerTicksWhenInterruptsDisabled();
 			} while (i != 0);
 			uint32_t now2 = SysTick->VAL;
 			asm volatile("":::"memory");
@@ -1978,13 +1997,13 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			uint16_t startTimeStamp, endTimeStamp;
 			{
 				AtomicCriticalSectionLocker lock;
-				startClocks = StepTimer::GetTimerTicks();
+				startClocks = StepTimer::GetTimerTicksWhenInterruptsDisabled();
 				startTimeStamp = CanInterface::GetTimeStampCounter();
 			}
 			delay(2);
 			{
 				AtomicCriticalSectionLocker lock;
-				endClocks = StepTimer::GetTimerTicks();
+				endClocks = StepTimer::GetTimerTicksWhenInterruptsDisabled();
 				endTimeStamp = CanInterface::GetTimeStampCounter();
 			}
 # if SAME70
@@ -2044,22 +2063,66 @@ bool Platform::WritePlatformParameters(FileStore *f, bool includingG31) const no
 
 // USB port functions
 
-void Platform::AppendUsbReply(OutputBuffer *buffer) noexcept
+void Platform::AppendUsbReply(const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept
 {
 	if (!SERIAL_MAIN_DEVICE.IsConnected())
 	{
 		// If the serial USB line is not open, discard the message right away
 		OutputBuffer::ReleaseAll(buffer);
+		usbMessageSeq = 0;							// reset the sequence number for when the USB port connects
 	}
 	else
 	{
 		// Else append incoming data to the stack
 		MutexLocker lock(usbMutex);
-		usbOutput.Push(buffer);
+		if (rawMessage || GetChannelMode(0) == AuxMode::raw)
+		{
+			usbOutput.Push(buffer);
+		}
+		else
+		{
+			OutputBuffer *buf;
+			if (OutputBuffer::Allocate(buf))
+			{
+				usbMessageSeq++;
+				RepRap::StartJsonResponse(gb, buf);
+				buf->catf("\"seq\":%" PRIu32 ",\"resp\":", usbMessageSeq);
+				buf->EncodeReply(buffer);
+				buf->cat("}\n");
+				usbOutput.Push(buf);
+			}
+			else
+			{
+				OutputBuffer::ReleaseAll(buffer);
+			}
+		}
 	}
 }
 
 // Aux port functions
+
+// Translation of M575 S parameter to AuxMode
+static constexpr AuxMode auxModes[] =
+{
+	AuxMode::panelDue,			// basic PanelDue mode,
+	AuxMode::panelDue,			// PanelDue mode with CRC or checksum required (default)
+	AuxMode::raw,				// basic raw mode
+	AuxMode::raw,				// raw mode with CRC or checksum required
+	AuxMode::panelDue,			// PanelDue mode with CRC required
+	AuxMode::disabled,			// was unused, now treated as disabled
+	AuxMode::raw,				// raw mode with CRC required
+	AuxMode::device,			// Modbus/Uart mode
+};
+
+// Return the mode of this serial channel (raw, panelDue, device, disabled)
+AuxMode Platform::GetChannelMode(size_t chan) const noexcept
+{
+	return (chan == 0) ? auxModes[commsParams[0] & 7]
+#if HAS_AUX_DEVICES
+			: (chan < NumSerialChannels) ? auxDevices[chan - 1].GetMode()
+#endif
+				: AuxMode::disabled;
+}
 
 GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
@@ -2075,61 +2138,63 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 	// See if a mode is provided
 	if (gb.Seen('S'))
 	{
-		// Translation of M575 S parameter to AuxMode
-		static constexpr AuxMode modes[] =
+		const uint32_t val = gb.GetLimitedUIValue('S', ARRAY_SIZE(auxModes));
+		const AuxMode newMode = auxModes[val];
+		if (newMode == AuxMode::device)
 		{
-			AuxMode::panelDue,			// basic PanelDue mode,
-			AuxMode::panelDue,			// PanelDue mode with CRC or checksum required (default)
-			AuxMode::raw,				// basic raw mode
-			AuxMode::raw,				// raw mode with CRC or checksum required
-			AuxMode::panelDue,			// PanelDue mode with CRC required
-			AuxMode::disabled,			// was unused, now treated as disabled
-			AuxMode::raw,				// raw mode with CRC required
-			AuxMode::device,			// Modbus/Uart mode
-		};
-
-		const uint32_t val = gb.GetLimitedUIValue('S', ARRAY_SIZE(modes));
-		AuxMode newMode = modes[val];
-		if (gbp != nullptr)
-		{
-			gbp->Disable();							// disable I/O for this buffer
+			// Don't allow device mode if it is not supported on this port
+			if (chan == 0)
+			{
+				reply.copy("Device mode not supported on this port");
+				return GCodeResult::error;
+			}
+# if SUPPORT_MODBUS_RTU
+			AuxDevice& dev = auxDevices[chan - 1];
+			if (gb.Seen('C'))
+			{
+				String<StringLength50> portName;
+				gb.GetQuotedString(portName.GetRef(), false);
+				if (!dev.ConfigureDirectionPort(portName.c_str(), reply))
+				{
+					return GCodeResult::error;
+				}
+			}
+#  if defined(DUET3_MB6XD) || defined(DUET3_MB6HC)
+			else if (chan == 2 &&
+#   if defined(DUET3_MB6XD)
+						board >= BoardType::Duet3_6XD_v102
+#   elif defined(DUET3_MB6HC)
+						board >= BoardType::Duet3_6HC_v102c
+#   endif
+					)
+			{
+				if (!dev.ConfigureDirectionPort(ModbusTxPinName, reply))
+				{
+					return GCodeResult::error;
+				}
+			}
+#  endif
+# endif
 		}
 
-		SetCommsProperties(chan, val);
+		if (gbp != nullptr)
+		{
+			gbp->Disable();				// disable I/O for this serial channel
+		}
 
 #if HAS_AUX_DEVICES
+		commsParams[chan] = val;		// we limited the value of 'chan' when we fetched it, so no need for a range-check here
 		if (chan != 0)
 		{
 			AuxDevice& dev = auxDevices[chan - FirstAuxChannel];
-			if (newMode == AuxMode::device)
-			{
-# if SUPPORT_MODBUS_RTU
-				if (gb.Seen('C'))
-				{
-					String<StringLength50> portName;
-					gb.GetQuotedString(portName.GetRef(), false);
-					if (!dev.ConfigureDirectionPort(portName.c_str(), reply))
-					{
-						return GCodeResult::error;
-					}
-				}
-#  if defined(DUET3_MB6XD)
-				else if (chan == 2 && board >= BoardType::Duet3_6XD_v102)
-				{
-					if (!dev.ConfigureDirectionPort(ModbusTxPinName, reply))
-					{
-						return GCodeResult::error;
-					}
-				}
-#  endif
-# endif
-			}
 			if (baudRate != 0)
 			{
 				dev.SetBaudRate(baudRate);
 			}
 			dev.SetMode(newMode);
 		}
+#else
+		commsParams[0] = val;			// gcc thinks chan is 1 here so use 0 explicitly
 #endif
 
 		if (   gbp != nullptr
@@ -2137,8 +2202,13 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			&& newMode != AuxMode::device
 		   )
 		{
-			gbp->Enable(val);						// enable I/O and set the CRC and checksum requirements, also sets Marlin or PanelDue compatibility
+			gbp->Enable(val);						// enable I/O and set the CRC and checksum requirements
+			if (auxModes[chan] == AuxMode::panelDue)
+			{
+				gbp->LatestMachineState().compatibility.Assign(Compatibility::RepRapFirmware);
+			}
 		}
+		reprap.InputsUpdated();
 	}
 #if HAS_AUX_DEVICES
 	else if (baudRate != 0)
@@ -2147,37 +2217,36 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 		{
 			auxDevices[chan - FirstAuxChannel].SetBaudRate(baudRate);
 			ResetChannel(chan);
+			reprap.InputsUpdated();
 		}
 	}
 #endif
 	else
 	{
 		// Just print the existing configuration
-		const uint32_t cp = GetCommsProperties(chan);
-		const char *_ecv_array crcMode = (cp & 4) ? "requires CRC"
-								: (cp & 1) ? "requires checksum or CRC"
-									: "does not require checksum or CRC";
-#if HAS_AUX_DEVICES
-		if (chan != 0)
+		const AuxMode mode = GetChannelMode(chan);
+		if (mode == AuxMode::disabled)
 		{
-			if (!IsAuxEnabled(chan - 1)
-				&& (chan >= NumSerialChannels || auxDevices[chan - FirstAuxChannel].GetMode() != AuxMode::device)
-			   )
+			reply.printf("Channel %u is disabled", chan);
+		}
+		else
+		{
+			const uint32_t cp = commsParams[chan];								// we limited the value of 'chan' when we fetched it, so no need for a range-check here
+			const char *_ecv_array crcMode = (cp & 4) ? "requires CRC"
+									: (cp & 1) ? "requires checksum or CRC"
+										: "does not require checksum or CRC";
+			const char *_ecv_array modeString = (mode == AuxMode::device) ? "Device or Modbus RTU"
+												: (IsChanRaw(chan)) ? "raw"
+													: "PanelDue";
+#if HAS_AUX_DEVICES
+			if (chan != 0)
 			{
-				reply.printf("Channel %u is disabled", chan);
-			}
-			else
-			{
-				const AuxDevice& dev = auxDevices[chan - FirstAuxChannel];
-				const char *_ecv_array modeString = (dev.GetMode() == AuxMode::device) ? "Device / modbus RTU" :
-											(IsAuxRaw(chan - 1)) ? "raw"
-												: "PanelDue";
-				reply.printf("Channel %d: baud rate %" PRIu32 ", %s mode, ", chan, GetBaudRate(chan), modeString);
-				if (dev.GetMode() == AuxMode::device)
+				reply.printf("Channel %u (Aux %u): baud rate %" PRIu32 ", %s mode, ", chan, chan - 1, GetBaudRate(chan), modeString);
+				if (mode == AuxMode::device)
 				{
 # if SUPPORT_MODBUS_RTU
 					reply.cat("Modbus Tx/!Rx port ");
-					dev.AppendDirectionPortName(reply);
+					auxDevices[chan - 1].AppendDirectionPortName(reply);
 # endif
 				}
 				else
@@ -2185,37 +2254,44 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 					reply.cat(crcMode);
 				}
 			}
-		}
-		else
+			else
 #endif
-		{
-			reply.printf("Channel 0 (USB): %s", crcMode);
-			if (SERIAL_MAIN_DEVICE.IsConnected())
 			{
-				reply.cat(", connected");
+				reply.printf("Channel 0 (USB): %s mode, %s", modeString, crcMode);
+				if (SERIAL_MAIN_DEVICE.IsConnected())
+				{
+					reply.cat(", connected");
+				}
 			}
 		}
 	}
 	return GCodeResult::ok;
 }
 
-bool Platform::IsAuxEnabled(size_t auxNumber) const noexcept
+bool Platform::IsChanEnabled(size_t chan) const noexcept
 {
 #if HAS_AUX_DEVICES
-	return auxNumber < ARRAY_SIZE(auxDevices) && auxDevices[auxNumber].IsEnabledForGCodeIo();
+	return chan == 0 || (chan <= ARRAY_SIZE(auxDevices) && auxDevices[chan - 1].IsEnabledForGCodeIo());
 #else
 	return false;
 #endif
 }
 
-bool Platform::IsAuxRaw(size_t auxNumber) const noexcept
+bool Platform::IsChanRaw(size_t chan) const noexcept
 {
+	if (chan == 0)				// if USB
+	{
+		return (commsParams[0] & 0x02) != 0;
+	}
+
 #if HAS_AUX_DEVICES
-	return auxNumber >= ARRAY_SIZE(auxDevices) || auxDevices[auxNumber].IsRaw();
+	return chan > ARRAY_SIZE(auxDevices) || auxDevices[chan - 1].IsRaw();
 #else
 	return true;
 #endif
 }
+
+# if !defined(DUET_NG)			// we don't support this on Duet 2 because we are running low on flash memory space
 
 /**
  * Converts a single byte of hex value to its ASCII hex representation.
@@ -2246,8 +2322,6 @@ static inline void ConvertHexToAsciiHex(uint8_t hex, uint8_t asciiHex[2])
 		}
 	}
 }
-
-# if !defined(DUET_NG)			// we don't support this on Duet 2 because we are running low on flash memory space
 
 static inline void CalculateNordsonUltimusVCheckSum(uint8_t *_ecv_array data, size_t len, uint8_t checksum[2])
 {
@@ -2762,12 +2836,12 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 						break;
 					}
 				}
-				else
+				else if (resultVar == nullptr) // Only report comm error if not storing result in variable
 				{
 					reply.copy("no or bad response from Modbus device");
 				}
 			}
-			else
+			else if (resultVar == nullptr)
 			{
 				reply.copy("couldn't initiate Modbus transaction");
 			}
@@ -2845,7 +2919,7 @@ void Platform::EnablePanelDuePort() noexcept
 {
 	auxDevices[0].SetBaudRate(57600);
 	auxDevices[0].SetMode(AuxMode::panelDue);
-	SetCommsProperties(1, 1);
+	commsParams[1] = 1;
 	reprap.GetGCodes().GetSerialGCodeBuffer(1)->Enable(1);
 }
 
@@ -2861,7 +2935,7 @@ void Platform::InitPanelDueUpdater() noexcept
 }
 #endif
 
-void Platform::AppendAuxReply(size_t auxNumber, const char *_ecv_array msg, bool rawMessage) noexcept
+void Platform::AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, const char *_ecv_array msg, bool rawMessage) noexcept
 {
 #if HAS_AUX_DEVICES
 	if (auxNumber < ARRAY_SIZE(auxDevices))
@@ -2871,12 +2945,12 @@ void Platform::AppendAuxReply(size_t auxNumber, const char *_ecv_array msg, bool
 		{
 			return;
 		}
-		auxDevices[auxNumber].AppendAuxReply(msg, rawMessage);
+		auxDevices[auxNumber].AppendAuxReply(gb, msg, rawMessage);
 	}
 #endif
 }
 
-void Platform::AppendAuxReply(size_t auxNumber, OutputBuffer *reply, bool rawMessage) noexcept
+void Platform::AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *reply, bool rawMessage) noexcept
 {
 #if HAS_AUX_DEVICES
 	if (auxNumber < ARRAY_SIZE(auxDevices))
@@ -2887,7 +2961,7 @@ void Platform::AppendAuxReply(size_t auxNumber, OutputBuffer *reply, bool rawMes
 			OutputBuffer::ReleaseAll(reply);
 			return;
 		}
-		auxDevices[auxNumber].AppendAuxReply(reply, rawMessage);
+		auxDevices[auxNumber].AppendAuxReply(gb, reply, rawMessage);
 	}
 	else
 #endif
@@ -2897,7 +2971,7 @@ void Platform::AppendAuxReply(size_t auxNumber, OutputBuffer *reply, bool rawMes
 }
 
 // Send the specified message to the specified destinations. The Error and Warning flags have already been handled.
-void Platform::RawMessage(MessageType type, const char *_ecv_array message) noexcept
+void Platform::RawMessage(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array message) noexcept
 {
 #if HAS_MASS_STORAGE
 	// Deal with logging
@@ -2910,11 +2984,11 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 	// Send the message to the destinations
 	if ((type & ImmediateAuxMessage) != 0)
 	{
-		SendPanelDueMessage(0, message);
+		SendPanelDueMessage(1, message);
 	}
 	else if ((type & AuxMessage) != 0)
 	{
-		AppendAuxReply(0, message, message[0] == '{' || (type & RawMessageFlag) != 0);
+		AppendAuxReply(0, gb, message, message[0] == '{' || (type & RawMessageFlag) != 0);
 	}
 
 	if ((type & HttpMessage) != 0)
@@ -2929,7 +3003,7 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 
 	if ((type & Aux2Message) != 0)
 	{
-		AppendAuxReply(1, message, message[0] == '{' || (type & RawMessageFlag) != 0);
+		AppendAuxReply(1, gb, message, message[0] == '{' || (type & RawMessageFlag) != 0);
 	}
 
 	if ((type & BlockingUsbMessage) != 0)
@@ -2951,30 +3025,52 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 		// Message that is to be sent via the USB line (non-blocking)
 		MutexLocker lock(usbMutex);
 
-		// Ensure we have a valid buffer to write to that isn't referenced for other destinations
-		OutputBuffer *_ecv_null usbOutputBuffer = usbOutput.GetLastItem();
-		if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
+		if (GetChannelMode(0) == AuxMode::raw || message[0] == '{' || (type & RawMessageFlag) != 0)
 		{
-			if (OutputBuffer::Allocate(usbOutputBuffer))
+			// Ensure we have a valid buffer to write to that isn't referenced for other destinations
+			OutputBuffer *_ecv_null usbOutputBuffer = usbOutput.GetLastItem();
+			if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
 			{
-				if (usbOutput.Push(usbOutputBuffer))
+				if (OutputBuffer::Allocate(usbOutputBuffer))
 				{
-					usbOutputBuffer->cat(message);
+					if (usbOutput.Push(usbOutputBuffer))
+					{
+						usbOutputBuffer->cat(message);
+					}
+					// else the stack is full, so discard the message
 				}
-				// else the message buffer has been released, so discard the message
+				// else we can't allocate a buffer, so discard the message
+			}
+			else
+			{
+				usbOutputBuffer->cat(message);		// append the message
 			}
 		}
 		else
 		{
-			usbOutputBuffer->cat(message);		// append the message
+			// We need to wrap the message in JSON before sending it to USB
+			OutputBuffer *buf;
+			if (OutputBuffer::Allocate(buf))
+			{
+				usbMessageSeq++;
+				RepRap::StartJsonResponse(gb, buf);
+				buf->catf("\"seq\":%" PRIu32 ",\"resp\":\"%.s\"}\n", usbMessageSeq, message);
+				usbOutput.Push(buf);
+			}
+			// else we can't allocate a buffer, so discard the message
 		}
 	}
+}
+
+void Platform::Message(MessageType type, OutputBuffer *buffer) noexcept
+{
+	Message(nullptr, type, buffer);
 }
 
 // Note: this overload of Platform::Message does not process the special action flags in the MessageType.
 // Also it treats calls to send a blocking USB message the same as ordinary USB messages,
 // and calls to send an immediate LCD message the same as ordinary LCD messages
-void Platform::Message(MessageType type, OutputBuffer *buffer) noexcept
+void Platform::Message(const GCodeBuffer *_ecv_null gb, MessageType type, OutputBuffer *buffer) noexcept
 {
 #if HAS_MASS_STORAGE
 	// First deal with logging because it doesn't hang on to the buffer
@@ -3007,13 +3103,13 @@ void Platform::Message(MessageType type, OutputBuffer *buffer) noexcept
 
 		if ((type & (AuxMessage | ImmediateAuxMessage)) != 0)
 		{
-			AppendAuxReply(0, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
+			AppendAuxReply(0, gb, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
 
 #ifdef SERIAL_AUX2_DEVICE
 		if ((type & Aux2Message) != 0)
 		{
-			AppendAuxReply(1, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
+			AppendAuxReply(1, gb, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
 #endif
 
@@ -3029,7 +3125,7 @@ void Platform::Message(MessageType type, OutputBuffer *buffer) noexcept
 
 		if ((type & (UsbMessage | BlockingUsbMessage)) != 0)
 		{
-			AppendUsbReply(buffer);
+			AppendUsbReply(gb, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
 
 #if HAS_SBC_INTERFACE
@@ -3041,7 +3137,7 @@ void Platform::Message(MessageType type, OutputBuffer *buffer) noexcept
 	}
 }
 
-void Platform::MessageV(MessageType type, const char *_ecv_array fmt, va_list vargs) noexcept
+void Platform::MessageV(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array fmt, va_list vargs) noexcept
 {
 	String<FormatStringLength> formatString;
 #if HAS_SBC_INTERFACE
@@ -3071,14 +3167,22 @@ void Platform::MessageV(MessageType type, const char *_ecv_array fmt, va_list va
 		formatString.vprintf(fmt, vargs);
 	}
 
-	RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
+	RawMessage(gb, (MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
 }
 
 void Platform::MessageF(MessageType type, const char *_ecv_array fmt, ...) noexcept
 {
 	va_list vargs;
 	va_start(vargs, fmt);
-	MessageV(type, fmt, vargs);
+	MessageV(nullptr, type, fmt, vargs);
+	va_end(vargs);
+}
+
+void Platform::MessageF(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array fmt, ...) noexcept
+{
+	va_list vargs;
+	va_start(vargs, fmt);
+	MessageV(gb, type, fmt, vargs);
 	va_end(vargs);
 }
 
@@ -3098,7 +3202,7 @@ void Platform::Message(MessageType type, const char *_ecv_array message) noexcep
 
 	if ((type & (ErrorMessageFlag | WarningMessageFlag)) == 0)
 	{
-		RawMessage(type, message);
+		RawMessage(nullptr, type, message);
 	}
 	else
 	{
@@ -3117,7 +3221,7 @@ void Platform::Message(MessageType type, const char *_ecv_array message) noexcep
 			String<FormatStringLength> formatString;
 			formatString.copy(((type & ErrorMessageFlag) != 0) ? "Error: " : "Warning: ");
 			formatString.cat(message);
-			RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
+			RawMessage(nullptr, (MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
 		}
 	}
 }
@@ -3179,6 +3283,7 @@ GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) 
 			}
 			return logger->Start(realTime, filename, reply);
 		}
+		reprap.StateUpdated();						// logLevel has been changed to off, so the OM has been updated
 	}
 	else
 	{
@@ -3207,7 +3312,7 @@ const char *_ecv_array Platform::GetLogLevel() const noexcept
 {
 	static const LogLevel off = LogLevel::off;	// need to have an instance otherwise it will fail .ToString() below
 #if HAS_MASS_STORAGE
-	return (logger == nullptr) ? off.ToString() : logger->GetLogLevel().ToString();
+	return (logger == nullptr || !logger->IsActive()) ? off.ToString() : logger->GetLogLevel().ToString();
 #else
 	return off.ToString();
 #endif
@@ -3350,19 +3455,6 @@ uint32_t Platform::GetBaudRate(size_t chan) const noexcept
 		0;
 }
 
-void Platform::SetCommsProperties(size_t chan, uint32_t cp) noexcept
-{
-	if (chan < NumSerialChannels)
-	{
-		commsParams[chan] = cp;
-	}
-}
-
-uint32_t Platform::GetCommsProperties(size_t chan) const noexcept
-{
-	return (chan < NumSerialChannels) ? commsParams[chan] : 0u;
-}
-
 // Re-initialise a serial channel.
 void Platform::ResetChannel(size_t chan) noexcept
 {
@@ -3393,17 +3485,22 @@ void Platform::ResetChannel(size_t chan) noexcept
 {
 	// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 or v1.02 boards
 	// Driver 1 has a pulldown resistor on v0.1 and v1.0 boards, however we don't support v0.1 and we don't care about the difference between v0.6 and v1.0, so we don't need to read it
-	// Driver 2 has a pulldown resistor on v1.02 only
-	pinMode(DIRECTION_PINS[2], INPUT_PULLUP);
-	pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
+	// Driver 2 has a pulldown resistor on v1.10, v1.02, 1.02a, 1.02b, 1.02c
+	// Driver 3 has a pulldown resistor on v1.02c
+	SetPinMode(DIRECTION_PINS[2], INPUT_PULLUP, false);
+	SetPinMode(DIRECTION_PINS[0], INPUT_PULLUP, false);
 	delayMicroseconds(20);									// give the pullup resistor time to work
 	if (digitalRead(DIRECTION_PINS[2]))
 	{
 		return (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
 	}
+	else if (digitalRead(DIRECTION_PINS[0]))
+	{
+		return BoardType::Duet3_6HC_v102;
+	}
 	else
 	{
-		return (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v102 : BoardType::Duet3_6HC_v102b;
+		return (digitalRead(DIRECTION_PINS[3])) ? BoardType::Duet3_6HC_v102b : BoardType::Duet3_6HC_v102c;
 	}
 }
 
@@ -3416,9 +3513,9 @@ void Platform::ResetChannel(size_t chan) noexcept
 {
 	// Driver 0 direction has a pulldown resistor on v1.0  boards only
 	// Driver 5 direction has a pulldown resistor on 1.01 boards only
-	pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
-	pinMode(DIRECTION_PINS[1], INPUT_PULLUP);
-	pinMode(DIRECTION_PINS[5], INPUT_PULLUP);
+	SetPinMode(DIRECTION_PINS[0], INPUT_PULLUP, false);
+	SetPinMode(DIRECTION_PINS[1], INPUT_PULLUP, false);
+	SetPinMode(DIRECTION_PINS[5], INPUT_PULLUP, false);
 	delayMicroseconds(20);									// give the pullup resistor time to work
 	if (digitalRead(DIRECTION_PINS[5]))
 	{
@@ -3435,7 +3532,7 @@ void Platform::SetBoardType() noexcept
 {
 #if defined(DUET3MINI_V04)
 	// Test whether this is a WiFi or an Ethernet board by testing for a pulldown resistor on Dir1
-	pinMode(DIRECTION_PINS[1], INPUT_PULLUP);
+	SetPinMode(DIRECTION_PINS[1], INPUT_PULLUP, false);
 	delayMicroseconds(20);									// give the pullup resistor time to work
 	board = (digitalRead(DIRECTION_PINS[1]))				// if SAME54P20A
 				? BoardType::Duet3Mini_WiFi
@@ -3464,19 +3561,19 @@ void Platform::SetBoardType() noexcept
 	board = BoardType::FMDC;
 #elif defined(DUET_NG)
 	// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
-	pinMode(W5500ModuleSensePin, INPUT_PULLUP);				// set our UART receive pin to be an input pin and enable the pullup
+	SetPinMode(W5500ModuleSensePin, INPUT_PULLUP);			// set our UART receive pin to be an input pin and enable the pullup
 
 	// Set up the VSSA sense pin. Older Duet WiFis don't have it connected, so we enable the pulldown resistor to keep it inactive.
-	pinMode(VssaSensePin, INPUT_PULLUP);
+	SetPinMode(VssaSensePin, INPUT_PULLUP, false);
 	delayMicroseconds(10);
 	const bool vssaHighVal = digitalRead(VssaSensePin);
-	pinMode(VssaSensePin, INPUT_PULLDOWN);
+	SetPinMode(VssaSensePin, INPUT_PULLDOWN);
 	delayMicroseconds(10);
 	const bool vssaLowVal = digitalRead(VssaSensePin);
 	const bool vssaSenseWorking = vssaLowVal || !vssaHighVal;
 	if (vssaSenseWorking)
 	{
-		pinMode(VssaSensePin, INPUT);
+		SetPinMode(VssaSensePin, INPUT, true);
 	}
 
 # if defined(USE_SBC)
@@ -3514,7 +3611,8 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v1.0 or earlier";
 	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
 	case BoardType::Duet3_6HC_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or 1.02a";
-	case BoardType::Duet3_6HC_v102b:		return "Duet 3 " BOARD_SHORT_NAME " v1.02b or later";
+	case BoardType::Duet3_6HC_v102b:		return "Duet 3 " BOARD_SHORT_NAME " v1.02b";
+	case BoardType::Duet3_6HC_v102c:		return "Duet 3 " BOARD_SHORT_NAME " v1.02c or later";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "Duet 3 " BOARD_SHORT_NAME " v0.1";
 	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0";
@@ -3647,12 +3745,6 @@ bool Platform::FileExists(const char *_ecv_array folder, const char *_ecv_array 
 	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::FileExists(location.c_str());
 }
 
-// Return a pointer to a string holding the directory where the system files are. Lock the sysdir lock before calling this.
-const char *_ecv_array Platform::InternalGetSysDir() const noexcept
-{
-	return (sysDir != nullptr) ? _ecv_not_null(sysDir) : DEFAULT_SYS_DIR;
-}
-
 bool Platform::SysFileExists(const char *_ecv_array filename) const noexcept
 {
 	String<MaxFilenameLength> location;
@@ -3672,43 +3764,42 @@ bool Platform::MakeSysFileName(const StringRef& result, const char *_ecv_array f
 	return MassStorage::CombineName(result, GetSysDir().Ptr(), filename);
 }
 
-void Platform::AppendSysDir(const StringRef & path) const noexcept
+ReadLockedPointer<const char> ConfigurableFolder::GetLockedPointer() const noexcept
 {
-	path.cat(GetSysDir().Ptr());
-}
-
-ReadLockedPointer<const char> Platform::GetSysDir() const noexcept
-{
-	return ReadLockedPointer<const char>(sysDirLock, InternalGetSysDir());
+	return ReadLockedPointer<const char>(lock, GetUnlockedPointer());
 }
 
 #endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
-// Set the system files path
-GCodeResult Platform::SetSysDir(const char *_ecv_array dir, const StringRef& reply) noexcept
+void ConfigurableFolder::AppendToString(const StringRef& path) const noexcept
 {
-	String<MaxFilenameLength> newSysDir;
-	WriteLocker lock(sysDirLock);
+	ReadLocker locker(lock);
+	path.cat(GetUnlockedPointer());
+}
 
-	if (!MassStorage::CombineName(newSysDir.GetRef(), InternalGetSysDir(), dir) || (!newSysDir.EndsWith('/') && newSysDir.cat('/')))
+GCodeResult ConfigurableFolder::Configure(const char *_ecv_array dir, const StringRef& reply) noexcept
+{
+	String<MaxFilenameLength> newDir;
+	WriteLocker locker(lock);
+	if (!MassStorage::CombineName(newDir.GetRef(), GetUnlockedPointer(), dir) || (!newDir.EndsWith('/') && newDir.cat('/')))
 	{
 		reply.copy("Path name too long");
 		return GCodeResult::error;
 	}
 
-	if (!MassStorage::DirectoryExists(newSysDir.GetRef()))
+	if (!MassStorage::DirectoryExists(newDir.GetRef()))
 	{
-		reply.copy("Path not found");
+		reply.printf("Path \"%s\" not found", newDir.c_str());
 		return GCodeResult::error;
 	}
 
-	newSysDir.cat('/');								// the call to DirectoryExists removed the trailing '/'
-	const size_t len = newSysDir.strlen() + 1;
-	char *_ecv_array _ecv_null const nsd = new char[len];
-	memcpy(nsd, newSysDir.c_str(), len);
-	ReplaceObject(sysDir, nsd);
+	newDir.cat('/');								// the call to DirectoryExists removed the trailing '/'
+	const size_t len = newDir.strlen() + 1;
+	char *_ecv_array _ecv_null const newDirArray = new char[len];
+	memcpy(newDirArray, newDir.c_str(), len);
+	ReplaceObject(userValue, newDirArray);
 	reprap.DirectoriesUpdated();
 	return GCodeResult::ok;
 }
@@ -3939,16 +4030,28 @@ void Platform::OnProcessingCanMessage() noexcept
 // Configure the ancillary PWM
 GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	bool seen = false;
-	if (gb.Seen('P'))
+	int32_t tempPort;
+	bool seen = gb.TryGetLimitedIValue('P', tempPort, seen, -1, MaxGpOutPorts - 1);
+	if (seen)
 	{
-		seen = true;
-		if (!extrusionAncilliaryPwmPort.AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::pwm))
+		if (tempPort >= 0)
 		{
-			return GCodeResult::error;
+			if (GetGpOutPort(tempPort).IsUnused())
+			{
+				reply.printf("GpOut port %" PRIu32 " has not been created", tempPort);
+				return GCodeResult::error;
+			}
+#if SUPPORT_CAN_EXPANSION
+			if (!GetGpOutPort(tempPort).IsLocal())
+			{
+				reply.printf("Remote GpOut port %" PRIu32 " not allowed here", tempPort);
+				return GCodeResult::error;
+			}
+#endif
 		}
-		const PwmFrequency freq = (gb.Seen('Q') || gb.Seen('F')) ? gb.GetPwmFrequency() : DefaultPinWritePwmFreq;
-		extrusionAncilliaryPwmPort.SetFrequency(freq);
+
+		extrusionAncilliaryPwmGpOutNumber = tempPort;
+		Move::CreateLaserTask();									// we use the laser task to manage ancillary PWM
 	}
 	if (gb.Seen('S'))
 	{
@@ -3958,8 +4061,14 @@ GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply
 
 	if (!seen)
 	{
-		reply.copy("Extrusion ancillary PWM");
-		extrusionAncilliaryPwmPort.AppendFullDetails(reply);
+		if (extrusionAncilliaryPwmGpOutNumber < 0)
+		{
+			reply.copy("Extrusion ancillary PWM is not configured");
+		}
+		else
+		{
+			reply.printf("Extrusion ancillary PWM port %" PRIu32 ", PWM value %.2f", extrusionAncilliaryPwmGpOutNumber, (double)extrusionAncilliaryPwmValue);
+		}
 	}
 	return GCodeResult::ok;
 }
@@ -4100,7 +4209,7 @@ void Platform::Tick() noexcept
 			highestVin = currentVin;
 			reprap.BoardsUpdated();
 		}
-		if (currentVin < lowestVin)
+		if (currentVin < lowestVin || millis64() < 1000)			// don't record the lowest VIN voltage while we are still powering up
 		{
 			lowestVin = currentVin;
 			reprap.BoardsUpdated();
@@ -4114,7 +4223,7 @@ void Platform::Tick() noexcept
 			highestV12 = currentV12;
 			reprap.BoardsUpdated();
 		}
-		if (currentV12 < lowestV12)
+		if (currentV12 < lowestV12 || millis64() < 1000)			// don't record the lowest V12 voltage while we are still powering up
 		{
 			lowestV12 = currentV12;
 			reprap.BoardsUpdated();

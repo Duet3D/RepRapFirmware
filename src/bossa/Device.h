@@ -35,7 +35,7 @@
 
 typedef GCodeException DeviceUnsupportedError;
 
-class Device
+class Device final
 {
 public:
     enum Family {
@@ -77,7 +77,7 @@ public:
     };
 
     explicit Device(Samba& samba) noexcept : _samba(samba), _flash(nullptr), _family(FAMILY_NONE) {}
-    virtual ~Device() {  delete _flash; }
+    ~Device() {  delete _flash; }
 
     void create() THROWS(GCodeException);
 

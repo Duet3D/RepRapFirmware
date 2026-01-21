@@ -59,7 +59,9 @@ Licence: GPL
 #if SUPPORT_CAN_EXPANSION
 constexpr uint32_t HeaterTaskStackWords = 470;			// task stack size in dwords, must be large enough for auto tuning and a local CAN buffer
 #else
-constexpr uint32_t HeaterTaskStackWords = 420;			// task stack size in dwords, must be large enough for auto tuning. 400 was not quite enough for one Duet WiFi user running 3.2.2.
+constexpr uint32_t HeaterTaskStackWords = 440;			// task stack size in dwords, must be large enough for auto tuning.
+														// 400 was not quite enough for one Duet WiFi user running 3.2.2 so increased to 420
+														// In 3.6.0 and 3.6.1 we are getting strange crashes within the I2C driver when called from the Heat task, so increased again to 440.
 #endif
 
 static Task<HeaterTaskStackWords> heaterTask;
@@ -74,10 +76,10 @@ extern "C" [[noreturn]] void HeaterTaskStart(void * pvParameters) noexcept
 	reprap.GetHeat().HeaterTask();
 }
 
-#if SUPPORT_OBJECT_MODEL
-
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Heat, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(Heat, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(Heat, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(Heat, __VA_ARGS__)
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -88,20 +90,20 @@ constexpr ObjectModelArrayTableEntry Heat::objectModelArrayTable[] =
 	// 0. Bed heaters
 	{
 		&heatersLock,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MaxBedHeaters; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Heat*)self)->bedHeaters[context.GetLastIndex()]); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(MaxBedHeaters),
+		OBJECT_MODEL_ARRAY_VALUE((int32_t)self->bedHeaters[context.GetLastIndex()])
 	},
 	// 1. Chamber heaters
 	{
 		&heatersLock,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MaxChamberHeaters; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Heat*)self)->chamberHeaters[context.GetLastIndex()]); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(MaxChamberHeaters),
+		OBJECT_MODEL_ARRAY_VALUE((int32_t)self->chamberHeaters[context.GetLastIndex()])
 	},
 	// 2. Heaters
 	{
 		&heatersLock,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Heat*)self)->GetNumHeatersToReport(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Heat*)self)->heaters[context.GetLastIndex()]); }
+		OBJECT_MODEL_ARRAY_COUNT(self->GetNumHeatersToReport()),
+		OBJECT_MODEL_ARRAY_VALUE(self->heaters[context.GetLastIndex()])
 	}
 };
 
@@ -121,8 +123,6 @@ constexpr ObjectModelTableEntry Heat::objectModelTable[] =
 constexpr uint8_t Heat::objectModelTableDescriptor[] = { 1, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heat)
-
-#endif
 
 ReadWriteLock Heat::heatersLock;
 ReadWriteLock Heat::sensorsLock;
@@ -542,23 +542,19 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 	}
 }
 
-void Heat::Diagnostics(MessageType mtype) noexcept
+void Heat::Diagnostics(const StringRef& reply) noexcept
 {
-	Platform& platform = reprap.GetPlatform();
-	platform.Message(mtype, "=== Heat ===\n");
-	String<StringLength100> str;
-	str.copy("Bed heaters");
+	reply.copy("=== Heat ===\nBed heaters");
 	for (int8_t bedHeater : bedHeaters)
 	{
-		str.catf(" %d", bedHeater);
+		reply.catf(" %d", bedHeater);
 	}
-	str.cat(", chamber heaters");
+	reply.cat(", chamber heaters");
 	for (int8_t chamberHeater : chamberHeaters)
 	{
-		str.catf(" %d", chamberHeater);
+		reply.catf(" %d", chamberHeater);
 	}
-	str.catf(", ordering errs %u\n", sensorOrderingErrors);
-	platform.Message(mtype, str.c_str());
+	reply.catf(", ordering errs %u", sensorOrderingErrors);
 
 	for (size_t heater : ARRAY_INDICES(heaters))
 	{
@@ -567,7 +563,7 @@ void Heat::Diagnostics(MessageType mtype) noexcept
 		{
 			const float acc = h->GetAccumulator();
 			h.Release();
-			platform.MessageF(mtype, "Heater %u is on, I-accum = %.1f\n", heater, (double)acc);
+			reply.lcatf("Heater %u is on, I-accum = %.1f", heater, (double)acc);
 		}
 	}
 }
@@ -645,14 +641,14 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROW
 
 bool Heat::SlowHeatersAtSetTemperatures(float tolerance, bool waitOnFault) const noexcept
 {
-	for (size_t bedHeater : ARRAY_INDICES(bedHeaters))
+	for (int8_t bedHeater : bedHeaters)
 	{
 		if (!HeaterAtSetTemperature(bedHeater, true, tolerance, waitOnFault))
 		{
 			return false;
 		}
 	}
-	for (size_t chamberHeater : ARRAY_INDICES(heaters))
+	for (int8_t chamberHeater : chamberHeaters)
 	{
 		if (!HeaterAtSetTemperature(chamberHeater, true, tolerance, waitOnFault))
 		{
@@ -662,7 +658,7 @@ bool Heat::SlowHeatersAtSetTemperatures(float tolerance, bool waitOnFault) const
 	return true;
 }
 
-//query an individual heater
+// Query whether an individual heater is close enough to its set temperature. Returns true if the heater number is not valid.
 bool Heat::HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance, bool waitOnFault) const noexcept
 {
 	const auto h = FindHeater(heater);

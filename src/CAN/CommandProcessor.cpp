@@ -30,6 +30,22 @@
 # include <Accelerometers/Accelerometers.h>
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <Hardware/NonVolatileMemory.h>
+
+static uint8_t expectedSeq = 0xFF;
+#endif
+
+static unsigned int duplicateMotionMessages = 0;
+static unsigned int oosMessages1Ahead = 0, oosMessages2Ahead = 0, oosMessages2Behind = 0, oosMessagesOther = 0;
+
+// Append diagnostics relating to bad motion messages
+void CommandProcessor::AppendBadMotionStats(const StringRef& reply) noexcept
+{
+	reply.lcatf("Motion dup %u, oos %u/%u/%u/%u", duplicateMotionMessages, oosMessages1Ahead, oosMessages2Ahead, oosMessages2Behind, oosMessagesOther);
+	duplicateMotionMessages = oosMessages1Ahead = oosMessages2Ahead = oosMessages2Behind = oosMessagesOther = 0;
+}
+
 // Handle a firmware update request
 static void HandleFirmwareBlockRequest(CanMessageBuffer *buf) noexcept
 pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
@@ -152,7 +168,7 @@ static void HandleInputStateChanged(const CanMessageInputChangedNew& msg, CanAdd
 	Platform& p = reprap.GetPlatform();
 	for (unsigned int i = 0; i < msg.numHandles; ++i)
 	{
-		const RemoteInputHandle handle(msg.results[i].handle);
+		const RemoteInputHandle handle(msg.GetEntryHandle(i));
 		const bool state = (msg.states & (1u << i)) != 0;
 		switch (handle.parts.type)
 		{
@@ -162,7 +178,7 @@ static void HandleInputStateChanged(const CanMessageInputChangedNew& msg, CanAdd
 			break;
 
 		case RemoteInputHandle::typeZprobe:
-			p.GetEndstops().HandleRemoteZProbeChange(src, handle.parts.major, handle.parts.minor, state, LoadLEU32(&msg.results[i].reading));
+			p.GetEndstops().HandleRemoteZProbeChange(src, handle.parts.major, handle.parts.minor, state, msg.GetEntryReading(i));
 			endstopStatesChanged = true;
 			break;
 
@@ -172,7 +188,7 @@ static void HandleInputStateChanged(const CanMessageInputChangedNew& msg, CanAdd
 
 		case RemoteInputHandle::typeStallEndstop:
 			// In this case there should be exactly one handle and the 'reading' is a bitmap of stalled drivers
-			p.GetEndstops().HandleStalledRemoteDrivers(src, RemoteDriversBitmap((RemoteDriversBitmap::BaseType)msg.results[i].reading));
+			p.GetEndstops().HandleStalledRemoteDrivers(src, LocalDriversBitmap((LocalDriversBitmap::BaseType)msg.GetEntryReading(i)));
 			break;
 
 		default:
@@ -190,14 +206,10 @@ static void HandleInputStateChanged(const CanMessageInputChangedNew& msg, CanAdd
 
 static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& reply, uint8_t& extra)
 {
-	static constexpr uint8_t LastDiagnosticsPart = 9;				// the last diagnostics part is typeDiagnosticsPart0 + 9
-
 	switch (msg.type)
 	{
 	case CanMessageReturnInfo::typeFirmwareVersion:
-	default:
-		// This must be formatted in a specific way for the ATE, starting with the electronics string
-		reply.printf("%s firmware version " VERSION " (%s%s)", reprap.GetPlatform().GetElectronicsString(), DATE, TIME_SUFFIX);
+		reply.printf("%s firmware version " VERSION " (%s%s)", reprap.GetPlatform().GetElectronicsString(), DateText, TimeSuffix);
 		break;
 
 	case CanMessageReturnInfo::typeBoardName:
@@ -236,72 +248,18 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		reprap.GetPlatform().GetUniqueId().AppendCharsToString(reply);
 		break;
 
-	case CanMessageReturnInfo::typeDiagnosticsPart0:
-		extra = LastDiagnosticsPart;
-		// Report the firmware version and board type
-		reply.lcatf("%s version %s (%s%s) running on %s", FIRMWARE_NAME, VERSION, DATE, TIME_SUFFIX, reprap.GetPlatform().GetElectronicsString());
-		// Show the up time and reason for the last reset
+	default:
+		if (msg.type >= CanMessageReturnInfo::typeDiagnosticsPart0 && msg.type < CanMessageReturnInfo::typeDiagnosticsPart0 + reprap.GetNumberOfDiagnosticParts())
 		{
-			const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
-			reply.lcatf("Last reset %02d:%02d:%02d ago, cause: %s", (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60), Platform::GetResetReasonText());
+			reply.Clear();
+			reprap.GetDiagnosticsPart(msg.type - CanMessageReturnInfo::typeDiagnosticsPart0, reply);
+			extra = reprap.GetNumberOfDiagnosticParts() - 1;
 		}
-		reprap.GetMove().AppendDiagnostics(reply);
-		break;
-
-	case CanMessageReturnInfo::typeDiagnosticsPart0 + 1:
-	case CanMessageReturnInfo::typeDiagnosticsPart0 + 2:
-	case CanMessageReturnInfo::typeDiagnosticsPart0 + 3:
-	case CanMessageReturnInfo::typeDiagnosticsPart0 + 4:
-	case CanMessageReturnInfo::typeDiagnosticsPart0 + 5:
-	case CanMessageReturnInfo::typeDiagnosticsPart0 + 6:
-	case CanMessageReturnInfo::typeDiagnosticsPart0 + 7:
-		// We send each driver status in a separate message because we can't fit more than three in one reply
-		extra = LastDiagnosticsPart;
+		else
 		{
-			const size_t driver = msg.type - (CanMessageReturnInfo::typeDiagnosticsPart0 + 1);
-			if (driver < NumDirectDrivers)			// we have up to 7 drivers on the Duet 3 Mini but only 6 on the 6HC and 6XD
-			{
-				reply.lcatf("Driver %u: %.1f steps/mm"
-#if HAS_SMART_DRIVERS
-					","
-#endif
-					, driver, (double)reprap.GetMove().DriveStepsPerMm(driver));
-#if HAS_SMART_DRIVERS
-				SmartDrivers::AppendDriverStatus(driver, reply);
-#endif
-			}
+			reply.copy("unknown GetInfo subfunction");
+			return GCodeResult::error;
 		}
-		break;
-
-	case CanMessageReturnInfo::typeDiagnosticsPart0 + 8:
-		extra = LastDiagnosticsPart;
-		{
-#if HAS_VOLTAGE_MONITOR && HAS_12V_MONITOR
-			reply.catf("VIN: %.1fV, V12: %.1fV", (double)reprap.GetPlatform().GetCurrentPowerVoltage(), (double)reprap.GetPlatform().GetCurrentV12Voltage());
-#elif HAS_VOLTAGE_MONITOR
-			reply.catf("VIN: %.1fV", (double)reprap.GetPlatform().GetCurrentPowerVoltage());
-#elif HAS_12V_MONITOR
-			reply.catf("V12: %.1fV", (double)reprap.GetPlatform().GetCurrentV12Voltage());
-#endif
-#if HAS_CPU_TEMP_SENSOR
-			const MinCurMax temps = reprap.GetPlatform().GetMcuTemperatures();
-			reply.catf(
-# if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
-				", "
-# endif
-				"MCU temperature: min %.1fC, current %.1fC, max %.1fC", (double)temps.minimum, (double)temps.current, (double)temps.maximum);
-#endif
-		}
-		break;
-
-	case CanMessageReturnInfo::typeDiagnosticsPart0 + 9:
-		extra = LastDiagnosticsPart;
-		StepTimer::Diagnostics(reply);
-#if 0	// We don't currently support accelerometers on main boards used as expansion boards
-//#if SUPPORT_ACCELEROMETERS
-		Accelerometers::Diagnostics(reply);
-#endif
-		FilamentMonitor::GetDiagnostics(reply);
 		break;
 	}
 	return GCodeResult::ok;
@@ -370,7 +328,41 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				return;							// no reply needed
 
 			case CanMessageType::movementLinearShaped:
-				//TODO check seq
+				// Check for duplicate and out-of-sequence message
+				// We can get out-of-sequence messages because of a bug in the CAN hardware; so use only the sequence number to detect duplicates
+				{
+					const int8_t seq = buf->msg.moveLinearShaped.seq;
+					if (((seq + 1) & CanMessageMovementLinearShaped::SeqMask) == expectedSeq)
+					{
+						++duplicateMotionMessages;
+						return;
+					}
+
+					if (seq != expectedSeq && expectedSeq != 0xFF)
+					{
+						switch ((seq - expectedSeq) & CanMessageMovementLinearShaped::SeqMask)
+						{
+						case 1:
+							++oosMessages1Ahead;
+							break;
+
+						case 2:
+							++oosMessages2Ahead;
+							break;
+
+						case 0x7E:
+							++oosMessages2Behind;
+							break;
+
+						default:
+							++oosMessagesOther;
+							break;
+						}
+					}
+
+					expectedSeq = (seq + 1) & CanMessageMovementLinearShaped::SeqMask;
+				}
+
 				if (StepTimer::IsSynced())
 				{
 					reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinearShaped);
@@ -577,6 +569,17 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				requestId = buf->msg.generic.requestId;
 				reply.copy("not supported by this board");
 				rslt = GCodeResult::error;
+				break;
+
+			case CanMessageType::diagnosticTest:
+				requestId = buf->msg.diagnosticTest.requestId;
+				//TODO support this function
+				rslt = GCodeResult::errorNotSupported;
+				break;
+
+			case CanMessageType::m111:
+				requestId = buf->msg.diagnosticTest.requestId;
+				rslt = reprap.ProcessRemoteM111(buf->msg.generic, replyRef);
 				break;
 
 			default:

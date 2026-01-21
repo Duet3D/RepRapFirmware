@@ -74,6 +74,7 @@ struct ExpressionValue final
 	enum class SpecialType : uint32_t
 	{
 		sysDir = 0,
+		webDir
 	};
 
 	ExpressionValue() noexcept : type((uint32_t)TypeCode::None) { }
@@ -244,7 +245,8 @@ public:
 	bool WantExists() const noexcept { return wantExists; }
 	bool ShouldIncludeNulls() const noexcept { return includeNulls; }
 	bool ShouldIncludeImportant() const noexcept { return includeImportant; }
-	bool TruncateLongArrays() const noexcept { return truncateLongArrays; }
+	bool ShouldTruncateArrays() const noexcept { return includeNonLive; }
+	bool ForPanelDue() const noexcept { return ((uint8_t)excludedFlags & (uint8_t)ObjectModelEntryFlags::notPanelDue) != 0; }
 	uint64_t GetStartMillis() const { return startMillis; }
 	size_t GetInitialBufferOffset() const noexcept { return initialBufOffset; }
 
@@ -273,10 +275,8 @@ private:
 				wantExists : 1,
 				includeNonLive : 1,
 				includeImportant : 1,
-				includePanelDue : 1,
 				includeNulls : 1,
-				obsoleteFieldQueried : 1,
-				truncateLongArrays : 1;
+				obsoleteFieldQueried : 1;
 	ObjectModelEntryFlags excludedFlags;			// don't report fields with any of these flags set
 };
 
@@ -311,6 +311,10 @@ public:
 	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor,
 							const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException);
 
+	// Report an item as full JSON. This is only called externally by the SBC interface to evaluate specific object model arrays, e.g. using the echo command
+	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor,
+															const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException);
+
 	// Skip the current element in the ID or filter string
 	static const char *_ecv_array GetNextElement(const char *_ecv_array id) noexcept;
 
@@ -341,11 +345,13 @@ protected:
 	// then it must be declared 'mutable' because this function is const, like the querying and reporting functions
 	virtual ReadWriteLock *_ecv_null GetObjectLock(unsigned int tableNumber) const noexcept { return nullptr; }
 
+	// Return the maximum number of elements to return from the specified array, with 0 meaning unlimited
+	// Override this in classes that have large arrays.
+	virtual size_t GetMaxElementsToReturn(const ObjectModelArrayTableEntry *entry, const ObjectExplorationContext& context) const noexcept { return 0; }
+
 private:
 	// These functions have been separated from ReportItemAsJson to avoid high stack usage in the recursive functions, therefore they must not be inlined
 	// Report on a single item
-	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor,
-															const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException);
 	__attribute__ ((noinline)) void ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ExpressionValue& val) const noexcept;
 	__attribute__ ((noinline)) static void ReportDateTime(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 	__attribute__ ((noinline)) static void ReportFloat(OutputBuffer *buf, const ExpressionValue& val) noexcept;

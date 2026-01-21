@@ -15,8 +15,6 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <GCodes/GCodeException.h>
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -24,14 +22,16 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(Heater, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(Heater, _condition, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(Heater, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(Heater, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry Heater::objectModelArrayTable[] =
 {
 	{
 		// 0. Monitors
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MaxMonitorsPerHeater; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 1); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(MaxMonitorsPerHeater),
+		OBJECT_MODEL_ARRAY_VALUE(self, 1)
 	}
 };
 
@@ -44,6 +44,8 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 	{ "active",				OBJECT_MODEL_FUNC(self->GetActiveTemperature(), 1), 									ObjectModelEntryFlags::live },
 	{ "avgPwm",				OBJECT_MODEL_FUNC(self->GetAveragePWM(), 3), 											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "current",			OBJECT_MODEL_FUNC(self->GetTemperature(), 2), 											ObjectModelEntryFlags::live },
+	{ "extrPwmBoost",		OBJECT_MODEL_FUNC_IF(self->usingFeedForward, self->extrusionPwmBoost, 2), 				ObjectModelEntryFlags::liveNotPanelDue },
+	{ "extrTempBoost",		OBJECT_MODEL_FUNC_IF(self->usingFeedForward, self->extrusionTemperatureBoost, 2), 		ObjectModelEntryFlags::liveNotPanelDue },
 	{ "max",				OBJECT_MODEL_FUNC(self->GetHighestTemperatureLimit(), 1), 								ObjectModelEntryFlags::none },
 	{ "maxBadReadings",		OBJECT_MODEL_FUNC((int32_t)self->maxBadTemperatureCount), 								ObjectModelEntryFlags::none },
 	{ "maxHeatingFaultTime", OBJECT_MODEL_FUNC(self->maxHeatingFaultTime, 1), 										ObjectModelEntryFlags::none },
@@ -64,11 +66,9 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 	{ "sensor",			OBJECT_MODEL_FUNC((int32_t)self->monitors[context.GetLastIndex()].GetSensorNumber()), 		ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 13, 4 };
+constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 15, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
-
-#endif
 
 // Static members of class Heater
 
@@ -116,7 +116,7 @@ Heater::Heater(unsigned int num) noexcept
 	: tuned(false), heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
 	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime), maxBadTemperatureCount(DefaultMaxBadTemperatureCount),
 	  isBedOrChamber(false),
-	  active(false), modelSetByUser(false), monitorsSetByUser(false)
+	  active(false), usingFeedForward(false), modelSetByUser(false), monitorsSetByUser(false)
 {
 	Heater::ResetHeater();
 }
@@ -131,15 +131,13 @@ Heater::~Heater() noexcept
 
 void Heater::ResetHeater() noexcept
 {
-	lastExtrusionPwmBoost = 0.0;
-	extrusionTemperatureBoost = 0.0;
+	previousExtrusionPwmBoost = extrusionTemperatureBoost = extrusionPwmBoost = 0.0;
 	lastFanPwm = 0.0;
 }
 
 void Heater::SwitchOff() noexcept
 {
-	lastExtrusionPwmBoost = 0.0;
-	extrusionTemperatureBoost = 0.0;
+	previousExtrusionPwmBoost = extrusionTemperatureBoost = extrusionPwmBoost = 0.0;
 }
 
 void Heater::SetSensorNumber(int sn) noexcept
@@ -148,6 +146,14 @@ void Heater::SetSensorNumber(int sn) noexcept
 	{
 		sensorNumber = sn;
 	}
+}
+
+void Heater::SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept
+{
+	usingFeedForward = true;
+	extrusionPwmBoost = pwmBoost;
+	extrusionTemperatureBoost = tempBoost;
+	ApplyExtrusionFeedForward();
 }
 
 GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)

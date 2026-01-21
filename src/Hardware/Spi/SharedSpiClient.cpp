@@ -20,7 +20,7 @@ void SharedSpiClient::InitCsPin() const noexcept
 {
 	if (csPin != NoPin)
 	{
-		IoPort::SetPinMode(csPin, (csActivePolarity) ? OUTPUT_LOW : OUTPUT_HIGH);
+		::SetPinMode(csPin, (csActivePolarity) ? OUTPUT_LOW : OUTPUT_HIGH);
 	}
 }
 

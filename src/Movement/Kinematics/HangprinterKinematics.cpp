@@ -352,7 +352,7 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 }
 
 // Convert Cartesian coordinates to motor coordinates, returning true if successful
-bool HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[],
+MovementError HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[],
 													size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
 	float distances[numAnchors];
@@ -379,12 +379,13 @@ bool HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], cons
 		linePos[i] = relaxedSpringLengths[i] - relaxedSpringLengthsOrigin[i];
 	}
 
+	MovementError rslt = MovementError::ok;
 	for (size_t i = 0; i < numAnchors; ++i)
 	{
-		motorPos[i] = lrintf(k0[i] * (fastSqrtf(spoolRadiiSq[i] + linePos[i] * k2[i]) - spoolRadii[i]));
+		RoundToInt32(rslt, k0[i] * (fastSqrtf(spoolRadiiSq[i] + linePos[i] * k2[i]) - spoolRadii[i]), motorPos[i]);
 	}
 
-	return true;
+	return MovementError::ok;
 }
 
 

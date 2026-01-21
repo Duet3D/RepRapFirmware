@@ -9,7 +9,6 @@
 #define TMC22xx_H_
 
 #include <RepRapFirmware.h>
-#include <atomic>
 
 #if SUPPORT_TMC22xx
 
@@ -30,6 +29,8 @@
 #if HAS_STALL_DETECT
 # include <Endstops/EndstopDefs.h>
 #endif
+
+#include <atomic>
 
 namespace SmartDrivers
 {
@@ -65,18 +66,21 @@ namespace SmartDrivers
 	GCodeResult GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept;
 	GCodeResult SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
 	StandardDriverStatus GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept;
+	uint32_t GetDriverMinClockFrequency() noexcept;
+	uint32_t GetDriverNominalClockFrequency() noexcept;
+	uint32_t GetDriverMaxClockFrequency() noexcept;
 
 #if HAS_STALL_DETECT
 	const char *_ecv_array _ecv_null CheckStallDetectionEnabled(size_t driver, float speed) noexcept;
 	LocalDriversBitmap GetStalledDrivers(LocalDriversBitmap driversOfInterest) noexcept;
-#endif
 
-#if SUPPORT_REMOTE_COMMANDS
+ #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept;
 	extern std::atomic<uint16_t> driverStallsToNotify;
+# endif
 #endif
 
-#if SUPPORT_TMC2240 && !(SUPPORT_TMC2208 || SUPPORT_TMC2209)
+#if SUPPORT_TMC2240
 	float GetDriverTemperature(size_t driver) noexcept;
 #endif
 };

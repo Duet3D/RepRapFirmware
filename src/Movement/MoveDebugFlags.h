@@ -14,7 +14,6 @@ namespace MoveDebugFlags
 	constexpr unsigned int PrintBadMoves = 0;
 	constexpr unsigned int PrintAllMoves = 1;
 	constexpr unsigned int CollisionData = 2;
-	constexpr unsigned int PrintTransforms = 3;
 
 	constexpr unsigned int Lookahead = 8;
 	constexpr unsigned int ZProbing = 9;
@@ -22,6 +21,7 @@ namespace MoveDebugFlags
 	constexpr unsigned int SimulateSteppingDrivers = 11;
 	constexpr unsigned int Segments = 12;
 	constexpr unsigned int PhaseStep = 13;
+	constexpr unsigned int PrintTransforms = 14;
 }
 
 #endif /* SRC_MOVEMENT_MOVEDEBUGFLAGS_H_ */

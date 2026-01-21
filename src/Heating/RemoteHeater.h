@@ -30,7 +30,6 @@ public:
 	float GetAccumulator() const noexcept override;							// Return the integral accumulator
 	void Suspend(bool sus) noexcept override;								// Suspend the heater to conserve power or while doing Z probing
 	void SetFanFeedForwardPwm(float pwm) noexcept override;
-	void SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept override;
 	bool IsLocal() const noexcept override { return false; }
 	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept override;
 	void UpdateHeaterTuning(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept override;
@@ -49,6 +48,8 @@ protected:
 	GCodeResult UpdateHeaterMonitors(const StringRef& reply) noexcept override;
 	GCodeResult StartAutoTune(const StringRef& reply, bool seenA, float ambientTemp) noexcept override;
 																			// Start an auto tune cycle for this heater
+	void ApplyExtrusionFeedForward() noexcept override;
+
 private:
 	enum class TuningState : uint8_t
 	{
@@ -70,6 +71,7 @@ private:
 	uint8_t averagePwm;
 	TuningState tuningState;
 	float lastTemperature;
+	float previousExtrusionTemperatureBoost;
 	uint32_t whenLastStatusReceived;
 
 	// Variables used only during tuning

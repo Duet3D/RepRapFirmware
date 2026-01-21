@@ -14,7 +14,7 @@
 
 namespace Tasks
 {
-	void Diagnostics(MessageType mtype) noexcept;
+	void Diagnostics(const StringRef& reply) noexcept;
 	TaskHandle GetMainTask() noexcept;
 	void TerminateMainTask() noexcept;
 	ptrdiff_t GetNeverUsedRam() noexcept;

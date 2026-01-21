@@ -53,7 +53,7 @@ public:
 	pre(extruder < MaxExtruders; extruder < reprap.GetGCodes().GetNumExtruders());
 
 	// Send diagnostics info
-	static void Diagnostics(MessageType mtype) noexcept;
+	static void AllDiagnostics(const StringRef& reply) noexcept;
 
 #if SUPPORT_OBJECT_MODEL
 	// Get the number of monitors to report in the OM
@@ -79,9 +79,6 @@ public:
 
 	// Delete all filament monitors
 	static void DeleteAll() noexcept;
-
-	// Generate diagnostics info
-	static void GetDiagnostics(const StringRef& reply) noexcept;
 #endif
 
 	// This must be public so that the array descriptor in class RepRap can lock it
@@ -95,8 +92,8 @@ protected:
 	// Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) = 0;
 
-	// Print diagnostic info for this sensor
-	virtual void Diagnostics(MessageType mtype, unsigned int extruder) noexcept = 0;
+	// Append diagnostic info for this sensor
+	virtual void Diagnostics(const StringRef& reply) noexcept = 0;
 
 	// ISR for when the pin state changes. It should return true if the ISR wants the commanded extrusion to be fetched.
 	virtual bool Interrupt() noexcept = 0;
@@ -135,9 +132,6 @@ protected:
 
 	// Store collected data in a CAN message slot returning true if there was data worth sending
 	virtual void GetLiveData(FilamentMonitorDataNew2& data) const noexcept = 0;
-
-	// Print diagnostic info for this sensor
-	virtual void Diagnostics(const StringRef& reply) noexcept = 0;
 #endif
 
 #if SUPPORT_CAN_EXPANSION

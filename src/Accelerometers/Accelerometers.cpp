@@ -122,13 +122,13 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 				do
 				{
 					const uint16_t *_ecv_array data;
-					bool overflowed;
-					unsigned int samplesRead = not_null(accelerometer)->CollectData(&data, dataRate, overflowed);
+					bool overflowedOrSpuriousInterrupts;
+					unsigned int samplesRead = not_null(accelerometer)->CollectData(&data, dataRate, overflowedOrSpuriousInterrupts);
 					if (samplesRead == 0)
 					{
 						// samplesRead == 0 indicates an error, e.g. no interrupt
 						samplesWanted = 0;
-						not_null(f)->Write("Failed to collect data from accelerometer\n");
+						not_null(f)->Write((overflowedOrSpuriousInterrupts) ? "Too many spurious interrupts from accelerometer\n" : "Failed to collect data from accelerometer\n");
 						not_null(f)->Truncate();				// truncate the file in case we didn't write all the preallocated space
 						not_null(f)->Close();
 						f = nullptr;
@@ -136,7 +136,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 					}
 					else
 					{
-						if (overflowed)
+						if (overflowedOrSpuriousInterrupts)
 						{
 							++numOverflows;
 						}

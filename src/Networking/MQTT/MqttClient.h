@@ -36,7 +36,7 @@ public:
 	bool Spin() noexcept override;
 	bool Accept(Socket *s) noexcept override;
 	void Terminate() noexcept override;
-	void Diagnostics(MessageType mtype) const noexcept override;
+	void Diagnostics(const StringRef& reply) const noexcept override;
 	bool HandlesProtocol(NetworkProtocol p) noexcept override;
 
 	static void SetInterface(unsigned int interface) { interfaceNum = interface; }

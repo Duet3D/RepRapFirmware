@@ -192,7 +192,7 @@ IPAddress NetworkResponder::GetRemoteIP() const noexcept
 	return (skt == nullptr) ? IPAddress() : skt->GetRemoteIP();
 }
 
-void NetworkResponder::ReportOutputBufferExhaustion(const char *_ecv_array sourceFile, int line) noexcept
+/*static */void NetworkResponder::ReportOutputBufferExhaustion(const char *_ecv_array sourceFile, int line) noexcept
 {
 	if (reprap.Debug(Module::Webserver))
 	{

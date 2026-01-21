@@ -51,9 +51,12 @@ public:
  	void Init() noexcept;
 	void Spin() noexcept;
 	void Exit() noexcept;
-	void Diagnostics(MessageType mtype) noexcept;
+
+	void Diagnostics(MessageType mtype, const StringRef& reply) noexcept;
+	unsigned int GetNumberOfDiagnosticParts() const noexcept;
+	void GetDiagnosticsPart(unsigned int partNumber, const StringRef& reply) noexcept;
 	void DeferredDiagnostics(MessageType mtype) noexcept { diagnosticsDestination = mtype; }
-	void Timing(MessageType mtype) noexcept;
+	void Timing(const StringRef& reply) noexcept;
 
 	bool Debug(Module module) const noexcept { return debugMaps[module.ToBaseType()].IsNonEmpty(); }
 	DebugFlags GetDebugFlags(Module m) const noexcept { return debugMaps[m.ToBaseType()]; }
@@ -75,6 +78,7 @@ public:
 	FansManager& GetFansManager() const noexcept { return *fansManager; }
 
 	GCodeResult ProcessM111(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	void ReportDebugSettings(const StringRef& reply) noexcept;
 
 	// Message box functions
 	uint32_t SendAlert(MessageType mt, c_string p_message, c_string title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits = nullptr) noexcept;
@@ -100,23 +104,27 @@ public:
 #if SUPPORT_REMOTE_COMMANDS
  	void ScheduleReset() noexcept { whenDeferredCommandScheduled = millis(); deferredCommand = DeferredCommand::reboot; }
  	void ScheduleFirmwareUpdateOverCan() noexcept { whenDeferredCommandScheduled = millis(); deferredCommand = DeferredCommand::updateFirmware; }
+	GCodeResult ProcessRemoteM111(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 #endif
 
 	void Tick() noexcept;
 	bool SpinTimeoutImminent() const noexcept;
 	bool IsStopped() const noexcept;
 
+#if 0	// removed because we ran out of flash memory on Duet 2
 	OutputBuffer *_ecv_null GetStatusResponse(uint8_t type, ResponseSource source) const noexcept;
 	OutputBuffer *_ecv_null GetConfigResponse() noexcept;
+#endif
+
 	OutputBuffer *_ecv_null GetLegacyStatusResponse(uint8_t type, int seq) const noexcept;
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	OutputBuffer *_ecv_null GetFilesResponse(c_string dir, unsigned int startAt, int maxItems, bool flagsDirs) noexcept;
-	OutputBuffer *_ecv_null GetFilelistResponse(c_string dir, unsigned int startAt, int maxItems) noexcept;
-	OutputBuffer *_ecv_null GetThumbnailResponse(c_string filename, FilePosition offset, bool forM31point1) noexcept;
+	OutputBuffer *_ecv_null GetFilesResponse(const GCodeBuffer *_ecv_null gb, c_string dir, unsigned int startAt, int maxItems, bool flagsDirs) noexcept;
+	OutputBuffer *_ecv_null GetFilelistResponse(const GCodeBuffer *_ecv_null gb, c_string dir, unsigned int startAt, int maxItems) noexcept;
+	OutputBuffer *_ecv_null GetFileFragment(const GCodeBuffer *_ecv_null gb, c_string filename, FilePosition offset, bool forM36point1or2, bool isThumbnail) noexcept;
 #endif
 
-	GCodeResult GetFileInfoResponse(c_string _ecv_null filename, OutputBuffer *_ecv_null &response, bool quitEarly) noexcept;
+	GCodeResult GetFileInfoResponse(const GCodeBuffer *_ecv_null gb, c_string _ecv_null filename, OutputBuffer *_ecv_null &response, bool quitEarly) noexcept;
 	OutputBuffer *GetModelResponse(const GCodeBuffer *_ecv_null gb, c_string _ecv_null key, c_string _ecv_null flags) const THROWS(GCodeException);
 	Mutex& GetObjectModelReportMutex() noexcept { return objectModelReportMutex; }
 
@@ -136,9 +144,9 @@ public:
 	void ReportInternalError(c_string file, c_string func, int line) const noexcept;	// report an internal error
 
 	static uint32_t DoDivide(uint32_t a, uint32_t b) noexcept;			// helper function for diagnostic tests
+	static void DoMemoryLeak() noexcept;								// helper function for diagnostic tests
 	static void GenerateBusFault() noexcept;							// helper function for diagnostic tests
 	static float SinfCosf(float angle) noexcept;						// helper function for diagnostic tests
-	static float FastSqrtf(float f) noexcept;							// helper function for diagnostic tests
 
 	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
 
@@ -164,6 +172,8 @@ public:
 	ReadLockedPointer<const VariableSet> GetGlobalVariablesForReading() noexcept { return globalVariables.GetForReading(); }
 	WriteLockedPointer<VariableSet> GetGlobalVariablesForWriting() noexcept { return globalVariables.GetForWriting(); }
 
+	static void StartJsonResponse(const GCodeBuffer *_ecv_null gb, OutputBuffer *outbuf) noexcept;
+
 	static constexpr uint16_t DefaultDebugFlags = 0x00FF;
 
 protected:
@@ -172,6 +182,7 @@ protected:
 	ReadWriteLock *_ecv_null GetObjectLock(unsigned int tableNumber) const noexcept override;
 
 private:
+	__attribute__((noinline)) void GenerateDeferredDiagnostics(MessageType destination) noexcept;
 
 #ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
 	struct DebugLogRecord
@@ -242,7 +253,7 @@ private:
 	uint16_t heatTaskIdleTicks;
 	uint32_t fastLoop, slowLoop;
 
-	DebugFlags debugMaps[NumRealModules];
+	DebugFlags debugMaps[Module::numModules];
 
 #ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
 	DebugLogRecord debugRecords[NumDebugRecords];

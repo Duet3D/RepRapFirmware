@@ -433,7 +433,7 @@ DataTransfer::DataTransfer() noexcept : state(InternalTransferState::ExchangingD
 void DataTransfer::Init() noexcept
 {
 	// Initialise transfer ready pin
-	pinMode(SbcTfrReadyPin, OUTPUT_LOW);
+	SetPinMode(SbcTfrReadyPin, OUTPUT_LOW);
 
 	// Allocate buffers in SBC mode
 #if HAS_LWIP_NETWORKING
@@ -525,11 +525,11 @@ void DataTransfer::InitFromTask() noexcept
 	sbcTaskHandle = TaskBase::GetCallerTaskHandle();
 }
 
-void DataTransfer::Diagnostics(MessageType mtype) noexcept
+void DataTransfer::Diagnostics(const StringRef& reply) noexcept
 {
-	reprap.GetPlatform().MessageF(mtype, "Transfer state: %d, failed transfers: %u, checksum errors: %u\n", (int)state, failedTransfers, checksumErrors);
-	reprap.GetPlatform().MessageF(mtype, "RX/TX seq numbers: %d/%d\n", (int)rxHeader.sequenceNumber, (int)txHeader.sequenceNumber);
-	reprap.GetPlatform().MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
+	reply.lcatf("Transfer state: %d, failed transfers: %u, checksum errors: %u", (int)state, failedTransfers, checksumErrors);
+	reply.lcatf("RX/TX seq numbers: %d/%d", (int)rxHeader.sequenceNumber, (int)txHeader.sequenceNumber);
+	reply.lcatf("SPI underruns %u, overruns %u", spiTxUnderruns, spiRxOverruns);
 }
 
 const PacketHeader *DataTransfer::ReadPacket() noexcept
@@ -1281,7 +1281,7 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 		break;
 	case TypeCode::DriverId_tc:
 		header->dataType = DataType::DriverId_dt;
-		header->uintValue = value.uVal;
+		header->uintValue = (value.param << 16) | value.uVal;
 		break;
 	case TypeCode::Uint32:
 		header->dataType = DataType::UInt;

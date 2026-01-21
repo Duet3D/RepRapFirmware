@@ -30,8 +30,8 @@ Licence: GPL
 #include <climits>		// for CHAR_BIT
 
 #include <ctime>
-[[deprecated("use gmtime_r instead for thread-safety")]] tm *_ecv_null gmtime(const time_t* t) noexcept;
-[[deprecated("use SafeStrptime instead")]] char *_ecv_array strptime (const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept;
+[[deprecated("use gmtime_r instead for thread-safety")]] tm *_ecv_null gmtime(const time_t* t);
+[[deprecated("use SafeStrptime instead")]] char *_ecv_array strptime (const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr);
 const char *_ecv_array _ecv_null SafeStrptime(const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept;
 
 #include <Core.h>
@@ -81,6 +81,7 @@ enum class PinAccess : int
 {
 	read,
 	readWithPullup_InternalUseOnly,
+	readNoDebounce,
 	readAnalog,
 	write0,
 	write1,
@@ -332,11 +333,10 @@ NamedEnum(Module, uint8_t,
 			SbcInterface,
 			CAN,					// uppercase to avoid eCv clash with type Can in Microchip driver file
 			Expansion,
-			none					// make this one last so that it is the number of real modules, one greater than the last real module number
+			numModules				// this is one greater than the last real module number and also serves as 'none'
 		 );
 
 static_assert(Module::NumValues < 32);
-constexpr size_t NumRealModules = Module::NumValues - 1;
 
 // Warn of what's to come, so we can use pointers and references to classes without including the entire header files
 class Network;
@@ -412,20 +412,28 @@ typedef float floatc_t;								// type of matrix element used for calibration
 #endif
 
 #if SUPPORT_CAN_EXPANSION
+
+# include <Duet3Common.h>
+
 typedef Bitmap<uint32_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
 typedef Bitmap<uint32_t> ExtrudersBitmap;			// Type of a bitmap representing a set of extruder drive numbers
 typedef Bitmap<uint32_t> LogicalDrivesBitmap;		// Type of a bitmap representing a set of logical drives i.e. motor sets
 typedef Bitmap<uint64_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
+
 #else
+
+typedef Bitmap<uint16_t> HeatersBitmap;
+typedef Bitmap<uint16_t> FansBitmap;
+typedef Bitmap<uint32_t> SensorsBitmap;
+typedef Bitmap<uint16_t> LocalDriversBitmap;
+
 typedef Bitmap<uint16_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
 typedef Bitmap<uint16_t> ExtrudersBitmap;			// Type of a bitmap representing a set of extruder drive numbers
 typedef Bitmap<uint16_t> LogicalDrivesBitmap;		// Type of a bitmap representing a set of logical drives i.e. motor sets
 typedef Bitmap<uint32_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
+
 #endif
 
-typedef Bitmap<uint16_t> LocalDriversBitmap;		// Type of a bitmap representing a set of local driver numbers
-typedef Bitmap<uint32_t> FansBitmap;				// Type of a bitmap representing a set of fan numbers
-typedef Bitmap<uint32_t> HeatersBitmap;				// Type of a bitmap representing a set of heater numbers
 typedef Bitmap<uint32_t> TriggerNumbersBitmap;		// Type of a bitmap representing a set of trigger numbers
 typedef Bitmap<uint64_t> ToolNumbersBitmap;			// Type of a bitmap representing a set of tool numbers
 
@@ -437,18 +445,13 @@ typedef Bitmap<uint32_t> ParameterLettersBitmap;	// Type of a bitmap representin
 constexpr char HighestAxisLetter = 'f';
 #endif
 
-#if SUPPORT_CAN_EXPANSION
-typedef Bitmap<uint64_t> SensorsBitmap;
-#else
-typedef Bitmap<uint32_t> SensorsBitmap;
-#endif
-
 static_assert(MaxAxesPlusExtruders <= AxesBitmap::MaxBits());
 static_assert(MaxAxesPlusExtruders <= LogicalDrivesBitmap::MaxBits());
 static_assert(MaxExtruders <= ExtrudersBitmap::MaxBits());
-static_assert(MaxFans <= FansBitmap::MaxBits());
-static_assert(MaxHeaters <= HeatersBitmap::MaxBits());
 static_assert(NumDirectDrivers <= LocalDriversBitmap::MaxBits());
+static_assert(MaxHeaters <= HeatersBitmap::MaxBits());
+static_assert(MaxFans <= FansBitmap::MaxBits());
+static_assert(MaxSensors <= SensorsBitmap::MaxBits());
 static_assert(MaxSensors <= SensorsBitmap::MaxBits());
 static_assert(MaxGpInPorts <= InputPortsBitmap::MaxBits());
 static_assert(MaxTriggers <= TriggerNumbersBitmap::MaxBits());
@@ -490,7 +493,7 @@ union LaserPwmOrIoBits
 
 #if SUPPORT_LASER
 
-// Data stored in the MovemetState and in a RestorePoint to handle laser pixel clusters
+// Data stored in the MovementState and in a RestorePoint to handle laser pixel clusters
 struct LaserPixelData
 {
 	size_t numPixels;
@@ -599,6 +602,14 @@ template <typename T, typename T2> void ReplaceObject(T *null & ptr, T2* pNew) n
 	delete p2;
 }
 
+// Functions to return and reset non-atomic values. Do not use on std::atomic<T> values.
+template<typename T> T Exchange(T& var, T newValue) noexcept
+{
+	const T ret = var;
+	var = newValue;
+	return ret;
+}
+
 // Common definitions used by more than one module
 
 constexpr size_t XY_AXES = 2;										// The number of Cartesian axes
@@ -644,6 +655,21 @@ constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2, PCCB 
 
 constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
 constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
+constexpr float StepClocksToSeconds = 1.0/(float)StepClockRate;
+
+// Convert milliseconds to step clocks
+static inline constexpr uint32_t MillisToStepClocks(uint32_t numMillis) noexcept
+{
+	if constexpr (StepClockRate % 1000 == 0)
+	{
+		return numMillis * (StepClockRate/1000);			// this works for Duet 3, step clock rate is 750kHz
+	}
+	if constexpr (StepClockRate % 500 == 0)
+	{
+		return (numMillis * (StepClockRate/500))/2;			// this works for Duet 2, step clock rate is 937500Hz
+	}
+	return (numMillis * (uint64_t)StepClockRate)/1000;		// catch-all in case of using other step clock rates
+}
 
 // Convert microseconds to step clocks, rounding up to the next step clock
 static inline constexpr uint32_t MicrosecondsToStepClocks(float us) noexcept
@@ -734,16 +760,19 @@ const NvicPriority NvicPriorityWiFiUart = 3;		// UART used to receive debug data
 const NvicPriority NvicPriorityCan = 4;				// CAN interface
 const NvicPriority NvicPriorityPins = 4;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const NvicPriority NvicPriorityDriversSerialTMC = 4; // USART or UART used to control and monitor the smart drivers
+
+// We used to set the end-of-dma interrupt priority to 7 but that results in too many TMC driver transfer timeouts on the MB6HC.
+// I tried setting it to 4 but that breaks the DMA somehow, looks like the motor currents don't get set properly.
+const NvicPriority NvicPriorityDMA = 5;				// end-of-DMA interrupt, used on the SAME70 by TMC2160 drivers and HSMCI
 const NvicPriority NvicPriorityStep = 5;			// step interrupt is next highest, it can preempt most other interrupts
+
 const NvicPriority NvicPriorityUSB = 6;				// USB interrupt
 const NvicPriority NvicPriorityHSMCI = 6;			// HSMCI command complete interrupt
 
 # if HAS_LWIP_NETWORKING
-const NvicPriority NvicPriorityNetworkTick = 7;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
 const NvicPriority NvicPriorityEthernet = 7;		// priority for Ethernet interface
 # endif
 
-const NvicPriority NvicPriorityDMA = 7;				// end-of-DMA interrupt used by TMC drivers and HSMCI
 const NvicPriority NvicPrioritySpi = 7;				// SPI is used for network transfers on Duet WiFi/Duet Ethernet and for SBC transfers
 
 #elif __NVIC_PRIO_BITS >= 4
@@ -763,7 +792,6 @@ const NvicPriority NvicPriorityUSB = 7;				// USB interrupt
 const NvicPriority NvicPriorityHSMCI = 7;			// HSMCI command complete interrupt
 
 # if HAS_LWIP_NETWORKING
-const NvicPriority NvicPriorityNetworkTick = 8;		// priority for network tick interrupt (to be replaced by a FreeRTOS task)
 const NvicPriority NvicPriorityEthernet = 8;		// priority for Ethernet interface
 # endif
 

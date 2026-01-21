@@ -25,7 +25,7 @@ unsigned int RemoteHeater::tuningCyclesDone;
 bool RemoteHeater::newTuningResult = false;
 
 RemoteHeater::RemoteHeater(unsigned int num, CanAddress board) noexcept
-	: Heater(num), boardAddress(board), lastMode(HeaterMode::offline), averagePwm(0), tuningState(TuningState::notTuning), lastTemperature(0.0), whenLastStatusReceived(0)
+	: Heater(num), boardAddress(board), lastMode(HeaterMode::offline), averagePwm(0), tuningState(TuningState::notTuning), lastTemperature(0.0), previousExtrusionTemperatureBoost(0.0), whenLastStatusReceived(0)
 {
 }
 
@@ -197,6 +197,7 @@ void RemoteHeater::Spin() noexcept
 void RemoteHeater::ResetHeater() noexcept
 {
 	Heater::ResetHeater();
+	previousExtrusionTemperatureBoost = 0.0;
 }
 
 GCodeResult RemoteHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply)
@@ -248,6 +249,7 @@ void RemoteHeater::SwitchOff() noexcept
 		}
 	}
 	Heater::SwitchOff();
+	previousExtrusionTemperatureBoost = 0.0;
 }
 
 GCodeResult RemoteHeater::ResetFault(const StringRef& reply) noexcept
@@ -338,12 +340,12 @@ void RemoteHeater::SetFanFeedForwardPwm(float pwm) noexcept
 	}
 }
 
-void RemoteHeater::SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept
+void RemoteHeater::ApplyExtrusionFeedForward() noexcept
 {
-	if (pwmBoost != lastExtrusionPwmBoost || tempBoost != extrusionTemperatureBoost)
+	if (extrusionPwmBoost != previousExtrusionPwmBoost || extrusionTemperatureBoost != previousExtrusionTemperatureBoost)
 	{
-		lastExtrusionPwmBoost = pwmBoost;
-		extrusionTemperatureBoost = tempBoost;
+		previousExtrusionPwmBoost = extrusionPwmBoost;
+		previousExtrusionTemperatureBoost = extrusionTemperatureBoost;
 		UpdateFeedForward();
 	}
 }
@@ -356,7 +358,7 @@ void RemoteHeater::UpdateFeedForward() noexcept
 	auto msg = buf.SetupRequestMessageNoRid<CanMessageHeaterFeedForwardNew>(CanInterface::GetCanAddress(), boardAddress);
 	msg->heaterNumber = GetHeaterNumber();
 	msg->fanPwmFraction = lastFanPwm;
-	msg->extrusionPwmBoost = lastExtrusionPwmBoost;
+	msg->extrusionPwmBoost = extrusionPwmBoost;
 	msg->extrusionTemperatureBoost = extrusionTemperatureBoost;
 	CanInterface::SendMessageNoReplyNoFree(&buf);
 }

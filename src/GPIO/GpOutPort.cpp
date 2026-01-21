@@ -53,6 +53,15 @@ bool GpOutputPort::IsUnused() const noexcept
 		!port.IsValid();
 }
 
+#if SUPPORT_CAN_EXPANSION
+
+bool GpOutputPort::IsLocal() const noexcept
+{
+	return boardAddress == CanInterface::GetCanAddress();
+}
+
+#endif
+
 GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
 	PwmFrequency freq = 0;
@@ -173,6 +182,30 @@ GCodeResult GpOutputPort::WriteAnalog(uint32_t gpioPortNumber, bool isServo, flo
 	return GCodeResult::ok;
 }
 
+void GpOutputPort::WriteAnalog(float pwm) noexcept
+{
+#if SUPPORT_CAN_EXPANSION
+	if (boardAddress == CanInterface::GetCanAddress())
+#endif
+	{
+		lastPwm = pwm;
+		port.WriteAnalog(pwm);
+	}
+}
+
+// Set the output low or high. Called by PortControl, only supported on local ports.
+void GpOutputPort::WriteDigital(bool value) noexcept
+{
+	lastPwm = (value) ? 1.0 : 0.0;
+#if SUPPORT_CAN_EXPANSION
+	if (boardAddress != CanInterface::GetCanAddress())
+	{
+		return;
+	}
+#endif
+	port.WriteAnalog(lastPwm);				// we must use WriteAnalog here because WriteDigital doesn't work on Duet 2 PWM ports
+}
+
 #if SUPPORT_REMOTE_COMMANDS
 
 GCodeResult GpOutputPort::AssignFromRemote(uint32_t gpioPortNumber, const CanMessageGenericParser& parser, const StringRef& reply) noexcept
@@ -221,15 +254,6 @@ GCodeResult GpOutputPort::AssignFromRemote(uint32_t gpioPortNumber, const CanMes
 			port.AppendFullDetails(reply);
 		}
 		return GCodeResult::ok;
-	}
-}
-
-void GpOutputPort::WriteAnalog(float pwm) noexcept
-{
-	if (boardAddress == CanInterface::GetCanAddress())
-	{
-		lastPwm = pwm;
-		port.WriteAnalog(pwm);
 	}
 }
 

@@ -55,6 +55,9 @@ public:
 	// Get the current tick count
 	static Ticks GetTimerTicks() noexcept SPEED_CRITICAL;
 
+	// Get the current tick count when we know that interrupts are disabled
+	static Ticks GetTimerTicksWhenInterruptsDisabled() noexcept SPEED_CRITICAL;
+
 	// Get the current tick count, adjusted for the movement delay
 	static Ticks GetMovementTimerTicks() noexcept SPEED_CRITICAL;
 
@@ -67,7 +70,7 @@ public:
 	// Get the tick rate (can also access it directly as StepClockRate)
 	static constexpr uint32_t GetTickRate() noexcept { return StepClockRate; }
 
-	// Add more movement delay
+	// Add more movement delay. Called from our step ISR when we can't keep up.
 	static void IncreaseMovementDelay(uint32_t increase) noexcept;
 
 	// Return the current movement delay
@@ -102,9 +105,7 @@ public:
 	static float TicksToFloatMicroseconds(uint32_t n) noexcept { return (float)n * (1000000.0f/(float)StepClockRate); }
 
 #if SUPPORT_REMOTE_COMMANDS
-	static uint32_t GetLocalTimeOffset() noexcept { return localTimeOffset; }
 	static void ProcessTimeSyncMessage(const CanMessageTimeSync& msg, size_t msgLen, uint16_t timeStamp) noexcept;
-	static uint32_t ConvertToLocalTime(uint32_t masterTime) noexcept { return masterTime + localTimeOffset; }
 	static uint32_t ConvertToMasterTime(uint32_t localTime) noexcept { return localTime - localTimeOffset; }
 	static uint32_t GetMasterTime() noexcept { return ConvertToMasterTime(GetTimerTicks()); }
 
@@ -122,7 +123,7 @@ private:
 
 #if SUPPORT_CAN_EXPANSION
 	static uint32_t ownMovementDelay;											// the amount of movement delay requested by this board
-	static bool movementDelayIncreased;											// true if movement delay has increased and we haven't yet broadcast that
+	static bool ownMovementDelayIncreased;										// true if have introduced more movement delay and not broadcast it (if in master mode) or requested it (if in expansion mode)
 #endif
 
 	StepTimer *_ecv_null next;
@@ -131,14 +132,15 @@ private:
 	CallbackParameter cbParam;
 	volatile bool active;
 
-	static StepTimer *_ecv_null volatile pendingList;									// list of pending callbacks, soonest first
+	static StepTimer *_ecv_null volatile pendingList;							// list of pending callbacks, soonest first
 
 #if SUPPORT_REMOTE_COMMANDS
-	static volatile uint32_t localTimeOffset;									// local time minus master time
+	static volatile uint32_t localTimeOffset;									// local time minus master time, always zero if we are running in master mode
 	static volatile uint32_t whenLastSynced;									// the millis tick count when we last synced
 	static uint32_t prevMasterTime;												// the previous master time received
 	static uint32_t prevLocalTime;												// the previous local time when the master time was received, corrected for receive processing delay
 	static int32_t peakPosJitter, peakNegJitter;								// the max and min corrections we made to local time offset while synced
+	static int32_t errorAccumulator;												// the average time sync error
 	static bool gotJitter;														// true if we have recorded the jitter
 	static uint32_t peakReceiveDelay;											// the maximum receive delay we measured by using the receive time stamp
 	static volatile unsigned int syncCount;										// the number of messages we have received since starting sync
@@ -149,22 +151,28 @@ private:
 #endif
 };
 
-// Function GetTimerTicks() is quite long for SAM4S and SAME70 processors, so it is moved to StepTimer.cpp and no longer inlined
-#if !(SAM4S || SAME70 || SAME5x)
+// Function GetTimerTicks() is very short on SAM4E processors so we inline it
+#if SAM4E
 
 inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
 {
 	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
 }
 
+inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicksWhenInterruptsDisabled() noexcept
+{
+	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
+}
+
 #endif
 
+// Sometimes we only need the lowest 16 bits of the step timer. On some processors this is faster than reading all 32 bits.
 inline __attribute__((always_inline)) uint16_t StepTimer::GetTimerTicks16() noexcept
 {
-#if SAME5x
-	return (uint16_t)GetTimerTicks();
-#else
+#if SAME70 || SAM4S
 	return (uint16_t)STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
+#else
+	return (uint16_t)GetTimerTicks();
 #endif
 }
 
@@ -174,20 +182,24 @@ inline void StepTimer::IncreaseMovementDelay(uint32_t increase) noexcept
 	movementDelay += increase;
 #if SUPPORT_CAN_EXPANSION
 	ownMovementDelay += increase;
-	movementDelayIncreased = true;
+	ownMovementDelayIncreased = true;
+#endif
+}
+
+// Convert local time to movement time
+inline StepTimer::Ticks StepTimer::ConvertLocalToMovementTime(Ticks localTime) noexcept
+{
+#if SUPPORT_REMOTE_COMMANDS
+	return localTime - (movementDelay + localTimeOffset);
+#else
+	return localTime - movementDelay;
 #endif
 }
 
 // Get the current tick count
 inline StepTimer::Ticks StepTimer::GetMovementTimerTicks() noexcept
 {
-	return GetTimerTicks() - movementDelay;
-}
-
-// Convert local time to movement time
-inline StepTimer::Ticks StepTimer::ConvertLocalToMovementTime(Ticks localTime) noexcept
-{
-	return localTime - movementDelay;
+	return ConvertLocalToMovementTime(GetTimerTicks());
 }
 
 #if SUPPORT_CAN_EXPANSION
@@ -196,9 +208,9 @@ inline StepTimer::Ticks StepTimer::ConvertLocalToMovementTime(Ticks localTime) n
 inline StepTimer::Ticks StepTimer::CheckMovementDelayIncreased() noexcept
 {
 	AtomicCriticalSectionLocker lock;
-	if (movementDelayIncreased)
+	if (ownMovementDelayIncreased)
 	{
-		movementDelayIncreased = false;
+		ownMovementDelayIncreased = false;
 		return movementDelay;
 	}
 	return 0;
@@ -212,7 +224,7 @@ inline StepTimer::Ticks StepTimer::CheckMovementDelayIncreased() noexcept
 // We leave the movementDelayIncreased flag set until the main board acknowledges the increased movement delay.
 inline StepTimer::Ticks StepTimer::CheckMovementDelayIncreasedNoClear() noexcept
 {
-	return (movementDelayIncreased) ? movementDelay : 0;
+	return (ownMovementDelayIncreased) ? movementDelay : 0;
 }
 
 #endif

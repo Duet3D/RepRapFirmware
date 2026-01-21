@@ -42,7 +42,7 @@ namespace Heap
 	void DeleteSlot(IndexSlot *slotPtr) noexcept;
 	void GarbageCollect() noexcept;
 	bool CheckIntegrity(const StringRef& errmsg) noexcept;
-	void Diagnostics(MessageType mt, Platform& p) noexcept;
+	void Diagnostics(const StringRef& reply, Platform& p) noexcept;
 
 	extern ReadWriteLock heapLock;
 }

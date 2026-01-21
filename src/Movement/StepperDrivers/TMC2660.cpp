@@ -434,7 +434,7 @@ void TmcDriverState::Init(uint8_t p_driverNumber, Pin p_pin) noexcept
 	logicalDriveNumber = driverNumber = p_driverNumber;								// assume straight through mapping at initialisation
 	driverBit = LocalDriversBitmap::MakeFromBits(p_driverNumber);
 	pin = p_pin;
-	pinMode(pin, OUTPUT_HIGH);
+	SetPinMode(pin, OUTPUT_HIGH);
 	enabled = false;
 	registers[DriveControl] = defaultDrvCtrlReg;
 	configuredChopConfReg = defaultChopConfReg;
@@ -740,9 +740,9 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const noexcep
 // Check that stall detection can occur at the specified speed
 const char *_ecv_array _ecv_null TmcDriverState::CheckStallDetectionEnabled(float speed) noexcept
 {
-	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor) * 1.2)
+	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor))
 	{
-		return "move is too slow for driver %u to detect stall";
+		return "move is too slow for driver %u to detect stall (increase speed or reduce M915 H parameter)";
 	}
 	return nullptr;
 }
@@ -912,7 +912,7 @@ void SmartDrivers::Init(const Pin driverSelectPins[NumDirectDrivers], size_t num
 	numTmc2660Drivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
 
 	// Make sure the ENN pins are high
-	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
 
 	// The pins are already set up for SPI in the pins table
 	SetPinFunction(TMC2660MosiPin, TMC2660PeriphMode);

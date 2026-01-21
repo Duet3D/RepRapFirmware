@@ -99,18 +99,6 @@ struct NonlinearExtrusion
 
 #endif
 
-// Collection of data reported to help debug step errors
-struct StepErrorDetails
-{
-	uint32_t executingStartTime;
-	uint32_t executingDuration;
-	uint32_t newSegmentStartTime;
-	uint32_t timeNow;
-	float extra;
-	uint8_t stepErrorType;
-	uint8_t drive;
-};
-
 // This is the master movement class.  It controls all movement in the machine.
 class Move final INHERIT_OBJECT_MODEL
 {
@@ -140,6 +128,9 @@ public:
 	void EmergencyDisableDrivers() noexcept;
 	void SetDriversIdle() noexcept;
 
+	GCodeResult ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException);	// Deal with M569 for one local driver
+	GCodeResult ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
+		pre(drive < GetNumActualDirectDrivers());														// Deal with M569.0 for one local driver
 	GCodeResult ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) THROWS(GCodeException)
 		pre(driver < GetNumActualDirectDrivers());
 	GCodeResult SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply) noexcept;
@@ -171,6 +162,7 @@ public:
 	float Acceleration(size_t axisOrExtruder, bool reduced) const noexcept;
 	const float *_ecv_array Accelerations(bool reduced) const noexcept { return (reduced) ? reducedAccelerations : normalAccelerations; }
 	void SetAcceleration(size_t axisOrExtruder, float value, bool reduced) noexcept;
+
 	float MaxFeedrate(size_t axisOrExtruder) const noexcept;
 	const float *_ecv_array MaxFeedrates() const noexcept { return maxFeedrates; }
 	void SetMaxFeedrate(size_t axisOrExtruder, float value) noexcept;
@@ -189,8 +181,10 @@ public:
 
 	GCodeResult ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M425
 	void UpdateBacklashSteps() noexcept;
-	int32_t ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept;
+	int32_t ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
+		pre(drive < MaxAxes);
 	uint32_t GetBacklashCorrectionDistanceFactor() const noexcept { return backlashCorrectionDistanceFactor; }
+	int32_t GetCurrentBacklashSteps(size_t drive) const noexcept { return (drive < MaxAxes) ? currentBacklashSteps[drive] : 0; }
 
 	inline AxesBitmap GetLinearAxes() const noexcept { return linearAxes; }
 	inline AxesBitmap GetRotationalAxes() const noexcept { return rotationalAxes; }
@@ -246,8 +240,6 @@ public:
 	float DriveStepsPerMm(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return driveStepsPerMm[axisOrExtruder]; }
 	float SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept pre(axisOrExtruder < MaxAxesPlusExtruders);
 
-	void SetAsExtruder(size_t drive, bool isExtruder) noexcept pre(drive < MaxAxesPlusExtruders) { dms[drive].SetAsExtruder(isExtruder); }
-
 	bool SetMicrostepping(size_t drive, unsigned int microsteps, bool mode, const StringRef& reply) noexcept pre(drive < MaxAxesPlusExtruders);
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation) const noexcept pre(drive < MaxAxesPlusExtruders);
 	unsigned int GetMicrostepping(size_t drive) const noexcept pre(drive < MaxAxesPlusExtruders) { return microstepping[drive] & 0x7FFF; }
@@ -279,8 +271,8 @@ public:
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, bool doBedCompensation, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetLiveMotorPosition(size_t driver) const noexcept pre(driver < MaxAxesPlusExtruders);
-	void SetMotorPosition(size_t drive, int32_t pos) noexcept pre(drive < MaxAxesPlusExtruders);
-	void SetMotorPositions(LogicalDrivesBitmap drives, const int32_t *positions) noexcept;
+	void SetMotorPosition(size_t drive, int32_t pos, bool clearBacklash) noexcept pre(drive < MaxAxesPlusExtruders);
+	void SetMotorPositions(LogicalDrivesBitmap drives, const int32_t *positions, bool clearBacklash) noexcept;
 
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
 	bool WaitingForAllMovesFinished(MovementSystemNumber msNumber
@@ -304,7 +296,7 @@ public:
 																			// Take a position and apply the bed and the axis-angle compensations
 	void InverseAxisAndBedTransform(float move[], const Tool *_ecv_null tool) const noexcept;
 																			// Go from a transformed point back to user coordinates
-	void SetZeroHeightError(const float coords[MaxAxes]) noexcept;			// Set zero height error at these bed coordinates
+	void SetZeroHeightError(const float coords[MaxAxes], const ZProbe *zp) noexcept;	// Set zero height error at these bed coordinates
 	float GetTaperHeight() const noexcept { return (useTaper) ? taperHeight : 0.0; }
 	void SetTaperHeight(float h) noexcept;
 	bool UseMesh(bool b) noexcept;											// Try to enable mesh bed compensation and report the final state
@@ -336,15 +328,9 @@ public:
 	GCodeResult EutProcessM915(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	void SendDriversStatus(CanMessageBuffer& buf) noexcept;
 
-	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
+	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;				// add a move to the movement queue when we are in expansion board mode
 	void StopDriversFromRemote(uint16_t whichDrives) noexcept;
 	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
-
-	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept				// add a move to the movement queue when we are in expansion board mode
-	{
-		rings[0].AddMoveFromRemote(msg);
-		MoveAvailable();
-	}
 
 	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutSetInputShaping(const CanMessageSetInputShapingNew& msg, size_t dataLength, const StringRef& reply) noexcept
@@ -354,24 +340,23 @@ public:
 
 	// Stall endstops
 	GCodeResult SetStallEndstopReporting(const CanMessageEnableStallEndstop& msg, const StringRef& reply) noexcept;
-
-	void AppendDiagnostics(const StringRef& reply) noexcept;
+	void SwitchToExpansionMode() noexcept { inExpansionMode = false; }						// we could consider terminating the Move task too
 #endif
 
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
 
 	// Functions called by DDA::Prepare to generate segments for executing DDAs
-	void AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags) noexcept;
+	void AddLinearSegments(size_t logicalDrive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags) noexcept;
 
 	bool AreDrivesStopped(LogicalDrivesBitmap drives) const noexcept;						// return true if none of the drives passed has any movement pending
 
-	void Diagnostics(MessageType mtype) noexcept;											// Report useful stuff
+	void Diagnostics(unsigned int part, const StringRef& reply) noexcept;					// Report useful stuff
 
 	// Kinematics and related functions
 	Kinematics &_ecv_from GetKinematics() const noexcept { return *kinematics; }
 	bool SetKinematics(KinematicsType k) noexcept;											// Set kinematics, return true if successful
-	bool CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const noexcept;
-																							// Convert Cartesian coordinates to delta motor coordinates, return true if successful
+	MovementError CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const noexcept;
+																							// Convert Cartesian coordinates to motor coordinates, return true if successful
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept;
 																							// Convert motor coordinates to machine coordinates
 	const char *_ecv_array GetGeometryString() const noexcept { return kinematics->GetName(true); }
@@ -448,28 +433,23 @@ public:
 #endif
 
 #if HAS_SMART_DRIVERS
-	uint32_t GetStepInterval(size_t drive, uint32_t microstepShift) const noexcept;			// Get the current step interval for this axis or extruder
+	uint32_t GetStepInterval(size_t drive, uint32_t microstepShift) const noexcept;				// Get the current step interval for this axis or extruder
 #endif
 
 #if SUPPORT_CLOSED_LOOP
-	bool EnableIfIdle(size_t driver) noexcept;										// if the driver is idle, enable it; return true if driver enabled on return
+	bool EnableIfIdle(size_t driver) noexcept;													// if the driver is idle, enable it; return true if driver enabled on return
 	void InvertCurrentMotorSteps(size_t driver) noexcept;
 #endif
 
 #if SUPPORT_PHASE_STEPPING
-	void ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config);							// configure Ka & Kv parameters for phase stepping
-	PhaseStepParams GetPhaseStepParams(size_t axisOrExtruder);
+	void ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config);	// configure Ka & Kv parameters for phase stepping
+	PhaseStepParams GetPhaseStepParams(size_t axisOrExtruder) const noexcept;
 	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
 	bool SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept;
-	StepMode GetStepMode(size_t axisOrExtruder) noexcept;
+	StepMode GetStepMode(size_t axisOrExtruder) const noexcept;
 	void ResetPhaseStepMonitoringVariables() noexcept;
 
 	void PhaseStepControlLoop() noexcept;
-#endif
-
-#if SUPPORT_S_CURVE
-	void UseSCurve(bool enable) noexcept { usingSCurve = enable; }
-	bool IsUsingSCurve() noexcept { return usingSCurve; }
 #endif
 
 	void Interrupt() noexcept;
@@ -481,7 +461,7 @@ public:
 	void CheckEndstops(bool executingMove) noexcept;
 #endif
 
-	int32_t MotorMovementToSteps(size_t drive, float coord) const noexcept;					// Convert a single motor position to number of steps
+	MovementError MotorMovementToSteps(size_t drive, float coord, int32_t& whereToStore) const noexcept;	// Convert a single motor position to number of steps
 	float MotorStepsToMovement(size_t drive, int32_t endpoint) const noexcept;				// Convert number of motor steps to motor position
 
 	void DeactivateDM(DriveMovement *dmToRemove) noexcept;									// remove a DM from the active list
@@ -491,11 +471,7 @@ public:
 #endif
 
 	// Movement error handling
-	void LogStepError(uint8_t type, uint8_t drive, float extra) noexcept;					// stop all movement because of a step error
-	StepErrorDetails GetStepErrorDetails() const noexcept { return stepErrorDetails; }
-	bool HasMovementError() const noexcept;
-	void ResetAfterError() noexcept;
-	void GenerateMovementErrorDebug() noexcept;
+	void StepErrorHalt() noexcept { hadStepError = true; }
 	void AddPrepareHiccup() noexcept { ++numPrepareHiccups; }
 
 	// We now use the laser task to take readings from scanning Z probes, so we always need it
@@ -504,13 +480,15 @@ public:
 	static void CreateLaserTask() noexcept;													// create the laser task if we haven't already
 	static void WakeLaserTask() noexcept;													// wake up the laser task, called at the start of a new move
 
-	static void WakeMoveTaskFromISR() noexcept;
+	void WakeMoveTaskFromISR() noexcept;
 	static const TaskBase *_ecv_from GetMoveTaskHandle() noexcept { return &moveTask; }
 
 	static void TimerCallback(CallbackParameter p) noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
+
+	size_t GetMaxElementsToReturn(const ObjectModelArrayTableEntry *entry, const ObjectExplorationContext& context) const noexcept override;
 
 private:
 	enum class MoveState : uint8_t
@@ -538,8 +516,8 @@ private:
 		float distancePerReading;
 		float accelDistance;
 		float decelStartDistance;
-		float acceleration;
-		float deceleration;
+		float acceleration;			// the acceleration at the start of this move, always positive
+		float deceleration;			// the acceleration at the end of this move, always negative
 		float initialSpeed;
 		float topSpeed;
 		uint32_t accelClocks;
@@ -548,14 +526,15 @@ private:
 	};
 #endif
 
-	MoveSegment *AddSegment(MoveSegment *list, uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a J_FORMAL_PARAMETER(j), MovementFlags moveFlags, motioncalc_t pressureAdvance) noexcept;
+	MoveSegment *AddSegment(MoveSegment *list, uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a,
+							 	 	 	 	 MovementFlags moveFlags, motioncalc_t pressureAdvanceClocksTimesDuration
+						  ) noexcept;
 
 	void BedTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept;						// Take a position and apply the bed compensations
 	void InverseBedTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept;				// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept;						// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept;				// Go from an axis transformed point back to user coordinates
 	float ComputeHeightCorrection(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept;			// Compute the height correction needed at a point, ignoring taper
-//	void SetNewPositionOfSomeAxes(const MovementState& ms, bool doBedCompensation, AxesBitmap axes) noexcept;	// Set the current position to be this
 	void GetLiveMachineCoordinates(float coords[MaxAxes]) const noexcept;										// Get the current machine coordinates, independently of the above functions, so not affected by other tasks calling them
 
 	const char *_ecv_array GetCompensationTypeString() const noexcept;
@@ -591,9 +570,10 @@ private:
 	void DisengageBrake(size_t driver) noexcept;
 
 	void UpdateMotorCurrent(size_t driver, float current) noexcept;
-	void SetOneDriverDirection(uint8_t driver, bool direction) noexcept pre(driver < NumDirectDrivers);
+	void SetOneDriverDirection(uint8_t driver, bool direction) noexcept pre(driver < GetNumActualDirectDrivers());
 
 	StandardDriverStatus GetLocalDriverStatus(size_t driver) const noexcept;
+	void ReportM569Parameters(size_t drive, const StringRef& reply) noexcept pre(driver < GetNumActualDirectDrivers());
 
 #if defined(DUET3_MB6XD)
 	void UpdateDriverTimings() noexcept;
@@ -635,17 +615,14 @@ private:
 	DriveMovement *_ecv_null activeDMs;
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	DriveMovement *_ecv_null phaseStepDMs;
+	float phaseStepMultiplier[MaxAxesPlusExtruders];				// the negative of the reciprocal of the microstepping of each drive
 
 	// These variables monitor how fast the phase stepping control loop is running etc.
-	StepTimer::Ticks prevPSControlLoopCallTime;			// The last time the control loop was called
+	StepTimer::Ticks prevPSControlLoopCallTime;				// The last time the control loop was called
 	StepTimer::Ticks minPSControlLoopRuntime;				// The minimum time the control loop has taken to run
 	StepTimer::Ticks maxPSControlLoopRuntime;				// The maximum time the control loop has taken to run
-	StepTimer::Ticks minPSControlLoopCallInterval;		// The minimum interval between the control loop being called
-	StepTimer::Ticks maxPSControlLoopCallInterval;		// The maximum interval between the control loop being called
-#endif
-
-#if SUPPORT_S_CURVE
-	bool usingSCurve = false;
+	StepTimer::Ticks minPSControlLoopCallInterval;			// The minimum interval between the control loop being called
+	StepTimer::Ticks maxPSControlLoopCallInterval;			// The maximum interval between the control loop being called
 #endif
 
 #if SUPPORT_ASYNC_MOVES
@@ -736,7 +713,7 @@ private:
 	float normalAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for normal moves
 	float reducedAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for probing and stall detection moves
 	float printingInstantDvs[MaxAxesPlusExtruders];			// current max jerk in mm per step clock (changed by M205 and M206)
-	float maxInstantDvs[MaxAxesPlusExtruders];				// max jerk in mm per step clock (changed by M206 only)
+	float maxInstantDvs[MaxAxesPlusExtruders];				// max instant velocity change in mm per step clock (changed by M206 only)
 
 	AxisDriversConfig axisDrivers[MaxAxes];					// the driver numbers assigned to each axis
 	AxesBitmap linearAxes;									// axes that behave like linear axes w.r.t. feedrate handling
@@ -757,7 +734,8 @@ private:
 
 	// Backlash compensation system variables
 	uint32_t backlashSteps[MaxAxes];						// the backlash converted to microsteps
-	int32_t backlashStepsDue[MaxAxes];						// how many backlash compensation microsteps are due for each axis
+	int32_t targetBacklashSteps[MaxAxes];					// how many backlash compensation microsteps we need for each axis
+	int32_t currentBacklashSteps[MaxAxes];					// how many backlash compensation microsteps have already been done for each axis
 	LogicalDrivesBitmap lastDirections;						// each bit is set if the corresponding axes motor last moved backwards
 
 #if SUPPORT_NONLINEAR_EXTRUSION
@@ -770,7 +748,7 @@ private:
 	uint32_t stepPulseMinimumPeriodClocks;					// minimum period between leading edges of step pulses, in step clocks
 	uint32_t directionSetupClocks;							// minimum direction change to step high time, in step clocks
 	uint32_t directionHoldClocksFromLeadingEdge;			// minimum step high to direction low step clocks, calculated from the step low to direction change hold time
-	const Pin *ENABLE_PINS;									// 6XD version 0.1 uses different enable pins from version 1.0 and later
+	const Pin *DriverEnablePins;							// 6XD version 0.1 uses different enable pins from version 1.0 and later
 #else
 	uint32_t slowDriversBitmap;								// bitmap of driver port bits that need extended step pulse timing
 	uint32_t slowDriverStepTimingClocks[4];					// minimum step high, step low, dir setup and dir hold timing for slow drivers
@@ -785,13 +763,17 @@ private:
 
 	// Calibration and bed compensation
 	uint8_t numCalibratedFactors;
-	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
-	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
-	bool useTaper;										// True to taper off the compensation
+	bool bedLevellingMoveAvailable;							// True if a leadscrew adjustment move is pending
+	bool usingMesh;											// True if we are using the height map, false if we are using the random probe point set
+	bool useTaper;											// True to taper off the compensation
+
+	// Expansion mode control, tracks CanInterface::InExpansionMode()), duplicated here for faster access
+#if SUPPORT_REMOTE_COMMANDS
+	bool inExpansionMode = false;
+#endif
 
 	// Reporting of step errors
-	volatile StepErrorState stepErrorState = StepErrorState::noError;
-	StepErrorDetails stepErrorDetails;
+	volatile bool hadStepError = false;
 };
 
 //******************************************************************************************************
@@ -804,11 +786,6 @@ inline float Move::NormalAcceleration(size_t drive) const noexcept
 inline float Move::Acceleration(size_t drive, bool useReduced) const noexcept
 {
 	return (useReduced) ? min<float>(reducedAccelerations[drive], normalAccelerations[drive]) : normalAccelerations[drive];
-}
-
-inline void Move::SetAcceleration(size_t drive, float value, bool reduced) noexcept
-{
-	((reduced) ? reducedAccelerations : normalAccelerations)[drive] = max<float>(value, ConvertAcceleration(MinimumAcceleration));	// don't allow zero or negative
 }
 
 inline float Move::MaxFeedrate(size_t drive) const noexcept
@@ -980,27 +957,6 @@ inline void Move::InsertDM(DriveMovement *dm) noexcept
 	}
 	dm->nextDM = *dmp;
 	*dmp = dm;
-}
-
-inline void Move::LogStepError(uint8_t type, uint8_t drive, float extra) noexcept
-{
-	stepErrorDetails.stepErrorType = type;
-	stepErrorDetails.drive = drive;
-	stepErrorDetails.extra = extra;
-	stepErrorState = StepErrorState::haveError;
-}
-
-inline bool Move::HasMovementError() const noexcept
-{
-	return stepErrorState == StepErrorState::haveError;
-}
-
-inline void Move::ResetAfterError() noexcept
-{
-	if (HasMovementError())
-	{
-		stepErrorState = StepErrorState::resetting;
-	}
 }
 
 #if HAS_SMART_DRIVERS

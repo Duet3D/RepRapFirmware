@@ -533,22 +533,19 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear() noexcept
 }
 
 // Print diagnostic info for this sensor
-void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder) noexcept
+void RotatingMagnetFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
 {
-	String<StringLength256> buf;
-	buf.printf("Extruder %u: ", extruder);
-
+	reply.lcatf("Driver %u: ", GetDriver());
 	if (dataReceived)
 	{
-		buf.catf("pos %.2f", (double)(float)(sensorValue * (360.0/1024.0)));
+		reply.catf("pos %.2f", (double)(float)(sensorValue * (360.0/1024.0)));
 	}
 	else
 	{
-		buf.cat("no data received");
+		reply.cat("no data received");
 	}
-	buf.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32 "\n",
+	reply.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32,
 				framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
-	reprap.GetPlatform().Message(mtype, buf.c_str());
 }
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -666,22 +663,6 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 		}
 	}
 	return rslt;
-}
-
-// Print diagnostic info for this sensor
-void RotatingMagnetFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
-{
-	reply.lcatf("Driver %u: ", GetDriver());
-	if (dataReceived)
-	{
-		reply.catf("pos %.2f", (double)(float)(sensorValue * (360.0/1024.0)));
-	}
-	else
-	{
-		reply.cat("no data received");
-	}
-	reply.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32,
-				framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
 }
 
 #endif

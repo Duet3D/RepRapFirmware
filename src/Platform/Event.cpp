@@ -238,9 +238,9 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 }
 
 // Generate diagnostic data
-/*static*/ void Event::Diagnostics(MessageType mt, Platform& p) noexcept
+/*static*/ void Event::Diagnostics(const StringRef& reply, Platform& p) noexcept
 {
-	p.MessageF(mt, "Events: %u queued, %u completed\n", eventsQueued, eventsProcessed);
+	reply.lcatf("Events: %u queued, %u completed", eventsQueued, eventsProcessed);
 }
 
 // End

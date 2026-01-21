@@ -19,7 +19,7 @@
 const unsigned int MaxBuffersPerSocket = 4;
 
 W5500Socket::W5500Socket(NetworkInterface *_ecv_from iface) noexcept
-	: Socket(iface), receivedData(nullptr)
+	: Socket(iface), receivedData(nullptr), state(SocketState::disabled)
 {
 }
 

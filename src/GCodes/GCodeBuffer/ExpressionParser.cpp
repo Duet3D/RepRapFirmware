@@ -72,7 +72,7 @@ void LineReader::SkipTabsAndSpaces() noexcept
 
 // These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true, input);
-NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, ceil, cos, datetime, degrees, exists, exp, fileexists, fileread, floor, isnan, log, max, min, mod, pow, radians, random, sin, sqrt, tan, vector);
+NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, ceil, cos, datetime, degrees, drop, exists, exp, fileexists, fileread, find, floor, isnan, log, max, min, mod, pow, radians, random, round, sin, sqrt, square, take, tan, vector);
 
 const char *_ecv_array const InvalidExistsMessage = "invalid 'exists' expression";
 const char *_ecv_array const ExpectedNonNegativeIntMessage = "expected non-negative integer";
@@ -100,55 +100,6 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 	{
 		ThrowParseException("expected '%c'", (uint32_t)closingBracket);
 	}
-
-	// Check for trailing index expressions
-	for (;;)
-	{
-		if (SkipWhiteSpace() != '[')
-		{
-			break;
-		}
-		const int indexCol = GetColumn();
-		AdvancePointer();
-		const uint32_t indexValue = ParseUnsigned();
-		if (CurrentCharacter() != ']')
-		{
-			ThrowParseException("expected ']'");
-		}
-		AdvancePointer();
-		switch (rslt.GetType())
-		{
-		case TypeCode::ObjectModelArray:
-			CheckStack(StackUsage::ApplyObjectModelArrayIndex);
-			ApplyObjectModelArrayIndex(rslt, indexCol, indexValue, evaluate);			// call out to separate function to reduce stack usage of this one from 128 to 32 bytes
-			break;
-
-		case TypeCode::HeapArray:
-			{
-				ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
-				if (!rslt.ahVal.GetElement(indexValue, rslt))	// if index was out of bounds
-				{
-					if (evaluate)
-					{
-						throw GCodeException(gb, indexCol, "array index out of range");
-					}
-					else
-					{
-						rslt.SetNull(nullptr);
-					}
-				}
-			}
-			break;
-
-		default:
-			if (evaluate)
-			{
-				throw GCodeException(gb, indexCol, "left operand of [ ] is not an array");
-			}
-			rslt.SetNull(nullptr);
-			break;
-		}
-	}
 }
 
 // Handle an index after an object model array expression.
@@ -160,7 +111,7 @@ void ExpressionParser::ApplyObjectModelArrayIndex(ExpressionValue& rslt, int ind
 		THROW_INTERNAL_ERROR;
 	}
 	ObjectExplorationContext context;
-	context.AddIndex(rslt.param >> 16);
+	context.AddIndex(rslt.param >> 8);
 	ReadLocker lock(entry->lockPointer);
 	const size_t numElements = entry->GetNumElements(rslt.omVal, context);
 	if (indexValue < numElements)
@@ -170,7 +121,7 @@ void ExpressionParser::ApplyObjectModelArrayIndex(ExpressionValue& rslt, int ind
 	}
 	else if (evaluate)
 	{
-		throw GCodeException(gb, indexCol, "array index out of range");
+		throw GCodeException(gb, indexCol, ArrayIndexOutOfRangeText);
 	}
 	else
 	{
@@ -228,7 +179,8 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 			break;
 
 		default:
-			ThrowParseException("expected numeric value after '-'");
+			if (evaluate) { ThrowParseException("expected numeric value after '-'"); }
+			break;
 		}
 		break;
 
@@ -252,7 +204,8 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 			break;
 
 		default:
-			ThrowParseException("expected numeric or enumeration value after '+'");
+			if (evaluate) { ThrowParseException("expected numeric or enumeration value after '+'"); }
+			break;
 		}
 		break;
 
@@ -305,6 +258,77 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 			ThrowParseException("expected an expression");
 		}
 		break;
+	}
+
+	// Check for trailing index expressions
+	for (;;)
+	{
+		if (SkipWhiteSpace() != '[')
+		{
+			break;
+		}
+		const int indexCol = GetColumn();
+		AdvancePointer();
+		const uint32_t indexValue = ParseUnsigned();
+		if (CurrentCharacter() != ']')
+		{
+			ThrowParseException("expected ']'");
+		}
+		AdvancePointer();
+		switch (val.GetType())
+		{
+		case TypeCode::ObjectModelArray:
+			CheckStack(StackUsage::ApplyObjectModelArrayIndex);
+			ApplyObjectModelArrayIndex(val, indexCol, indexValue, evaluate);			// call out to separate function to reduce stack usage of this one from 128 to 32 bytes
+			break;
+
+		case TypeCode::HeapArray:
+			{
+				ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
+				if (!val.ahVal.GetElement(indexValue, val))		// if index was out of bounds
+				{
+					if (evaluate)
+					{
+						throw GCodeException(gb, indexCol, ArrayIndexOutOfRangeText);
+					}
+					else
+					{
+						val.SetNull(nullptr);
+					}
+				}
+			}
+			break;
+
+		case TypeCode::CString:
+			{
+				const size_t len = strlen(val.sVal);
+				if (indexValue >= len)
+				{
+					throw GCodeException(gb, indexCol, ArrayIndexOutOfRangeText);
+				}
+				val.SetChar(val.sVal[indexValue]);
+			}
+			break;
+
+		case TypeCode::HeapString:
+			{
+				ReadLockedPointer<const char> p = val.shVal.Get();
+				if (p.IsNull() || indexValue >= strlen(p.Ptr()))
+				{
+					throw GCodeException(gb, indexCol, ArrayIndexOutOfRangeText);
+				}
+				val.SetChar(p.Ptr()[indexValue]);
+			}
+			break;
+
+		default:
+			if (evaluate)
+			{
+				throw GCodeException(gb, indexCol, "left operand of [ ] is not an array or string");
+			}
+			val.SetNull(nullptr);
+			break;
+		}
 	}
 
 	// See if it is followed by a binary operator
@@ -1069,7 +1093,11 @@ void ExpressionParser::GetNextOperand(ExpressionValue& operand, bool evaluate) T
 // We don't need to handle Port and UniqueId types here because we convent them to string before calling this.
 /*static*/ bool ExpressionParser::TypeHasNoLiterals(TypeCode t) noexcept
 {
-	return t == TypeCode::Char || t == TypeCode::DateTime_tc || t == TypeCode::IPAddress_tc || t == TypeCode::MacAddress_tc || t == TypeCode::DriverId_tc;
+	return t == TypeCode::Char || t == TypeCode::DateTime_tc || t == TypeCode::IPAddress_tc || t == TypeCode::MacAddress_tc || t == TypeCode::DriverId_tc
+#if SUPPORT_CAN_EXPANSION
+		|| t == TypeCode::CanExpansionBoardDetails
+#endif
+		;
 }
 
 // Balance types for a comparison operator
@@ -1305,7 +1333,7 @@ void ExpressionParser::ApplyLengthOperator(ExpressionValue& val, bool evaluate) 
 				THROW_INTERNAL_ERROR;
 			}
 			ObjectExplorationContext context;
-			context.AddIndex(val.param >> 16);
+			context.AddIndex(val.param >> 8);
 			ReadLocker lock(entry->lockPointer);
 			val.SetInt(entry->GetNumElements(val.omVal, context));
 			context.RemoveIndex();
@@ -1354,6 +1382,39 @@ void ExpressionParser::ParseNumber(ExpressionValue& rslt) noexcept
 	else
 	{
 		rslt.SetFloat(conv.GetFloat(), constrain<unsigned int>(conv.GetDigitsAfterPoint(), 1, MaxFloatDigitsDisplayedAfterPoint));
+	}
+}
+
+static void SetStrStrResult(ExpressionValue& e, const char *_ecv_array s1, const char *_ecv_array s2) noexcept
+{
+	const char *_ecv_array _ecv_null q = strstr(s1, s2);
+	e.SetInt((q == nullptr) ? -1 : q - s1);
+}
+
+void ExpressionParser::SetFindResult(ExpressionValue& e1, const char *_ecv_array s, const ExpressionValue& e2) THROWS(GCodeException)
+{
+	switch (e2.GetType())
+	{
+	case TypeCode::Char:
+		{
+			const char *_ecv_array _ecv_null q = strchr(s, e2.cVal);
+			e1.SetInt((q == nullptr) ? -1 : q - s);
+		}
+		break;
+
+	case TypeCode::CString:
+		SetStrStrResult(e1, s, e2.sVal);
+		break;
+
+	case TypeCode::HeapString:
+		{
+			ReadLockedPointer<const char> p = e2.shVal.Get();
+			SetStrStrResult(e1, s, p.Ptr());
+		}
+		break;
+
+	default:
+		ThrowParseException("incompatible operand types");
 	}
 }
 
@@ -1628,6 +1689,11 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
 				break;
 
+			case Function::square:
+				ConvertToFloat(rslt, evaluate);
+				rslt.fVal = fsquare(rslt.fVal);
+				break;
+
 			case Function::isnan:
 				ConvertToFloat(rslt, evaluate);
 				rslt.SetBool(std::isnan(rslt.fVal));
@@ -1635,9 +1701,10 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 			case Function::floor:
 			case Function::ceil:
+			case Function::round:
 				{
 					ConvertToFloat(rslt, evaluate);
-					const float f = ((func.RawValue() == Function::floor) ? floorf : ceilf)(rslt.fVal);
+					const float f = ((func.RawValue() == Function::floor) ? floorf : (func.RawValue() == Function::ceil) ? ceilf : rintf)(rslt.fVal);
 					if (f <= (float)std::numeric_limits<int32_t>::max() && f >= (float)std::numeric_limits<int32_t>::min())
 					{
 						rslt.SetInt((int32_t)f);
@@ -1888,6 +1955,187 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				}
 				break;
 
+			case Function::take:
+				{
+					ExpressionValue nextOperand;
+					GetNextOperand(nextOperand, evaluate);
+					ConvertToUnsigned(nextOperand, evaluate);
+					switch (rslt.GetType())
+					{
+					case TypeCode::ObjectModelArray:
+						{
+							const ObjectModelArrayTableEntry *const entry = _ecv_not_null(rslt.omVal->FindObjectModelArrayEntry(rslt.param & 0xFF));
+							ObjectExplorationContext context;
+							ReadLocker locker(entry->lockPointer);
+							const size_t len = min<size_t>(entry->GetNumElements(rslt.omVal, context), nextOperand.uVal);
+							ArrayHandle ah;
+							WriteLocker lock(Heap::heapLock);
+							ah.Allocate(len);
+							for (size_t i = 0; i < len; ++i)
+							{
+								context.AddIndex(i);
+								ExpressionValue elem(entry->GetElement(rslt.omVal, context));
+								ah.AssignElement(i, elem);
+								context.RemoveIndex();
+							}
+							rslt.SetArrayHandle(ah);
+						}
+						break;
+
+					case TypeCode::HeapArray:
+						{
+							WriteLocker lock(Heap::heapLock);
+							const size_t len = min<size_t>(rslt.ahVal.GetNumElements(), nextOperand.uVal);
+							ArrayHandle ah;
+							ah.Allocate(len);
+							for (size_t i = 0; i < len; ++i)
+							{
+								ExpressionValue elem;
+								(void)rslt.ahVal.GetElement(i, elem);
+								ah.AssignElement(i, elem);
+							}
+							rslt.SetArrayHandle(ah);
+						}
+						break;
+
+					case TypeCode::CString:
+						{
+							const size_t len = min<size_t>(strlen(rslt.sVal), nextOperand.uVal);
+							const StringHandle sh(rslt.sVal, len);
+							rslt.SetStringHandle(sh);
+						}
+						break;
+
+					case TypeCode::HeapString:
+						{
+							ExpressionValue copy(rslt);
+							WriteLocker lock(Heap::heapLock);
+							const ReadLockedPointer<const char> p = copy.shVal.Get();
+							const size_t len = min<size_t>(strlen(p.Ptr()), nextOperand.uVal);
+							const StringHandle sh(p.Ptr(), len);
+							rslt.SetStringHandle(sh);
+						}
+						break;
+
+					default:
+						if (evaluate) { ThrowParseException("first operand of function is not an array or string"); }
+						rslt.SetNull(nullptr);
+						break;
+					}
+				}
+				break;
+
+			case Function::drop:
+				{
+					ExpressionValue nextOperand;
+					GetNextOperand(nextOperand, evaluate);
+					ConvertToUnsigned(nextOperand, evaluate);
+					switch (rslt.GetType())
+					{
+					case TypeCode::ObjectModelArray:
+						{
+							const ObjectModelArrayTableEntry *const entry = _ecv_not_null(rslt.omVal->FindObjectModelArrayEntry(rslt.param & 0xFF));
+							ObjectExplorationContext context;
+							ReadLocker locker(entry->lockPointer);
+							const size_t numOriginalElements = entry->GetNumElements(rslt.omVal, context);
+							const size_t offset = min<size_t>(numOriginalElements, nextOperand.uVal);
+							const size_t len = numOriginalElements - offset;
+							ArrayHandle ah;
+							if (len != 0)
+							{
+								WriteLocker lock(Heap::heapLock);
+								ah.Allocate(len);
+								ObjectExplorationContext context;
+								for (size_t i = 0; i < len; ++i)
+								{
+									context.AddIndex(i + offset);
+									ExpressionValue elem(entry->GetElement(rslt.omVal, context));
+									ah.AssignElement(i, elem);
+									context.RemoveIndex();
+								}
+							}
+							rslt.SetArrayHandle(ah);
+						}
+						break;
+
+						case TypeCode::HeapArray:
+						{
+							WriteLocker lock(Heap::heapLock);
+							const size_t numOriginalElements = rslt.ahVal.GetNumElements();
+							const size_t offset = min<size_t>(numOriginalElements, nextOperand.uVal);
+							const size_t len = numOriginalElements - offset;
+							ArrayHandle ah;
+							if (len != 0)
+							{
+								ah.Allocate(len);
+								for (size_t i = 0; i < len; ++i)
+								{
+									ExpressionValue elem;
+									(void)rslt.ahVal.GetElement(i + offset, elem);
+									ah.AssignElement(i, elem);
+								}
+							}
+							rslt.SetArrayHandle(ah);
+						}
+						break;
+
+					case TypeCode::CString:
+						{
+							const size_t slen = strlen(rslt.sVal);
+							const size_t offset = min<size_t>(slen, nextOperand.uVal);
+							StringHandle sh(rslt.sVal + offset, slen - offset);
+							rslt.SetStringHandle(sh);
+						}
+						break;
+
+					case TypeCode::HeapString:
+						{
+							ExpressionValue copy(rslt);
+							WriteLocker lock(Heap::heapLock);
+							const ReadLockedPointer<const char> p = copy.shVal.Get();
+							const size_t slen = strlen(p.Ptr());
+							const size_t offset = min<size_t>(slen, nextOperand.uVal);
+							StringHandle sh(p.Ptr() + offset, slen - offset);
+							rslt.SetStringHandle(sh);
+						}
+						break;
+
+					default:
+						if (evaluate) { ThrowParseException("first operand of function is not an array or string"); }
+						rslt.SetNull(nullptr);
+						break;
+					}
+				}
+				break;
+
+			case Function::find:
+				{
+					ExpressionValue nextOperand;
+					GetNextOperand(nextOperand, evaluate);
+					switch (rslt.GetType())
+					{
+					case TypeCode::CString:
+						SetFindResult(rslt, rslt.sVal, nextOperand);
+						break;
+
+					case TypeCode::HeapString:
+						{
+							ReadLockedPointer<const char> p1 = rslt.shVal.Get();
+							SetFindResult(rslt, p1.Ptr(), nextOperand);
+						}
+						break;
+
+					// find() on arrays is not yet implemented but may be in future
+					case TypeCode::ObjectModelArray:
+					case TypeCode::HeapArray:
+					default:
+						if (evaluate) { ThrowParseException("first operand of function is not a string"); }
+						rslt.SetNull(nullptr);
+						break;
+					}
+				}
+				break;
+
 			default:
 				THROW_INTERNAL_ERROR;
 			}
@@ -2001,7 +2249,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 							rslt.SetBool(false);
 							return;
 						}
-						ThrowParseException("Index out of range");
+						ThrowParseException(ArrayIndexOutOfRangeText);
 					}
 				}
 

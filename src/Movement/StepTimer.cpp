@@ -32,7 +32,7 @@ uint32_t StepTimer::movementDelay = 0;											// how many timer ticks the mov
 
 #if SUPPORT_CAN_EXPANSION
 uint32_t StepTimer::ownMovementDelay = 0;
-bool StepTimer::movementDelayIncreased = false;
+bool StepTimer::ownMovementDelayIncreased = false;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -43,6 +43,7 @@ uint32_t StepTimer::prevMasterTime;												// the previous master time recei
 uint32_t StepTimer::prevLocalTime;												// the previous local time when the master time was received, corrected for receive processing delay
 int32_t StepTimer::peakPosJitter = 0;
 int32_t StepTimer::peakNegJitter = 0;
+int32_t StepTimer::errorAccumulator = 0;
 bool StepTimer::gotJitter = false;
 uint32_t StepTimer::peakReceiveDelay = 0;
 volatile unsigned int StepTimer::syncCount = 0;
@@ -144,23 +145,13 @@ void StepTimer::Init() noexcept
 #endif
 }
 
-#if SAM4S || SAME70 || SAME5x
+#if SAM4S || SAME70
 
-// Get the interrupt clock count
+// Get the step timer clock count
 /*static*/ uint32_t StepTimer::GetTimerTicks() noexcept
 {
-	// Get the current timer value into 'rslt'
-	// If we don't disable interrupts here then maxInterval ends up at -3. Presumably, this means we get an interrupt while we are within this code and the ISR calls it again.
-	const auto flags = IrqSave();
-# if SAME5x
-	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
-	// On the SAME5x it isn't enough just to wait for SYNCBUSY.COUNT here, nor is it enough just to use a DSB instruction first
-	while (StepTc->CTRLBSET.bit.CMD != 0) { }
-	while (StepTc->SYNCBUSY.bit.COUNT) { }
-	const uint32_t rslt = StepTc->COUNT.reg;
-# else
+	AtomicCriticalSectionLocker lock;
 	// The TCs on the SAM4S and SAME70 are only 16 bits wide, so we maintain the upper 16 bits in a chained counter
-	uint32_t rslt;
 	uint16_t highWord = STEP_TC->TC_CHANNEL[STEP_TC_CHAN_UPPER].TC_CV;		// get the timer high word
 	do
 	{
@@ -168,15 +159,53 @@ void StepTimer::Init() noexcept
 		const uint16_t highWordAgain = STEP_TC->TC_CHANNEL[STEP_TC_CHAN_UPPER].TC_CV;
 		if (highWordAgain == highWord)
 		{
-			rslt = ((uint32_t)highWord << 16) | lowWord;
+			return ((uint32_t)highWord << 16) | lowWord;
+		}
+		highWord = highWordAgain;
+	} while (true);
+}
+
+// Get the step timer clock count
+/*static*/ uint32_t StepTimer::GetTimerTicksWhenInterruptsDisabled() noexcept
+{
+	// The TCs on the SAM4S and SAME70 are only 16 bits wide, so we maintain the upper 16 bits in a chained counter
+	uint16_t highWord = STEP_TC->TC_CHANNEL[STEP_TC_CHAN_UPPER].TC_CV;		// get the timer high word
+	do
+	{
+		const uint16_t lowWord = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;	// get the timer low word
+		const uint16_t highWordAgain = STEP_TC->TC_CHANNEL[STEP_TC_CHAN_UPPER].TC_CV;
+		if (highWordAgain == highWord)
+		{
+			return ((uint32_t)highWord << 16) | lowWord;
 			break;
 		}
 		highWord = highWordAgain;
 	} while (true);
-# endif
+}
 
-	IrqRestore(flags);
-	return rslt;
+#endif
+
+#if SAME5x
+
+// Get the step timer clock count
+/*static*/ uint32_t StepTimer::GetTimerTicks() noexcept
+{
+	AtomicCriticalSectionLocker lock;
+	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
+	// On the SAME5x it isn't enough just to wait for SYNCBUSY.COUNT here, nor is it enough just to use a DSB instruction first
+	while (StepTc->CTRLBSET.bit.CMD != 0) { }
+	while (StepTc->SYNCBUSY.bit.COUNT) { }
+	return StepTc->COUNT.reg;
+}
+
+// Get the step timer clock count
+/*static*/ uint32_t StepTimer::GetTimerTicksWhenInterruptsDisabled() noexcept
+{
+	StepTc->CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
+	// On the SAME5x it isn't enough just to wait for SYNCBUSY.COUNT here, nor is it enough just to use a DSB instruction first
+	while (StepTc->CTRLBSET.bit.CMD != 0) { }
+	while (StepTc->SYNCBUSY.bit.COUNT) { }
+	return StepTc->COUNT.reg;
 }
 
 #endif
@@ -188,7 +217,7 @@ bool StepTimer::ScheduleTimerInterrupt(uint32_t tim) noexcept
 	// We need to disable all interrupts, because once we read the current step clock we have only 6us to set up the interrupt, or we will miss it
 	AtomicCriticalSectionLocker lock;
 
-	const int32_t diff = (int32_t)(tim - GetTimerTicks());			// see how long we have to go
+	const int32_t diff = (int32_t)(tim - GetTimerTicksWhenInterruptsDisabled());	// see how long we have to go
 	if (diff < (int32_t)MoveTiming::MinInterruptInterval)			// if less than about 6us or already passed
 	{
 		return true;												// tell the caller to simulate an interrupt instead
@@ -242,8 +271,10 @@ void StepTimer::DisableTimerInterrupt() noexcept
 	return syncCount == MaxSyncCount;
 }
 
+// Process a received time sync message. This is only called when we are in expansion mode.
 /*static*/ void StepTimer::ProcessTimeSyncMessage(const CanMessageTimeSync& msg, size_t msgLen, uint16_t timeStamp) noexcept
 {
+	static uint32_t originalOffset = 0;
 
 #if SAME70
 	// On the SAME70 the timestamp counter is the lower 16 bits of the step counter
@@ -254,7 +285,7 @@ void StepTimer::DisableTimerInterrupt() noexcept
 	uint16_t timeStampNow;
 	{
 		AtomicCriticalSectionLocker lock;							// there must be no delay between calling GetTimerTicks and GetTimeStampCounter
-		localTimeNow = StepTimer::GetTimerTicks();
+		localTimeNow = StepTimer::GetTimerTicksWhenInterruptsDisabled();
 		timeStampNow = CanInterface::GetTimeStampCounter();
 	}
 
@@ -279,27 +310,34 @@ void StepTimer::DisableTimerInterrupt() noexcept
 	if (locSyncCount == 0)											// we can't sync until we have previous message details
 	{
 		syncCount = 1;
+		errorAccumulator = 0;
 	}
-	else if (msg.lastTimeSent == oldMasterTime)
+	else if (msg.lastTimeSent == oldMasterTime && msg.lastTimeAcknowledgeDelay != 0)
 	{
 		// We have the previous message details and now we have the transmit delay for that message
 		const uint32_t correctedMasterTime = oldMasterTime + msg.lastTimeAcknowledgeDelay;
 		const uint32_t newOffset = oldLocalTime - correctedMasterTime;
 
-		//TODO convert this to a PLL, but note that there could be a constant offset if the clocks run at slightly different speeds
-		const uint32_t oldOffset = localTimeOffset;
-		localTimeOffset = newOffset;
-		const int32_t diff = (int32_t)(newOffset - oldOffset);
+		const int32_t diff = (int32_t)(newOffset - localTimeOffset);
 		if ((uint32_t)labs(diff) > MaxSyncJitter && locSyncCount > 1)
 		{
 			syncCount = 0;
+			localTimeOffset = newOffset;
 			++numJitterResyncs;
 		}
 		else
 		{
 			whenLastSynced = millis();
-			if (locSyncCount == MaxSyncCount)
+			if (locSyncCount < MaxSyncCount)
 			{
+				localTimeOffset = newOffset;
+				originalOffset = newOffset;
+				syncCount = locSyncCount + 1;
+			}
+			else
+			{
+				errorAccumulator += diff;
+				localTimeOffset += (uint32_t)(errorAccumulator/64 + diff/4);		// this is effectively a PI controller with P=1/4, I=freq/64
 				if (!gotJitter)
 				{
 					peakPosJitter = peakNegJitter = diff;
@@ -314,14 +352,24 @@ void StepTimer::DisableTimerInterrupt() noexcept
 					peakNegJitter = diff;
 				}
 				reprap.GetGCodes().SetRemotePrinting(msg.isPrinting);
-				if (msgLen >= 16)										// if real time is included
+				if (msgLen >= CanMessageTimeSync::SizeWithRealTime)					// if real time is included
 				{
 					reprap.GetPlatform().SetDateTime(msg.realTime);
+					if (msgLen >= CanMessageTimeSync::SizeWithRealTimeAndMovementDelay)
+					{
+						AtomicCriticalSectionLocker lock;
+						if (msg.movementDelay >= movementDelay)
+						{
+							movementDelay = msg.movementDelay;
+							ownMovementDelayIncreased = false;
+						}
+					}
 				}
-			}
-			else
-			{
-				syncCount = locSyncCount + 1;
+				if (reprap.Debug(Module::CAN))
+				{
+					debugPrintf("TS RxD,TxD,diff,errac,offs %" PRIu32 ",%u,%" PRIi32 ",%" PRIi32 ",%" PRIi32 "\n",
+								timeStampDelay, (unsigned int)msg.lastTimeAcknowledgeDelay, diff, errorAccumulator, (int32_t)(newOffset - originalOffset));
+				}
 			}
 		}
 	}
@@ -411,7 +459,11 @@ bool StepTimer::ScheduleCallbackFromIsr(Ticks when) noexcept
 // As ScheduleCallback but base priority >= NvicPriorityStep when called. Can be called from within a callback.
 bool StepTimer::ScheduleMovementCallbackFromIsr(Ticks when) noexcept
 {
+#if SUPPORT_REMOTE_COMMANDS
+	whenDue = when + movementDelay + localTimeOffset;
+#else
 	whenDue = when + movementDelay;
+#endif
 	return ScheduleCallbackFromIsr();
 }
 
@@ -465,10 +517,8 @@ bool StepTimer::ScheduleCallbackFromIsr() noexcept
 
 bool StepTimer::ScheduleCallback(Ticks when) noexcept
 {
-	const uint32_t baseprio = ChangeBasePriority(NvicPriorityStep);
-	const bool rslt = ScheduleCallbackFromIsr(when);
-	RestoreBasePriority(baseprio);
-	return rslt;
+	BasePriorityBooster booster(NvicPriorityStep);
+	return ScheduleCallbackFromIsr(when);
 }
 
 // Cancel any scheduled callback for this timer. Harmless if there is no callback scheduled.
@@ -488,9 +538,8 @@ void StepTimer::CancelCallbackFromIsr() noexcept
 
 void StepTimer::CancelCallback() noexcept
 {
-	const uint32_t baseprio = ChangeBasePriority(NvicPriorityStep);
+	BasePriorityBooster booster(NvicPriorityStep);
 	CancelCallbackFromIsr();
-	RestoreBasePriority(baseprio);
 }
 
 /*static*/ void StepTimer::Diagnostics(const StringRef& reply) noexcept
@@ -498,20 +547,21 @@ void StepTimer::CancelCallback() noexcept
 #if SUPPORT_REMOTE_COMMANDS
 	if (CanInterface::InExpansionMode())
 	{
-		reply.lcatf("Peak sync jitter %" PRIi32 "/%" PRIi32 ", peak Rx sync delay %" PRIu32 ", resyncs %u/%u, ", peakNegJitter, peakPosJitter, peakReceiveDelay, numTimeoutResyncs, numJitterResyncs);
+		reply.lcatf("Sync err accum %" PRIi32 ", peak jitter %" PRIi32 "/%" PRIi32 ", peak Rx delay %" PRIu32 ", resyncs %u/%u, ",
+						errorAccumulator, peakNegJitter, peakPosJitter, peakReceiveDelay, numTimeoutResyncs, numJitterResyncs);
 		gotJitter = false;
 		numTimeoutResyncs = numJitterResyncs = 0;
 		peakReceiveDelay = 0;
 	}
 #endif
-	StepTimer *_ecv_null pst = pendingList;
+	const StepTimer *_ecv_null const pst = pendingList;
 	if (pst == nullptr)
 	{
-		reply.cat("no step interrupt scheduled");
+		reply.lcat("No step interrupt scheduled");
 	}
 	else
 	{
-		reply.catf("next step interrupt due in %" PRIu32 " ticks, %s",
+		reply.lcatf("Next step interrupt due in %" PRIu32 " ticks, %s",
 					pst->whenDue - GetTimerTicks(),
 # if SAME5x
 					((StepTc->INTENSET.reg & TC_INTFLAG_MC0) == 0)
@@ -543,7 +593,7 @@ void StepTimer::ProcessMovementDelayRequest(uint32_t delayRequested) noexcept
 	{
 		movementDelay = delayRequested;
 	}
-	movementDelayIncreased = true;						// always set this to ensure that we acknowledge the request
+	ownMovementDelayIncreased = true;						// always set this to ensure that we acknowledge the request
 }
 
 #endif

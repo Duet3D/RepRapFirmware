@@ -15,37 +15,34 @@
 
 const float M3ScrewPitch = 0.5;
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(ZLeadscrewKinematics, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(ZLeadscrewKinematics, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(ZLeadscrewKinematics, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(ZLeadscrewKinematics, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry ZLeadscrewKinematics::objectModelArrayTable[] =
 {
 	// 10. Latest corrections
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const ZLeadscrewKinematics*)self)->numLeadscrews; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-										{ return ExpressionValue(((const ZLeadscrewKinematics*)self)->lastCorrections[context.GetLastIndex()], 3); }
+		OBJECT_MODEL_ARRAY_COUNT(self->numLeadscrews),
+		OBJECT_MODEL_ARRAY_VALUE(self->lastCorrections[context.GetLastIndex()], 3),
 	},
 	// 11. Screw X coordinates
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const ZLeadscrewKinematics*)self)->numLeadscrews; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-										{ return ExpressionValue(((const ZLeadscrewKinematics*)self)->leadscrewX[context.GetLastIndex()], 1); }
+		OBJECT_MODEL_ARRAY_COUNT(self->numLeadscrews),
+		OBJECT_MODEL_ARRAY_VALUE(self->leadscrewX[context.GetLastIndex()], 1)
 	},
 	// 12. Screw Y coordinates
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const ZLeadscrewKinematics*)self)->numLeadscrews; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-										{ return ExpressionValue(((const ZLeadscrewKinematics*)self)->leadscrewY[context.GetLastIndex()], 1); }
+		OBJECT_MODEL_ARRAY_COUNT(self->numLeadscrews),
+		OBJECT_MODEL_ARRAY_VALUE(self->leadscrewY[context.GetLastIndex()], 1)
 	}
 };
 
@@ -69,8 +66,6 @@ constexpr ObjectModelTableEntry ZLeadscrewKinematics::objectModelTable[] =
 constexpr uint8_t ZLeadscrewKinematics::objectModelTableDescriptor[] = { 2, 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(ZLeadscrewKinematics, Kinematics)
-
-#endif
 
 ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k) noexcept
 	: Kinematics(k, SegmentationType(false, false, false)), numLeadscrews(0), correctionFactor(1.0), maxCorrection(1.0), screwPitch(M3ScrewPitch)

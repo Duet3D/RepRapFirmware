@@ -39,7 +39,6 @@ public:
 	float GetAccumulator() const noexcept override;							// Return the integral accumulator
 	void Suspend(bool sus) noexcept override;								// Suspend the heater to conserve power or while doing Z probing
 	void SetFanFeedForwardPwm(float fanPwmChange) noexcept override;
-	void SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept override;				// Set extrusion feedforward
 #if SUPPORT_CAN_EXPANSION
 	bool IsLocal() const noexcept override { return true; }
 	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept override { }
@@ -62,12 +61,15 @@ protected:
 	GCodeResult UpdateHeaterMonitors(const StringRef& reply) noexcept override { return GCodeResult::ok; }
 	GCodeResult StartAutoTune(const StringRef& reply, bool seenA, float ambientTemp) noexcept override;
 																			// Start an auto tune cycle for this heater
+	void ApplyExtrusionFeedForward() noexcept override;
+
 private:
 	void SetHeater(float power) const noexcept;				// Power is a fraction in [0,1]
 	TemperatureError ReadTemperature() noexcept;			// Read and store the temperature of this heater
 	void DoTuningStep() noexcept;							// Called on each temperature sample when auto tuning
 	float GetExpectedHeatingRate() const noexcept;			// Get the minimum heating rate we expect
 	void RaiseHeaterFault(HeaterFaultType type, const char *_ecv_array format, ...) noexcept;
+	void UpdateHeaterMode(float targetTemperature) noexcept;	// Determine and if necessary change the current heater mode
 
 	PwmPort ports[MaxPortsPerHeater];						// The port(s) that drive the heater
 	float temperature;										// The current temperature

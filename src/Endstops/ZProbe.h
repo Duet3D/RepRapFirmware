@@ -50,9 +50,10 @@ public:
 	float GetOffset(size_t axisNumber) const noexcept { return offsets[axisNumber]; }
 	float GetConfiguredTriggerHeight() const noexcept { return -offsets[Z_AXIS]; }
 	float GetActualTriggerHeight() const noexcept { return actualTriggerHeight; }
+	float GetActiveModeTriggerHeight() const noexcept;
 	float GetDiveHeight(int tapsDone) const noexcept;
 	float GetStartingHeight(bool firstTap, float previousHeightError = 0.0) const noexcept;
-	float GetProbingSpeed(int tapsDone) const noexcept { return probeSpeeds[(tapsDone < 0) ? 0 : 1]; }
+	float GetProbingSpeed(int tapsDone) const noexcept;
 	float GetScanningSpeed() const noexcept { return probeSpeeds[2]; }
 	bool FastThenSlowProbing() const noexcept { return probeSpeeds[1] < probeSpeeds[0]; }
 	float GetTravelSpeed() const noexcept { return travelSpeed; }
@@ -79,8 +80,10 @@ public:
 	float GetScanningHeight() const noexcept;
 	GCodeResult SetScanningCoefficients(float aParam, float bParam, float cParam) noexcept;
 	GCodeResult ReportScanningCoefficients(const StringRef& reply) noexcept;
+	GCodeResult SetTouchModeParameters(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void CalibrateScanningProbe(const int32_t calibrationReadings[], size_t numCalibrationReadingsTaken, float heightChangePerPoint, const StringRef& reply) noexcept;
 	float ConvertReadingToHeightDifference(int32_t reading) const noexcept;
+	void ClearTouchTriggered() noexcept { touchTriggered = false; }		// called before doing a probing move so we don't get an "already triggered" error
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -120,7 +123,12 @@ protected:
 #if SUPPORT_SCANNING_PROBES
 	// Scanning support
 	float scanCoefficients[4];
+	float touchModeTriggerHeight = DefaultScanningProbeTouchModeTriggerHeight;
+	float touchModeThreshold = DefaultScanningProbeTouchModeThreshold;
+	float touchModeProbeSpeed = ConvertSpeedFromMmPerMin(DefaultScanningProbeTouchModeProbeSpeed);
 	bool isCalibrated = false;
+	bool useTouchMode = false;
+	bool touchTriggered = false;		// the state of the probe, used when it is in touch mode
 #endif
 
 	uint8_t number;
@@ -128,6 +136,11 @@ protected:
 	int8_t sensor;						// the sensor number used for temperature calibration
 	bool isDeployedByUser;				// true if the user has used the M401 command to deploy this probe and not sent M402 to retract it
 };
+
+#if !SUPPORT_SCANNING_PROBES
+inline float ZProbe::GetActiveModeTriggerHeight() const noexcept { return GetActualTriggerHeight(); }
+inline float ZProbe::GetProbingSpeed(int tapsDone) const noexcept { return probeSpeeds[(tapsDone < 0) ? 0 : 1]; }
+#endif
 
 // MotorStall Z probes have no port, also in a CAN environment the local and remote proxy versions are the same
 class MotorStallZProbe final : public ZProbe

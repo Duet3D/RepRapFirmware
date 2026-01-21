@@ -114,6 +114,7 @@ private:
 	char CurrentCharacter() const noexcept;
 	void AdvancePointer() noexcept;
 	char SkipWhiteSpace() noexcept;
+	void SetFindResult(ExpressionValue& e1, const char *_ecv_array s, const ExpressionValue& e2) THROWS(GCodeException);
 
 	const char *_ecv_array currentp;
 	const char *_ecv_array const startp;

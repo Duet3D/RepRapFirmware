@@ -187,7 +187,7 @@ bool Heap::CheckIntegrity(const StringRef& errmsg) noexcept
 
 	if (numHeapErrors != 0)
 	{
-		errmsg.printf("%u bad heap blocks", numHeapErrors);
+		errmsg.lcatf("%u bad heap blocks", numHeapErrors);
 		return false;
 	}
 
@@ -362,17 +362,16 @@ void Heap::DeleteSlot(IndexSlot *slotPtr) noexcept
 	}
 }
 
-void Heap::Diagnostics(MessageType mt, Platform& p) noexcept
+void Heap::Diagnostics(const StringRef& reply, Platform& p) noexcept
 {
 	String<StringLength256> temp;
-	const bool ok = CheckIntegrity(temp.GetRef());
+	const bool ok = CheckIntegrity(reply);
 	if (ok)
 	{
-		temp.copy("Heap OK");
+		reply.lcat("Heap OK");
 	}
-	temp.catf(", handles allocated/used %u/%u, heap memory allocated/used/recyclable %u/%u/%u, gc cycles %u\n",
+	reply.catf(", handles allocated/used %u/%u, heap memory allocated/used/recyclable %u/%u/%u, gc cycles %u",
 					handlesAllocated, (unsigned int)handlesUsed, heapAllocated, heapUsed, (unsigned int)heapToRecycle, gcCyclesDone);
-	p.Message(mt, temp.c_str());
 }
 
 // End

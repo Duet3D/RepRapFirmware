@@ -11,6 +11,7 @@
 #include <RepRapFirmware.h>
 #include <ObjectModel/ObjectModel.h>
 #include <Movement/HomingMode.h>
+#include <Movement/MovementError.h>
 
 template<class T> class MathMatrix;
 
@@ -90,7 +91,7 @@ public:
 	// 'numAxes' is the number of machine axes to convert, which will always be at least 3
 	// 'motorPos' is the output vector of motor positions
 	// Return true if successful, false if we were unable to convert
-	virtual bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept = 0;
+	virtual MovementError CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept = 0;
 
 	// Convert motor positions (measured in steps from reference position) to Cartesian coordinates
 	// 'motorPos' is the input vector of motor positions
@@ -217,6 +218,9 @@ protected:
 
 	// Try to configure the segmentation parameters
 	bool TryConfigureSegmentation(GCodeBuffer& gb) THROWS(GCodeException);
+
+	// Round a float value to int32_t if it will fit, else set update a movement error code
+	static void RoundToInt32(MovementError& ErrorCode, float pos, int32_t& whereToStore) noexcept;
 
 	// Debugging functions
 	static void PrintMatrix(const char *_ecv_array s, const MathMatrix<float>& m, size_t numRows = 0, size_t maxCols = 0) noexcept;

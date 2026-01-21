@@ -30,7 +30,7 @@ public:
 	virtual bool Spin() noexcept = 0;															// do some work, returning true if we did anything significant
 	virtual bool Accept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept = 0;			// ask the responder to accept this connection, returns true if it did
 	virtual void Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept = 0;	// terminate the responder if it is serving the specified protocol on the specified interface
-	virtual void Diagnostics(MessageType mtype) const noexcept = 0;
+	virtual void Diagnostics(const StringRef& reply) const noexcept = 0;
 
 protected:
 	// State machine control. Not all derived classes use all states.
@@ -69,7 +69,8 @@ protected:
 	virtual void ConnectionLost() noexcept;
 
 	IPAddress GetRemoteIP() const noexcept;
-	void ReportOutputBufferExhaustion(const char *_ecv_array sourceFile, int line) noexcept;
+
+	static void ReportOutputBufferExhaustion(const char *_ecv_array sourceFile, int line) noexcept;
 
 	static Platform& GetPlatform() noexcept { return reprap.GetPlatform(); }
 	static Network& GetNetwork() noexcept { return reprap.GetNetwork(); }

@@ -21,8 +21,8 @@ MonoLcd::MonoLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], s
 MonoLcd::~MonoLcd()
 {
 	delete image;
-	pinMode(csPin, INPUT_PULLUP);
-	pinMode(a0Pin, INPUT_PULLUP);
+	SetPinMode(csPin, INPUT_PULLUP);
+	SetPinMode(a0Pin, INPUT_PULLUP);
 }
 
 // Initialise. a0Pin is only used by the ST7567.
@@ -37,7 +37,7 @@ void MonoLcd::Init(Pin p_csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uin
 	device.SetClockFrequency(freq);
 	device.SetCsPin(csPin);
 	device.SetCsPolarity(csPolarity);		// normally active high chip select for ST7920, active low for ST7567
-	pinMode(csPin, (csPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);
+	SetPinMode(csPin, (csPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);
 
 	startRow = numRows;
 	startCol = numCols;

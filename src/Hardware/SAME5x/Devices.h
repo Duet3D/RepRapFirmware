@@ -24,6 +24,5 @@ void StopUsbTask() noexcept;
 
 // GCLK numbers not defined in the core
 constexpr unsigned int GclkNum25MHz = 2;		// for Ethernet PHY
-constexpr unsigned int GclkNum90MHz = 5;		// for SDHC
 
 #endif /* SRC_HARDWARE_SAME5X_DEVICES_H_ */

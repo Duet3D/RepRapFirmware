@@ -86,7 +86,7 @@ GCodeResult SwitchEndstop::Configure(const char *_ecv_array pinNames, const Stri
 		if (boardAddress != CanInterface::GetCanAddress())
 		{
 			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), numPortsUsed);
-			const GCodeResult rslt = CanInterface::CreateHandle(boardAddress, h, pn.c_str(), 0, MinimumSwitchReportInterval, states[numPortsUsed], reply);
+			const GCodeResult rslt = CanInterface::CreateHandle(boardAddress, h, pn.c_str(), 0, MinimumSwitchReportInterval, &states[numPortsUsed], reply);
 			if (rslt != GCodeResult::ok)
 			{
 				ReleasePorts();
@@ -148,7 +148,7 @@ void SwitchEndstop::PrimeAxis(const Kinematics &_ecv_from kin, const AxisDrivers
 		{
 			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), i);
 			String<StringLength100> reply;
-			if (CanInterface::EnableHandle(boardNumbers[i], h, true, states[i], reply.GetRef()) != GCodeResult::ok)
+			if (CanInterface::EnableHandle(boardNumbers[i], h, true, &states[i], reply.GetRef()) != GCodeResult::ok)
 			{
 				ThrowGCodeException(reply.c_str());
 			}
@@ -239,7 +239,7 @@ void SwitchEndstop::AppendDetails(const StringRef& str) noexcept
 		{
 			RemoteInputHandle h(RemoteInputHandle::typeEndstop, GetAxis(), i);
 			String<StringLength100> reply;
-			if (CanInterface::GetHandlePinName(boardNumbers[i], h, states[i], reply.GetRef()) == GCodeResult::ok)
+			if (CanInterface::GetHandlePinName(boardNumbers[i], h, &states[i], reply.GetRef()) == GCodeResult::ok)
 			{
 				str.cat(reply.c_str());
 			}

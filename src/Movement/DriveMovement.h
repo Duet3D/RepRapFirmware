@@ -64,8 +64,6 @@ public:
 	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
 	bool CheckingEndstops() const noexcept;								// returns true when executing a move that checks endstops or Z probe
 
-	void SetAsExtruder(bool p_isExtruder) noexcept { isExtruder = p_isExtruder; }
-
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
 #endif
@@ -76,7 +74,7 @@ public:
 	bool IsPhaseStepEnabled() const noexcept { return stepMode == StepMode::phase; }
 	// Get the current position relative to the start of this move, speed and acceleration. Units are microsteps and step clocks.
 	// Return true if this drive is moving. Segments are advanced as necessary.
-	bool GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept;
+	bool GetCurrentMotion(uint32_t when, float multiplier, MotionParameters& mParams) noexcept;
 #endif
 
 	void ClearMovementPending() noexcept;
@@ -95,7 +93,7 @@ private:
 	bool ScheduleFirstSegment() noexcept;
 
 	void ReleaseSegments() noexcept;					// release the list of segments and set it to nullptr
-	bool LogStepError(uint8_t type, float extra) noexcept;	// tell the Move class that we had a step error
+	bool LogStepError(uint8_t type, float info, const MoveSegment *seg) noexcept;	// record a step error
 
 #if SUPPORT_PHASE_STEPPING
 	motioncalc_t GetPhaseStepsTakenThisSegment() const noexcept;
@@ -119,7 +117,7 @@ private:
 	uint8_t drive;										// the drive that this DM controls
 	uint8_t direction : 1,								// true=forwards, false=backwards
 			directionChanged : 1,						// set by CalcNextStepTime if the direction is changed
-			isExtruder : 1,								// true if this DM is for an extruder
+							: 1,						// unused
 			stepErrorType : 3,							// records what type of step error we had
 			stepsTakenThisSegment : 2;					// how many steps we have taken this phase, counts from 0 to 2. Last field in the byte so that we can increment it efficiently.
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate. Use the top 2 bits of the byte so that we can increment it efficiently.
@@ -139,7 +137,7 @@ private:
 	int32_t positionAtSegmentStart;						// the value of currentMotorPosition at the start of the current segment
 	int32_t positionAtMoveStart;						// the position at the start of the current move, if it is an isolated move
 #if STEPS_DEBUG
-	motioncalc_t positionRequested;						// accumulated position changes requested by moves executed
+	motioncalc_t positionRequested;						// accumulated position changes requested by moves executed - caution, the step ISR modifies this!
 #endif
 
 	// These values change as the segment is executed
@@ -263,7 +261,7 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 // Get the current position relative to the start of this segment, speed and acceleration. Units are microsteps and step clocks.
 // Return true if this drive is moving. Segments are advanced as necessary if we are in closed loop mode.
 // Inlined because it is only called from one place
-inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept
+inline bool DriveMovement::GetCurrentMotion(uint32_t when, float multiplier, MotionParameters& mParams) noexcept
 {
 	bool hasMotion = false;
 	AtomicCriticalSectionLocker lock;									// we don't want 'segments' changing while we do this
@@ -283,12 +281,30 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 				if (phaseStepControl.IsEnabled())
 				{
 					currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
-					distanceCarriedForwards += seg->GetLength() - (motioncalc_t)netStepsThisSegment;
 					phaseStepsTakenSinceMoveStart += seg->GetLength();
-					if (isExtruder)
+					movementAccumulator += netStepsThisSegment;			// update the amount of extrusion
+
+					motioncalc_t provisionalDistanceCarriedForwards = distanceCarriedForwards + seg->GetLength() - (motioncalc_t)netStepsThisSegment;
+					if (seg->GetNext() == nullptr && !seg->GetFlags().isExtruder)
 					{
-						movementAccumulator += netStepsThisSegment;		// update the amount of extrusion
+						// This is an axis and there are no further segments, so we may need to round the current position to the nearest microstep
+						if (fabsm(provisionalDistanceCarriedForwards) < 0.05)
+						{
+							provisionalDistanceCarriedForwards = (motioncalc_t)0.0;						// just remove the rounding error
+						}
+						else if (provisionalDistanceCarriedForwards > (motioncalc_t)0.95)
+						{
+							++currentMotorPosition;														// round up to next microstep
+							provisionalDistanceCarriedForwards = (motioncalc_t)0.0;
+						}
+						else if (provisionalDistanceCarriedForwards < -(motioncalc_t)0.95)
+						{
+							--currentMotorPosition;														// round down to next position
+							provisionalDistanceCarriedForwards = (motioncalc_t)0.0;
+						}
 					}
+					distanceCarriedForwards = provisionalDistanceCarriedForwards;
+
 					MoveSegment *oldSeg = seg;
 					segments = oldSeg->GetNext();
 					MoveSegment::Release(oldSeg);
@@ -299,20 +315,17 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 				timeSinceStart = seg->GetDuration();
 			}
 
-#if SUPPORT_S_CURVE
-			mParams.position = (float)((u + (0.5 * seg->GetA() + OneSixth * seg->GetJ() * timeSinceStart) * timeSinceStart) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
-#else
-			mParams.position = (float)((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
-#endif
-			currentMotorPosition = (int32_t)mParams.position;			// store the approximate position for OM updates
-			mParams.speed = (float)(u + seg->GetA() * timeSinceStart);
-			mParams.acceleration = (float)seg->GetA();
+			const float rawPosition = (float)((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
+			currentMotorPosition = (int32_t)rawPosition;												// store the approximate position for OM updates
+			mParams.position = rawPosition * multiplier;
+			mParams.speed = (float)(u + seg->GetA() * timeSinceStart) * multiplier;
+			mParams.acceleration = (float)seg->GetA() * multiplier;
 			return true;
 		}
 	}
 
 	// If we get here then no movement is taking place
-	mParams.position = (float)((motioncalc_t)currentMotorPosition + distanceCarriedForwards);
+	mParams.position = (float)((motioncalc_t)currentMotorPosition + distanceCarriedForwards) * multiplier;
 	mParams.speed = mParams.acceleration = 0.0;
 	return hasMotion;
 }

@@ -92,7 +92,7 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 		if (newBoard != CanInterface::GetCanAddress())
 		{
 			handle.Set(RemoteInputHandle::typeGpIn, gpinNumber, 0);
-			rslt = CanInterface::CreateHandle(newBoard, handle, pinName.c_str(), 0, MinimumGpinReportInterval, currentState, reply);
+			rslt = CanInterface::CreateHandle(newBoard, handle, pinName.c_str(), 0, MinimumGpinReportInterval, &currentState, reply);
 			if (rslt == GCodeResult::ok)
 			{
 				boardAddress = newBoard;
@@ -125,7 +125,7 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 #if SUPPORT_CAN_EXPANSION
 		if (boardAddress != CanInterface::GetCanAddress())
 		{
-			const GCodeResult rslt = CanInterface::GetHandlePinName(boardAddress, handle, currentState, reply);
+			const GCodeResult rslt = CanInterface::GetHandlePinName(boardAddress, handle, &currentState, reply);
 			if (rslt != GCodeResult::ok)
 			{
 				return rslt;

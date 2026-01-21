@@ -19,7 +19,7 @@ public:
 	bool Accept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept override;	// ask the responder to accept this connection, returns true if it did
 	void Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept override;	// terminate the responder if it is serving the specified protocol on the specified interface
 
-	void Diagnostics(MessageType mtype) const noexcept override;
+	void Diagnostics(const StringRef& reply) const noexcept override;
 
 	static void InitStatic() noexcept;
 	static void Disable() noexcept;

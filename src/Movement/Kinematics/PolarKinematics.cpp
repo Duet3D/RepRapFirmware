@@ -28,10 +28,15 @@ constexpr ObjectModelTableEntry PolarKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "name",	OBJECT_MODEL_FUNC(self->GetName(true)), 	ObjectModelEntryFlags::none },
+	{ "name",				OBJECT_MODEL_FUNC(self->GetName(true)), 				ObjectModelEntryFlags::none },
+	{ "radiusHomed",		OBJECT_MODEL_FUNC(self->homedRadius), 					ObjectModelEntryFlags::none },
+	{ "radiusMax",			OBJECT_MODEL_FUNC(self->maxRadius), 					ObjectModelEntryFlags::none },
+	{ "radiusMin",			OBJECT_MODEL_FUNC(self->minRadius), 					ObjectModelEntryFlags::none },
+	{ "ttAccMax",			OBJECT_MODEL_FUNC(self->maxTurntableAcceleration, 1), 	ObjectModelEntryFlags::none },
+	{ "ttSpeedMax",			OBJECT_MODEL_FUNC(self->maxTurntableSpeed, 1), 			ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t PolarKinematics::objectModelTableDescriptor[] = { 1, 1 };
+constexpr uint8_t PolarKinematics::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(PolarKinematics, Kinematics)
 
@@ -125,17 +130,25 @@ bool PolarKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 // 'numAxes' is the number of machine axes to convert, which will always be at least 3
 // 'motorPos' is the output vector of motor positions
 // Return true if successful, false if we were unable to convert
-bool PolarKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
+MovementError PolarKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
-	motorPos[0] = lrintf(fastSqrtf(fsquare(machinePos[0]) + fsquare(machinePos[1])) * stepsPerMm[0]);
-	motorPos[1] = (motorPos[0] == 0) ? 0 : lrintf(atan2f(machinePos[1], machinePos[0]) * RadiansToDegrees * stepsPerMm[1]);
+	MovementError rslt = MovementError::ok;
+	RoundToInt32(rslt, fastSqrtf(fsquare(machinePos[0]) + fsquare(machinePos[1])) * stepsPerMm[0], motorPos[0]);
+	if (motorPos[0] == 0)
+	{
+		motorPos[1] = 0;
+	}
+	else
+	{
+		RoundToInt32(rslt, atan2f(machinePos[1], machinePos[0]) * RadiansToDegrees * stepsPerMm[1], motorPos[1]);
+	}
 
 	// Transform remaining axes linearly
 	for (size_t axis = Z_AXIS; axis < numVisibleAxes; ++axis)
 	{
-		motorPos[axis] = lrintf(machinePos[axis] * stepsPerMm[axis]);
+		RoundToInt32(rslt, machinePos[axis] * stepsPerMm[axis], motorPos[axis]);
 	}
-	return true;
+	return rslt;
 }
 
 // Convert motor positions (measured in steps from reference position) to Cartesian coordinates

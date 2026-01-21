@@ -49,6 +49,7 @@ class WifiFirmwareUploader;
 NamedEnum(NetworkState, uint8_t,
 	disabled,					// Network disabled
 	enabled,					// Network enabled but not started yet
+	initFailed,					// tried to start it but failed initialisation
 	starting1,					// starting up (used by WiFi networking)
 	starting2,					// starting up (used by WiFi networking)
 	changingMode,				// running and in the process of switching between modes (used by WiFi networking)
@@ -72,7 +73,7 @@ public:
 #if HAS_NETWORKING
 	[[noreturn]] void Spin() noexcept;
 #endif
-	void Diagnostics(MessageType mtype) noexcept;
+	void Diagnostics(unsigned int part, const StringRef& reply) noexcept;
 	unsigned int GetNumNetworkInterfaces() const noexcept;
 	bool IsWiFiInterface(unsigned int interface) const noexcept;
 

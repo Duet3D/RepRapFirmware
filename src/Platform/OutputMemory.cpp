@@ -177,7 +177,7 @@ size_t OutputBuffer::cat(const char c) noexcept
 	{
 		// No - allocate a new item and copy the data
 		OutputBuffer *nextBuffer;
-		if (!Allocate(nextBuffer))
+		if (!Allocate(nextBuffer, false))
 		{
 			// We cannot store any more data
 			hadOverflow = true;
@@ -218,9 +218,10 @@ size_t OutputBuffer::cat(const char *_ecv_array src, size_t len) noexcept
 	{
 		if (last->dataLength == OUTPUT_BUFFER_SIZE)
 		{
-			// The last buffer is full
+			// Save at least some output buffers in case this buffer chain has to be sent via network.
+			// If we don't do this, the network responder may be unable to allocate enough for the header
 			OutputBuffer *nextBuffer;
-			if (!Allocate(nextBuffer))
+			if (!Allocate(nextBuffer, false))
 			{
 				// We cannot store any more data, stop here
 				hadOverflow = true;
@@ -359,13 +360,13 @@ bool OutputBuffer::WriteToFile(FileData& f) const noexcept
 }
 
 // Allocates an output buffer instance which can be used for (large) string outputs. This must be thread safe. Not safe to call from interrupts!
-/*static*/ bool OutputBuffer::Allocate(OutputBuffer *_ecv_null &buf) noexcept
+/*static*/ bool OutputBuffer::Allocate(OutputBuffer *_ecv_null &buf, bool allowReserved) noexcept
 {
 	{
 		TaskCriticalSectionLocker lock;
 
 		buf = freeOutputBuffers;
-		if (buf != nullptr)
+		if (buf != nullptr && (allowReserved || OUTPUT_BUFFER_COUNT - usedOutputBuffers > RESERVED_OUTPUT_BUFFERS))
 		{
 			freeOutputBuffers = buf->next;
 			usedOutputBuffers++;
@@ -473,10 +474,9 @@ bool OutputBuffer::WriteToFile(FileData& f) const noexcept
 	}
 }
 
-/*static*/ void OutputBuffer::Diagnostics(MessageType mtype) noexcept
+/*static*/ void OutputBuffer::Diagnostics(const StringRef& reply) noexcept
 {
-	reprap.GetPlatform().MessageF(mtype, "Used output buffers: %d of %d (%d max)\n",
-			usedOutputBuffers, OUTPUT_BUFFER_COUNT, maxUsedOutputBuffers);
+	reply.lcatf("Used output buffers: %d of %d (%d max)", usedOutputBuffers, OUTPUT_BUFFER_COUNT, maxUsedOutputBuffers);
 }
 
 //*************************************************************************************************

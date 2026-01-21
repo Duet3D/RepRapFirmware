@@ -115,7 +115,7 @@ constexpr ObjectModelTableEntry SdCardInfo::objectModelTable[] =
 	{ "openFiles",			OBJECT_MODEL_FUNC_IF(self->isMounted, MassStorage::AnyFileOpen(&(self->fileSystem))),					ObjectModelEntryFlags::none },
 	{ "partitionSize",		OBJECT_MODEL_FUNC_IF(self->isMounted, GetPartitionSize(context.GetLastIndex())),						ObjectModelEntryFlags::none },
 	{ "path",				OBJECT_MODEL_FUNC_NOSELF(VolPathNames[context.GetLastIndex()]),											ObjectModelEntryFlags::verbose },
-	{ "speed",				OBJECT_MODEL_FUNC_IF(self->isMounted, (int32_t)sd_mmc_get_interface_speed(context.GetLastIndex())),		ObjectModelEntryFlags::none },
+	{ "speed",				OBJECT_MODEL_FUNC_IF(self->isMounted, (int32_t)sd_mmc_get_interface_speed(context.GetLastIndex(), nullptr)),	ObjectModelEntryFlags::none },
 };
 
 // TODO Add storages here in the format
@@ -689,7 +689,7 @@ static bool DeleteContents(DIR& dir, const StringRef& filePath, ErrorMessageMode
 		if (!StringEqualsIgnoreCase(entry.fname, ".") && !StringEqualsIgnoreCase(entry.fname, ".."))
 		{
 			filePath.cat(entry.fname);
-			if (entry.fattrib & AM_DIR)
+			if ((entry.fattrib & AM_DIR) != 0)
 			{
 				DIR dir2;
 				if (f_opendir(&dir2, filePath.c_str()) == FR_OK)
@@ -1261,24 +1261,24 @@ GCodeResult MassStorage::GetFileInfo(const char *_ecv_array filePath, GCodeFileI
 	return infoParser.GetFileInfo(filePath, p_info, quitEarly, customVars);
 }
 
-void MassStorage::Diagnostics(MessageType mtype) noexcept
+void MassStorage::Diagnostics(const StringRef& reply) noexcept
 {
-	Platform& platform = reprap.GetPlatform();
-
 	// Show the number of free entries in the file table
-	platform.MessageF(mtype, "=== Storage ===\nFree file entries: %u\n", MassStorage::GetNumFreeFiles());
+	reply.printf("=== Storage ===\nFree file entries: %u", MassStorage::GetNumFreeFiles());
 
 # if HAS_MASS_STORAGE
 #  if HAS_HIGH_SPEED_SD
 	// Show the HSMCI CD pin and speed
-	platform.MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n",
-								(IsCardDetected(0) ? "detected" : "not detected"), (double)((float)sd_mmc_get_interface_speed(0) * 0.000001));
+	uint32_t requestedSpeed;
+	const uint32_t actualSpeed = sd_mmc_get_interface_speed(0, &requestedSpeed);
+	reply.lcatf("SD card 0 %s, requested/actual speed: %.1f/%.1fMBytes/sec",
+								(IsCardDetected(0) ? "detected" : "not detected"), (double)((float)requestedSpeed * 0.000001), (double)((float)actualSpeed * 0.000001));
 #  else
-	platform.MessageF(mtype, "SD card 0 %s\n", (MassStorage::IsCardDetected(0) ? "detected" : "not detected"));
+	reply.lcatf("SD card 0 %s", (MassStorage::IsCardDetected(0) ? "detected" : "not detected"));
 #  endif
 
 	// Show the longest SD card write time
-	platform.MessageF(mtype, "SD card longest read time %.1fms, write time %.1fms, max retries %u\n",
+	reply.lcatf("SD card longest read time %.1fms, write time %.1fms, max retries %u",
 								(double)DiskioGetAndClearLongestReadTime(), (double)DiskioGetAndClearLongestWriteTime(), DiskioGetAndClearMaxRetryCount());
 # endif
 }
@@ -1355,7 +1355,7 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, SdCardReturnedInfo
 	}
 
 	returnedInfo.cardCapacity = (uint64_t)sd_mmc_get_capacity(slot) * 1024;
-	returnedInfo.speed = sd_mmc_get_interface_speed(slot);
+	returnedInfo.speed = sd_mmc_get_interface_speed(slot, nullptr);
 	String<StringLength50> path;
 	path.printf("%u:/", slot);
 	uint32_t freeClusters;

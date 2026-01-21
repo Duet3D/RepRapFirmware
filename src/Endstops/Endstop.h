@@ -33,7 +33,7 @@ public:
 	virtual EndstopHitDetails CheckTriggered() noexcept = 0;
 	virtual bool Acknowledge(EndstopHitDetails what) noexcept = 0;
 #if SUPPORT_CAN_EXPANSION
-	virtual void HandleStalledRemoteDrivers(CanAddress boardAddress, RemoteDriversBitmap driversReportedStalled) noexcept { }		// overridden for stall endstops
+	virtual void HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled) noexcept { }		// overridden for stall endstops
 #endif
 	EndstopOrZProbe *_ecv_from _ecv_null GetNext() const noexcept { return next; }
 	void SetNext(EndstopOrZProbe *_ecv_from _ecv_null e) noexcept { next = e; }

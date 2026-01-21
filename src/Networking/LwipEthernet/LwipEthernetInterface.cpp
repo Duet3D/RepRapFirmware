@@ -395,15 +395,22 @@ void LwipEthernetInterface::Start() noexcept
 		ethernet_configure_interface(macAddress.bytes, hostname);
 		init_ethernet(DefaultIpAddress, DefaultNetMask, DefaultGateway);
 
-		// Initialise mDNS subsystem
-		mdns_resp_init();
-		mdns_resp_add_netif(&gs_net_if, hostname, MdnsTtl);
+		if (ethernetif_GetPhyInitResult() != GMAC_OK)
+		{
+			SetState(NetworkState::initFailed);
+		}
+		else
+		{
+			// Initialise mDNS subsystem
+			mdns_resp_init();
+			mdns_resp_add_netif(&gs_net_if, hostname, MdnsTtl);
 
-		// Initialise NetBIOS responder
-		netbiosns_init();
-		netbiosns_set_name(hostname);
+			// Initialise NetBIOS responder
+			netbiosns_init();
+			netbiosns_set_name(hostname);
 
-		initialised = true;
+			initialised = true;
+		}
 	}
 
 	SetState(NetworkState::establishingLink);
@@ -416,7 +423,7 @@ void LwipEthernetInterface::Stop() noexcept
 	{
 		netif_set_down(&gs_net_if);
 
-		pinMode(EthernetPhyResetPin, OUTPUT_LOW);		// hold the Ethernet Phy chip in reset
+		SetPinMode(EthernetPhyResetPin, OUTPUT_LOW);		// hold the Ethernet Phy chip in reset
 		SetState(NetworkState::disabled);
 	}
 }
@@ -542,15 +549,14 @@ void LwipEthernetInterface::Spin() noexcept
 	}
 }
 
-void LwipEthernetInterface::Diagnostics(MessageType mtype) noexcept
+void LwipEthernetInterface::Diagnostics(const StringRef& reply) noexcept
 {
-	platform.MessageF(mtype, "= Ethernet =\nInterface state: %s\n", GetStateName());
-	ethernetif_diagnostics(mtype);
+	reply.lcatf("= Ethernet =\nInterface state: %s", GetStateName());
+	ethernetif_diagnostics(reply);
 	for (const LwipSocket *s : sockets)
 	{
-		platform.MessageF(mtype, " %d", s->GetState());
+		reply.catf(" %d", s->GetState());
 	}
-	platform.Message(mtype, "\n");
 
 #if LWIP_STATS
 	if (reprap.Debug(Module::Network))

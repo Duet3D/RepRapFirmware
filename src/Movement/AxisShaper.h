@@ -47,13 +47,12 @@ public:
 	size_t GetNumImpulses() const noexcept { return numImpulses; }
 	motioncalc_t GetImpulseSize(size_t n) const noexcept { return coefficients[n]; }
 	uint32_t GetImpulseDelay(size_t n) const noexcept { return delays[n]; }
+	uint32_t GetPrepareAdvanceTime() const noexcept { return prepareAdvanceTime; }
 
 #if SUPPORT_REMOTE_COMMANDS
 	// Handle a request from the master board to set input shaping parameters
 	GCodeResult EutSetInputShaping(const CanMessageSetInputShapingNew& msg, size_t dataLength, const StringRef& reply) noexcept;
 #endif
-
-	void Diagnostics(MessageType mtype) noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
@@ -64,8 +63,10 @@ private:
 	GCodeResult UpdateRemoteInputShaping(const StringRef& reply) const noexcept;
 #endif
 
-	static constexpr unsigned int MaxImpulses = 5;
+	static constexpr float MinimumInputShapingFrequency = 4.0;
+	static constexpr float MaximumInputShapingFrequency = 400.0;
 	static constexpr float DefaultFrequency = 40.0;
+	static constexpr unsigned int MaxImpulses = 5;
 	static constexpr float DefaultDamping = 0.05;
 
 	// Input shaping parameters input by the user
@@ -77,6 +78,7 @@ private:
 	unsigned int numImpulses;							// the number of impulses
 	motioncalc_t coefficients[MaxImpulses];				// the coefficients of all the impulses, must add up to 1.0
 	uint32_t delays[MaxImpulses];						// the start delay in step clocks of each impulse, first one is normally zero
+	uint32_t prepareAdvanceTime;						// how far in advance we need to prepare moves, which depends on input shaping
 };
 
 #endif /* SRC_MOVEMENT_AXISSHAPER_H_ */

@@ -22,7 +22,7 @@ namespace MulticastResponder
 	void Stop() noexcept;
 	void SendResponse(uint8_t *data, size_t length) noexcept;
 	void ScheduleReboot() noexcept;
-	void Diagnostics(MessageType mtype) noexcept;
+	void Diagnostics(const StringRef& reply) noexcept;
 }
 
 #endif

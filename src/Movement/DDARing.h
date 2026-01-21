@@ -24,13 +24,13 @@ public:
 	void Exit() noexcept;
 
 	bool CanAddMove() const noexcept;
-	bool AddStandardMove(const RawMove &nextMove, bool doMotorMapping) noexcept SPEED_CRITICAL;	// Set up a new move, returning true if it represents real movement
+	MovementError AddStandardMove(const RawMove &nextMove, bool doMotorMapping) noexcept SPEED_CRITICAL;	// Set up a new move, returning true if it represents real movement
 	bool AddSpecialMove(float feedRate, const float coords[MaxDriversPerAxis]) noexcept;
 #if SUPPORT_ASYNC_MOVES
 	bool AddAsyncMove(const AsyncMove& nextMove) noexcept;
 #endif
 
-	uint32_t Spin(SimulationMode simulationMode, bool signalMoveCompletion, bool shouldStartMove) noexcept SPEED_CRITICAL;	// Try to process moves in the ring
+	uint32_t Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMode, bool signalMoveCompletion, bool shouldStartMove) noexcept SPEED_CRITICAL;	// Try to process moves in the ring
 	bool IsIdle() const noexcept;														// Return true if this DDA ring is idle
 	uint32_t GetGracePeriod() const noexcept { return gracePeriod; }					// Return the minimum idle time, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
@@ -66,26 +66,23 @@ public:
 #endif
 
 #if SUPPORT_LASER
-	uint32_t ManageLaserPower() noexcept;												// Manage the laser power
+	uint32_t ManageLaserPower(Platform& platform) noexcept;								// Manage the laser power
 #endif
-	uint32_t ManageIOBitsAndFeedForward() noexcept;										// Manage the IOBITS (G1 P parameter) and extruder heater feedforward
+	uint32_t ManageIOBitsAndFeedForward(Platform& platform) noexcept;					// Manage the IOBITS (G1 P parameter) and extruder heater feedforward
 
 	void RecordLookaheadError() noexcept { ++numLookaheadErrors; }						// Record a lookahead error
-	void Diagnostics(MessageType mtype, unsigned int ringNumber) noexcept;
+	void Diagnostics(const StringRef& reply, unsigned int ringNumber) noexcept;
 
 	bool SetWaitingToEmpty() noexcept;
 
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
-#if SUPPORT_REMOTE_COMMANDS
-	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;			// add a move from the ATE to the movement queue
-#endif
-
 protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept;
+	bool IsTimeToPrepareMove(uint32_t prepareAdvanceTime, uint32_t moveTimeLeft) const noexcept;
+	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, SimulationMode simulationMode) noexcept;
 
 	DDA* addPointer;															// Pointer to the next DDA that we can use to add a new move, if this DDA is free
 	DDA* volatile getPointer;													// Pointer to the oldest committed or provisional move, if not equal to addPointer
@@ -100,7 +97,6 @@ private:
 	uint32_t completedMoves;													// Number of moves completed in this ring
 
 	unsigned int numLookaheadUnderruns;											// How many times we have run out of moves to adjust during lookahead
-	unsigned int numPrepareUnderruns;											// How many times we wanted a new move but there were only un-prepared moves in the queue
 	unsigned int numNoMoveUnderruns;											// How many times we wanted a new move but there were none
 	unsigned int numLookaheadErrors;											// How many times our lookahead algorithm failed
 

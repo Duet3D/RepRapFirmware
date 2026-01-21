@@ -21,7 +21,7 @@ public:
 	PortControl() noexcept;
 	void Init() noexcept;
 	void Exit() noexcept;
-	bool Configure(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 	// Functions called by DDARing
 	void UpdatePorts(IoBits_t newPortState) noexcept;
@@ -30,11 +30,11 @@ public:
 
 private:
 
-	static const size_t MaxPorts = 16;		// the port bitmap is currently a 16-bit word
+	static const size_t MaxIoBitsPorts = 16;		// the port bitmap is currently a 16-bit word
 
-	IoPort portMap[MaxPorts];
+	uint8_t gpOutPortNumbers[MaxIoBitsPorts];
 	size_t numConfiguredPorts;
-	unsigned int advanceMillis;
+	uint32_t advanceMillis;
 	uint32_t advanceClocks;
 	IoBits_t currentPortState;
 };

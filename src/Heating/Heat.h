@@ -94,7 +94,7 @@ public:
 	size_t GetNumHeatersToReport() const noexcept;
 	size_t GetNumSensorsToReport() const noexcept;
 
-	void Diagnostics(MessageType mtype) noexcept;						// Output useful information
+	void Diagnostics(const StringRef& reply) noexcept;					// Output useful information
 
 	// Methods that relate to a particular heater
 	float GetAveragePWM(size_t heater) const noexcept					// Return the running average PWM to the heater as a fraction in [0, 1].

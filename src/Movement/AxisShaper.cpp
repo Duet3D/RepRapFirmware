@@ -25,22 +25,22 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(AxisShaper, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(AxisShaper, _condition, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(AxisShaper, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(AxisShaper, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry AxisShaper::objectModelArrayTable[] =
 {
 	// 0. Amplitudes
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numImpulses; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
-											-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->coefficients[context.GetLastIndex()], 3); }
+		OBJECT_MODEL_ARRAY_COUNT(self->numImpulses),
+		OBJECT_MODEL_ARRAY_VALUE(self->coefficients[context.GetLastIndex()], 3)
 	},
 	// 1. Durations
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numImpulses; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
-											-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->delays[context.GetLastIndex()] * (1.0/StepClockRate), 5); }
+		OBJECT_MODEL_ARRAY_COUNT(self->numImpulses),
+		OBJECT_MODEL_ARRAY_VALUE(self->delays[context.GetLastIndex()] * (1.0/StepClockRate), 5)
 	}
 };
 
@@ -65,7 +65,7 @@ AxisShaper::AxisShaper() noexcept
 	: type(InputShaperType::none),
 	  frequency(DefaultFrequency),
 	  zeta(DefaultDamping),
-	  numImpulses(1)
+	  numImpulses(1), prepareAdvanceTime(MoveTiming::UsualMinimumPreparedTime)
 {
 	coefficients[0] = 1.0;
 	delays[0] = 0;
@@ -74,8 +74,6 @@ AxisShaper::AxisShaper() noexcept
 // Process M593 (configure input shaping)
 GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	constexpr float MinimumInputShapingFrequency = (float)StepClockRate/(2 * 65535);		// we use a 16-bit number of step clocks to represent half the input shaping period
-	constexpr float MaximumInputShapingFrequency = 1000.0;
 	bool seen = false;
 
 	// If we are changing the type, frequency, damping or custom parameters, we will change multiple stored values used by the motion planner, so wait until movement has stopped.
@@ -97,7 +95,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		const InputShaperType newType(shaperName.c_str());
 		if (!newType.IsValid())
 		{
-			reply.printf("Unsupported input shaper type '%s'", shaperName.c_str());
+			reply.printf("Unknown input shaper type '%s'", shaperName.c_str());
 			return GCodeResult::error;
 		}
 		seen = true;
@@ -258,12 +256,20 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		}
 
 		// The sum of the coefficients must total 1, use this to fill in the last coefficient
+		// Also calculate the longest interval between adjacent impulses
 		motioncalc_t sum = 0.0;
+		uint32_t longestSegment = 0;
 		for (size_t i = 0; i + 1 < numImpulses; ++i)
 		{
 			sum += coefficients[i];
+			const uint32_t thisInterval = delays[i + 1] - delays[1];
+			if (thisInterval > longestSegment)
+			{
+				longestSegment = thisInterval;
+			}
 		}
 		coefficients[numImpulses - 1] = (motioncalc_t)1.0 - sum;
+		prepareAdvanceTime = max<uint32_t>(longestSegment + MoveTiming::AbsoluteMinimumPreparedTime, MoveTiming::UsualMinimumPreparedTime);
 
 		reprap.MoveUpdated();
 
@@ -306,11 +312,6 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		}
 	}
 	return GCodeResult::ok;
-}
-
-void AxisShaper::Diagnostics(MessageType mtype) noexcept
-{
-	// We no longer report anything here
 }
 
 #if SUPPORT_CAN_EXPANSION

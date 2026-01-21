@@ -62,8 +62,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 
 // The physical capabilities of the machine
 
-#include <Duet3Common.h>							// this file is in the CANlib project because both main and expansion boards need it
-
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
 constexpr size_t MaxCanDrivers = 30;
 constexpr size_t MaxCanBoards = 20;
@@ -110,8 +108,8 @@ constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB po
 // Drivers
 constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin(18), PortCPin(16), PortCPin(28), PortCPin(01), PortCPin(4),  PortCPin(9)  };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortBPin(5),  PortDPin(10), PortAPin(4),  PortAPin(22), PortCPin(3),  PortDPin(14) };
-constexpr Pin ENABLE_PINS_v01[NumDirectDrivers] =	{ PortBPin(4),  PortAPin(21), PortAPin(9),  PortAPin(23), PortAPin(2),  PortDPin(17) };
-constexpr Pin ENABLE_PINS_v100[NumDirectDrivers] =	{ PortBPin(4),  PortAPin(21), PortCPin(20), PortAPin(23), PortAPin(2),  PortDPin(17) };
+constexpr Pin ENABLE_PINS_v01[NumDirectDrivers] =	{ PortBPin(4),  PortAPin(21), PortAPin(9),  PortAPin(23), PortAPin(2),  PortDPin(17) };		// Enable pins for pre-production boards (version 0.1)
+constexpr Pin ENABLE_PINS_v100[NumDirectDrivers] =	{ PortBPin(4),  PortAPin(21), PortCPin(20), PortAPin(23), PortAPin(2),  PortDPin(17) };		// Enable pins for production board (version 1.0 and later)
 constexpr Pin DRIVER_ERR_PINS[NumDirectDrivers] =	{ PortDPin(29), PortCPin(17), PortDPin(13), PortCPin(02), PortDPin(31), PortCPin(10) };
 constexpr Pin StepGatePin = PortDPin(22);
 constexpr GpioPinFunction StepGatePinFunction = GpioPinFunction::C;			// TIOB11
@@ -272,7 +270,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC03 driver 4 dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC04 driver 4 step
 	{ TcOutput::tioa6,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out4"					},	// PC05 OUT4
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC06 EthernetPhyInterrupt (up to v1.0), USB_PWR_EN (v1.1)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"ate.usbpwren"			},	// PC06 EthernetPhyInterrupt (up to v1.0), USB_PWR_EN (v1.1)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out3.tach"				},	// PC07 OUT3_TACH
 	{ TcOutput::tioa7,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out7"					},	// PC08 OUT7
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC09 driver 5 step

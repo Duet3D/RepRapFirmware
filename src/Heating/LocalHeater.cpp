@@ -192,16 +192,18 @@ GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 	}
 
 	const float target = min<float>(GetTargetTemperature() + extrusionTemperatureBoost, GetHighestTemperatureLimit());
-	const HeaterMode newMode = (temperature + TemperatureCloseEnough < target) ? HeaterMode::heating
-								: (temperature > target + TemperatureCloseEnough) ? HeaterMode::cooling
-									: HeaterMode::stable;
+	UpdateHeaterMode(target);
+	return GCodeResult::ok;
+}
+
+// Determine and if necessary change the current heater mode
+void LocalHeater::UpdateHeaterMode(float targetTemperature) noexcept
+{
+	const HeaterMode newMode = (temperature + TemperatureCloseEnough < targetTemperature) ? HeaterMode::heating
+					: (temperature > targetTemperature + TemperatureCloseEnough) ? HeaterMode::cooling
+						: HeaterMode::stable;
 	if (newMode != mode)
 	{
-		if (reprap.Debug(Module::Heat) && mode == HeaterMode::off)
-		{
-			reprap.GetPlatform().MessageF(GenericMessage, "Heater %u switched on\n", GetHeaterNumber());
-		}
-
 		// The Heat task can preempt the GCodes task that calls this, so lock out the Heat task while we update multiple variables
 		TaskCriticalSectionLocker lock;
 		if (newMode == HeaterMode::heating)
@@ -212,7 +214,6 @@ GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 		heatingFaultCount = 0;
 		mode = newMode;
 	}
-	return GCodeResult::ok;
 }
 
 // Switch off the specified heater. If in tuning mode, delete the array used to store tuning temperature readings.
@@ -290,10 +291,7 @@ void LocalHeater::Spin() noexcept
 
 			if (IsPidMode(mode) && extrusionTemperatureBoost != lastExtrusionTemperatureBoost)
 			{
-				// Calculate new heater mode to prevent heater fault due to exceededAllowedExcursion
-				mode = (temperature + TemperatureCloseEnough < targetTemperature) ? HeaterMode::heating
-						: (temperature > targetTemperature + TemperatureCloseEnough) ? HeaterMode::cooling
-							: HeaterMode::stable;
+				UpdateHeaterMode(targetTemperature);									// calculate new heater mode to prevent heater fault due to exceededAllowedExcursion
 				lastExtrusionTemperatureBoost = extrusionTemperatureBoost;
 			}
 
@@ -424,13 +422,10 @@ void LocalHeater::Spin() noexcept
 					}
 					else
 					{
-						const float errorToUse = error;
-						{
-							InterruptCriticalSectionLocker lock;					// avoid a race with tasks that implement feedforward
-							iAccumulator = constrain<float>
-											(iAccumulator + (errorToUse * params.kP * params.recipTi * (HeatSampleIntervalMillis * MillisToSeconds)),
-												0.0, GetModel().GetMaxPwm());
-						}
+						TaskCriticalSectionLocker lock;					// avoid a race with tasks that implement feedforward
+						iAccumulator = constrain<float>
+										(iAccumulator + (error * params.kP * params.recipTi * (HeatSampleIntervalMillis * MillisToSeconds)),
+											0.0, GetModel().GetMaxPwm());
 						lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, GetModel().GetMaxPwm());
 					}
 #if HAS_VOLTAGE_MONITOR
@@ -575,22 +570,21 @@ void LocalHeater::SetFanFeedForwardPwm(float pwm) noexcept
 		const float pwmChange = pwm - lastFanPwm;
 		lastFanPwm = pwm;
 		const float boost = GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, pwmChange) * FanFeedForwardMultiplier;
-		InterruptCriticalSectionLocker lock;
+		TaskCriticalSectionLocker lock;
 		iAccumulator += boost;
 	}
 }
 
 // Set extrusion feedforward
-void LocalHeater::SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept
+void LocalHeater::ApplyExtrusionFeedForward() noexcept
 {
 	if (mode == HeaterMode::stable)
 	{
-		const float pwmChange = pwmBoost - lastExtrusionPwmBoost;
-		lastExtrusionPwmBoost = pwmBoost;
-		InterruptCriticalSectionLocker lock;
+		const float pwmChange = extrusionPwmBoost - previousExtrusionPwmBoost;
+		previousExtrusionPwmBoost = extrusionPwmBoost;
+		TaskCriticalSectionLocker lock;
 		iAccumulator += pwmChange;
 	}
-	extrusionTemperatureBoost = tempBoost;
 }
 
 /* Notes on the auto tune algorithm
@@ -995,15 +989,15 @@ GCodeResult LocalHeater::ApplyFeedForward(const CanMessageHeaterFeedForwardNew& 
 {
 	if (mode == HeaterMode::stable)
 	{
-		float pwmBoost = msg.extrusionPwmBoost - lastExtrusionPwmBoost;
-		lastExtrusionPwmBoost = msg.extrusionPwmBoost;
+		float pwmBoost = msg.extrusionPwmBoost - previousExtrusionPwmBoost;
+		previousExtrusionPwmBoost = msg.extrusionPwmBoost;
 		if (msg.fanPwmFraction != lastFanPwm)
 		{
 			const float pwmChange = msg.fanPwmFraction - lastFanPwm;
 			lastFanPwm = msg.fanPwmFraction;
 			pwmBoost += GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, pwmChange) * FanFeedForwardMultiplier;
 		}
-		InterruptCriticalSectionLocker lock;
+		TaskCriticalSectionLocker lock;
 		iAccumulator += pwmBoost;
 	}
 	extrusionTemperatureBoost = msg.extrusionTemperatureBoost;

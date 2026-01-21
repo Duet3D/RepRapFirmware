@@ -58,7 +58,6 @@ public:
 	virtual void Suspend(bool sus) noexcept = 0;						// Suspend the heater to conserve power or while doing Z probing
 	virtual float GetAccumulator() const noexcept = 0;					// Get the inertial term accumulator
 	virtual void SetFanFeedForwardPwm(float fanPwm) noexcept = 0;
-	virtual void SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept = 0;
 
 #if SUPPORT_CAN_EXPANSION
 	virtual bool IsLocal() const noexcept = 0;
@@ -83,6 +82,7 @@ public:
 
 	const FopDt& GetModel() const noexcept { return model; }			// Get the process model
 	GCodeResult SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	void SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
 	virtual GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept = 0;
@@ -127,6 +127,7 @@ protected:
 	virtual GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult UpdateHeaterMonitors(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult StartAutoTune(const StringRef& reply, bool seenA, float ambientTemp) noexcept = 0;
+	virtual void ApplyExtrusionFeedForward() noexcept = 0;
 
 	int GetSensorNumber() const noexcept { return sensorNumber; }
 	void SetSensorNumber(int sn) noexcept;
@@ -144,8 +145,9 @@ protected:
 
 	HeaterMonitor monitors[MaxMonitorsPerHeater];			// embedding them in the Heater uses less memory than dynamic allocation
 	volatile float lastFanPwm;								// The fan PWM when we last calculated heater feedforward for the fan
-	volatile float lastExtrusionPwmBoost;					// The last value of extrusion boost we applied
+	volatile float extrusionPwmBoost;						// The value of extrusion PWM boost to apply
 	volatile float extrusionTemperatureBoost;				// the amount of extrusion temperature boost we are currently applying
+	float previousExtrusionPwmBoost;						// The previoius value of extrusion boost we applied
 
 	bool tuned;												// true if tuning was successful
 
@@ -211,6 +213,7 @@ private:
 
 	bool isBedOrChamber;							// true if this was a bed or chamber heater when we were switched on
 	bool active;									// are we active or standby?
+	bool usingFeedForward;							// true if we have ever applied feedforward even if the amounts are zero
 	bool modelSetByUser;
 	bool monitorsSetByUser;
 };

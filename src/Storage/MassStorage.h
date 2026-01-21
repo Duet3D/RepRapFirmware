@@ -10,6 +10,42 @@
 
 #include <ctime>
 
+#ifdef __ECV__
+
+// Redefinitions of FatFs functions that we use with extra type information
+_ecv_spec FRESULT f_open (FIL* fp, const TCHAR *_ecv_array path, BYTE mode) noexcept;			/* Open or create a file */
+_ecv_spec FRESULT f_close (FIL* fp) noexcept;											/* Close an open file object */
+_ecv_spec FRESULT f_read (FIL* fp, void* buff, UINT btr, UINT* br) noexcept;			/* Read data from the file */
+_ecv_spec FRESULT f_write (FIL* fp, const void* buff, UINT btw, UINT* bw) noexcept;	/* Write data to the file */
+_ecv_spec FRESULT f_lseek (FIL* fp, FSIZE_t ofs) noexcept;							/* Move file pointer of the file object */
+_ecv_spec FRESULT f_truncate (FIL* fp) noexcept;										/* Truncate the file */
+_ecv_spec FRESULT f_sync (FIL* fp) noexcept;											/* Flush cached data of the writing file */
+_ecv_spec FRESULT f_opendir (DIR* dp, const TCHAR *_ecv_array path) noexcept;					/* Open a directory */
+_ecv_spec FRESULT f_closedir (DIR* dp) noexcept;										/* Close an open directory */
+_ecv_spec FRESULT f_readdir (DIR* dp, FILINFO* fno) noexcept;							/* Read a directory item */
+_ecv_spec FRESULT f_findfirst (DIR* dp, FILINFO* fno, const TCHAR *_ecv_array path, const TCHAR* pattern) noexcept;	/* Find first file */
+_ecv_spec FRESULT f_findnext (DIR* dp, FILINFO* fno) noexcept;						/* Find next file */
+_ecv_spec FRESULT f_mkdir (const TCHAR *_ecv_array path) noexcept;								/* Create a sub directory */
+_ecv_spec FRESULT f_unlink (const TCHAR *_ecv_array path) noexcept;								/* Delete an existing file or directory */
+_ecv_spec FRESULT f_rename (const TCHAR *_ecv_array path_old, const TCHAR *_ecv_array path_new) noexcept;	/* Rename/Move a file or directory */
+_ecv_spec FRESULT f_stat (const TCHAR *_ecv_array path, FILINFO* fno) noexcept;					/* Get file status */
+_ecv_spec FRESULT f_chmod (const TCHAR *_ecv_array path, BYTE attr, BYTE mask) noexcept;			/* Change attribute of a file/dir */
+_ecv_spec FRESULT f_utime (const TCHAR *_ecv_array path, const FILINFO* fno) noexcept;			/* Change timestamp of a file/dir */
+_ecv_spec FRESULT f_chdir (const TCHAR *_ecv_array path) noexcept;								/* Change current directory */
+_ecv_spec FRESULT f_chdrive (const TCHAR *_ecv_array path) noexcept;								/* Change current drive */
+_ecv_spec FRESULT f_getcwd (TCHAR *_ecv_array buff, UINT len) noexcept;							/* Get current directory */
+_ecv_spec FRESULT f_getfree (const TCHAR *_ecv_array path, DWORD* nclst, FATFS** fatfs) noexcept;	/* Get number of free clusters on the drive */
+_ecv_spec FRESULT f_getlabel (const TCHAR *_ecv_array path, TCHAR* label, DWORD* vsn) noexcept;	/* Get volume label */
+_ecv_spec FRESULT f_setlabel (const TCHAR *_ecv_array label) noexcept;							/* Set volume label */
+_ecv_spec FRESULT f_forward (FIL* fp, UINT(*func)(const BYTE *_ecv_array ,UINT) noexcept, UINT btf, UINT* bf) noexcept;	/* Forward data to the stream */
+_ecv_spec FRESULT f_expand (FIL* fp, FSIZE_t fsz, BYTE opt) noexcept;					/* Allocate a contiguous block to the file */
+_ecv_spec FRESULT f_mount (FATFS *_ecv_null fs, const TCHAR *_ecv_array path, BYTE opt) noexcept;			/* Mount/Unmount a logical drive */
+_ecv_spec FRESULT f_mkfs (const TCHAR *_ecv_array path, const MKFS_PARM* opt, void* work, UINT len) noexcept;	/* Create a FAT volume */
+_ecv_spec FRESULT f_fdisk (BYTE pdrv, const LBA_t ptbl[], void* work) noexcept;		/* Divide a physical drive into some partitions */
+_ecv_spec FRESULT f_setcp (WORD cp) noexcept;											/* Set current code page */
+
+#endif
+
 // Info returned by FindFirst/FindNext calls
 struct FileInfo
 {
@@ -87,7 +123,7 @@ namespace MassStorage
 	GCodeResult GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& info, bool quitEarly, GlobalVariables *_ecv_null customVars) noexcept;
 	GCodeResult Mount(size_t card, const StringRef& reply, bool reportSuccess) noexcept;
 	GCodeResult Unmount(size_t card, const StringRef& reply) noexcept;
-	void Diagnostics(MessageType mtype) noexcept;
+	void Diagnostics(const StringRef& reply) noexcept;
 
 # if SUPPORT_ASYNC_MOVES
 	FileStore *_ecv_null DuplicateOpenHandle(const FileStore *f) noexcept;	// Duplicate a file handle, with the duplicate having its own position in the file. Use only when files opened in read-only mode.

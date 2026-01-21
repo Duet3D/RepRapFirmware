@@ -108,56 +108,54 @@ void SoftwareResetData::Populate(uint16_t reason, const uint32_t *_ecv_array _ec
 	}
 }
 
-void SoftwareResetData::Printit(MessageType mtype, unsigned int slot) const noexcept
+void SoftwareResetData::PrintPart1(unsigned int slot, const StringRef& reply) const noexcept
 {
-	String<StringLength256> scratchString;		// long enough to print 28 stack entries @ 9 bytes each, but not 29
-	scratchString.copy("Last software reset ");
+	reply.copy("Last software reset ");
 	if (when != 0)
 	{
 		const time_t whenTime = (time_t)when;
 		tm timeInfo;
 		gmtime_r(&whenTime, &timeInfo);
-		scratchString.catf("at %04u-%02u-%02u %02u:%02u",
+		reply.catf("at %04u-%02u-%02u %02u:%02u",
 						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min);
 	}
 	else
 	{
-		scratchString.cat("time unknown");
+		reply.cat("time unknown");
 	}
-	scratchString.cat(", reason: ");
+	reply.cat(", reason: ");
 	if (resetReason & (uint32_t)SoftwareResetReason::deliberate)
 	{
-		scratchString.cat("deliberate ");
+		reply.cat("deliberate ");
 	}
-	scratchString.cat(ReasonText[(resetReason >> 5) & 0x0F]);
+	reply.cat(ReasonText[(resetReason >> 5) & 0x0F]);
 
 	// If it's a forced hard fault or a memory access fault, provide some more information
 	if ((resetReason & (uint16_t)SoftwareResetReason::mainReasonMask) == (uint16_t)SoftwareResetReason::hardFault && (hfsr & (1u << 30)) != 0)
 	{
-		if (cfsr & (1u << 25)) { scratchString.cat(" zeroDiv"); }
-		if (cfsr & (1u << 24)) { scratchString.cat(" unaligned"); }
-		if (cfsr & (1u << 18)) { scratchString.cat(" invPC"); }
-		if (cfsr & (1u << 17)) { scratchString.cat(" invState"); }
-		if (cfsr & (1u << 16)) { scratchString.cat(" undefInstr"); }
-		if (cfsr & (1u << 15)) { scratchString.cat(" bfarValid"); }
-		if (cfsr & (1u << 12)) { scratchString.cat(" stkErr"); }
-		if (cfsr & (1u << 11)) { scratchString.cat(" unstkErr"); }
-		if (cfsr & (1u << 10)) { scratchString.cat(" imprec"); }
-		if (cfsr & (1u << 9)) { scratchString.cat(" precise"); }
-		if (cfsr & (1u << 8)) { scratchString.cat(" ibus"); }
+		if (cfsr & (1u << 25)) { reply.cat(" zeroDiv"); }
+		if (cfsr & (1u << 24)) { reply.cat(" unaligned"); }
+		if (cfsr & (1u << 18)) { reply.cat(" invPC"); }
+		if (cfsr & (1u << 17)) { reply.cat(" invState"); }
+		if (cfsr & (1u << 16)) { reply.cat(" undefInstr"); }
+		if (cfsr & (1u << 15)) { reply.cat(" bfarValid"); }
+		if (cfsr & (1u << 12)) { reply.cat(" stkErr"); }
+		if (cfsr & (1u << 11)) { reply.cat(" unstkErr"); }
+		if (cfsr & (1u << 10)) { reply.cat(" imprec"); }
+		if (cfsr & (1u << 9)) { reply.cat(" precise"); }
+		if (cfsr & (1u << 8)) { reply.cat(" ibus"); }
 	}
 #if USE_MPU
 	else if ((resetReason & (uint16_t)SoftwareResetReason::mainReasonMask) == (uint16_t)SoftwareResetReason::memFault)
 	{
-		if (cfsr & (1u << 7)) { scratchString.cat(" mmarValid"); }
-		if (cfsr & (1u << 4)) { scratchString.cat(" mstkErr"); }
-		if (cfsr & (1u << 3)) { scratchString.cat(" munstkErr"); }
-		if (cfsr & (1u << 1)) { scratchString.cat(" daccViol"); }
-		if (cfsr & (1u << 0)) { scratchString.cat(" iaccViol"); }
+		if (cfsr & (1u << 7)) { reply.cat(" mmarValid"); }
+		if (cfsr & (1u << 4)) { reply.cat(" mstkErr"); }
+		if (cfsr & (1u << 3)) { reply.cat(" munstkErr"); }
+		if (cfsr & (1u << 1)) { reply.cat(" daccViol"); }
+		if (cfsr & (1u << 0)) { reply.cat(" iaccViol"); }
 	}
 #endif
-	reprap.GetPlatform().MessageF(mtype, "%s, %s spinning, available RAM %" PRIi32 ", slot %u\n",
-						scratchString.c_str(),
+	reply.catf(", %s spinning, available RAM %" PRIi32 ", slot %u",
 						Module(resetReason & 0x1F).ToString(),
 						neverUsedRam,
 						slot);
@@ -165,19 +163,21 @@ void SoftwareResetData::Printit(MessageType mtype, unsigned int slot) const noex
 	// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
 	// The task name may include nulls at the end, so print it as a string
 	const uint32_t taskNameWords[2] = { taskName, 0u };
-	reprap.GetPlatform().MessageF(mtype,
-			"Software reset code 0x%04x HFSR 0x%08" PRIx32 " CFSR 0x%08" PRIx32 " ICSR 0x%08" PRIx32 " BFAR 0x%08" PRIx32 " SP 0x%08" PRIx32 " Task %s Freestk %u %s\n",
-			resetReason, hfsr, cfsr, icsr, bfar, sp, (const char *)taskNameWords, (unsigned int)stackOffset, (sp == 0) ? "n/a" : (stackMarkerValid) ? "ok" : "bad marker"
-		);
+	reply.lcatf("Software reset code 0x%04x HFSR 0x%08" PRIx32 " CFSR 0x%08" PRIx32 " ICSR 0x%08" PRIx32 " BFAR 0x%08" PRIx32 " SP 0x%08" PRIx32 " Task %s Freestk %u %s",
+				resetReason, hfsr, cfsr, icsr, bfar, sp, (const char *)taskNameWords, (unsigned int)stackOffset, (sp == 0) ? "n/a" : (stackMarkerValid) ? "ok" : "bad marker"
+			  );
+}
+
+void SoftwareResetData::PrintPart2(const StringRef& reply) const noexcept
+{
 	if (sp != 0)
 	{
 		// We saved a stack dump, so print it
-		scratchString.Clear();
+		reply.copy("Stack:");
 		for (uint32_t stval : stack)
 		{
-			scratchString.catf(" %08" PRIx32, stval);
+			reply.catf(" %08" PRIx32, stval);
 		}
-		reprap.GetPlatform().MessageF(mtype, "Stack:%s\n", scratchString.c_str());
 	}
 }
 

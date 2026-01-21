@@ -40,6 +40,8 @@ enum class GCodeState : uint8_t
 	m109ToolChangeComplete,
 	m109WaitForTemperature,
 
+	doingDeferredPause,
+
 	// These pairs must be contiguous
 	pausing1,
 	pausing2,

@@ -391,9 +391,9 @@ void TelnetResponder::ProcessLine() noexcept
 	}
 }
 
-void TelnetResponder::Diagnostics(MessageType mt) const noexcept
+void TelnetResponder::Diagnostics(const StringRef& reply) const noexcept
 {
-	GetPlatform().MessageF(mt, " Telnet(%d)", (int)responderState);
+	reply.catf(" Telnet(%d)", (int)responderState);
 }
 
 unsigned int TelnetResponder::numSessions = 0;

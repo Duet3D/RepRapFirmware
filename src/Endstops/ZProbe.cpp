@@ -15,8 +15,6 @@
 #include <Math/Matrix.h>
 #include <Movement/MoveDebugFlags.h>
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -25,33 +23,33 @@
 #define OBJECT_MODEL_FUNC(...)							OBJECT_MODEL_FUNC_BODY(ZProbe, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition, ...)			OBJECT_MODEL_FUNC_IF_BODY(ZProbe, _condition, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_ARRAY_IF(_condition, ...)		OBJECT_MODEL_FUNC_ARRAY_IF_BODY(ZProbe, _condition, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)				OBJECT_MODEL_ARRAY_COUNT_BODY(ZProbe, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)					OBJECT_MODEL_ARRAY_VALUE_BODY(ZProbe, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 {
 	// 0. Offsets
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const ZProbe*)self)->offsets[context.GetLastIndex()], 2); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetVisibleAxes()),
+		OBJECT_MODEL_ARRAY_VALUE(self->offsets[context.GetLastIndex()], 2)
 	},
 	// 1. Speeds
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return (((const ZProbe*)self)->type == ZProbeType::scanningAnalog) ? 3 : 2; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-					{ return ExpressionValue(InverseConvertSpeedToMmPerMin(((const ZProbe*)self)->probeSpeeds[context.GetLastIndex()]), 1); }
+		OBJECT_MODEL_ARRAY_COUNT((self->type == ZProbeType::scanningAnalog) ? 3 : 2),
+		OBJECT_MODEL_ARRAY_VALUE(InverseConvertSpeedToMmPerMin(self->probeSpeeds[context.GetLastIndex()]), 1)
 	},
 	// 2. Temperature coefficients
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::temperatureCoefficients); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-					{ return ExpressionValue(((const ZProbe*)self)->temperatureCoefficients[context.GetLastIndex()], 5); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(ARRAY_SIZE(ZProbe::temperatureCoefficients)),
+		OBJECT_MODEL_ARRAY_VALUE(self->temperatureCoefficients[context.GetLastIndex()], 5)
 	},
 	// 3. Values
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return (((const ZProbe*)self)->type == ZProbeType::dumbModulated) ? 2 : 1; },
+		OBJECT_MODEL_ARRAY_COUNT((self->type == ZProbeType::dumbModulated) ? 2 : 1),
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 					{	int32_t v1 = 0;
 						return ExpressionValue
@@ -64,17 +62,15 @@ constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 	// 4. Dive heights
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::diveHeights); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue(((const ZProbe*)self)->diveHeights[context.GetLastIndex()], 1); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(ARRAY_SIZE(ZProbe::diveHeights)),
+		OBJECT_MODEL_ARRAY_VALUE(self->diveHeights[context.GetLastIndex()], 1)
 	},
 #if SUPPORT_SCANNING_PROBES
 	// 5. Scanning probe coefficients
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::scanCoefficients); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue(((const ZProbe*)self)->scanCoefficients[context.GetLastIndex()], 7); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(ARRAY_SIZE(ZProbe::scanCoefficients)),
+		OBJECT_MODEL_ARRAY_VALUE(self->scanCoefficients[context.GetLastIndex()], 7)
 	},
 #endif
 };
@@ -107,17 +103,32 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "temperatureCoefficients",	OBJECT_MODEL_FUNC_ARRAY(2), 																ObjectModelEntryFlags::none },
 	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->targetAdcValue), 											ObjectModelEntryFlags::none },
 	{ "tolerance",					OBJECT_MODEL_FUNC(self->tolerance, 3), 														ObjectModelEntryFlags::none },
+#if SUPPORT_SCANNING_PROBES
+	{ "touchMode",					OBJECT_MODEL_FUNC_IF(self->IsScanning(), self, 1),											ObjectModelEntryFlags::none },
+#endif
 	{ "travelSpeed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->travelSpeed), 1), 					ObjectModelEntryFlags::none },
 	{ "triggerHeight",				OBJECT_MODEL_FUNC(-self->offsets[Z_AXIS], 3), 												ObjectModelEntryFlags::none },
 	{ "type",						OBJECT_MODEL_FUNC((int32_t)self->type), 													ObjectModelEntryFlags::none },
 	{ "value",						OBJECT_MODEL_FUNC_ARRAY(3), 																ObjectModelEntryFlags::live },
+
+#if SUPPORT_SCANNING_PROBES
+	// 1. probe.touchMode members
+	{ "active",						OBJECT_MODEL_FUNC(self->useTouchMode), 														ObjectModelEntryFlags::none },
+	{ "speed",						OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->touchModeProbeSpeed), 1),				ObjectModelEntryFlags::none },
+	{ "threshold",					OBJECT_MODEL_FUNC(self->touchModeThreshold, 2), 											ObjectModelEntryFlags::none },
+	{ "triggerHeight",				OBJECT_MODEL_FUNC(self->touchModeTriggerHeight, 3), 										ObjectModelEntryFlags::none },
+#endif
 };
 
-constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 17 + 3 * SUPPORT_SCANNING_PROBES };
+constexpr uint8_t ZProbe::objectModelTableDescriptor[] =
+{ 	1 + SUPPORT_SCANNING_PROBES,
+	17 + 4 * SUPPORT_SCANNING_PROBES,
+#if SUPPORT_SCANNING_PROBES
+	4
+#endif
+};
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ZProbe)
-
-#endif
 
 ZProbe::ZProbe(unsigned int num, ZProbeType p_type) noexcept : EndstopOrZProbe(Z_AXIS), lastStopHeight(0.0), number(num), isDeployedByUser(false)
 {
@@ -190,7 +201,7 @@ float ZProbe::GetDiveHeight(int tapsDone) const noexcept
 float ZProbe::GetStartingHeight(bool firstTap, float previousHeightError) const noexcept
 {
 	return ((!firstTap && diveHeights[1] < diveHeights[0]) ? diveHeights[1] + previousHeightError : diveHeights[0])
-			+ GetActualTriggerHeight();
+			+ GetActiveModeTriggerHeight();
 }
 
 #if SUPPORT_SCANNING_PROBES
@@ -198,6 +209,17 @@ float ZProbe::GetStartingHeight(bool firstTap, float previousHeightError) const 
 float ZProbe::GetScanningHeight() const noexcept
 {
 	return GetActualTriggerHeight();
+}
+
+float ZProbe::GetActiveModeTriggerHeight() const noexcept
+{
+	return (type == ZProbeType::scanningAnalog && useTouchMode) ? touchModeTriggerHeight : GetActualTriggerHeight();
+}
+
+float ZProbe::GetProbingSpeed(int tapsDone) const noexcept
+{
+	return (type == ZProbeType::scanningAnalog && useTouchMode) ? touchModeProbeSpeed
+			: probeSpeeds[(tapsDone < 0) ? 0 : 1];
 }
 
 #endif
@@ -288,6 +310,13 @@ int32_t ZProbe::GetSecondaryValues(int32_t& v1) const noexcept
 // Test whether we are at or near the stop. May be called from an ISR as well and from a normal task context.
 bool ZProbe::Stopped() const noexcept
 {
+#if SUPPORT_SCANNING_PROBES
+	if (type == ZProbeType::scanningAnalog && useTouchMode)
+	{
+		return touchTriggered;
+	}
+#endif
+
 	const int32_t zProbeVal = GetReading();
 	return zProbeVal >= targetAdcValue;
 }
@@ -536,6 +565,33 @@ GCodeResult ZProbe::SetScanningCoefficients(float aParam, float bParam, float cP
 	scanCoefficients[3] =  cParam;
 	isCalibrated = true;
 	reprap.SensorsUpdated();
+	return GCodeResult::ok;
+}
+
+// Set touch mode parameters (M558.3)
+GCodeResult ZProbe::SetTouchModeParameters(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	bool seen = false;
+	gb.TryGetBValue('S', useTouchMode, seen);
+	gb.TryGetFValue('H', touchModeTriggerHeight, seen);
+	gb.TryGetLimitedFValue('V', touchModeThreshold, seen, 0.0, TouchModeMaxThreshold);
+	{
+		float speed;
+		if (gb.TryGetPositiveFValue('F', speed, seen))
+		{
+			touchModeProbeSpeed = ConvertSpeedFromMmPerMin(speed);
+		}
+	}
+
+	if (seen)
+	{
+		reprap.SensorsUpdated();
+	}
+	else
+	{
+		reply.printf("Z probe %u touch mode: %s" "active, speed %.1fmm/min, trigger height %.2fmm, threshold %.2f",
+						number, (useTouchMode) ? "" : "not ", (double)InverseConvertSpeedToMmPerMin(touchModeProbeSpeed), (double)touchModeTriggerHeight, (double)touchModeThreshold);
+	}
 	return GCodeResult::ok;
 }
 

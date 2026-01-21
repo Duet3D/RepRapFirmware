@@ -69,7 +69,7 @@ public:
 	static void FinishedProcessing() noexcept;
 
 	// Generate diagnostic data
-	static void Diagnostics(MessageType mt, Platform& p) noexcept;
+	static void Diagnostics(const StringRef& reply, Platform& p) noexcept;
 
 private:
 	Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, CanAddress p_ba, uint8_t devNum, const char *_ecv_array format, va_list vargs) noexcept;

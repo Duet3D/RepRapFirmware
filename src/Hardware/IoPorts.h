@@ -12,6 +12,7 @@
 
 #include <Interrupts.h>
 #include <AnalogIn.h>
+#include <AnalogOut.h>
 
 // Class to represent a port
 class IoPort
@@ -39,6 +40,22 @@ public:
 	bool GetTotalInvert() const noexcept { return totalInvert; }
 
 	bool ReadDigital() const noexcept;
+
+#if SAME5x
+	// Read the pin through the EIC debouncer. Only valid if an interrupt has been attached to the pin with debouncing enabled.
+	// On the SAME5x there is no debouncing on the pin itself, but the EI can deglitch or debounce before it generated an interrupt.
+	// The problem with this scheme is that if we read the pin inside the ISR, the state we read may not be the same as the state that caused the interrupt.
+	// This is a particular problem when the interrupt mode is 'change'. It can cause lost state changes for endstops or Z probes, because if e.g. the
+	// probe makes contact but bounces a bit, the contact may generate an interrupt but the ISR could read the pin as not triggered because of a bounce.
+	// If that bounce is too short to pass through the debouncer/deglitcher then we don't detect that the probe has triggered.
+	// We can mitigate this when using the debouncer if we read the pin state via the debounce register instead.
+	bool ReadDebouncedDigital() const noexcept
+	{
+		const bool b = ReadDebouncedPin(logicalPin);
+		return (totalInvert) ? !b : b;
+	}
+#endif
+
 	bool AttachInterrupt(StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param) const noexcept;
 	void DetachInterrupt() const noexcept;
 #if SAME5x
@@ -76,7 +93,7 @@ public:
 #endif
 
 	// Low level port access
-	static void SetPinMode(Pin p, PinMode mode) noexcept;
+	static void SetPinMode(Pin p, PinMode mode, bool debounce = false) noexcept;
 	static bool ReadPin(Pin p) noexcept;
 	static void WriteDigital(Pin p, bool high) noexcept;
 	static void WriteAnalog(Pin p, float pwm, uint16_t frequency) noexcept;
@@ -104,6 +121,31 @@ protected:
 };
 
 static_assert(sizeof(IoPort) == 2, "Unexpected size for class IoPort");		// try to keep these small because triggers have arrays of them
+
+#ifndef DUET_NG
+
+// For all boards except Duet 2 we just pass calls to these functions on to CoreN2G, so inline them
+/*static*/ inline void IoPort::SetPinMode(Pin pin, PinMode mode, bool debounce) noexcept
+{
+	::SetPinMode(pin, mode, debounce);
+}
+
+/*static*/ inline bool IoPort::ReadPin(Pin pin) noexcept
+{
+	return digitalRead(pin);
+}
+
+/*static*/ inline void IoPort::WriteDigital(Pin pin, bool high) noexcept
+{
+	digitalWrite(pin, high);
+}
+
+/*static*/ inline void IoPort::WriteAnalog(Pin pin, float pwm, uint16_t freq) noexcept
+{
+	AnalogOut::Write(pin, pwm, freq);
+}
+
+#endif
 
 // Class to represent an output port that might (or might not) support PWM
 class PwmPort : public IoPort

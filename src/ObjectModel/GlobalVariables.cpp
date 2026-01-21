@@ -11,6 +11,13 @@
 // This function is not used in this class
 const ObjectModelClassDescriptor *_ecv_null GlobalVariables::GetObjectModelClassDescriptor() const noexcept { return nullptr; }
 
+// Report all variables
+void GlobalVariables::ReportAllAsJson(OutputBuffer *buf) const THROWS(GCodeException)
+{
+	ObjectExplorationContext context;
+	ReportAsJson(buf, context, nullptr, 0, "");
+}
+
 // Construct a JSON representation of those parts of the object model requested by the user
 // This overrides the standard definition because the variable names are not fixed
 // We ignore any remaining key or flags and just report all the variables

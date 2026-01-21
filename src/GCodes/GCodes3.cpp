@@ -56,15 +56,16 @@ GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply) THROWS
 // Note, in the NIST specification G53 doesn't affect how G92 is interpreted.
 GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	MovementState& ms = GetMovementState(gb);
+
 #if SUPPORT_COORDINATE_ROTATION
-	if (g68Angle != 0.0 && gb.SeenAny("XY") && gb.DoingCoordinateRotation())
+	if (ms.g68Angle != 0.0 && gb.SeenAny("XY") && gb.DoingCoordinateRotation())
 	{
 		reply.copy("not supported when coordinate rotation is in effect");
 		return GCodeResult::error;
 	}
 #endif
 
-	MovementState& ms = GetMovementState(gb);
 	AxesBitmap axesIncluded;
 
 	// Don't wait for the machine to stop if only extruder drives are being reset.
@@ -116,10 +117,8 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 		{
 			ToolOffsetInverseTransform(ms);					// make sure the limits are reflected in the user position
 		}
-		float ncoords[MaxAxes];
-		memcpyf(ncoords, ms.coords, ARRAY_SIZE(ncoords));
-		move.AxisAndBedTransform(ncoords, ms.currentTool, true);
-		ms.SetNewPositionOfOwnedAxes(ncoords);
+
+		ms.SetNewPositionOfOwnedAxes();
 		if (!IsSimulating())
 		{
 			axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
@@ -256,9 +255,27 @@ bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const noexcept
 			return false;
 		}
 	}
+
 	return true;
 }
 
+# if SUPPORT_COORDINATE_ROTATION
+
+bool GCodes::WriteCoordinateRotation(FileStore *f, const MovementState& ms) const noexcept
+{
+	String<StringLength100> buf;
+	if (ms.g68Angle != 0.0)
+	{
+		buf.printf("G68 X%.3f Y%.3f R%.2f\n", (double)ms.g68Centre[0], (double)ms.g68Centre[1], (double)ms.g68Angle);
+	}
+	else
+	{
+		buf.copy("G69\n");
+	}
+	return f->Write(buf.c_str());
+}
+
+# endif
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
@@ -292,7 +309,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 			}
 
 			// Now that lastKnownEndpoints is up to date, save it
-			MovementState::RestoreEndpointsAfterSimulating();
+			MovementState::SaveEndpointsBeforeSimulating();
 
 			// Pretend that all axes have been homed
 			axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);
@@ -517,7 +534,6 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 					reprap.MoveUpdated();
 				}
 				move.SetAxisDriversConfig(drive, numValues, drivers);
-				move.SetAsExtruder(drive, false);
 #if SUPPORT_CAN_EXPANSION
 				axesToUpdate.SetBit(drive);
 #endif
@@ -539,8 +555,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 		for (size_t i = 0; i < numValues; ++i)
 		{
 			move.SetExtruderDriver(i, drivers[i]);
+#if SUPPORT_CAN_EXPANSION || SUPPORT_PHASE_STEPPING
 			const size_t drive = ExtruderToLogicalDrive(i);
-			move.SetAsExtruder(drive, true);
+#endif
 #if SUPPORT_CAN_EXPANSION
 			axesToUpdate.SetBit(drive);
 #endif
@@ -833,80 +850,94 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
+			if (!seen && !LockAllMovementSystemsAndWaitForStandstill(gb))
+			{
+				return GCodeResult::notFinished;
+			}
+
 			seen = true;
 			switch (commandFraction)
 			{
 			case -1:
-			{
-				const StepMode mode = (StepMode)gb.GetLimitedUIValue(axisLetters[axis], (uint32_t) StepMode::unknown);
-				const bool ret = move.SetStepMode(axis, mode, reply);
-				if (!ret)
 				{
-					reply.printf("Could not set step mode for axis %c to mode %u", axisLetters[axis], (uint16_t)mode);
-					return GCodeResult::error;
+					const StepMode mode = (StepMode)gb.GetLimitedUIValue(axisLetters[axis], (uint32_t) StepMode::unknown);
+					const bool ret = move.SetStepMode(axis, mode, reply);
+					if (!ret)
+					{
+						reply.printf("Could not set step mode for axis %c to mode %u", axisLetters[axis], (uint16_t)mode);
+						return GCodeResult::error;
+					}
+					break;
 				}
-				break;
-			}
 			case kvSubCommand:
 			case kaSubCommand:
-			{
-				const float value = gb.GetLimitedFValue(axisLetters[axis], 0, FLT_MAX);
-				move.ConfigurePhaseStepping(axis, value, commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
-				break;
-			}
+				{
+					const float value = gb.GetLimitedFValue(axisLetters[axis], 0, FLT_MAX);
+					move.ConfigurePhaseStepping(axis, value, commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
+					break;
+				}
 			}
 		}
 	}
 
 	if (gb.Seen(extrudeLetter))
 	{
+		if (!seen && !LockAllMovementSystemsAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+
 		seen = true;
 		switch (commandFraction)
 		{
 		case -1:
-		{
-			uint32_t eVals[MaxExtruders];
-			size_t eCount = numExtruders;
-			gb.GetUnsignedArray(eVals, eCount, true);
-
-			for (size_t e = 0; e < eCount; e++)
 			{
-				if (eVals[e] >= (uint32_t)StepMode::unknown)
+				uint32_t eVals[MaxExtruders];
+				size_t eCount = numExtruders;
+				gb.GetUnsignedArray(eVals, eCount, true);
+
+				for (size_t e = 0; e < eCount; e++)
 				{
-					reply.printf("Unknown mode %lu", eVals[e]);
-					return GCodeResult::error;
+					if (eVals[e] >= (uint32_t)StepMode::unknown)
+					{
+						reply.printf("Unknown mode %lu", eVals[e]);
+						return GCodeResult::error;
+					}
+					const bool ret = move.SetStepMode(ExtruderToLogicalDrive(e), (StepMode)eVals[e], reply);
+					if (!ret)
+					{
+						reply.printf("Could not set step mode for extruder %u to mode %lu", e, eVals[e]);
+						return GCodeResult::error;
+					}
 				}
-				const bool ret = move.SetStepMode(ExtruderToLogicalDrive(e), (StepMode)eVals[e], reply);
-				if (!ret)
-				{
-					reply.printf("Could not set step mode for extruder %u to mode %lu", e, eVals[e]);
-					return GCodeResult::error;
-				}
+				break;
 			}
-			break;
-		}
 		case kvSubCommand:
 		case kaSubCommand:
-		{
-			float eVals[MaxExtruders];
-			size_t eCount = numExtruders;
-			gb.GetFloatArray(eVals, eCount, true);
-
-			for (size_t e = 0; e < eCount; e++)
 			{
-				if (eVals[e] >= FLT_MAX || eVals[e] < 0)
+				float eVals[MaxExtruders];
+				size_t eCount = numExtruders;
+				gb.GetFloatArray(eVals, eCount, true);
+
+				for (size_t e = 0; e < eCount; e++)
 				{
-					reply.printf("Invalid K%c %f", commandFraction == kvSubCommand ? 'v' : 'a', (double)eVals[e]);
-					return GCodeResult::error;
+					if (eVals[e] >= FLT_MAX || eVals[e] < 0)
+					{
+						reply.printf("Invalid K%c %f", commandFraction == kvSubCommand ? 'v' : 'a', (double)eVals[e]);
+						return GCodeResult::error;
+					}
+					move.ConfigurePhaseStepping(ExtruderToLogicalDrive(e), eVals[e], commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
 				}
-				move.ConfigurePhaseStepping(ExtruderToLogicalDrive(e), eVals[e], commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
+				break;
 			}
-			break;
-		}
 		}
 	}
 
-	if (!seen)
+	if (seen)
+	{
+		reprap.MoveUpdated();
+	}
+	else
 	{
 		switch (commandFraction)
 		{
@@ -952,53 +983,6 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 
 #endif
 
-#if SUPPORT_S_CURVE
-GCodeResult GCodes::ConfigureSCurve(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
-{
-	bool seen = false;
-	Move& move = reprap.GetMove();
-	bool enable;
-
-	if (gb.TryGetBValue('S', enable, seen))
-	{
-		bool phaseSetEnabled = true;
-		for (size_t axis = 0; axis < numTotalAxes; axis++)
-		{
-			if (move.GetStepMode(axis) != StepMode::phase)
-			{
-				phaseSetEnabled = false;
-				break;
-			}
-		}
-
-		for (size_t extruder = 0; extruder < numExtruders; extruder++)
-		{
-			if (move.GetStepMode(ExtruderToLogicalDrive(extruder)) != StepMode::phase)
-			{
-				phaseSetEnabled = false;
-				break;
-			}
-		}
-
-		if (enable && !phaseSetEnabled)
-		{
-			reply.copy("All axes and extruders must be using phase stepping to enable S-curve acceleration.");
-			return GCodeResult::error;
-		}
-
-		move.UseSCurve(enable);
-	}
-
-	if (!seen)
-	{
-		reply.printf(move.IsUsingSCurve() ? "Using S Curve acceleration" : "Not using S Curve acceleration");
-	}
-
-	return GCodeResult::ok;
-}
-#endif
-
-
 // Deal with M569
 GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
@@ -1026,7 +1010,7 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 				? CanInterface::ConfigureRemoteDriver(id, gb, reply)
 					:
 #endif
-					ConfigureLocalDriver(gb, reply, id.localDriver);
+					reprap.GetMove().ConfigureLocalDriver(gb, reply, id.localDriver);
 		if (res != GCodeResult::ok || (!isSetOfReadings && gb.GetCommandFraction() != 4))
 		{
 			break;
@@ -1038,306 +1022,6 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 		reply.cat(" ],\n");
 	}
 	return res;
-}
-
-GCodeResult GCodes::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
-{
-	if (drive >= reprap.GetMove().GetNumActualDirectDrivers())
-	{
-		reply.printf("Driver number %u out of range", drive);
-		return GCodeResult::error;
-	}
-
-	switch (gb.GetCommandFraction())
-	{
-	case 0:
-	case -1:
-		return ConfigureLocalDriverBasicParameters(gb, reply, drive);
-
-	case 1:
-	case 3:
-	case 4:
-	case 5:
-	case 6:
-	case 8:
-		// Main board drivers do not support closed loop modes, or reading encoders,
-		// or reading motor currents through the subfunction 8
-		reply.copy("Command is not supported on local drivers");
-		return GCodeResult::error;
-
-#if SUPPORT_TMC22xx || SUPPORT_TMC51xx
-	case 2:			// read/write smart driver register
-		{
-			gb.MustSee('R');
-			const uint8_t regNum = gb.GetLimitedUIValue('R', 0, 0x80);
-			if (gb.Seen('V'))
-			{
-				const uint32_t regVal = gb.GetUIValue();
-				return SmartDrivers::SetAnyRegister(drive, reply, regNum, regVal);
-			}
-			return SmartDrivers::GetAnyRegister(drive, reply, regNum);
-		}
-#endif
-
-	case 7:			// configure brake
-		return reprap.GetMove().ConfigureDriverBrakePort(gb, reply, drive);
-
-	default:
-		return GCodeResult::warningNotSupported;
-	}
-}
-
-GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
-{
-	if (gb.SeenAny("RS"))
-	{
-		if (!LockAllMovementSystemsAndWaitForStandstill(gb))
-		{
-			return GCodeResult::notFinished;
-		}
-	}
-
-	bool seen = false;
-	bool warn = false;
-	Move& move = reprap.GetMove();
-	if (gb.Seen('S'))
-	{
-		seen = true;
-		move.SetDirectionValue(drive, gb.GetIValue() != 0);
-	}
-	if (gb.Seen('R'))
-	{
-		seen = true;
-		move.SetEnableValue(drive, (int8_t)gb.GetIValue());
-	}
-	if (gb.Seen('T'))
-	{
-		seen = true;
-		float timings[4];
-		size_t numTimings = ARRAY_SIZE(timings);
-		gb.GetFloatArray(timings, numTimings, true);
-		if (numTimings != ARRAY_SIZE(timings))
-		{
-			reply.copy("bad timing parameter");
-			return GCodeResult::error;
-		}
-		move.SetDriverStepTiming(drive, timings);
-	}
-
-#if HAS_SMART_DRIVERS
-	{
-		uint32_t val;
-# if SUPPORT_TMC51xx
-		int32_t ival;
-# endif
-		if (gb.TryGetUIValue('D', val, seen))	// set driver mode
-		{
-# if SUPPORT_PHASE_STEPPING
-			if (SmartDrivers::IsPhaseSteppingEnabled(drive))
-			{
-				reply.printf("Can not set driver %u mode while phase stepping is enabled", drive);
-				return GCodeResult::error;
-			}
-# endif
-			if (!SmartDrivers::SetDriverMode(drive, val))
-			{
-				reply.printf("Driver %u does not support mode '%s'", drive, TranslateDriverMode(val));
-				return GCodeResult::error;
-			}
-		}
-
-		if (gb.TryGetUIValue('C', val, seen))		// set chopper control register
-		{
-			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::chopperControl, val))
-			{
-				reply.printf("Bad ccr for driver %u", drive);
-				return GCodeResult::error;
-			}
-		}
-
-		if (gb.TryGetUIValue('F', val, seen))		// set off time
-		{
-			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::toff, val))
-			{
-				reply.printf("Bad off time for driver %u", drive);
-				return GCodeResult::error;
-			}
-		}
-
-		if (gb.TryGetUIValue('B', val, seen))		// set blanking time
-		{
-			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tblank, val))
-			{
-				reply.printf("Bad blanking time for driver %u", drive);
-				return GCodeResult::error;
-			}
-		}
-
-		if (gb.TryGetUIValue('V', val, seen))		// set microstep interval for changing from stealthChop to spreadCycle
-		{
-			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tpwmthrs, val))
-			{
-				reply.printf("Bad mode change microstep interval for driver %u", drive);
-				return GCodeResult::error;
-			}
-		}
-
-# if SUPPORT_TMC51xx
-		if (gb.TryGetUIValue('H', val, seen))		// set coolStep threshold
-		{
-			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::thigh, val))
-			{
-				reply.printf("Bad high speed microstep interval for driver %u", drive);
-				return GCodeResult::error;
-			}
-		}
-
-		if (gb.TryGetLimitedIValue('U', ival, seen, -1, 32))
-		{
-			if (!SmartDrivers::SetCurrentScaler(drive, ival))
-			{
-				reply.printf("Bad current scaler for driver %u", drive);
-				return GCodeResult::error;
-			}
-			if (ival >= 0 && ival < 16)
-			{
-				reply.printf("Current scaler = %ld for driver %u might result in poor microstep performance. Recommended minimum is 16.", ival, drive);
-				warn = true;
-			}
-		}
-# endif
-	}
-
-	if (gb.Seen('Y'))								// set spread cycle hysteresis
-	{
-		seen = true;
-		uint32_t hvalues[3];
-		size_t numHvalues = 3;
-		gb.GetUnsignedArray(hvalues, numHvalues, false);
-		if (numHvalues == 2 || numHvalues == 3)
-		{
-			// There is a constraint on the sum of HSTRT and HEND, so set HSTART then HEND then HSTART again because one may go up and the other down
-			(void)SmartDrivers::SetRegister(drive, SmartDriverRegister::hstart, hvalues[0]);
-			bool ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hend, hvalues[1]);
-			if (ok)
-			{
-				ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hstart, hvalues[0]);
-			}
-			if (ok && numHvalues == 3)
-			{
-				ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hdec, hvalues[2]);
-			}
-			if (!ok)
-			{
-				reply.printf("Bad hysteresis setting for driver %u", drive);
-				return GCodeResult::error;
-			}
-		}
-		else
-		{
-			reply.copy("Expected 2 or 3 Y values");
-			return GCodeResult::error;
-		}
-	}
-#endif
-
-	if (warn)
-	{
-		return GCodeResult::warning;
-	}
-
-	if (!seen)
-	{
-		// Print the basic parameters common to all types of driver
-		reply.printf("Drive %u runs %s, active %s enable, timing ",
-						drive,
-						(move.GetDirectionValue(drive)) ? "forwards" : "in reverse",
-						(move.GetEnableValue(drive) > 0) ? "high" : "low");
-		{
-			float timings[4];
-			const bool isSlowDriver = move.GetDriverStepTiming(drive, timings);
-			if (isSlowDriver)
-			{
-				reply.catf("%.1f:%.1f:%.1f:%.1fus", (double)timings[0], (double)timings[1], (double)timings[2], (double)timings[3]);
-#ifdef DUET3_MB6XD
-				move.GetActualDriverTimings(timings);
-				reply.catf(" (actual %.1f:%.1f:%.1f:%.1fus)", (double)timings[0], (double)timings[1], (double)timings[2], (double)timings[3]);
-#endif
-			}
-			else
-			{
-				reply.cat("fast");
-			}
-		}
-
-#if HAS_SMART_DRIVERS
-		if (drive < move.GetNumSmartDrivers())
-		{
-			// It's a smart driver, so print the parameters common to all modes, except for the position
-			reply.catf(", mode %s, ccr 0x%05" PRIx32 ", toff %" PRIu32 ", tblank %" PRIu32,
-					TranslateDriverMode(SmartDrivers::GetDriverMode(drive)),
-					SmartDrivers::GetRegister(drive, SmartDriverRegister::chopperControl),
-					SmartDrivers::GetRegister(drive, SmartDriverRegister::toff),
-					SmartDrivers::GetRegister(drive, SmartDriverRegister::tblank)
-				);
-
-# if SUPPORT_TMC51xx
-			{
-				const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
-				const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
-				bool bdummy;
-				const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * reprap.GetMove().DriveStepsPerMm(axis));
-				const uint8_t iRun = SmartDrivers::GetIRun(drive);
-				const uint8_t iHold = SmartDrivers::GetIHold(drive);
-				const uint32_t gs = SmartDrivers::GetGlobalScaler(drive);
-				const float current = SmartDrivers::GetCalculatedCurrent(drive);
-				reply.catf(", thigh %" PRIu32 " (%.1f mm/sec), gs=%lu, iRun=%u, iHold=%u, current=%.3f", thigh, (double)mmPerSec, gs, iRun, iHold, (double)current);
-			}
-# endif
-
-			// Print the additional parameters that are relevant in the current mode
-			if (SmartDrivers::GetDriverMode(drive) == DriverMode::spreadCycle)
-			{
-				reply.catf(", hstart/hend/hdec %" PRIu32 "/%" PRIu32 "/%" PRIu32,
-							SmartDrivers::GetRegister(drive, SmartDriverRegister::hstart),
-							SmartDrivers::GetRegister(drive, SmartDriverRegister::hend),
-							SmartDrivers::GetRegister(drive, SmartDriverRegister::hdec)
-						  );
-			}
-
-# if SUPPORT_TMC22xx || SUPPORT_TMC51xx
-			if (SmartDrivers::GetDriverMode(drive) == DriverMode::stealthChop)
-			{
-				const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
-				const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
-				bool bdummy;
-				const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * reprap.GetMove().DriveStepsPerMm(axis));
-				const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
-				const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
-				const unsigned int pwmScaleSum = pwmScale & 0xFF;
-				const int pwmScaleAuto = (int)((((pwmScale >> 16) & 0x01FF) ^ 0x0100) - 0x0100);
-				const unsigned int pwmOfsAuto = pwmAuto & 0xFF;
-				const unsigned int pwmGradAuto = (pwmAuto >> 16) & 0xFF;
-				reply.catf(", tpwmthrs %" PRIu32 " (%.1f mm/sec)"", pwmScaleSum %u, pwmScaleAuto %d, pwmOfsAuto %u, pwmGradAuto %u",
-							tpwmthrs, (double)mmPerSec, pwmScaleSum, pwmScaleAuto, pwmOfsAuto, pwmGradAuto);
-			}
-# endif
-			// Finally, print the microstep position
-			{
-				const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
-				if (mstepPos < 1024)
-				{
-					reply.catf(", pos %" PRIu32, mstepPos);
-				}
-				else
-				{
-					reply.cat(", pos unknown");
-				}
-			}
-		}
-#endif
-	}
-	return GCodeResult::ok;
 }
 
 #if SUPPORT_COORDINATE_ROTATION
@@ -1368,25 +1052,25 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		gb.MustSee('B', 'Y');
 		centreY = gb.GetFValue();
 
-		g68Centre[0] = centreX + GetWorkplaceOffset(gb, 0);
-		g68Centre[1] = centreY + GetWorkplaceOffset(gb, 1);
+		MovementState& ms = GetMovementState(gb);
+		ms.g68Centre[0] = centreX + GetWorkplaceOffset(gb, 0);
+		ms.g68Centre[1] = centreY + GetWorkplaceOffset(gb, 1);
 #if SUPPORT_ASYNC_MOVES
-		const float oldG68Angle = g68Angle;
+		const float oldG68Angle = ms.g68Angle;
 #endif
 		if (gb.Seen('I'))
 		{
-			g68Angle += angle;
+			ms.g68Angle += angle;
 		}
 		else
 		{
-			g68Angle = angle;
+			ms.g68Angle = angle;
 		}
 #if SUPPORT_ASYNC_MOVES
-		if (g68Angle != 0.0 && oldG68Angle == 0.0)
+		if (ms.g68Angle != 0.0 && oldG68Angle == 0.0)
 		{
 			// We have just started doing coordinate rotation, so if we own axis letter X we need to own Y and vice versa
 			// Simplest is just to say we don't own either in the axis letters bitmap
-			MovementState& ms = GetMovementState(gb);
 			ms.ReleaseAxisLetter('X');
 			ms.ReleaseAxisLetter('Y');
 		}
@@ -1398,11 +1082,11 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 }
 
 // Account for coordinate rotation. Only called when the angle to rotate is nonzero, so we don't check that here.
-void GCodes::RotateCoordinates(float angleDegrees, float coords[2]) const noexcept
+void GCodes::RotateCoordinates(const MovementState& ms, float angleDegrees, float coords[2]) const noexcept
 {
 	const float angle = angleDegrees * DegreesToRadians;
-	const float newX = (coords[0] - g68Centre[0]) * cosf(angle)    + (coords[1] - g68Centre[1]) * sinf(angle) + g68Centre[0];
-	const float newY = (coords[0] - g68Centre[0]) * (-sinf(angle)) + (coords[1] - g68Centre[1]) * cosf(angle) + g68Centre[1];
+	const float newX = (coords[0] - ms.g68Centre[0]) * cosf(angle) - (coords[1] - ms.g68Centre[1]) * sinf(angle) + ms.g68Centre[0];
+	const float newY = (coords[0] - ms.g68Centre[0]) * sinf(angle) + (coords[1] - ms.g68Centre[1]) * cosf(angle) + ms.g68Centre[1];
 	coords[0] = newX;
 	coords[1] = newY;
 }

@@ -49,7 +49,7 @@ constexpr float DefaultZInstantDv = 10.0;
 constexpr float DefaultEInstantDv = 5.0;
 
 constexpr float DefaultMinFeedrate = 0.5;				// the default minimum movement speed in mm/sec (extruding moves will go slower than this if the extrusion rate demands it)
-constexpr float AbsoluteMinFeedrate = 0.01;				// the absolute minimum movement speed in mm/sec
+constexpr float AbsoluteMinFeedrate = 0.001;			// the absolute minimum movement speed in mm/sec (reduced, see issue #1172)
 constexpr float ImpossiblyHighFeedRate = 10000.0;		// a feedrate higher than any that are likely to be achieved
 
 constexpr float MinimumJerk = 0.1;						// the minimum jerk in mm/sec
@@ -66,6 +66,12 @@ constexpr unsigned int MaxTools = 50;					// this limit is to stop the serialise
 constexpr unsigned int MinVisibleAxes = 2;				// the minimum number of axes that we allow to be visible
 
 constexpr unsigned int DefaultBacklashCorrectionDistanceFactor = 10;	// backlash correction is spread over (backlash amount * this) mm
+
+constexpr float MaxCncRadiusErrorMm = 0.002;			// max difference between G2/G3 start and end distances from arc centre when in CNC mm mode, see NIST 3.5.3.2
+constexpr float MaxCncRadiusErrorInches = 0.0002;		// max difference between G2/G3 start and end distances from arc centre when in CNC inches mode, see NIST 3.5.3.2
+constexpr float MaxNonCncRadiusError = 0.05;			// max difference between G2/G3 start and end distances from arc centre when not in CNC mode (mm)
+
+constexpr float MaxRelativeBabystepping = 10.0;			// increased from 1.0mm because we have an OEM using 40mm layer height
 
 // Timeouts
 constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
@@ -147,13 +153,9 @@ constexpr size_t MaxHeaterNameLength = StringLength50;	// Maximum number of char
 constexpr size_t MaxFanNameLength = StringLength50;		// Maximum number of characters in a fan name
 constexpr size_t MaxToolNameLength = StringLength50;	// Maximum allowed length for tool names
 
-#ifdef DUET3_ATE
+// GCodeReplyLength is also the maximum size of a fragment of the diagnostics, for example the Tasks section, so 256 isn't long enough on some processors
 constexpr size_t GCodeReplyLength = StringLength500;	// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer (ATE codes can generate long replies)
 constexpr size_t FormatStringLength = StringLength500;	// GCode replies are processed by Platform::MessageF which uses an intermediate buffer of this length
-#else
-constexpr size_t GCodeReplyLength = StringLength256;	// Maximum number of characters in a GCode reply that doesn't use an OutputBuffer
-constexpr size_t FormatStringLength = StringLength256;
-#endif
 constexpr size_t MachineNameLength = StringLength50;
 constexpr size_t RepRapPasswordLength = StringLength20;
 constexpr size_t MediumStringLength = MaxFilenameLength;
@@ -180,12 +182,14 @@ constexpr size_t MinimumBuffersForObjectModel = 20;		// Minimum number of free b
 #elif SAM4E || SAM4S
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 26;				// How many OutputBuffer instances do we have?
-constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response
+constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buffers after long responses, enough to hold a status response
 constexpr size_t MinimumBuffersForObjectModel = 20;		// Minimum number of free buffers we want before we start assembling a request for the object model
 #else
 # error Unsupported processor
 #endif
 
+constexpr size_t MaxReportedAxes = 5;					// This used to be fixed at 9 but even 6 is too much for some Duet 2 configurations in RRF 3.6.0-rc.1
+constexpr size_t MaxReportedAxesForPanelDue = 6;		// If the requester is PanelDue then we can return more axes because fewer fields are included
 constexpr size_t maxQueuedCodes = 16;					// How many codes can be queued?
 
 #if SAME70 || SAME5x
@@ -281,7 +285,7 @@ constexpr size_t MaxThumbnails = 4;						// Maximum number of thumbnail images r
 
 // Filesystem and upload defaults
 #define FS_PREFIX				"0:"
-#define WEB_DIR					"0:/www/"				// Place to find web files on the SD card
+#define DEFAULT_WEB_DIR			"0:/www/"				// Place to find web files on the SD card
 #define GCODE_DIR				"0:/gcodes/"			// Ditto - G-Codes
 #define DEFAULT_SYS_DIR			"0:/sys/"				// Ditto - System files (can be changed using M505)
 #define MACRO_DIR				"0:/macros/"			// Ditto - Macro files
@@ -295,7 +299,7 @@ constexpr size_t MaxThumbnails = 4;						// Maximum number of thumbnail images r
 // As at 2020-05-02 the longest filename requested by DWC is "/fonts/materialdesignicons-webfont.3e2c1c79.eot" which is 48 characters long
 // It must be small enough that a filename within this length doesn't cause an overflow in MassStorage::CombineName. This is checked by the static_assert below.
 constexpr size_t MaxExpectedWebDirFilenameLength = MaxFilenameLength - 20;
-static_assert(MaxExpectedWebDirFilenameLength + strlen(WEB_DIR) + strlen(".gz") <= MaxFilenameLength);
+static_assert(MaxExpectedWebDirFilenameLength + strlen(DEFAULT_WEB_DIR) + strlen(".gz") <= MaxFilenameLength);
 
 #define UPLOAD_EXTENSION ".part"					// Extension to a filename for a file being uploaded
 

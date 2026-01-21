@@ -46,11 +46,10 @@ typedef GCodeException BootFlashError;
 typedef GCodeException FlashEraseError;
 
 template<class T>
-class FlashOption
+class FlashOption final
 {
 public:
     FlashOption() noexcept : _dirty(false) {}
-    virtual ~FlashOption() {}
     void set(const T& value) noexcept { _value = value; _dirty = true; }
     const T& get() noexcept { return _value; }
     bool isDirty() noexcept { return _dirty; }

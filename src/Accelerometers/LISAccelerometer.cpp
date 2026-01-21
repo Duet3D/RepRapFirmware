@@ -113,7 +113,7 @@ bool LISAccelerometer::Configure(uint16_t& samplingRate, uint8_t& resolution) no
 	case AccelerometerType::LIS3DH:
 	default:
 		// Set up control registers 1 and 4 according to the selected sampling rate and resolution
-		ctrlReg_0x20 = 0;												// collect no axes for now
+		ctrlReg_0x20 = 0;													// collect no axes for now
 		{
 			uint8_t ctrlReg_0x23 = (1u << 7);								// set block data update
 			if (resolution >= 12)											// if high resolution mode
@@ -259,8 +259,8 @@ bool LISAccelerometer:: StartCollecting(uint8_t axes) noexcept
 	totalNumRead = 0;
 
 	// Before we enable data collection, check that the interrupt line is low
-	pinMode(int1Pin, INPUT);			// make sure we can read the interrupt pin
-	delayMicroseconds(5);
+	SetPinMode(int1Pin, INPUT, true);			// make sure we can read the interrupt pin
+	delay(2);									// wait for longer than the debounce time
 	interruptError = digitalRead(int1Pin);
 	if (interruptError)
 	{
@@ -268,11 +268,13 @@ bool LISAccelerometer:: StartCollecting(uint8_t axes) noexcept
 	}
 
 	const bool ok = WriteRegister(LisRegister::Ctrl_0x20, ctrlRegValue);
+	goodInterrupts = spuriousInterrupts = 0;
 	return ok && AttachPinInterrupt(int1Pin, Int1Interrupt, InterruptMode::rising, CallbackParameter(this));
 }
 
 // Collect some data from the FIFO, suspending until the data is available
-unsigned int LISAccelerometer::CollectData(const uint16_t *_ecv_array *collectedData, uint16_t &dataRate, bool &overflowed) noexcept
+// The overflowedOrSpuriousInterrupts return value means the fifo overflowed if we return nonzero, or there were too many spurious interrupts if we return zero
+unsigned int LISAccelerometer::CollectData(const uint16_t *_ecv_array *collectedData, uint16_t &dataRate, bool &overflowedOrSpuriousInterrupts) noexcept
 {
 	// Wait until we have some data
 	taskWaiting = TaskBase::GetCallerTaskHandle();
@@ -310,7 +312,16 @@ unsigned int LISAccelerometer::CollectData(const uint16_t *_ecv_array *collected
 		break;
 	}
 
-	if (numToRead != 0)
+	if (numToRead == 0)
+	{
+		++spuriousInterrupts;
+		if (spuriousInterrupts > 10 && spuriousInterrupts > goodInterrupts/4)
+		{
+			overflowedOrSpuriousInterrupts = true;
+			DetachPinInterrupt(int1Pin);
+		}
+	}
+	else
 	{
 		// Read the data
 		// When the auto-increment bit is set, after reading register 0x2D it wraps back to 0x28
@@ -321,12 +332,13 @@ unsigned int LISAccelerometer::CollectData(const uint16_t *_ecv_array *collected
 		}
 
 		*collectedData = reinterpret_cast<const uint16_t* _ecv_array>(DataBuffer());
-		overflowed = (fifoStatus & 0x40) != 0;
+		overflowedOrSpuriousInterrupts = (fifoStatus & 0x40) != 0;
 		const uint32_t interval = lastInterruptTime - firstInterruptTime;
 		dataRate = (totalNumRead == 0 || interval == 0)
 					? 0
 					: (totalNumRead * (uint64_t)StepClockRate)/interval;
 		totalNumRead += numToRead;
+		++goodInterrupts;
 	}
 	return numToRead;
 }
@@ -334,6 +346,7 @@ unsigned int LISAccelerometer::CollectData(const uint16_t *_ecv_array *collected
 // Stop collecting data
 void LISAccelerometer::StopCollecting() noexcept
 {
+	DetachPinInterrupt(int1Pin);
 	WriteRegister(LisRegister::Ctrl_0x20, 0);
 }
 

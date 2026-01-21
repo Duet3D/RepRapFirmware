@@ -32,8 +32,6 @@
 ReadWriteLock EndstopsManager::endstopsLock;
 ReadWriteLock EndstopsManager::zProbesLock;
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -41,32 +39,33 @@ ReadWriteLock EndstopsManager::zProbesLock;
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(EndstopsManager, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(EndstopsManager, _condition, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(EndstopsManager, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(EndstopsManager, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry EndstopsManager::objectModelArrayTable[] =
 {
 	// 0. Analog sensors
 	{
 		&Heat::sensorsLock,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetHeat().GetNumSensorsToReport(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetHeat().FindSensor(context.GetLastIndex()).Ptr()); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetHeat().GetNumSensorsToReport()),
+		OBJECT_MODEL_ARRAY_VALUE_NOSELF(reprap.GetHeat().FindSensor(context.GetLastIndex()).Ptr())
 	},
 	// 1. Axis endstops
 	{
 		&endstopsLock,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-						{ return ExpressionValue(((const EndstopsManager*)self)->FindEndstopWhenLockOwned(context.GetLastIndex())); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetTotalAxes()),
+		OBJECT_MODEL_ARRAY_VALUE(self->FindEndstopWhenLockOwned(context.GetLastIndex()))
 	},
 	// 2. Filament monitors
 	{
 		&FilamentMonitor::filamentMonitorsLock,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return FilamentMonitor::GetNumMonitorsToReport(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(FilamentMonitor::GetMonitorAlreadyLocked(context.GetLastIndex())); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(FilamentMonitor::GetNumMonitorsToReport()),
+		OBJECT_MODEL_ARRAY_VALUE_NOSELF(FilamentMonitor::GetMonitorAlreadyLocked(context.GetLastIndex()))
 	},
 	// 3. GpIn ports
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetPlatform().GetNumGpInputsToReport(); },
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetPlatform().GetNumGpInputsToReport()),
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 						{
 							const GpInputPort& port = reprap.GetPlatform().GetGpInPort(context.GetLastIndex());
@@ -76,9 +75,8 @@ constexpr ObjectModelArrayTableEntry EndstopsManager::objectModelArrayTable[] =
 	// 4. Z probes
 	{
 		&zProbesLock,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const EndstopsManager*)self)->GetNumProbesToReport(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-						{ return ExpressionValue(((const EndstopsManager*)self)->GetZProbe(context.GetLastIndex()).Ptr()); }
+		OBJECT_MODEL_ARRAY_COUNT(self->GetNumProbesToReport()),
+		OBJECT_MODEL_ARRAY_VALUE(self->GetZProbe(context.GetLastIndex()).Ptr())
 	}
 };
 
@@ -99,11 +97,9 @@ constexpr uint8_t EndstopsManager::objectModelTableDescriptor[] = { 1, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(EndstopsManager)
 
-#endif
-
 EndstopsManager::EndstopsManager() noexcept
 		: activeEndstops(nullptr),
-#if HAS_STALL_DETECT
+#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 		  extrudersEndstop(nullptr),
 #endif
 		  isHomingMove(false)
@@ -226,8 +222,8 @@ void EndstopsManager::EnableAxisEndstops(AxesBitmap axes, const float speeds[Max
 	}
 }
 
-// Enable extruder endstops. This adds to any existing axis endstops, so you must call EnableAxisEndstops before calling this.
-void EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders, const float speeds[MaxExtruders]) THROWS(GCodeException)
+// Enable extruder endstops. This adds to any existing axis endstops, so if you want to enable axis endstops too then you must call EnableAxisEndstops before calling this.
+void EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders, const float speeds[MaxExtruders], bool& reduceAcceleration) THROWS(GCodeException)
 {
 	if (extruders.IsNonEmpty())
 	{
@@ -237,6 +233,7 @@ void EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders, const fl
 			extrudersEndstop = new StallDetectionEndstop;
 		}
 		extrudersEndstop->PrimeExtruders(extruders, speeds);
+		reduceAcceleration = extrudersEndstop->ShouldReduceAcceleration();
 		AddToActive(*extrudersEndstop);
 #else
 		ThrowGCodeException("extruder endstops not supported by this system");
@@ -600,7 +597,7 @@ bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) con
 
 #endif
 
-// Handle M558, M558.1 and M558.2
+// Handle M558, M558.1, M558.2 and M558.3
 GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
 	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
@@ -608,7 +605,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 #if SUPPORT_SCANNING_PROBES
 	if (gb.GetCommandFraction() > 0)
 	{
-		return reprap.GetGCodes().HandleM558Point1or2(gb, reply, probeNumber);
+		return reprap.GetGCodes().HandleM558Point1or2or3(gb, reply, probeNumber);
 	}
 #endif
 
@@ -754,7 +751,7 @@ void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMa
 {
 	if (handleMajor < ARRAY_SIZE(axisEndstops))
 	{
-		TaskCriticalSectionLocker lock;						// make sure endstops are not changed or deleted while we operate on them
+		TaskCriticalSectionLocker lock;					// make sure endstops are not changed or deleted while we operate on them
 		Endstop * const es = axisEndstops[handleMajor];
 		if (es != nullptr)
 		{
@@ -768,7 +765,7 @@ void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMaj
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
-		ReadLocker lock(zProbesLock);					// make sure Z peobes are not changed or deleted while we operate on them
+		ReadLocker lock(zProbesLock);					// make sure Z probes are not changed or deleted while we operate on them
 		ZProbe * const zp = zProbes[handleMajor];
 		if (zp != nullptr)
 		{
@@ -781,7 +778,7 @@ void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
-		ReadLocker lock(zProbesLock);					// make sure Z peobes are not changed or deleted while we operate on them
+		ReadLocker lock(zProbesLock);					// make sure Z probes are not changed or deleted while we operate on them
 		ZProbe * const zp = zProbes[handleMajor];
 		if (zp != nullptr)
 		{
@@ -790,7 +787,7 @@ void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_
 	}
 }
 
-void EndstopsManager::HandleStalledRemoteDrivers(CanAddress boardAddress, RemoteDriversBitmap driversReportedStalled) noexcept
+void EndstopsManager::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled) noexcept
 {
 	ReadLocker lock(endstopsLock);						// make sure endstops are not changed or deleted while we operate on them
 

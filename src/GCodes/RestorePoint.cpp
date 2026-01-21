@@ -9,24 +9,23 @@
 #include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(RestorePoint, __VA_ARGS__)
-#define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(RestorePoint, _condition,__VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(RestorePoint, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition,...)	OBJECT_MODEL_FUNC_IF_BODY(RestorePoint, _condition,__VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(RestorePoint, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(RestorePoint, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry RestorePoint::objectModelArrayTable[] =
 {
 	// 0. Coordinates
 	{
 		nullptr,
-		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-																				{ return ExpressionValue(((const RestorePoint*)self)->moveCoords[context.GetLastIndex()], 3); }
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetVisibleAxes()),
+		OBJECT_MODEL_ARRAY_VALUE(self->moveCoords[context.GetLastIndex()], 3)
 	}
 };
 
@@ -39,7 +38,7 @@ constexpr ObjectModelTableEntry RestorePoint::objectModelTable[] =
 	{ "coords", 			OBJECT_MODEL_FUNC_ARRAY(0), 														ObjectModelEntryFlags::none },
 	{ "extruderPos",		OBJECT_MODEL_FUNC(self->virtualExtruderPosition, 1),	 							ObjectModelEntryFlags::none },
 	{ "fanPwm", 			OBJECT_MODEL_FUNC(self->fanSpeed, 2), 												ObjectModelEntryFlags::none },
-	{ "feedRate", 			OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->feedRate), 1), 				ObjectModelEntryFlags::none },
+	{ "feedRate", 			OBJECT_MODEL_FUNC(self->originalFeedRate, 1), 										ObjectModelEntryFlags::none },
 #if SUPPORT_IOBITS
 	{ "ioBits",				OBJECT_MODEL_FUNC_IF(reprap.GetGCodes().GetMachineType() != MachineType::laser,
 													(int32_t)self->laserPwmOrIoBits.ioBits),					ObjectModelEntryFlags::none },
@@ -55,8 +54,6 @@ constexpr uint8_t RestorePoint::objectModelTableDescriptor[] = { 1, 5 + SUPPORT_
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RestorePoint)
 
-#endif
-
 RestorePoint::RestorePoint() noexcept
 {
 	Init();
@@ -69,7 +66,7 @@ void RestorePoint::Init() noexcept
 		moveCoords[i] = 0.0;
 	}
 
-	feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
+	originalFeedRate = DefaultFeedRate;
 	virtualExtruderPosition = 0.0;
 	filePos = noFilePosition;
 	proportionDone = 0.0;

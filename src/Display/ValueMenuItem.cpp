@@ -371,7 +371,7 @@ bool ValueMenuItem::Adjust_AlterHelper(int clicks) noexcept
 			{
 				String<ShortGCodeLength> cmd;
 				const float amount = ((itemNumber == 12) ? 0.02 : 0.1) * clicks;			// 0.02mm Z resolution, 0.1mm for other axes
-				cmd.printf("M120 G91 G1 F3000 %c%.2f M121", 'X' + (itemNumber - 10), (double)amount);
+				cmd.printf("M120 G91 G1 F3000 %c%.2f M121", reprap.GetGCodes().GetAxisLetters()[itemNumber - 10], (double)amount);
 				(void) reprap.GetGCodes().ProcessCommandFromLcd(cmd.c_str());
 				adjusting = AdjustMode::liveAdjusting;
 			}

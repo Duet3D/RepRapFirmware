@@ -25,10 +25,23 @@ bool InputMonitor::Activate(bool useInterrupt) noexcept
 		if (threshold == 0)
 		{
 			// Digital input
-			const auto flags = IrqSave();
-			ok = !useInterrupt || port.AttachInterrupt(CommonDigitalPortInterrupt, InterruptMode::change, CallbackParameter(this));
-			state = port.ReadDigital();
-			IrqRestore(flags);
+			if (useInterrupt)
+			{
+#if SAME5x
+				ok = port.AttachInterrupt(CommonDigitalPortInterrupt, InterruptMode::changeWithDebounce, CallbackParameter(this));
+				delay(2);								// give the debouncer enough time to get the correct state
+				state = (ok) ? port.ReadDebouncedDigital() : port.ReadDigital();
+#else
+				AtomicCriticalSectionLocker lock;
+				ok = port.AttachInterrupt(CommonDigitalPortInterrupt, InterruptMode::change, CallbackParameter(this));
+				state = port.ReadDigital();
+#endif
+			}
+			else
+			{
+				ok = true;
+				state = port.ReadDigital();
+			}
 		}
 		else
 		{
@@ -67,23 +80,28 @@ void InputMonitor::Deactivate() noexcept
 }
 
 // Return the analog value of this input
-uint16_t InputMonitor::GetAnalogValue() const noexcept
+uint32_t InputMonitor::GetAnalogValue() const noexcept
 {
 	return (threshold != 0) ? port.ReadAnalog()
-			: port.ReadDigital() ? 0xFFFF
+			: port.ReadDigital() ? 0xFFFFFFFF
 				: 0;
 }
 
 void InputMonitor::DigitalInterrupt() noexcept
 {
-	const bool newState = port.ReadDigital();
+	const bool newState =
+#if SAME5x
+		port.ReadDebouncedDigital();
+#else
+		port.ReadDigital();
+#endif
 	if (newState != state)
 	{
 		state = newState;
 		if (active)
 		{
 			sendDue = true;
-			CanInterface::WakeAsyncSender();
+			CanInterface::WakeAsyncSenderFromIsr();
 		}
 	}
 }
@@ -273,7 +291,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 			{
 				bool monitorState;
 				{
-					InterruptCriticalSectionLocker ilock;
+					AtomicCriticalSectionLocker ilock;
 					p->sendDue = false;
 					monitorState = p->state;
 				}
