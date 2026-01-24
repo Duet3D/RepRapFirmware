@@ -100,7 +100,7 @@ namespace CanInterface
 	GCodeResult ChangeHandleThreshold(CanAddress boardAddress, RemoteInputHandle h, int32_t threshold, bool *_ecv_null currentState, const StringRef &reply) noexcept;
 	GCodeResult ChangeHandleSetTouchMode(CanAddress boardAddress, RemoteInputHandle h, uint32_t sensitivity, const StringRef &reply) noexcept;
 	GCodeResult SetHandleDriveLevel(CanAddress boardAddress, RemoteInputHandle h, uint32_t driveLevel, uint8_t &returnedDriveLevel, const StringRef &reply) noexcept;
-	typedef void (*ReadHandlesCallbackFunction)(CallbackParameter param, RemoteInputHandle h, uint32_t val) noexcept;
+	typedef void (*ReadHandlesCallbackFunction)(CallbackParameter param, RemoteInputHandle h, int32_t val) noexcept;
 	GCodeResult ReadRemoteHandles(CanAddress boardAddress, RemoteInputHandle mask, RemoteInputHandle pattern, ReadHandlesCallbackFunction callback, CallbackParameter param, const StringRef &reply) noexcept;
 
 	// Filament monitor functions

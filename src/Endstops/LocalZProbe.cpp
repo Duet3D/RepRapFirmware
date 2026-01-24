@@ -92,7 +92,7 @@ bool LocalZProbe::AssignPorts(const char* pinNames, const StringRef& reply) noex
 #endif
 
 // This is called by the tick ISR to get the raw Z probe reading to feed to the filter
-uint32_t LocalZProbe::GetRawReading() const noexcept
+int32_t LocalZProbe::GetRawReading() const noexcept
 {
 	constexpr uint16_t MaxReading = 1000;
 	switch (type)

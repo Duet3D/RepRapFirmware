@@ -761,7 +761,7 @@ void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMa
 }
 
 // Handle signalling of a remote switch change, when the handle indicates that it is being used as a Z probe.
-void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state, uint32_t reading) noexcept
+void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state, int32_t reading) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
@@ -774,7 +774,7 @@ void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMaj
 	}
 }
 
-void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t reading) noexcept
+void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, int32_t reading) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
