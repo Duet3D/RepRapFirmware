@@ -101,12 +101,12 @@ int32_t LocalZProbe::GetRawReading() const noexcept
 	case ZProbeType::dumbModulated:
 	case ZProbeType::alternateAnalog:
 	case ZProbeType::scanningAnalog:
-		return min<uint32_t>(inputPort.ReadAnalog() >> (AdcBits - 10), MaxReading);
+		return (int32_t)min<uint32_t>(inputPort.ReadAnalog() >> (AdcBits - 10), MaxReading);
 
 	case ZProbeType::digital:
 	case ZProbeType::unfilteredDigital:
 	case ZProbeType::blTouch:
-		return (inputPort.ReadDigital()) ? MaxReading : 0u;
+		return (inputPort.ReadDigital()) ? MaxReading : 0;
 
 	default:
 		return MaxReading;

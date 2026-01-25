@@ -46,6 +46,9 @@ public:
 
 	void ScanningProbeCallback(RemoteInputHandle h, int32_t val) noexcept;
 
+protected:
+	bool IsRemote() const noexcept override { return true; }
+
 private:
 	CanAddress boardAddress;
 	RemoteInputHandle handle;

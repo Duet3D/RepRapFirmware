@@ -95,6 +95,10 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
+#if SUPPORT_CAN_EXPANSION
+	virtual bool IsRemote() const noexcept { return false; }	// overridden in class RemoteZProbe
+#endif
+
 	float GetTriggerHeightCompensation() const noexcept;		// return the amount by which the trigger height is increased by temperature compensation
 
 	int32_t targetAdcValue;					// the target ADC value, after inversion if enabled
