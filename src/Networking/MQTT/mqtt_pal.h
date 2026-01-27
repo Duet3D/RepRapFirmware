@@ -5,7 +5,7 @@
  *      Author: rechrtb
  */
 #ifndef SRC_NETWORKING_MQTT_MQTT_PAL_H_
-#define SRC_NETWORKING_MQTT_MQTT_PAL_H
+#define SRC_NETWORKING_MQTT_MQTT_PAL_H_
 
 #include <sys/types.h>
 #include <stdint.h>

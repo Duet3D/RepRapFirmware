@@ -236,8 +236,6 @@ public:
 		pre(restorePointNumber < NumTotalRestorePoints);							// Save position etc. to a restore point
 	void StartToolChange(GCodeBuffer& gb, MovementState& ms, uint8_t param) noexcept;
 
-	unsigned int GetPrimaryWorkplaceCoordinateSystemNumber() const noexcept { return GetPrimaryMovementState().currentCoordinateSystem + 1; }
-
 #if SUPPORT_COORDINATE_ROTATION
 	void RotateCoordinates(const MovementState& ms, float angleDegrees, float coords[2]) const noexcept;		// Account for coordinate rotation
 #endif
@@ -259,8 +257,6 @@ public:
 	{
 		return workplaceCoordinates[workplaceNumber][axis];
 	}
-	float GetPrimaryMaxPrintingAcceleration() const noexcept { return moveStates[0].maxPrintingAcceleration; }
-	float GetPrimaryMaxTravelAcceleration() const noexcept { return moveStates[0].maxTravelAcceleration; }
 
 # if SUPPORT_COORDINATE_ROTATION
 	float GetRotationAngle(const MovementState& ms) const noexcept { return ms.g68Angle; }
