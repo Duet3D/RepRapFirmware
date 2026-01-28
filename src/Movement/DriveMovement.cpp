@@ -290,11 +290,11 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
 
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+#  if !SUPPORT_S_CURVE // we already calculated and set u if we are supporting 3rd order motion control
+		u = seg->CalcU();
+#  endif
 		if (IsPhaseStepEnabled())
 		{
-# if !SUPPORT_S_CURVE											// we already calculated and set u if we are supporting 3rd order motion control
-			u = seg->CalcU();
-# endif
 			state = DMState::phaseStepping;
 			return seg;
 		}
@@ -460,7 +460,9 @@ static inline motioncalc_t fastLimSqrtm(motioncalc_t f) noexcept
 bool DriveMovement::LogStepError(uint8_t type, float info, const MoveSegment *seg) noexcept
 {
 	const StringRef& dbgRef = Platform::genericDebugBuffer.GetRef();
-	dbgRef.printf("Code %u move error: info=%.3g, seg: ", type, (double)info);
+	const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive]
+															   : (char)('0' + LogicalDriveToExtruder(drive));
+	dbgRef.printf("Code %u move error: dm=%u %c, info=%.3g, seg: ", type, drive, c, (double)info);
 	if (seg != nullptr)
 	{
 		seg->AppendDetails(dbgRef);
