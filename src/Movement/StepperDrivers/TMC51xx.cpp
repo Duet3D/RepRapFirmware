@@ -86,7 +86,7 @@ constexpr size_t TmcTaskStackWords = 140;					// with 100 stack words, deckingma
 constexpr float SenseResistor = 0.11;						// 0.082R external + 0.03 internal
 #elif TMC_TYPE == 5160
 // We now define MaxTmc5160Current and Tmc5160SenseResistor in the board configuration file because they vary between boards
-constexpr float MaximumStandstillCurrent = MaxTmc5160Current * 0.707;
+constexpr float MaxStandstillCurrent = MaxTmc5160Current * 0.707;
 constexpr float RecipFullScaleCurrent = Tmc5160SenseResistor/325.0;		// 1.0 divided by full scale current in mA
 #endif
 
@@ -958,7 +958,7 @@ void TmcDriverState::UpdateCurrent() noexcept
 				standstillCurrentFraction;
 #endif
 
-	constexpr uint32_t MaxStandstillCurrentTimes256 = 256 * (uint32_t)MaximumStandstillCurrent;
+	constexpr uint32_t MaxStandstillCurrentTimes256 = 256 * (uint32_t)MaxStandstillCurrent;
 	const uint32_t limitedStandstillCurrentFraction = (motorCurrent * desiredStandstillCurrentFraction <= MaxStandstillCurrentTimes256)
 														? desiredStandstillCurrentFraction
 															: MaxStandstillCurrentTimes256/motorCurrent;
