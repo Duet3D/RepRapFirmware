@@ -160,7 +160,6 @@ public:
 	void JobUpdated() noexcept { ++jobSeq; }
 	void MoveUpdated() noexcept { ++moveSeq; }
 	void NetworkUpdated() noexcept { ++networkSeq; }
-	void ScannerUpdated() noexcept { ++scannerSeq; }
 	void SensorsUpdated() noexcept { ++sensorsSeq; }
 	void SpindlesUpdated() noexcept { ++spindlesSeq; }
 	void StateUpdated() noexcept { ++stateSeq; }
@@ -241,7 +240,7 @@ private:
 #endif
 
 	uint16_t boardsSeq, directoriesSeq, fansSeq, heatSeq, inputsSeq, jobSeq, ledStripsSeq, moveSeq, globalSeq;
-	uint16_t networkSeq, scannerSeq, sensorsSeq, spindlesSeq, stateSeq, toolsSeq, volumesSeq;
+	uint16_t networkSeq, sensorsSeq, spindlesSeq, stateSeq, toolsSeq, volumesSeq;
 
 	GlobalVariables globalVariables;
 

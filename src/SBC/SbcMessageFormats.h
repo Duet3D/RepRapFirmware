@@ -21,7 +21,7 @@ constexpr uint8_t SbcFormatCode = 0x5F;				// standard format code for RRF SPI p
 constexpr uint8_t SbcFormatCodeStandalone = 0x60;	// used to indicate that RRF is running in stand-alone mode
 constexpr uint8_t InvalidFormatCode = 0xC9;			// must be different from any other format code
 
-constexpr uint16_t SbcProtocolVersion = 6;
+constexpr uint16_t SbcProtocolVersion = 7;
 
 constexpr size_t SbcTransferBufferSize = 8192;		// maximum length of a data transfer. Must be a multiple of 4 and kept in sync with Duet Control Server!
 static_assert(SbcTransferBufferSize % sizeof(uint32_t) == 0, "SbcTransferBufferSize must be a whole number of dwords");
@@ -61,7 +61,10 @@ enum class DataType : uint8_t
 	ULong = 12,				// uint64_t
 	DateTime = 13,			// datetime string in ISO-conform formatting
 	Null = 14,				// null value
-	Char = 15				// char value (int32_t)
+	Char = 15,				// char value (int32_t)
+	Bitmap16 = 16,			// 16-bit bitmap
+	Bitmap32 = 17,			// 32-bit bitmap
+	Bitmap64 = 18			// 64-bit bitmap
 };
 
 struct CodeChannelHeader
@@ -157,7 +160,7 @@ struct DoCodeHeader
 struct EvaluationResultHeader
 {
 	DataType dataType;
-	uint8_t padding;
+	uint8_t channel;
 	uint16_t expressionLength;
 	union
 	{
@@ -236,6 +239,7 @@ enum class FirmwareRequest : uint16_t
 struct PrintPausedHeader
 {
 	uint32_t filePosition;
+	uint32_t filePosition2;
 	PrintPausedReason pauseReason;
 	uint8_t paddingA;
 	uint16_t paddingB;
@@ -273,8 +277,10 @@ enum class SbcRequest : uint16_t
 	FileWriteResult = 26,						// Result of a file write request
 	FileSeekResult = 27,						// Result of a file seek request
 	FileTruncateResult = 28,					// Result of a file truncate request
+    SetLastCodeResult = 29,						// Set the result of the last executed code
+    ObjectModelKeyChanged = 30,					// Increment the sequence number of an object model key provided exclusively by DSF
 
-	InvalidRequest = 29
+	InvalidRequest = 31
 };
 
 struct BooleanHeader
@@ -412,6 +418,13 @@ struct SetVariableHeader
 	bool createVariable;
 	uint8_t variableLength;
 	uint8_t expressionLength;
+};
+
+struct SetLastCodeResultHeader
+{
+	uint8_t channel;
+	GCodeResult result;
+	uint16_t padding;
 };
 
 #endif

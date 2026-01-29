@@ -62,6 +62,7 @@ public:
 	GCodeChannel ReadDeleteLocalVariable(const StringRef& varName) noexcept;				// Read a variable deletion request
 	FileHandle ReadOpenFileResult(FilePosition& fileLength) noexcept;						// Read the result of a file open request
 	int ReadFileData(char *buffer, size_t length) noexcept;									// Read file data from the SBC
+	GCodeChannel ReadSetLastCodeResult(GCodeResult& result) noexcept;						// Read the result of the last executed code
 
 	void ResendPacket(const PacketHeader *packet) noexcept;
 	bool WriteObjectModel(OutputBuffer *data) noexcept;
@@ -70,17 +71,17 @@ public:
 	bool WriteMacroRequest(GCodeChannel channel, const char *filename, bool fromCode) noexcept;
 	bool WriteAbortFileRequest(GCodeChannel channel, bool abortAll) noexcept;
 	bool WriteMacroFileClosed(GCodeChannel channel) noexcept;
-	bool WritePrintPaused(FilePosition position, PrintPausedReason reason) noexcept;
+	bool WritePrintPaused(FilePosition position, FilePosition position2, PrintPausedReason reason) noexcept;
 	bool WriteLocked(GCodeChannel channel) noexcept;
-	bool WriteEvaluationResult(const char *expression, const ExpressionValue& value) noexcept;
-	bool WriteEvaluationResult(const char *expression, OutputBuffer *json) noexcept;
-	bool WriteEvaluationError(const char *expression, const char *errorMessage) noexcept;
+	bool WriteEvaluationResult(GCodeChannel channel, const char *expression, const ExpressionValue& value) noexcept;
+	bool WriteEvaluationResult(GCodeChannel channel, const char *expression, OutputBuffer *json) noexcept;
+	bool WriteEvaluationError(GCodeChannel channel, const char *expression, const char *errorMessage) noexcept;
 	bool WriteDoCode(GCodeChannel channel, const char *code, size_t length) noexcept;
 	bool WriteWaitForAcknowledgement(GCodeChannel channel) noexcept;
 	bool WriteMessageAcknowledged(GCodeChannel channel) noexcept;
-	bool WriteSetVariableResult(const char *varName, const ExpressionValue& value) noexcept;
-	bool WriteSetVariableResult(const char *varName, OutputBuffer *json) noexcept;
-	bool WriteSetVariableError(const char *varName, const char *errorMessage) noexcept;
+	bool WriteSetVariableResult(GCodeChannel channel, const char *varName, const ExpressionValue& value) noexcept;
+	bool WriteSetVariableResult(GCodeChannel channel,const char *varName, OutputBuffer *json) noexcept;
+	bool WriteSetVariableError(GCodeChannel channel,const char *varName, const char *errorMessage) noexcept;
 	bool WriteCheckFileExists(const char *filename) noexcept;
 	bool WriteDeleteFileOrDirectory(const char *filename, bool recursive = false) noexcept;
 	bool WriteOpenFile(const char *filename, bool forWriting, bool append, uint32_t preAllocSize) noexcept;
