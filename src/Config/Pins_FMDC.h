@@ -112,7 +112,7 @@ constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (
 constexpr size_t FirstAuxChannel = 1;
 constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 
-#define SERIAL_MAIN_DEVICE (serialUSB)
+#define SERIAL_USB_DEVICE (serialUSB)
 #define SERIAL_AUX_DEVICE (serialUart0)
 
 // SerialUSB

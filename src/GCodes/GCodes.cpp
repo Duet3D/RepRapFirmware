@@ -114,19 +114,26 @@ GCodes::GCodes(Platform& p) noexcept :
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)] = nullptr;
 #endif // SUPPORT_TELNET || HAS_SBC_INTERFACE
-#if defined(SERIAL_MAIN_DEVICE)
+#ifdef SERIAL_USB_DEVICE
 # if SAME5x && !CORE_USES_TINYUSB
 	// SAME5x USB driver already uses an efficient buffer for receiving data from USB
-	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
+	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_USB_DEVICE);
 # else
 	// Old USB driver and tinyusb drivers are inefficient when read in single-character mode
-	BufferedStreamGCodeInput * const usbInput = new BufferedStreamGCodeInput(SERIAL_MAIN_DEVICE);
+	BufferedStreamGCodeInput * const usbInput = new BufferedStreamGCodeInput(SERIAL_USB_DEVICE);
 # endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)] = new GCodeBuffer(GCodeChannel::USB, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
 #elif HAS_SBC_INTERFACE
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)] = new GCodeBuffer(GCodeChannel::USB, nullptr, fileInput, UsbMessage, Compatibility::Marlin);
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)] = nullptr;
+#endif
+
+#ifdef SERIAL_USB2_DEVICE
+	BufferedStreamGCodeInput * const usb2Input = new BufferedStreamGCodeInput(SERIAL_USB2_DEVICE);
+	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB2)] = new GCodeBuffer(GCodeChannel::USB2, usb2Input, fileInput, Usb2Message, Compatibility::Marlin);
+#else
+	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB2)] = nullptr;
 #endif
 
 #if HAS_AUX_DEVICES
@@ -152,7 +159,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::SBC)] = nullptr;
 #endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Daemon)] = new GCodeBuffer(GCodeChannel::Daemon, nullptr, fileInput, GenericMessage);
-#if defined(SERIAL_AUX2_DEVICE)
+#ifdef SERIAL_AUX2_DEVICE
 	StreamGCodeInput * const aux2Input = new StreamGCodeInput(SERIAL_AUX2_DEVICE);
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)] = new GCodeBuffer(GCodeChannel::Aux2, aux2Input, fileInput, Aux2Message);
 #elif HAS_SBC_INTERFACE
@@ -4163,9 +4170,9 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 			|| &gb == Queue2GCode()
 #endif
 #if HAS_AUX_DEVICES
-			|| (&gb == AuxGCode() && !platform.IsChanRaw(1))
+			|| (&gb == AuxGCode() && !platform.IsChanRaw(FirstAuxChannel))
 # ifdef SERIAL_AUX2_DEVICE
-			|| (&gb == Aux2GCode() && !platform.IsChanRaw(2))
+			|| (&gb == Aux2GCode() && !platform.IsChanRaw(FirstAuxChannel + 1))
 # endif
 #endif
 			|| gb.IsDoingFileMacro()

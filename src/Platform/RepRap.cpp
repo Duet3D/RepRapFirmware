@@ -1857,11 +1857,13 @@ void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 	}
 #endif
 
-	if (platform->IsChanEnabled(1) && !platform->IsChanRaw(1))
+#if HAS_AUX_DEVICES
+	if (platform->IsChanEnabled(FirstAuxChannel) && !platform->IsChanRaw(FirstAuxChannel))
 	{
 		platform->PanelDueBeep(freq, ms);
 		bleeped = true;
 	}
+#endif
 
 	if (!bleeped)
 	{
@@ -1881,10 +1883,12 @@ void RepRap::SetMessage(c_string msg) noexcept
 #endif
 	StateUpdated();
 
-	if (platform->IsChanEnabled(1) && !platform->IsChanRaw(1))
+#if HAS_AUX_DEVICES
+	if (platform->IsChanEnabled(FirstAuxChannel) && !platform->IsChanRaw(FirstAuxChannel))
 	{
-		platform->SendPanelDueMessage(1, msg);
+		platform->SendPanelDueMessage(FirstAuxChannel, msg);
 	}
+#endif
 	platform->Message(MessageType::LogInfo, msg);
 }
 

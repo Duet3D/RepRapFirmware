@@ -28,12 +28,13 @@ enum MessageType : uint32_t
 	Aux2Message =				 0x400u,	// A message that is to be sent to the second aux device
 	AutoPauseMessage =			 0x800u,	// A message that is to be sent to an auto-pause processor
 	MqttMessage = 				0x1000u,	// A message that is to be published by the MQTT client
+	Usb2Message =				0x2000u,	// A message that is to be sent to the second USB channel
 
 	// Special destinations (byte 3)
 	BlockingUsbMessage =	   0x10000u,	// A message that is to be sent to USB in blocking mode
 	ImmediateAuxMessage =	   0x20000u,	// A message that is to be sent to LCD in immediate mode
 
-	DestinationsMask =		   0x308FFu, 	// Mask for all the destinations
+	DestinationsMask =		   0x328FFu, 	// Mask for all the destinations
 
 	// Special indicators (byte 4)
 	// The first two are not processed when calling the version of Platform::Message that takes an OutputBuffer.

@@ -17,6 +17,9 @@ extern AsyncSerial serialUart0, serialUart1;
 #include <SerialCDC.h>
 
 extern SerialCDC serialUSB;
+#if CORE_USES_TINYUSB
+extern SerialCDC serialUSB2;
+#endif
 
 void DeviceInit() noexcept;
 void StopAnalogTask() noexcept;

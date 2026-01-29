@@ -104,17 +104,26 @@ constexpr size_t MaxExtrudersPerTool = 8;
 
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 
-#ifdef DUET3_ATE
-constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB and one auxiliary UART) - reserve the second UART for ATE use
-#else
-constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB and two auxiliary UARTs)
+#define SERIAL_USB_DEVICE (serialUSB)
+#if CORE_USES_TINYUSB
+# define SERIAL_USB2_DEVICE serialUSB2
 #endif
-constexpr size_t FirstAuxChannel = 1;
-constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
-
-#define SERIAL_MAIN_DEVICE (serialUSB)
 #define SERIAL_AUX_DEVICE (serialUart0)
 #define SERIAL_AUX2_DEVICE (serialUart1)
+
+#ifdef DUET3_ATE
+constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB, USB2, and one auxiliary UART) - reserve the third UART for ATE use
+constexpr size_t FirstAuxChannel = 2;
+#else
+# ifdef SERIAL_USB2_DEVICE
+constexpr size_t NumSerialChannels = 4;				// The number of serial IO channels (USB, USB2, and two auxiliary UART)
+constexpr size_t FirstAuxChannel = 2;
+# else
+constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB and two auxiliary UARTs)
+constexpr size_t FirstAuxChannel = 1;
+# endif
+#endif
+constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 
 // SerialUSB
 constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB port
