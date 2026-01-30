@@ -127,7 +127,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		break;
 
 	case TypeCode::ObjectModelArray:
-		str.cat('{');
+		str.cat('[');
 		{
 			const ObjectModelArrayTableEntry *_ecv_null entry = omVal->FindObjectModelArrayEntry(param & 0xFF);
 			if (entry == nullptr)
@@ -152,11 +152,11 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 				}
 			}
 		}
-		str.cat('}');
+		str.cat(']');
 		break;
 
 	case TypeCode::HeapArray:
-		str.cat('{');
+		str.cat('[');
 		{
 			ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
 			for (size_t i = 0; ; ++i)
@@ -174,7 +174,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 				val.AppendAsString(str);
 			}
 		}
-		str.cat('}');
+		str.cat(']');
 		break;
 
 	case TypeCode::Port_tc:
