@@ -29,20 +29,26 @@ ExpressionValue::ExpressionValue(const MacAddress& mac) noexcept : type((uint32_
 }
 
 // Append a string representation of this value to a string
-void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
+void ExpressionValue::AppendAsString(const StringRef& str, bool quoteStrings) const noexcept
 {
 	switch (GetType())
 	{
 	case TypeCode::Char:
+		if (quoteStrings) { str.cat('\''); }
 		str.cat(cVal);
+		if (quoteStrings) { str.cat('\''); }
 		break;
 
 	case TypeCode::CString:
+		if (quoteStrings) { str.cat('"'); }
 		str.cat(sVal);
+		if (quoteStrings) { str.cat('"'); }
 		break;
 
 	case TypeCode::HeapString:
+		if (quoteStrings) { str.cat('"'); }
 		str.cat(shVal.Get().Ptr());
+		if (quoteStrings) { str.cat('"'); }
 		break;
 
 	case TypeCode::Float:
@@ -108,7 +114,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 
 #if SUPPORT_CAN_EXPANSION
 	case TypeCode::CanExpansionBoardDetails:
-		ExtractRequestedPart(str);
+		ExtractRequestedPart(str, quoteStrings);
 		break;
 #endif
 
@@ -147,7 +153,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 						str.cat(',');
 					}
 					context.AddIndex(i);
-					entry->GetElement(omVal, context).AppendAsString(str);
+					entry->GetElement(omVal, context).AppendAsString(str, true);
 					context.RemoveIndex();
 				}
 			}
@@ -171,7 +177,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 				{
 					str.cat(',');
 				}
-				val.AppendAsString(str);
+				val.AppendAsString(str, true);
 			}
 		}
 		str.cat(']');
@@ -401,7 +407,7 @@ bool ExpressionValue::IsHeapStringArrayType() const noexcept
 
 // Given that this is a CanExpansionBoardDetails value, extract the part requested according to the parameter and append it to the string
 // sVal is a string of the form shortName|version
-void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
+void ExpressionValue::ExtractRequestedPart(const StringRef& rslt, bool quoteStrings) const noexcept
 {
 	// While updating firmware on expansion/tool boards we sometimes get a null board type string here, so allow for that
 	if (sVal != nullptr)
@@ -418,30 +424,42 @@ void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 		switch((ExpansionDetail)param)
 		{
 		case ExpansionDetail::longName:
+			if (quoteStrings) { rslt.cat('"'); }
 			rslt.cat("Duet 3 Expansion ");
-			[[fallthrough]];
-		case ExpansionDetail::shortName:
 			rslt.catn(sVal, indexOfDivider1);
+			if (quoteStrings) { rslt.cat('"'); }
+			break;
+
+		case ExpansionDetail::shortName:
+			if (quoteStrings) { rslt.cat('"'); }
+			rslt.catn(sVal, indexOfDivider1);
+			if (quoteStrings) { rslt.cat('"'); }
 			break;
 
 		case ExpansionDetail::firmwareVersion:
 			if (indexOfDivider2 > indexOfDivider1)
 			{
+				if (quoteStrings) { rslt.cat('"'); }
 				rslt.catn(sVal + indexOfDivider1 + 1, indexOfDivider2 - indexOfDivider1 - 1);
+				if (quoteStrings) { rslt.cat('"'); }
 			}
 			break;
 
 		case ExpansionDetail::firmwareFileNameBin:
 		case ExpansionDetail::firmwareFileNameUf2:
+			if (quoteStrings) { rslt.cat('"'); }
 			rslt.cat("Duet3Firmware_");
 			rslt.catn(sVal, indexOfDivider1);
 			rslt.cat(((ExpansionDetail)param == ExpansionDetail::firmwareFileNameUf2 || strncmp(sVal, "Mini5plus", indexOfDivider1) == 0) ? ".uf2" : ".bin");
+			if (quoteStrings) { rslt.cat('"'); }
 			break;
 
 		case ExpansionDetail::firmwareDate:
 			if (strlen(sVal) > indexOfDivider2)
 			{
+				if (quoteStrings) { rslt.cat('"'); }
 				rslt.cat(sVal + indexOfDivider2 + 1);
+				if (quoteStrings) { rslt.cat('"'); }
 			}
 			break;
 
@@ -1675,15 +1693,15 @@ void ObjectModel::ReportBitmap64Long(OutputBuffer *buf, const ExpressionValue& v
 void ObjectModel::ReportExpansionBoardDetail(OutputBuffer *buf, const ExpressionValue& val) noexcept
 {
 	String<StringLength50> rslt;
-	val.ExtractRequestedPart(rslt.GetRef());
+	val.ExtractRequestedPart(rslt.GetRef(), false);
 	buf->catf("\"%.s\"", rslt.c_str());
 }
 
 ExpressionValue ObjectModel::GetExpansionBoardDetailLength(const ExpressionValue& val) noexcept
 {
 	String<StringLength50> rslt;
-	val.ExtractRequestedPart(rslt.GetRef());
-	return ExpressionValue((int32_t)rslt.strlen());
+	val.ExtractRequestedPart(rslt.GetRef(), false);
+	return ExpressionValue((int32_t)rslt.strlen(), false);
 }
 
 #endif

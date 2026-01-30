@@ -173,10 +173,10 @@ struct ExpressionValue final
 	const char *_ecv_array GetFloatFormatString() const noexcept { return ::GetFloatFormatString(fVal, param); }
 
 	// Append a string representation of this value to a string
-	void AppendAsString(const StringRef& str) const noexcept;
+	void AppendAsString(const StringRef& str, bool quoteStrings = false) const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
-	void ExtractRequestedPart(const StringRef& rslt) const noexcept pre(type == TYPE_OF(CanExpansionBoardDetails));
+	void ExtractRequestedPart(const StringRef& rslt, bool quoteStrings) const noexcept pre(type == TYPE_OF(CanExpansionBoardDetails));
 #endif
 };
 
