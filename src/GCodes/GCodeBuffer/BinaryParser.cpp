@@ -859,6 +859,7 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 				s.catf("%c%" PRIu32, param->letter, param->uintValue);
 				break;
 			case DataType::Float:
+			case DataType::FloatWithDigits:
 				s.catf("%c%f", param->letter, (double)param->floatValue);
 				break;
 			case DataType::IntArray:
