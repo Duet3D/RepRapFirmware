@@ -1,0 +1,35 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Duet3_MB6HC",
+            "type": "shell",
+            "command": "make DEBUG=1 Duet3_MB6HC",
+            "problemMatcher": ["$gcc"],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Build Duet3_MB6XD",
+            "type": "shell",
+            "command": "make DEBUG=1 Duet3_MB6XD",
+            "problemMatcher": ["$gcc"],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+                {
+            "label": "Build Duet3Mini5plus",
+            "type": "shell",
+            "command": "make DEBUG=1 Duet3Mini5plus",
+            "problemMatcher": ["$gcc"],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+    ]
+}
