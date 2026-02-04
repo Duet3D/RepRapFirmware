@@ -1222,12 +1222,14 @@ bool DataTransfer::WriteEvaluationResult(GCodeChannel channel, const char *expre
 	case TypeCode::Bool_tc:
 	case TypeCode::DriverId_tc:
 	case TypeCode::Uint32:
-	case TypeCode::Float:
 	case TypeCode::Int32:
 	case TypeCode::Char:
 	case TypeCode::Bitmap16:
 	case TypeCode::Bitmap32:
 		payloadLength = expressionLength;
+		break;
+	case TypeCode::Float:
+		payloadLength = expressionLength + sizeof(uint8_t);
 		break;
 	case TypeCode::Uint64:
 	case TypeCode::Bitmap64:
@@ -1271,6 +1273,13 @@ bool DataTransfer::WriteEvaluationResult(GCodeChannel channel, const char *expre
 	header->channel = channel.ToBaseType();
 	header->expressionLength = expressionLength;
 
+	// Write precision in case of float values
+	if (value.GetType() == TypeCode::Float)
+	{
+		uint8_t numDigits = value.param;
+		WriteData(reinterpret_cast<const char *>(&numDigits), sizeof(uint8_t));
+	}
+
 	// Write expression
 	WriteData(expression, expressionLength);
 
@@ -1303,7 +1312,7 @@ bool DataTransfer::WriteEvaluationResult(GCodeChannel channel, const char *expre
 		header->uintValue = value.uVal;
 		break;
 	case TypeCode::Float:
-		header->dataType = DataType::Float;
+		header->dataType = DataType::FloatWithDigits;
 		header->floatValue = value.fVal;
 		break;
 	case TypeCode::Int32:
@@ -1480,10 +1489,12 @@ bool DataTransfer::WriteSetVariableResult(GCodeChannel channel, const char *varN
 	case TypeCode::Bool_tc:
 	case TypeCode::DriverId_tc:
 	case TypeCode::Uint32:
-	case TypeCode::Float:
 	case TypeCode::Int32:
 	case TypeCode::Char:
 		payloadLength = varNameLength;
+		break;
+	case TypeCode::Float:
+		payloadLength = varNameLength + sizeof(uint32_t);
 		break;
 	case TypeCode::CString:
 		payloadLength = varNameLength + strlen(value.sVal);
@@ -1519,6 +1530,13 @@ bool DataTransfer::WriteSetVariableResult(GCodeChannel channel, const char *varN
 	header->channel = channel.ToBaseType();
 	header->expressionLength = varNameLength;
 
+	// Write precision in case of float values
+	if (value.GetType() == TypeCode::Float)
+	{
+		uint8_t numDigits = value.param;
+		WriteData(reinterpret_cast<const char *>(&numDigits), sizeof(uint8_t));
+	}
+
 	// Write variable name
 	WriteData(varName, varNameLength);
 
@@ -1547,7 +1565,7 @@ bool DataTransfer::WriteSetVariableResult(GCodeChannel channel, const char *varN
 		header->uintValue = value.uVal;
 		break;
 	case TypeCode::Float:
-		header->dataType = DataType::Float;
+		header->dataType = DataType::FloatWithDigits;
 		header->floatValue = value.fVal;
 		break;
 	case TypeCode::Int32:
