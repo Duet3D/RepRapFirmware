@@ -30,6 +30,8 @@ public:
 	float GetAccumulator() const noexcept override;							// Return the integral accumulator
 	void Suspend(bool sus) noexcept override;								// Suspend the heater to conserve power or while doing Z probing
 	void SetFanFeedForwardPwm(float pwm) noexcept override;
+	GCodeResult SetDefaultModel(HeaterFunction func) noexcept override;		// set a default model depending on the heater type
+
 	bool IsLocal() const noexcept override { return false; }
 	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept override;
 	void UpdateHeaterTuning(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept override;
@@ -37,13 +39,14 @@ public:
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept override;
 	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept override { return GCodeResult::error; }	// this should never be called on a remote heater
+	void SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept override {}	// set and return the default heater model
 #endif
 
 protected:
 	void ResetHeater() noexcept override;
 	HeaterMode GetMode() const noexcept override;
 	GCodeResult SwitchOn(const StringRef& reply) noexcept override;			// Turn the heater on and set the mode
-	GCodeResult UpdateModel(const StringRef& reply) noexcept override;		// Called when the heater model has been changed
+	GCodeResult UpdateRemoteModel(const StringRef& reply) noexcept override;	// Called when the heater model has been changed
 	GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) noexcept override;
 	GCodeResult UpdateHeaterMonitors(const StringRef& reply) noexcept override;
 	GCodeResult StartAutoTune(const StringRef& reply, bool seenA, float ambientTemp) noexcept override;
