@@ -2100,6 +2100,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	ms.checkEndstops = false;
 	ms.reduceAcceleration = false;
 	ms.usePressureAdvance = false;
+	ms.pressureAdvance = 0.0;
 	ms.linearAxesMentioned = false;
 	ms.rotationalAxesMentioned = false;
 
@@ -2564,6 +2565,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 				AxesBitmap axesMentionedExceptZ = axesMentioned;
 				axesMentionedExceptZ.ClearBit(Z_AXIS);
 				ms.usePressureAdvance = axesMentionedExceptZ.IsNonEmpty();
+				ms.pressureAdvance = (ms.usePressureAdvance && ms.movementTool != nullptr) ? ms.movementTool->GetPressureAdvance() : 0.0;
 			}
 
 			// Apply segmentation if necessary
@@ -3026,6 +3028,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 #endif
 
 	ms.usePressureAdvance = ms.hasPositiveExtrusion;
+	ms.pressureAdvance = (ms.usePressureAdvance && ms.movementTool != nullptr) ? ms.movementTool->GetPressureAdvance() : 0.0;
 
 	// Calculate the total angle moved, which depends on which way round we are going
 	float totalArc;

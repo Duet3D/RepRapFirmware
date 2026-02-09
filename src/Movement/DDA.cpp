@@ -170,6 +170,7 @@ DDA::DDA(DDA *_ecv_null n) noexcept : next(n), prev(nullptr)
 
 	flags.all = 0;						// in particular we need to set endCoordinatesValid, usePressureAdvance to false, stateBits to empty, also checkEndstops false for the ATE build
 	SetState(empty);					// should alrrady be covered by the above
+	pressureAdvanceClocks = 0.0;
 	virtualExtruderPosition = 0.0;
 	filePos = noFilePosition;
 
@@ -377,7 +378,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 				}
 				if (flags.xyMoving && nextMove.usePressureAdvance)
 				{
-					const float compensationClocks = move.GetPressureAdvanceClocksForLogicalDrive(drive);
+					const float compensationClocks = (float)nextMove.pressureAdvance * (float)StepClockRate;
 					if (compensationClocks > 0.0)
 					{
 						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
@@ -417,6 +418,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	initialUserC0 = nextMove.initialUserC0;
 	initialUserC1 = nextMove.initialUserC1;
 	originalFeedRate = nextMove.originalFeedRate;
+	pressureAdvanceClocks = (nextMove.usePressureAdvance) ? (float)nextMove.pressureAdvance * (float)StepClockRate : 0.0;
 
 	// These 4 or 5 bits can be copied in one go by the compiler generating a ubfx instruction
 	flags.canPauseAfter = nextMove.canPauseAfter;
@@ -1112,7 +1114,7 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 						else		// we don't generate segments for leadscrew adjustment moves to remote drivers
 #endif
 						{
-							move.AddLinearSegments(driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
+							move.AddLinearSegments(driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags, 0.0);
 						}
 					}
 				}
@@ -1146,7 +1148,7 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 						delta = move.ApplyBacklashCompensation(drive, delta);
 
 						// We generate segments even for nonlocal drivers so that the final position is correct and to track the position in near real time
-						move.AddLinearSegments(drive, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
+						move.AddLinearSegments(drive, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags, 0.0);
 						afterPrepare.drivesMoving.SetBit(drive);
 
 #if SUPPORT_CAN_EXPANSION
@@ -1198,14 +1200,14 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 							const motioncalc_t delta = totalDistance * directionVector[drive] * move.DriveStepsPerMm(drive);
 
 							// We generate segments even for nonlocal extruders in order to track extruder position
-							move.AddLinearSegments(drive, afterPrepare.moveStartTime, params, delta, segFlags.AddIsExtruder());
+							move.AddLinearSegments(drive, afterPrepare.moveStartTime, params, delta, segFlags.AddIsExtruder(), pressureAdvanceClocks);
 
 #if SUPPORT_CAN_EXPANSION
 							const DriverId driver = move.GetExtruderDriver(extruder);
 							if (driver.IsRemote())
 							{
 								// The MovementLinearShaped message requires the extrusion amount in steps to be passed as a float. The remote board adds the PA and handles fractional steps.
-								CanMotion::AddExtruderMovement(params, driver, delta, flags.usePressureAdvance);
+								CanMotion::AddExtruderMovement(params, driver, delta, flags.usePressureAdvance ? pressureAdvanceClocks : 0.0);
 							}
 #endif
 							afterPrepare.drivesMoving.SetBit(drive);

@@ -1814,7 +1814,7 @@ finished:
 
 // Add some linear segments to be executed by a driver, taking account of possible input shaping. This is used by linear axes and by extruders.
 // We never add a segment that starts earlier than the earliest existing segment (if any).
-void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags) noexcept
+void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags, float pressureAdvanceClocks) noexcept
 {
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
 	{
@@ -1899,7 +1899,7 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 	else
 	{
 		accelDistance = (params.decelClocks + params.steadyClocks == 0) ? totalDistance : (motioncalc_t)params.accelDistance;
-		accelPressureAdvance = (moveFlags.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)(params.accelClocks * dm.extruderShaper.GetKclocks()) : (motioncalc_t)0.0;
+		accelPressureAdvance = (moveFlags.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)(params.accelClocks * pressureAdvanceClocks) : (motioncalc_t)0.0;
 	}
 
 	motioncalc_t decelDistance, decelPressureAdvance;
@@ -1911,7 +1911,7 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 	else
 	{
 		decelDistance = totalDistance - ((params.steadyClocks == 0) ? accelDistance : (motioncalc_t)params.decelStartDistance);
-		decelPressureAdvance = (moveFlags.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)(params.decelClocks * dm.extruderShaper.GetKclocks()) : (motioncalc_t)0.0;
+		decelPressureAdvance = (moveFlags.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)(params.decelClocks * pressureAdvanceClocks) : (motioncalc_t)0.0;
 	}
 
 	const motioncalc_t steadyDistance = (params.steadyClocks == 0) ? (motioncalc_t)0.0 : totalDistance - accelDistance - decelDistance;

@@ -245,6 +245,7 @@ private:
     float totalDistance;							// How long is the move in hypercuboid space
     float maxAcceleration, maxDeceleration;			// The maximum acceleration and deceleration to use, always positive
     float requestedSpeed;							// The speed that the user asked for
+    float pressureAdvanceClocks;					// pressure advance to use for this move, in step clocks
     float virtualExtruderPosition;					// the virtual extruder position at the end of this move, used for pause/resume
 
     // These vary depending on how we connect the move with its predecessor and successor, but remain constant while the move is being executed
