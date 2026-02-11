@@ -1974,7 +1974,7 @@ bool GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(G
 						{
 							extrusionAmount *= volumetricExtrusionFactors[extruder];
 						}
-						if (eDrive == 0 && ms.moveType == 0 && !gb.IsDoingFileMacro())
+						if (ms.moveType == 0 && !gb.IsDoingFileMacro())
 						{
 							rawExtruderTotalByDrive[extruder] += extrusionAmount;
 						}
