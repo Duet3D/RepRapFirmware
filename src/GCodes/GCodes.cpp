@@ -3358,7 +3358,7 @@ bool GCodes::DoFileMacroWithParameters(GCodeBuffer& gb, const char *_ecv_array f
 }
 
 // Run a file macro. Prior to calling this, 'state' must be set to the state we want to enter when the macro has been completed.
-// Return true if the file was found or it wasn't and we were asked to report that fact.
+// Return true if the file was found or it wasn't and we were asked to report that fact. If the file wasn't found and we were not asked to report that, return false.
 // 'codeRunning' is the G or M command we are running, or 0 for a tool change file. In particular:
 // 501 = running M501
 // 502 = running M502
