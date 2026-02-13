@@ -1155,7 +1155,7 @@ void DDA::Prepare(DDARing& ring,
 		// Don't allow the start of a move without input shaping (e.g. retraction/repriming) to overlap a move with input shaping
 		if (!params.useInputShaping && prev->UsesInputShaping())
 		{
-			prevEndTime += move.GetAxisShaper().GetInputShapingDelay();
+			prevEndTime += move.GetAxisShaper().GetShapingTime();
 		}
 		if ((int32_t)(prevEndTime - now) >= (int32_t)MoveTiming::AbsoluteMinimumPreparedTime)
 		{

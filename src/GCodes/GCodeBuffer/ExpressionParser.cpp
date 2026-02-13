@@ -209,7 +209,8 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 			break;
 
 		default:
-			ThrowParseException("expected numeric value after '-'");
+			if (evaluate) { ThrowParseException("expected numeric value after '-'"); }
+			break;
 		}
 		break;
 
@@ -233,7 +234,8 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 			break;
 
 		default:
-			ThrowParseException("expected numeric or enumeration value after '+'");
+			if (evaluate) { ThrowParseException("expected numeric or enumeration value after '+'"); }
+			break;
 		}
 		break;
 

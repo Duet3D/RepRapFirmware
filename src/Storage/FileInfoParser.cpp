@@ -389,7 +389,9 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 			++lineEnd;
 		}
 
-		if (lineEnd == pEnd)
+		if (   lineEnd == pEnd
+			|| lineEnd + 1 == pEnd			// make sure that if CRLF line endings are used, ProcessThumbnail can read the LF
+		   )
 		{
 			// The line ending is not within the buffer
 			if (lineStart >= buf + GCodeReadSize)
@@ -752,7 +754,10 @@ void FileInfoParser::ProcessThumbnail(const char *_ecv_array k, const char *_ecv
 			const uint32_t size = StrToU32(p, &npos);
 			if (size >= 10)
 			{
-				const FilePosition offset = bufferStartFilePosition + (size_t)(lineEnd + 1 - buf);
+				// If the line ending is CRLF then we need to skip then LF as well as the CR
+				++lineEnd;
+				if (*lineEnd == '\n') { ++lineEnd; }
+				const FilePosition offset = bufferStartFilePosition + (size_t)(lineEnd - buf);
 				GCodeFileInfo::ThumbnailInfo& th = parsedFileInfo.thumbnails[numThumbnailsStored++];
 				th.width = w;
 				th.height = h;
