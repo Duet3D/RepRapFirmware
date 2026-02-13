@@ -293,8 +293,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (   LockCurrentMovementSystemAndWaitForStandstill(gb)
 #if SUPPORT_CAN_EXPANSION
 			&& CanMotion::RevertStoppedDrivers()
-		   )
 #endif
+		   )
 		{
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
 			zp->SetProbing(false);
@@ -335,8 +335,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (   LockCurrentMovementSystemAndWaitForStandstill(gb)
 #if SUPPORT_CAN_EXPANSION
 			&& CanMotion::RevertStoppedDrivers()
-		   )
 #endif
+		   )
 		{
 			reprap.GetHeat().SuspendHeaters(false);
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
@@ -1003,8 +1003,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (   LockCurrentMovementSystemAndWaitForStandstill(gb)
 #if SUPPORT_CAN_EXPANSION
 			&& CanMotion::RevertStoppedDrivers()
-		   )
 #endif
+		   )
 		{
 			doingManualBedProbe = false;
 			++tapsDone;
@@ -1418,8 +1418,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (   LockCurrentMovementSystemAndWaitForStandstill(gb)
 #if SUPPORT_CAN_EXPANSION
 			&& CanMotion::RevertStoppedDrivers()
-		   )
 #endif
+		   )
 		{
 			// Probing move has stopped
 			reprap.GetHeat().SuspendHeaters(false);
@@ -1687,8 +1687,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (   LockCurrentMovementSystemAndWaitForStandstill(gb)
 #if SUPPORT_CAN_EXPANSION
 			&& CanMotion::RevertStoppedDrivers()
-		   )
 #endif
+		   )
 		{
 			// Probing move has stopped
 			reprap.GetHeat().SuspendHeaters(false);
