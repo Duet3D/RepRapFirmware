@@ -217,7 +217,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::probingToolOffset4:					// executing M585, probing move has started
-		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
+		if (   LockCurrentMovementSystemAndWaitForStandstill(gb)
+#if SUPPORT_CAN_EXPANSION
+			&& CanMotion::RevertStoppedDrivers()
+#endif
+		   )
 		{
 			if (m585Settings.useProbe)
 			{
@@ -286,7 +290,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::findCenterOfCavity3:						// Executing M675, min probing move has started
-		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
+		if (   LockCurrentMovementSystemAndWaitForStandstill(gb)
+#if SUPPORT_CAN_EXPANSION
+			&& CanMotion::RevertStoppedDrivers()
+		   )
+#endif
 		{
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
 			zp->SetProbing(false);
@@ -324,7 +332,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::findCenterOfCavity5:						// Executing M675, max probing move has started
-		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
+		if (   LockCurrentMovementSystemAndWaitForStandstill(gb)
+#if SUPPORT_CAN_EXPANSION
+			&& CanMotion::RevertStoppedDrivers()
+		   )
+#endif
 		{
 			reprap.GetHeat().SuspendHeaters(false);
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
@@ -988,7 +1000,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::gridProbing4:	// ready to lift the probe after probing the current grid probe point
-		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
+		if (   LockCurrentMovementSystemAndWaitForStandstill(gb)
+#if SUPPORT_CAN_EXPANSION
+			&& CanMotion::RevertStoppedDrivers()
+		   )
+#endif
 		{
 			doingManualBedProbe = false;
 			++tapsDone;
@@ -1399,7 +1415,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::probingAtPoint4:
 		// Executing G30. The probe wasn't triggered at the start of the move, and the probing move has been commanded.
-		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
+		if (   LockCurrentMovementSystemAndWaitForStandstill(gb)
+#if SUPPORT_CAN_EXPANSION
+			&& CanMotion::RevertStoppedDrivers()
+		   )
+#endif
 		{
 			// Probing move has stopped
 			reprap.GetHeat().SuspendHeaters(false);
@@ -1664,7 +1684,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::straightProbe3:
 		// Executing G38. The probe wasn't in target state at the start of the move, and the probing move has been commanded.
-		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
+		if (   LockCurrentMovementSystemAndWaitForStandstill(gb)
+#if SUPPORT_CAN_EXPANSION
+			&& CanMotion::RevertStoppedDrivers()
+		   )
+#endif
 		{
 			// Probing move has stopped
 			reprap.GetHeat().SuspendHeaters(false);
