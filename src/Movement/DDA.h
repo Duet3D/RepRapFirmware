@@ -29,8 +29,6 @@ struct PrepParams
 	uint32_t accelClocks, steadyClocks, decelClocks;
 	float acceleration;								// the acceleration to use, always positive
 	float deceleration;								// the deceleration to use, always negative
-# define peakAcceleration	acceleration
-# define peakDeceleration	deceleration
 	float accelDistance;
 	float decelStartDistance;
 	float totalDistance;

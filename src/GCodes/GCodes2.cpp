@@ -1688,7 +1688,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					String<MaxFilenameLength> filename;
 					gb.GetQuotedString(filename.GetRef());
-					DoFileMacroWithParameters(gb, filename.c_str(), true, code);
+					if (!DoFileMacroWithParameters(gb, filename.c_str(), false, code))
+					{
+						reply.printf("Macro file %s not found", filename.c_str());
+						result = GCodeResult::error;
+					}
 				}
 				else if (gb.Seen('R'))
 				{
