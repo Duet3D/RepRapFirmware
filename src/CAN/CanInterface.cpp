@@ -42,8 +42,6 @@
 # endif
 #endif
 
-#include <memory>
-
 #define SUPPORT_CAN		1				// needed by CanDevice.h
 #include <CanDevice.h>
 #if SAME70
