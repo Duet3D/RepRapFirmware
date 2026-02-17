@@ -3160,7 +3160,7 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 // Enable the PanelDue port so that the ATE can test the board
 void Platform::EnablePanelDuePort() noexcept
 {
-	debugPrintf("EnablePanelDuePort: FirstAuxChannel=%u\\n", (unsigned)FirstAuxChannel);
+	//debugPrintf("EnablePanelDuePort: FirstAuxChannel=%u\\n", (unsigned)FirstAuxChannel);
 	auxDevices[0].SetMode(AuxMode::panelDue);
 	commsParams[FirstAuxChannel] = 1;
 	reprap.GetGCodes().GetSerialGCodeBuffer(FirstAuxChannel)->Enable(1);
@@ -3735,7 +3735,7 @@ void Platform::AtxPowerOff() noexcept
 void Platform::SetBaudRate(size_t chan, uint32_t br) noexcept
 {
 #if HAS_AUX_DEVICES
-	if (chan != 0 && chan < NumSerialChannels)
+	if (chan >= FirstAuxChannel && chan < NumSerialChannels)
 	{
 		auxDevices[chan - FirstAuxChannel].SetBaudRate(br);
 	}
@@ -3746,7 +3746,7 @@ uint32_t Platform::GetBaudRate(size_t chan) const noexcept
 {
 	return
 #if HAS_AUX_DEVICES
-		(chan != 0 && chan < NumSerialChannels) ? auxDevices[chan - FirstAuxChannel].GetBaudRate() :
+		(chan >= FirstAuxChannel && chan < NumSerialChannels) ? auxDevices[chan - FirstAuxChannel].GetBaudRate() :
 #endif
 		0;
 }
@@ -3763,8 +3763,15 @@ void Platform::ResetChannel(size_t chan) noexcept
         SERIAL_USB_DEVICE.Start(UsbVBusPin);
 #endif
 	}
+#ifdef SERIAL_USB2_DEVICE
+	else if (chan == 1)
+	{
+		SERIAL_USB2_DEVICE.end();
+        SERIAL_USB2_DEVICE.Start(NoPin);
+	}
+#endif
 #if HAS_AUX_DEVICES
-	else if (chan < NumSerialChannels)
+	else if (chan >= FirstAuxChannel && chan < NumSerialChannels)
 	{
 		AuxDevice& device = auxDevices[chan - FirstAuxChannel];
 		AuxMode mode = device.GetMode();
