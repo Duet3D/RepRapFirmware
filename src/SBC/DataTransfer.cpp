@@ -1232,7 +1232,9 @@ bool DataTransfer::WriteEvaluationResult(GCodeChannel channel, const char *expre
 		payloadLength = expressionLength + sizeof(uint8_t);
 		break;
 	case TypeCode::Uint64:
+#if SUPPORT_BITMAP64
 	case TypeCode::Bitmap64:
+#endif
 		payloadLength = AddPadding(expressionLength) + sizeof(uint64_t);
 		break;
 	case TypeCode::CString:
@@ -1336,6 +1338,7 @@ bool DataTransfer::WriteEvaluationResult(GCodeChannel channel, const char *expre
 		header->dataType = DataType::Bitmap32;
 		header->uintValue = value.uVal;
 		break;
+#if SUPPORT_BITMAP64
 	case TypeCode::Bitmap64:
 	{
 		header->dataType = DataType::Bitmap64;
@@ -1345,6 +1348,7 @@ bool DataTransfer::WriteEvaluationResult(GCodeChannel channel, const char *expre
 		WriteData(reinterpret_cast<const char *>(&ulVal), sizeof(uint64_t));
 		break;
 	}
+#endif
 	case TypeCode::HeapString:
 		header->dataType = DataType::String;
 		header->intValue = value.shVal.GetLength();

@@ -951,7 +951,9 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 				}
 				break;
 			case DataType::ULong:
+#if SUPPORT_BITMAP64
 			case DataType::Bitmap64:
+#endif
 			{
 				uint64_t ulVal;
 				memcpy(reinterpret_cast<char *>(&ulVal), val, sizeof(uint64_t));
