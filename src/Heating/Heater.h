@@ -27,7 +27,7 @@ struct CanMessageHeaterTuningReport;
 struct CanHeaterReport;
 
 #if SUPPORT_REMOTE_COMMANDS
-struct CanMessageHeaterModelV2;
+struct CanMessageHeaterModelV3;
 struct CanMessageSetHeaterTemperatureV1;
 struct CanMessageSetHeaterMonitors;
 struct CanMessageHeaterTuningCommand;
@@ -88,7 +88,7 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	virtual GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept = 0;
-	GCodeResult SetModel(unsigned int heater, const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
+	GCodeResult SetModel(unsigned int heater, const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept;
 	GCodeResult SetTemperature(const CanMessageSetHeaterTemperatureV1& msg, const StringRef& reply) noexcept;
 	GCodeResult SetFaultDetectionParameters(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept;
 	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;

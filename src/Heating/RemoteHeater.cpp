@@ -441,7 +441,7 @@ GCodeResult RemoteHeater::UpdateRemoteModel(const StringRef& reply) noexcept
 	if (buf != nullptr)
 	{
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
-		CanMessageHeaterModelV2 * const msg = buf->SetupRequestMessage<CanMessageHeaterModelV2>(rid, CanInterface::GetCanAddress(), boardAddress);
+		CanMessageHeaterModelV3 * const msg = buf->SetupRequestMessage<CanMessageHeaterModelV3>(rid, CanInterface::GetCanAddress(), boardAddress);
 		GetModel().SetupCanMessage(GetHeaterNumber(), *msg);
 		return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 	}

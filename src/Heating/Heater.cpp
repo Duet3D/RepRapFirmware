@@ -722,7 +722,7 @@ GCodeResult Heater::SetFaultDetectionParameters(const CanMessageSetHeaterFaultDe
 	return GCodeResult::ok;
 }
 
-GCodeResult Heater::SetModel(unsigned int heater, const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept
+GCodeResult Heater::SetModel(unsigned int heater, const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept
 {
 	const bool rslt = model.SetParameters(msg, reply);
 	if (rslt)

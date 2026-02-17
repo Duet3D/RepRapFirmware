@@ -35,7 +35,7 @@ class FileStore;
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-struct CanMessageHeaterModelV2;
+struct CanMessageHeaterModelV3;
 #endif
 
 class FopDt INHERIT_OBJECT_MODEL
@@ -47,7 +47,7 @@ public:
 	bool SetParameters(float phr, float pbcr, float pfcr, float pcrExponent, float pdt, float pMaxPwm, float pVoltage, bool pUsePid, bool pInverted, const StringRef& reply) noexcept;
 	void SetDefaultModel(const HeaterModel& model) noexcept;
 #if SUPPORT_REMOTE_COMMANDS
-	bool SetParameters(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
+	bool SetParameters(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept;
 	const HeaterModel& GetBasicModel() const noexcept { return basicModel; }
 #endif
 
@@ -58,7 +58,7 @@ public:
 	float GetCoolingRateExponent() const noexcept { return basicModel.coolingRateExponent; }
 	float GetDeadTime() const noexcept { return basicModel.deadTime; }
 	float GetMaxPwm() const noexcept { return maxPwm; }
-	float GetVoltage() const noexcept { return standardVoltage; }
+	float GetVoltage() const noexcept { return basicModel.standardVoltage; }
 	bool UsePid() const noexcept { return basicModel.usePid; }
 	bool IsInverted() const noexcept { return inverted; }
 	bool IsEnabled() const noexcept { return enabled; }
@@ -90,7 +90,7 @@ public:
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void SetupCanMessage(unsigned int heater, CanMessageHeaterModelV2& msg) const noexcept;
+	void SetupCanMessage(unsigned int heater, CanMessageHeaterModelV3& msg) const noexcept;
 #endif
 
 protected:
@@ -103,7 +103,6 @@ private:
 
 	HeaterModel basicModel;
 	float maxPwm;
-	float standardVoltage;					// power voltage reading at which tuning was done, or 0 if unknown
 	bool enabled;
 	bool inverted;
 	bool pidParametersOverridden;

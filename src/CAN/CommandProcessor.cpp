@@ -393,9 +393,9 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetHeat().ApplyFeedForward(buf->msg.heaterFeedForwardV1, replyRef);
 				break;
 
-			case CanMessageType::heaterModelV2:
-				requestId = buf->msg.heaterModelV2.requestId;
-				rslt = reprap.GetHeat().ProcessM307V1(buf->msg.heaterModelV2, replyRef);
+			case CanMessageType::heaterModelV3:
+				requestId = buf->msg.heaterModelV3.requestId;
+				rslt = reprap.GetHeat().ProcessM307(buf->msg.heaterModelV3, replyRef);
 				break;
 
 			case CanMessageType::setHeaterTemperatureV1:
