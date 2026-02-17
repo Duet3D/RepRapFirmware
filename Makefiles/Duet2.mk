@@ -110,7 +110,6 @@ DUET2_CFLAGS := -c -std=gnu99 \
 	-Werror=implicit \
 	-fsingle-precision-constant \
 	-Os \
-	-Wall \
 	-Werror \
 	-Wwrite-strings \
 	$(DUET2_INCLUDES) \
@@ -140,7 +139,6 @@ DUET2_CXXFLAGS := -c -std=gnu++17 \
 	-fsingle-precision-constant \
 	-fstack-usage \
 	-Os \
-	-Wall \
 	-Werror \
 	-Wnoexcept \
 	-Wshadow \

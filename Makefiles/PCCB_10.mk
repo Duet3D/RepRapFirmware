@@ -110,7 +110,6 @@ PCCB_10_CFLAGS := -c -std=gnu99 \
 	-Werror=implicit \
 	-fsingle-precision-constant \
 	-O2 \
-	-Wall \
 	-Werror \
 	-Wwrite-strings \
 	$(PCCB_10_INCLUDES) \
@@ -138,7 +137,6 @@ PCCB_10_CXXFLAGS := -c -std=gnu++17 \
 	-fsingle-precision-constant \
 	-fstack-usage \
 	-O2 \
-	-Wall \
 	-Werror \
 	-Wnoexcept \
 	-Wshadow \

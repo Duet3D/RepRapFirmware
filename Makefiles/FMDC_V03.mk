@@ -112,7 +112,6 @@ FMDC_V03_CFLAGS := -c -std=gnu99 \
 	-Werror=implicit \
 	-fsingle-precision-constant \
 	-Os \
-	-Wall \
 	-Werror \
 	-Wwrite-strings \
 	$(FMDC_V03_INCLUDES) \
@@ -142,11 +141,10 @@ FMDC_V03_CXXFLAGS := -c -std=gnu++17 \
 	-fsingle-precision-constant \
 	-fstack-usage \
 	-Os \
-	-Wall \
 	-Werror \
 	-Wnoexcept \
 	-Wshadow \
-	-Wsign-promo \
+	-Woverloaded-virtual \
 	$(FMDC_V03_INCLUDES) \
 	$(FMDC_V03_DEFINES)
 

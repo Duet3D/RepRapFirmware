@@ -106,7 +106,6 @@ DUET2SBC_CFLAGS := -c -std=gnu99 \
 	-Werror=implicit \
 	-fsingle-precision-constant \
 	-O2 \
-	-Wall \
 	-Werror \
 	-Wwrite-strings \
 	$(DUET2SBC_INCLUDES) \
@@ -136,7 +135,6 @@ DUET2SBC_CXXFLAGS := -c -std=gnu++17 \
 	-fsingle-precision-constant \
 	-fstack-usage \
 	-Os \
-	-Wall \
 	-Werror \
 	-Wnoexcept \
 	-Wshadow \

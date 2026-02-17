@@ -124,7 +124,6 @@ DUET3MINI_CFLAGS := -c -std=gnu99 \
 	-Werror=implicit \
 	-fsingle-precision-constant \
 	-O2 \
-	-Wall \
 	-Werror \
 	-Wwrite-strings \
 	$(DUET3MINI_INCLUDES) \
@@ -154,7 +153,6 @@ DUET3MINI_CXXFLAGS := -c -std=gnu++17 \
 	-fsingle-precision-constant \
 	-fstack-usage \
 	-O2 \
-	-Wall \
 	-Werror \
 	-Wnoexcept \
 	-Wshadow \

@@ -131,7 +131,6 @@ DUET3MB6HC_CFLAGS := -c -std=gnu99 \
 	-Werror=implicit \
 	-fsingle-precision-constant \
 	-O2 \
-	-Wall \
 	-Werror \
 	-Wwrite-strings \
 	$(DUET3MB6HC_INCLUDES) \
@@ -162,7 +161,6 @@ DUET3MB6HC_CXXFLAGS := -c -std=gnu++17 \
 	-fsingle-precision-constant \
 	-fstack-usage \
 	-O2 \
-	-Wall \
 	-Werror \
 	-Wnoexcept \
 	-Wshadow \
