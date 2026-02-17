@@ -2118,6 +2118,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							type = MqttMessage;
 							break;
 #endif
+#ifdef SERIAL_USB2_DEVICE
+						case 7:		// second USB channel
+							type = Usb2Message;
+							break;
+#endif
 						default:
 							reply.printf("Invalid message type: %" PRIi32, param);
 							result = GCodeResult::error;
