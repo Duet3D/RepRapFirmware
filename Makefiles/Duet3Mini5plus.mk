@@ -109,6 +109,7 @@ DUET3MINI_DEFINES := \
 
 # Compiler flags - C
 DUET3MINI_CFLAGS := -c -std=gnu99 \
+	-Wall \
 	-mcpu=cortex-m4 \
 	-mthumb \
 	-fno-math-errno \
@@ -133,6 +134,7 @@ DUET3MINI_CFLAGS := -c -std=gnu99 \
 
 # Compiler flags - C++
 DUET3MINI_CXXFLAGS := -c -std=gnu++17 \
+	-Wall \
 	-mcpu=cortex-m4 \
 	-mthumb \
 	-fno-math-errno \

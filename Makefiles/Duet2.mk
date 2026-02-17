@@ -95,6 +95,7 @@ DUET2_DEFINES := \
 
 # Compiler flags - C
 DUET2_CFLAGS := -c -std=gnu99 \
+	-Wall \
 	-mcpu=cortex-m4 \
 	-mthumb \
 	-fno-math-errno \
@@ -119,6 +120,7 @@ DUET2_CFLAGS := -c -std=gnu99 \
 
 # Compiler flags - C++
 DUET2_CXXFLAGS := -c -std=gnu++17 \
+	-Wall \
 	-mcpu=cortex-m4 \
 	-mthumb \
 	-fno-math-errno \

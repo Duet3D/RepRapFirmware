@@ -97,6 +97,7 @@ FMDC_V03_DEFINES := \
 
 # Compiler flags - C
 FMDC_V03_CFLAGS := -c -std=gnu99 \
+	-Wall \
 	-mcpu=cortex-m4 \
 	-mthumb \
 	-fno-math-errno \
@@ -121,6 +122,7 @@ FMDC_V03_CFLAGS := -c -std=gnu99 \
 
 # Compiler flags - C++
 FMDC_V03_CXXFLAGS := -c -std=gnu++17 \
+	-Wall \
 	-mcpu=cortex-m4 \
 	-mthumb \
 	-fno-math-errno \
