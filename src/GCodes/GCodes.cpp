@@ -344,10 +344,13 @@ GCodeBuffer *_ecv_null GCodes::GetSerialGCodeBuffer(size_t serialPortNumber) con
 {
 	switch (serialPortNumber)
 	{
-	case 0:		return UsbGCode();
-	case 1:		return AuxGCode();
-	case 2:		return Aux2GCode();
-	default:	return nullptr;
+	case 0:						return UsbGCode();
+#ifdef SERIAL_USB2_DEVICE
+	case 1:						return Usb2GCode();
+#endif
+	case FirstAuxChannel:		return AuxGCode();
+	case FirstAuxChannel + 1:	return Aux2GCode();
+	default:					return nullptr;
 	}
 }
 

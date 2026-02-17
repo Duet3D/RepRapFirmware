@@ -460,7 +460,7 @@ void Platform::Init() noexcept
 #if defined(SERIAL_USB2_DEVICE) && CORE_USES_TINYUSB
 	commsParams[1] = 2;							// USB2 is in raw mode by default
 	usb2Mutex.Create("USB2");
-	SERIAL_USB2_DEVICE.Start(NoPin);		// No VBUS pin for second USB channel
+	SERIAL_USB2_DEVICE.Start(NoPin);			// No VBUS pin for second USB channel
 #endif
 
 #if HAS_AUX_DEVICES
@@ -2371,10 +2371,7 @@ static constexpr AuxMode auxModes[] =
 // Return the mode of this serial channel (raw, panelDue, device, disabled)
 AuxMode Platform::GetChannelMode(size_t chan) const noexcept
 {
-	return (chan == 0) ? auxModes[commsParams[0] & 7]
-#ifdef SERIAL_USB2_DEVICE
-			: (chan == 1) ? auxModes[commsParams[1] & 7]
-#endif
+	return (chan < FirstAuxChannel) ? auxModes[commsParams[chan] & 7]
 #if HAS_AUX_DEVICES
 			: (chan < NumSerialChannels) ? auxDevices[chan - FirstAuxChannel].GetMode()
 #endif
@@ -2400,7 +2397,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 		if (newMode == AuxMode::device)
 		{
 			// Don't allow device mode if it is not supported on this port
-			if (chan == 0)
+			if (chan < FirstAuxChannel)
 			{
 				reply.copy("Device mode not supported on this port");
 				return GCodeResult::error;
@@ -2417,7 +2414,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 				}
 			}
 #  if defined(DUET3_MB6XD) || defined(DUET3_MB6HC)
-			else if (chan == 2 &&
+			else if (chan == FirstAuxChannel + 1 &&
 #   if defined(DUET3_MB6XD)
 						board >= BoardType::Duet3_6XD_v102
 #   elif defined(DUET3_MB6HC)
@@ -2470,7 +2467,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 #if HAS_AUX_DEVICES
 	else if (baudRate != 0)
 	{
-		if (chan != 0)
+		if (chan >= FirstAuxChannel)
 		{
 			auxDevices[chan - FirstAuxChannel].SetBaudRate(baudRate);
 			ResetChannel(chan);
@@ -2540,7 +2537,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 bool Platform::IsChanEnabled(size_t chan) const noexcept
 {
 #if HAS_AUX_DEVICES
-	return chan == 0 || (chan <= ARRAY_SIZE(auxDevices) && auxDevices[chan - FirstAuxChannel].IsEnabledForGCodeIo());
+	return chan < FirstAuxChannel || (chan <= ARRAY_SIZE(auxDevices) && auxDevices[chan - FirstAuxChannel].IsEnabledForGCodeIo());
 #else
 	return false;
 #endif
@@ -2548,9 +2545,9 @@ bool Platform::IsChanEnabled(size_t chan) const noexcept
 
 bool Platform::IsChanRaw(size_t chan) const noexcept
 {
-	if (chan == 0)				// if USB
+	if (chan < FirstAuxChannel)				// if USB
 	{
-		return (commsParams[0] & 0x02) != 0;
+		return (commsParams[chan] & 0x02) != 0;
 	}
 
 #if HAS_AUX_DEVICES
@@ -4318,6 +4315,7 @@ void Platform::HandleRemoteGpInChange(CanAddress src, uint8_t handleMajor, uint8
 	}
 }
 
+// Call this when we have processed a message, other than regular broadcast messages. It causes the ACT LED to flash.
 void Platform::OnProcessingCanMessage() noexcept
 {
 	whenLastCanMessageProcessed = millis();
