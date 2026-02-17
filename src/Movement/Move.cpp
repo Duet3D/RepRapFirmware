@@ -174,19 +174,19 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
 	{ "limitAxes",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().LimitAxes()),										ObjectModelEntryFlags::none },
 	{ "noMovesBeforeHoming",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().NoMovesBeforeHoming()),								ObjectModelEntryFlags::none },
-	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetPrimaryMaxPrintingAcceleration()), 1),	ObjectModelEntryFlags::none },
+	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).maxPrintingAcceleration), 1),	ObjectModelEntryFlags::none },
 	{ "queue",					OBJECT_MODEL_FUNC_ARRAY(2),																		ObjectModelEntryFlags::none },
 #if SUPPORT_COORDINATE_ROTATION
 	{ "rotation",				OBJECT_MODEL_FUNC(self, 15),																	ObjectModelEntryFlags::notPanelDue },
 #endif
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
-	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimarySpeedFactor(), 2),						ObjectModelEntryFlags::none },
-	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetPrimaryMaxTravelAcceleration()), 1),		ObjectModelEntryFlags::none },
+	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).speedFactor, 2),	ObjectModelEntryFlags::none },
+	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).maxTravelAcceleration), 1),		ObjectModelEntryFlags::none },
 #if SUPPORT_S_CURVE
 	{ "usingSCurve",			OBJECT_MODEL_FUNC(self->usingSCurve),															ObjectModelEntryFlags::none },
 #endif
 	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).latestVirtualExtruderPosition, 5),		ObjectModelEntryFlags::liveNotPanelDue },
-	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber() - 1),				ObjectModelEntryFlags::none },
+	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetCurrentMovementState(context).currentCoordinateSystem),		ObjectModelEntryFlags::none },
 
 	// 1. Move.Idle members
 	{ "factor",					OBJECT_MODEL_FUNC(self->GetIdleCurrentFactor(), 1),												ObjectModelEntryFlags::none },
@@ -1423,14 +1423,21 @@ void Move::SetLatestMeshDeviation(const Deviation& d) noexcept
 	latestMeshDeviation = d;
 }
 
-inline void Move::WakeMoveTaskFromISR() noexcept
+inline void Move::WakeMoveTask() noexcept
 {
 	// No need to check whether the Move task is running because GiveFromISR does that
 #if SUPPORT_REMOTE_COMMANDS
 	if (!inExpansionMode)
 #endif
 	{
-		moveTask.GiveFromISR(NotifyIndices::Move);
+		if (inInterrupt())
+		{
+			moveTask.GiveFromISR(NotifyIndices::Move);
+		}
+		else
+		{
+			moveTask.Give(NotifyIndices::Move);
+		}
 	}
 }
 
@@ -2449,7 +2456,7 @@ void Move::Interrupt() noexcept
 
 			if (activeDMs == nullptr || hadStepError)
 			{
-				WakeMoveTaskFromISR();							// we may have just completed a special move, so wake up the Move task so that it can notice that
+				WakeMoveTask();					// we may have just completed a special move, so wake up the Move task so that it can notice that
 				break;
 			}
 
@@ -2533,6 +2540,7 @@ void Move::DeactivateDM(DriveMovement *dmToRemove) noexcept
 }
 
 // Check the endstops, given that we know that this move checks endstops.
+// This may be called both from the step ISR and from the CanReceive task.
 // If executingMove is set then the move is already being executed; otherwise we are preparing to commit the move.
 #if SUPPORT_CAN_EXPANSION
 // Returns true if the caller needs to wake the async sender task because CAN-connected drivers need to be stopped
@@ -2568,7 +2576,7 @@ void Move::CheckEndstops(bool executingMove) noexcept
 
 			if (executingMove)
 			{
-				WakeMoveTaskFromISR();					// wake move task so that it sets the move as finished promptly
+				WakeMoveTask();			// wake move task so that it sets the move as finished promptly
 			}
 #if SUPPORT_CAN_EXPANSION
 			return wakeAsyncSender;
@@ -2587,7 +2595,7 @@ void Move::CheckEndstops(bool executingMove) noexcept
 
 			if (executingMove && !emgr.AnyEndstopsActive())
 			{
-				WakeMoveTaskFromISR();					// wake move task so that it sets the move as finished promptly
+				WakeMoveTask();			// wake move task so that it sets the move as finished promptly
 			}
 			break;
 
@@ -2904,7 +2912,7 @@ bool Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
 	{
 		IterateDrivers(logicalDrive,
 						[](uint8_t)->void { },						// no action if the driver is local
-						[executingMove, wasMoving, netStepsTaken, &wakeAsyncSender](DriverId did)->void
+						[executingMove, netStepsTaken, &wakeAsyncSender](DriverId did)->void
 							{
 								if (executingMove)
 								{

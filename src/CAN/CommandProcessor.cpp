@@ -393,12 +393,12 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetHeat().ApplyFeedForward(buf->msg.heaterFeedForwardV1, replyRef);
 				break;
 
-			case CanMessageType::heaterModelV2:
-				requestId = buf->msg.heaterModelV2.requestId;
-				rslt = reprap.GetHeat().ProcessM307V1(buf->msg.heaterModelV2, replyRef);
+			case CanMessageType::heaterModelV3:
+				requestId = buf->msg.heaterModelV3.requestId;
+				rslt = reprap.GetHeat().ProcessM307(buf->msg.heaterModelV3, replyRef);
 				break;
 
-			case CanMessageType::setHeaterTemperature:
+			case CanMessageType::setHeaterTemperatureV1:
 				requestId = buf->msg.setTemp.requestId;
 				rslt = reprap.GetHeat().SetTemperature(buf->msg.setTemp, replyRef);
 				break;
@@ -417,6 +417,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				requestId = buf->msg.setHeaterMonitors.requestId;
 				rslt = reprap.GetHeat().SetHeaterMonitors(buf->msg.setHeaterMonitors, replyRef);
 				break;
+
+			case CanMessageType::setDefaultHeaterModel:
+				reprap.GetHeat().SetDefaultHeaterModel(*buf);
+				CanInterface::SendResponseNoFree(buf);
+				return;
 
 			case CanMessageType::m308V1:
 				requestId = buf->msg.generic.requestId;
@@ -684,7 +689,6 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 					CanMessageStandardReply * const msg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
 					msg->resultCode = (uint16_t)GCodeResult::ok;
-					msg->extra = 0;
 					msg->text[0] = 0;
 					buf->dataLength = msg->GetActualDataLength(0);
 					msg->fragmentNumber = 0;

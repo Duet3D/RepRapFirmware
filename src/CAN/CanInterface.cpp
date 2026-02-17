@@ -42,8 +42,6 @@
 # endif
 #endif
 
-#include <memory>
-
 #define SUPPORT_CAN		1				// needed by CanDevice.h
 #include <CanDevice.h>
 #if SAME70
@@ -787,7 +785,7 @@ unsigned int CanInterface::GetNumPendingMotionMessages() noexcept
 // Send a request to an expansion board and append the response to 'reply'
 GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra) noexcept
 {
-	return SendRequestAndGetCustomReply(buf, rid, reply, extra, CanMessageType::unusedMessageType, [](const CanMessageBuffer*) { });
+	return SendRequestAndGetCustomReply(buf, rid, reply, extra, CanMessageType::unusedMessageType, [](const CanMessageBuffer*) noexcept->void { });
 }
 
 // Send a request to an expansion board and append the response to 'reply'. The response may either be a standard reply or 'replyType'.

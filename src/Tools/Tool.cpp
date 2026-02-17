@@ -702,7 +702,7 @@ void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHea
 	for (size_t heaterIndex = 0; heaterIndex < heaterCount; heaterIndex++)
 	{
 		const int heaterNumber = heaters[heaterIndex];
-		if (!reprap.GetHeat().IsBedOrChamberHeater(heaterNumber) && heaterNumber >= (int)numHeaters)
+		if (reprap.GetHeat().GetHeaterFunction(heaterNumber) == HeaterFunction::tool && heaterNumber >= (int)numHeaters)
 		{
 			numHeaters = (uint16_t)heaterNumber + 1;
 		}

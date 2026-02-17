@@ -40,8 +40,6 @@ struct PrepParams
 	uint32_t accelClocks, steadyClocks, decelClocks;
 	motioncalc_t acceleration;							// the acceleration to use, always positive
 	motioncalc_t deceleration;							// the deceleration to use, always negative
-# define peakAcceleration	acceleration
-# define peakDeceleration	deceleration
 	motioncalc_t accelDistance;
 	motioncalc_t decelStartDistance;
 	uint32_t SteadyClocks() const noexcept { return steadyClocks; }

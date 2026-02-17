@@ -61,16 +61,14 @@ public:
 	pre(index < MaxBedHeaters);
 	void SetBedHeater(size_t index, int heater)	 noexcept				// Set a hot bed heater number
 	pre(index < MaxBedHeaters; -1 <= heater; heater < MaxHeaters);
-	bool IsBedHeater(int heater) const noexcept;						// Check if this heater is a bed heater
 
 	int GetChamberHeater(size_t index) const noexcept					// Get a chamber heater number
 	pre(index < MaxChamberHeaters);
 	void SetChamberHeater(size_t index, int heater)	 noexcept			// Set a chamber heater number
 	pre(index < MaxChamberHeaters; -1 <= heater; heater < MaxHeaters);
-	bool IsChamberHeater(int heater) const noexcept;					// Check if this heater is a chamber heater
 
+	HeaterFunction GetHeaterFunction(int heater) const noexcept;		// Check if this heater is a bed heater, chamber heater or tool heater
 	void SetAsToolHeater(int8_t heater) const noexcept;					// called when a tool is created that uses this heater
-	bool IsBedOrChamberHeater(int heater) const noexcept;				// Queried by the Platform class
 
 	bool SlowHeatersAtSetTemperatures(float tolerance, bool waitOnFault) const noexcept;	// Are all slow heaters at temperature within tolerance?
 
@@ -143,18 +141,20 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
-	GCodeResult ProcessM307V1(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
+	GCodeResult ProcessM307(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept;
 	GCodeResult ProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	GCodeResult SetFaultDetection(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept;
 	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;
-	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
+	GCodeResult SetTemperature(const CanMessageSetHeaterTemperatureV1& msg, const StringRef& reply) noexcept;
 	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept;
 	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept;
+
+	void SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept;			// set and report the default model for a heater
 #endif
 
 	static TaskHandle GetHeatTask() noexcept;
 
-	static ReadWriteLock sensorsLock;							// needs to be public so that the OMT in EndstopsManager can lock it
+	static ReadWriteLock sensorsLock;									// needs to be public so that the OMT in EndstopsManager can lock it
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS

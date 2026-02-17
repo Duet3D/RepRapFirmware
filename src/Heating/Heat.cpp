@@ -708,22 +708,29 @@ void Heat::SetBedHeater(size_t index, int heater) noexcept
 		const auto h = FindHeater(heater);
 		if (h.IsNotNull())
 		{
-			h->SetAsBedOrChamberHeater();
+			h->SetAsBedHeater();
 		}
 	}
 	reprap.HeatUpdated();
 }
 
-bool Heat::IsBedHeater(int heater) const noexcept
+HeaterFunction Heat::GetHeaterFunction(int heater) const noexcept
 {
 	for (int8_t bedHeater : bedHeaters)
 	{
 		if (heater == bedHeater)
 		{
-			return true;
+			return HeaterFunction::bed;
 		}
 	}
-	return false;
+	for (int8_t chamberHeater : chamberHeaters)
+	{
+		if (heater == chamberHeater)
+		{
+			return HeaterFunction::chamber;
+		}
+	}
+	return HeaterFunction::tool;
 }
 
 void Heat::SetChamberHeater(size_t index, int heater) noexcept
@@ -740,21 +747,9 @@ void Heat::SetChamberHeater(size_t index, int heater) noexcept
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
 	{
-		h->SetAsBedOrChamberHeater();
+		h->SetAsChamberHeater();
 	}
 	reprap.HeatUpdated();
-}
-
-bool Heat::IsChamberHeater(int heater) const noexcept
-{
-	for (int8_t chamberHeater : chamberHeaters)
-	{
-		if (heater == chamberHeater)
-		{
-			return true;
-		}
-	}
-	return false;
 }
 
 // This is called when a tool is created that uses this heater
@@ -856,7 +851,7 @@ void Heat::SwitchOffAll(bool includingChamberAndBed) noexcept
 	for (int heater = 0; heater < (int)MaxHeaters; ++heater)
 	{
 		Heater * const h = heaters[heater];
-		if (h != nullptr && (includingChamberAndBed || !IsBedOrChamberHeater(heater)))
+		if (h != nullptr && (includingChamberAndBed || h->GetFunction() == HeaterFunction::tool))
 		{
 			h->SwitchOff();
 			lastStandbyTools[heater] = nullptr;
@@ -917,11 +912,6 @@ float Heat::GetAveragePWM(size_t heater) const noexcept
 	return (h.IsNull()) ? 0.0 : h->GetAveragePWM();
 }
 
-bool Heat::IsBedOrChamberHeater(int heater) const noexcept
-{
-	return IsBedHeater(heater) || IsChamberHeater(heater);
-}
-
 // Get the highest temperature limit of any heater
 float Heat::GetHighestTemperatureLimit() const noexcept
 {
@@ -955,7 +945,7 @@ bool Heat::WriteModelParameters(FileStore *f) const noexcept
 			if (model.IsEnabled())
 			{
 				String<StringLength256> scratchString;
-				model.AppendM307Command(h, scratchString.GetRef(), !IsBedOrChamberHeater(h));
+				model.AppendM307Command(h, scratchString.GetRef(), heaters[h]->GetFunction() == HeaterFunction::tool);
 				model.AppendM301Command(h, scratchString.GetRef());
 				ok = f->Write(scratchString.c_str());
 			}
@@ -1461,13 +1451,13 @@ GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef&
 	return h->ReportDetails(reply);
 }
 
-GCodeResult Heat::ProcessM307V1(const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept
+GCodeResult Heat::ProcessM307(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heater);
 	return (h.IsNotNull()) ? h->SetModel(msg.heater, msg, reply) : UnknownHeater(msg.heater, reply);
 }
 
-GCodeResult Heat::SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept
+GCodeResult Heat::SetTemperature(const CanMessageSetHeaterTemperatureV1& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heaterNumber);
 	return (h.IsNotNull()) ? h->SetTemperature(msg, reply) : UnknownHeater(msg.heaterNumber, reply);
@@ -1572,6 +1562,24 @@ GCodeResult Heat::ProcessM308(const CanMessageGeneric& msg, const StringRef& rep
 
 	reply.copy("Missing sensor number parameter");
 	return GCodeResult::error;
+}
+
+// Set and report the default model for a heater
+void Heat::SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept
+{
+	const auto h = FindHeater(buf.msg.setDefaultHeaterModel.heater);
+	if (h.IsNotNull())
+	{
+		h->SetDefaultHeaterModel(buf);
+	}
+	else
+	{
+		const CanRequestId rid = buf.msg.setDefaultHeaterModel.requestId;
+		const CanAddress src = buf.id.Src();
+		auto msg = buf.SetupResponseMessage<CanMessageStandardReply>(rid, CanInterface::GetCanAddress(), src);
+		msg->resultCode = (uint32_t)GCodeResult::error;
+		strcpy(msg->text, "unknown heater");
+	}
 }
 
 #endif

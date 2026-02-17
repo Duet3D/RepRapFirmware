@@ -13,6 +13,7 @@
 #include "CanMessageBuffer.h"
 #include "CanInterface.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <limits>
 
 #define STRINGIZE2(_v)	#_v
 #define STRINGIZE(_v)	STRINGIZE2(_v)
