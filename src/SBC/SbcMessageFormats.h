@@ -64,7 +64,8 @@ enum class DataType : uint8_t
 	Char = 15,				// char value (int32_t)
 	Bitmap16 = 16,			// 16-bit bitmap
 	Bitmap32 = 17,			// 32-bit bitmap
-	Bitmap64 = 18			// 64-bit bitmap
+	Bitmap64 = 18,			// 64-bit bitmap
+	FloatWithDigits = 19	// float with a specified number of digits (from RRF to SBC only when returning expression values)
 };
 
 struct CodeChannelHeader

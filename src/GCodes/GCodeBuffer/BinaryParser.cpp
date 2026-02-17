@@ -859,6 +859,7 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 				s.catf("%c%" PRIu32, param->letter, param->uintValue);
 				break;
 			case DataType::Float:
+			case DataType::FloatWithDigits:
 				s.catf("%c%f", param->letter, (double)param->floatValue);
 				break;
 			case DataType::IntArray:
@@ -950,7 +951,9 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 				}
 				break;
 			case DataType::ULong:
+#if SUPPORT_BITMAP64
 			case DataType::Bitmap64:
+#endif
 			{
 				uint64_t ulVal;
 				memcpy(reinterpret_cast<char *>(&ulVal), val, sizeof(uint64_t));
