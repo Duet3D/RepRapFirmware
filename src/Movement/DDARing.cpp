@@ -463,6 +463,7 @@ bool DDARing::SetWaitingToEmpty() noexcept
 	if (ret)
 	{
 		waitingForRingToEmpty = false;
+		plannedProfile.Invalidate();				// we may be waiting for movement to stop after an asynchronous pause, in which case the planned profile may not have been completed
 	}
 	return ret;
 }
