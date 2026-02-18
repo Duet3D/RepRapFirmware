@@ -22,6 +22,10 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define HAS_WIFI_NETWORKING		1
 #define WIFI_USES_ESP32			1
 
+#ifndef NO_S_CURVE
+# define SUPPORT_S_CURVE		1		// by default we support 3rd-order motion control on the 6HC
+#endif
+
 // Storage support
 #ifdef USE_EMBEDDED_FILES
 # define HAS_EMBEDDED_FILES		1
