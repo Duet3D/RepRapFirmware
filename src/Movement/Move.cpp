@@ -2222,6 +2222,7 @@ void Move::ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepC
 {
 	switch (config)
 	{
+	default:
 		break;
 	case PhaseStepConfig::kv:
 		dms[axisOrExtruder].phaseStepControl.SetKv(value);
