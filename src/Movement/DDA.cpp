@@ -1048,10 +1048,16 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 
 	// Decide when this move should start.
 	// Avoid setting the move start time in the past or with very little time before it starts, because this can lead to us trying to modify a segment that is already executing
+	Move& move = reprap.GetMove();
 	const uint32_t now = StepTimer::GetMovementTimerTicks();
 	if (prev->GetState() == committed)
 	{
-		const uint32_t prevEndTime = prev->afterPrepare.moveStartTime + prev->clocksNeeded;
+		uint32_t prevEndTime = prev->afterPrepare.moveStartTime + prev->clocksNeeded;
+		if (prev->flags.isPrintingMove && !flags.isPrintingMove)
+		{
+			// When doing a non-printing move (e.g. retraction or Z move) after a printing move, let any input shaping for the printing move complete first. See issue #1204.
+			prevEndTime += move.GetAxisShaper().GetShapingTime();
+		}
 		if ((int32_t)(prevEndTime - now) >= (int32_t)MoveTiming::AbsoluteMinimumPreparedTime)
 		{
 			afterPrepare.moveStartTime = prevEndTime;		// start this move directly after the previous one
@@ -1063,7 +1069,7 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 		else
 		{
 			afterPrepare.moveStartTime = now + MoveTiming::AbsoluteMinimumPreparedTime;
-			reprap.GetMove().AddPrepareHiccup();		// move was supposed to follow the previous one directly, so record a hiccup
+			move.AddPrepareHiccup();		// move was supposed to follow the previous one directly, so record a hiccup
 		}
 	}
 	else
@@ -1077,7 +1083,6 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 		CanMotion::StartMovement();
 #endif
 		// Handle all drivers
-		Move& move = reprap.GetMove();
 		if (flags.isLeadscrewAdjustmentMove)
 		{
 			move.EnableDrivers(Z_AXIS, false);			// ensure all Z motors are enabled
@@ -1129,7 +1134,7 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 					if (delta != 0)
 					{
 						move.EnableDrivers(drive, false);
-						if (flags.continuousRotationShortcut && reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
+						if (flags.continuousRotationShortcut && move.GetKinematics().IsContinuousRotationAxis(drive))
 						{
 							// This is a continuous rotation axis, so we may have adjusted the move to cross the 180 degrees position
 							const int32_t stepsPerRotation = lrintf(360.0 * move.DriveStepsPerMm(drive));
@@ -1161,7 +1166,7 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 						}
 #endif
 						axisMotorsEnabled.SetBit(drive);
-						additionalAxisMotorsToEnable |= reprap.GetMove().GetKinematics().GetControllingDrives(drive, flags.checkEndstops);
+						additionalAxisMotorsToEnable |= move.GetKinematics().GetControllingDrives(drive, flags.checkEndstops);
 					}
 				}
 				else

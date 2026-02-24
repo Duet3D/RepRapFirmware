@@ -65,7 +65,7 @@ AxisShaper::AxisShaper() noexcept
 	: type(InputShaperType::none),
 	  frequency(DefaultFrequency),
 	  zeta(DefaultDamping),
-	  numImpulses(1), prepareAdvanceTime(MoveTiming::UsualMinimumPreparedTime)
+	  numImpulses(1), shapingTime(0), prepareAdvanceTime(MoveTiming::UsualMinimumPreparedTime)
 {
 	coefficients[0] = 1.0;
 	delays[0] = 0;
@@ -269,6 +269,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			}
 		}
 		coefficients[numImpulses - 1] = (motioncalc_t)1.0 - sum;
+		shapingTime = delays[numImpulses - 1];
 		prepareAdvanceTime = max<uint32_t>(longestSegment + MoveTiming::AbsoluteMinimumPreparedTime, MoveTiming::UsualMinimumPreparedTime);
 
 		reprap.MoveUpdated();

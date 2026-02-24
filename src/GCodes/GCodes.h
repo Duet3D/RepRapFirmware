@@ -366,6 +366,7 @@ private:
 #if SUPPORT_ASYNC_MOVES
 	void UnlockMovementFrom(const GCodeBuffer& gb, MovementSystemNumber firstMsNumber) noexcept;	// Release movement locks greater or equal to than the specified one
 #endif
+	bool WaitForEndstopOrProbingMoveToFinish(GCodeBuffer& gb) noexcept;			// Wait for movement to stop after performing a move that may terminate early
 
 	void SetInitialAxisAndDrivePositions() noexcept;							// Called at initialisation and when new axes are added
 	void AdjustEndpoint(size_t drive, float ratio) const noexcept;				// Adjust an endpoint following a change to steps/mm

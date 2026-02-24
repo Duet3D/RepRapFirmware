@@ -19,8 +19,10 @@
 
 constexpr FileInfoParser::ParseTableEntry FileInfoParser::parseTable[] =
 {
-	// Note: if a key string in this table is a leading or embedded substring of another, the longer one must come first
-	// First character is case-insensitive but must be uppercase in this table, remaining characters are case-sensitive
+	// Table of comments parsed, in alphabetical order.
+	// If a key string in this table is a leading or embedded substring of another, the longer one must come first so that it will be recognised in preference to the shorter one
+	// First character is case-insensitive when matching but must be uppercase in this table; remaining characters are case-sensitive when matching
+	{	"Build Time",								&FileInfoParser::ProcessJobTime,			0 },		// S3D 5.x							";   Build Time: 0 hours 42 minutes"
 	{	"Build time",								&FileInfoParser::ProcessJobTime,			0 },		// S3D								";   Build time: 0 hours 42 minutes"
 																											// also REALvision					"; Build time: 2:11:47"
 	{	"Calculated-during-export Build Time",		&FileInfoParser::ProcessJobTime,			0 },		// KISSSlicer 2 alpha				"; Calculated-during-export Build Time: 130.62 minutes"
@@ -676,6 +678,10 @@ void FileInfoParser::ProcessJobTime(const char *_ecv_array k, const char *_ecv_a
 					++p;
 				}
 				secs = SafeStrtof(p, &p);
+				while (*p == ' ')
+				{
+					++p;
+				}
 			}
 			if (*p == 'm')
 			{
