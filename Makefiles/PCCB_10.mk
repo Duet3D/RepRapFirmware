@@ -97,6 +97,7 @@ PCCB_10_DEFINES := \
 
 # Compiler flags - C
 PCCB_10_CFLAGS := -c -std=gnu99 \
+	-Wall \
 	-mcpu=cortex-m4 \
 	-mthumb \
 	-fno-math-errno \
@@ -119,6 +120,7 @@ PCCB_10_CFLAGS := -c -std=gnu99 \
 
 # Compiler flags - C++
 PCCB_10_CXXFLAGS := -c -std=gnu++17 \
+	-Wall \
 	-mcpu=cortex-m4 \
 	-mthumb \
 	-fno-math-errno \

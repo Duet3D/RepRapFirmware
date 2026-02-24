@@ -91,6 +91,7 @@ DUET2SBC_DEFINES := \
 
 # Compiler flags - C
 DUET2SBC_CFLAGS := -c -std=gnu99 \
+	-Wall \
 	-mcpu=cortex-m4 \
 	-mthumb \
 	-fno-math-errno \
@@ -115,6 +116,7 @@ DUET2SBC_CFLAGS := -c -std=gnu99 \
 
 # Compiler flags - C++
 DUET2SBC_CXXFLAGS := -c -std=gnu++17 \
+	-Wall \
 	-mcpu=cortex-m4 \
 	-mthumb \
 	-fno-math-errno \

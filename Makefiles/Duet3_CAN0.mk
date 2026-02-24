@@ -115,6 +115,7 @@ DUET3CAN0_DEFINES := \
 
 # Compiler flags - C
 DUET3CAN0_CFLAGS := -c -std=gnu99 \
+	-Wall \
 	-mcpu=cortex-m7 \
 	-mthumb \
 	-fno-math-errno \
@@ -140,6 +141,7 @@ DUET3CAN0_CFLAGS := -c -std=gnu99 \
 
 # Compiler flags - C++
 DUET3CAN0_CXXFLAGS := -c -std=gnu++17 \
+	-Wall \
 	-mcpu=cortex-m7 \
 	-mthumb \
 	-fno-math-errno \

@@ -115,6 +115,7 @@ DUET3NOSD_DEFINES := \
 
 # Compiler flags - C
 DUET3NOSD_CFLAGS := -c -std=gnu99 \
+	-Wall \
 	-mcpu=cortex-m7 \
 	-mthumb \
 	-fno-math-errno \
@@ -140,6 +141,7 @@ DUET3NOSD_CFLAGS := -c -std=gnu99 \
 
 # Compiler flags - C++
 DUET3NOSD_CXXFLAGS := -c -std=gnu++17 \
+	-Wall \
 	-mcpu=cortex-m7 \
 	-mthumb \
 	-fno-math-errno \
