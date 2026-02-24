@@ -45,7 +45,7 @@ constexpr ObjectModelTableEntry FopDt::objectModelTable[] =
 	{ "i",					OBJECT_MODEL_FUNC(self->loadChangeParams.recipTi * self->loadChangeParams.kP, 4),	ObjectModelEntryFlags::none },
 	{ "overridden",			OBJECT_MODEL_FUNC(self->pidParametersOverridden),									ObjectModelEntryFlags::none },
 	{ "p",					OBJECT_MODEL_FUNC(self->loadChangeParams.kP, 5),									ObjectModelEntryFlags::none },
-	{ "used",				OBJECT_MODEL_FUNC(self->basicModel.usePid),											ObjectModelEntryFlags::none },
+	{ "used",				OBJECT_MODEL_FUNC((bool)self->basicModel.usePid),									ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t FopDt::objectModelTableDescriptor[] = { 2, 10, 5 };
