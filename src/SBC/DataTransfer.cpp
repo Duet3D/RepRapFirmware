@@ -1498,7 +1498,7 @@ bool DataTransfer::WriteSetVariableResult(GCodeChannel channel, const char *varN
 		payloadLength = varNameLength;
 		break;
 	case TypeCode::Float:
-		payloadLength = varNameLength + sizeof(uint32_t);
+		payloadLength = varNameLength + sizeof(uint8_t);
 		break;
 	case TypeCode::CString:
 		payloadLength = varNameLength + strlen(value.sVal);

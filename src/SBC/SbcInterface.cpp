@@ -1239,7 +1239,7 @@ void SbcInterface::ExchangeData() noexcept
 			{
 				if (reprap.Debug(Module::SbcInterface))
 				{
-					debugPrintf("Requesting macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
+					debugPrintf("Requesting macro file '%s' (channel %d, fromCode %s)\n", requestedMacroFile, (int)i, fromCode ? "true" : "false");
 				}
 				gb->MacroRequestSent();
 				gb->Invalidate();
@@ -1309,7 +1309,7 @@ void SbcInterface::ExchangeData() noexcept
 					{
 						if (reprap.Debug(Module::SbcInterface))
 						{
-							debugPrintf("Requesting non-blocking macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
+							debugPrintf("Requesting non-blocking macro file '%s' (channel %i, fromCode %s)\n", requestedMacroFile, (int)i, fromCode ? "true" : "false");
 						}
 						gb->MacroRequestSent();
 						gb->Invalidate();
