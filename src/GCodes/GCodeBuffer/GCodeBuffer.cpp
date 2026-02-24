@@ -247,23 +247,28 @@ void GCodeBuffer::Diagnostics(const StringRef& reply) noexcept
 		break;
 	}
 
-	reply.cat(" in state(s)");
-	const GCodeMachineState *_ecv_null ms = machineState;
-	do
-	{
-		reply.catf(" %d", (int)ms->GetState());
-		ms = ms->GetPrevious();
-	} while (ms != nullptr);
-	if (IsDoingFileMacro())
-	{
-		reply.cat(", running macro");
-	}
+	if (machineState->GetPrevious() != nullptr ||
+		machineState->GetState() != GCodeState::normal || IsDoingFileMacro()
 #if SUPPORT_ASYNC_MOVES
-	if (syncState != SyncState::running)
-	{
-		reply.catf(", sync state %u", (unsigned int)syncState);
-	}
+		|| syncState != SyncState::running
 #endif
+	)
+	{
+		reply.cat(" in state(s)");
+		const GCodeMachineState *_ecv_null ms = machineState;
+		do {
+			reply.catf(" %d", (int)ms->GetState());
+			ms = ms->GetPrevious();
+		} while (ms != nullptr);
+		if (IsDoingFileMacro()) {
+			reply.cat(", running macro");
+		}
+#if SUPPORT_ASYNC_MOVES
+		if (syncState != SyncState::running) {
+			reply.catf(", sync state %u", (unsigned int)syncState);
+		}
+#endif
+	}
 }
 
 // Add a character to the end
