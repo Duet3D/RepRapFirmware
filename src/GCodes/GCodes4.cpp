@@ -184,10 +184,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			gb.LatestMachineState().SetError("intermediate position outside machine limits");
 			gb.SetState(GCodeState::normal);
-			if (machineType != MachineType::fff)
-			{
-				AbortPrint(gb);
-			}
+			AbortPrint(gb);
 			break;
 
 		case SegmentedMoveState::active:					// move still ongoing
