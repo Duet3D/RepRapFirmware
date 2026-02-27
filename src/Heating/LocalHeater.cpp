@@ -376,7 +376,12 @@ void LocalHeater::Spin() noexcept
 				break;
 
 			case HeaterMode::stable:
-				if (fabsf(error) > GetMaxTemperatureExcursion() && temperature > MaxAmbientTemperature)
+				// Check for maximum temperature excursion exceeded when we were at a stable temperature.
+				if (   fabsf(error) > GetMaxTemperatureExcursion()
+					&& (   error > 0.0											// if the temperature we are reading has dropped unexpectedly, e.g. indirect sensor can no longer see a tool
+						|| temperature > MaxAmbientTemperature					// or the temperature reading is too high and greater than a reasonable ambient temperature (should we use chamber temperature instead, for a tool heater?)
+					   )
+				   )
 				{
 					++heatingFaultCount;
 					if ((float)(heatingFaultCount * HeatSampleIntervalMillis) > GetMaxHeatingFaultTime() * SecondsToMillis)
