@@ -4178,7 +4178,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 			|| (&gb == Aux2GCode() && !platform.IsChanRaw(FirstAuxChannel + 1))
 # endif
 #endif
-			|| gb.IsDoingFileMacro()
+			|| gb.IsDoingFileMacro(true)
 		   )
 	   )
 	{
