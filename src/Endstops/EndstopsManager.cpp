@@ -774,7 +774,7 @@ void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMaj
 	}
 }
 
-void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, int32_t reading) noexcept
+void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, int32_t reading, uint16_t when) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
@@ -782,6 +782,7 @@ void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_
 		ZProbe * const zp = zProbes[handleMajor];
 		if (zp != nullptr)
 		{
+			//TODO use the 'when' parameter
 			zp->UpdateRemoteReading(src, handleMinor, reading);
 		}
 	}

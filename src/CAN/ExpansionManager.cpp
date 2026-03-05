@@ -246,48 +246,99 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 		UpdateBoardState(address, BoardState::running);
 	}
 
-	const CanMessageBoardStatusV0& msg = buf->msg.boardStatusV0;
-	if (msg.hasMovementDelay)
+	if (buf->id.MsgType() == CanMessageType::boardStatusReportV1)
 	{
-		StepTimer::ProcessMovementDelayRequest(msg.movementDelay);
+		const CanMessageBoardStatusV1& msg = buf->msg.boardStatusV1;
+		if (msg.hasMovementDelay)
+		{
+			StepTimer::ProcessMovementDelayRequest(msg.movementDelay);
+		}
+		else
+		{
+			board.neverUsedRam = msg.neverUsedRam;
+		}
+
+		// We must process the data in the correct order, to ensure that we pick up the right values
+		size_t index = 0;
+		board.hasVin = msg.hasVin;
+		if (msg.hasVin)
+		{
+			board.vin = msg.shortValues[index++];
+			board.hasVin = true;
+		}
+		board.hasV12 = msg.hasV12;
+		if (msg.hasV12)
+		{
+			board.v12 = msg.shortValues[index++];
+		}
+		board.hasMcuTemp = msg.hasMcuTemp;
+		if (msg.hasMcuTemp)
+		{
+			board.mcuTemp = msg.shortValues[index++];
+		}
+		board.hasAccelerometer = msg.hasAccelerometer;
+		board.hasClosedLoop = msg.hasClosedLoop;
+		board.hasInductiveSensor = msg.hasInductiveSensor;
+
+		size_t offset = msg.GetAnalogHandlesOffset();
+		for (unsigned int i = 0; i < msg.numAnalogHandles && offset + sizeof(AnalogHandleDataV1) < buf->dataLength; ++i)
+		{
+			AnalogHandleDataV1 data;
+			memcpy(&data, (const uint8_t*)&msg + offset, sizeof(AnalogHandleDataV1));
+			offset += sizeof(AnalogHandleDataV1);
+			// Currently only Z probes use analog handles, so ask the EndstopsManager to deal with it
+			if (data.handle.parts.type == RemoteInputHandle::typeZprobe)
+			{
+				reprap.GetPlatform().GetEndstops().HandleRemoteAnalogZProbeValueChange(address, data.handle.parts.major, data.handle.parts.minor, data.reading, data.when);
+			}
+		}
 	}
 	else
 	{
-		board.neverUsedRam = msg.neverUsedRam;
-	}
-
-	// We must process the data in the correct order, to ensure that we pick up the right values
-	size_t index = 0;
-	board.hasVin = msg.hasVin;
-	if (msg.hasVin)
-	{
-		board.vin = msg.values[index++];
-		board.hasVin = true;
-	}
-	board.hasV12 = msg.hasV12;
-	if (msg.hasV12)
-	{
-		board.v12 = msg.values[index++];
-	}
-	board.hasMcuTemp = msg.hasMcuTemp;
-	if (msg.hasMcuTemp)
-	{
-		board.mcuTemp = msg.values[index++];
-	}
-	board.hasAccelerometer = msg.hasAccelerometer;
-	board.hasClosedLoop = msg.hasClosedLoop;
-	board.hasInductiveSensor = msg.hasInductiveSensor;
-
-	size_t offset = msg.GetAnalogHandlesOffset();
-	for (unsigned int i = 0; i < msg.numAnalogHandles && offset + sizeof(AnalogHandleDataV0) < buf->dataLength; ++i)
-	{
-		AnalogHandleDataV0 data;
-		memcpy(&data, (const uint8_t*)&msg + offset, sizeof(AnalogHandleDataV0));
-		offset += sizeof(AnalogHandleDataV0);
-		// Currently only Z probes use analog handles, so ask the EndstopsManager to deal with it
-		if (data.handle.parts.type == RemoteInputHandle::typeZprobe)
+		// Must be CanMessageType::boardStatusReportV0
+		const CanMessageBoardStatusV0& msg = buf->msg.boardStatusV0;
+		if (msg.hasMovementDelay)
 		{
-			reprap.GetPlatform().GetEndstops().HandleRemoteAnalogZProbeValueChange(address, data.handle.parts.major, data.handle.parts.minor, data.reading);
+			StepTimer::ProcessMovementDelayRequest(msg.movementDelay);
+		}
+		else
+		{
+			board.neverUsedRam = msg.neverUsedRam;
+		}
+
+		// We must process the data in the correct order, to ensure that we pick up the right values
+		size_t index = 0;
+		board.hasVin = msg.hasVin;
+		if (msg.hasVin)
+		{
+			board.vin = msg.values[index++];
+			board.hasVin = true;
+		}
+		board.hasV12 = msg.hasV12;
+		if (msg.hasV12)
+		{
+			board.v12 = msg.values[index++];
+		}
+		board.hasMcuTemp = msg.hasMcuTemp;
+		if (msg.hasMcuTemp)
+		{
+			board.mcuTemp = msg.values[index++];
+		}
+		board.hasAccelerometer = msg.hasAccelerometer;
+		board.hasClosedLoop = msg.hasClosedLoop;
+		board.hasInductiveSensor = msg.hasInductiveSensor;
+
+		size_t offset = msg.GetAnalogHandlesOffset();
+		for (unsigned int i = 0; i < msg.numAnalogHandles && offset + sizeof(AnalogHandleDataV0) < buf->dataLength; ++i)
+		{
+			AnalogHandleDataV0 data;
+			memcpy(&data, (const uint8_t*)&msg + offset, sizeof(AnalogHandleDataV0));
+			offset += sizeof(AnalogHandleDataV0);
+			// Currently only Z probes use analog handles, so ask the EndstopsManager to deal with it
+			if (data.handle.parts.type == RemoteInputHandle::typeZprobe)
+			{
+				reprap.GetPlatform().GetEndstops().HandleRemoteAnalogZProbeValueChange(address, data.handle.parts.major, data.handle.parts.minor, data.reading, buf->timeStamp);
+			}
 		}
 	}
 }

@@ -272,20 +272,21 @@ static GCodeResult InitiateFirmwareUpdate(const CanMessageUpdateYourFirmware& ms
 // Process a received broadcast or request message. Don't free the message buffer
 void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 {
-	if (buf->id.Src() != CanInterface::GetCanAddress())								// I don't think we should receive our own broadcasts, but in case we do...
+	if (buf->id.Src() != CanInterface::GetCanAddress())				// I don't think we should receive our own messages, but in case we do...
 	{
-		if (   buf->id.Dst() != CanId::BroadcastAddress
-			&& buf->id.MsgType() != CanMessageType::fansReport						// don't flash whenever we receive a regular status message
-			&& buf->id.MsgType() != CanMessageType::heatersStatusReport
-			&& buf->id.MsgType() != CanMessageType::boardStatusReportV1
-			&& buf->id.MsgType() != CanMessageType::driversStatusReport
-			&& buf->id.MsgType() != CanMessageType::filamentMonitorsStatusReportV2
+		const CanMessageType id = buf->id.MsgType();
+		if (   buf->id.Dst() != CanId::BroadcastAddress				// ignore broadcast messages e.g. temperature reports
+			&& id != CanMessageType::fansReport						// don't flash whenever we receive a regular status message
+			&& id != CanMessageType::heatersStatusReport
+			&& id != CanMessageType::boardStatusReportV0
+			&& id != CanMessageType::boardStatusReportV1
+			&& id != CanMessageType::driversStatusReport
+			&& id != CanMessageType::filamentMonitorsStatusReportV2
 		   )
 		{
 			reprap.GetPlatform().OnProcessingCanMessage();
 		}
 
-		const CanMessageType id = buf->id.MsgType();
 #if SUPPORT_REMOTE_COMMANDS
 		if (CanInterface::InExpansionMode())
 		{
@@ -634,6 +635,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::boardStatusReportV0:
+			case CanMessageType::boardStatusReportV1:
 				reprap.GetExpansion().ProcessBoardStatusReport(buf);
 				break;
 

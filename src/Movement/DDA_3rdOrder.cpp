@@ -188,8 +188,12 @@ static MovementProfile debugProfile;
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
 	{
 		plannedProfile.DebugPrint();
+	}
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+	{
 		plannedProfile.CheckForShortSegments();
 	}
+
 #if COPY_PLAN	//DEBUG
 	debugProfile = plannedProfile;
 #endif

@@ -328,7 +328,6 @@ bool StringParser::LineFinished() noexcept
 			case 1:
 			case 2:
 			case 3:
-				// If a CRC is required then the only command we allow without a CRC is M409
 				badChecksum = (crcRequired || computedChecksum != declaredChecksum);
 				break;
 

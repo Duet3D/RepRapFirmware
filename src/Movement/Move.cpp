@@ -2222,6 +2222,7 @@ void Move::ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepC
 {
 	switch (config)
 	{
+	default:
 		break;
 	case PhaseStepConfig::kv:
 		dms[axisOrExtruder].phaseStepControl.SetKv(value);
@@ -3034,6 +3035,7 @@ void Move::SetAxisDriversConfig(size_t axis, size_t numValues, const DriverId dr
 		}
 	}
 	dms[axis].driversNormallyUsed = bitmap;
+	dms[axis].isExtruder = false;
 }
 
 // Set the characteristics of an axis
@@ -3068,17 +3070,19 @@ void Move::SetAxisType(size_t axis, AxisWrapType wrapType, bool isNistRotational
 void Move::SetExtruderDriver(size_t extruder, DriverId driver) noexcept
 {
 	extruderDrivers[extruder] = driver;
+	const size_t logicalDriveNumber = ExtruderToLogicalDrive(extruder);
 	if (driver.IsLocal())
 	{
 #if HAS_SMART_DRIVERS
-		SmartDrivers::SetAxisNumber(driver.localDriver, ExtruderToLogicalDrive(extruder));
+		SmartDrivers::SetAxisNumber(driver.localDriver, logicalDriveNumber);
 #endif
-		dms[ExtruderToLogicalDrive(extruder)].driversNormallyUsed = StepPins::CalcDriverBitmap(driver.localDriver);
+		dms[logicalDriveNumber].driversNormallyUsed = StepPins::CalcDriverBitmap(driver.localDriver);
 	}
 	else
 	{
-		dms[ExtruderToLogicalDrive(extruder)].driversNormallyUsed = 0;
+		dms[logicalDriveNumber].driversNormallyUsed = 0;
 	}
+	dms[logicalDriveNumber].isExtruder = true;
 }
 
 void Move::SetDriverStepTiming(size_t driver, const float microseconds[4]) noexcept

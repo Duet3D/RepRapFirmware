@@ -2527,10 +2527,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			{
 			case LimitPositionResult::adjusted:
 			case LimitPositionResult::adjustedAndIntermediateUnreachable:
-				if (machineType != MachineType::fff)
-				{
-					gb.ThrowGCodeException(TargetUnreachableText);				// it's a laser or CNC so this is a definite error
-				}
+				gb.ThrowGCodeException(TargetUnreachableText);
 				ToolOffsetInverseTransform(ms);									// make sure the limits are reflected in the user position
 				if (lp == LimitPositionResult::adjusted)
 				{
@@ -4181,7 +4178,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 			|| (&gb == Aux2GCode() && !platform.IsChanRaw(FirstAuxChannel + 1))
 # endif
 #endif
-			|| gb.IsDoingFileMacro()
+			|| gb.IsDoingFileMacro(true)
 		   )
 	   )
 	{

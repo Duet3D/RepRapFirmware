@@ -124,11 +124,9 @@ private:
 
 	DMState state;										// whether this is active or not
 	uint8_t drive;										// the drive that this DM controls
-	uint8_t direction : 1,								// true=forwards, false=backwards
-			directionChanged : 1,						// set by CalcNextStepTime if the direction is changed
-							: 1,						// unused
-			stepErrorType : 3,							// records what type of step error we had
-			stepsTakenThisSegment : 2;					// how many steps we have taken this phase, counts from 0 to 2. Last field in the byte so that we can increment it efficiently.
+	bool direction;										// true=forwards, false=backwards
+	bool directionChanged;								// set by CalcNextStepTime if the direction is changed
+	uint8_t stepsTakenThisSegment;						// how many steps we have taken this phase, counts from 0 to 2. Last field in the byte so that we can increment it efficiently.
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate. Use the top 2 bits of the byte so that we can increment it efficiently.
 
 	int32_t netStepsThisSegment;						// the (signed) net number of steps in the current segment
@@ -166,12 +164,13 @@ private:
 	motioncalc_t peakDeltaV, peakDeltaA;				// For debugging: the maximum instantaneous speed change and acceleration change recorded
 #endif
 
-	bool extruderPrinting;								// true if this is an extruder and the most recent segment started was a printing move
-
 #if SUPPORT_PHASE_STEPPING
 	PhaseStep phaseStepControl;
 	StepMode stepMode;
 #endif
+
+	bool isExtruder;									// true if this is an extruder, false it it is an axis
+	bool extruderPrinting;								// true if this is an extruder and the most recent segment started was a printing move
 };
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
