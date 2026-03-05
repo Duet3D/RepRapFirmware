@@ -99,7 +99,6 @@ constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors p
 constexpr size_t MaxBedHeaters = 1;
 constexpr size_t MaxChamberHeaters = 1;
 constexpr int8_t DefaultBedHeater = -1;
-constexpr int8_t DefaultE0Heater = 0;				// Index of the default first extruder heater, used only for the legacy status response
 
 constexpr size_t NumThermistorInputs = 2;
 constexpr size_t NumTmcDriversSenseChannels = 1;
