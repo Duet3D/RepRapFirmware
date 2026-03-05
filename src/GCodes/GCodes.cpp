@@ -5115,7 +5115,12 @@ void GCodes::GenerateTemperatureReport(const GCodeBuffer& gb, const StringRef& r
 // 'reply' is a convenient buffer that is free for us to use.
 void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexcept
 {
-	if ((&gb == UsbGCode() || &gb == AuxGCode() || &gb == Aux2GCode()) && gb.IsReportDue())
+	if ((&gb == UsbGCode()
+#ifdef SERIAL_USB2_DEVICE
+		 || &gb == Usb2GCode()
+#endif
+		 || &gb == AuxGCode() || &gb == Aux2GCode()) &&
+		gb.IsReportDue())
 	{
 		switch (gb.GetLastStatusReportType())
 		{
