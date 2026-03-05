@@ -5111,7 +5111,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 			if (reply.strlen() > 0)
 			{
 				reply.cat('\n');
-				platform.Message(gb.GetResponseMessageType(), reply.c_str());
+				platform.Message(gb.GetNativeResponseMessageType(), reply.c_str());
 				reply.Clear();
 			}
 			break;
@@ -5137,7 +5137,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 				}
 				if (statusBuf != nullptr)
 				{
-					platform.Message(gb.GetResponseMessageType(), statusBuf);
+					platform.Message(gb.GetNativeResponseMessageType(), statusBuf);
 				}
 			}
 			catch (const GCodeException&)
