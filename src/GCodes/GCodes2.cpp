@@ -737,7 +737,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_SCANNING_PROBES
 			&& code != 558
 #endif
-			&& code != 140 && code != 569 && code != 581 && code != 586 && code != 587		// these are the only M-codes we implement that can have fractional parts
+			&& code != 569 && code != 581 && code != 586 && code != 587		// these are the only M-codes we implement that can have fractional parts
 #if SUPPORT_PHASE_STEPPING
 			&& code != 970
 #endif
@@ -2239,50 +2239,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			// M135 (set PID sample interval) is no longer supported
 
-			case 140: // Bed temperature; also M140.1 to set bed heater control list
-				if (gb.GetCommandFraction() == 1)
-				{
-					Heat& heat = reprap.GetHeat();
-
-					if (gb.Seen('S'))
-					{
-						// Set bed heaters to control by M140 S/R without explicit P parameter. S-1 clears the list
-						int32_t slots[MaxBedHeaters];
-						size_t slotCount = MaxBedHeaters;
-						gb.GetIntArray(slots, slotCount, false);
-						heat.SetBedHeaterControlMask(BedIndicesBitmap::MakeFromArray(slots, slotCount));
-					}
-					else
-					{
-						// Report list of controlled bed heater slots
-						const BedIndicesBitmap mask = heat.GetBedHeaterControlMask();
-						bool first = true;
-
-						reply.copy("Controlled bed heater slots:");
-						for (size_t i = 0; i < MaxBedHeaters; i++)
-						{
-							if (mask.IsBitSet(i))
-							{
-								reply.catf("%s %u", first ? "" : ",", i);
-								first = false;
-							}
-						}
-						if (first)
-						{
-							reply.cat(" none");
-						}
-					}
-					break;
-				}
-				[[fallthrough]];
+			case 140: // Bed temperature
 			case 141: // Chamber temperature
 				{
 					Heat& heat = reprap.GetHeat();
 					bool seen = false;
-					const bool seenP = gb.Seen('P');
 
 					// Check if the heater index is passed
-					const unsigned int index = seenP ? gb.GetLimitedUIValue('P', (code == 140) ? MaxBedHeaters : MaxChamberHeaters) : 0;
+					const unsigned int index = gb.Seen('P') ? gb.GetLimitedUIValue('P', (code == 140) ? MaxBedHeaters : MaxChamberHeaters) : 0;
 
 					// See if the heater number is being set
 					if (gb.Seen('H'))
@@ -2310,7 +2274,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
-					const int currentHeater = (code == 141) ? heat.GetChamberHeater(index) : heat.GetBedHeater(index);
+					const int8_t currentHeater = (code == 141) ? heat.GetChamberHeater(index) : heat.GetBedHeater(index);
 					const char *_ecv_array const heaterName = (code == 141) ? "chamber" : "bed";
 
 					// Active temperature
@@ -2318,59 +2282,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						seen = true;
 						const float temperature = gb.GetFValue();
-						if (code == 140 && !seenP)
+						if (currentHeater < 0)
 						{
-							// Apply to all bed heater indices in the control mask
-							const BedIndicesBitmap mask = heat.GetBedHeaterControlMask();
-							for (unsigned int i = 0; i < MaxBedHeaters; ++i)
+							if (temperature > 0.0)							// turning off a non-existent bed or chamber heater is not an error
 							{
-								if (mask.IsBitSet(i))
-								{
-									const int heater = heat.GetBedHeater(i);
-									if (heater < 0)
-									{
-										if (temperature > 0.0)				// turning off a non-existent bed heater is not an error
-										{
-											reply.lcatf("No bed heater has been configured for slot %u", i);
-											result = GCodeResult::error;
-										}
-									}
-									else if (temperature <= NEARLY_ABS_ZERO)
-									{
-										heat.SwitchOff(heater);
-									}
-									else
-									{
-										heat.SetActiveTemperature(heater, temperature);		// may throw
-										if (result == GCodeResult::ok)
-										{
-											result = heat.SetActiveOrStandby(heater, nullptr, true, reply);
-										}
-									}
-								}
+								reply.printf("No %s heater has been configured for slot %d", heaterName, index);
+								result = GCodeResult::error;
 							}
 						}
 						else
 						{
-							if (currentHeater < 0)
+							if (temperature <= NEARLY_ABS_ZERO)
 							{
-								if (temperature > 0.0)							// turning off a non-existent bed or chamber heater is not an error
-								{
-									reply.printf("No %s heater has been configured for slot %d", heaterName, index);
-									result = GCodeResult::error;
-								}
+								heat.SwitchOff(currentHeater);
 							}
 							else
 							{
-								if (temperature <= NEARLY_ABS_ZERO)
-								{
-									heat.SwitchOff(currentHeater);
-								}
-								else
-								{
-									heat.SetActiveTemperature(currentHeater, temperature);		// may throw
-									result = heat.SetActiveOrStandby(currentHeater, nullptr, true, reply);
-								}
+								heat.SetActiveTemperature(currentHeater, temperature);		// may throw
+								result = heat.SetActiveOrStandby(currentHeater, nullptr, true, reply);
 							}
 						}
 					}
@@ -2379,39 +2308,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (gb.Seen('R'))
 					{
 						seen = true;
-						const float standbyTemp = gb.GetFValue();
-						if (code == 140 && !seenP)
+						if (currentHeater < 0)
 						{
-							// Apply to all bed heater indices in the control mask
-							const BedIndicesBitmap mask = heat.GetBedHeaterControlMask();
-							for (unsigned int i = 0; i < MaxBedHeaters; ++i)
-							{
-								if (mask.IsBitSet(i))
-								{
-									const int heater = heat.GetBedHeater(i);
-									if (heater < 0)
-									{
-										reply.lcatf("No bed heater has been configured for slot %u", i);
-										result = GCodeResult::error;
-									}
-									else
-									{
-										heat.SetStandbyTemperature(heater, standbyTemp);
-									}
-								}
-							}
+							reply.printf("No %s heater has been configured for slot %d", heaterName, index);
+							result = GCodeResult::error;
 						}
 						else
 						{
-							if (currentHeater < 0)
-							{
-								reply.printf("No %s heater has been configured for slot %d", heaterName, index);
-								result = GCodeResult::error;
-							}
-							else
-							{
-								heat.SetStandbyTemperature(currentHeater, standbyTemp);
-							}
+							heat.SetStandbyTemperature(currentHeater, gb.GetFValue());
 						}
 					}
 

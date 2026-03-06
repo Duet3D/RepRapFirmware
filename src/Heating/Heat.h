@@ -61,8 +61,7 @@ public:
 	pre(index < MaxBedHeaters);
 	void SetBedHeater(size_t index, int heater)	 noexcept				// Set a hot bed heater number
 	pre(index < MaxBedHeaters; -1 <= heater; heater < MaxHeaters);
-	BedIndicesBitmap GetBedHeaterControlMask() const noexcept { return bedHeaterControlMask; }	// Get bitmap of bed heater indices controlled by M140 S/R without P
-	void SetBedHeaterControlMask(BedIndicesBitmap mask) noexcept;									// Set bitmap of bed heater indices controlled by M140 S/R without P
+
 	int GetChamberHeater(size_t index) const noexcept					// Get a chamber heater number
 	pre(index < MaxChamberHeaters);
 	void SetChamberHeater(size_t index, int heater)	 noexcept			// Set a chamber heater number
@@ -181,9 +180,8 @@ private:
 	float retractionMinTemp;									// Minimum temperature to allow regular retraction
 	unsigned int sensorOrderingErrors;							// Counts any issue with unordered temperature sensors
 	bool coldExtrude;											// Is cold extrusion allowed?
-	int8_t bedHeaters[MaxBedHeaters];									// Indices of the hot bed heaters to use or -1 if none is available
-	BedIndicesBitmap bedHeaterControlMask;								// Bitmap of bed heater indices controlled by M140 S/R without P parameter (default: bit 0 only)
-	int8_t chamberHeaters[MaxChamberHeaters];							// Indices of the chamber heaters to use or -1 if none is available
+	int8_t bedHeaters[MaxBedHeaters];							// Indices of the hot bed heaters to use or -1 if none is available
+	int8_t chamberHeaters[MaxChamberHeaters];					// Indices of the chamber heaters to use or -1 if none is available
 	int8_t heaterBeingTuned;									// which PID is currently being tuned
 	int8_t lastHeaterTuned;										// which PID we last finished tuning
 
