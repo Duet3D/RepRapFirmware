@@ -36,10 +36,10 @@ static std::atomic<FileStore*> closedLoopFile = nullptr;	// This is non-null whe
 static unsigned int expectedRemoteSampleNumber = 0;
 static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
 
-static bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned int size) noexcept
+static bool OpenDataCollectionFile(const char *_ecv_array filename, unsigned int size) noexcept
 {
 	// Create the file
-	FileStore * const f = MassStorage::OpenFile(filename.c_str(), OpenMode::write, size);
+	FileStore * const f = MassStorage::OpenFile(filename, OpenMode::write, size);
 	if (f == nullptr) { return false; }
 
 	// Write the header line
@@ -181,7 +181,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 
 	String<MaxFilenameLength> closedLoopFileName;
 	MassStorage::CombineName(closedLoopFileName.GetRef(), "0:/sys/closed-loop/", tempFilename.c_str());
-	if (!OpenDataCollectionFile(closedLoopFileName, preallocSize))
+	if (!OpenDataCollectionFile(closedLoopFileName.c_str(), preallocSize))
 	{
 		reply.copy("failed to create data collection file");
 		return GCodeResult::error;
