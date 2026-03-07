@@ -32,7 +32,7 @@ static DriverId deviceRequested;						// The driver being sampled
 static uint8_t movementRequested;						// The movement to be made whilst recording
 static std::atomic<uint32_t> whenDataLastReceived;
 static std::atomic<uint32_t> numSamplesRequested;			// The number of samples to collect
-static std::atomic<FileStore*> closedLoopFile = nullptr;	// This is non-null when the data collection is running, null otherwise
+static std::atomic<FileStore *_ecv_null> closedLoopFile = nullptr;	// This is non-null when the data collection is running, null otherwise
 
 static unsigned int expectedRemoteSampleNumber = 0;
 static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
@@ -40,12 +40,12 @@ static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
 static bool OpenDataCollectionFile(const char *_ecv_array filename, unsigned int size) noexcept
 {
 	// Create the file
-	FileStore * const f = MassStorage::OpenFile(filename, OpenMode::write, size);
+	FileStore *_ecv_null const f = MassStorage::OpenFile(filename, OpenMode::write, size);
 	if (f == nullptr) { return false; }
 
 	// Write the header line
 	{
-		static constexpr const char *headings[16] =
+		static constexpr const char *_ecv_array headings[16] =
 		{
 			",Raw Encoder Reading",
 			",Measured Motor Steps",
@@ -74,7 +74,7 @@ static bool OpenDataCollectionFile(const char *_ecv_array filename, unsigned int
 						| ((filterRequested & (CL_RECORD_PID_V_TERM | CL_RECORD_PID_A_TERM)) >> 5);
 		for (unsigned int i = 0; filter != 0; ++i)
 		{
-			if (filter & 1u)
+			if ((filter & 1u) != 0)
 			{
 				temp.cat(headings[i]);
 			}
@@ -92,7 +92,7 @@ static bool OpenDataCollectionFile(const char *_ecv_array filename, unsigned int
 // Close the data collection file. Avoid a race between the two tasks that access it.
 static void CloseDataCollectionFile() noexcept
 {
-	FileStore *const f = closedLoopFile.exchange(nullptr);
+	FileStore *_ecv_null const f = closedLoopFile.exchange(nullptr);
 	if (f != nullptr)
 	{
 		f->Truncate();				// truncate the file in case we didn't write all the preallocated space
@@ -172,9 +172,9 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	else
 	{
 		// Create default filename as none was provided
-		const time_t time = reprap.GetPlatform().GetDateTime();
+		const time_t timeNow = reprap.GetPlatform().GetDateTime();
 		tm timeInfo;
-		gmtime_r(&time, &timeInfo);
+		gmtime_r(&timeNow, &timeInfo);
 		tempFilename.printf("0:/sys/closed-loop/%u_%04u-%02u-%02u_%02u.%02u.%02u.csv",
 						(unsigned int) deviceRequested.boardAddress,
 						timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday, timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
@@ -213,7 +213,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 // Process closed loop data received over CAN
 void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopData& msg, size_t msgLen) noexcept
 {
-	FileStore * const f = closedLoopFile.load();
+	FileStore *_ecv_null const f = closedLoopFile.load();
 	if (f != nullptr)
 	{
 		whenDataLastReceived = millis();
@@ -229,7 +229,7 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 		}
 		else
 		{
-			const uint8_t *dataPtr = msg.data;
+			const uint8_t *_ecv_array dataPtr = msg.data;
 			for (unsigned int sampleIndex = 0; sampleIndex < msg.numSamples; ++sampleIndex)
 			{
 				// Compile the data
