@@ -129,7 +129,7 @@ enum TransferResponse : uint32_t
 	BadHeaderChecksum = 5,
 	BadDataChecksum = 6,
 
-	BadResponse = 0xFEFEFEFE
+	BadResponse = 0xFEFEFEFEu
 };
 
 // RepRapFirmware to Sbc

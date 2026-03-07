@@ -202,7 +202,7 @@ enum class ErrorCode : uint32_t
 class ConfigurableFolder
 {
 public:
-	ConfigurableFolder(const char *_ecv_array defValue) noexcept : userValue(nullptr), defaultValue(defValue) { }
+	explicit ConfigurableFolder(const char *_ecv_array defValue) noexcept : userValue(nullptr), defaultValue(defValue) { }
 	ReadLockedPointer<const char> GetLockedPointer() const noexcept;
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	void AppendToString(const StringRef& path) const noexcept;
@@ -210,7 +210,7 @@ public:
 #endif
 private:
 	mutable ReadWriteLock lock;
-	const char *_ecv_array GetUnlockedPointer() const noexcept { return (userValue == nullptr) ? defaultValue : userValue; }
+	const char *_ecv_array GetUnlockedPointer() const noexcept { return (userValue == nullptr) ? defaultValue : _ecv_not_null(userValue); }
 	const char *_ecv_array _ecv_null userValue;
 	const char *_ecv_array defaultValue;
 };
