@@ -19,6 +19,7 @@
 # include <CAN/CanMessageGenericConstructor.h>
 # include <General/Portability.h>
 # include <atomic>
+# include <limits>
 
 constexpr unsigned int MaxSamples = 65535;				// This comes from the fact CanMessageClosedLoopData->firstSampleNumber has a max value of 65535
 constexpr uint32_t DataReceiveTimeout = 5000;			// Data receive timeout in milliseconds
