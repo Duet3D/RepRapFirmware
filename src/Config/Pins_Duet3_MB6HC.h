@@ -212,7 +212,7 @@ constexpr Pin UsbDetectPin = PortCPin(19);
 // RS485 control
 // Modbus (board version 1.02 and later)
 constexpr Pin ModbusTxPin = PortCPin(10);										// was Driver 5 diag0 prior to version 1.06c board
-constexpr const char *ModbusTxPinName = "rs485.tx";
+constexpr const char *_ecv_array ModbusTxPinName = "rs485.tx";
 
 // SD cards
 // PD24 is SWD_EXT_RESET on pre-1.02 boards, PanelDue Card Detect on 1.20 and later

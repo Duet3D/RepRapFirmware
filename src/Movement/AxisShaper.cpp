@@ -327,7 +327,7 @@ GCodeResult AxisShaper::UpdateRemoteInputShaping(const StringRef& reply) const n
 					for (unsigned int i = 0; i < numImpulses; ++i)
 					{
 						msg->impulses[i].coefficient = (float)coefficients[i];
-						msg->impulses[i].delay = delays[i];
+						msg->impulses[i].impulseDelay = delays[i];
 					}
 					buf->dataLength = msg->GetActualDataLength();
 					msg->SetRequestId(rid);
@@ -356,7 +356,7 @@ GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShapingV1& ms
 		for (size_t i = 0; i < numImpulses; ++i)
 		{
 			coefficients[i] = msg.impulses[i].coefficient;
-			delays[i] = msg.impulses[i].delay;
+			delays[i] = msg.impulses[i].impulseDelay;
 		}
 		return GCodeResult::ok;
 	}

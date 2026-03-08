@@ -31,8 +31,8 @@ static size_t dataBytesPerSample;						// How many bytes there will be in each s
 static DriverId deviceRequested;						// The driver being sampled
 static uint8_t movementRequested;						// The movement to be made whilst recording
 static std::atomic<uint32_t> whenDataLastReceived;
-static std::atomic<uint32_t> numSamplesRequested;			// The number of samples to collect
-static std::atomic<FileStore *_ecv_null> closedLoopFile = nullptr;	// This is non-null when the data collection is running, null otherwise
+static std::atomic<uint32_t> numSamplesRequested;					// The number of samples to collect
+static std::atomic<FileStore *_ecv_null> closedLoopFile(nullptr);	// This is non-null when the data collection is running, null otherwise
 
 static unsigned int expectedRemoteSampleNumber = 0;
 static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
@@ -84,7 +84,7 @@ static bool OpenDataCollectionFile(const char *_ecv_array filename, unsigned int
 		f->Write(temp.c_str());							// this call could result in the file becoming invalidated
 	}
 
-	whenDataLastReceived = millis();					// prevent another request closing the file
+	whenDataLastReceived.store(millis());				// prevent another request closing the file
 	closedLoopFile.store(f);
 	return true;
 }
@@ -120,7 +120,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 		}
 		else
 		{
-			reply.printf("Collecting sample: %u/%u", expectedRemoteSampleNumber, (unsigned int)numSamplesRequested);
+			reply.printf("Collecting sample: %u/%" PRIu32, expectedRemoteSampleNumber, numSamplesRequested.load());
 			return GCodeResult::ok;
 		}
 	}
@@ -128,7 +128,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	// If we get here then the user is requesting a recording
 	if (closedLoopFile.load() != nullptr)							// check if one is already happening
 	{
-		const uint32_t wlr = whenDataLastReceived;					// load this volatile variable before calling millis()
+		const uint32_t wlr = whenDataLastReceived.load();			// load this volatile variable before calling millis()
 		if (millis() - wlr >= DataReceiveTimeout)
 		{
 			CloseDataCollectionFile();								// this case is to allow us to reset if data collection stalls
@@ -157,11 +157,11 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	dataBytesPerSample = ClosedLoopSampleLength(filterRequested);
 	deviceRequested = driverId;
 	movementRequested = parsedV;
-	numSamplesRequested = parsedS;
+	numSamplesRequested.store(parsedS);
 
 	// Estimate how large the file will be
 	const unsigned int numVariables = Bitmap<uint32_t>(filterRequested).CountSetBits() + 1;		// 1 extra for time stamp
-	const uint32_t preallocSize = numSamplesRequested * ((numVariables * 8) + 4);				// assume format "xxx.xxx," for most samples
+	const uint32_t preallocSize = numSamplesRequested.load() * ((numVariables * 8) + 4);		// assume format "xxx.xxx," for most samples
 
 	// Create the file
 	String<StringLength50> tempFilename;
@@ -193,7 +193,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	expectedRemoteBoardAddress = deviceRequested.boardAddress;
 
 	// If no samples have been requested, return with an info message
-	if (numSamplesRequested == 0)
+	if (numSamplesRequested.load() == 0)
 	{
 		CloseDataCollectionFile();
 		reply.copy("no samples recorded");
@@ -201,7 +201,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	}
 
 	// Set up & start the CAN data transfer
-	const GCodeResult rslt = CanInterface::StartClosedLoopDataCollection(deviceRequested, filterRequested, numSamplesRequested, rateRequested, movementRequested, modeRequested, gb, reply);
+	const GCodeResult rslt = CanInterface::StartClosedLoopDataCollection(deviceRequested, filterRequested, numSamplesRequested.load(), rateRequested, movementRequested, modeRequested, gb, reply);
 	if (rslt > GCodeResult::warning)
 	{
 		CloseDataCollectionFile();
@@ -216,7 +216,7 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 	FileStore *_ecv_null const f = closedLoopFile.load();
 	if (f != nullptr)
 	{
-		whenDataLastReceived = millis();
+		whenDataLastReceived.store(millis());
 		if (msg.firstSampleNumber != expectedRemoteSampleNumber)
 		{
 			f->Write("Data lost\n");

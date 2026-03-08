@@ -17,7 +17,7 @@ class CanMessageClosedLoopData;
 
 namespace ClosedLoop
 {
-	GCodeResult StartDataCollection(DriverId id, GCodeBuffer&, const StringRef&) THROWS(GCodeException) pre(id.IsRemote());
+	GCodeResult StartDataCollection(DriverId driverId, GCodeBuffer&, const StringRef&) THROWS(GCodeException) pre(driverId.IsRemote());
 	void ProcessReceivedData(CanAddress src, const CanMessageClosedLoopData& msg, size_t msgLen) noexcept;
 }
 

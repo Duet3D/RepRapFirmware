@@ -21,7 +21,7 @@ class GCodeBuffer;
 class CanMessageGenericConstructor
 {
 public:
-	CanMessageGenericConstructor(const ParamDescriptor *p_param) noexcept;
+	explicit CanMessageGenericConstructor(const ParamDescriptor *p_param) noexcept;
 
 	// Populate from a GCode message. Throws if an error occurs.
 	void PopulateFromCommand(GCodeBuffer& gb) THROWS(GCodeException);

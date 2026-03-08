@@ -160,7 +160,7 @@ public:
 	}
 
 #if SUPPORT_ASYNC_MOVES
-	const FileStore *GetUnderlyingFile() const noexcept { return f; }
+	const FileStore *_ecv_null GetUnderlyingFile() const noexcept { return f; }
 #endif
 
 private:

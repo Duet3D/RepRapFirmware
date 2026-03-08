@@ -1742,16 +1742,16 @@ GCodeResult CanInterface::StartAccelerometer(DriverId device, uint8_t axes, uint
 
 # endif
 
-GCodeResult CanInterface::StartClosedLoopDataCollection(DriverId device, uint16_t filter, uint16_t numSamples, uint16_t rateRequested, uint8_t movementRequested, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+GCodeResult CanInterface::StartClosedLoopDataCollection(DriverId device, uint16_t filter, uint16_t numSamples, uint16_t p_rateRequested, uint8_t p_movementRequested, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	CanMessageBuffer* const buf = AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(device.boardAddress, buf);
 	auto msg = buf->SetupRequestMessage<CanMessageStartClosedLoopDataCollection>(rid, GetCanAddress(), device.boardAddress);
 	msg->mode = mode;
 	msg->filter = filter;
-	msg->rate = rateRequested;
+	msg->rate = p_rateRequested;
 	msg->numSamples = numSamples;
-	msg->movement = movementRequested;
+	msg->movement = p_movementRequested;
 	msg->deviceNumber = device.localDriver;
 	return SendRequestAndGetStandardReply(buf, rid, reply);
 }

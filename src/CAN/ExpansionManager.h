@@ -34,7 +34,7 @@ struct ExpansionBoardData
 	uint32_t closedLoopLastRunDataPoints;
 	volatile uint32_t whenLastStatusReportReceived;
 	UniqueId uniqueId;
-	DriverData *driverData;									// an array numDrivers long of objects, or nullptr if numDrivers is zero
+	DriverData *_ecv_null driverData;						// an array numDrivers long of objects, or nullptr if numDrivers is zero
 	uint16_t accelerometerRuns;
 	uint16_t closedLoopRuns;
 	uint16_t hasMcuTemp : 1,
