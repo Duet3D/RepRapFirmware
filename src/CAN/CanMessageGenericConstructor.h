@@ -21,7 +21,7 @@ class GCodeBuffer;
 class CanMessageGenericConstructor
 {
 public:
-	explicit CanMessageGenericConstructor(const ParamDescriptor *p_param) noexcept;
+	explicit CanMessageGenericConstructor(const ParamDescriptor *_ecv_array p_param) noexcept;
 
 	// Populate from a GCode message. Throws if an error occurs.
 	void PopulateFromCommand(GCodeBuffer& gb) THROWS(GCodeException);
@@ -32,9 +32,9 @@ public:
 	void AddIParam(char c, int32_t v) THROWS(GCodeException);
 	void AddFParam(char c, float v) THROWS(GCodeException);
 	void AddCharParam(char c, char v) THROWS(GCodeException);
-	void AddStringParam(char c, const char* v) THROWS(GCodeException);
+	void AddStringParam(char c, const char *_ecv_array v) THROWS(GCodeException);
 	void AddDriverIdParam(char c, DriverId did) THROWS(GCodeException);
-	void AddFloatArrayParam(char c, const float *v, size_t numV) THROWS(GCodeException);
+	void AddFloatArrayParam(char c, const float *_ecv_array v, size_t numV) THROWS(GCodeException);
 
 	GCodeResult SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply, uint8_t *_ecv_null extra = nullptr) const noexcept;
 
@@ -51,7 +51,7 @@ private:
 	// Insert a value in the data, returning true if it wouldn't fit
 	void InsertValue(const void *vp, size_t sz, size_t pos) THROWS(GCodeException);
 
-	const ParamDescriptor * const paramTable;
+	const ParamDescriptor *_ecv_array const paramTable;
 	size_t dataLen;
 	CanMessageGeneric msg;
 };

@@ -271,7 +271,7 @@ public:
 	void ChangeSingleEndpointAfterHoming(MovementSystemNumber msNumber, size_t drive, int32_t ep) noexcept
 		pre(msNumber < NumMovementSystems);									// Set the current position to be this without transforming them first
 
-	void UpdateStartCoordinates(MovementSystemNumber msNumber, const float *coords) noexcept
+	void UpdateStartCoordinates(MovementSystemNumber msNumber, const float *_ecv_array coords) noexcept
 		pre(msNumber < NumMovementSystems)
 		{ rings[msNumber].UpdateStartCoordinates(coords); }
 
@@ -279,7 +279,7 @@ public:
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetLiveMotorPosition(size_t driver) const noexcept pre(driver < MaxAxesPlusExtruders);
 	void SetMotorPosition(size_t drive, int32_t pos, bool clearBacklash) noexcept pre(drive < MaxAxesPlusExtruders);
-	void SetMotorPositions(LogicalDrivesBitmap drives, const int32_t *positions, bool clearBacklash) noexcept;
+	void SetMotorPositions(LogicalDrivesBitmap drives, const int32_t *_ecv_array positions, bool clearBacklash) noexcept;
 
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
 	bool WaitingForAllMovesFinished(MovementSystemNumber msNumber
@@ -403,7 +403,7 @@ public:
 #endif
 
 #if SUPPORT_ASYNC_MOVES
-	AsyncMove *LockAuxMove() noexcept;														// Get and lock the aux move buffer
+	AsyncMove *_ecv_null LockAuxMove() noexcept;											// Get and lock the aux move buffer
 	void ReleaseAuxMove(bool hasNewMove) noexcept;											// Release the aux move buffer and optionally signal that it contains a move
 	GCodeResult ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Configure height following
 	GCodeResult StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Start/stop height following
@@ -571,8 +571,8 @@ private:
 
 #if SUPPORT_CAN_EXPANSION
 	void IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc, function_ref_noexcept<void(DriverId) noexcept> remoteFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId) noexcept {}); }
-	void IterateRemoteDrivers(size_t axisOrExtruder, function_ref_noexcept<void(DriverId) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, [](uint8_t) noexcept {}, func); }
+	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId) noexcept -> void {}); }
+	void IterateRemoteDrivers(size_t axisOrExtruder, function_ref_noexcept<void(DriverId) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, [](uint8_t) noexcept -> void {}, func); }
 #else
 	void IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc) noexcept;
 	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func); }
@@ -591,7 +591,7 @@ private:
 	void SetOneDriverDirection(uint8_t driver, bool direction) noexcept pre(driver < GetNumActualDirectDrivers());
 
 	StandardDriverStatus GetLocalDriverStatus(size_t driver) const noexcept;
-	void ReportM569Parameters(size_t drive, const StringRef& reply) noexcept pre(driver < GetNumActualDirectDrivers());
+	void ReportM569Parameters(size_t drive, const StringRef& reply) noexcept pre(drive < GetNumActualDirectDrivers());
 
 #if defined(DUET3_MB6XD)
 	void UpdateDriverTimings() noexcept;
@@ -647,7 +647,7 @@ private:
 	AsyncMove auxMove;
 	volatile bool auxMoveLocked;
 	volatile bool auxMoveAvailable;
-	HeightController *heightController;
+	HeightController *_ecv_null heightController;
 #endif
 
 	SimulationMode simulationMode;						// Are we simulating, or really printing?

@@ -299,7 +299,7 @@ inline bool RepRap::IsStopped() const noexcept { return stopped; }
 template <size_t NumWords> class MemoryWatcher
 {
 public:
-	__attribute__((noinline)) explicit MemoryWatcher(uint32_t *p_address) noexcept;
+	__attribute__((noinline)) explicit MemoryWatcher(uint32_t *_ecv_array p_address) noexcept;
 	__attribute__((noinline)) MemoryWatcher() noexcept;
 	~MemoryWatcher() noexcept;
 	__attribute__((noinline)) bool Check(unsigned int tag) noexcept;

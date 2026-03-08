@@ -27,14 +27,14 @@ struct ExpansionBoardData
 
 	bool HasDrivers() const noexcept { return numDrivers != 0 && driverData != nullptr; }
 
-	const char *_ecv_array typeName;
+	const char *_ecv_array _ecv_null typeName;
 	int32_t neverUsedRam;
 	MinCurMax mcuTemp, vin, v12;
 	uint32_t accelerometerLastRunDataPoints;
 	uint32_t closedLoopLastRunDataPoints;
 	volatile uint32_t whenLastStatusReportReceived;
 	UniqueId uniqueId;
-	DriverData *_ecv_null driverData;						// an array numDrivers long of objects, or nullptr if numDrivers is zero
+	DriverData *_ecv_array _ecv_null driverData;				// an array numDrivers long of objects, or nullptr if numDrivers is zero
 	uint16_t accelerometerRuns;
 	uint16_t closedLoopRuns;
 	uint16_t hasMcuTemp : 1,
@@ -56,7 +56,7 @@ public:
 	ExpansionManager() noexcept;
 
 	unsigned int GetNumExpansionBoards() const noexcept { return numExpansionBoards; }
-	const ExpansionBoardData *GetBoardDetails(uint8_t address) const noexcept;
+	const ExpansionBoardData *_ecv_null GetBoardDetails(uint8_t address) const noexcept;
 
 	void ProcessAnnouncement(CanMessageBuffer *buf, bool isNewFormat) noexcept;
 	void ProcessBoardStatusReport(const CanMessageBuffer *buf) noexcept;

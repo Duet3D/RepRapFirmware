@@ -38,7 +38,7 @@ namespace CanInterface
 	void SwitchToExpansionMode(CanAddress addr, bool useTestMode) noexcept;
 
 	void SendAnnounce(CanMessageBuffer *buf) noexcept;
-	void RaiseEvent(EventType type, uint16_t param, uint8_t device, const char *format, va_list vargs) noexcept;
+	void RaiseEvent(EventType type, uint16_t param, uint8_t device, const char *_ecv_array format, va_list vargs) noexcept;
 	void MainBoardAcknowledgedAnnounce() noexcept;
 	void LogIgnoredMovementMessage() noexcept;
 #endif
@@ -50,7 +50,7 @@ namespace CanInterface
 	void SendBroadcastNoFree(CanMessageBuffer *buf) noexcept;
 	void SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept;
 	void Diagnostics(const StringRef& reply) noexcept;
-	CanMessageBuffer *AllocateBuffer(const GCodeBuffer* gb) THROWS(GCodeException);
+	CanMessageBuffer *AllocateBuffer(const GCodeBuffer *_ecv_null gb) THROWS(GCodeException);
 	void CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS(GCodeException);
 
 	uint16_t GetTimeStampCounter() noexcept;
@@ -80,8 +80,8 @@ namespace CanInterface
 	GCodeResult SetRemoteDriverCurrents(const CanDriversData<float>& data, const StringRef& reply) noexcept;
 	GCodeResult SetRemotePressureAdvance(const CanDriversData<float>& data, const StringRef& reply) noexcept;
 	GCodeResult SetRemoteDriverStepsPerMmAndMicrostepping(const CanDriversData<StepsPerUnitAndMicrostepping>& data, const StringRef& reply) noexcept;
-	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-	GCodeResult GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException);
+	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) pre(driver.IsRemote());
+	GCodeResult GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) THROWS(GCodeException);
 	void EnableRemoteStallEndstop(DriverId did, float speed) THROWS(GCodeException) pre(did.IsRemote());
 	void DisableRemoteStallEndstops(CanAddress boardId) noexcept;
 
@@ -126,7 +126,7 @@ namespace CanInterface
 #if DUAL_CAN
 namespace ODrive {
 	CanId ArbitrationId(DriverId driver, uint8_t cmd) noexcept;
-	CanMessageBuffer * PrepareSimpleMessage(DriverId const driver, const StringRef& reply) noexcept;
+	CanMessageBuffer *_ecv_null PrepareSimpleMessage(DriverId const driver, const StringRef& reply) noexcept;
 	void FlushCanReceiveHardware() noexcept;
 	bool GetExpectedSimpleMessage(CanMessageBuffer *buf, DriverId const driver, uint8_t const cmd, const StringRef& reply) noexcept;
 }
