@@ -247,7 +247,7 @@ void DDA::DebugPrint(const char *_ecv_array tag) const noexcept
 #else
 				"a=%.4e"
 #endif
-				" reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=x%04" PRIx32 "\n",
+				" reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=0x%06" PRIx32 "\n",
 #if SUPPORT_S_CURVE
 				(double)startAcceleration, (double)maxAcceleration, (double)jerk,
 #else
