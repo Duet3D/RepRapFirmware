@@ -115,7 +115,7 @@ GCodeResult GCodes::CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) 
 {
 	// Find the two specified axes
 	int lowerAxisNumber = -1, upperAxisNumber = -1;
-	float lowerValue, upperValue;
+	float lowerValue = 0.0f, upperValue = 0.0f;
 	for (unsigned int i = 0; i < numVisibleAxes; ++i)
 	{
 		if (gb.Seen(axisLetters[i]))
