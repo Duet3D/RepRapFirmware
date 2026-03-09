@@ -20,6 +20,8 @@
 # include <CAN/CanInterface.h>
 #endif
 
+#include <limits>
+
 #ifdef DUET_NG
 # define DDA_MOVE_DEBUG	(0)
 #else
