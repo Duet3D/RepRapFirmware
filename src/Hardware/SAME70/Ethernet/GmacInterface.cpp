@@ -309,23 +309,23 @@ static void gmac_tx_init(struct gmac_device *ps_gmac_dev) noexcept
  *
  * \param netif the lwIP network interface structure for this ethernetif.
  */
-static void gmac_low_level_init(struct netif *netif) noexcept
+static void gmac_low_level_init(struct netif *iface) noexcept
 {
 	/* Set MAC hardware address length. */
-	netif->hwaddr_len = sizeof(gs_uc_mac_address);
+	iface->hwaddr_len = sizeof(gs_uc_mac_address);
 	/* Set MAC hardware address. */
-	netif->hwaddr[0] = gs_uc_mac_address[0];
-	netif->hwaddr[1] = gs_uc_mac_address[1];
-	netif->hwaddr[2] = gs_uc_mac_address[2];
-	netif->hwaddr[3] = gs_uc_mac_address[3];
-	netif->hwaddr[4] = gs_uc_mac_address[4];
-	netif->hwaddr[5] = gs_uc_mac_address[5];
+	iface->hwaddr[0] = gs_uc_mac_address[0];
+	iface->hwaddr[1] = gs_uc_mac_address[1];
+	iface->hwaddr[2] = gs_uc_mac_address[2];
+	iface->hwaddr[3] = gs_uc_mac_address[3];
+	iface->hwaddr[4] = gs_uc_mac_address[4];
+	iface->hwaddr[5] = gs_uc_mac_address[5];
 
 	/* Set maximum transfer unit. */
-	netif->mtu = NET_MTU;
+	iface->mtu = NET_MTU;
 
 	/* Device capabilities. */
-	netif->flags |= NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP | NETIF_FLAG_IGMP;
+	iface->flags |= NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP | NETIF_FLAG_IGMP;
 
 	/* Init MAC PHY driver. */
 	phyInitResult = ethernet_phy_init(GMAC, BOARD_GMAC_PHY_ADDR, SystemCoreClockFreq/2);
