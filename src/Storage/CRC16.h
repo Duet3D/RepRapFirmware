@@ -24,8 +24,8 @@ public:
 	void Update(const uint8_t *_ecv_array c, size_t len) noexcept pre(c.lim >= len) { UpdateNormal(c, len, crc16_xmodem_table); }
 
 #if SUPPORT_MODBUS_RTU
-	void UpdateModbus(uint8_t c) noexcept pre(table.lim == 256) { UpdateReflected(c, crc16_modbus_table); }
-	void UpdateModbus(const uint8_t *c, size_t len) noexcept pre(c.lim >= len) { UpdateReflected(c, len, crc16_modbus_table); }
+	void UpdateModbus(uint8_t c) noexcept pre(crc16_modbus_table.lim == 256) { UpdateReflected(c, crc16_modbus_table); }
+	void UpdateModbus(const uint8_t *_ecv_array c, size_t len) noexcept pre(c.lim >= len) { UpdateReflected(c, len, crc16_modbus_table); }
 #endif
 
 private:

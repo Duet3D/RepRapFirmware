@@ -209,11 +209,11 @@ public:
 	bool EvaluateValueForDisplay(const char *_ecv_array str, ExpressionValue& expr) const noexcept;
 #endif
 
-	void SetMappedFanSpeed(const GCodeBuffer *null gb, float f) noexcept;				// Set the speeds of fans mapped for the current tool
+	void SetMappedFanSpeed(const GCodeBuffer *null gb, float f) noexcept;			// Set the speeds of fans mapped for the current tool
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *_ecv_array reply) noexcept;	// Handle G-Code replies
 	void EmergencyStop() noexcept;													// Cancel everything
 
-	const GridDefinition& GetDefaultGrid() const { return defaultGrid; };			// Get the default grid definition
+	const GridDefinition& GetDefaultGrid() const noexcept { return defaultGrid; };	// Get the default grid definition
 	void ActivateHeightmap(bool activate) noexcept;									// (De-)Activate the height map
 
 	size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }

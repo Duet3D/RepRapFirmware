@@ -34,9 +34,9 @@ constexpr ObjectModelArrayTableEntry ExpansionManager::objectModelArrayTable[] =
 	// 0. Drivers
 	{
 		&boardsLock,
-		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t
+		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext& context) noexcept -> size_t
 				{ return ((const ExpansionManager*)self)->FindIndexedBoard(context.GetLastIndex()).numDrivers; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 				{ return ExpressionValue(&((const ExpansionManager*)self)->FindIndexedBoard(context.GetIndex(1)).driverData[context.GetLastIndex()]); }
 	}
 };
@@ -192,7 +192,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 			if (board.typeName == nullptr || strcmp(board.typeName, boardTypeAndFirmwareVersion.c_str()) != 0)
 			{
 				// To save memory, see if we already have another board with the same type name
-				const char *newTypeName = nullptr;
+				const char *_ecv_array _ecv_null newTypeName = nullptr;
 				for (const ExpansionBoardData& data : boards)
 				{
 					if (data.typeName != nullptr && strcmp(boardTypeAndFirmwareVersion.c_str(), data.typeName) == 0)
@@ -204,7 +204,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 
 				if (newTypeName == nullptr)
 				{
-					char * const temp = new char[boardTypeAndFirmwareVersion.strlen() + 1];
+					char *_ecv_array const temp = new char[boardTypeAndFirmwareVersion.strlen() + 1];
 					strcpy(temp, boardTypeAndFirmwareVersion.c_str());
 					newTypeName = temp;
 				}
@@ -284,7 +284,7 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 		for (unsigned int i = 0; i < msg.numAnalogHandles && offset + sizeof(AnalogHandleDataV1) < buf->dataLength; ++i)
 		{
 			AnalogHandleDataV1 data;
-			memcpy(&data, (const uint8_t*)&msg + offset, sizeof(AnalogHandleDataV1));
+			memcpy(&data, (const uint8_t *_ecv_array)&msg + offset, sizeof(AnalogHandleDataV1));
 			offset += sizeof(AnalogHandleDataV1);
 			// Currently only Z probes use analog handles, so ask the EndstopsManager to deal with it
 			if (data.handle.parts.type == RemoteInputHandle::typeZprobe)
@@ -332,7 +332,7 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 		for (unsigned int i = 0; i < msg.numAnalogHandles && offset + sizeof(AnalogHandleDataV0) < buf->dataLength; ++i)
 		{
 			AnalogHandleDataV0 data;
-			memcpy(&data, (const uint8_t*)&msg + offset, sizeof(AnalogHandleDataV0));
+			memcpy(&data, (const uint8_t *_ecv_array)&msg + offset, sizeof(AnalogHandleDataV0));
 			offset += sizeof(AnalogHandleDataV0);
 			// Currently only Z probes use analog handles, so ask the EndstopsManager to deal with it
 			if (data.handle.parts.type == RemoteInputHandle::typeZprobe)
@@ -375,7 +375,7 @@ void ExpansionManager::ProcessDriveStatusReport(const CanMessageBuffer *buf) noe
 }
 
 // Return a pointer to the expansion board, if it is present
-const ExpansionBoardData *ExpansionManager::GetBoardDetails(uint8_t address) const noexcept
+const ExpansionBoardData *_ecv_null ExpansionManager::GetBoardDetails(uint8_t address) const noexcept
 {
 	return (address < ARRAY_SIZE(boards) && boards[address].state == BoardState::running) ? &boards[address] : nullptr;
 }
@@ -401,10 +401,10 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 
 		msg1->type = (moduleNumber == (unsigned int)FirmwareModule::bootloader) ? CanMessageReturnInfo::typeBootloaderName : CanMessageReturnInfo::typeBoardName;
 		{
-			const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf1, rid1, reply, &extra);
-			if (rslt != GCodeResult::ok)
+			const GCodeResult rslt2 = CanInterface::SendRequestAndGetStandardReply(buf1, rid1, reply, &extra);
+			if (rslt2 != GCodeResult::ok)
 			{
-				return rslt;
+				return rslt2;
 			}
 		}
 	}

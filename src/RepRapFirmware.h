@@ -570,25 +570,25 @@ private:
 #define ARRAY_INDICES(_arr) (SimpleRange<size_t>(ARRAY_SIZE(_arr)))
 
 // Function to delete an object and clear the pointer. Safe to call even if the pointer is already null.
-template <typename T> void DeleteObject(T *null & ptr) noexcept
+template <typename T> void DeleteObject(T *_ecv_null & ptr) noexcept
 {
-	T *null p2 = nullptr;
+	T *_ecv_null p2 = nullptr;
 	std::swap(ptr, p2);
 	delete p2;
 }
 
 // Function to delete an array of objects and clear the pointer. Safe to call even if the pointer is already null.
-template <typename T> void DeleteArray(T*& ptr) noexcept
+template <typename T> void DeleteArray(T *_ecv_array _ecv_null & ptr) noexcept
 {
-	T *null p2 = nullptr;
+	T *_ecv_null p2 = nullptr;
 	std::swap(ptr, p2);
 	delete[] p2;
 }
 
 // Function to make a pointer point to a new object and delete the existing object, if any. T2 must be the same as T or derived from it.
-template <typename T, typename T2> void ReplaceObject(T *null & ptr, T2* pNew) noexcept
+template <typename T, typename T2> void ReplaceObject(T *_ecv_null & ptr, T2* pNew) noexcept
 {
-	T *null p2 = static_cast<T *null>(pNew);
+	T *_ecv_null p2 = static_cast<T *_ecv_null>(pNew);
 	std::swap(ptr, p2);
 	delete p2;
 }

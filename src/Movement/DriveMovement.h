@@ -281,7 +281,7 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, float multiplier, Mot
 
 	if (state == DMState::phaseStepping)
 	{
-		MoveSegment *seg = segments;
+		MoveSegment *_ecv_null seg = segments;
 		while (seg != nullptr)
 		{
 			int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
@@ -318,7 +318,7 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, float multiplier, Mot
 					}
 					distanceCarriedForwards = provisionalDistanceCarriedForwards;
 
-					MoveSegment *oldSeg = seg;
+					MoveSegment *oldSeg = _ecv_not_null(seg);
 					segments = oldSeg->GetNext();
 					RetireSegment(oldSeg);
 					seg = NewSegment(when);

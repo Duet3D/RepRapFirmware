@@ -299,7 +299,7 @@ inline bool RepRap::IsStopped() const noexcept { return stopped; }
 template <size_t NumWords> class MemoryWatcher
 {
 public:
-	__attribute__((noinline)) MemoryWatcher(uint32_t *p_address) noexcept;
+	__attribute__((noinline)) explicit MemoryWatcher(uint32_t *_ecv_array p_address) noexcept;
 	__attribute__((noinline)) MemoryWatcher() noexcept;
 	~MemoryWatcher() noexcept;
 	__attribute__((noinline)) bool Check(unsigned int tag) noexcept;
@@ -307,13 +307,13 @@ public:
 private:
 	void Init() noexcept;
 
-	volatile uint32_t* checkedData;
+	volatile uint32_t *_ecv_array checkedData;
 	uint32_t checkSum;
 	volatile uint32_t dataCopy[NumWords];
 };
 
 // Constructor to watch memory at a specified start address
-template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher(uint32_t *p_address) noexcept
+template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher(uint32_t *_ecv_array p_address) noexcept
 	: checkedData(p_address)
 {
 	Init();
@@ -322,7 +322,7 @@ template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher(uint32_t *p_ad
 // Constructor to watch memory immediately after the memory occupied by this memory watcher object
 template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher() noexcept
 {
-	checkedData = reinterpret_cast<uint32_t*>(this) + (sizeof(*this) / sizeof(uint32_t));
+	checkedData = reinterpret_cast<uint32_t *_ecv_array>(this) + (sizeof(*this) / sizeof(uint32_t));
 	Init();
 }
 
@@ -367,7 +367,7 @@ template <size_t NumWords> bool MemoryWatcher<NumWords>::Check(unsigned int tag)
 	{
 		const bool fix = (csumProtected != checkSum && csumCopy == checkSum);
 		constexpr c_string msg = "Mem diff: offset %u, original %08" PRIx32 ", copy %08" PRIx32 ", flags %08" PRIx32 "\n";
-		const uint32_t flags = ((csumProtected == checkSum) ? 0 : 1) | ((csumCopy == checkSum) ? 0 : 0x10) | ((fix) ? 0x0100 : 0) | (tag << 16);
+		const uint32_t flags = ((csumProtected == checkSum) ? 0u : 1u) | ((csumCopy == checkSum) ? 0u : 0x10u) | ((fix) ? 0x0100u : 0u) | (tag << 16);
 		reprap.LogDebugMessage(msg, (unsigned int)badOffset * 4, checkedData[badOffset], dataCopy[badOffset], flags);
 
 		if (fix)

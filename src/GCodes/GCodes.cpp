@@ -1417,7 +1417,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				{
 					float coords2[MaxAxes];
 					ToolOffsetTransform(moveStates[i], moveStates[i].GetPauseRestorePoint().moveCoords, coords2);
-					moveStates[i].GetAxesAndExtrudersOwned().Iterate([&coords, coords2](unsigned int bitNum, unsigned int) noexcept { coords[bitNum] = coords2[bitNum]; });
+					moveStates[i].GetAxesAndExtrudersOwned().Iterate([&coords, coords2](unsigned int bitNum, unsigned int) noexcept -> void { coords[bitNum] = coords2[bitNum]; });
 				}
 #endif
 				String<StringLength100> buf2, buf3;
@@ -1728,7 +1728,7 @@ void GCodes::Diagnostics(const StringRef& reply) noexcept
 #if SUPPORT_ASYNC_MOVES
 
 // Get the file GCode buffer that processes commands for this movement system
-GCodeBuffer* GCodes::GetFileGCode(unsigned int msNumber) const noexcept
+GCodeBuffer *_ecv_null GCodes::GetFileGCode(unsigned int msNumber) const noexcept
 {
 	return (msNumber == 0 || FileGCode()->ExecutingAll()) ? FileGCode() : File2GCode();
 }
@@ -2393,7 +2393,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		// We assume that the homing move hasn't been commanded at a speed that exceeds any of the individual axis maximum speeds.
 		// The feed rate refers to the composite linear axis movement. We assume hat we don't have both linear and rotational movement.
 		float speeds[MaxAxes];
-		const Kinematics& kin = move.GetKinematics();
+		const Kinematics &_ecv_from kin = move.GetKinematics();
 		if (kin.GetHomingMode() == HomingMode::homeCartesianAxes)
 		{
 			// The endstops are on axes, so calculate the axis speeds and then convert them to drive speeds
@@ -3342,7 +3342,7 @@ void GCodes::AbortPrint(GCodeBuffer& gb) noexcept
 	if (gb.IsFileChannel())						// if the current command came from a file being printed
 	{
 #if HAS_SBC_INTERFACE && SUPPORT_ASYNC_MOVES
-		GCodeBuffer* otherGb = (gb.GetChannel() == GCodeChannel::File) ? File2GCode() : FileGCode();
+		GCodeBuffer* otherGb = (gb.GetChannel() == GCodeChannel::File) ? _ecv_not_null(File2GCode()) : _ecv_not_null(FileGCode());
 		if (otherGb->IsDoingFile() && (!otherGb->IsDoingFileMacro() || otherGb->LatestMachineState().CanRestartMacro()))
 		{
 			(void)otherGb->AbortFile(true);		// stop processing commands from the other file reader too
@@ -4414,7 +4414,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 					{
 						// Set up the reverse Z hop move
 						const float zHopToUse = currentTool->GetActualZHop();
-						currentTool->GetZAxisMap().Iterate([&ms, zHopToUse](unsigned int axis, unsigned int) noexcept
+						currentTool->GetZAxisMap().Iterate([&ms, zHopToUse](unsigned int axis, unsigned int) noexcept -> void
 															{
 																ms.coords[axis] -= zHopToUse;
 															}
@@ -5293,7 +5293,7 @@ void GCodes::UnlockAll(const GCodeBuffer& gb) noexcept
 // Append a list of axes to a string
 void GCodes::AppendAxes(const StringRef& reply, AxesBitmap axes) const noexcept
 {
-	axes.Iterate([&reply, this](unsigned int axis, unsigned int) noexcept { reply.cat(this->axisLetters[axis]); });
+	axes.Iterate([&reply, this](unsigned int axis, unsigned int) noexcept -> void { reply.cat(this->axisLetters[axis]); });
 }
 
 // Get the name of the current machine mode
@@ -5410,7 +5410,7 @@ const MovementState& GCodes::GetConstMovementState(const GCodeBuffer& gb) const 
 
 const MovementState& GCodes::GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept
 {
-	const GCodeBuffer *gb = context.GetGCodeBuffer();
+	const GCodeBuffer *_ecv_null gb = context.GetGCodeBuffer();
 	if (gb == nullptr)
 	{
 # if HAS_NETWORKING

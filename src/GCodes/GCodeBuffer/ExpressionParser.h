@@ -19,7 +19,7 @@ class VariableSet;
 class LineReader
 {
 public:
-	LineReader(FileStore *pf) noexcept : f(pf), charsRead(0), currentCharacter(0), fileFinished(false) { }
+	explicit LineReader(FileStore *pf) noexcept : f(pf), charsRead(0), currentCharacter(0), fileFinished(false) { }
 
 	// Read a character into currentCharacter. If we reach end of file or end of line, set the character to 0 and fileFinished to true.
 	void ReadChar() noexcept;

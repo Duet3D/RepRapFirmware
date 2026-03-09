@@ -48,12 +48,11 @@
 #include <stdio.h>
 #endif
 
+#if 0	// chrishamm - already defined
 #include <stdint.h>
 
-#if 0	// chrishamm - already defined
 /* Define platform endianness */
 #define BYTE_ORDER LITTLE_ENDIAN
-#endif
 
 /* Types based on stdint.h */
 typedef uint8_t            u8_t;
@@ -71,6 +70,7 @@ typedef uintptr_t          mem_ptr_t;
 #define U32_F "u"
 #define S32_F "d"
 #define X32_F "x"
+#endif
 
 /* Compiler hints for packing lwip's structures */
 #if defined(__CC_ARM)

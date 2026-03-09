@@ -37,11 +37,6 @@
 # include <General/NamedEnum.h>
 # include <Movement/StepTimer.h>
 # include <Movement/Trigonometry.h>
-
-using std::atomic;
-using std::numeric_limits;
-
-# include <math.h>
 # include <Platform/Platform.h>
 # include <Movement/Move.h>
 # include <Movement/MoveDebugFlags.h>
@@ -55,7 +50,9 @@ using std::numeric_limits;
 #  error Cannot support phase stepping with the specified hardware
 # endif
 
-#define BASIC_TUNING_DEBUG	0
+# include <cmath>
+
+# define BASIC_TUNING_DEBUG	0
 
 static uint16_t currentPhase[MaxSmartDrivers] = { 0 };
 static uint16_t phaseOffset[MaxSmartDrivers] = { 0 };			// The amount by which the phase should be offset for each driver

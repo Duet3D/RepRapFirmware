@@ -23,8 +23,8 @@ constexpr ObjectModelArrayTableEntry KeepoutZone::objectModelArrayTable[] =
 	// 0. Axis coordinates
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
+		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 					{ return (((const KeepoutZone*)self)->axesChecked.IsBitSet(context.GetLastIndex())) ? ExpressionValue(self, 1) : ExpressionValue(nullptr); }
 	},
 };
@@ -55,8 +55,8 @@ GCodeResult KeepoutZone::Configure(GCodeBuffer &gb, const StringRef &reply) THRO
 {
 	// See if any axes have been given
 	bool seenAxis = false;
-	const char *const axisNames = reprap.GetGCodes().GetAxisLetters();
-	const char *p = axisNames;
+	const char *_ecv_array const axisNames = reprap.GetGCodes().GetAxisLetters();
+	const char *_ecv_array p = axisNames;
 	while (*p != 0)
 	{
 		if (gb.Seen(*p))
@@ -98,7 +98,7 @@ GCodeResult KeepoutZone::Configure(GCodeBuffer &gb, const StringRef &reply) THRO
 	{
 		// No axes or S parameter, so report current configuration
 		reply.printf("Keepout zone %s, limits:", (active) ? "enabled" : "disabled");
-		axesChecked.Iterate([this, axisNames, reply](unsigned int axis, unsigned int) noexcept
+		axesChecked.Iterate([this, axisNames, reply](unsigned int axis, unsigned int) noexcept -> void
 							{
 								reply.catf(" %c (%.1f to %.1f)", axisNames[axis], (double)coords[axis][0], (double)coords[axis][1]);
 							});
