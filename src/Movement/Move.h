@@ -444,7 +444,14 @@ public:
 #if SUPPORT_PHASE_STEPPING
 	void ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config);	// configure Ka & Kv parameters for phase stepping
 	PhaseStepParams GetPhaseStepParams(size_t axisOrExtruder) const noexcept;
-	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
+	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams)
+		const noexcept; // get the net full steps taken, including in the current move so far, also speed and
+						// acceleration; return true if moving
+	bool UpdateCurrentMotion(
+		size_t driver,
+		uint32_t when,
+		MotionParameters& mParams) noexcept; // get the net full steps taken, including in the current move so far, also
+											 // speed and acceleration; return true if moving
 	bool SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept;
 	StepMode GetStepMode(size_t axisOrExtruder) const noexcept;
 	void ResetPhaseStepMonitoringVariables() noexcept;
@@ -535,8 +542,11 @@ private:
 	void AxisTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept;						// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept;				// Go from an axis transformed point back to user coordinates
 	float ComputeHeightCorrection(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept;			// Compute the height correction needed at a point, ignoring taper
-	void GetLiveMachineCoordinates(float coords[MaxAxes]) const noexcept;										// Get the current machine coordinates, independently of the above functions, so not affected by other tasks calling them
-
+  public:
+	void GetLiveMachineCoordinates(
+		float coords[MaxAxes]) const noexcept; // Get the current machine coordinates, independently of the above
+											   // functions, so not affected by other tasks calling them
+  private:
 	const char *_ecv_array GetCompensationTypeString() const noexcept;
 
 	float tanXY() const noexcept { return tangents[0]; }

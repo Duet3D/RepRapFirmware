@@ -16,6 +16,7 @@
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
 #include <RepRapFirmware.h>
+#include <GCodes/GCodes.h>
 
 #if SAME70
 
@@ -28,6 +29,7 @@ namespace DataCollection
 {
 	static uint32_t lastTransmissionTime = 0;
 
+	static constexpr size_t MaxBufferLen = 100;		// max number of bytes supported in a single message
 	static __nocache volatile uint8_t buffer[MaxBufferLen];
 	static __nocache volatile size_t bufferLen = 0;
 
@@ -42,7 +44,7 @@ namespace DataCollection
 
 	bool AddDataToBuffer(uint8_t val)
 	{
-		if (bufferLen >= MaxBufferLen)
+		if (bufferLen >= MaxBufferLen - 1) // leave 1 space for '\n'
 		{
 			return false;
 		}
@@ -176,16 +178,21 @@ namespace DataCollection
 		return !failed;
 	}
 
-	static void AddAxisPosition(size_t axisOrExtruder)
+	bool AddDataToBuffer(float val, size_t len, size_t decimals)
+	{
+		uint8_t asciiPos[len+1] = {0};
+		SerialiseFloat(val, asciiPos, len, decimals);
+		return AddDataToBuffer(asciiPos, len);
+	}
+
+	static void AddAxisPosition(size_t axisOrExtruder, uint32_t when)
 	{
 		Move& move = reprap.GetMove();
 
-		int32_t currentMicrosteps = move.GetLiveMotorPosition(axisOrExtruder);
-		float pos = currentMicrosteps / move.DriveStepsPerMm(axisOrExtruder);
-		size_t len = 7;
-		uint8_t asciiPos[len+1] = {0};
-		SerialiseFloat(pos, asciiPos, len, 2);
-		AddDataToBuffer(asciiPos, len);
+		MotionParameters params;
+		move.GetCurrentMotion(axisOrExtruder, when, params);
+		const float pos = params.position * move.GetMicrostepping(axisOrExtruder) / move.DriveStepsPerMm(axisOrExtruder);
+		AddDataToBuffer(pos, 7, 2);
 	}
 
 	void CollectAndSendData()
@@ -197,15 +204,22 @@ namespace DataCollection
 		AddDataToBuffer(lastTransmissionTime);
 		AddDataToBuffer((uint8_t)',');
 
+		const uint32_t now = StepTimer::GetTimerTicks();
+
 		// Add X,Y,Z position to buffer
-		for (size_t axis = 0; axis <= 2; axis++)
+		Move& move = reprap.GetMove();
+		float coords[MaxAxes];
+//		move.GetLiveMachineCoordinates(coords);
+		move.UpdateLiveMachineCoordinates(coords, reprap.GetGCodes().GetPrimaryMovementState().currentTool);
+		for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); axis++)
 		{
-			AddAxisPosition(axis);
+			AddDataToBuffer(coords[axis], 7, 2);
+//			AddAxisPosition(axis, now);
 			AddDataToBuffer((uint8_t)',');
 		}
 
 		// Add E0 position to buffer
-		AddAxisPosition(ExtruderToLogicalDrive(0));
+		AddAxisPosition(ExtruderToLogicalDrive(0), now);
 
 		// Add analog sensor
 		// TODO will need to poll this faster
@@ -226,7 +240,8 @@ namespace DataCollection
 			}
 		}
 
-		AddDataToBuffer((uint8_t)'\n');
+		buffer[bufferLen] = (uint8_t)'\n';
+		bufferLen++;
 
 		SendDataToUart();
 	}

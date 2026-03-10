@@ -73,8 +73,11 @@ public:
 	StepMode GetStepMode() const noexcept { return stepMode; }
 	bool IsPhaseStepEnabled() const noexcept { return stepMode == StepMode::phase; }
 	// Get the current position relative to the start of this move, speed and acceleration. Units are microsteps and step clocks.
+	// Return true if this drive is moving.
+	bool GetCurrentMotion(uint32_t when, float multiplier, MotionParameters& mParams) const noexcept;
+	// Get the current position relative to the start of this move, speed and acceleration. Units are microsteps and step clocks.
 	// Return true if this drive is moving. Segments are advanced as necessary.
-	bool GetCurrentMotion(uint32_t when, float multiplier, MotionParameters& mParams) noexcept;
+	bool UpdateCurrentMotion(uint32_t when, float multiplier, MotionParameters& mParams) noexcept;
 #endif
 
 	void ClearMovementPending() noexcept;
@@ -258,10 +261,47 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 
 #if SUPPORT_PHASE_STEPPING
 
+inline bool DriveMovement::GetCurrentMotion(uint32_t when, float multiplier, MotionParameters& mParams) const noexcept
+{
+	bool hasMotion = false;
+	AtomicCriticalSectionLocker lock;									// we don't want 'segments' changing while we do this
+
+	if (state == DMState::phaseStepping || driversNormallyUsed == 0)
+	{
+		MoveSegment *seg = segments;
+		if (seg != nullptr)
+		{
+			int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
+			if (timeSinceStart < 0)
+			{
+				goto idle;													// segment isn't due to start yet
+			}
+			if ((uint32_t)timeSinceStart >= seg->GetDuration())			// if segment should have finished by now
+			{
+				// we can't get the next seg because that needs `NewSegment()` to be called which is none const
+				timeSinceStart = seg->GetDuration();
+				hasMotion = true;
+			}
+
+			const float rawPosition = (float)((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
+			mParams.position = rawPosition * multiplier;
+			mParams.speed = (float)(u + seg->GetA() * timeSinceStart) * multiplier;
+			mParams.acceleration = (float)seg->GetA() * multiplier;
+			return true;
+		}
+	}
+
+idle:
+	// If we get here then no movement is taking place
+	mParams.position = (float)((motioncalc_t)currentMotorPosition + distanceCarriedForwards) * multiplier;
+	mParams.speed = mParams.acceleration = 0.0;
+	return hasMotion;
+}
+
 // Get the current position relative to the start of this segment, speed and acceleration. Units are microsteps and step clocks.
 // Return true if this drive is moving. Segments are advanced as necessary if we are in closed loop mode.
 // Inlined because it is only called from one place
-inline bool DriveMovement::GetCurrentMotion(uint32_t when, float multiplier, MotionParameters& mParams) noexcept
+inline bool DriveMovement::UpdateCurrentMotion(uint32_t when, float multiplier, MotionParameters& mParams) noexcept
 {
 	bool hasMotion = false;
 	AtomicCriticalSectionLocker lock;									// we don't want 'segments' changing while we do this
