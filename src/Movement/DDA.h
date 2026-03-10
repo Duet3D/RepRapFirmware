@@ -40,8 +40,6 @@ struct PrepParams
 	uint32_t accelClocks, steadyClocks, decelClocks;
 	motioncalc_t acceleration;							// the acceleration to use, always positive
 	motioncalc_t deceleration;							// the deceleration to use, always negative
-# define peakAcceleration	acceleration
-# define peakDeceleration	deceleration
 	motioncalc_t accelDistance;
 	motioncalc_t decelStartDistance;
 	uint32_t SteadyClocks() const noexcept { return steadyClocks; }
@@ -130,8 +128,8 @@ public:
 	void SetState(DDAState state) noexcept { flags.stateBits = (uint32_t)state; }
 	bool IsCommitted() const noexcept { return GetState() == DDA::committed; }
 	bool IsProvisional() const noexcept;
-	DDA* GetNext() const noexcept { return next; }
-	DDA* GetPrevious() const noexcept { return prev; }
+	DDA* GetNext() const noexcept { return _ecv_not_null(next); }
+	DDA* GetPrevious() const noexcept { return _ecv_not_null(prev); }
 	uint32_t GetTimeLeft() const noexcept;
 
 	const int32_t *_ecv_array DriveCoordinates() const noexcept { return endPoint; }				// Get endpoints of a move in machine coordinates

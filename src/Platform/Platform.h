@@ -202,7 +202,7 @@ enum class ErrorCode : uint32_t
 class ConfigurableFolder
 {
 public:
-	ConfigurableFolder(const char *_ecv_array defValue) noexcept : userValue(nullptr), defaultValue(defValue) { }
+	explicit ConfigurableFolder(const char *_ecv_array defValue) noexcept : userValue(nullptr), defaultValue(defValue) { }
 	ReadLockedPointer<const char> GetLockedPointer() const noexcept;
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	void AppendToString(const StringRef& path) const noexcept;
@@ -210,7 +210,7 @@ public:
 #endif
 private:
 	mutable ReadWriteLock lock;
-	const char *_ecv_array GetUnlockedPointer() const noexcept { return (userValue == nullptr) ? defaultValue : userValue; }
+	const char *_ecv_array GetUnlockedPointer() const noexcept { return (userValue == nullptr) ? defaultValue : _ecv_not_null(userValue); }
 	const char *_ecv_array _ecv_null userValue;
 	const char *_ecv_array defaultValue;
 };
@@ -295,6 +295,9 @@ public:
 
   	// Communications and data storage
 	void AppendUsbReply(const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept;
+#ifdef SERIAL_USB2_DEVICE
+	void AppendUsb2Reply(const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept;
+#endif
 	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, bool rawMessage) noexcept;
 	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, const char *_ecv_array msg, bool rawMessage) noexcept;
 
@@ -611,6 +614,12 @@ private:
 
 	volatile OutputStack usbOutput;
 	Mutex usbMutex;
+
+#ifdef SERIAL_USB2_DEVICE
+	volatile OutputStack usb2Output;
+	Mutex usb2Mutex;
+	uint32_t usb2MessageSeq = 0;
+#endif
 
 #if HAS_AUX_DEVICES
 	AuxDevice auxDevices[NumAuxChannels];

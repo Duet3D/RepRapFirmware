@@ -115,6 +115,9 @@ constexpr size_t UsbDeviceTaskStackWords = 200;
 static Task<UsbDeviceTaskStackWords> usbDeviceTask;
 
 SerialCDC serialUSB;
+#ifdef SERIAL_USB2_DEVICE
+SerialCDC serialUSB2(1);
+#endif
 
 #else
 

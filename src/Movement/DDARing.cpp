@@ -145,9 +145,15 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 
 bool DDARing::CanAddMove() const noexcept
 {
-	 if (   addPointer->GetState() == DDA::empty
-		 && !addPointer->GetNext()->IsProvisional()			// function Prepare needs to access the endpoints in the previous move, so don't change them
-		)
+	// We have two constraints here that may prevent us from using the last free element in the ring:
+	// 1. DDA::Prepare needs to access the previous DDA in the ring to find the endpoints of the previous move.
+	//    So we must not allocate an empty slot if the next one has state 'provisional'.
+	// 2. If all DDAs in the ring have state 'committed' then function ManageIOBitsAndFeedforward may loop indefinitely.
+	//    So we must not allocate an empty slot if the next one has state 'committed'.
+	// The simplest solution is not to allow the last free slot to be allocated.
+	if (   addPointer->GetState() == DDA::empty
+		&& addPointer->GetNext()->GetState() == DDA::empty
+	   )
 	 {
 			// In order to react faster to speed and extrusion rate changes, only add more moves if the total duration of
 			// all un-frozen moves is less than 2 seconds, or the total duration of all but the first un-frozen move is less than 0.5 seconds.
@@ -457,6 +463,9 @@ bool DDARing::SetWaitingToEmpty() noexcept
 	if (ret)
 	{
 		waitingForRingToEmpty = false;
+#if SUPPORT_S_CURVE
+		plannedProfile.Invalidate();				// we may be waiting for movement to stop after an asynchronous pause, in which case the planned profile may not have been completed
+#endif
 	}
 	return ret;
 }
@@ -780,10 +789,10 @@ uint32_t DDARing::ManageLaserPower(Platform& platform) noexcept
 // Manage the IOBITS (G1 P parameter) and extruder heater feedforward. Called by the Laser task. Return the number of ticks until we should be called again, up to portMAX_DELAY.
 uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 {
-	const unsigned int FeedForwardBit = 0x01;
-	const unsigned int OutputOnExtrudeBit = 0x02;
+	constexpr unsigned int FeedForwardBit = 0x01;
+	constexpr unsigned int OutputOnExtrudeBit = 0x02;
 #if SUPPORT_IOBITS
-	const unsigned int IoBitsBit = 0x04;
+	constexpr unsigned int IoBitsBit = 0x04;
 #endif
 
 	unsigned int bitsLeftToDo = FeedForwardBit;

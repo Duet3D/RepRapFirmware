@@ -64,6 +64,7 @@ void MovementProfile::DebugPrint() const noexcept
 			   );
 }
 
+// Check for segments that are too short. Only called if PrintBadMoves movement debug is enabled.
 void MovementProfile::CheckForShortSegments() const noexcept
 {
 	// The code to avoid phases shorter than MinimumPhaseDuration tries to lengthen the phase to exactly MinimumPhaseDuration.
@@ -242,7 +243,10 @@ void MovementProfile::CalculateSimpleSCurvePlan(double distance) noexcept
 				// Reduce the top speed to make the constant speed segment longer
 				const double oldTopSpeed = topSpeed;
 				topSpeed = SmallestNonNegativeCubicSolution((double)4.0, -dsquare(MinimumPhaseDuration) * jerk, 2 * distance * MinimumPhaseDuration * jerk, -dsquare(distance) * jerk);
-				debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment (5p)\n", oldTopSpeed, topSpeed);
+				if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+				{
+					debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment at line %d\n", oldTopSpeed, topSpeed, __LINE__);
+				}
 				CalculateSimpleFivePhasePlan(distance);
 				reachesRequestedSpeed = false;
 				return;
@@ -283,7 +287,10 @@ void MovementProfile::CalculateSimpleSCurvePlan(double distance) noexcept
 				// Reduce the top speed to avoid the constant acceleration segment
 				const double oldTopSpeed = topSpeed;
 				topSpeed = timeToMaxAcceleration * peakAcceleration;
-				debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant acceleration segment\n", oldTopSpeed, topSpeed);
+				if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+				{
+					debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment at line %d\n", oldTopSpeed, topSpeed, __LINE__);
+				}
 				CalculateSimpleFivePhasePlan(distance);
 				reachesRequestedSpeed = false;
 				return;
@@ -313,7 +320,10 @@ void MovementProfile::CalculateSimpleSCurvePlan(double distance) noexcept
 				// Reduce top speed to avoid the need for a short constant acceleration segment
 				const double oldTopSpeed = topSpeed;
 				topSpeed = timeToMaxAcceleration * peakAcceleration;
-				debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant acceleration segment\n", oldTopSpeed, topSpeed);
+				if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+				{
+					debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment at line %d\n", oldTopSpeed, topSpeed, __LINE__);
+				}
 				CalculateSimpleFivePhasePlan(distance);
 				reachesRequestedSpeed = false;
 				return;
@@ -348,7 +358,10 @@ void MovementProfile::CalculateSimpleSCurvePlan(double distance) noexcept
 					// This still works as a 7-phase move
 					const double oldTopSpeed = topSpeed;
 					topSpeed = jerk * timeToMaxAcceleration * (timeToMaxAcceleration + revisedConstantAccelerationTime);
-					debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment (7p)\n", oldTopSpeed, topSpeed);
+					if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+					{
+						debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment at line %d\n", oldTopSpeed, topSpeed, __LINE__);
+					}
 					d15 = OneHalfDouble * revisedConstantAccelerationTime * topSpeed;
 					d24 = timeToMaxAcceleration * topSpeed - distances[0];
 					steadySpeedDistance = distance - 2 * (distances[0] + d15 + d24);
@@ -363,7 +376,10 @@ void MovementProfile::CalculateSimpleSCurvePlan(double distance) noexcept
 			// If we get here then this isn't possible as a 7-phase profile meeting the minimum phase durations, so generate a 5-phase profile instead
 			const double oldTopSpeed = topSpeed;
 			topSpeed = SmallestNonNegativeCubicSolution((double)4.0, -dsquare(MinimumPhaseDuration) * jerk, 2 * distance * MinimumPhaseDuration * jerk, -dsquare(distance) * jerk);
-			debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment (7p to 5p)\n", oldTopSpeed, topSpeed);
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+			{
+				debugPrintf("Reduced top speed from %.3g to %.3g to avoid short constant speed segment at line %d\n", oldTopSpeed, topSpeed, __LINE__);
+			}
 			CalculateSimpleFivePhasePlan(distance);
 			reachesRequestedSpeed = false;
 			return;
@@ -426,12 +442,18 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 												: startSpeed;
 	if (topSpeed < minTopSpeedFromStart)
 	{
-		debugPrintf("Increasing top speed from %.4e to %.4e due to start speed/accel\n", topSpeed, minTopSpeedFromStart);
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+		{
+			debugPrintf("Increasing top speed from %.4e to %.4e due to start speed/accel\n", topSpeed, minTopSpeedFromStart);
+		}
 		topSpeed = minTopSpeedFromStart;
 	}
 	if (topSpeed < endSpeed)
 	{
-		debugPrintf("Increasing top speed from %.4e to %.4e due to end speed\n", topSpeed, endSpeed);
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+		{
+			debugPrintf("Increasing top speed from %.4e to %.4e due to end speed\n", topSpeed, endSpeed);
+		}
 		topSpeed = endSpeed;
 	}
 
@@ -445,7 +467,7 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 		{
 			distances[3] = excessDistance;
 			t2NonDecelDistance = distances[2];
-			debugPrintf("Gs, rrs\n");
+//			debugPrintf("Gs, rrs\n");
 			return;
 		}
 	}
@@ -510,9 +532,11 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 			const double dist5 = (v5 - OneHalfDouble * peakDeceleration * t5) * t5;
 			const double dist6 = (endSpeed + OneSixthDouble * jerk * dsquare(t6)) * t6;
 
-			debugPrintf("Quadratic solution: t0,t1,t2,t5,t6 = %.1f %.1f %.1f %.1f %.1f, distances %.3f %.3f %.3f %.3f %.3f total %.3f, orig dist %.3f\n",
-							t0, t1, t2, t5, t6, dist0, dist1, dist2, dist5, dist6, dist0 + dist1 + dist2 + dist5 + dist6, distance);
-
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+			{
+				debugPrintf("Quadratic solution: t0,t1,t2,t5,t6 = %.1f %.1f %.1f %.1f %.1f, distances %.3f %.3f %.3f %.3f %.3f total %.3f, orig dist %.3f\n",
+								t0, t1, t2, t5, t6, dist0, dist1, dist2, dist5, dist6, dist0 + dist1 + dist2 + dist5 + dist6, distance);
+			}
 			distances[0] = dist0;
 			distances[1] = dist1;
 			distances[2] = dist2;
@@ -586,9 +610,15 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 		double rslt[4];
 		const size_t numSolutions = SolveQuartic(coeff4, coeff3, coeff2, coeff1, coeff0, rslt);
 
-		debugPrintf("Coefficients %.7e %.7e %.7e %.7e %.7e, solutions", coeff4, coeff3, coeff2, coeff1, coeff0);
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+		{
+			debugPrintf("Coefficients %.7e %.7e %.7e %.7e %.7e, solutions", coeff4, coeff3, coeff2, coeff1, coeff0);
+		}
 		for (size_t i = 0; i < numSolutions; ++i) { debugPrintf(" %.7e", rslt[i]); }
-		debugPrintf("\n");
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+		{
+			debugPrintf("\n");
+		}
 
 		// We want a solution in which t0, t2 and t6 are all non-negative. If there is more than one, we want the one with the lowest sum.
 		double t0, t2, t6;
@@ -634,13 +664,19 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 			const double dist6 = (endSpeed + OneSixthDouble * jerk * dsquare(t6)) * t6;
 			const double a6 = -OneHalfDouble * jerk * t6;
 
-			debugPrintf("Quartic solution: t0,t2,t6 = %.1f %.1f %.1f, distances %.3f %.3f %.3f total %.3f, orig dist %.3f\n", t0, t2, t6, dist0, dist2, dist6, dist0 + dist2 + dist6, distance);
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
+			{
+				debugPrintf("Quartic solution: t0,t2,t6 = %.1f %.1f %.1f, distances %.3f %.3f %.3f total %.3f, orig dist %.3f\n", t0, t2, t6, dist0, dist2, dist6, dist0 + dist2 + dist6, distance);
+			}
 
 			// Check that max acceleration isn't exceeded
 			if (a2 > peakAcceleration || a6 < peakDeceleration)
 			{
 				//TODO use another plan
-				debugPrintf("Acceleration limits exceeded: %.4e %.4e vs. %.4e %.4e\n", a2, a6, peakAcceleration, peakDeceleration);
+				if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+				{
+					debugPrintf("Acceleration limits exceeded: %.4e %.4e vs. %.4e %.4e\n", a2, a6, peakAcceleration, peakDeceleration);
+				}
 			}
 
 			distances[0] = dist0;
@@ -653,7 +689,10 @@ void MovementProfile::CalculateGeneralSCurvePlan(double distance) noexcept
 		}
 	}
 
-	debugPrintf("No quartic solution\n");
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+	{
+		debugPrintf("No quartic solution\n");
+	}
 	//TODO
 	distances[0] = distances[1] = distances[3] = distances[4] = distances[5] = distances[6] = t2NonDecelDistance = 0.0;
 }

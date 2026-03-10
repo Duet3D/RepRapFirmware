@@ -87,19 +87,44 @@ ExpressionParser::ExpressionParser(const GCodeBuffer *_ecv_null p_gb, const char
 {
 }
 
-// Evaluate a bracketed expression
+// Evaluate a bracketed expression after '(' or '{' or '['.
+// If the closing bracket is ')' then we expect a simple expression.
+// If the closing bracket is ']' then we expect an array, which may be empty.
+// If the closing bracket is '}' then for backwards compatibility it may be either a simple expression or a non-empty array.
 void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char closingBracket) THROWS(GCodeException)
 {
-	CheckStack(StackUsage::ParseInternal);
+	SkipWhiteSpace();
+	if (closingBracket == ']' && CurrentCharacter() == closingBracket)		// if it's an empty array
+	{
+		AdvancePointer();
+		ArrayHandle ah;
+		{
+			WriteLocker locker(Heap::heapLock);								// prevent other tasks modifying the heap
+			ah.Allocate(0);
+		}
+		rslt.SetArrayHandle(ah);
+		return;
+	}
+	CheckStack(StackUsage::ParseInternal);									// parse the expression after the opening bracket
 	ParseInternal(rslt, evaluate, 0);
 	if (CurrentCharacter() == closingBracket)
 	{
 		AdvancePointer();
+		if (closingBracket == ']')											// if it's a single-element array
+		{
+			ArrayHandle ah;
+			{
+				WriteLocker locker(Heap::heapLock);							// prevent other tasks modifying the heap
+				ah.Allocate(1);
+				ah.AssignElement(0, rslt);
+			}
+			rslt.SetArrayHandle(ah);
+		}
 	}
-	else if (CurrentCharacter() == ',' && closingBracket == '}')
+	else if (CurrentCharacter() == ',' && (closingBracket == ']' || closingBracket == '}'))		// {e,} is a single-element array, {e} is a simple expression
 	{
 		CheckStack(StackUsage::ParseGeneralArray);
-		ParseGeneralArray(rslt, evaluate);
+		ParseGeneralArray(rslt, evaluate, closingBracket);
 	}
 	else
 	{
@@ -184,7 +209,8 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 			break;
 
 		default:
-			ThrowParseException("expected numeric value after '-'");
+			if (evaluate) { ThrowParseException("expected numeric value after '-'"); }
+			break;
 		}
 		break;
 
@@ -208,7 +234,8 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 			break;
 
 		default:
-			ThrowParseException("expected numeric or enumeration value after '+'");
+			if (evaluate) { ThrowParseException("expected numeric or enumeration value after '+'"); }
+			break;
 		}
 		break;
 
@@ -231,6 +258,11 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 	case '{':
 		AdvancePointer();
 		ParseExpectKet(val, evaluate, '}');
+		break;
+
+	case '[':
+		AdvancePointer();
+		ParseExpectKet(val, evaluate, ']');
 		break;
 
 	case '(':
@@ -819,7 +851,7 @@ void ExpressionParser::ParseDriverIdArray(DriverId arr[], size_t& length) THROWS
 }
 
 // Parse the rest of an array. We have already parsed the first element and found but not skipped a comma. The array should be terminated with '}'.
-void ExpressionParser::ParseGeneralArray(ExpressionValue& firstElementAndResult, bool evaluate) THROWS(GCodeException)
+void ExpressionParser::ParseGeneralArray(ExpressionValue& firstElementAndResult, bool evaluate, char closingBracket) THROWS(GCodeException)
 {
 	// Parse the array elements into a temporary array
 	ExpressionValue elements[MaxLiteralArrayElements];
@@ -832,7 +864,7 @@ void ExpressionParser::ParseGeneralArray(ExpressionValue& firstElementAndResult,
 			ThrowParseException("too many array elements");
 		}
 		AdvancePointer();					// skip the comma
-		if (SkipWhiteSpace() == '}')
+		if (SkipWhiteSpace() == closingBracket)
 		{
 			break;							// we allow a trailing comma and it can be used to distinguish a 1-element array from a bracketed value
 		}
@@ -840,9 +872,9 @@ void ExpressionParser::ParseGeneralArray(ExpressionValue& firstElementAndResult,
 		++index;
 	} while (CurrentCharacter() == ',');
 
-	if (CurrentCharacter() != '}')
+	if (CurrentCharacter() != closingBracket)
 	{
-		ThrowParseException("expected '}'");
+		ThrowParseException("expected '%c'", closingBracket);
 	}
 	AdvancePointer();
 

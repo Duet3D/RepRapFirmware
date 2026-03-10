@@ -65,7 +65,7 @@ AxisShaper::AxisShaper() noexcept
 	: type(InputShaperType::none),
 	  frequency(DefaultFrequency),
 	  zeta(DefaultDamping),
-	  numImpulses(1), prepareAdvanceTime(MoveTiming::UsualMinimumPreparedTime), inputShapingDelay(0)
+	  numImpulses(1), shapingTime(0), prepareAdvanceTime(MoveTiming::UsualMinimumPreparedTime)
 {
 	coefficients[0] = 1.0;
 	delays[0] = 0;
@@ -269,8 +269,8 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			}
 		}
 		coefficients[numImpulses - 1] = (motioncalc_t)1.0 - sum;
+		shapingTime = delays[numImpulses - 1];
 		prepareAdvanceTime = max<uint32_t>(longestSegment + MoveTiming::AbsoluteMinimumPreparedTime, MoveTiming::UsualMinimumPreparedTime);
-		inputShapingDelay = delays[numImpulses - 1];
 
 		reprap.MoveUpdated();
 
@@ -327,7 +327,7 @@ GCodeResult AxisShaper::UpdateRemoteInputShaping(const StringRef& reply) const n
 					for (unsigned int i = 0; i < numImpulses; ++i)
 					{
 						msg->impulses[i].coefficient = (float)coefficients[i];
-						msg->impulses[i].delay = delays[i];
+						msg->impulses[i].impulseDelay = delays[i];
 					}
 					buf->dataLength = msg->GetActualDataLength();
 					msg->SetRequestId(rid);
@@ -356,7 +356,7 @@ GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShapingV1& ms
 		for (size_t i = 0; i < numImpulses; ++i)
 		{
 			coefficients[i] = msg.impulses[i].coefficient;
-			delays[i] = msg.impulses[i].delay;
+			delays[i] = msg.impulses[i].impulseDelay;
 		}
 		return GCodeResult::ok;
 	}

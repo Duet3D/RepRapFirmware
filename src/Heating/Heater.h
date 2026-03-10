@@ -27,12 +27,13 @@ struct CanMessageHeaterTuningReport;
 struct CanHeaterReport;
 
 #if SUPPORT_REMOTE_COMMANDS
-struct CanMessageHeaterModelV2;
-struct CanMessageSetHeaterTemperature;
+struct CanMessageHeaterModelV3;
+struct CanMessageSetHeaterTemperatureV1;
 struct CanMessageSetHeaterMonitors;
 struct CanMessageHeaterTuningCommand;
 struct CanMessageSetHeaterFaultDetectionParameters;
 struct CanMessageHeaterFeedForwardV1;
+class CanMessageBuffer;
 #endif
 
 // Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
@@ -50,14 +51,15 @@ public:
 	virtual GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) = 0;
 	virtual GCodeResult ReportDetails(const StringRef& reply) const noexcept = 0;
 
-	virtual float GetTemperature() const noexcept = 0;					// Get the current temperature and error status
-	virtual float GetAveragePWM() const noexcept = 0;					// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
+	virtual float GetTemperature() const noexcept = 0;						// Get the current temperature and error status
+	virtual float GetAveragePWM() const noexcept = 0;						// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
 	virtual GCodeResult ResetFault(const StringRef& reply) noexcept = 0;	// Reset a fault condition - only call this if you know what you are doing
 	virtual void SwitchOff() noexcept;
 	virtual void Spin() noexcept = 0;
-	virtual void Suspend(bool sus) noexcept = 0;						// Suspend the heater to conserve power or while doing Z probing
-	virtual float GetAccumulator() const noexcept = 0;					// Get the inertial term accumulator
+	virtual void Suspend(bool sus) noexcept = 0;							// Suspend the heater to conserve power or while doing Z probing
+	virtual float GetAccumulator() const noexcept = 0;						// Get the inertial term accumulator
 	virtual void SetFanFeedForwardPwm(float fanPwm) noexcept = 0;
+	virtual GCodeResult SetDefaultModel(HeaterFunction func) noexcept = 0;	// set a default model depending on the heater type
 
 #if SUPPORT_CAN_EXPANSION
 	virtual bool IsLocal() const noexcept = 0;
@@ -65,44 +67,48 @@ public:
 	virtual void UpdateHeaterTuning(CanAddress src, const CanMessageHeaterTuningReport& msg) noexcept = 0;
 #endif
 
-	HeaterStatus GetStatus() const noexcept;							// Get the status of the heater
+	HeaterStatus GetStatus() const noexcept;								// Get the status of the heater
 	unsigned int GetHeaterNumber() const noexcept { return heaterNumber; }
 	void SetTemperature(float t, bool activeNotStandby) THROWS(GCodeException);
 	float GetActiveTemperature() const noexcept { return activeTemperature; }
 	float GetStandbyTemperature() const noexcept { return standbyTemperature; }
 	GCodeResult SetActiveOrStandby(bool setActive, const StringRef& reply) noexcept;	// Switch from idle to active or standby
 	GCodeResult StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansBitmap fans) THROWS(GCodeException);
-																		// Start an auto tune cycle for this heater
-	void GetAutoTuneStatus(const StringRef& reply) const noexcept;		// Get the auto tune status or last result
+																			// Start an auto tune cycle for this heater
+	void GetAutoTuneStatus(const StringRef& reply) const noexcept;			// Get the auto tune status or last result
 	GCodeResult ConfigureFaultDetectionParameters(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult ConfigureMonitor(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException);
 
 	float GetHighestTemperatureLimit() const noexcept;
-	float GetLowestTemperatureLimit() const noexcept;					// Get the lowest temperature limit
+	float GetLowestTemperatureLimit() const noexcept;						// Get the lowest temperature limit
 
-	const FopDt& GetModel() const noexcept { return model; }			// Get the process model
+	const FopDt& GetModel() const noexcept { return model; }				// Get the process model
 	GCodeResult SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
 	virtual GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept = 0;
-	GCodeResult SetModel(unsigned int heater, const CanMessageHeaterModelV2& msg, const StringRef& reply) noexcept;
-	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
+	GCodeResult SetModel(unsigned int heater, const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept;
+	GCodeResult SetTemperature(const CanMessageSetHeaterTemperatureV1& msg, const StringRef& reply) noexcept;
 	GCodeResult SetFaultDetectionParameters(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept;
 	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;
 	virtual GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept = 0;
 	uint8_t GetModeByte() const { return (uint8_t)GetMode(); }
+	virtual void SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept = 0;	// set and return the default heater model
 #endif
 
-	bool IsHeaterEnabled() const noexcept								// Is this heater enabled?
+	bool IsHeaterEnabled() const noexcept									// Is this heater enabled?
 		{ return model.IsEnabled(); }
 
 	void SetM301PidParameters(const M301PidParameters& params) noexcept
 		{ model.SetM301PidParameters(params); }
 
 	void ClearModelAndMonitors() noexcept;
+
+	HeaterFunction GetFunction() const noexcept { return function; }
 	void SetAsToolHeater() noexcept;
-	void SetAsBedOrChamberHeater() noexcept;
+	void SetAsBedHeater() noexcept;
+	void SetAsChamberHeater() noexcept;
 
 	bool IsCoolingDevice() const noexcept { return model.IsInverted(); }
 
@@ -123,7 +129,7 @@ protected:
 	virtual void ResetHeater() noexcept;
 	virtual HeaterMode GetMode() const noexcept = 0;
 	virtual GCodeResult SwitchOn(const StringRef& reply) noexcept = 0;
-	virtual GCodeResult UpdateModel(const StringRef& reply) noexcept = 0;
+	virtual GCodeResult UpdateRemoteModel(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult UpdateHeaterMonitors(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult StartAutoTune(const StringRef& reply, bool seenA, float ambientTemp) noexcept = 0;
@@ -135,7 +141,6 @@ protected:
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
 	uint32_t GetMaxBadTemperatureCount() const noexcept { return maxBadTemperatureCount; }
 	float GetTargetTemperature() const noexcept { return (active) ? activeTemperature : standbyTemperature; }
-	bool IsBedOrChamber() const noexcept { return isBedOrChamber; }
 
 	GCodeResult SetModel(float hr, float bcr, float fcr, float coolingRateExponent, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;
 															// set the process model
@@ -199,10 +204,11 @@ protected:
 
 	static void ClearCounters() noexcept;
 
+	FopDt model;
+
 private:
 	static const char *_ecv_array const TuningPhaseText[];
 
-	FopDt model;
 	unsigned int heaterNumber;
 	int sensorNumber;								// the sensor number used by this heater
 	float activeTemperature;						// the required active temperature
@@ -211,7 +217,7 @@ private:
 	float maxHeatingFaultTime;						// how long a heater fault is permitted to persist before a heater fault is raised
 	uint32_t maxBadTemperatureCount;				// the number of consecutive bad sensor readings we allow before raising a fault
 
-	bool isBedOrChamber;							// true if this was a bed or chamber heater when we were switched on
+	HeaterFunction function;						// what type of heater this is
 	bool active;									// are we active or standby?
 	bool usingFeedForward;							// true if we have ever applied feedforward even if the amounts are zero
 	bool modelSetByUser;

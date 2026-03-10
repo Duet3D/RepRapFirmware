@@ -441,7 +441,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
 RepRap::RepRap() noexcept
 	: boardsSeq(0), directoriesSeq(0), fansSeq(0), heatSeq(0), inputsSeq(0), jobSeq(0), ledStripsSeq(0), moveSeq(0), globalSeq(0),
-	  networkSeq(0), scannerSeq(0), sensorsSeq(0), spindlesSeq(0), stateSeq(0), toolsSeq(0), volumesSeq(0),
+	  networkSeq(0), sensorsSeq(0), spindlesSeq(0), stateSeq(0), toolsSeq(0), volumesSeq(0),
 	  lastWarningMillis(0),
 	  ticksInSpinState(0), heatTaskIdleTicks(0),
 	  beepFrequency(0), beepDuration(0), beepTimer(0),
@@ -1857,11 +1857,13 @@ void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 	}
 #endif
 
-	if (platform->IsChanEnabled(1) && !platform->IsChanRaw(1))
+#if HAS_AUX_DEVICES
+	if (platform->IsChanEnabled(FirstAuxChannel) && !platform->IsChanRaw(FirstAuxChannel))
 	{
 		platform->PanelDueBeep(freq, ms);
 		bleeped = true;
 	}
+#endif
 
 	if (!bleeped)
 	{
@@ -1881,10 +1883,12 @@ void RepRap::SetMessage(c_string msg) noexcept
 #endif
 	StateUpdated();
 
-	if (platform->IsChanEnabled(1) && !platform->IsChanRaw(1))
+#if HAS_AUX_DEVICES
+	if (platform->IsChanEnabled(FirstAuxChannel) && !platform->IsChanRaw(FirstAuxChannel))
 	{
-		platform->SendPanelDueMessage(1, msg);
+		platform->SendPanelDueMessage(FirstAuxChannel, msg);
 	}
+#endif
 	platform->Message(MessageType::LogInfo, msg);
 }
 

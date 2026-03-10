@@ -23,7 +23,7 @@ class MacAddress;
 class BinaryParser
 {
 public:
-	BinaryParser(GCodeBuffer& gcodeBuffer) noexcept;
+	explicit BinaryParser(GCodeBuffer& gcodeBuffer) noexcept;
 	void Init() noexcept; 														// Set it up to parse another G-code
 	void Put(const uint32_t *data, size_t len) noexcept;						// Add an entire binary code, overwriting any existing content
 	void DecodeCommand() noexcept;												// Print the buffer content in debug mode and prepare for execution

@@ -22,6 +22,7 @@ constexpr FileInfoParser::ParseTableEntry FileInfoParser::parseTable[] =
 	// Table of comments parsed, in alphabetical order.
 	// If a key string in this table is a leading or embedded substring of another, the longer one must come first so that it will be recognised in preference to the shorter one
 	// First character is case-insensitive when matching but must be uppercase in this table; remaining characters are case-sensitive when matching
+	{	"Build Time",								&FileInfoParser::ProcessJobTime,			0 },		// S3D 5.x							";   Build Time: 0 hours 42 minutes"
 	{	"Build time",								&FileInfoParser::ProcessJobTime,			0 },		// S3D								";   Build time: 0 hours 42 minutes"
 																											// also REALvision					"; Build time: 2:11:47"
 	{	"Calculated-during-export Build Time",		&FileInfoParser::ProcessJobTime,			0 },		// KISSSlicer 2 alpha				"; Calculated-during-export Build Time: 130.62 minutes"
@@ -388,7 +389,9 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 			++lineEnd;
 		}
 
-		if (lineEnd == pEnd)
+		if (   lineEnd == pEnd
+			|| lineEnd + 1 == pEnd			// make sure that if CRLF line endings are used, ProcessThumbnail can read the LF
+		   )
 		{
 			// The line ending is not within the buffer
 			if (lineStart >= buf + GCodeReadSize)
@@ -675,6 +678,10 @@ void FileInfoParser::ProcessJobTime(const char *_ecv_array k, const char *_ecv_a
 					++p;
 				}
 				secs = SafeStrtof(p, &p);
+				while (*p == ' ')
+				{
+					++p;
+				}
 			}
 			if (*p == 'm')
 			{
@@ -747,7 +754,10 @@ void FileInfoParser::ProcessThumbnail(const char *_ecv_array k, const char *_ecv
 			const uint32_t size = StrToU32(p, &npos);
 			if (size >= 10)
 			{
-				const FilePosition offset = bufferStartFilePosition + (size_t)(lineEnd + 1 - buf);
+				// If the line ending is CRLF then we need to skip then LF as well as the CR
+				++lineEnd;
+				if (*lineEnd == '\n') { ++lineEnd; }
+				const FilePosition offset = bufferStartFilePosition + (size_t)(lineEnd - buf);
 				GCodeFileInfo::ThumbnailInfo& th = parsedFileInfo.thumbnails[numThumbnailsStored++];
 				th.width = w;
 				th.height = h;

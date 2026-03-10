@@ -78,7 +78,8 @@ void RemoteHeater::Spin() noexcept
 
 	case TuningState::heatingUp:
 		{
-			const bool isBedOrChamberHeater = reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber());
+			const HeaterFunction f = reprap.GetHeat().GetHeaterFunction(GetHeaterNumber());
+			const bool isBedOrChamberHeater = (f != HeaterFunction::tool);
 			const uint32_t heatingTime = now - timeSetHeating;
 			const float extraTimeAllowed = (isBedOrChamberHeater) ? 120.0 : 30.0;
 			if (heatingTime > (uint32_t)((GetModel().GetDeadTime() + extraTimeAllowed) * SecondsToMillis) && (lastTemperature - tuningStartTemp.GetMean()) < 3.0)
@@ -237,11 +238,11 @@ void RemoteHeater::SwitchOff() noexcept
 	else
 	{
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
-		auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanInterface::GetCanAddress(), boardAddress);
+		auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperatureV1>(rid, CanInterface::GetCanAddress(), boardAddress);
 		msg->heaterNumber = GetHeaterNumber();
-		msg->isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber());
+		msg->function = (uint16_t)reprap.GetHeat().GetHeaterFunction(GetHeaterNumber());
 		msg->setPoint = GetTargetTemperature();
-		msg->command = CanMessageSetHeaterTemperature::commandOff;
+		msg->command = CanMessageSetHeaterTemperatureV1::commandOff;
 		String<StringLength100> reply;
 		if (CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef()) != GCodeResult::ok)
 		{
@@ -257,16 +258,15 @@ GCodeResult RemoteHeater::ResetFault(const StringRef& reply) noexcept
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reply.copy("No CAN buffer");
-		return GCodeResult::error;
+		return GCodeResult::noCanBuffer;
 	}
 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
-	auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanInterface::GetCanAddress(), boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperatureV1>(rid, CanInterface::GetCanAddress(), boardAddress);
 	msg->heaterNumber = GetHeaterNumber();
-	msg->isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber());
+	msg->function =  (uint16_t)reprap.GetHeat().GetHeaterFunction(GetHeaterNumber());
 	msg->setPoint = GetTargetTemperature();
-	msg->command = CanMessageSetHeaterTemperature::commandResetFault;
+	msg->command = CanMessageSetHeaterTemperatureV1::commandResetFault;
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 }
 
@@ -298,8 +298,7 @@ GCodeResult RemoteHeater::StartAutoTune(const StringRef& reply, bool seenA, floa
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reply.copy("No CAN buffer");
-		return GCodeResult::error;
+		return GCodeResult::noCanBuffer;
 	}
 
 	reprap.GetFansManager().SetFansValue(tuningFans, 0.0);
@@ -369,11 +368,11 @@ void RemoteHeater::Suspend(bool sus) noexcept
 	if (buf != nullptr)
 	{
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
-		auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanInterface::GetCanAddress(), boardAddress);
+		auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperatureV1>(rid, CanInterface::GetCanAddress(), boardAddress);
 		msg->heaterNumber = GetHeaterNumber();
-		msg->isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber());
+		msg->function =  (uint16_t)reprap.GetHeat().GetHeaterFunction(GetHeaterNumber());
 		msg->setPoint = GetTargetTemperature();
-		msg->command = (sus) ? CanMessageSetHeaterTemperature::commandSuspend : CanMessageSetHeaterTemperature::commandUnsuspend;
+		msg->command = (sus) ? CanMessageSetHeaterTemperatureV1::commandSuspend : CanMessageSetHeaterTemperatureV1::commandUnsuspend;
 		String<1> dummy;
 		(void) CanInterface::SendRequestAndGetStandardReply(buf, rid, dummy.GetRef());
 	}
@@ -392,16 +391,15 @@ GCodeResult RemoteHeater::SwitchOn(const StringRef& reply) noexcept
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reply.copy("No CAN buffer");
-		return GCodeResult::error;
+		return GCodeResult::noCanBuffer;
 	}
 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
-	auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanInterface::GetCanAddress(), boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperatureV1>(rid, CanInterface::GetCanAddress(), boardAddress);
 	msg->heaterNumber = GetHeaterNumber();
-	msg->isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber());
+	msg->function = (uint16_t)reprap.GetHeat().GetHeaterFunction(GetHeaterNumber());
 	msg->setPoint = GetTargetTemperature();
-	msg->command = CanMessageSetHeaterTemperature::commandOn;
+	msg->command = CanMessageSetHeaterTemperatureV1::commandOn;
 	const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 	if (lastMode == HeaterMode::off && rslt <= GCodeResult::warning)
 	{
@@ -412,20 +410,43 @@ GCodeResult RemoteHeater::SwitchOn(const StringRef& reply) noexcept
 	return rslt;
 }
 
+// Set a default model depending on the heater type
+GCodeResult RemoteHeater::SetDefaultModel(HeaterFunction func) noexcept
+{
+	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		return GCodeResult::noCanBuffer;
+	}
+
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
+	auto msg = buf->SetupRequestMessage<CanMessageSetDefaultHeaterModel>(rid, CanInterface::GetCanAddress(), boardAddress);
+	msg->heater = GetHeaterNumber();
+	msg->heaterFunction = (uint16_t)func;
+	String<1> dummy;
+	const GCodeResult rslt = CanInterface::SendRequestAndGetCustomReply
+								(	buf, rid, dummy.GetRef(), nullptr, CanMessageType::heaterModelReport,
+									[this, buf](const CanMessageBuffer*) noexcept->void
+									{
+										model.SetDefaultModel(buf->msg.heaterModelReport.model);
+									}
+								);
+	return rslt;
+}
+
 // This is called when the heater model has been updated
-GCodeResult RemoteHeater::UpdateModel(const StringRef& reply) noexcept
+GCodeResult RemoteHeater::UpdateRemoteModel(const StringRef& reply) noexcept
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf != nullptr)
 	{
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
-		CanMessageHeaterModelV2 * const msg = buf->SetupRequestMessage<CanMessageHeaterModelV2>(rid, CanInterface::GetCanAddress(), boardAddress);
+		CanMessageHeaterModelV3 * const msg = buf->SetupRequestMessage<CanMessageHeaterModelV3>(rid, CanInterface::GetCanAddress(), boardAddress);
 		GetModel().SetupCanMessage(GetHeaterNumber(), *msg);
 		return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 	}
 
-	reply.copy("No CAN buffer");
-	return GCodeResult::error;
+	return GCodeResult::noCanBuffer;
 }
 
 GCodeResult RemoteHeater::UpdateFaultDetectionParameters(const StringRef& reply) noexcept
@@ -443,8 +464,7 @@ GCodeResult RemoteHeater::UpdateFaultDetectionParameters(const StringRef& reply)
 		return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 	}
 
-	reply.copy("No CAN buffer");
-	return GCodeResult::error;
+	return GCodeResult::noCanBuffer;
 }
 
 GCodeResult RemoteHeater::UpdateHeaterMonitors(const StringRef& reply) noexcept
@@ -466,8 +486,7 @@ GCodeResult RemoteHeater::UpdateHeaterMonitors(const StringRef& reply) noexcept
 		return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 	}
 
-	reply.copy("No CAN buffer");
-	return GCodeResult::error;
+	return GCodeResult::noCanBuffer;
 }
 
 // This function processes an incoming heater report from an expansion board
@@ -505,8 +524,7 @@ GCodeResult RemoteHeater::SendTuningCommand(const StringRef& reply, bool on) noe
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reply.copy("No CAN buffer");
-		return GCodeResult::error;
+		return GCodeResult::noCanBuffer;
 	}
 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);

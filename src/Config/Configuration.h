@@ -263,7 +263,11 @@ constexpr size_t MaxI2cOrModbusValues = 34;						// max bytes in M260 or M261 co
 // File handling
 #if defined(DUET3) || defined(DUET3MINI)
 constexpr size_t MAX_FILES = 20;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
-constexpr unsigned int NumLruBuffers = 4;				// Number of disk buffers to allocate if FF_LRU is enabled in ff_confg.h
+# if SAME70
+constexpr unsigned int NumLruBuffers = 10;				// Number of disk buffers to allocate if FF_LRU is enabled in ff_config.h
+# else
+constexpr unsigned int NumLruBuffers = 5;				// Number of disk buffers to allocate if FF_LRU is enabled in ff_config.h
+# endif
 #else
 constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
 constexpr unsigned int NumLruBuffers = 2;				// Number of disk buffers to allocate if FF_LRU is enabled in ff_confg.h

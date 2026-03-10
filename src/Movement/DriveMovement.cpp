@@ -33,11 +33,10 @@ void DriveMovement::Init(size_t drv) noexcept
 {
 	drive = (uint8_t)drv;
 	state = DMState::idle;
-	stepErrorType = 0;
 	distanceCarriedForwards = 0.0;
 	currentMotorPosition = positionAtSegmentStart = 0;
 	movementAccumulator = 0;
-	extruderPrinting = false;
+	extruderPrinting = isExtruder = false;
 #if STEPS_DEBUG
 	positionRequested = 0;
 #endif
@@ -63,8 +62,8 @@ void DriveMovement::DebugPrint() const noexcept
 	const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + LogicalDriveToExtruder(drive));
 	if (state != DMState::idle)
 	{
-		debugPrintf("DM%c state=%u err=%u dir=%c next=%" PRIi32 " rev=%" PRIi32 " ssl=%" PRIi32 " sns=%" PRIi32 " interval=%" PRIu32 " q=%.4g t0=%.4g p=%.4g dcf=%.2f\n",
-						c, (unsigned int)state, (unsigned int)stepErrorType, (direction) ? 'F' : 'B',
+		debugPrintf("DM%c state=%u dir=%c next=%" PRIi32 " rev=%" PRIi32 " ssl=%" PRIi32 " sns=%" PRIi32 " interval=%" PRIu32 " q=%.4g t0=%.4g p=%.4g dcf=%.2f\n",
+						c, (unsigned int)state, (direction) ? 'F' : 'B',
 							nextStep, reverseStartStep, segmentStepLimit, netStepsThisSegment, stepInterval,
 								(double)q, (double)t0, (double)p, (double)distanceCarriedForwards);
 	}
@@ -180,9 +179,9 @@ inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpee
 	u = newSpeed;
 	peakDeltaV = max<motioncalc_t>(peakDeltaV, std::fabs(newSpeed - finalSpeed));
 # if DEBUG_DISCONTINUITIES
-	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(newSpeed - finalSpeed) > MaxSpeedChange)
+	if (isExtruder && std::fabs(newSpeed - finalSpeed) > MaxSpeedChange && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
 	{
-		debugPrintf("Speed change %.1f to %.1f, retired: ", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed), (double)InverseConvertSpeedToMmPerSec((float)newSpeed));
+		debugPrintf("Extruder speed change %.1f to %.1f, retired: ", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed), (double)InverseConvertSpeedToMmPerSec((float)newSpeed));
 		PrintRetiredSegment();
 		MoveSegment::DebugPrintList(segments);
 	}
@@ -191,9 +190,9 @@ inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpee
 
 	peakDeltaA = max<motioncalc_t>(peakDeltaA, std::fabs(newAcc - finalAcc));
 # if DEBUG_DISCONTINUITIES
-	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(newAcc - finalAcc) > MaxAccChange && extruderShaper.GetKclocks() == 0.0)
+	if (isExtruder && std::fabs(newAcc - finalAcc) > MaxAccChange && extruderShaper.GetKclocks() == 0.0 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
 	{
-		debugPrintf("Acc change %.1f to %.1f, retired: ", (double)InverseConvertAcceleration((float)finalAcc), (double)InverseConvertAcceleration((float)newAcc));
+		debugPrintf("Extruder acc change %.1f to %.1f, retired: ", (double)InverseConvertAcceleration((float)finalAcc), (double)InverseConvertAcceleration((float)newAcc));
 		PrintRetiredSegment();
 		MoveSegment::DebugPrintList(segments);
 	}
@@ -207,9 +206,9 @@ inline void DriveMovement::MovementStopped() noexcept
 	u = (motioncalc_t)0.0;
 	peakDeltaV = max<motioncalc_t>(peakDeltaV, std::fabs(finalSpeed));
 # if DEBUG_DISCONTINUITIES
-	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(finalSpeed) > MaxSpeedChange)
+	if (isExtruder && std::fabs(finalSpeed) > MaxSpeedChange && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
 	{
-		debugPrintf("Speed change %.1f to standstill, retired: ", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed));
+		debugPrintf("Extruder speed change %.1f to standstill, retired: ", (double)InverseConvertSpeedToMmPerSec((float)finalSpeed));
 		PrintRetiredSegment();
 	}
 # endif
@@ -217,9 +216,9 @@ inline void DriveMovement::MovementStopped() noexcept
 
 	peakDeltaA = max<motioncalc_t>(peakDeltaA, std::fabs(finalAcc));
 # if DEBUG_DISCONTINUITIES
-	if (drive == MaxAxesPlusExtruders - 1 && std::fabs(finalAcc) > MaxAccChange && extruderShaper.GetKclocks() == 0.0)
+	if (isExtruder && std::fabs(finalAcc) > MaxAccChange && extruderShaper.GetKclocks() == 0.0 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
 	{
-		debugPrintf("Acc change %.1f to standstill, retired: ", (double)InverseConvertAcceleration((float)finalAcc));
+		debugPrintf("Extruder acc change %.1f to standstill, retired: ", (double)InverseConvertAcceleration((float)finalAcc));
 		PrintRetiredSegment();
 	}
 # endif

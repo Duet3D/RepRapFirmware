@@ -259,6 +259,7 @@ public:
 	const char *_ecv_array GetIdentity() const noexcept { return codeChannel.ToString(); }
 	bool CanQueueCodes() const noexcept;
 	MessageType GetResponseMessageType() const noexcept;
+	MessageType GetNativeResponseMessageType() const noexcept { return responseMessageType; }
 
 #if HAS_MASS_STORAGE
 	bool OpenFileToWrite(const char *_ecv_array directory, const char *_ecv_array fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept;

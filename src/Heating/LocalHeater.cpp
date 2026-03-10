@@ -236,8 +236,33 @@ void LocalHeater::SwitchOff() noexcept
 	lastExtrusionTemperatureBoost = 0.0;
 }
 
+// Set a default model depending on the heater type
+GCodeResult LocalHeater::SetDefaultModel(HeaterFunction func) noexcept
+{
+	GCodeResult rslt = GCodeResult::ok;
+	switch (func)
+	{
+	default:
+		rslt = GCodeResult::error;
+		// Return an error but set the default tool model, which is safest as it has the highest expected heating rate
+		[[fallthrough]];
+	case HeaterFunction::tool:
+		model.SetDefaultModel(DefaultToolHeaterModel);
+		break;
+
+	case HeaterFunction::bed:
+		model.SetDefaultModel(DefaultBedHeaterModel);
+		break;
+
+	case HeaterFunction::chamber:
+		model.SetDefaultModel(DefaultChamberHeaterModel);
+		break;
+	}
+	return rslt;
+}
+
 // This is called when the heater model has been updated. Returns true if successful.
-GCodeResult LocalHeater::UpdateModel(const StringRef& reply) noexcept
+GCodeResult LocalHeater::UpdateRemoteModel(const StringRef& reply) noexcept
 {
 	return GCodeResult::ok;
 }
@@ -326,7 +351,7 @@ void LocalHeater::Spin() noexcept
 							const float expectedTemperatureRise = expectedRate * actualInterval;
 							const float actualTemperatureRise = temperature - lastTemperatureValue;
 							// Bed heaters sometimes have much slower long term heating rates than their short term heating rates, so allow them a lower measured heating rate
-							if (actualTemperatureRise < expectedTemperatureRise * ((IsBedOrChamber()) ? MinBedTemperatureRiseFactor : MinToolTemperatureRiseFactor))
+							if (actualTemperatureRise < expectedTemperatureRise * MinTemperatureRiseFactors[(unsigned int)GetFunction()])
 							{
 								++heatingFaultCount;
 								if ((float)(heatingFaultCount * HeatSampleIntervalMillis) > GetMaxHeatingFaultTime() * SecondsToMillis)
@@ -351,7 +376,12 @@ void LocalHeater::Spin() noexcept
 				break;
 
 			case HeaterMode::stable:
-				if (fabsf(error) > GetMaxTemperatureExcursion() && temperature > MaxAmbientTemperature)
+				// Check for maximum temperature excursion exceeded when we were at a stable temperature.
+				if (   fabsf(error) > GetMaxTemperatureExcursion()
+					&& (   error > 0.0											// if the temperature we are reading has dropped unexpectedly, e.g. indirect sensor can no longer see a tool
+						|| temperature > MaxAmbientTemperature					// or the temperature reading is too high and greater than a reasonable ambient temperature (should we use chamber temperature instead, for a tool heater?)
+					   )
+				   )
 				{
 					++heatingFaultCount;
 					if ((float)(heatingFaultCount * HeatSampleIntervalMillis) > GetMaxHeatingFaultTime() * SecondsToMillis)
@@ -430,7 +460,7 @@ void LocalHeater::Spin() noexcept
 					}
 #if HAS_VOLTAGE_MONITOR
 					// Scale the PID based on the current voltage vs. the calibration voltage
-					if (!reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber()))
+					if (GetFunction() == HeaterFunction::tool)
 					{
 						lastPwm = GetModel().CorrectPwmForVoltage(lastPwm, reprap.GetPlatform().GetCurrentPowerVoltage());
 					}
@@ -677,7 +707,7 @@ void LocalHeater::DoTuningStep() noexcept
 		}
 #endif
 		{
-			const bool isBedOrChamberHeater = reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber());
+			const bool isBedOrChamberHeater = (GetFunction() != HeaterFunction::tool);
 			const uint32_t heatingTime = now - timeSetHeating;
 			const float extraTimeAllowed = (isBedOrChamberHeater) ? 120.0 : 30.0;
 			if (heatingTime > (uint32_t)((GetModel().GetDeadTime() + extraTimeAllowed) * SecondsToMillis) && (temperature - tuningStartTemp.GetMean()) < 3.0)
@@ -1022,6 +1052,39 @@ GCodeResult LocalHeater::ApplyFeedForward(const CanMessageHeaterFeedForwardV1& m
 	}
 
 	return false;
+}
+
+// Set and return the default heater model
+void LocalHeater::SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept
+{
+	const CanRequestId rid = buf.msg.setDefaultHeaterModel.requestId;
+	const CanAddress src = buf.id.Src();
+	switch ((HeaterFunction)buf.msg.setDefaultHeaterModel.heaterFunction)
+	{
+		default:
+		{
+			auto msg1 = buf.SetupResponseMessage<CanMessageStandardReply>(rid, CanInterface::GetCanAddress(), src);
+			strcpy(msg1->text, "unknown heater function");
+			msg1->resultCode = (uint32_t)GCodeResult::error;
+		}
+		return;
+
+	case HeaterFunction::tool:
+		model.SetDefaultModel(DefaultToolHeaterModel);
+		break;
+
+	case HeaterFunction::bed:
+		model.SetDefaultModel(DefaultBedHeaterModel);
+		break;
+
+	case HeaterFunction::chamber:
+		model.SetDefaultModel(DefaultChamberHeaterModel);
+		break;
+	}
+
+	auto msg = buf.SetupResponseMessage<CanMessageHeaterModelReport>(rid, CanInterface::GetCanAddress(), src);
+	msg->model = model.GetBasicModel();
+	msg->resultCode = (uint32_t)GCodeResult::ok;
 }
 
 #endif
