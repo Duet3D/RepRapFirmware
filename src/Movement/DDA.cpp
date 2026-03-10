@@ -529,6 +529,10 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 		flags.useScurve = true;
 		jerk = VectorBoxIntersection(normalisedDirectionVector, move.Jerks());
 	}
+	else
+	{
+		jerk = 0.0;													// not used, bit it makes debug output clearer
+	}
 #endif
 
 	// 6. Set the speed to the smaller of the requested and maximum speed.
