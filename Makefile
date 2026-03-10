@@ -70,6 +70,8 @@ help:
 	$(Q)echo "  clean               - Clean all build outputs"
 	$(Q)echo "  clean-all           - Clean all build outputs and libraries"
 	$(Q)echo "  clean-<config>      - Clean specific configuration"
+	$(Q)echo "  test                - Run host-native unit tests"
+	$(Q)echo "  test-host           - Run host-native unit tests"
 	$(Q)echo "  test-toolchain      - Verify toolchain is accessible"
 	$(Q)echo ""
 	$(Q)echo "Environment variables:"
@@ -81,6 +83,7 @@ help:
 	$(Q)echo "  make Duet2                                # Build Duet 2 firmware"
 	$(Q)echo "  make Duet3Mini5plus V=1                   # Build with verbose output"
 	$(Q)echo "  make Duet3_MB6HC DEBUG=1                  # Build with debug symbols"
+	$(Q)echo "  make test-host                            # Run host-native unit tests"
 	$(Q)echo "  make CROSS_COMPILE=/path/to/arm-none-eabi- Duet2  # Custom toolchain"
 	$(Q)echo ""
 
@@ -89,6 +92,12 @@ help:
 all: $(CONFIGS)
 
 # Verify toolchain
+.PHONY: test test-host
+test: test-host
+
+test-host:
+	$(Q)$(MAKE) $(VERBOSE) -C tests CXX=g++-15
+
 .PHONY: test-toolchain
 test-toolchain:
 	$(Q)echo "Testing toolchain..."
