@@ -15,7 +15,7 @@ namespace MoveDebugFlags
 	constexpr unsigned int PrintAllMoves = 1;
 	constexpr unsigned int CollisionData = 2;
 
-	constexpr unsigned int Lookahead = 8;
+	constexpr unsigned int Lookahead = 8;				// also used for 3rd order motion control debug
 	constexpr unsigned int ZProbing = 9;
 	constexpr unsigned int AxisAllocation = 10;
 	constexpr unsigned int SimulateSteppingDrivers = 11;

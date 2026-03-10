@@ -43,7 +43,6 @@ enum class StatusReportType : uint8_t
 {
 	none = 0,
 	m105,
-	m408,
 	m409
 };
 
@@ -70,6 +69,7 @@ public:
 	void StartNewFile() noexcept;													// Called when we start a new file
 	bool FileEnded() noexcept;														// Called when we reach the end of the file we are reading from
 	void DecodeCommand() noexcept;													// Decode the command in the buffer when it is complete
+	bool HadOverflow() noexcept { return overflowed; }								// Indicates if the previous binary G-code was too long
 	bool CheckMetaCommand(const StringRef& reply) THROWS(GCodeException);			// Check whether the current command is a meta command, or we are skipping a block
 
 	char GetCommandLetter() const noexcept;
@@ -129,7 +129,8 @@ public:
 	void GetIntArray(int32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);		// Get a :-separated list of ints after a key letter
 	void GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) THROWS(GCodeException);	// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);	// Get a :-separated list of drivers after a key letter
-	ExpressionValue GetExpression() THROWS(GCodeException);							// Get a general expression after a key letter
+	ExpressionValue GetExpression() THROWS(GCodeException);							// Get a general expression enclosed in { } after a key letter
+	bool GetStringOrUIValue(uint32_t& ival, const StringRef& str) THROWS(GCodeException);	// Get an unsigned integer or nonempty string after a key letter
 
 	bool TryGetFValue(char c, float& val, bool& seen) THROWS(GCodeException);
 	bool TryGetIValue(char c, int32_t& val, bool& seen) THROWS(GCodeException);
@@ -258,6 +259,7 @@ public:
 	const char *_ecv_array GetIdentity() const noexcept { return codeChannel.ToString(); }
 	bool CanQueueCodes() const noexcept;
 	MessageType GetResponseMessageType() const noexcept;
+	MessageType GetNativeResponseMessageType() const noexcept { return responseMessageType; }
 
 #if HAS_MASS_STORAGE
 	bool OpenFileToWrite(const char *_ecv_array directory, const char *_ecv_array fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept;
@@ -270,8 +272,8 @@ public:
 	void FinishWritingBinary() noexcept;
 #endif
 
-	const char *_ecv_array DataStart() const noexcept;			// Get the start of the current command
-	size_t DataLength() const noexcept;							// Get the length of the current command
+	const char *_ecv_array _ecv_null DataStart() const noexcept;	// Get the start of the current command
+	size_t DataLength() const noexcept;								// Get the length of the current command
 
 	void PrintCommand(const StringRef& s) const noexcept;
 	void AppendFullCommand(const StringRef &s) const noexcept;
@@ -364,11 +366,11 @@ private:
 	bool cancelWait;									// true to stop waiting for temperatures to be reached
 	bool hadExplicitLineNumber;							// true if the N field of the GCode command line was present
 
-	alignas(4) char buffer[MaxGCodeLength];				// must be aligned because in SBC binary mode we do dword fetches from it
+	char *_ecv_array _ecv_null buffer;					// if allocated must be aligned because in SBC binary mode we do dword fetches from it
+	size_t bufferLength;								// length of the allocated buffer in bytes
+	bool overflowed;									// true if the buffer overflowed
 
 #if HAS_SBC_INTERFACE
-	static_assert(MaxGCodeLength >= MaxCodeBufferSize);	// make sure the GCodeBuffer is large enough to hold a command received from the SBC in binary
-
 	// Accessed by both the Main and SBC tasks
 	BinarySemaphore macroSemaphore;
 	volatile bool isWaitingForMacro;	// Is this GB waiting in DoFileMacro?

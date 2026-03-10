@@ -50,7 +50,7 @@
 	{
 		if (initialReason != SoftwareResetReason::user)
 		{
-			if (SERIAL_MAIN_DEVICE.canWrite() == 0)
+			if (SERIAL_USB_DEVICE.canWrite() == 0)
 			{
 				fullReason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
 			}
@@ -232,7 +232,7 @@ void vAssertCalled(uint32_t line, const char *file) noexcept
 {
 #if 0
 	debugPrintf("ASSERTION FAILED IN %s on LINE %d\n", file, line);
-	SERIAL_MAIN_DEVICE.flush();
+	SERIAL_USB_DEVICE.flush();
 #endif
 	__asm volatile
 	(
@@ -248,7 +248,7 @@ void vAssertCalled(uint32_t line, const char *file) noexcept
 namespace std
 {
 	// We need to define this function in order to use lambda functions with captures
-	[[noreturn]] void __throw_bad_function_call() noexcept { vAssertCalled(__LINE__, __FILE__); }
+	[[noreturn]] void __throw_bad_function_call() { vAssertCalled(__LINE__, __FILE__); }
 }
 
 // The default terminate handler pulls in sprintf and lots of other functions, which makes the binary too large. So we replace it.

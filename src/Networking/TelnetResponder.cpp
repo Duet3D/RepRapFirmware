@@ -19,7 +19,7 @@ TelnetResponder::TelnetResponder(NetworkResponder *_ecv_from n) noexcept : Netwo
 }
 
 // Ask the responder to accept this connection, returns true if it did
-bool TelnetResponder::Accept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept
+bool TelnetResponder::TryAccept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept
 {
 	if (responderState == ResponderState::free && protocol == TelnetProtocol)
 	{
@@ -42,7 +42,7 @@ bool TelnetResponder::Accept(Socket *_ecv_from s, NetworkProtocol protocol) noex
 }
 
 // This is called to force termination if we implement the specified protocol
-void TelnetResponder::Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept
+void TelnetResponder::TryTerminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept
 {
 	if (responderState != ResponderState::free && (protocol == TelnetProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{

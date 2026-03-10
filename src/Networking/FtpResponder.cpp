@@ -20,7 +20,7 @@ FtpResponder::FtpResponder(NetworkResponder *_ecv_from _ecv_null n) noexcept
 }
 
 // Ask the responder to accept this connection, returns true if it did
-bool FtpResponder::Accept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept
+bool FtpResponder::TryAccept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept
 {
 	if (responderState == ResponderState::free && protocol == FtpProtocol)
 	{
@@ -55,7 +55,7 @@ bool FtpResponder::Accept(Socket *_ecv_from s, NetworkProtocol protocol) noexcep
 }
 
 // This is called to force termination if we implement the specified protocol
-void FtpResponder::Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept
+void FtpResponder::TryTerminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept
 {
 	if (responderState != ResponderState::free && (protocol == FtpProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{

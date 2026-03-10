@@ -117,7 +117,7 @@ void FilesMenuItem::Draw(Lcd &_ecv_from lcd, PixelNumber rightMargin, bool highl
 
 				default:
 					reply.copy("Internal error");
-					// no break
+					[[fallthrough]];
 				case GCodeResult::error:
 					sdCardState = CardState::error;
 					lcd.SetFont(fontNumber);

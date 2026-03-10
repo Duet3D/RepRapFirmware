@@ -185,8 +185,7 @@ void WiFiSocket::Poll() noexcept
 		// We can get here if a peer has sent very little data and then instantly closed
 		// the connection, e.g. when an FTP peer transferred very small files over the
 		// data port. In such cases we must notify the responder about this transmission!
-		// no break
-
+		[[fallthrough]];
 	case ConnState::connected:
 		if (state != SocketState::connected)
 		{

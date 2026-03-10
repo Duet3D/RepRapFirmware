@@ -235,7 +235,7 @@ void Network::TerminateResponders(const NetworkInterface *iface, NetworkProtocol
 {
 	for (NetworkResponder *_ecv_from _ecv_null r = responders; r != nullptr; r = r->GetNext())
 	{
-		r->Terminate(protocol, iface);
+		r->TryTerminate(protocol, iface);
 	}
 }
 
@@ -921,7 +921,7 @@ bool Network::FindResponder(Socket *_ecv_from skt, NetworkProtocol protocol) noe
 #if HAS_RESPONDERS
 	for (NetworkResponder *_ecv_from _ecv_null r = responders; r != nullptr; r = r->GetNext())
 	{
-		if (r->Accept(skt, protocol))
+		if (r->TryAccept(skt, protocol))
 		{
 			return true;
 		}

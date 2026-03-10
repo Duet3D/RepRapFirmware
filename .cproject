@@ -25,7 +25,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.1881231799" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${ArmGccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.172065168" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.1838379384" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Duet2_RTOS" id="cdt.managedbuild.builder.gnu.cross.1206198077" keepEnvironmentInBuildfile="false" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Duet2_RTOS" id="cdt.managedbuild.builder.gnu.cross.1206198077" keepEnvironmentInBuildfile="false" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" stopOnErr="false" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1539163958" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.both.asm.option.include.paths.2063579544" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib}&quot;"/>
@@ -39,7 +39,7 @@
 								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.456685708" name="Optimization level" superClass="gnu.c.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.c.optimization.level.size" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.debugging.level.1579494397" name="Debug level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.misc.verbose.328543251" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.c.compiler.option.misc.other.465279131" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant  &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
+								<option id="gnu.c.compiler.option.misc.other.465279131" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -nostdlib -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant  &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.include.paths.288982451" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -69,6 +69,9 @@
 								<option id="gnu.c.compiler.option.dialect.std.1370424675" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.1078349416" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
 								<option id="gnu.c.compiler.option.optimization.flags.2118944913" name="Other optimization flags" superClass="gnu.c.compiler.option.optimization.flags" useByScannerDiscovery="false" value="" valueType="string"/>
+								<option id="gnu.c.compiler.option.warnings.toerrors.1765300068" name="Warnings as errors (-Werror)" superClass="gnu.c.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wwritestrings.739643469" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wundef.1732605305" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.c.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1065384487" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.1102044150" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
@@ -98,7 +101,7 @@
 								<option id="gnu.cpp.compiler.option.optimization.level.1835678360" name="Optimization level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.size" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.debugging.level.737051102" name="Debug level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.other.verbose.1225557122" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.cpp.compiler.option.other.other.1423466590" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Wsuggest-override -fsingle-precision-constant  &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.other.other.1423466590" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wdouble-promotion -Wfloat-conversion -Werror=return-type -Wsuggest-override -fsingle-precision-constant  &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.include.paths.1505018967" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -135,6 +138,14 @@
 								<option id="gnu.cpp.compiler.option.dialect.std.1493465864" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.316329964" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
 								<option id="gnu.cpp.compiler.option.optimization.flags.1174285047" name="Other optimization flags" superClass="gnu.cpp.compiler.option.optimization.flags" useByScannerDiscovery="false" value="" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.warnings.toerrors.1800776162" name="Warnings as errors (-Werror)" superClass="gnu.cpp.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wconversion.874247566" name="Implicit conversion warnings (-Wconversion)" superClass="gnu.cpp.compiler.option.warnings.wconversion" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wnoexccept.409759460" name="Noexcept false but never throw exception (-Wnoexcept)" superClass="gnu.cpp.compiler.option.warnings.wnoexccept" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wundef.647935845" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.cpp.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wsignpromo.270945891" name="Overload resolution promotes unsigned to signed type (-Wsign-promo)" superClass="gnu.cpp.compiler.option.warnings.wsignpromo" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wshadow.772114512" name="Local symbol shadows upper scope symbol (-Wshadow)" superClass="gnu.cpp.compiler.option.warnings.wshadow" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wcastqual.176250228" name="Removing type qualifier from cast target type (-Wcast-qual)" superClass="gnu.cpp.compiler.option.warnings.wcastqual" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.woverloadedvirtual.888882556" name="Function hides virtual functions from base class (-Woverloaded-virtual)" superClass="gnu.cpp.compiler.option.warnings.woverloadedvirtual" useByScannerDiscovery="false" value="false" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.65828751" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 						</toolChain>
@@ -174,170 +185,6 @@
 				</externalSettings>
 			</storageModule>
 		</cconfiguration>
-		<cconfiguration id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.170574622.649587786.1798324396.239853003.969416350">
-			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.170574622.649587786.1798324396.239853003.969416350" moduleId="org.eclipse.cdt.core.settings" name="PCCB_10">
-				<macros>
-					<stringMacro name="LinkFlags2" type="VALUE_TEXT" value="-Wl,--end-group -lm"/>
-					<stringMacro name="CoreName" type="VALUE_TEXT" value="CoreN2G"/>
-					<stringMacro name="LinkFlags1" type="VALUE_TEXT" value="-mthumb -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry=Reset_Handler -Wl,--unresolved-symbols=report-all -Wl,--warn-common -Wl,--warn-section-align -Wl,--warn-unresolved-symbols -Wl,--start-group"/>
-				</macros>
-				<externalSettings/>
-				<extensions>
-					<extension id="org.eclipse.cdt.core.ELF" point="org.eclipse.cdt.core.BinaryParser"/>
-					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.GCCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.GASErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.GLDErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-				</extensions>
-			</storageModule>
-			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
-				<configuration artifactExtension="elf" artifactName="PccbFirmware" buildArtefactType="org.eclipse.cdt.build.core.buildArtefactType.exe" buildProperties="org.eclipse.cdt.build.core.buildArtefactType=org.eclipse.cdt.build.core.buildArtefactType.exe,org.eclipse.cdt.build.core.buildType=org.eclipse.cdt.build.core.buildType.release" cleanCommand="rm -rf" description="" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.170574622.649587786.1798324396.239853003.969416350" name="PCCB_10" optionalBuildProperties="org.eclipse.cdt.docker.launcher.containerbuild.property.selectedvolumes=,org.eclipse.cdt.docker.launcher.containerbuild.property.volumes=" parent="cdt.managedbuild.config.gnu.cross.exe.release" postannouncebuildStep="Generating binary file" postbuildStep="arm-none-eabi-objcopy -O binary &quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.elf&quot; &quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.bin&quot; &amp;&amp; CrcAppender &quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.bin&quot; &quot;${workspace_loc:/${ProjName}/PccbEmbeddedFiles}&quot;" prebuildStep="touch -c &quot;${workspace_loc:/${ProjName}}/src/Version.cpp&quot;">
-					<folderInfo id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.170574622.649587786.1798324396.239853003.969416350." name="/" resourcePath="">
-						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.release.1389555858" name="Cross GCC" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.release">
-							<option id="cdt.managedbuild.option.gnu.cross.path.1439474441" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${ArmGccPath}" valueType="string"/>
-							<option id="cdt.managedbuild.option.gnu.cross.prefix.1309581199" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
-							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.820061870" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1357804179" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
-							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1700699279" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
-								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.both.asm.option.include.paths.1814357351" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS}&quot;"/>
-								</option>
-								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.1126011087" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
-							</tool>
-							<tool commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT} ${INPUTS}" id="cdt.managedbuild.tool.gnu.cross.c.compiler.1122530180" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler">
-								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.316988124" name="Optimization level" superClass="gnu.c.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.c.optimization.level.more" valueType="enumerated"/>
-								<option id="gnu.c.compiler.option.debugging.level.869932600" name="Debug level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.none" valueType="enumerated"/>
-								<option id="gnu.c.compiler.option.misc.verbose.348397710" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.c.compiler.option.misc.other.1339598788" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfp16-format=ieee -ffunction-sections -fdata-sections -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
-								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.include.paths.1757844611" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/SAM4S}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/common/utils}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/drivers}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/preprocessor}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/header_files}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/cmsis/sam4s/include}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
-								</option>
-								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.preprocessor.def.symbols.1626366618" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" useByScannerDiscovery="false" valueType="definedSymbols">
-									<listOptionValue builtIn="false" value="__SAM4S8C__"/>
-									<listOptionValue builtIn="false" value="RTOS"/>
-									<listOptionValue builtIn="false" value="PCCB"/>
-									<listOptionValue builtIn="false" value="PCCB_10"/>
-									<listOptionValue builtIn="false" value="noexcept="/>
-								</option>
-								<option id="gnu.c.compiler.option.dialect.flags.2138987417" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
-								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1697017655" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
-							</tool>
-							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.178696318" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
-							<tool id="cdt.managedbuild.tool.gnu.cross.archiver.1343498785" name="Cross GCC Archiver" superClass="cdt.managedbuild.tool.gnu.cross.archiver"/>
-							<tool command="gcc" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT} ${LinkFlags1} ${INPUTS} ${EXTRA_FLAGS} ${LinkFlags2}" id="cdt.managedbuild.tool.gnu.cross.cpp.linker.547420771" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker">
-								<option id="gnu.cpp.link.option.nostdlibs.295391099" name="No startup or default libs (-nostdlib)" superClass="gnu.cpp.link.option.nostdlibs" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.link.option.paths.93177435" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" useByScannerDiscovery="false" valueType="libPaths">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/SAM4S_RTOS}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/SAM4S_SDHC_USB_RTOS}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/SAM4S_RTOS}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/SAM4S}&quot;"/>
-								</option>
-								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.link.option.libs.837705056" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
-									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="CANlib"/>
-									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="CoreN2G"/>
-									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="RRFLibraries"/>
-									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="FreeRTOS"/>
-									<listOptionValue builtIn="false" value="supc++"/>
-								</option>
-								<option id="gnu.cpp.link.option.flags.1542629928" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="--specs=nosys.specs -Os -Wl,--gc-sections -Wl,--fatal-warnings -Wl,--no-warn-rwx-segment -mcpu=cortex-m4 -T&quot;${workspace_loc:/${ProjName}/src/Hardware/SAM4S/sam4s8c_flash.ld}&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
-								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1255607760" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
-									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
-									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
-								</inputType>
-							</tool>
-							<tool command="g++" id="cdt.managedbuild.tool.gnu.cross.cpp.compiler.398590106" name="Cross G++ Compiler" superClass="cdt.managedbuild.tool.gnu.cross.cpp.compiler">
-								<option id="gnu.cpp.compiler.option.optimization.level.1342318357" name="Optimization level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.more" valueType="enumerated"/>
-								<option id="gnu.cpp.compiler.option.debugging.level.299293344" name="Debug level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
-								<option id="gnu.cpp.compiler.option.other.verbose.913195266" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.cpp.compiler.option.other.other.731452074" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfp16-format=ieee -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
-								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.include.paths.1319376517" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/SAM4S}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/common/utils}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/cmsis/sam4s/include}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/preprocessor}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/header_files}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/drivers}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Hardware/SAM4S}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/WiFiSocketServerRTOS/src/include}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/include}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM3}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/src}&quot;"/>
-								</option>
-								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.preprocessor.def.23794512" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
-									<listOptionValue builtIn="false" value="__SAM4S8C__"/>
-									<listOptionValue builtIn="false" value="RTOS"/>
-									<listOptionValue builtIn="false" value="PCCB"/>
-									<listOptionValue builtIn="false" value="PCCB_10"/>
-									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
-								</option>
-								<option id="gnu.cpp.compiler.option.dialect.std.749259151" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
-								<option id="gnu.cpp.compiler.option.dialect.flags.99746569" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
-								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1229249116" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
-							</tool>
-						</toolChain>
-					</folderInfo>
-					<sourceEntries>
-						<entry excluding="src/Networking/MQTT|src/Hardware/SAME70|src/Hardware/SAME5x|src/Networking/LwipEthernet|src/DuetNG|src/Networking/W5500Ethernet/|src/SBC|src/Duet3_V06|src/Display|src/Hardware/ksz8081rna|src/Networking/ESP8266WiFi|src/Duet3Mini|src/Hardware/SAM4E|src/DuetM" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
-					</sourceEntries>
-				</configuration>
-			</storageModule>
-			<storageModule moduleId="org.eclipse.cdt.core.externalSettings">
-				<externalSettings containerId="FreeRTOS;cdt.managedbuild.config.gnu.cross.exe.release.487753828.400703681" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier">
-					<externalSetting>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="includePath" name="/FreeRTOS"/>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/FreeRTOS/SAM4S"/>
-						<entry flags="RESOLVED" kind="libraryFile" name="FreeRTOS" srcPrefixMapping="" srcRootPath=""/>
-					</externalSetting>
-				</externalSettings>
-				<externalSettings containerId="RRFLibraries;cdt.managedbuild.config.gnu.cross.lib.release.1693990866.1176679643" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier">
-					<externalSetting>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/RRFLibraries/SAM4S_RTOS"/>
-						<entry flags="RESOLVED" kind="libraryFile" name="RRFLibraries" srcPrefixMapping="" srcRootPath=""/>
-					</externalSetting>
-				</externalSettings>
-				<externalSettings containerId="CoreN2G;cdt.managedbuild.config.gnu.cross.lib.release.675522878.1031364120.863690523.546088957.1995084397" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier">
-					<externalSetting>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="includePath" name="/CoreN2G"/>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/CoreN2G/SAM4S_SDHC_USB_RTOS"/>
-						<entry flags="RESOLVED" kind="libraryFile" name="CoreN2G" srcPrefixMapping="" srcRootPath=""/>
-					</externalSetting>
-				</externalSettings>
-				<externalSettings containerId="CANlib;cdt.managedbuild.config.gnu.cross.lib.release.1485070058.1417068454" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier">
-					<externalSetting>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="includePath" name="/CANlib"/>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/CANlib/SAM4S_RTOS"/>
-						<entry flags="RESOLVED" kind="libraryFile" name="CANlib" srcPrefixMapping="" srcRootPath=""/>
-					</externalSetting>
-				</externalSettings>
-			</storageModule>
-		</cconfiguration>
 		<cconfiguration id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366.1645191116.1852610203.289083307.712841925">
 			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366.1645191116.1852610203.289083307.712841925" moduleId="org.eclipse.cdt.core.settings" name="Duet3_MB6HC">
 				<macros>
@@ -362,7 +209,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.582108797" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${ArmGccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.294408013" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.1611700370" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1522216223" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1522216223" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" stopOnErr="false" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.96607748" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.both.asm.option.include.paths.1649199922" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
@@ -377,7 +224,7 @@
 								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.1052167633" name="Optimization level" superClass="gnu.c.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.c.optimization.level.more" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.debugging.level.1431164406" name="Debug level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.misc.verbose.1282164464" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.c.compiler.option.misc.other.1326549359" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
+								<option id="gnu.c.compiler.option.misc.other.1326549359" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -nostdlib -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.include.paths.747218438" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -408,6 +255,9 @@
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1738681846" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.1952106689" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
+								<option id="gnu.c.compiler.option.warnings.toerrors.1450234931" name="Warnings as errors (-Werror)" superClass="gnu.c.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wwritestrings.4446964" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wundef.990903751" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.c.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.349149650" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.335874105" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
@@ -439,7 +289,7 @@
 								<option id="gnu.cpp.compiler.option.optimization.level.853356157" name="Optimization level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.more" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.debugging.level.1666050145" name="Debug level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.other.verbose.513668348" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.cpp.compiler.option.other.other.1799333383" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.other.other.1799333383" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wdouble-promotion -Wfloat-conversion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.include.paths.1493725201" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -476,6 +326,12 @@
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1240779290" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.1208796918" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.warnings.toerrors.2025417283" name="Warnings as errors (-Werror)" superClass="gnu.cpp.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wnoexccept.1869178545" name="Noexcept false but never throw exception (-Wnoexcept)" superClass="gnu.cpp.compiler.option.warnings.wnoexccept" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.woverloadedvirtual.1654879496" name="Function hides virtual functions from base class (-Woverloaded-virtual)" superClass="gnu.cpp.compiler.option.warnings.woverloadedvirtual" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wundef.1516044976" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.cpp.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wshadow.308719154" name="Local symbol shadows upper scope symbol (-Wshadow)" superClass="gnu.cpp.compiler.option.warnings.wshadow" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wsignpromo.856583318" name="Overload resolution promotes unsigned to signed type (-Wsign-promo)" superClass="gnu.cpp.compiler.option.warnings.wsignpromo" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.2019005310" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 						</toolChain>
@@ -545,7 +401,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.264413301" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${ArmGccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.689197669" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.2064631076" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.2000973807" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.2000973807" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" stopOnErr="false" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1200487946" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.both.asm.option.include.paths.1360923025" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
@@ -590,6 +446,9 @@
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1589331260" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.344980217" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
+								<option id="gnu.c.compiler.option.warnings.toerrors.1021144789" name="Warnings as errors (-Werror)" superClass="gnu.c.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wundef.151371070" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.c.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wwritestrings.2143510504" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.353476446" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.289974232" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
@@ -621,7 +480,7 @@
 								<option id="gnu.cpp.compiler.option.optimization.level.1733994699" name="Optimization level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.more" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.debugging.level.977407101" name="Debug level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.other.verbose.300036040" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.cpp.compiler.option.other.other.1461332896" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfp16-format=ieee -mfloat-abi=hard -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.other.other.1461332896" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfp16-format=ieee -mfloat-abi=hard -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wundef -Wdouble-promotion -Wfloat-conversion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.include.paths.842937172" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -659,6 +518,11 @@
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1181997841" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.784276622" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.warnings.toerrors.1070504496" name="Warnings as errors (-Werror)" superClass="gnu.cpp.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wundef.1930682187" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.cpp.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wshadow.496837711" name="Local symbol shadows upper scope symbol (-Wshadow)" superClass="gnu.cpp.compiler.option.warnings.wshadow" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wnoexccept.1339356048" name="Noexcept false but never throw exception (-Wnoexcept)" superClass="gnu.cpp.compiler.option.warnings.wnoexccept" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wsignpromo.1025115054" name="Overload resolution promotes unsigned to signed type (-Wsign-promo)" superClass="gnu.cpp.compiler.option.warnings.wsignpromo" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1492456478" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 						</toolChain>
@@ -728,7 +592,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.571548305" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${ArmGccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.245180595" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.509820949" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Duet2_RTOS" id="cdt.managedbuild.builder.gnu.cross.1472489771" keepEnvironmentInBuildfile="false" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Duet2_RTOS" id="cdt.managedbuild.builder.gnu.cross.1472489771" keepEnvironmentInBuildfile="false" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" stopOnErr="false" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1251056819" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.both.asm.option.include.paths.748950315" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib}&quot;"/>
@@ -742,7 +606,7 @@
 								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.499082039" name="Optimization level" superClass="gnu.c.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.c.optimization.level.more" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.debugging.level.286109438" name="Debug level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.misc.verbose.2100533250" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.c.compiler.option.misc.other.51237387" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
+								<option id="gnu.c.compiler.option.misc.other.51237387" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -nostdlib -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.include.paths.259472338" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -769,6 +633,9 @@
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.366590213" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.767757960" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
+								<option id="gnu.c.compiler.option.warnings.toerrors.18191149" name="Warnings as errors (-Werror)" superClass="gnu.c.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wundef.1521764801" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.c.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wwritestrings.1578613379" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1451144003" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.420262089" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
@@ -798,7 +665,7 @@
 								<option id="gnu.cpp.compiler.option.optimization.level.2036964129" name="Optimization level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.size" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.debugging.level.734389459" name="Debug level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.other.verbose.516508660" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.cpp.compiler.option.other.other.2058032643" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.other.other.2058032643" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wdouble-promotion -Wfloat-conversion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.include.paths.2008633041" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -833,6 +700,14 @@
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.2108490752" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.228819429" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.warnings.toerrors.2093815740" name="Warnings as errors (-Werror)" superClass="gnu.cpp.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wconversion.690512236" name="Implicit conversion warnings (-Wconversion)" superClass="gnu.cpp.compiler.option.warnings.wconversion" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wcastqual.1220400491" name="Removing type qualifier from cast target type (-Wcast-qual)" superClass="gnu.cpp.compiler.option.warnings.wcastqual" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wnoexccept.1172823453" name="Noexcept false but never throw exception (-Wnoexcept)" superClass="gnu.cpp.compiler.option.warnings.wnoexccept" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wshadow.532431407" name="Local symbol shadows upper scope symbol (-Wshadow)" superClass="gnu.cpp.compiler.option.warnings.wshadow" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wundef.932358585" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.cpp.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wsignpromo.2092435657" name="Overload resolution promotes unsigned to signed type (-Wsign-promo)" superClass="gnu.cpp.compiler.option.warnings.wsignpromo" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.woverloadedvirtual.1706024244" name="Function hides virtual functions from base class (-Woverloaded-virtual)" superClass="gnu.cpp.compiler.option.warnings.woverloadedvirtual" useByScannerDiscovery="false" value="false" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.61929442" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 						</toolChain>
@@ -909,7 +784,7 @@
 								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.1969972072" name="Optimization level" superClass="gnu.c.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.c.optimization.level.more" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.debugging.level.1649249275" name="Debug level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.misc.verbose.744370390" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.c.compiler.option.misc.other.586762948" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage -fdump-rtl-expand" valueType="string"/>
+								<option id="gnu.c.compiler.option.misc.other.586762948" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -nostdlib -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage -fdump-rtl-expand" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.include.paths.55492871" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -933,6 +808,9 @@
 									<listOptionValue builtIn="false" value="noexcept="/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.flags.832818004" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
+								<option id="gnu.c.compiler.option.warnings.wwritestrings.324234373" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wundef.1754505790" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.c.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.toerrors.2067557819" name="Warnings as errors (-Werror)" superClass="gnu.c.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.388633716" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.541821066" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
@@ -965,7 +843,7 @@
 								<option id="gnu.cpp.compiler.option.optimization.level.787596539" name="Optimization level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.more" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.debugging.level.1654001240" name="Debug level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.other.verbose.434057491" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.cpp.compiler.option.other.other.1892624010" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage -fdump-rtl-expand" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.other.other.1892624010" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wdouble-promotion -Wfloat-conversion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage -fdump-rtl-expand" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.include.paths.828643136" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -1001,6 +879,12 @@
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1758907806" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.1984964653" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.warnings.toerrors.1117239089" name="Warnings as errors (-Werror)" superClass="gnu.cpp.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wnoexccept.994041428" name="Noexcept false but never throw exception (-Wnoexcept)" superClass="gnu.cpp.compiler.option.warnings.wnoexccept" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.woverloadedvirtual.1278542066" name="Function hides virtual functions from base class (-Woverloaded-virtual)" superClass="gnu.cpp.compiler.option.warnings.woverloadedvirtual" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wshadow.122978106" name="Local symbol shadows upper scope symbol (-Wshadow)" superClass="gnu.cpp.compiler.option.warnings.wshadow" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wundef.237235889" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.cpp.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wsignpromo.1770040357" name="Overload resolution promotes unsigned to signed type (-Wsign-promo)" superClass="gnu.cpp.compiler.option.warnings.wsignpromo" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.988662527" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 						</toolChain>
@@ -1071,7 +955,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.1566676644" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${ArmGccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.619495315" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.2055297048" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1053939851" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1053939851" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" stopOnErr="false" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1948600749" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.both.asm.option.include.paths.220830785" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
@@ -1085,7 +969,7 @@
 								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.1886857400" name="Optimization level" superClass="gnu.c.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.c.optimization.level.optimize" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.debugging.level.1080089182" name="Debug level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.misc.verbose.909727357" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.c.compiler.option.misc.other.1176394435" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
+								<option id="gnu.c.compiler.option.misc.other.1176394435" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -nostdlib -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.include.paths.468883064" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -1111,6 +995,9 @@
 									<listOptionValue builtIn="false" value="DEBUG"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.flags.1707248932" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
+								<option id="gnu.c.compiler.option.warnings.wwritestrings.1825419781" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wundef.254374213" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.c.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.toerrors.182259034" name="Warnings as errors (-Werror)" superClass="gnu.c.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1764855360" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.1892225542" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
@@ -1143,7 +1030,7 @@
 								<option id="gnu.cpp.compiler.option.optimization.level.118452777" name="Optimization level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.optimize" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.debugging.level.1370417201" name="Debug level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.other.verbose.313278382" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.cpp.compiler.option.other.other.1951413447" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.other.other.1951413447" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wdouble-promotion -Wfloat-conversion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.include.paths.1562950186" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -1182,6 +1069,11 @@
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1592850060" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.1378260707" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.warnings.wundef.1345196745" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.cpp.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wsignpromo.192771849" name="Overload resolution promotes unsigned to signed type (-Wsign-promo)" superClass="gnu.cpp.compiler.option.warnings.wsignpromo" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wshadow.905966757" name="Local symbol shadows upper scope symbol (-Wshadow)" superClass="gnu.cpp.compiler.option.warnings.wshadow" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wnoexccept.1118738277" name="Noexcept false but never throw exception (-Wnoexcept)" superClass="gnu.cpp.compiler.option.warnings.wnoexccept" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.toerrors.142463461" name="Warnings as errors (-Werror)" superClass="gnu.cpp.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1103096049" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 						</toolChain>
@@ -1252,7 +1144,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.436798614" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${ArmGccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.1750676208" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.168972340" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1448313120" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1448313120" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" stopOnErr="false" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1801892968" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.both.asm.option.include.paths.257281924" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
@@ -1265,7 +1157,7 @@
 								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.1265394162" name="Optimization level" superClass="gnu.c.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.c.optimization.level.more" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.debugging.level.19355070" name="Debug level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.misc.verbose.470289072" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.c.compiler.option.misc.other.133663334" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
+								<option id="gnu.c.compiler.option.misc.other.133663334" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -nostdlib -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.include.paths.1687156570" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -1290,6 +1182,9 @@
 									<listOptionValue builtIn="false" value="noexcept="/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.flags.129901167" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
+								<option id="gnu.c.compiler.option.warnings.wwritestrings.920429024" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wundef.1727065036" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.c.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.toerrors.1000215257" name="Warnings as errors (-Werror)" superClass="gnu.c.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.905891817" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.408053871" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
@@ -1324,7 +1219,7 @@
 								<option id="gnu.cpp.compiler.option.optimization.level.2132731079" name="Optimization level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.more" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.debugging.level.165649260" name="Debug level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.other.verbose.418237960" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.cpp.compiler.option.other.other.191622413" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.other.other.191622413" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wdouble-promotion -Wfloat-conversion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.include.paths.1076828318" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -1362,6 +1257,11 @@
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.449505816" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.2037142917" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.warnings.wundef.1052989461" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.cpp.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wsignpromo.1456238856" name="Overload resolution promotes unsigned to signed type (-Wsign-promo)" superClass="gnu.cpp.compiler.option.warnings.wsignpromo" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wshadow.151677721" name="Local symbol shadows upper scope symbol (-Wshadow)" superClass="gnu.cpp.compiler.option.warnings.wshadow" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wnoexccept.650887564" name="Noexcept false but never throw exception (-Wnoexcept)" superClass="gnu.cpp.compiler.option.warnings.wnoexccept" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.toerrors.1494498396" name="Warnings as errors (-Werror)" superClass="gnu.cpp.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.2140964210" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 						</toolChain>
@@ -1438,7 +1338,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.831603836" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${ArmGccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.540422738" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.133754905" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.2048849989" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.2048849989" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" stopOnErr="false" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.28116501" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.both.asm.option.include.paths.22579880" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
@@ -1453,7 +1353,7 @@
 								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.1469190336" name="Optimization level" superClass="gnu.c.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.c.optimization.level.size" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.debugging.level.1149877463" name="Debug level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.misc.verbose.1432610665" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.c.compiler.option.misc.other.1768268369" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
+								<option id="gnu.c.compiler.option.misc.other.1768268369" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -nostdlib -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.include.paths.1551910433" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -1485,6 +1385,9 @@
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1375046536" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.977498232" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
+								<option id="gnu.c.compiler.option.warnings.wwritestrings.726279690" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wundef.388871252" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.c.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.toerrors.1271030468" name="Warnings as errors (-Werror)" superClass="gnu.c.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.835911007" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.1848330557" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
@@ -1516,7 +1419,7 @@
 								<option id="gnu.cpp.compiler.option.optimization.level.1984091712" name="Optimization level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.size" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.debugging.level.1089618663" name="Debug level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.other.verbose.2120996990" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.cpp.compiler.option.other.other.1858600173" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.other.other.1858600173" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wdouble-promotion -Wfloat-conversion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.include.paths.1843583751" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -1554,6 +1457,11 @@
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.314608141" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.69489869" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.warnings.wundef.1798469058" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.cpp.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wsignpromo.1892038874" name="Overload resolution promotes unsigned to signed type (-Wsign-promo)" superClass="gnu.cpp.compiler.option.warnings.wsignpromo" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wshadow.1006303155" name="Local symbol shadows upper scope symbol (-Wshadow)" superClass="gnu.cpp.compiler.option.warnings.wshadow" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wnoexccept.571062559" name="Noexcept false but never throw exception (-Wnoexcept)" superClass="gnu.cpp.compiler.option.warnings.wnoexccept" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.toerrors.656718633" name="Warnings as errors (-Werror)" superClass="gnu.cpp.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1198997248" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 						</toolChain>
@@ -1623,7 +1531,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.812992990" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${ArmGccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.873970519" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.1455006415" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1136361500" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1136361500" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" stopOnErr="false" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1257506213" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.both.asm.option.include.paths.1665673003" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
@@ -1638,7 +1546,7 @@
 								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.1804755174" name="Optimization level" superClass="gnu.c.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.c.optimization.level.more" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.debugging.level.186013296" name="Debug level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.misc.verbose.648671658" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.c.compiler.option.misc.other.1762191778" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
+								<option id="gnu.c.compiler.option.misc.other.1762191778" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -nostdlib -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.include.paths.1355859823" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -1669,6 +1577,9 @@
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1606632073" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.14880249" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
+								<option id="gnu.c.compiler.option.warnings.wwritestrings.1650658957" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wundef.271561258" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.c.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.toerrors.1123058553" name="Warnings as errors (-Werror)" superClass="gnu.c.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.580317764" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.327679459" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
@@ -1700,7 +1611,7 @@
 								<option id="gnu.cpp.compiler.option.optimization.level.664985634" name="Optimization level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.more" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.debugging.level.1734164321" name="Debug level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.other.verbose.314123010" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.cpp.compiler.option.other.other.2044167328" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.other.other.2044167328" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wdouble-promotion -Wfloat-conversion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.include.paths.1555421177" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -1737,6 +1648,12 @@
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1853970062" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.2141116099" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.warnings.toerrors.74997453" name="Warnings as errors (-Werror)" superClass="gnu.cpp.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wundef.457128701" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.cpp.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wshadow.1805635693" name="Local symbol shadows upper scope symbol (-Wshadow)" superClass="gnu.cpp.compiler.option.warnings.wshadow" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wnoexccept.1267167485" name="Noexcept false but never throw exception (-Wnoexcept)" superClass="gnu.cpp.compiler.option.warnings.wnoexccept" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.woverloadedvirtual.691584183" name="Function hides virtual functions from base class (-Woverloaded-virtual)" superClass="gnu.cpp.compiler.option.warnings.woverloadedvirtual" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wsignpromo.232192016" name="Overload resolution promotes unsigned to signed type (-Wsign-promo)" superClass="gnu.cpp.compiler.option.warnings.wsignpromo" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.523534501" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 						</toolChain>
@@ -1806,7 +1723,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.1532594565" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${ArmGccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.1764092606" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.251085647" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1042606130" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1042606130" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" stopOnErr="false" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1696123347" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.both.asm.option.include.paths.829460823" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
@@ -1819,7 +1736,7 @@
 								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.288915533" name="Optimization level" superClass="gnu.c.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.c.optimization.level.size" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.debugging.level.1737526845" name="Debug level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.misc.verbose.1248052632" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.c.compiler.option.misc.other.2054857403" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage -fdump-rtl-expand" valueType="string"/>
+								<option id="gnu.c.compiler.option.misc.other.2054857403" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -nostdlib -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage -fdump-rtl-expand" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.include.paths.988450914" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -1840,6 +1757,9 @@
 									<listOptionValue builtIn="false" value="noexcept="/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.flags.37984891" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
+								<option id="gnu.c.compiler.option.warnings.wwritestrings.553390117" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wundef.945597332" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.c.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.toerrors.904838030" name="Warnings as errors (-Werror)" superClass="gnu.c.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1767226225" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.1151360744" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
@@ -1872,7 +1792,7 @@
 								<option id="gnu.cpp.compiler.option.optimization.level.1936804063" name="Optimization level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.size" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.debugging.level.942018545" name="Debug level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.other.verbose.1545443788" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.cpp.compiler.option.other.other.1708980556" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage -fdump-rtl-expand" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.other.other.1708980556" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m4 -mthumb -fno-math-errno -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mfp16-format=ieee -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wdouble-promotion -Wfloat-conversion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage -fdump-rtl-expand" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.include.paths.434709132" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -1905,6 +1825,11 @@
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1349415507" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.1501409571" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.warnings.toerrors.1378129442" name="Warnings as errors (-Werror)" superClass="gnu.cpp.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wundef.96456040" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.cpp.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wshadow.1458619770" name="Local symbol shadows upper scope symbol (-Wshadow)" superClass="gnu.cpp.compiler.option.warnings.wshadow" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wnoexccept.770036993" name="Noexcept false but never throw exception (-Wnoexcept)" superClass="gnu.cpp.compiler.option.warnings.wnoexccept" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.woverloadedvirtual.854908584" name="Function hides virtual functions from base class (-Woverloaded-virtual)" superClass="gnu.cpp.compiler.option.warnings.woverloadedvirtual" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.143338494" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 						</toolChain>
@@ -1975,7 +1900,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.1855707125" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${ArmGccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.1959408365" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.1896760867" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1421858526" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1421858526" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" stopOnErr="false" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1224829415" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.both.asm.option.include.paths.1052376852" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
@@ -1990,7 +1915,7 @@
 								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.465481372" name="Optimization level" superClass="gnu.c.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.c.optimization.level.more" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.debugging.level.459890609" name="Debug level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.misc.verbose.2063910298" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.c.compiler.option.misc.other.243072689" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
+								<option id="gnu.c.compiler.option.misc.other.243072689" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -nostdlib -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.include.paths.1784670262" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -2022,6 +1947,9 @@
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1241223746" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.266087535" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
+								<option id="gnu.c.compiler.option.warnings.wwritestrings.1230240148" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wundef.614657501" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.c.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.toerrors.78155568" name="Warnings as errors (-Werror)" superClass="gnu.c.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1450311062" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.584407780" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
@@ -2053,7 +1981,7 @@
 								<option id="gnu.cpp.compiler.option.optimization.level.2003454677" name="Optimization level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.more" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.debugging.level.839809467" name="Debug level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.other.verbose.1552684258" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
-								<option id="gnu.cpp.compiler.option.other.other.1037314603" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wundef -Wdouble-promotion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.other.other.1037314603" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wdouble-promotion -Wfloat-conversion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.include.paths.904359590" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
@@ -2091,7 +2019,204 @@
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1147751964" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.2140529595" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.warnings.wnoexccept.582989760" name="Noexcept false but never throw exception (-Wnoexcept)" superClass="gnu.cpp.compiler.option.warnings.wnoexccept" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wshadow.1706360916" name="Local symbol shadows upper scope symbol (-Wshadow)" superClass="gnu.cpp.compiler.option.warnings.wshadow" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wundef.894521317" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.cpp.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wsignpromo.895688510" name="Overload resolution promotes unsigned to signed type (-Wsign-promo)" superClass="gnu.cpp.compiler.option.warnings.wsignpromo" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.toerrors.796782424" name="Warnings as errors (-Werror)" superClass="gnu.cpp.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1698417853" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
+							</tool>
+						</toolChain>
+					</folderInfo>
+					<sourceEntries>
+						<entry excluding="src/Networking/LwipEthernet/Lwip/src/apps/smtp|src/Networking/LwipEthernet/Lwip/src/apps/snmp|src/Networking/LwipEthernet/Lwip/src/apps/httpd|src/Hardware/SAME5x|/src/Networking/LwipEthernet/Lwip/test|src/DuetNG|src/Networking/LwipEthernet/Lwip/src/apps/tftp|src/Networking/W5500Ethernet|src/Networking/LwipEthernet/Lwip/src/netif/ppp|src/Networking/LwipEthernet/Lwip/src/apps/lwiperf|src/Networking/LwipEthernet/Lwip/src/apps/altcp_tls|src/Networking/LwipEthernet/Lwip/src/apps/sntp|src/Display|src/Networking/LwipEthernet/Lwip/src/apps/http|src/Duet3Mini|src/Hardware/SAM4E|src/Pccb|/src/Networking/LwipEthernet/Lwip/src/apps/mqtt|src/Hardware/SAM4S|src/DuetM|src/Networking/LwipEthernet/Lwip/doc" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+					</sourceEntries>
+				</configuration>
+			</storageModule>
+			<storageModule moduleId="org.eclipse.cdt.core.externalSettings">
+				<externalSettings containerId="CANlib;cdt.managedbuild.config.gnu.cross.lib.release.1485070058" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier">
+					<externalSetting>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/CANlib/SAME70_RTOS"/>
+						<entry flags="RESOLVED" kind="libraryFile" name="CANlib" srcPrefixMapping="" srcRootPath=""/>
+					</externalSetting>
+				</externalSettings>
+				<externalSettings containerId="FreeRTOS;cdt.managedbuild.config.gnu.cross.exe.release.487753828.694459458" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier">
+					<externalSetting>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="includePath" name="/FreeRTOS"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/FreeRTOS/SAME70"/>
+						<entry flags="RESOLVED" kind="libraryFile" name="FreeRTOS" srcPrefixMapping="" srcRootPath=""/>
+					</externalSetting>
+				</externalSettings>
+				<externalSettings containerId="RRFLibraries;cdt.managedbuild.config.gnu.cross.lib.release.1693990866.1913177425" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier">
+					<externalSetting>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/RRFLibraries/SAME70_RTOS"/>
+						<entry flags="RESOLVED" kind="libraryFile" name="RRFLibraries" srcPrefixMapping="" srcRootPath=""/>
+					</externalSetting>
+				</externalSettings>
+				<externalSettings containerId="CoreN2G;cdt.managedbuild.config.gnu.cross.lib.release.675522878.1031364120.1670975982.1657433415.1166824645" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier">
+					<externalSetting>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="includePath" name="/CoreN2G"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/CoreN2G/SAME70_CAN_SDHC_USB_RTOS"/>
+						<entry flags="RESOLVED" kind="libraryFile" name="CoreN2G" srcPrefixMapping="" srcRootPath=""/>
+					</externalSetting>
+				</externalSettings>
+				<externalSettings containerId="LibTinyusb;ilg.gnuarmeclipse.managedbuild.cross.config.lib.release.1898036579.564174673" factoryId="org.eclipse.cdt.core.cfg.export.settings.sipplier">
+					<externalSetting>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="includePath" name="/LibTinyusb"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="libraryPath" name="/LibTinyusb/SAME70"/>
+						<entry flags="RESOLVED" kind="libraryFile" name="LibTinyusb" srcPrefixMapping="" srcRootPath=""/>
+					</externalSetting>
+				</externalSettings>
+			</storageModule>
+		</cconfiguration>
+		<cconfiguration id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366.1645191116.1852610203.289083307.712841925.816505277">
+			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366.1645191116.1852610203.289083307.712841925.816505277" moduleId="org.eclipse.cdt.core.settings" name="Duet3_MB6HC_no_S_curve">
+				<macros>
+					<stringMacro name="LinkFlags2" type="VALUE_TEXT" value="-Wl,--end-group -lm"/>
+					<stringMacro name="CoreName" type="VALUE_TEXT" value="CoreN2G"/>
+					<stringMacro name="LinkFlags1" type="VALUE_TEXT" value="-mthumb -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry=Reset_Handler -Wl,--unresolved-symbols=report-all -Wl,--warn-common -Wl,--warn-section-align -Wl,--warn-unresolved-symbols -Wl,--start-group"/>
+				</macros>
+				<externalSettings/>
+				<extensions>
+					<extension id="org.eclipse.cdt.core.ELF" point="org.eclipse.cdt.core.BinaryParser"/>
+					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GCCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GASErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GLDErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+				</extensions>
+			</storageModule>
+			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
+				<configuration artifactExtension="elf" artifactName="Duet3Firmware_MB6HC_no_S_curve" buildArtefactType="org.eclipse.cdt.build.core.buildArtefactType.exe" buildProperties="org.eclipse.cdt.build.core.buildArtefactType=org.eclipse.cdt.build.core.buildArtefactType.exe,org.eclipse.cdt.build.core.buildType=org.eclipse.cdt.build.core.buildType.release" cleanCommand="rm -rf" description="" errorParsers="org.eclipse.cdt.core.GASErrorParser;org.eclipse.cdt.core.GmakeErrorParser;org.eclipse.cdt.core.GLDErrorParser;org.eclipse.cdt.core.CWDLocator;org.eclipse.cdt.core.GCCErrorParser" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366.1645191116.1852610203.289083307.712841925.816505277" name="Duet3_MB6HC_no_S_curve" optionalBuildProperties="org.eclipse.cdt.docker.launcher.containerbuild.property.enablement=null,org.eclipse.cdt.docker.launcher.containerbuild.property.selectedvolumes=,org.eclipse.cdt.docker.launcher.containerbuild.property.volumes=,org.eclipse.cdt.docker.launcher.containerbuild.property.image=null,org.eclipse.cdt.docker.launcher.containerbuild.property.connection=null" parent="cdt.managedbuild.config.gnu.cross.exe.release" postannouncebuildStep="Generating binary file" postbuildStep="arm-none-eabi-objcopy -O binary &quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.elf&quot; &quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.bin&quot; &amp;&amp; CrcAppender &quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.bin&quot;" prebuildStep="touch -c &quot;${workspace_loc:/${ProjName}}/src/Version.cpp&quot;">
+					<folderInfo id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366.1645191116.1852610203.289083307.712841925.816505277." name="/" resourcePath="">
+						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.release.1895052195" name="Cross GCC" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.release">
+							<option id="cdt.managedbuild.option.gnu.cross.path.1510605566" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${ArmGccPath}" valueType="string"/>
+							<option id="cdt.managedbuild.option.gnu.cross.prefix.1571409815" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
+							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.1729660554" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1820733338" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" stopOnErr="false" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1099092220" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
+								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.both.asm.option.include.paths.318564511" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70}&quot;"/>
+								</option>
+								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.55781346" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
+							</tool>
+							<tool commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT} ${INPUTS}" id="cdt.managedbuild.tool.gnu.cross.c.compiler.572908232" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler">
+								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.2075217869" name="Optimization level" superClass="gnu.c.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.c.optimization.level.more" valueType="enumerated"/>
+								<option id="gnu.c.compiler.option.debugging.level.1208736047" name="Debug level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.none" valueType="enumerated"/>
+								<option id="gnu.c.compiler.option.misc.verbose.436756722" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.misc.other.836269854" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -nostdlib -Wdouble-promotion -Werror=return-type -Werror=implicit -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot;" valueType="string"/>
+								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.include.paths.605724110" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/drivers}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/common/utils}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/preprocessor}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/header_files}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/cmsis/same70/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/SAME70}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Networking/LwipEthernet/Lwip}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Networking/LwipEthernet/Lwip/src/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Networking/MQTT/MQTT_C/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
+								</option>
+								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.c.compiler.option.preprocessor.def.symbols.608323710" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" useByScannerDiscovery="false" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="__SAME70Q20B__"/>
+									<listOptionValue builtIn="false" value="RTOS"/>
+									<listOptionValue builtIn="false" value="DUET3_MB6HC"/>
+									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
+									<listOptionValue builtIn="false" value="noexcept="/>
+								</option>
+								<option id="gnu.c.compiler.option.dialect.std.1422059822" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
+								<option id="gnu.c.compiler.option.dialect.flags.1205640883" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
+								<option id="gnu.c.compiler.option.warnings.wwritestrings.1332731299" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.wundef.1838642090" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.c.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.toerrors.1371338514" name="Warnings as errors (-Werror)" superClass="gnu.c.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1224888322" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
+							</tool>
+							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.2003371145" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.archiver.862780034" name="Cross GCC Archiver" superClass="cdt.managedbuild.tool.gnu.cross.archiver"/>
+							<tool command="gcc" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT} ${LinkFlags1} ${INPUTS} ${EXTRA_FLAGS} ${LinkFlags2}" id="cdt.managedbuild.tool.gnu.cross.cpp.linker.1727376032" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker">
+								<option id="gnu.cpp.link.option.nostdlibs.833392182" name="No startup or default libs (-nostdlib)" superClass="gnu.cpp.link.option.nostdlibs" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.link.option.paths.1762819733" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" useByScannerDiscovery="false" valueType="libPaths">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/SAME70_CAN_SDHC_USB_RTOS}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/SAME70_RTOS}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/SAME70}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/SAME70_RTOS}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/SAME70}&quot;"/>
+								</option>
+								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.link.option.libs.222765224" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
+									<listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="LibTinyusb"/>
+									<listOptionValue builtIn="false" value="CoreN2G"/>
+									<listOptionValue builtIn="false" value="RRFLibraries"/>
+									<listOptionValue builtIn="false" value="FreeRTOS"/>
+									<listOptionValue builtIn="false" value="CANlib"/>
+									<listOptionValue builtIn="false" value="supc++"/>
+								</option>
+								<option id="gnu.cpp.link.option.flags.942805263" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="--specs=nosys.specs -Os -Wl,--gc-sections -Wl,--fatal-warnings -Wl,--no-warn-rwx-segment -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -T&quot;${workspace_loc:/${ProjName}/src/Hardware/SAME70/same70q20b_flash.ld}&quot; -Wl,-Map,&quot;${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map&quot;" valueType="string"/>
+								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.593710437" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
+									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
+									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
+								</inputType>
+							</tool>
+							<tool command="g++" id="cdt.managedbuild.tool.gnu.cross.cpp.compiler.1875476617" name="Cross G++ Compiler" superClass="cdt.managedbuild.tool.gnu.cross.cpp.compiler">
+								<option id="gnu.cpp.compiler.option.optimization.level.1471654327" name="Optimization level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.more" valueType="enumerated"/>
+								<option id="gnu.cpp.compiler.option.debugging.level.1810809934" name="Debug level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
+								<option id="gnu.cpp.compiler.option.other.verbose.324383651" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.other.other.1155414346" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="true" value="-c -mcpu=cortex-m7 -mthumb -fno-math-errno -mfpu=fpv5-d16 -mfloat-abi=hard -mfp16-format=ieee -mno-unaligned-access -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fexceptions -nostdlib -Wdouble-promotion -Wfloat-conversion -Werror=return-type -Wsuggest-override -fsingle-precision-constant &quot;-Wa,-ahl=$*.s&quot; -fstack-usage" valueType="string"/>
+								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.include.paths.2107939290" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/common/utils}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/cmsis/same70/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/SAME70}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/preprocessor}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/header_files}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/SAM4S_4E_E70/asf/sam/drivers}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Hardware/SAME70}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Networking}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Networking/LwipEthernet/Lwip}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Networking/LwipEthernet/Lwip/src/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Networking/MQTT/MQTT_C/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/WiFiSocketServerRTOS/src/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM7/r0p1}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/src}&quot;"/>
+								</option>
+								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.preprocessor.def.214210156" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="__SAME70Q20B__"/>
+									<listOptionValue builtIn="false" value="RTOS"/>
+									<listOptionValue builtIn="false" value="DUET3_MB6HC"/>
+									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
+									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
+									<listOptionValue builtIn="false" value="NO_S_CURVE=1"/>
+								</option>
+								<option id="gnu.cpp.compiler.option.dialect.std.379827873" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
+								<option id="gnu.cpp.compiler.option.dialect.flags.263987495" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.warnings.wundef.406236084" name="An undefined identifier is evaluated in an #if directive (-Wundef)" superClass="gnu.cpp.compiler.option.warnings.wundef" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wsignpromo.1545554371" name="Overload resolution promotes unsigned to signed type (-Wsign-promo)" superClass="gnu.cpp.compiler.option.warnings.wsignpromo" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wshadow.48365912" name="Local symbol shadows upper scope symbol (-Wshadow)" superClass="gnu.cpp.compiler.option.warnings.wshadow" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.wnoexccept.1373715366" name="Noexcept false but never throw exception (-Wnoexcept)" superClass="gnu.cpp.compiler.option.warnings.wnoexccept" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.warnings.toerrors.209435621" name="Warnings as errors (-Werror)" superClass="gnu.cpp.compiler.option.warnings.toerrors" useByScannerDiscovery="false" value="true" valueType="boolean"/>
+								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1107505089" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 						</toolChain>
 					</folderInfo>
@@ -2151,17 +2276,15 @@
 		</configuration>
 		<configuration configurationName="Duet3Mini5plus"/>
 		<configuration configurationName="Duet2_SBC"/>
-		<configuration configurationName="DuetMaestro"/>
 		<configuration configurationName="Duet3_MB6XD">
+			<resource resourceType="PROJECT" workspacePath="/RepRapFirmware"/>
+		</configuration>
+		<configuration configurationName="Duet3_MB6HC_no_S_curve">
 			<resource resourceType="PROJECT" workspacePath="/RepRapFirmware"/>
 		</configuration>
 		<configuration configurationName="Duet3MiniATE"/>
 		<configuration configurationName="Duet3Mini5plus_Debug"/>
 		<configuration configurationName="FMDC_V03">
-			<resource resourceType="PROJECT" workspacePath="/RepRapFirmware"/>
-		</configuration>
-		<configuration configurationName="PCCB_10"/>
-		<configuration configurationName="Duet3_MB6HC_S_curve">
 			<resource resourceType="PROJECT" workspacePath="/RepRapFirmware"/>
 		</configuration>
 		<configuration configurationName="Duet3_MB6HC_no_SD"/>

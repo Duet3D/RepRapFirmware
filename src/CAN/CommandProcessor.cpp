@@ -66,7 +66,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 		// Fetch the firmware file from the local SD card or SBC
-		FileStore * const f = reprap.GetPlatform().OpenFile(FIRMWARE_DIRECTORY, fname.c_str(), OpenMode::read);
+		FileStore *_ecv_null const f = reprap.GetPlatform().OpenFile(FIRMWARE_DIRECTORY, fname.c_str(), OpenMode::read);
 		if (f != nullptr)
 		{
 			fileLength = f->Length();
@@ -162,7 +162,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 }
 
 // Handle an input state change message
-static void HandleInputStateChanged(const CanMessageInputChangedNew& msg, CanAddress src) noexcept
+static void HandleInputStateChanged(const CanMessageInputChangedV1& msg, CanAddress src) noexcept
 {
 	bool endstopStatesChanged = false;
 	Platform& p = reprap.GetPlatform();
@@ -204,7 +204,7 @@ static void HandleInputStateChanged(const CanMessageInputChangedNew& msg, CanAdd
 
 #if SUPPORT_REMOTE_COMMANDS
 
-static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& reply, uint8_t& extra)
+static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& reply, uint8_t& extra) noexcept
 {
 	switch (msg.type)
 	{
@@ -221,27 +221,6 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 
 	case CanMessageReturnInfo::typeBootloaderName:
 		reply.copy("(n/a)");
-		break;
-
-	case CanMessageReturnInfo::typeM408:
-		// For now we ignore the parameter and always return the same set of info
-		// This command is only used by the old ATE, which needs the board type and the voltages
-		reply.printf("{\"firmwareElectronics\":\"Duet 3 %.0s\"", BOARD_NAME);
-#if HAS_VOLTAGE_MONITOR
-		{
-			const MinCurMax voltages = reprap.GetPlatform().GetPowerVoltages();
-			reply.catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}",
-					(double)voltages.minimum, (double)voltages.current, (double)voltages.maximum);
-		}
-#endif
-#if HAS_12V_MONITOR
-		{
-			const MinCurMax voltages = reprap.GetPlatform().GetV12Voltages();
-			reply.catf(",\"v12\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}",
-					(double)voltages.minimum, (double)voltages.current, (double)voltages.maximum);
-		}
-#endif
-		reply.cat('}');
 		break;
 
 	case CanMessageReturnInfo::typeBoardUniqueId:
@@ -265,7 +244,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 	return GCodeResult::ok;
 }
 
-static GCodeResult InitiateFirmwareUpdate(const CanMessageUpdateYourFirmware& msg, const StringRef& reply)
+static GCodeResult InitiateFirmwareUpdate(const CanMessageUpdateYourFirmware& msg, const StringRef& reply) noexcept
 {
 	if (msg.boardId != CanInterface::GetCanAddress() || msg.invertedBoardId != (uint8_t)~CanInterface::GetCanAddress() || (msg.module != 0 && msg.module != 3))
 	{
@@ -293,20 +272,21 @@ static GCodeResult InitiateFirmwareUpdate(const CanMessageUpdateYourFirmware& ms
 // Process a received broadcast or request message. Don't free the message buffer
 void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 {
-	if (buf->id.Src() != CanInterface::GetCanAddress())								// I don't think we should receive our own broadcasts, but in case we do...
+	if (buf->id.Src() != CanInterface::GetCanAddress())				// I don't think we should receive our own messages, but in case we do...
 	{
-		if (   buf->id.Dst() != CanId::BroadcastAddress
-			&& buf->id.MsgType() != CanMessageType::fansReport						// don't flash whenever we receive a regular status message
-			&& buf->id.MsgType() != CanMessageType::heatersStatusReport
-			&& buf->id.MsgType() != CanMessageType::boardStatusReport
-			&& buf->id.MsgType() != CanMessageType::driversStatusReport
-			&& buf->id.MsgType() != CanMessageType::filamentMonitorsStatusReportNew2
+		const CanMessageType id = buf->id.MsgType();
+		if (   buf->id.Dst() != CanId::BroadcastAddress				// ignore broadcast messages e.g. temperature reports
+			&& id != CanMessageType::fansReport						// don't flash whenever we receive a regular status message
+			&& id != CanMessageType::heatersStatusReport
+			&& id != CanMessageType::boardStatusReportV0
+			&& id != CanMessageType::boardStatusReportV1
+			&& id != CanMessageType::driversStatusReport
+			&& id != CanMessageType::filamentMonitorsStatusReportV2
 		   )
 		{
 			reprap.GetPlatform().OnProcessingCanMessage();
 		}
 
-		const CanMessageType id = buf->id.MsgType();
 #if SUPPORT_REMOTE_COMMANDS
 		if (CanInterface::InExpansionMode())
 		{
@@ -331,7 +311,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				// Check for duplicate and out-of-sequence message
 				// We can get out-of-sequence messages because of a bug in the CAN hardware; so use only the sequence number to detect duplicates
 				{
-					const int8_t seq = buf->msg.moveLinearShaped.seq;
+					const uint8_t seq = buf->msg.moveLinearShaped.seq;
 					if (((seq + 1) & CanMessageMovementLinearShaped::SeqMask) == expectedSeq)
 					{
 						++duplicateMotionMessages;
@@ -409,17 +389,17 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetHeat().ConfigureHeater(buf->msg.generic, replyRef);
 				break;
 
-			case CanMessageType::heaterFeedForwardNew:
+			case CanMessageType::heaterFeedForwardV1:
 				requestId = CanRequestIdNoReplyNeeded;
-				rslt = reprap.GetHeat().ApplyFeedForward(buf->msg.heaterFeedForwardNew, replyRef);
+				rslt = reprap.GetHeat().ApplyFeedForward(buf->msg.heaterFeedForwardV1, replyRef);
 				break;
 
-			case CanMessageType::heaterModelNewNew:
-				requestId = buf->msg.heaterModelNewNew.requestId;
-				rslt = reprap.GetHeat().ProcessM307New(buf->msg.heaterModelNewNew, replyRef);
+			case CanMessageType::heaterModelV3:
+				requestId = buf->msg.heaterModelV3.requestId;
+				rslt = reprap.GetHeat().ProcessM307(buf->msg.heaterModelV3, replyRef);
 				break;
 
-			case CanMessageType::setHeaterTemperature:
+			case CanMessageType::setHeaterTemperatureV1:
 				requestId = buf->msg.setTemp.requestId;
 				rslt = reprap.GetHeat().SetTemperature(buf->msg.setTemp, replyRef);
 				break;
@@ -439,7 +419,12 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetHeat().SetHeaterMonitors(buf->msg.setHeaterMonitors, replyRef);
 				break;
 
-			case CanMessageType::m308New:
+			case CanMessageType::setDefaultHeaterModel:
+				reprap.GetHeat().SetDefaultHeaterModel(*buf);
+				CanInterface::SendResponseNoFree(buf);
+				return;
+
+			case CanMessageType::m308V1:
 				requestId = buf->msg.generic.requestId;
 				rslt = reprap.GetHeat().ProcessM308(buf->msg.generic, replyRef);
 				break;
@@ -508,9 +493,9 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetMove().EutSetRemotePressureAdvance(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
 				break;
 
-			case CanMessageType::setInputShapingNew:
-				requestId = buf->msg.setInputShapingNew.requestId;
-				rslt = reprap.GetMove().EutSetInputShaping(buf->msg.setInputShapingNew, buf->dataLength, replyRef);
+			case CanMessageType::setInputShapingV1:
+				requestId = buf->msg.setInputShapingV1.requestId;
+				rslt = reprap.GetMove().EutSetInputShaping(buf->msg.setInputShapingV1, buf->dataLength, replyRef);
 				break;
 
 			case CanMessageType::m569:
@@ -528,14 +513,14 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetMove().EutProcessM569Point7(buf->msg.generic, replyRef);
 				break;
 
-			case CanMessageType::createInputMonitorNew:
-				requestId = buf->msg.createInputMonitorNew.requestId;
-				rslt = InputMonitor::Create(buf->msg.createInputMonitorNew, buf->dataLength, replyRef, extra);
+			case CanMessageType::createInputMonitorV1:
+				requestId = buf->msg.createInputMonitorV1.requestId;
+				rslt = InputMonitor::Create(buf->msg.createInputMonitorV1, buf->dataLength, replyRef, extra);
 				break;
 
-			case CanMessageType::changeInputMonitorNew:
-				requestId = buf->msg.changeInputMonitorNew.requestId;
-				rslt = InputMonitor::Change(buf->msg.changeInputMonitorNew, replyRef, extra);
+			case CanMessageType::changeInputMonitorV1:
+				requestId = buf->msg.changeInputMonitorV1.requestId;
+				rslt = InputMonitor::Change(buf->msg.changeInputMonitorV1, replyRef, extra);
 				break;
 
 			case CanMessageType::enableStallEndstop:
@@ -591,6 +576,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				requestId = CanRequestIdAcceptAlways;
 				reply.printf("Board %u received unknown msg type %u", CanInterface::GetCanAddress(), (unsigned int)buf->id.MsgType());
 				rslt = GCodeResult::error;
+				break;
 			}
 
 			if (requestId != CanRequestIdNoReplyNeeded)				// if a reply is needed
@@ -628,9 +614,9 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			// Handle messages received in normal operation mode
 			switch (id)
 			{
-			case CanMessageType::inputStateChangedNew:
+			case CanMessageType::inputStateChangedV1:
 				//TODO we should preferably handle this one using a separate high-priority queue or buffer
-				HandleInputStateChanged(buf->msg.inputChangedNew, buf->id.Src());
+				HandleInputStateChanged(buf->msg.inputChangedV1, buf->id.Src());
 				break;
 
 			case CanMessageType::firmwareBlockRequest:
@@ -649,7 +635,8 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				reprap.GetExpansion().ProcessDriveStatusReport(buf);
 				break;
 
-			case CanMessageType::boardStatusReport:
+			case CanMessageType::boardStatusReportV0:
+			case CanMessageType::boardStatusReportV1:
 				reprap.GetExpansion().ProcessBoardStatusReport(buf);
 				break;
 
@@ -661,16 +648,16 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				reprap.GetFansManager().ProcessRemoteFanRpms(buf->id.Src(), buf->msg.fansReport);
 				break;
 
-			case CanMessageType::announceOld:
+			case CanMessageType::announceV0:
 				reprap.GetExpansion().ProcessAnnouncement(buf, false);
 				break;
 
-			case CanMessageType::announceNew:
+			case CanMessageType::announceV1:
 				reprap.GetExpansion().ProcessAnnouncement(buf, true);
 				break;
 
-			case CanMessageType::filamentMonitorsStatusReportNew2:
-				FilamentMonitor::UpdateRemoteFilamentStatus(buf->id.Src(), buf->msg.filamentMonitorsStatusNew2);
+			case CanMessageType::filamentMonitorsStatusReportV2:
+				FilamentMonitor::UpdateRemoteFilamentStatus(buf->id.Src(), buf->msg.filamentMonitorsStatusV2);
 				break;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -705,7 +692,6 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 					CanMessageStandardReply * const msg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
 					msg->resultCode = (uint16_t)GCodeResult::ok;
-					msg->extra = 0;
 					msg->text[0] = 0;
 					buf->dataLength = msg->GetActualDataLength(0);
 					msg->fragmentNumber = 0;

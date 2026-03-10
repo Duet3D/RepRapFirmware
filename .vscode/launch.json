@@ -1,0 +1,140 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "[Duet3_MB6HC] Build, Flash & Debug",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Duet3_MB6HC/Duet3Firmware_MB6HC.elf",
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+            "miDebuggerPath": "arm-none-eabi-gdb",
+            "miDebuggerServerAddress": "localhost:3333",
+            "preLaunchTask": "Build Duet3_MB6HC",
+            "setupCommands": [
+                {
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "postRemoteConnectCommands": [
+                {
+                    "text": "monitor reset halt"
+                },
+                {
+                    "text": "load"
+                },
+                {
+                    "text": "monitor reset halt"
+                }
+            ]
+        },
+        {
+            "name": "[Duet3_MB6HC] Debug Only",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Duet3_MB6HC/Duet3Firmware_MB6HC.elf",
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+            "miDebuggerPath": "arm-none-eabi-gdb",
+            "miDebuggerServerAddress": "localhost:3333",
+            "setupCommands": [
+                {
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "[Duet3_MB6XD] Build, Flash & Debug",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Duet3_MB6XD/Duet3Firmware_MB6XD.elf",
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+            "miDebuggerPath": "arm-none-eabi-gdb",
+            "miDebuggerServerAddress": "localhost:3333",
+            "preLaunchTask": "Build Duet3_MB6XD",
+            "setupCommands": [
+                {
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "postRemoteConnectCommands": [
+                {
+                    "text": "monitor reset halt"
+                },
+                {
+                    "text": "load"
+                },
+                {
+                    "text": "monitor reset halt"
+                }
+            ]
+        },
+        {
+            "name": "[Duet3_MB6XD] Debug Only",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Duet3_MB6XD/Duet3Firmware_MB6XD.elf",
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+            "miDebuggerPath": "arm-none-eabi-gdb",
+            "miDebuggerServerAddress": "localhost:3333",
+            "setupCommands": [
+                {
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },        
+        {
+            "name": "[Duet3Mini5plus] Build, Flash & Debug",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Duet3Mini5plus/Duet3Firmware_Mini5plus.elf",
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+            "miDebuggerPath": "arm-none-eabi-gdb",
+            "miDebuggerServerAddress": "localhost:3333",
+            "preLaunchTask": "Build Duet3Mini5plus",
+            "setupCommands": [
+                {
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ],
+            "postRemoteConnectCommands": [
+                {
+                    "text": "monitor reset halt"
+                },
+                {
+                    "text": "load"
+                },
+                {
+                    "text": "monitor reset halt"
+                }
+            ]
+        },
+        {
+            "name": "[Duet3Mini5plus] Debug Only",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Duet3Mini5plus/Duet3Firmware_Mini5plus.elf",
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+            "miDebuggerPath": "arm-none-eabi-gdb",
+            "miDebuggerServerAddress": "localhost:3333",
+            "setupCommands": [
+                {
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+    ]
+}

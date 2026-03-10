@@ -19,7 +19,7 @@ class VariableSet;
 class LineReader
 {
 public:
-	LineReader(FileStore *pf) noexcept : f(pf), charsRead(0), currentCharacter(0), fileFinished(false) { }
+	explicit LineReader(FileStore *pf) noexcept : f(pf), charsRead(0), currentCharacter(0), fileFinished(false) { }
 
 	// Read a character into currentCharacter. If we reach end of file or end of line, set the character to 0 and fileFinished to true.
 	void ReadChar() noexcept;
@@ -46,6 +46,7 @@ class ExpressionParser
 {
 public:
 	ExpressionParser(const GCodeBuffer *_ecv_null p_gb, const char *_ecv_array text, const char *_ecv_array textLimit, int p_column = -1) noexcept;
+	ExpressionParser(const GCodeBuffer *_ecv_null p_gb, const char *_ecv_array text) noexcept;
 
 	ExpressionValue Parse(bool evaluate = true) THROWS(GCodeException);
 	bool ParseBoolean() THROWS(GCodeException);
@@ -77,12 +78,12 @@ private:
 	void __attribute__((noinline)) ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeException);
 
 	void ParseCharacter(ExpressionValue& rslt) THROWS(GCodeException);
-	void ParseGeneralArray(ExpressionValue& firstElementAndResult, bool evaluate) THROWS(GCodeException);
+	void ParseGeneralArray(ExpressionValue& firstElementAndResult, bool evaluate, char closingBracket) THROWS(GCodeException);
 	void ParseArray(size_t& length, function_ref<void(ExpressionValue& ev, size_t index) THROWS(GCodeException)> processElement) THROWS(GCodeException);
 
 	time_t __attribute__((noinline)) ParseDateTime(const char *_ecv_array s) const THROWS(GCodeException);
 
-	void __attribute__((noinline)) GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *_ecv_array name, ObjectExplorationContext& context, bool isParameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException);
+	void __attribute__((noinline)) GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *_ecv_array name, ObjectExplorationContext& context, bool isParameter) THROWS(GCodeException);
 
 	void ConvertToFloat(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToInteger(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);

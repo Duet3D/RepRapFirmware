@@ -35,7 +35,7 @@ public:
 	void ConnectionError(err_t err) noexcept;
 
 	// Inherited members of the Socket class
-	void Init(SocketNumber s, TcpPort serverPort, NetworkProtocol p, bool outgoing = false) noexcept;
+	void Init(SocketNumber s, TcpPort serverPort, NetworkProtocol p, bool p_outgoing = false) noexcept;
 	void TerminateAndDisable() noexcept override;
 	void Poll() noexcept override;
 	void Close() noexcept override;

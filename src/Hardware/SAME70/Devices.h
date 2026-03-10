@@ -22,6 +22,9 @@ extern AsyncSerial serialWiFi;
 #include "SerialCDC.h"
 
 extern SerialCDC serialUSB;
+#ifdef SERIAL_USB2_DEVICE
+extern SerialCDC serialUSB2;
+#endif
 
 void DeviceInit() noexcept;
 void StopAnalogTask() noexcept;

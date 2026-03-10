@@ -107,7 +107,7 @@ GCodeResult SimpleFilamentMonitor::Configure(const CanMessageGenericParser& pars
 }
 
 // Store collected data in a CAN message slot
-void SimpleFilamentMonitor::GetLiveData(FilamentMonitorDataNew2& data) const noexcept
+void SimpleFilamentMonitor::GetLiveData(FilamentMonitorDataV2& data) const noexcept
 {
 	data.ClearReservedFields();
 	data.position = 0;
@@ -118,7 +118,7 @@ void SimpleFilamentMonitor::GetLiveData(FilamentMonitorDataNew2& data) const noe
 
 #if SUPPORT_CAN_EXPANSION
 
-void SimpleFilamentMonitor::UpdateLiveData(const FilamentMonitorDataNew2& data) noexcept
+void SimpleFilamentMonitor::UpdateLiveData(const FilamentMonitorDataV2& data) noexcept
 {
 	// nothing needed here
 }

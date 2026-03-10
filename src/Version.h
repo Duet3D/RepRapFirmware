@@ -12,11 +12,11 @@
 
 #ifndef VERSION
 // Note: the complete VERSION string must be in standard version number format and must not contain spaces! This is so that DWC can parse it.
-# define MAIN_VERSION	"3.6.2-beta.1+3"
+# define MAIN_VERSION	"3.7.0-alpha.2"
 # ifdef USE_CAN0
 #  define VERSION_SUFFIX	"(CAN0)"
-# elif defined(SUPPORT_S_CURVE) && SUPPORT_S_CURVE
-#  define VERSION_SUFFIX	"(S-curve)"
+# elif defined(NO_S_CURVE)
+#  define VERSION_SUFFIX	"(no 3rd order motion)"
 # else
 #  define VERSION_SUFFIX	""
 # endif
@@ -25,5 +25,7 @@
 
 extern const char *_ecv_array const DateText;
 extern const char *_ecv_array const TimeSuffix;
+
+#define AUTHORS "reprappro, dc42, chrishamm, t3p3, dnewman, printm3d"
 
 #endif /* SRC_VERSION_H_ */

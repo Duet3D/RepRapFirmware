@@ -114,6 +114,13 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	try
 	{
+#if HAS_SBC_INTERFACE
+		if (gb.IsBinary() && gb.HadOverflow())
+		{
+			// Too long G-codes in SBC mode are not stored to avoid access to invalid memory regions, so there are no details available here
+			throw GCodeException("GCode command too long");
+		}
+#endif
 		switch (gb.GetCommandLetter())
 		{
 		case 'G':
@@ -604,7 +611,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 // Return true if the M-code number passed is a request for status
 static bool IsStatusRequestMCode(int code) noexcept
 {
-	return code == 105 || code == 109 || code == 114 || code == 115 || code == 122 || code == 408 || code == 409;
+	return code == 105 || code == 109 || code == 114 || code == 115 || code == 122 || code == 409;
 }
 
 bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
@@ -730,7 +737,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_SCANNING_PROBES
 			&& code != 558
 #endif
-			&& code != 569 && code != 586 && code != 587		// these are the only M-codes we implement that can have fractional parts
+			&& code != 140 && code != 569 && code != 581 && code != 586 && code != 587		// these are the only M-codes we implement that can have fractional parts
 #if SUPPORT_PHASE_STEPPING
 			&& code != 970
 #endif
@@ -1688,7 +1695,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					String<MaxFilenameLength> filename;
 					gb.GetQuotedString(filename.GetRef());
-					DoFileMacroWithParameters(gb, filename.c_str(), true, code);
+					if (!DoFileMacroWithParameters(gb, filename.c_str(), false, code))
+					{
+						reply.printf("Macro file %s not found", filename.c_str());
+						result = GCodeResult::error;
+					}
 				}
 				else if (gb.Seen('R'))
 				{
@@ -1821,8 +1832,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						UnlockMovement(gb);							// allow babystepping and pausing while heating
 					}
 				}
-
-				// no break
+				[[fallthrough]];
 			case 104:
 				// New behaviour from 1.20beta12:
 				// M109 Snnn
@@ -2068,7 +2078,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 118:	// Echo message on host
 				{
 					gb.MustSee('S');
-					String<MaxGCodeLength> message;
+					String<MaxGCodeStringLength> message;
 					gb.GetQuotedString(message.GetRef());
 
 					MessageType type = GenericMessage;
@@ -2106,6 +2116,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_MQTT
 						case 6:		// MQTT
 							type = MqttMessage;
+							break;
+#endif
+#ifdef SERIAL_USB2_DEVICE
+						case 7:		// second USB channel
+							type = Usb2Message;
 							break;
 #endif
 						default:
@@ -2146,7 +2161,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_MQTT
 					if ((type & MqttMessage) && (result != GCodeResult::error))
 					{
-						String<MaxGCodeLength> topic;
+						String<MaxGCodeStringLength> topic;
 						gb.MustSee('T');
 						gb.GetQuotedString(topic.GetRef());
 
@@ -2224,14 +2239,50 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			// M135 (set PID sample interval) is no longer supported
 
-			case 140: // Bed temperature
+			case 140: // Bed temperature; also M140.1 to set bed heater control list
+				if (gb.GetCommandFraction() == 1)
+				{
+					Heat& heat = reprap.GetHeat();
+
+					if (gb.Seen('S'))
+					{
+						// Set bed heaters to control by M140 S/R without explicit P parameter. S-1 clears the list
+						int32_t slots[MaxBedHeaters];
+						size_t slotCount = MaxBedHeaters;
+						gb.GetIntArray(slots, slotCount, false);
+						heat.SetBedHeaterControlMask(BedIndicesBitmap::MakeFromArray(slots, slotCount));
+					}
+					else
+					{
+						// Report list of controlled bed heater slots
+						const BedIndicesBitmap mask = heat.GetBedHeaterControlMask();
+						bool first = true;
+
+						reply.copy("Controlled bed heater slots:");
+						for (size_t i = 0; i < MaxBedHeaters; i++)
+						{
+							if (mask.IsBitSet(i))
+							{
+								reply.catf("%s %u", first ? "" : ",", i);
+								first = false;
+							}
+						}
+						if (first)
+						{
+							reply.cat(" none");
+						}
+					}
+					break;
+				}
+				[[fallthrough]];
 			case 141: // Chamber temperature
 				{
 					Heat& heat = reprap.GetHeat();
 					bool seen = false;
+					const bool seenP = gb.Seen('P');
 
 					// Check if the heater index is passed
-					const unsigned int index = gb.Seen('P') ? gb.GetLimitedUIValue('P', (code == 140) ? MaxBedHeaters : MaxChamberHeaters) : 0;
+					const unsigned int index = seenP ? gb.GetLimitedUIValue('P', (code == 140) ? MaxBedHeaters : MaxChamberHeaters) : 0;
 
 					// See if the heater number is being set
 					if (gb.Seen('H'))
@@ -2259,7 +2310,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
-					const int8_t currentHeater = (code == 141) ? heat.GetChamberHeater(index) : heat.GetBedHeater(index);
+					const int currentHeater = (code == 141) ? heat.GetChamberHeater(index) : heat.GetBedHeater(index);
 					const char *_ecv_array const heaterName = (code == 141) ? "chamber" : "bed";
 
 					// Active temperature
@@ -2267,24 +2318,59 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						seen = true;
 						const float temperature = gb.GetFValue();
-						if (currentHeater < 0)
+						if (code == 140 && !seenP)
 						{
-							if (temperature > 0.0)							// turning off a non-existent bed or chamber heater is not an error
+							// Apply to all bed heater indices in the control mask
+							const BedIndicesBitmap mask = heat.GetBedHeaterControlMask();
+							for (unsigned int i = 0; i < MaxBedHeaters; ++i)
 							{
-								reply.printf("No %s heater has been configured for slot %d", heaterName, index);
-								result = GCodeResult::error;
+								if (mask.IsBitSet(i))
+								{
+									const int heater = heat.GetBedHeater(i);
+									if (heater < 0)
+									{
+										if (temperature > 0.0)				// turning off a non-existent bed heater is not an error
+										{
+											reply.lcatf("No bed heater has been configured for slot %u", i);
+											result = GCodeResult::error;
+										}
+									}
+									else if (temperature <= NEARLY_ABS_ZERO)
+									{
+										heat.SwitchOff(heater);
+									}
+									else
+									{
+										heat.SetActiveTemperature(heater, temperature);		// may throw
+										if (result == GCodeResult::ok)
+										{
+											result = heat.SetActiveOrStandby(heater, nullptr, true, reply);
+										}
+									}
+								}
 							}
 						}
 						else
 						{
-							if (temperature <= NEARLY_ABS_ZERO)
+							if (currentHeater < 0)
 							{
-								heat.SwitchOff(currentHeater);
+								if (temperature > 0.0)							// turning off a non-existent bed or chamber heater is not an error
+								{
+									reply.printf("No %s heater has been configured for slot %d", heaterName, index);
+									result = GCodeResult::error;
+								}
 							}
 							else
 							{
-								heat.SetActiveTemperature(currentHeater, temperature);		// may throw
-								result = heat.SetActiveOrStandby(currentHeater, nullptr, true, reply);
+								if (temperature <= NEARLY_ABS_ZERO)
+								{
+									heat.SwitchOff(currentHeater);
+								}
+								else
+								{
+									heat.SetActiveTemperature(currentHeater, temperature);		// may throw
+									result = heat.SetActiveOrStandby(currentHeater, nullptr, true, reply);
+								}
 							}
 						}
 					}
@@ -2293,14 +2379,39 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (gb.Seen('R'))
 					{
 						seen = true;
-						if (currentHeater < 0)
+						const float standbyTemp = gb.GetFValue();
+						if (code == 140 && !seenP)
 						{
-							reply.printf("No %s heater has been configured for slot %d", heaterName, index);
-							result = GCodeResult::error;
+							// Apply to all bed heater indices in the control mask
+							const BedIndicesBitmap mask = heat.GetBedHeaterControlMask();
+							for (unsigned int i = 0; i < MaxBedHeaters; ++i)
+							{
+								if (mask.IsBitSet(i))
+								{
+									const int heater = heat.GetBedHeater(i);
+									if (heater < 0)
+									{
+										reply.lcatf("No bed heater has been configured for slot %u", i);
+										result = GCodeResult::error;
+									}
+									else
+									{
+										heat.SetStandbyTemperature(heater, standbyTemp);
+									}
+								}
+							}
 						}
 						else
 						{
-							heat.SetStandbyTemperature(currentHeater, gb.GetFValue());
+							if (currentHeater < 0)
+							{
+								reply.printf("No %s heater has been configured for slot %d", heaterName, index);
+								result = GCodeResult::error;
+							}
+							else
+							{
+								heat.SetStandbyTemperature(currentHeater, standbyTemp);
+							}
 						}
 					}
 
@@ -2458,8 +2569,25 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
+#if SUPPORT_S_CURVE
+					if (frac < 1 && gb.Seen('T'))
+					{
+						if (!LockAllMovementSystemsAndWaitForStandstill(gb))
+						{
+							return false;
+						}
+						move.SetAccelerationTime(gb.GetNonNegativeFValue());
+						seen = true;
+					}
+#endif
 					if (seen)
 					{
+#if SUPPORT_S_CURVE
+						if (frac < 1)
+						{
+							move.UpdateSCurveFlagAndJerk();
+						}
+#endif
 						reprap.MoveUpdated();
 					}
 					else
@@ -2476,7 +2604,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(move.Acceleration(ExtruderToLogicalDrive(extruder), frac == 1)));
 							sep = ':';
 						}
+#if SUPPORT_S_CURVE
+						if (frac < 1)
+						{
+							reply.catf(", acceleration time %.2f sec", (double)(move.AccelerationTime() * (1.0/StepClockRate)));
+						}
+#endif
 					}
+
+#if SUPPORT_S_CURVE
+					if (frac < 1 && move.AccelerationTime() != 0.0 && !move.IsUsingSCurve())
+					{
+						reply.lcat("Acceleration time (S-curve acceleration) is disabled because phase stepping is not enabled");
+						result = GCodeResult::warning;
+					}
+#endif
 				}
 				break;
 
@@ -3033,46 +3175,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 404: // Filament width. See also M200.
-				// TODO support per-extruder values
 				if (gb.Seen('N'))
 				{
 					platform.SetFilamentWidth(gb.GetPositiveFValue());
 					break;
 				}
-				// no break
+				[[fallthrough]];
 			case 407:
 				reply.printf("Filament width %.2fmm", (double)platform.GetFilamentWidth());
 				break;
 
-			case 408: // Get status in JSON format
-				{
-#if 0	// removed support for M408 with S > 1 because we ran out of flash memory on Duet 2
-					const unsigned int type = gb.Seen('S') ? gb.GetUIValue() : 0;
-#else
-					const unsigned int type = gb.Seen('S') ? gb.GetLimitedUIValue('S', 2) : 0;
-#endif
-#if SUPPORT_CAN_EXPANSION
-					const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : 0;
-					if (board != 0)
-					{
-						result = CanInterface::RemoteM408(board, type, gb, reply);
-						break;
-					}
-#endif
-					const int seq = gb.Seen('R') ? gb.GetIValue() : -1;
-
-					outBuf = GenerateJsonStatusResponse(type, seq, (&gb == AuxGCode()) ? ResponseSource::AUX : ResponseSource::Generic);
-					if (outBuf == nullptr)
-					{
-						result = GCodeResult::notFinished;			// we ran out of buffers, so try again later
-					}
-					else if (type == 0)
-					{
-						gb.RespondedToStatusRequest(StatusReportType::m408);
-						gb.ResetReportDueTimer();
-					}
-				}
-				break;
+			// Support for M408 was withdrawn at version 3.7
 
 #if SUPPORT_OBJECT_MODEL
 			case 409: // Get object model values in JSON format

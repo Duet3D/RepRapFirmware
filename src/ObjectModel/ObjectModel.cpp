@@ -29,20 +29,26 @@ ExpressionValue::ExpressionValue(const MacAddress& mac) noexcept : type((uint32_
 }
 
 // Append a string representation of this value to a string
-void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
+void ExpressionValue::AppendAsString(const StringRef& str, bool quoteStrings) const noexcept
 {
 	switch (GetType())
 	{
 	case TypeCode::Char:
+		if (quoteStrings) { str.cat('\''); }
 		str.cat(cVal);
+		if (quoteStrings) { str.cat('\''); }
 		break;
 
 	case TypeCode::CString:
+		if (quoteStrings) { str.cat('"'); }
 		str.cat(sVal);
+		if (quoteStrings) { str.cat('"'); }
 		break;
 
 	case TypeCode::HeapString:
+		if (quoteStrings) { str.cat('"'); }
 		str.cat(shVal.Get().Ptr());
+		if (quoteStrings) { str.cat('"'); }
 		break;
 
 	case TypeCode::Float:
@@ -61,7 +67,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		str.catf("%" PRIi32, uVal);			// convert signed integer to string
 		break;
 
-	case TypeCode::Bool:
+	case TypeCode::Bool_tc:
 		str.cat((bVal) ? "true" : "false");	// convert bool to string
 		break;
 
@@ -108,7 +114,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 
 #if SUPPORT_CAN_EXPANSION
 	case TypeCode::CanExpansionBoardDetails:
-		ExtractRequestedPart(str);
+		ExtractRequestedPart(str, quoteStrings);
 		break;
 #endif
 
@@ -127,7 +133,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		break;
 
 	case TypeCode::ObjectModelArray:
-		str.cat('{');
+		str.cat('[');
 		{
 			const ObjectModelArrayTableEntry *_ecv_null entry = omVal->FindObjectModelArrayEntry(param & 0xFF);
 			if (entry == nullptr)
@@ -147,16 +153,16 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 						str.cat(',');
 					}
 					context.AddIndex(i);
-					entry->GetElement(omVal, context).AppendAsString(str);
+					entry->GetElement(omVal, context).AppendAsString(str, true);
 					context.RemoveIndex();
 				}
 			}
 		}
-		str.cat('}');
+		str.cat(']');
 		break;
 
 	case TypeCode::HeapArray:
-		str.cat('{');
+		str.cat('[');
 		{
 			ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
 			for (size_t i = 0; ; ++i)
@@ -171,13 +177,13 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 				{
 					str.cat(',');
 				}
-				val.AppendAsString(str);
+				val.AppendAsString(str, true);
 			}
 		}
-		str.cat('}');
+		str.cat(']');
 		break;
 
-	case TypeCode::Port:
+	case TypeCode::Port_tc:
 		iopVal->AppendPinName(str);
 		break;
 
@@ -216,7 +222,7 @@ bool ExpressionValue::operator==(const ExpressionValue& other) const noexcept
 		case TypeCode::None:
 			return true;
 
-		case TypeCode::Bool:
+		case TypeCode::Bool_tc:
 			return bVal == other.bVal;
 
 		case TypeCode::Char:
@@ -251,7 +257,7 @@ bool ExpressionValue::operator==(const ExpressionValue& other) const noexcept
 		case TypeCode::DriverId_tc:
 			return uVal == other.uVal && param == other.param;
 
-		case TypeCode::Port:
+		case TypeCode::Port_tc:
 			return iopVal == other.iopVal;
 
 		// We don't handle the remaining types
@@ -346,7 +352,7 @@ void ExpressionValue::Release() noexcept
 void ExpressionValue::SetBool(bool b) noexcept
 {
 	Release();
-	type = (uint32_t)TypeCode::Bool;
+	type = (uint32_t)TypeCode::Bool_tc;
 	bVal = b;
 }
 
@@ -401,7 +407,7 @@ bool ExpressionValue::IsHeapStringArrayType() const noexcept
 
 // Given that this is a CanExpansionBoardDetails value, extract the part requested according to the parameter and append it to the string
 // sVal is a string of the form shortName|version
-void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
+void ExpressionValue::ExtractRequestedPart(const StringRef& rslt, bool quoteStrings) const noexcept
 {
 	// While updating firmware on expansion/tool boards we sometimes get a null board type string here, so allow for that
 	if (sVal != nullptr)
@@ -418,30 +424,42 @@ void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 		switch((ExpansionDetail)param)
 		{
 		case ExpansionDetail::longName:
+			if (quoteStrings) { rslt.cat('"'); }
 			rslt.cat("Duet 3 Expansion ");
-			// no break
-		case ExpansionDetail::shortName:
 			rslt.catn(sVal, indexOfDivider1);
+			if (quoteStrings) { rslt.cat('"'); }
+			break;
+
+		case ExpansionDetail::shortName:
+			if (quoteStrings) { rslt.cat('"'); }
+			rslt.catn(sVal, indexOfDivider1);
+			if (quoteStrings) { rslt.cat('"'); }
 			break;
 
 		case ExpansionDetail::firmwareVersion:
 			if (indexOfDivider2 > indexOfDivider1)
 			{
+				if (quoteStrings) { rslt.cat('"'); }
 				rslt.catn(sVal + indexOfDivider1 + 1, indexOfDivider2 - indexOfDivider1 - 1);
+				if (quoteStrings) { rslt.cat('"'); }
 			}
 			break;
 
 		case ExpansionDetail::firmwareFileNameBin:
 		case ExpansionDetail::firmwareFileNameUf2:
+			if (quoteStrings) { rslt.cat('"'); }
 			rslt.cat("Duet3Firmware_");
 			rslt.catn(sVal, indexOfDivider1);
 			rslt.cat(((ExpansionDetail)param == ExpansionDetail::firmwareFileNameUf2 || strncmp(sVal, "Mini5plus", indexOfDivider1) == 0) ? ".uf2" : ".bin");
+			if (quoteStrings) { rslt.cat('"'); }
 			break;
 
 		case ExpansionDetail::firmwareDate:
 			if (strlen(sVal) > indexOfDivider2)
 			{
+				if (quoteStrings) { rslt.cat('"'); }
 				rslt.cat(sVal + indexOfDivider2 + 1);
+				if (quoteStrings) { rslt.cat('"'); }
 			}
 			break;
 
@@ -965,7 +983,6 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 				ReportExpansionBoardDetail(buf, val);
 				break;
 #endif
-
 			case TypeCode::Enum32:
 				if (context.ShortFormReport())
 				{
@@ -978,7 +995,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 				}
 				break;
 
-			case TypeCode::Bool:
+			case TypeCode::Bool_tc:
 				buf->cat((val.bVal) ? "true" : "false");
 				break;
 
@@ -1046,7 +1063,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 				buf->cat("null");
 				break;
 
-			case TypeCode::Port:
+			case TypeCode::Port_tc:
 				ReportPinNameAsJson(buf, val);
 				break;
 
@@ -1297,11 +1314,13 @@ decrease(strlen(idString))	// recursion variant
 ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *_ecv_array idString) const THROWS(GCodeException)
 decrease(strlen(idString))	// recursion variant
 {
-	if (*idString == 0 && context.WantExists() && val.GetType() != TypeCode::None)
+	// If we are at the end of the selector string and within exists(...) but not exists(#...) then just return false if the value is null, true otherwise
+	if (*idString == 0 && context.WantExists() && !context.WantArrayLength())
 	{
-		return ExpressionValue(true);
+		return ExpressionValue(val.GetType() != TypeCode::None);
 	}
 
+	// Here we need to handle separately all the types that can be indexed.
 	switch (val.GetType())
 	{
 	case TypeCode::ObjectModelArray:
@@ -1310,6 +1329,10 @@ decrease(strlen(idString))	// recursion variant
 			{
 				if (context.WantArrayLength())
 				{
+					if (context.WantExists())
+					{
+						return ExpressionValue(true);
+					}
 					const ObjectModelArrayTableEntry *const entry = _ecv_not_null(val.omVal->GetObjectModelArrayEntry(val.param & 0xFF));
 					ReadLocker lock(entry->lockPointer);
 					return ExpressionValue((int32_t)entry->GetNumElements(this, context));
@@ -1353,6 +1376,10 @@ decrease(strlen(idString))	// recursion variant
 			{
 				if (context.WantArrayLength())
 				{
+					if (context.WantExists())
+					{
+						return ExpressionValue(true);
+					}
 					ReadLocker lock(Heap::heapLock);		// must have a read lock on heapLock when calling GetNumElements or GetElement
 					return ExpressionValue((int32_t)val.ahVal.GetNumElements());
 				}
@@ -1382,30 +1409,16 @@ decrease(strlen(idString))	// recursion variant
 		}
 
 	case TypeCode::ObjectModel_tc:
-		switch (*idString)
-		{
-		case 0:
-			return val;
-		case '.':
-			context.CheckStack(StackUsage::GetObjectValue_withTable);
-			return val.omVal->GetObjectValueUsingTableNumber(context, (val.omVal == this) ? classDescriptor : nullptr, idString + 1, val.param);
-		case '^':
-			throw context.ConstructParseException("object is not an array");
-		default:
-			throw context.ConstructParseException("syntax error in object model path");
-		}
-		break;
-
-	case TypeCode::None:
-		if (context.WantExists())
-		{
-			return ExpressionValue(false);
-		}
 		if (*idString == 0)
 		{
-			return val;				// a null value can be compared to null
+			return val;
 		}
-		throw context.ConstructParseException("reached null object before end of selector string");
+		if (*idString == '.')
+		{
+			context.CheckStack(StackUsage::GetObjectValue_withTable);
+			return val.omVal->GetObjectValueUsingTableNumber(context, (val.omVal == this) ? classDescriptor : nullptr, idString + 1, val.param);
+		}
+		break;
 
 	case TypeCode::Bitmap16:
 	case TypeCode::Bitmap32:
@@ -1417,7 +1430,7 @@ decrease(strlen(idString))	// recursion variant
 				{
 					break;
 				}
-				return ExpressionValue((int32_t)numSetBits);
+				return (context.WantExists()) ? ExpressionValue(true) : ExpressionValue((int32_t)numSetBits);
 			}
 
 			if (*idString == '^')
@@ -1463,7 +1476,7 @@ decrease(strlen(idString))	// recursion variant
 				{
 					break;
 				}
-				return ExpressionValue((int32_t)numSetBits);
+				return (context.WantExists()) ? ExpressionValue(true) : ExpressionValue((int32_t)numSetBits);
 			}
 
 			if (*idString == '^')
@@ -1503,7 +1516,7 @@ decrease(strlen(idString))	// recursion variant
 	case TypeCode::MacAddress_tc:
 		if (*idString == 0)
 		{
-			return (context.WantArrayLength()) ? ExpressionValue((int32_t)17) : val;
+			return (context.WantArrayLength()) ? ((context.WantExists()) ? ExpressionValue(true) : ExpressionValue((int32_t)17)) : val;
 		}
 		break;
 
@@ -1511,7 +1524,7 @@ decrease(strlen(idString))	// recursion variant
 	case TypeCode::CanExpansionBoardDetails:
 		if (*idString == 0)
 		{
-			return (context.WantArrayLength()) ? GetExpansionBoardDetailLength(val) : val;
+			return (context.WantArrayLength()) ? ((context.WantExists()) ? ExpressionValue(true) : GetExpansionBoardDetailLength(val)) : val;
 		}
 		break;
 #endif
@@ -1519,7 +1532,7 @@ decrease(strlen(idString))	// recursion variant
 	case TypeCode::HeapString:
 		if (*idString == 0)
 		{
-			return (context.WantArrayLength()) ? ExpressionValue((int32_t)val.shVal.GetLength()) : val;
+			return (context.WantArrayLength()) ? ((context.WantExists()) ? ExpressionValue(true) : ExpressionValue((int32_t)val.shVal.GetLength())) : val;
 		}
 		if (*idString == '^')
 		{
@@ -1548,7 +1561,7 @@ decrease(strlen(idString))	// recursion variant
 	case TypeCode::CString:
 		if (*idString == 0)
 		{
-			return (context.WantArrayLength()) ? ExpressionValue((int32_t)strlen(val.sVal)) : val;
+			return (context.WantArrayLength()) ? ((context.WantExists()) ? ExpressionValue(true) : ExpressionValue((int32_t)strlen(val.sVal))) : val;
 		}
 		if (*idString == '^')
 		{
@@ -1573,15 +1586,44 @@ decrease(strlen(idString))	// recursion variant
 		}
 		break;
 
-	default:
-		if (*idString == 0)
+	case TypeCode::None:
+		if (*idString == 0 && !context.WantArrayLength())
 		{
 			return val;
+		}
+
+#if 1	// Trying this out: when x is null: x.y, #x and x[...] return null instead of throwing an error
+		return (context.WantExists()) ? ExpressionValue(false) : val;
+#else
+		// Special case: exists(x.y), exists(#x) and exists(x[...]) return false when x is null because some OM values may be null or not
+		if (context.WantExists())
+		{
+			return ExpressionValue(false);
+		}
+		break;
+#endif
+
+	default:
+		if (*idString == 0 && !context.WantArrayLength())
+		{
+			return val;					// we already handled the case of context.WantExists()
 		}
 		break;
 	}
 
-	throw context.ConstructParseException("reached primitive type before end of selector string");
+	// If we get here then the character at *idString is not one that we expect, or we are being asked for the length of something that is not an array
+	switch (*idString)
+	{
+	case 0:
+		contract_assert(context.WantArrayLength());
+		[[fallthrough]];
+	case '^':
+		throw context.ConstructParseException("object is not an array");
+	case '.':
+		throw context.ConstructParseException("'.' operator applied to primitive type");
+	default:
+		throw context.ConstructParseException("unexpected character in selector string");
+	}
 }
 
 // Separate function to avoid the tm object (44 bytes) being allocated on the stack frame of a recursive function
@@ -1651,15 +1693,15 @@ void ObjectModel::ReportBitmap64Long(OutputBuffer *buf, const ExpressionValue& v
 void ObjectModel::ReportExpansionBoardDetail(OutputBuffer *buf, const ExpressionValue& val) noexcept
 {
 	String<StringLength50> rslt;
-	val.ExtractRequestedPart(rslt.GetRef());
+	val.ExtractRequestedPart(rslt.GetRef(), false);
 	buf->catf("\"%.s\"", rslt.c_str());
 }
 
 ExpressionValue ObjectModel::GetExpansionBoardDetailLength(const ExpressionValue& val) noexcept
 {
 	String<StringLength50> rslt;
-	val.ExtractRequestedPart(rslt.GetRef());
-	return ExpressionValue((int32_t)rslt.strlen());
+	val.ExtractRequestedPart(rslt.GetRef(), false);
+	return ExpressionValue((int32_t)rslt.strlen(), false);
 }
 
 #endif

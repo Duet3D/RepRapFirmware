@@ -70,7 +70,6 @@ constexpr size_t MaxPortsPerHeater = 3;
 
 constexpr size_t MaxBedHeaters = 12;
 constexpr size_t MaxChamberHeaters = 8;
-constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder heater, used only for the legacy status response
 
 constexpr size_t NumThermistorInputs = 4;
 constexpr size_t NumTmcDriversSenseChannels = 1;
@@ -87,13 +86,21 @@ constexpr size_t MaxExtrudersPerTool = 12;			// Increased in 3.5.2 because a use
 
 constexpr unsigned int MaxTriggers = 32;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 
-constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels not counting the WiFi serial connection (USB and two auxiliary UARTs)
-constexpr size_t FirstAuxChannel = 1;
-constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
-
-#define SERIAL_MAIN_DEVICE serialUSB
+#define SERIAL_USB_DEVICE serialUSB
+#if CORE_USES_TINYUSB
+# define SERIAL_USB2_DEVICE serialUSB2
+#endif
 #define SERIAL_AUX_DEVICE serialUart1
 #define SERIAL_AUX2_DEVICE serialUart2
+
+#ifdef SERIAL_USB2_DEVICE
+constexpr size_t NumSerialChannels = 4;				// The number of serial IO channels not counting the WiFi serial connection (USB, USB2, and two auxiliary UARTs)
+constexpr size_t FirstAuxChannel = 2;
+#else
+constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels not counting the WiFi serial connection (USB and two auxiliary UARTs)
+constexpr size_t FirstAuxChannel = 1;
+#endif
+constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 
 // Shared SPI (USART 1)
 constexpr Pin APIN_USART_SSPI_SCK = PortBPin(13);

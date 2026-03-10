@@ -12,6 +12,7 @@
 
 #include "RepRapFirmware.h"
 #include "ObjectModel/ObjectModel.h"
+#include <HeaterModel.h>
 
 // This is how PID parameters are stored internally
 struct PidParameters
@@ -34,7 +35,7 @@ class FileStore;
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-struct CanMessageHeaterModelNewNew;
+struct CanMessageHeaterModelV3;
 #endif
 
 class FopDt INHERIT_OBJECT_MODEL
@@ -44,21 +45,21 @@ public:
 
 	void Reset() noexcept;
 	bool SetParameters(float phr, float pbcr, float pfcr, float pcrExponent, float pdt, float pMaxPwm, float pVoltage, bool pUsePid, bool pInverted, const StringRef& reply) noexcept;
-	void SetDefaultToolParameters() noexcept;
-	void SetDefaultBedOrChamberParameters() noexcept;
+	void SetDefaultModel(const HeaterModel& model) noexcept;
 #if SUPPORT_REMOTE_COMMANDS
-	bool SetParameters(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept;
+	bool SetParameters(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept;
+	const HeaterModel& GetBasicModel() const noexcept { return basicModel; }
 #endif
 
 	// Stored parameters
-	float GetHeatingRate() const noexcept { return heatingRate; }
-	float GetBasicCoolingRate() const noexcept { return basicCoolingRate; }
-	float GetFanCoolingRate() const noexcept { return fanCoolingRate; }
-	float GetCoolingRateExponent() const noexcept { return coolingRateExponent; }
-	float GetDeadTime() const noexcept { return deadTime; }
+	float GetHeatingRate() const noexcept { return basicModel.heatingRate; }
+	float GetBasicCoolingRate() const noexcept { return basicModel.basicCoolingRate; }
+	float GetFanCoolingRate() const noexcept { return basicModel.fanCoolingRate; }
+	float GetCoolingRateExponent() const noexcept { return basicModel.coolingRateExponent; }
+	float GetDeadTime() const noexcept { return basicModel.deadTime; }
 	float GetMaxPwm() const noexcept { return maxPwm; }
-	float GetVoltage() const noexcept { return standardVoltage; }
-	bool UsePid() const noexcept { return usePid; }
+	float GetVoltage() const noexcept { return basicModel.standardVoltage; }
+	bool UsePid() const noexcept { return basicModel.usePid; }
 	bool IsInverted() const noexcept { return inverted; }
 	bool IsEnabled() const noexcept { return enabled; }
 
@@ -89,7 +90,7 @@ public:
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void SetupCanMessage(unsigned int heater, CanMessageHeaterModelNewNew& msg) const noexcept;
+	void SetupCanMessage(unsigned int heater, CanMessageHeaterModelV3& msg) const noexcept;
 #endif
 
 protected:
@@ -100,15 +101,9 @@ private:
 	void SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcept;
 	static float EstimateMaxTemperatureRise(float hr, float cr, float cre) noexcept;
 
-	float heatingRate;						// the rate at which the heater heats up at full PWM with no cooling
-	float basicCoolingRate;					// the rate at which the heater cools down when it is 100C above ambient and the fan is off
-	float fanCoolingRate;					// the additional cooling rate at 100C above ambient with the fan on at full PWM
-	float coolingRateExponent;				// how the basic cooling rate varies with temperature difference
-	float deadTime;
+	HeaterModel basicModel;
 	float maxPwm;
-	float standardVoltage;					// power voltage reading at which tuning was done, or 0 if unknown
 	bool enabled;
-	bool usePid;
 	bool inverted;
 	bool pidParametersOverridden;
 

@@ -13,12 +13,12 @@
 #include "ExpressionParser.h"
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
+#include <Platform/Tasks.h>
 #include <ObjectModel/Variable.h>
 #include <Networking/NetworkDefs.h>
 
-BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer)
+BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer), bufferLength(0), header(nullptr)
 {
-	header = reinterpret_cast<CodeHeader *>(gcodeBuffer.buffer);
 }
 
 void BinaryParser::Init() noexcept
@@ -32,11 +32,37 @@ void BinaryParser::Init() noexcept
 // CAUTION! This may be called with the task scheduler suspended, so don't do anything that might block or take more than a few microseconds to execute
 void BinaryParser::Put(const uint32_t *data, size_t len) noexcept
 {
-	memcpyu32(reinterpret_cast<uint32_t *>(gb.buffer), data, len);
-	bufferLength = len * sizeof(uint32_t);
-	gb.bufferState = GCodeBufferState::parsingGCode;
-	gb.LatestMachineState().g53Active = (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
-	gb.CurrentFileMachineState().lineNumber = header->lineNumber;
+	// Buffer allocation happens dynamically when the GB is used for the first time.
+	// Hence, in theory, it is possible for different GBs to have different buffer sizes
+	if (header == nullptr)
+	{
+		if (gb.buffer == nullptr)
+		{
+			gb.buffer = static_cast<char *>(Tasks::AllocPermanent(MaxGCodeBinaryLength, std::align_val_t(4)));
+			gb.bufferLength = MaxGCodeBinaryLength;
+		}
+		header = reinterpret_cast<CodeHeader *>(gb.buffer);
+	}
+
+	// Make sure we can store the incoming chunk. If it doesn't fit, report an error later
+	const size_t codeLength = len * sizeof(uint32_t);
+	if (codeLength > gb.bufferLength)
+	{
+		bufferLength = 0;
+		gb.bufferState = GCodeBufferState::executing;
+		gb.overflowed = true;
+	}
+	else
+	{
+		memcpyu32(reinterpret_cast<uint32_t *>(gb.buffer), data, len);
+		bufferLength = codeLength;
+		gb.bufferState = GCodeBufferState::parsingGCode;
+		gb.overflowed = false;
+	}
+
+	// Copy G-code data
+	gb.LatestMachineState().g53Active = (bufferLength != 0) && (header->flags & CodeFlags::EnforceAbsolutePosition) != 0;
+	gb.CurrentFileMachineState().lineNumber = (bufferLength != 0) ? header->lineNumber : 0;
 #if SUPPORT_ASYNC_MOVES
 	gb.CurrentFileMachineState().fpos = GetFilePosition();
 #endif
@@ -48,7 +74,7 @@ void BinaryParser::DecodeCommand() noexcept
 	{
 		if (reprap.GetDebugFlags(Module::Gcodes).IsBitSet(gb.GetChannel().ToBaseType()))
 		{
-			String<MaxCodeBufferSize> buf;
+			String<MaxGCodeStringLength> buf;
 			AppendFullCommand(buf.GetRef());
 			debugPrintf("%s: %s\n", gb.GetIdentity(), buf.c_str());
 		}
@@ -202,7 +228,7 @@ int32_t BinaryParser::GetIValue() THROWS(GCodeException)
 	switch (seenParameter->type)
 	{
 	case DataType::Float:
-		value = seenParameter->floatValue;
+		value = (int32_t)seenParameter->floatValue;
 		break;
 	case DataType::Int:
 		value = seenParameter->intValue;
@@ -236,9 +262,17 @@ uint32_t BinaryParser::GetUIValue() THROWS(GCodeException)
 	switch (seenParameter->type)
 	{
 	case DataType::Float:
+		if (seenParameter->floatValue < 0.0)
+		{
+			throw ConstructParseException("expected non-negative integer after '%c'", seenParameter->letter);
+		}
 		value = (uint32_t)seenParameter->floatValue;
 		break;
 	case DataType::Int:
+		if (seenParameter->intValue < 0)
+		{
+			throw ConstructParseException("expected non-negative integer after '%c'", seenParameter->letter);
+		}
 		value = (uint32_t)seenParameter->intValue;
 		break;
 	case DataType::UInt:
@@ -252,7 +286,7 @@ uint32_t BinaryParser::GetUIValue() THROWS(GCodeException)
 		}
 		break;
 	default:
-		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
+		throw ConstructParseException("expected non-negative integer after '%c'", seenParameter->letter);
 	}
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
@@ -597,6 +631,67 @@ ExpressionValue BinaryParser::GetExpression() THROWS(GCodeException)
 	throw ConstructParseException("expected an expression inside { }");
 }
 
+// Get an unsigned integer or a string after a key letter. Return true if a string was found, false if an unsigned integer; else throw,
+bool BinaryParser::GetStringOrUIValue(uint32_t& uival, const StringRef& str) THROWS(GCodeException)
+{
+	if (seenParameter == nullptr)
+	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	switch (seenParameter->type)
+	{
+	case DataType::Float:
+		uival = (uint32_t)seenParameter->floatValue;
+		return false;
+	case DataType::Int:
+		uival = (uint32_t)seenParameter->intValue;
+		return false;
+	case DataType::UInt:
+		uival = seenParameter->uintValue;
+		return false;
+	case DataType::String:
+		str.copy(seenParameterValue, seenParameter->intValue);
+		return true;
+	case DataType::Expression:
+		{
+			ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			const ExpressionValue e = parser.Parse();
+			switch (e.GetType())
+			{
+			case TypeCode::CString:
+				str.copy(e.sVal);
+				return true;
+
+			case TypeCode::HeapString:
+				{
+					ReadLockedPointer<const char> p = e.shVal.Get();
+					str.copy(p.Ptr());
+				}
+				return true;
+
+			case TypeCode::Uint32:
+				uival = e.uVal;
+				return false;
+
+			case TypeCode::Int32:
+				if (e.iVal >= 0)
+				{
+					uival = (uint32_t)e.iVal;
+					return false;
+				}
+				break;
+			default:
+				break;
+			}
+		}
+		break;
+	default:
+		break;
+	}
+	throw ConstructParseException("expected a string or unsigned integer after '%c'", seenParameter->letter);
+}
+
 void BinaryParser::SetFinished() noexcept
 {
 	gb.LatestMachineState().g53Active = false;		// G53 does not persist beyond the current command
@@ -605,25 +700,28 @@ void BinaryParser::SetFinished() noexcept
 
 FilePosition BinaryParser::GetFilePosition() const noexcept
 {
-	return ((header->flags & CodeFlags::HasFilePosition) != 0) ? header->filePosition : noFilePosition;
+	return (bufferLength != 0) && ((header->flags & CodeFlags::HasFilePosition) != 0) ? header->filePosition : noFilePosition;
 }
 
 void BinaryParser::SetFilePosition(FilePosition fpos) noexcept
 {
-	if (fpos == noFilePosition)
+	if (bufferLength != 0)
 	{
-		header->flags = (CodeFlags)(header->flags & ~CodeFlags::HasFilePosition);
-	}
-	else
-	{
-		header->filePosition = fpos;
-		header->flags = (CodeFlags)(header->flags | CodeFlags::HasFilePosition);
+		if (fpos == noFilePosition)
+		{
+			header->flags = (CodeFlags)(header->flags & ~CodeFlags::HasFilePosition);
+		}
+		else
+		{
+			header->filePosition = fpos;
+			header->flags = (CodeFlags)(header->flags | CodeFlags::HasFilePosition);
+		}
 	}
 }
 
-const char* BinaryParser::DataStart() const noexcept
+const char *_ecv_array _ecv_null BinaryParser::DataStart() const noexcept
 {
-	return gb.buffer;
+	return (bufferLength != 0) ? gb.buffer : nullptr;
 }
 
 size_t BinaryParser::DataLength() const noexcept
@@ -756,9 +854,12 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 				s.catf("%c%" PRId32, param->letter, param->intValue);
 				break;
 			case DataType::UInt:
+			case DataType::Bitmap16:
+			case DataType::Bitmap32:
 				s.catf("%c%" PRIu32, param->letter, param->uintValue);
 				break;
 			case DataType::Float:
+			case DataType::FloatWithDigits:
 				s.catf("%c%f", param->letter, (double)param->floatValue);
 				break;
 			case DataType::IntArray:
@@ -834,7 +935,7 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 					val += sizeof(uint32_t);
 				}
 				break;
-			case DataType::Bool:
+			case DataType::Boolean:
 				s.catf("%c%c", param->letter, (param->intValue != 0) ? '1' : '0');
 				break;
 			case DataType::BoolArray:
@@ -850,6 +951,7 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 				}
 				break;
 			case DataType::ULong:
+			case DataType::Bitmap64:
 			{
 				uint64_t ulVal;
 				memcpy(reinterpret_cast<char *>(&ulVal), val, sizeof(uint64_t));

@@ -17,12 +17,12 @@ extern AsyncSerial serialUart0, serialUart1;
 #include <SerialCDC.h>
 
 extern SerialCDC serialUSB;
+#if CORE_USES_TINYUSB
+extern SerialCDC serialUSB2;
+#endif
 
 void DeviceInit() noexcept;
 void StopAnalogTask() noexcept;
 void StopUsbTask() noexcept;
-
-// GCLK numbers not defined in the core
-constexpr unsigned int GclkNum25MHz = 2;		// for Ethernet PHY
 
 #endif /* SRC_HARDWARE_SAME5X_DEVICES_H_ */

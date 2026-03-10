@@ -48,14 +48,17 @@ StringHandle::StringHandle(const char *_ecv_array s1, const char *_ecv_array s2)
 }
 #endif
 
-void StringHandle::Assign(const char *_ecv_array s) noexcept
+void StringHandle::Assign(const char *_ecv_array _ecv_null s) noexcept
 {
 	Delete();
-	const size_t len = strlen(s);
-	if (len != 0)
+	if (s != nullptr)
 	{
-		WriteLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
-		InternalAssign(s, len);
+		const size_t len = strlen(s);
+		if (len != 0)
+		{
+			WriteLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
+			InternalAssign(s, len);
+		}
 	}
 }
 

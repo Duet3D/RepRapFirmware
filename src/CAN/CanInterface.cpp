@@ -42,8 +42,6 @@
 # endif
 #endif
 
-#include <memory>
-
 #define SUPPORT_CAN		1				// needed by CanDevice.h
 #include <CanDevice.h>
 #if SAME70
@@ -141,7 +139,7 @@ static_assert(Can0Config.IsValid());
 // CAN buffer memory must be in the first 64Kb of RAM (SAME5x) or in non-cached RAM (SAME70), so put it in its own memory section
 static uint32_t can0Memory[Can0Config.GetMemorySize()] __attribute__ ((section (".CanMessage")));
 
-static CanDevice *can0dev = nullptr;
+static CanDevice *_ecv_null can0dev = nullptr;
 
 static unsigned int txTimeouts[Can0Config.numTxBuffers + 1] = { 0 };
 static uint32_t lastCancelledId = 0;
@@ -166,7 +164,7 @@ static_assert(Can1Config.IsValid());
 // CAN buffer memory must be in the first 64Kb of RAM (SAME5x) or in non-cached RAM (SAME70), so put it in its own segment
 static uint32_t can1Memory[Can1Config.GetMemorySize()] __attribute__ ((section (".CanMessage")));
 
-static CanDevice *can1dev = nullptr;
+static CanDevice *_ecv_null can1dev = nullptr;
 
 #endif
 
@@ -193,7 +191,7 @@ static Task<CanReceiverTaskStackWords> canReceiverTask;
 constexpr size_t CanClockTaskStackWords = 400;			// used to be 300 but RD had a stack overflow
 static Task<CanSenderTaskStackWords> canClockTask;
 
-static CanMessageBuffer * volatile pendingMotionBuffers = nullptr;
+static CanMessageBuffer *_ecv_null volatile pendingMotionBuffers = nullptr;
 static CanMessageBuffer * volatile lastMotionBuffer;	// only valid when pendingBuffers != nullptr
 
 #if 0	//unused
@@ -393,7 +391,7 @@ void CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
 {
 	if (inExpansionMode && !mainBoardAcknowledgedAnnounce)
 	{
-		auto msg = buf->SetupBroadcastMessage<CanMessageAnnounceNew>(myAddress);
+		auto msg = buf->SetupBroadcastMessage<CanMessageAnnounceV1>(myAddress);
 		msg->timeSinceStarted = millis();
 		msg->numDrivers = NumDirectDrivers;
 		msg->usesUf2Binary = BOARD_USES_UF2_BINARY;
@@ -408,7 +406,7 @@ void CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
 }
 
 // Send an event. The text will be truncated if it is longer than 55 characters.
-void CanInterface::RaiseEvent(EventType type, uint16_t param, uint8_t device, const char *format, va_list vargs) noexcept
+void CanInterface::RaiseEvent(EventType type, uint16_t param, uint8_t device, const char *_ecv_array format, va_list vargs) noexcept
 {
 	CanMessageBuffer buf;
 	auto msg = buf.SetupRequestMessageNoRid<CanMessageEvent>(GetCanAddress(), GetCurrentMasterAddress());
@@ -441,14 +439,14 @@ CanRequestId CanInterface::AllocateRequestId(CanAddress destination, CanMessageB
 }
 
 // Allocate a CAN message buffer, throw if failed
-CanMessageBuffer *CanInterface::AllocateBuffer(const GCodeBuffer* gb) THROWS(GCodeException)
+CanMessageBuffer *CanInterface::AllocateBuffer(const GCodeBuffer *_ecv_null gb) THROWS(GCodeException)
 {
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		throw GCodeException((gb == nullptr) ? -1 : gb->GetLineNumber(), -1, NoCanBufferMessage);
 	}
-	return buf;
+	return _ecv_not_null(buf);
 }
 
 void CanInterface::CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS(GCodeException)
@@ -494,7 +492,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 		{
 			// In expansion mode this task just send notifications when the states of input handles change
 			CanMessageBuffer buf;
-			auto msg = buf.SetupRequestMessageNoRid<CanMessageInputChangedNew>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+			auto msg = buf.SetupRequestMessageNoRid<CanMessageInputChangedV1>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 			msg->states = 0;
 			msg->numHandles = 0;
 
@@ -522,7 +520,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 			// In main board mode this task sends urgent messages concerning motion
 			for (;;)
 			{
-				CanMessageBuffer * const urgentMessage = CanMotion::GetUrgentMessage();
+				CanMessageBuffer *_ecv_null const urgentMessage = CanMotion::GetUrgentMessage();
 				if (urgentMessage != nullptr)
 				{
 					SendCanMessage(TxBufferIndexUrgent, MaxUrgentSendWait, urgentMessage);
@@ -532,7 +530,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 					CanMessageBuffer *buf;
 					{
 						TaskCriticalSectionLocker lock;
-						buf = pendingMotionBuffers;
+						buf = _ecv_not_null(pendingMotionBuffers);
 						pendingMotionBuffers = buf->next;
 #if 0	//unused
 						--numPendingMotionBuffers;
@@ -578,6 +576,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 	for (;;)
 	{
 		CanMessageTimeSync * const msg = buf.SetupBroadcastMessage<CanMessageTimeSync>(CanInterface::GetCanAddress());
+		msg->fastDataRate = 0;												// we don't use bit rate switching yet
 		msg->lastTimeSent = lastTimeSent;
 		msg->lastTimeAcknowledgeDelay = 0;									// assume we don't have the transmit delay available
 
@@ -684,7 +683,7 @@ template<class T> static GCodeResult SetRemoteDriverValues(const CanDriversData<
 		{
 			break;
 		}
-		CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+		CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 		if (buf == nullptr)
 		{
 			return GCodeResult::noCanBuffer;
@@ -720,7 +719,7 @@ static GCodeResult SetRemoteDriverStates(const CanDriversList& drivers, const St
 		{
 			break;
 		}
-		CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+		CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 		if (buf == nullptr)
 		{
 			return GCodeResult::noCanBuffer;
@@ -784,13 +783,13 @@ unsigned int CanInterface::GetNumPendingMotionMessages() noexcept
 #endif
 
 // Send a request to an expansion board and append the response to 'reply'
-GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra) noexcept
+GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *_ecv_null extra) noexcept
 {
-	return SendRequestAndGetCustomReply(buf, rid, reply, extra, CanMessageType::unusedMessageType, [](const CanMessageBuffer*) { });
+	return SendRequestAndGetCustomReply(buf, rid, reply, extra, CanMessageType::unusedMessageType, [](const CanMessageBuffer*) noexcept->void { });
 }
 
 // Send a request to an expansion board and append the response to 'reply'. The response may either be a standard reply or 'replyType'.
-GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra, CanMessageType replyType, function_ref_noexcept<void(const CanMessageBuffer*) noexcept> callback) noexcept
+GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *_ecv_null extra, CanMessageType replyType, function_ref_noexcept<void(const CanMessageBuffer*) noexcept> callback) noexcept
 {
 	if (can0dev == nullptr)
 	{
@@ -916,12 +915,12 @@ void CanInterface::SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept
 
 #if DUAL_CAN
 
-uint32_t CanInterface::SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t const timeout) noexcept
+uint32_t CanInterface::SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout) noexcept
 {
 	return (can1dev != nullptr) ? can1dev->SendMessage(CanDevice::TxBufferNumber::fifo, timeout, buf) : 0;
 }
 
-bool CanInterface::ReceivePlainMessage(CanMessageBuffer *null buf, uint32_t const timeout) noexcept
+bool CanInterface::ReceivePlainMessage(CanMessageBuffer *_ecv_null buf, uint32_t timeout) noexcept
 {
 	return can1dev != nullptr && can1dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo0, timeout, buf);
 }
@@ -1001,7 +1000,6 @@ GCodeResult CanInterface::SetRemotePressureAdvance(const CanDriversData<float>& 
 
 // Handle M569 for a remote driver
 GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
-pre(driver.IsRemote())
 {
 	switch (gb.GetCommandFraction())
 	{
@@ -1045,7 +1043,7 @@ pre(driver.IsRemote())
 #if DUAL_CAN
 	case 3:			// read driver encoder via secondary CAN
 		{
-			Kinematics& kin = reprap.GetMove().GetKinematics();
+			Kinematics &_ecv_from kin = reprap.GetMove().GetKinematics();
 			if (kin.GetKinematicsType() == KinematicsType::hangprinter)
 			{
 				return ((HangprinterKinematics&)kin).ReadODrive3Encoder(driver, gb, reply);
@@ -1059,7 +1057,7 @@ pre(driver.IsRemote())
 		// First check whether we have a suitable EXP1HCL or M23 driver at the specified CAN address.
 		// ODrive CAN addresses in this command are between 40 and 43 inclusive so the EXP1HCL or M23CL addresses should avoid that range when using Hangprinter kinematics.
 		{
-			const ExpansionBoardData *const boardData = reprap.GetExpansion().GetBoardDetails(driver.boardAddress);
+			const ExpansionBoardData *_ecv_null const boardData = reprap.GetExpansion().GetBoardDetails(driver.boardAddress);
 			if (boardData != nullptr && boardData->hasClosedLoop)
 			{
 				CanMessageGenericConstructor cons(M569Point4Params);
@@ -1069,7 +1067,7 @@ pre(driver.IsRemote())
 		}
 #if DUAL_CAN
 		{
-			Kinematics& kin = reprap.GetMove().GetKinematics();
+			Kinematics &_ecv_from kin = reprap.GetMove().GetKinematics();
 			if (kin.GetKinematicsType() == KinematicsType::hangprinter)
 			{
 				gb.MustSee('T');
@@ -1130,7 +1128,7 @@ pre(driver.IsRemote())
 #if DUAL_CAN
 	case 8:			// read axis force via secondary CAN
 		{
-			Kinematics& kin = reprap.GetMove().GetKinematics();
+			Kinematics &_ecv_from kin = reprap.GetMove().GetKinematics();
 			if (kin.GetKinematicsType() == KinematicsType::hangprinter)
 			{
 				return ((HangprinterKinematics&)kin).ReadODrive3AxisForce(driver, reply);
@@ -1145,7 +1143,7 @@ pre(driver.IsRemote())
 }
 
 // Handle M915 for a collection of remote drivers
-GCodeResult CanInterface::GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException)
+GCodeResult CanInterface::GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) THROWS(GCodeException)
 {
 	size_t start = 0;
 	for (;;)
@@ -1185,10 +1183,10 @@ static String<StringLength100> enableEndstopsReply;
 // Enable a stall endstop on a remote board
 void CanInterface::EnableRemoteStallEndstop(DriverId did, float speed) THROWS(GCodeException)
 {
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		return ThrowGCodeException("no CAN buffer available");
+		ThrowGCodeException("no CAN buffer available");
 	}
 	const CanRequestId rid = CanInterface::AllocateRequestId(did.boardAddress, buf);
 	auto msg = buf->SetupRequestMessage<CanMessageEnableStallEndstop>(rid, CanInterface::GetCanAddress(), did.boardAddress);
@@ -1205,7 +1203,7 @@ void CanInterface::EnableRemoteStallEndstop(DriverId did, float speed) THROWS(GC
 // Disable all stall endstops on a remote board
 void CanInterface::DisableRemoteStallEndstops(CanAddress boardId) noexcept
 {
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		return;								// there's very little we can do here in terms of error handling
@@ -1218,11 +1216,11 @@ void CanInterface::DisableRemoteStallEndstops(CanAddress boardId) noexcept
 	(void)CanInterface::SendRequestAndGetStandardReply(buf, rid, reply.GetRef(), nullptr);
 }
 
-static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_t param, GCodeBuffer& gb, const StringRef& reply, uint8_t *extra = nullptr) THROWS(GCodeException)
+static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_t param, GCodeBuffer& gb, const StringRef& reply, uint8_t *_ecv_null extra = nullptr) THROWS(GCodeException)
 {
 	CanInterface::CheckCanAddress(boardAddress, gb);
 
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		return GCodeResult::noCanBuffer;
@@ -1302,11 +1300,6 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 	return SendRequestAndGetStandardReply(buf, rid, reply);	// we may not actually get a reply if the test is one that crashes the expansion board
 }
 
-GCodeResult CanInterface::RemoteM408(uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
-{
-	return GetRemoteInfo(CanMessageReturnInfo::typeM408, boardAddress, type, gb, reply, nullptr);
-}
-
 GCodeResult CanInterface::GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	return GetRemoteInfo(CanMessageReturnInfo::typeFirmwareVersion, boardAddress, 0, gb, reply);
@@ -1340,14 +1333,14 @@ void CanInterface::WakeAsyncSenderFromIsr() noexcept
 GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *_ecv_array pinName, uint16_t threshold, uint16_t minInterval,
 										bool *_ecv_null currentState, const StringRef& reply) noexcept
 {
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		return GCodeResult::noCanBuffer;
 	}
 
 	const CanRequestId rid = AllocateRequestId(boardAddress, buf);
-	auto msg = buf->SetupRequestMessage<CanMessageCreateInputMonitorNew>(rid, GetCanAddress(), boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageCreateInputMonitorV1>(rid, GetCanAddress(), boardAddress);
 	msg->handle = h;
 	msg->threshold = threshold;
 	msg->minInterval = minInterval;
@@ -1363,7 +1356,7 @@ GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandl
 	return rslt;
 }
 
-static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle h, uint8_t action, uint32_t param, uint8_t* retVal, const StringRef &reply) noexcept
+static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle h, uint8_t action, uint32_t param, uint8_t *_ecv_null retVal, const StringRef &reply) noexcept
 {
 	if (!h.IsValid())
 	{
@@ -1371,14 +1364,14 @@ static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle
 		return GCodeResult::error;
 	}
 
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		return GCodeResult::noCanBuffer;
 	}
 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
-	auto msg = buf->SetupRequestMessage<CanMessageChangeInputMonitorNew>(rid, CanInterface::GetCanAddress(), boardAddress);
+	auto msg = buf->SetupRequestMessage<CanMessageChangeInputMonitorV1>(rid, CanInterface::GetCanAddress(), boardAddress);
 	msg->handle = h;
 	msg->action = action;
 	msg->param = param;
@@ -1393,13 +1386,13 @@ static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle
 
 GCodeResult CanInterface::DeleteHandle(CanAddress boardAddress, RemoteInputHandle h, const StringRef &reply) noexcept
 {
-	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorNew::actionDelete, 0, nullptr, reply);
+	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionDelete, 0, nullptr, reply);
 }
 
 GCodeResult CanInterface::GetHandlePinName(CanAddress boardAddress, RemoteInputHandle h, bool *_ecv_null currentState, const StringRef &reply) noexcept
 {
 	uint8_t rVal;
-	const GCodeResult ret = ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorNew::actionReturnPinName, 0, &rVal, reply);
+	const GCodeResult ret = ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionReturnPinName, 0, &rVal, reply);
 	if (ret < GCodeResult::error && currentState != nullptr)
 	{
 		*currentState = (rVal != 0);
@@ -1410,7 +1403,7 @@ GCodeResult CanInterface::GetHandlePinName(CanAddress boardAddress, RemoteInputH
 GCodeResult CanInterface::EnableHandle(CanAddress boardAddress, RemoteInputHandle h, bool enable, bool *_ecv_null currentState, const StringRef &reply) noexcept
 {
 	uint8_t rVal;
-	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, (enable) ? CanMessageChangeInputMonitorNew::actionDoMonitor : CanMessageChangeInputMonitorNew::actionDontMonitor, 0, &rVal, reply);
+	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, (enable) ? CanMessageChangeInputMonitorV1::actionDoMonitor : CanMessageChangeInputMonitorV1::actionDontMonitor, 0, &rVal, reply);
 	if (ret < GCodeResult::error && currentState != nullptr)
 	{
 		*currentState = (rVal != 0);
@@ -1421,7 +1414,7 @@ GCodeResult CanInterface::EnableHandle(CanAddress boardAddress, RemoteInputHandl
 GCodeResult CanInterface::ChangeHandleResponseTime(CanAddress boardAddress, RemoteInputHandle h, uint32_t responseMillis, bool *_ecv_null currentState, const StringRef &reply) noexcept
 {
 	uint8_t rVal;
-	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorNew::actionChangeMinInterval, responseMillis, &rVal, reply);
+	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionChangeMinInterval, responseMillis, &rVal, reply);
 	if (ret < GCodeResult::error && currentState != nullptr)
 	{
 		*currentState = (rVal != 0);
@@ -1429,10 +1422,10 @@ GCodeResult CanInterface::ChangeHandleResponseTime(CanAddress boardAddress, Remo
 	return ret;
 }
 
-GCodeResult CanInterface::ChangeHandleThreshold(CanAddress boardAddress, RemoteInputHandle h, uint32_t threshold, bool *_ecv_null currentState, const StringRef &reply) noexcept
+GCodeResult CanInterface::ChangeHandleThreshold(CanAddress boardAddress, RemoteInputHandle h, int32_t threshold, bool *_ecv_null currentState, const StringRef &reply) noexcept
 {
 	uint8_t rVal;
-	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorNew::actionChangeThreshold, threshold, &rVal, reply);
+	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionChangeThreshold, (uint32_t)threshold, &rVal, reply);
 	if (ret < GCodeResult::error && currentState != nullptr)
 	{
 		*currentState = (rVal != 0);
@@ -1442,17 +1435,17 @@ GCodeResult CanInterface::ChangeHandleThreshold(CanAddress boardAddress, RemoteI
 
 GCodeResult CanInterface::ChangeHandleSetTouchMode(CanAddress boardAddress, RemoteInputHandle h, uint32_t sensitivity, const StringRef &reply) noexcept
 {
-	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorNew::actionSelectTouchMode, sensitivity, nullptr, reply);
+	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionSelectTouchMode, sensitivity, nullptr, reply);
 }
 
 GCodeResult CanInterface::SetHandleDriveLevel(CanAddress boardAddress, RemoteInputHandle h, uint32_t driveLevel, uint8_t &returnedDriveLevel, const StringRef &reply) noexcept
 {
-	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorNew::actionSetDriveLevel, driveLevel, &returnedDriveLevel, reply);
+	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionSetDriveLevel, driveLevel, &returnedDriveLevel, reply);
 }
 
 GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInputHandle mask, RemoteInputHandle pattern, ReadHandlesCallbackFunction callback, CallbackParameter param, const StringRef &reply) noexcept
 {
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		return GCodeResult::noCanBuffer;
@@ -1462,10 +1455,10 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 	auto msg = buf->SetupRequestMessage<CanMessageReadInputsRequest>(rid, GetCanAddress(), boardAddress);
 	msg->mask = mask;
 	msg->pattern = pattern;
-	const GCodeResult rslt = SendRequestAndGetCustomReply(buf, rid, reply, nullptr, CanMessageType::readInputsReply,
-															[callback, param](const CanMessageBuffer *buf)
+	const GCodeResult rslt = SendRequestAndGetCustomReply(buf, rid, reply, nullptr, CanMessageType::readInputsReplyV0,
+															[callback, param](const CanMessageBuffer *bufp) noexcept -> void
 																{
-																	auto response = buf->msg.readInputsReply;
+																	auto response = bufp->msg.readInputsReplyV0;
 																	for (unsigned int i = 0; i < response.numReported; ++i)
 																	{
 																		callback(param, response.results[i].handle, LoadLEU32(&response.results[i].reading));
@@ -1578,7 +1571,7 @@ void CanInterface::Diagnostics(const StringRef& reply) noexcept
 
 GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber, float pwm, bool isServo, const GCodeBuffer* gb, const StringRef &reply) noexcept
 {
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		return GCodeResult::noCanBuffer;
@@ -1748,37 +1741,37 @@ GCodeResult CanInterface::StartAccelerometer(DriverId device, uint8_t axes, uint
 
 # endif
 
-GCodeResult CanInterface::StartClosedLoopDataCollection(DriverId device, uint16_t filter, uint16_t numSamples, uint16_t rateRequested, uint8_t movementRequested, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+GCodeResult CanInterface::StartClosedLoopDataCollection(DriverId device, uint16_t filter, uint16_t numSamples, uint16_t p_rateRequested, uint8_t p_movementRequested, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	CanMessageBuffer* const buf = AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(device.boardAddress, buf);
 	auto msg = buf->SetupRequestMessage<CanMessageStartClosedLoopDataCollection>(rid, GetCanAddress(), device.boardAddress);
 	msg->mode = mode;
 	msg->filter = filter;
-	msg->rate = rateRequested;
+	msg->rate = p_rateRequested;
 	msg->numSamples = numSamples;
-	msg->movement = movementRequested;
+	msg->movement = p_movementRequested;
 	msg->deviceNumber = device.localDriver;
 	return SendRequestAndGetStandardReply(buf, rid, reply);
 }
 
 #if DUAL_CAN
 
-CanId CanInterface::ODrive::ArbitrationId(DriverId const driver, uint8_t const cmd) noexcept {
+CanId CanInterface::ODrive::ArbitrationId(DriverId driver, uint8_t cmd) noexcept {
 	const auto arbitration_id = (driver.boardAddress << 5) + cmd;
 	CanId canId;
 	canId.SetReceivedId(arbitration_id);
 	return canId;
 }
 
-CanMessageBuffer * CanInterface::ODrive::PrepareSimpleMessage(DriverId const driver, const StringRef& reply) noexcept
+CanMessageBuffer *_ecv_null CanInterface::ODrive::PrepareSimpleMessage(DriverId const driver, const StringRef& reply) noexcept
 {
 	// Detect any early return conditions
 	if (can1dev == nullptr)
 	{
 		return nullptr;
 	}
-	CanMessageBuffer * buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer *_ecv_null buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		return nullptr;

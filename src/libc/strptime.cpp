@@ -191,8 +191,7 @@ const char *_ecv_array _ecv_null SafeStrptime(const char *_ecv_array buf, const 
 
 			case '\0' :
 				--format;
-				/* FALLTHROUGH */
-				/* no break - DC added for Eclipse */
+				[[fallthrough]];
 			case '%' :
 				if (*buf == '%')
 				{

@@ -114,19 +114,26 @@ GCodes::GCodes(Platform& p) noexcept :
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)] = nullptr;
 #endif // SUPPORT_TELNET || HAS_SBC_INTERFACE
-#if defined(SERIAL_MAIN_DEVICE)
+#ifdef SERIAL_USB_DEVICE
 # if SAME5x && !CORE_USES_TINYUSB
 	// SAME5x USB driver already uses an efficient buffer for receiving data from USB
-	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
+	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_USB_DEVICE);
 # else
 	// Old USB driver and tinyusb drivers are inefficient when read in single-character mode
-	BufferedStreamGCodeInput * const usbInput = new BufferedStreamGCodeInput(SERIAL_MAIN_DEVICE);
+	BufferedStreamGCodeInput * const usbInput = new BufferedStreamGCodeInput(SERIAL_USB_DEVICE);
 # endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)] = new GCodeBuffer(GCodeChannel::USB, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
 #elif HAS_SBC_INTERFACE
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)] = new GCodeBuffer(GCodeChannel::USB, nullptr, fileInput, UsbMessage, Compatibility::Marlin);
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)] = nullptr;
+#endif
+
+#ifdef SERIAL_USB2_DEVICE
+	BufferedStreamGCodeInput * const usb2Input = new BufferedStreamGCodeInput(SERIAL_USB2_DEVICE);
+	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB2)] = new GCodeBuffer(GCodeChannel::USB2, usb2Input, fileInput, Usb2Message, Compatibility::Marlin);
+#else
+	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB2)] = nullptr;
 #endif
 
 #if HAS_AUX_DEVICES
@@ -152,7 +159,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::SBC)] = nullptr;
 #endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Daemon)] = new GCodeBuffer(GCodeChannel::Daemon, nullptr, fileInput, GenericMessage);
-#if defined(SERIAL_AUX2_DEVICE)
+#ifdef SERIAL_AUX2_DEVICE
 	StreamGCodeInput * const aux2Input = new StreamGCodeInput(SERIAL_AUX2_DEVICE);
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)] = new GCodeBuffer(GCodeChannel::Aux2, aux2Input, fileInput, Aux2Message);
 #elif HAS_SBC_INTERFACE
@@ -337,10 +344,13 @@ GCodeBuffer *_ecv_null GCodes::GetSerialGCodeBuffer(size_t serialPortNumber) con
 {
 	switch (serialPortNumber)
 	{
-	case 0:		return UsbGCode();
-	case 1:		return AuxGCode();
-	case 2:		return Aux2GCode();
-	default:	return nullptr;
+	case 0:						return UsbGCode();
+#ifdef SERIAL_USB2_DEVICE
+	case 1:						return Usb2GCode();
+#endif
+	case FirstAuxChannel:		return AuxGCode();
+	case FirstAuxChannel + 1:	return Aux2GCode();
+	default:					return nullptr;
 	}
 }
 
@@ -861,7 +871,7 @@ void GCodes::CheckTriggers() noexcept
 {
 	for (unsigned int i = 0; i < MaxTriggers; ++i)
 	{
-		if (!triggersPending.IsBitSet(i) && triggers[i].Check())
+		if (!triggersPending.IsBitSet(i) && triggers[i].Check(i))
 		{
 			triggersPending.SetBit(i);
 		}
@@ -963,7 +973,8 @@ bool GCodes::DoSynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCode
 	if (reprap.UsingSbcInterface())
 	{
 		// Prepare notification for the SBC
-		reprap.GetSbcInterface().SetPauseReason(ms.GetPauseRestorePoint().filePos, reason);
+		// FIXME This should pass the file position of the first and second file, or noFilePosition if not applicable
+		reprap.GetSbcInterface().SetPauseReason(ms.GetPauseRestorePoint().filePos, noFilePosition, reason);
 	}
 #endif
 
@@ -1100,7 +1111,8 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 		if (reprap.UsingSbcInterface() && ms.GetNumber() == 0)
 		{
 			// Prepare notification for the SBC
-			reprap.GetSbcInterface().SetPauseReason(ms.GetPauseRestorePoint().filePos, reason);
+			// FIXME This should pass the file position of the first and second file, or noFilePosition if not applicable
+			reprap.GetSbcInterface().SetPauseReason(ms.GetPauseRestorePoint().filePos, noFilePosition, reason);
 		}
 #endif
 
@@ -1253,8 +1265,9 @@ bool GCodes::DoEmergencyPause() noexcept
 #if HAS_SBC_INTERFACE
 		if (reprap.UsingSbcInterface() && ms.GetNumber() == 0)
 		{
+			// FIXME This needs to report the file position of the second file as well (if applicable)
 			PrintPausedReason reason = platform.IsPowerOk() ? PrintPausedReason::stall : PrintPausedReason::lowVoltage;
-			reprap.GetSbcInterface().SetEmergencyPauseReason(ms.GetPauseRestorePoint().filePos, reason);
+			reprap.GetSbcInterface().SetEmergencyPauseReason(ms.GetPauseRestorePoint().filePos, noFilePosition, reason);
 			reprap.GetSbcInterface().EventOccurred(true);
 		}
 #endif
@@ -1404,7 +1417,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				{
 					float coords2[MaxAxes];
 					ToolOffsetTransform(moveStates[i], moveStates[i].GetPauseRestorePoint().moveCoords, coords2);
-					moveStates[i].GetAxesAndExtrudersOwned().Iterate([&coords, coords2](unsigned int bitNum, unsigned int) noexcept { coords[bitNum] = coords2[bitNum]; });
+					moveStates[i].GetAxesAndExtrudersOwned().Iterate([&coords, coords2](unsigned int bitNum, unsigned int) noexcept -> void { coords[bitNum] = coords2[bitNum]; });
 				}
 #endif
 				String<StringLength100> buf2, buf3;
@@ -1715,7 +1728,7 @@ void GCodes::Diagnostics(const StringRef& reply) noexcept
 #if SUPPORT_ASYNC_MOVES
 
 // Get the file GCode buffer that processes commands for this movement system
-GCodeBuffer* GCodes::GetFileGCode(unsigned int msNumber) const noexcept
+GCodeBuffer *_ecv_null GCodes::GetFileGCode(unsigned int msNumber) const noexcept
 {
 	return (msNumber == 0 || FileGCode()->ExecutingAll()) ? FileGCode() : File2GCode();
 }
@@ -1890,7 +1903,7 @@ void GCodes::LoadFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(GC
 		ms.usingStandardFeedrate = false;
 	}
 
-	ms.originalFeedRate = gb.LatestMachineState().feedRate;
+	ms.originalFeedRate = (float16_t)gb.LatestMachineState().feedRate;
 }
 
 // Set up the extrusion of a move, returning true if there is any extrusion
@@ -1974,7 +1987,7 @@ bool GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(G
 						{
 							extrusionAmount *= volumetricExtrusionFactors[extruder];
 						}
-						if (eDrive == 0 && ms.moveType == 0 && !gb.IsDoingFileMacro())
+						if (ms.moveType == 0 && !gb.IsDoingFileMacro())
 						{
 							rawExtruderTotalByDrive[extruder] += extrusionAmount;
 						}
@@ -2380,7 +2393,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		// We assume that the homing move hasn't been commanded at a speed that exceeds any of the individual axis maximum speeds.
 		// The feed rate refers to the composite linear axis movement. We assume hat we don't have both linear and rotational movement.
 		float speeds[MaxAxes];
-		const Kinematics& kin = move.GetKinematics();
+		const Kinematics &_ecv_from kin = move.GetKinematics();
 		if (kin.GetHomingMode() == HomingMode::homeCartesianAxes)
 		{
 			// The endstops are on axes, so calculate the axis speeds and then convert them to drive speeds
@@ -2514,16 +2527,13 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			{
 			case LimitPositionResult::adjusted:
 			case LimitPositionResult::adjustedAndIntermediateUnreachable:
-				if (machineType != MachineType::fff)
-				{
-					gb.ThrowGCodeException(TargetUnreachableText);				// it's a laser or CNC so this is a definite error
-				}
+				gb.ThrowGCodeException(TargetUnreachableText);
 				ToolOffsetInverseTransform(ms);									// make sure the limits are reflected in the user position
 				if (lp == LimitPositionResult::adjusted)
 				{
 					break;														// we can reach the intermediate positions, so nothing more to do
 				}
-				// no break
+				[[fallthrough]];
 
 			case LimitPositionResult::intermediateUnreachable:
 				if (   ms.isCoordinated
@@ -2543,7 +2553,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 					}
 				}
 				gb.ThrowGCodeException("target position not reachable from current position");		// we can't bring the move within limits, so this is a definite error
-				// no break
+				[[fallthrough]];
 
 			case LimitPositionResult::ok:
 			default:
@@ -3102,7 +3112,7 @@ void GCodes::FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept
 
 			if (ms.moveFractionToSkip != 0.0)
 			{
-				const float fseg = floor(ms.totalSegments * ms.moveFractionToSkip);		// round down to the start of a move
+				const float fseg = floorf(ms.totalSegments * ms.moveFractionToSkip);	// round down to the start of a move
 				ms.segmentsLeftToStartAt = ms.totalSegments - (unsigned int)fseg;
 				ms.firstSegmentFractionToSkip = (ms.moveFractionToSkip * ms.totalSegments) - fseg;
 				NewMoveAvailable(ms);
@@ -3132,7 +3142,7 @@ void GCodes::TravelToStartPoint(GCodeBuffer& gb, MovementState& ms) noexcept
 	ToolOffsetTransform(ms);
 	const RestorePoint& rp = ms.GetResumeObjectRestorePoint();
 	ToolOffsetTransform(ms, rp.moveCoords, ms.coords);
-	ms.originalFeedRate = rp.originalFeedRate;
+	ms.originalFeedRate = (float16_t)rp.originalFeedRate;
 	ms.feedRate = gb.ConvertSpeed(rp.originalFeedRate, true);
 	ms.movementTool = ms.currentTool;
 	ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;			// assume that both linear and rotational axes might be moving
@@ -3332,7 +3342,7 @@ void GCodes::AbortPrint(GCodeBuffer& gb) noexcept
 	if (gb.IsFileChannel())						// if the current command came from a file being printed
 	{
 #if HAS_SBC_INTERFACE && SUPPORT_ASYNC_MOVES
-		GCodeBuffer* otherGb = (gb.GetChannel() == GCodeChannel::File) ? File2GCode() : FileGCode();
+		GCodeBuffer* otherGb = (gb.GetChannel() == GCodeChannel::File) ? _ecv_not_null(File2GCode()) : _ecv_not_null(FileGCode());
 		if (otherGb->IsDoingFile() && (!otherGb->IsDoingFileMacro() || otherGb->LatestMachineState().CanRestartMacro()))
 		{
 			(void)otherGb->AbortFile(true);		// stop processing commands from the other file reader too
@@ -3358,7 +3368,7 @@ bool GCodes::DoFileMacroWithParameters(GCodeBuffer& gb, const char *_ecv_array f
 }
 
 // Run a file macro. Prior to calling this, 'state' must be set to the state we want to enter when the macro has been completed.
-// Return true if the file was found or it wasn't and we were asked to report that fact.
+// Return true if the file was found or it wasn't and we were asked to report that fact. If the file wasn't found and we were not asked to report that, return false.
 // 'codeRunning' is the G or M command we are running, or 0 for a tool change file. In particular:
 // 501 = running M501
 // 502 = running M502
@@ -4163,12 +4173,12 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 			|| &gb == Queue2GCode()
 #endif
 #if HAS_AUX_DEVICES
-			|| (&gb == AuxGCode() && !platform.IsChanRaw(1))
+			|| (&gb == AuxGCode() && !platform.IsChanRaw(FirstAuxChannel))
 # ifdef SERIAL_AUX2_DEVICE
-			|| (&gb == Aux2GCode() && !platform.IsChanRaw(2))
+			|| (&gb == Aux2GCode() && !platform.IsChanRaw(FirstAuxChannel + 1))
 # endif
 #endif
-			|| gb.IsDoingFileMacro()
+			|| gb.IsDoingFileMacro(true)
 		   )
 	   )
 	{
@@ -4404,7 +4414,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 					{
 						// Set up the reverse Z hop move
 						const float zHopToUse = currentTool->GetActualZHop();
-						currentTool->GetZAxisMap().Iterate([&ms, zHopToUse](unsigned int axis, unsigned int) noexcept
+						currentTool->GetZAxisMap().Iterate([&ms, zHopToUse](unsigned int axis, unsigned int) noexcept -> void
 															{
 																ms.coords[axis] -= zHopToUse;
 															}
@@ -5111,18 +5121,8 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 			if (reply.strlen() > 0)
 			{
 				reply.cat('\n');
-				platform.Message(gb.GetResponseMessageType(), reply.c_str());
+				platform.Message(gb.GetNativeResponseMessageType(), reply.c_str());
 				reply.Clear();
-			}
-			break;
-
-		case StatusReportType::m408:
-			{
-				OutputBuffer *_ecv_null statusBuf = GenerateJsonStatusResponse(0, -1, ResponseSource::AUX);		// older PanelDueFirmware using M408
-				if (statusBuf != nullptr)
-				{
-					platform.Message(gb.GetResponseMessageType(), statusBuf);
-				}
 			}
 			break;
 
@@ -5137,7 +5137,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 				}
 				if (statusBuf != nullptr)
 				{
-					platform.Message(gb.GetResponseMessageType(), statusBuf);
+					platform.Message(gb.GetNativeResponseMessageType(), statusBuf);
 				}
 			}
 			catch (const GCodeException&)
@@ -5150,46 +5150,6 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 			break;
 		}
 	}
-}
-
-// Generate a M408 response
-// Return the output buffer containing the response, or nullptr if we failed
-OutputBuffer *_ecv_null GCodes::GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept
-{
-	OutputBuffer *_ecv_null statusResponse = nullptr;
-#if 0	// removed support for types > 1because we ran out of flash memory on Duet 2
-	switch (type)
-	{
-		case 0:
-		case 1:
-			statusResponse = reprap.GetLegacyStatusResponse(type + 2, seq);
-			break;
-
-		default:				// need a default clause to prevent the command hanging by always returning a null buffer
-			type = 2;
-			// no break
-		case 2:
-		case 3:
-		case 4:
-			statusResponse = reprap.GetStatusResponse(type - 1, source);
-			break;
-
-		case 5:
-			statusResponse = reprap.GetConfigResponse();
-			break;
-	}
-#else
-	statusResponse = reprap.GetLegacyStatusResponse(type + 2, seq);
-#endif
-	if (statusResponse != nullptr)
-	{
-		statusResponse->cat('\n');
-		if (statusResponse->HadOverflow())
-		{
-			OutputBuffer::ReleaseAll(statusResponse);
-		}
-	}
-	return statusResponse;
 }
 
 // Initiate a tool change. Caller has already checked that the correct tool isn't loaded and set up ms.newToolNumber.
@@ -5328,7 +5288,7 @@ void GCodes::UnlockAll(const GCodeBuffer& gb) noexcept
 // Append a list of axes to a string
 void GCodes::AppendAxes(const StringRef& reply, AxesBitmap axes) const noexcept
 {
-	axes.Iterate([&reply, this](unsigned int axis, unsigned int) noexcept { reply.cat(this->axisLetters[axis]); });
+	axes.Iterate([&reply, this](unsigned int axis, unsigned int) noexcept -> void { reply.cat(this->axisLetters[axis]); });
 }
 
 // Get the name of the current machine mode
@@ -5445,7 +5405,7 @@ const MovementState& GCodes::GetConstMovementState(const GCodeBuffer& gb) const 
 
 const MovementState& GCodes::GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept
 {
-	const GCodeBuffer *gb = context.GetGCodeBuffer();
+	const GCodeBuffer *_ecv_null gb = context.GetGCodeBuffer();
 	if (gb == nullptr)
 	{
 # if HAS_NETWORKING
@@ -5606,7 +5566,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 	case GCodeBuffer::SyncState::running:
 		thisGb.syncState = GCodeBuffer::SyncState::syncing;				// tell other input channels that we are waiting for sync
 		//debugPrintf("Channel %u changed state to syncing, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
-		// no break
+		[[fallthrough]];
 	case GCodeBuffer::SyncState::syncing:
 		if (otherGb.syncState == GCodeBuffer::SyncState::running)
 		{
@@ -5629,7 +5589,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 		// Now that we no longer need to read axis coordinates from the other motion system, flag that we have finished syncing
 		thisGb.syncState = GCodeBuffer::SyncState::synced;
 		//debugPrintf("Channel %u changed state to synced, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
-		// no break
+		[[fallthrough]];
 	case GCodeBuffer::SyncState::synced:
 		switch (otherGb.syncState)
 		{
@@ -5838,7 +5798,7 @@ bool GCodes::EvaluateConditionForDisplay(const char *_ecv_array str) const noexc
 {
 	try
 	{
-		ExpressionParser parser(LcdGCode(), str, str + strlen(str));
+		ExpressionParser parser(LcdGCode(), str);
 		return parser.ParseBoolean();
 	}
 	catch (const GCodeException&)
@@ -5852,7 +5812,7 @@ bool GCodes::EvaluateValueForDisplay(const char *_ecv_array str, ExpressionValue
 {
 	try
 	{
-		ExpressionParser parser(LcdGCode(), str, str + strlen(str));
+		ExpressionParser parser(LcdGCode(), str);
 		expr = parser.Parse();
 		return false;
 	}

@@ -101,6 +101,9 @@ static Task<UsbDeviceTaskStackWords> usbDeviceTask;
 #endif
 
 SerialCDC serialUSB;
+#ifdef SERIAL_USB2_DEVICE
+SerialCDC serialUSB2(1);
+#endif
 
 // Device initialisation
 void DeviceInit() noexcept

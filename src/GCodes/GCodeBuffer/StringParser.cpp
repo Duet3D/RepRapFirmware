@@ -14,6 +14,7 @@
 #include <GCodes/GCodes.h>
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
+#include <Platform/Tasks.h>
 #include <Networking/NetworkDefs.h>
 
 // Replace the default definition of THROW_INTERNAL_ERROR by one that gives line information
@@ -37,7 +38,7 @@ void StringParser::Init() noexcept
 	gcodeLineEnd = 0;
 	commandStart = commandLength = 0;								// set both to zero so that calls to GetFilePosition don't return negative values
 	readPointer = -1;
-	hadLineNumber = hadChecksum = overflowed = seenExpression = false;
+	hadLineNumber = hadChecksum = seenExpression = false;
 	computedChecksum = 0;
 	gb.bufferState = GCodeBufferState::parseNotStarted;
 	commandIndent = 0;
@@ -60,13 +61,13 @@ inline void StringParser::AddToChecksum(char c) noexcept
 inline void StringParser::StoreAndAddToChecksum(char c) noexcept
 {
 	AddToChecksum(c);
-	if (gcodeLineEnd + 1 < ARRAY_SIZE(gb.buffer))					// if there is space for this character and a trailing null
+	if (gcodeLineEnd + 1 < gb.bufferLength)							// if there is space for this character and a trailing null
 	{
 		gb.buffer[gcodeLineEnd++] = c;
 	}
 	else if (gb.bufferState != GCodeBufferState::parsingComment)	// we don't care if comment lines overflow
 	{
-		overflowed = true;
+		gb.overflowed = true;
 	}
 }
 
@@ -74,6 +75,18 @@ inline void StringParser::StoreAndAddToChecksum(char c) noexcept
 // If true, it is complete and ready to be acted upon and 'indent' is the number of leading white space characters.
 bool StringParser::Put(char c) noexcept
 {
+	if (gb.buffer == nullptr)
+	{
+		// Allocate more memory if we're in SBC mode, because binary codes have slightly more overhead.
+		// If USB/AUX channels request very long codes via macros, this will avoid bottlenecks from macros
+#if HAS_SBC_INTERFACE
+		gb.buffer = static_cast<char *>(Tasks::AllocPermanent(reprap.UsingSbcInterface() ? MaxGCodeBinaryLength : MaxGCodeStringLength, std::align_val_t(4)));
+#else
+		gb.buffer = static_cast<char *>(Tasks::AllocPermanent(MaxGCodeStringLength, std::align_val_t(4)));
+#endif
+		gb.bufferLength = MaxGCodeStringLength;
+	}
+
 	if (c != 0)
 	{
 		++commandLength;
@@ -315,7 +328,6 @@ bool StringParser::LineFinished() noexcept
 			case 1:
 			case 2:
 			case 3:
-				// If a CRC is required then the only command we allow without a CRC is M409
 				badChecksum = (crcRequired || computedChecksum != declaredChecksum);
 				break;
 
@@ -360,9 +372,9 @@ bool StringParser::CheckMetaCommand(const StringRef& reply) THROWS(GCodeExceptio
 		return false;
 	}
 
-	if (overflowed)
+	if (gb.overflowed)
 	{
-		throw GCodeException(&gb, ARRAY_SIZE(gb.buffer) + commandIndent - 1, "GCode command too long");
+		throw GCodeException(&gb, gb.bufferLength + commandIndent - 1, "GCode command too long");
 	}
 
 	const bool doingFile = gb.IsDoingFile();
@@ -725,7 +737,7 @@ void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeExceptio
 	}
 
 	SkipWhiteSpace();
-	ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+	ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 	ExpressionValue ev = parser.Parse();
 	vset->InsertNew(varName.c_str(), ev, (isGlobal) ? 0 : (int)gb.CurrentFileMachineState().GetBlockNesting());
 	if (isGlobal)
@@ -790,7 +802,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 		}
 
 		++readPointer;
-		ExpressionParser indexParser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser indexParser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 		const uint32_t indexExpr = indexParser.ParseUnsigned();
 		readPointer = indexParser.GetEndptr() - gb.buffer;
 		if (gb.buffer[readPointer] != ']')
@@ -808,7 +820,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	}
 	++readPointer;
 
-	ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+	ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 	ExpressionValue ev = parser.Parse();
 
 	if (numIndices == 0)
@@ -838,7 +850,7 @@ void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 		// If we fail to parse the expression, we want to abort anyway
 		try
 		{
-			ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+			ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 			const ExpressionValue val = parser.Parse();
 			readPointer = parser.GetEndptr() - gb.buffer;
 			val.AppendAsString(reply);
@@ -910,7 +922,7 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 		{
 			break;
 		}
-		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 		const ExpressionValue val = parser.Parse();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		if (!reply.IsEmpty())
@@ -950,7 +962,7 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 // Evaluate the condition that should follow 'if' or 'while'
 bool StringParser::EvaluateCondition() THROWS(GCodeException)
 {
-	ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+	ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 	const bool b = parser.ParseBoolean();
 	parser.CheckForExtraCharacters();
 	return b;
@@ -1032,7 +1044,7 @@ void StringParser::DecodeCommand() noexcept
 	else if (cl == ';')
 	{
 		// It's a whole line comment without indentation. Turn it into an internal Q0 command.
-		overflowed = false;															// we can get very long comment lines and we don't mind if they are truncated
+		gb.overflowed = false;															// we can get very long comment lines and we don't mind if they are truncated
 		commandLetter = 'Q';
 		commandNumber = 0;
 		hasCommandNumber = true;
@@ -1320,7 +1332,7 @@ void StringParser::GetFloatArray(float arr[], size_t& returnedLength) THROWS(GCo
 
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 		parser.ParseFloatArray(arr, returnedLength);
 	}
 	else
@@ -1353,7 +1365,7 @@ void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength) THROWS(GCo
 
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 		parser.ParseIntArray(arr, returnedLength);
 	}
 	else
@@ -1387,7 +1399,7 @@ void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength) THRO
 
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 		parser.ParseUnsignedArray(arr, returnedLength);
 	}
 	else
@@ -1421,7 +1433,7 @@ void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength) THRO
 
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 		parser.ParseDriverIdArray(arr, returnedLength);
 	}
 	else
@@ -1450,10 +1462,60 @@ ExpressionValue StringParser::GetExpression() THROWS(GCodeException)
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 		return parser.Parse();
 	}
 	throw ConstructParseException("expected an expression inside { }");
+}
+
+// Get an unsigned integer or a string after a key letter. Return true if a string was found, false if an unsigned integer; else throw,
+bool StringParser::GetStringOrUIValue(uint32_t& uival, const StringRef& str) THROWS(GCodeException)
+{
+	if (gb.buffer[readPointer] == '{')
+	{
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
+		const ExpressionValue e = parser.Parse();
+		switch (e.GetType())
+		{
+		case TypeCode::CString:
+			str.copy(e.sVal);
+			return true;
+
+		case TypeCode::HeapString:
+			{
+				ReadLockedPointer<const char> p = e.shVal.Get();				str.copy(p.Ptr());
+				str.copy(p.Ptr());
+			}
+			return true;
+
+		case TypeCode::Uint32:
+			uival = e.uVal;
+			return false;
+
+		case TypeCode::Int32:
+			if (e.iVal >= 0)
+			{
+				uival = (uint32_t)e.iVal;
+				return false;
+			}
+			break;
+
+		default:
+			break;
+		}
+	}
+	else if (gb.buffer[readPointer] == '"')
+	{
+		GetQuotedString(str, false);
+		return true;
+	}
+	else if (isDigit(gb.buffer[readPointer]) || gb.buffer[readPointer] == '+')
+	{
+		uival = GetUIValue();
+		return false;
+	}
+
+	throw ConstructParseException("expected a string or unsigned integer");
 }
 
 void StringParser::CheckArrayLength(size_t actualLength, size_t maxLength) THROWS(GCodeException)
@@ -1481,7 +1543,7 @@ void StringParser::GetQuotedString(const StringRef& str, bool allowEmpty) THROWS
 
 	case '{':
 		{
-			ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+			ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 			const ExpressionValue val = parser.Parse();
 			readPointer = parser.GetEndptr() - gb.buffer;
 			val.AppendAsString(str);
@@ -1563,7 +1625,7 @@ void StringParser::InternalGetPossiblyQuotedString(const StringRef& str) THROWS(
 	}
 	else if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 		const ExpressionValue val = parser.Parse();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		val.AppendAsString(str);
@@ -1938,7 +2000,7 @@ float StringParser::ReadFloatValue() THROWS(GCodeException)
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 		const float val = parser.ParseFloat();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		return val;
@@ -1954,7 +2016,7 @@ uint32_t StringParser::ReadUIValue() THROWS(GCodeException)
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 		const uint32_t val = parser.ParseUnsigned();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		return val;
@@ -1971,7 +2033,7 @@ int32_t StringParser::ReadIValue() THROWS(GCodeException)
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 		const int32_t val = parser.ParseInteger();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		return val;
@@ -1990,7 +2052,7 @@ DriverId StringParser::ReadDriverIdValue() THROWS(GCodeException)
 	{
 		// Allow a floating point expression to be converted to a driver ID
 		// We assume that a driver ID only ever has a single fractional digit. This means that e.g. 3.10 will be treated the same as 3.1.
-		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
 		const float val = 10.0 * parser.ParseFloat();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		const int32_t ival = lrintf(val);
@@ -2057,23 +2119,26 @@ void StringParser::SkipWhiteSpace() noexcept
 
 void StringParser::AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeException)
 {
-	parametersPresent.IterateWithExceptions([this, &vs, codeRunning](unsigned int bit, unsigned int count)
-								{
-									const char letter = BitNumberToParameterLetter(bit);
-									if ((letter != 'P' || codeRunning != 98) && Seen(letter))
-									{
-										const char c = gb.buffer[readPointer];
-										if (!isDigit(c) && c != '"' && c != '{' && c != '.' && c != '-' && c != '+')
-										{
-											throw ConstructParseException("invalid value for parameter '%c'", (uint32_t)c);
-										}
-										ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + commandEnd);
-										ExpressionValue ev = parser.Parse();
-										char paramName[2] = { letter, 0 };
-										vs.InsertNewParameter(paramName, ev);
-									}
-								}
-							  );
+	if (gb.buffer != nullptr)
+	{
+		parametersPresent.IterateWithExceptions([this, &vs, codeRunning](unsigned int bit, unsigned int count)
+			{
+				const char letter = BitNumberToParameterLetter(bit);
+				if ((letter != 'P' || codeRunning != 98) && Seen(letter))
+				{
+					const char c = gb.buffer[readPointer];
+					if (!isDigit(c) && c != '"' && c != '{' && c != '.' && c != '-' && c != '+')
+					{
+						throw ConstructParseException("invalid value for parameter '%c'", (uint32_t)c);
+					}
+					ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + commandEnd);
+					ExpressionValue ev = parser.Parse();
+					char paramName[2] = { letter, 0 };
+					vs.InsertNewParameter(paramName, ev);
+				}
+			}
+		  );
+	}
 }
 
 GCodeException StringParser::ConstructParseException(const char *_ecv_array str) const noexcept

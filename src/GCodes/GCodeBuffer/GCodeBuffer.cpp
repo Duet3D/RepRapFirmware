@@ -91,7 +91,7 @@ const char *_ecv_array GCodeBuffer::GetStateText() const noexcept
 
 	switch (bufferState)
 	{
-	case GCodeBufferState::parseNotStarted:		return "idle";
+	case GCodeBufferState::parseNotStarted:		return (buffer != nullptr) ? "idle" : "unused";
 	case GCodeBufferState::ready:				return "executing";
 	case GCodeBufferState::executing:			return "waiting";
 	default:									return "reading";
@@ -115,7 +115,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from no
 	  stringParser(*this),
 	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()), lastStatusReportType(StatusReportType::none),
 	  codeChannel(channel), lastResult(GCodeResult::ok),
-	  disabled(false), timerRunning(false), motionCommanded(false), hadExplicitLineNumber(false)
+	  disabled(false), timerRunning(false), motionCommanded(false), hadExplicitLineNumber(false), buffer(nullptr), bufferLength(0)
 
 #if HAS_SBC_INTERFACE
 	  , isWaitingForMacro(false), isBinaryBuffer(false), invalidated(false)
@@ -157,7 +157,7 @@ void GCodeBuffer::Init() noexcept
 	binaryParser.Init();
 #endif
 	stringParser.Init();
-	timerRunning = false;
+	overflowed = timerRunning = false;
 #if SUPPORT_ASYNC_MOVES
 	syncState = SyncState::running;
 #endif
@@ -247,23 +247,30 @@ void GCodeBuffer::Diagnostics(const StringRef& reply) noexcept
 		break;
 	}
 
-	reply.cat(" in state(s)");
-	const GCodeMachineState *_ecv_null ms = machineState;
-	do
-	{
-		reply.catf(" %d", (int)ms->GetState());
-		ms = ms->GetPrevious();
-	} while (ms != nullptr);
-	if (IsDoingFileMacro())
-	{
-		reply.cat(", running macro");
-	}
+	if (machineState->GetPrevious() != nullptr || machineState->GetState() != GCodeState::normal || IsDoingFileMacro()
 #if SUPPORT_ASYNC_MOVES
-	if (syncState != SyncState::running)
-	{
-		reply.catf(", sync state %u", (unsigned int)syncState);
-	}
+		|| syncState != SyncState::running
 #endif
+	)
+	{
+		reply.cat(" in state(s)");
+		const GCodeMachineState *_ecv_null ms = machineState;
+		do
+		{
+			reply.catf(" %d", (int)ms->GetState());
+			ms = ms->GetPrevious();
+		} while (ms != nullptr);
+		if (IsDoingFileMacro())
+		{
+			reply.cat(", running macro");
+		}
+#if SUPPORT_ASYNC_MOVES
+		if (syncState != SyncState::running)
+		{
+			reply.catf(", sync state %u", (unsigned int)syncState);
+		}
+#endif
+	}
 }
 
 // Add a character to the end
@@ -697,6 +704,12 @@ void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) T
 ExpressionValue GCodeBuffer::GetExpression() THROWS(GCodeException)
 {
 	return PARSER_OPERATION(GetExpression());
+}
+
+// Get an unsigned integer or a string after a key letter returning true if a string was found, false if an unsigned integer was found
+bool GCodeBuffer::GetStringOrUIValue(uint32_t& ival, const StringRef& str) THROWS(GCodeException)
+{
+	return PARSER_OPERATION(GetStringOrUIValue(ival, str));
 }
 
 // Get a :-separated list of drivers after a key letter

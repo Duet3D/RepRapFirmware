@@ -162,6 +162,13 @@ public:
 	float Acceleration(size_t axisOrExtruder, bool reduced) const noexcept;
 	const float *_ecv_array Accelerations(bool reduced) const noexcept { return (reduced) ? reducedAccelerations : normalAccelerations; }
 	void SetAcceleration(size_t axisOrExtruder, float value, bool reduced) noexcept;
+#if SUPPORT_S_CURVE
+	const float *_ecv_array Jerks() const noexcept { return jerks; }
+	void SetAccelerationTime(float value) noexcept;
+	float AccelerationTime() const noexcept { return accelerationTime; }
+	void UpdateSCurveFlagAndJerk() noexcept;
+	bool IsUsingSCurve() const noexcept { return usingSCurve; }
+#endif
 
 	float MaxFeedrate(size_t axisOrExtruder) const noexcept;
 	const float *_ecv_array MaxFeedrates() const noexcept { return maxFeedrates; }
@@ -264,7 +271,7 @@ public:
 	void ChangeSingleEndpointAfterHoming(MovementSystemNumber msNumber, size_t drive, int32_t ep) noexcept
 		pre(msNumber < NumMovementSystems);									// Set the current position to be this without transforming them first
 
-	void UpdateStartCoordinates(MovementSystemNumber msNumber, const float *coords) noexcept
+	void UpdateStartCoordinates(MovementSystemNumber msNumber, const float *_ecv_array coords) noexcept
 		pre(msNumber < NumMovementSystems)
 		{ rings[msNumber].UpdateStartCoordinates(coords); }
 
@@ -272,7 +279,7 @@ public:
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetLiveMotorPosition(size_t driver) const noexcept pre(driver < MaxAxesPlusExtruders);
 	void SetMotorPosition(size_t drive, int32_t pos, bool clearBacklash) noexcept pre(drive < MaxAxesPlusExtruders);
-	void SetMotorPositions(LogicalDrivesBitmap drives, const int32_t *positions, bool clearBacklash) noexcept;
+	void SetMotorPositions(LogicalDrivesBitmap drives, const int32_t *_ecv_array positions, bool clearBacklash) noexcept;
 
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
 	bool WaitingForAllMovesFinished(MovementSystemNumber msNumber
@@ -333,7 +340,7 @@ public:
 	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
 
 	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
-	GCodeResult EutSetInputShaping(const CanMessageSetInputShapingNew& msg, size_t dataLength, const StringRef& reply) noexcept
+	GCodeResult EutSetInputShaping(const CanMessageSetInputShapingV1& msg, size_t dataLength, const StringRef& reply) noexcept
 	{
 		return axisShaper.EutSetInputShaping(msg, dataLength, reply);
 	}
@@ -396,7 +403,7 @@ public:
 #endif
 
 #if SUPPORT_ASYNC_MOVES
-	AsyncMove *LockAuxMove() noexcept;														// Get and lock the aux move buffer
+	AsyncMove *_ecv_null LockAuxMove() noexcept;											// Get and lock the aux move buffer
 	void ReleaseAuxMove(bool hasNewMove) noexcept;											// Release the aux move buffer and optionally signal that it contains a move
 	GCodeResult ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Configure height following
 	GCodeResult StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Start/stop height following
@@ -409,6 +416,8 @@ public:
 	float GetRequestedSpeedMmPerSec() const noexcept { return rings[0].GetRequestedSpeedMmPerSec(); }
 	float GetAccelerationMmPerSecSquared() const noexcept { return rings[0].GetAccelerationMmPerSecSquared(); }		// Get the (peak) acceleration for reporting in the object model
 	float GetDecelerationMmPerSecSquared() const noexcept { return rings[0].GetDecelerationMmPerSecSquared(); }		// Get the (peak) deceleration for reporting in the object model
+	float GetCurrentMoveDistance() const noexcept { return rings[0].GetCurrentMoveDistance(); }
+	float GetCurrentMoveDuration() const noexcept { return rings[0].GetCurrentMoveDuration(); }
 	float GetTotalExtrusionRate() const noexcept { return rings[0].GetTotalExtrusionRate(); }
 
 	void UpdateLiveMachineCoordinates(float coords[MaxAxes], const Tool *_ecv_null tool) const noexcept;		// Force an update of the live machine coordinates
@@ -444,14 +453,8 @@ public:
 #if SUPPORT_PHASE_STEPPING
 	void ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config);	// configure Ka & Kv parameters for phase stepping
 	PhaseStepParams GetPhaseStepParams(size_t axisOrExtruder) const noexcept;
-	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams)
-		const noexcept; // get the net full steps taken, including in the current move so far, also speed and
-						// acceleration; return true if moving
-	bool UpdateCurrentMotion(
-		size_t driver,
-		uint32_t when,
-		MotionParameters& mParams) noexcept; // get the net full steps taken, including in the current move so far, also
-											 // speed and acceleration; return true if moving
+	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) const noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
+	bool UpdateCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
 	bool SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept;
 	StepMode GetStepMode(size_t axisOrExtruder) const noexcept;
 	void ResetPhaseStepMonitoringVariables() noexcept;
@@ -487,7 +490,7 @@ public:
 	static void CreateLaserTask() noexcept;													// create the laser task if we haven't already
 	static void WakeLaserTask() noexcept;													// wake up the laser task, called at the start of a new move
 
-	void WakeMoveTaskFromISR() noexcept;
+	void WakeMoveTask() noexcept;
 	static const TaskBase *_ecv_from GetMoveTaskHandle() noexcept { return &moveTask; }
 
 	static void TimerCallback(CallbackParameter p) noexcept;
@@ -534,7 +537,11 @@ private:
 #endif
 
 	MoveSegment *AddSegment(MoveSegment *list, uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a,
+#if SUPPORT_S_CURVE
+	 	 	 	 	 	 	 motioncalc_t j, MovementFlags moveFlags, motioncalc_t pressureAdvanceClocks
+#else
 							 	 	 	 	 MovementFlags moveFlags, motioncalc_t pressureAdvanceClocksTimesDuration
+#endif
 						  ) noexcept;
 
 	void BedTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept;						// Take a position and apply the bed compensations
@@ -568,11 +575,16 @@ private:
 
 #if SUPPORT_CAN_EXPANSION
 	void IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc, function_ref_noexcept<void(DriverId) noexcept> remoteFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId) noexcept {}); }
-	void IterateRemoteDrivers(size_t axisOrExtruder, function_ref_noexcept<void(DriverId) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, [](uint8_t) noexcept {}, func); }
+	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId) noexcept -> void {}); }
+	void IterateRemoteDrivers(size_t axisOrExtruder, function_ref_noexcept<void(DriverId) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, [](uint8_t) noexcept -> void {}, func); }
 #else
 	void IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc) noexcept;
 	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func); }
+#endif
+
+#if SUPPORT_S_CURVE && SUPPORT_CAN_EXPANSION
+	bool AxisHasLocalDriver(size_t axis) const noexcept;
+	bool ExtruderHasLocalDriver(size_t extruder) const noexcept;
 #endif
 
 	void InternalDisableDriver(size_t driver) noexcept;
@@ -583,7 +595,7 @@ private:
 	void SetOneDriverDirection(uint8_t driver, bool direction) noexcept pre(driver < GetNumActualDirectDrivers());
 
 	StandardDriverStatus GetLocalDriverStatus(size_t driver) const noexcept;
-	void ReportM569Parameters(size_t drive, const StringRef& reply) noexcept pre(driver < GetNumActualDirectDrivers());
+	void ReportM569Parameters(size_t drive, const StringRef& reply) noexcept pre(drive < GetNumActualDirectDrivers());
 
 #if defined(DUET3_MB6XD)
 	void UpdateDriverTimings() noexcept;
@@ -639,7 +651,7 @@ private:
 	AsyncMove auxMove;
 	volatile bool auxMoveLocked;
 	volatile bool auxMoveAvailable;
-	HeightController *heightController;
+	HeightController *_ecv_null heightController;
 #endif
 
 	SimulationMode simulationMode;						// Are we simulating, or really printing?
@@ -724,6 +736,12 @@ private:
 	float reducedAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for probing and stall detection moves
 	float printingInstantDvs[MaxAxesPlusExtruders];			// current max jerk in mm per step clock (changed by M205 and M206)
 	float maxInstantDvs[MaxAxesPlusExtruders];				// max instant velocity change in mm per step clock (changed by M206 only)
+
+#if SUPPORT_S_CURVE
+	float accelerationTime;									// time taken to each max acceleration in step clocks, single value used for all axes.
+	float jerks[MaxAxesPlusExtruders];						// max rate of change of acceleration, calculated from accelerationTime and normalAccelerations. Only used if accelerationTime > 0.0.
+	bool usingSCurve = false;
+#endif
 
 	AxisDriversConfig axisDrivers[MaxAxes];					// the driver numbers assigned to each axis
 	AxesBitmap linearAxes;									// axes that behave like linear axes w.r.t. feedrate handling
@@ -991,6 +1009,16 @@ inline __attribute__((always_inline)) uint32_t Move::GetStepInterval(size_t driv
 inline void Move::InvertCurrentMotorSteps(size_t driver) noexcept
 {
 	dms[driver].currentMotorPosition = -dms[driver].currentMotorPosition;
+}
+
+#endif
+
+#if SUPPORT_S_CURVE
+
+// Set the acceleration time
+inline void Move::SetAccelerationTime(float value) noexcept
+{
+	accelerationTime = value * (float)StepClockRate;
 }
 
 #endif

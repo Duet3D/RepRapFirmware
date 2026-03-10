@@ -113,6 +113,7 @@ constexpr ObjectModelTableEntry Heat::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
 	// 0. Heat class
+	{ "bedHeaterControlMask",	OBJECT_MODEL_FUNC((int32_t)self->bedHeaterControlMask.GetRaw()),				ObjectModelEntryFlags::none },
 	{ "bedHeaters",				OBJECT_MODEL_FUNC_ARRAY(0), 													ObjectModelEntryFlags::none },
 	{ "chamberHeaters",			OBJECT_MODEL_FUNC_ARRAY(1),				 										ObjectModelEntryFlags::none },
 	{ "coldExtrudeTemperature",	OBJECT_MODEL_FUNC((self->coldExtrude) ? 0.0f : self->extrusionMinTemp, 1),		ObjectModelEntryFlags::none },
@@ -120,7 +121,7 @@ constexpr ObjectModelTableEntry Heat::objectModelTable[] =
 	{ "heaters",				OBJECT_MODEL_FUNC_ARRAY(2),														ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t Heat::objectModelTableDescriptor[] = { 1, 5 };
+constexpr uint8_t Heat::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heat)
 
@@ -128,7 +129,7 @@ ReadWriteLock Heat::heatersLock;
 ReadWriteLock Heat::sensorsLock;
 
 Heat::Heat() noexcept
-	: sensorCount(0), sensorsRoot(nullptr), sensorOrderingErrors(0), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
+	: sensorCount(0), sensorsRoot(nullptr), sensorOrderingErrors(0), coldExtrude(false), bedHeaterControlMask(BedIndicesBitmap(1)), heaterBeingTuned(-1), lastHeaterTuned(-1)
 #if SUPPORT_REMOTE_COMMANDS
 	, newHeaterFaultState(0), newDriverFaultState(0)
 #endif
@@ -501,7 +502,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 
 				// Send a board health message
 				{
-					CanMessageBoardStatus * const boardStatusMsg = buf.SetupRequestMessageNoRid<CanMessageBoardStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+					CanMessageBoardStatusV0 * const boardStatusMsg = buf.SetupRequestMessageNoRid<CanMessageBoardStatusV0>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 					boardStatusMsg->Clear();
 
 					const StepTimer::Ticks movementDelayNeeded = StepTimer::CheckMovementDelayIncreasedNoClear();
@@ -530,7 +531,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 					boardStatusMsg->hasMcuTemp = true;
 #endif
 					// Add the analog handle data
-					boardStatusMsg->numAnalogHandles = InputMonitor::AddAnalogHandleData((uint8_t*)boardStatusMsg + boardStatusMsg->GetAnalogHandlesOffset(), boardStatusMsg->GetMaxAnalogHandleSpace());
+					boardStatusMsg->numAnalogHandles = InputMonitor::AddAnalogHandleDataV0((uint8_t*)boardStatusMsg + boardStatusMsg->GetAnalogHandlesOffset(), boardStatusMsg->GetMaxAnalogHandleSpace());
 					buf.dataLength = boardStatusMsg->GetActualDataLength();
 					CanInterface::SendMessageNoReplyNoFree(&buf);
 				}
@@ -708,22 +709,35 @@ void Heat::SetBedHeater(size_t index, int heater) noexcept
 		const auto h = FindHeater(heater);
 		if (h.IsNotNull())
 		{
-			h->SetAsBedOrChamberHeater();
+			h->SetAsBedHeater();
 		}
 	}
 	reprap.HeatUpdated();
 }
 
-bool Heat::IsBedHeater(int heater) const noexcept
+void Heat::SetBedHeaterControlMask(BedIndicesBitmap mask) noexcept
+{
+	bedHeaterControlMask = mask;
+	reprap.HeatUpdated();
+}
+
+HeaterFunction Heat::GetHeaterFunction(int heater) const noexcept
 {
 	for (int8_t bedHeater : bedHeaters)
 	{
 		if (heater == bedHeater)
 		{
-			return true;
+			return HeaterFunction::bed;
 		}
 	}
-	return false;
+	for (int8_t chamberHeater : chamberHeaters)
+	{
+		if (heater == chamberHeater)
+		{
+			return HeaterFunction::chamber;
+		}
+	}
+	return HeaterFunction::tool;
 }
 
 void Heat::SetChamberHeater(size_t index, int heater) noexcept
@@ -740,21 +754,9 @@ void Heat::SetChamberHeater(size_t index, int heater) noexcept
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
 	{
-		h->SetAsBedOrChamberHeater();
+		h->SetAsChamberHeater();
 	}
 	reprap.HeatUpdated();
-}
-
-bool Heat::IsChamberHeater(int heater) const noexcept
-{
-	for (int8_t chamberHeater : chamberHeaters)
-	{
-		if (heater == chamberHeater)
-		{
-			return true;
-		}
-	}
-	return false;
 }
 
 // This is called when a tool is created that uses this heater
@@ -856,7 +858,7 @@ void Heat::SwitchOffAll(bool includingChamberAndBed) noexcept
 	for (int heater = 0; heater < (int)MaxHeaters; ++heater)
 	{
 		Heater * const h = heaters[heater];
-		if (h != nullptr && (includingChamberAndBed || !IsBedOrChamberHeater(heater)))
+		if (h != nullptr && (includingChamberAndBed || h->GetFunction() == HeaterFunction::tool))
 		{
 			h->SwitchOff();
 			lastStandbyTools[heater] = nullptr;
@@ -917,11 +919,6 @@ float Heat::GetAveragePWM(size_t heater) const noexcept
 	return (h.IsNull()) ? 0.0 : h->GetAveragePWM();
 }
 
-bool Heat::IsBedOrChamberHeater(int heater) const noexcept
-{
-	return IsBedHeater(heater) || IsChamberHeater(heater);
-}
-
 // Get the highest temperature limit of any heater
 float Heat::GetHighestTemperatureLimit() const noexcept
 {
@@ -955,7 +952,7 @@ bool Heat::WriteModelParameters(FileStore *f) const noexcept
 			if (model.IsEnabled())
 			{
 				String<StringLength256> scratchString;
-				model.AppendM307Command(h, scratchString.GetRef(), !IsBedOrChamberHeater(h));
+				model.AppendM307Command(h, scratchString.GetRef(), heaters[h]->GetFunction() == HeaterFunction::tool);
 				model.AppendM301Command(h, scratchString.GetRef());
 				ok = f->Write(scratchString.c_str());
 			}
@@ -1461,13 +1458,13 @@ GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef&
 	return h->ReportDetails(reply);
 }
 
-GCodeResult Heat::ProcessM307New(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept
+GCodeResult Heat::ProcessM307(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heater);
 	return (h.IsNotNull()) ? h->SetModel(msg.heater, msg, reply) : UnknownHeater(msg.heater, reply);
 }
 
-GCodeResult Heat::SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept
+GCodeResult Heat::SetTemperature(const CanMessageSetHeaterTemperatureV1& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heaterNumber);
 	return (h.IsNotNull()) ? h->SetTemperature(msg, reply) : UnknownHeater(msg.heaterNumber, reply);
@@ -1503,7 +1500,7 @@ GCodeResult Heat::TuningCommand(const CanMessageHeaterTuningCommand& msg, const 
 	return h->TuningCommand(msg, reply);
 }
 
-GCodeResult Heat::ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept
+GCodeResult Heat::ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(msg.heaterNumber);
 	if (h.IsNull())
@@ -1516,7 +1513,7 @@ GCodeResult Heat::ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, co
 
 GCodeResult Heat::ProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept
 {
-	CanMessageGenericParser parser(msg, M308NewParams);
+	CanMessageGenericParser parser(msg, M308V1Params);
 	uint16_t sensorNum;
 	if (parser.GetUintParam('S', sensorNum))
 	{
@@ -1572,6 +1569,24 @@ GCodeResult Heat::ProcessM308(const CanMessageGeneric& msg, const StringRef& rep
 
 	reply.copy("Missing sensor number parameter");
 	return GCodeResult::error;
+}
+
+// Set and report the default model for a heater
+void Heat::SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept
+{
+	const auto h = FindHeater(buf.msg.setDefaultHeaterModel.heater);
+	if (h.IsNotNull())
+	{
+		h->SetDefaultHeaterModel(buf);
+	}
+	else
+	{
+		const CanRequestId rid = buf.msg.setDefaultHeaterModel.requestId;
+		const CanAddress src = buf.id.Src();
+		auto msg = buf.SetupResponseMessage<CanMessageStandardReply>(rid, CanInterface::GetCanAddress(), src);
+		msg->resultCode = (uint32_t)GCodeResult::error;
+		strcpy(msg->text, "unknown heater");
+	}
 }
 
 #endif

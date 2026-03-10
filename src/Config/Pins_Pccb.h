@@ -99,7 +99,6 @@ constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors p
 constexpr size_t MaxBedHeaters = 1;
 constexpr size_t MaxChamberHeaters = 1;
 constexpr int8_t DefaultBedHeater = -1;
-constexpr int8_t DefaultE0Heater = 0;				// Index of the default first extruder heater, used only for the legacy status response
 
 constexpr size_t NumThermistorInputs = 2;
 constexpr size_t NumTmcDriversSenseChannels = 1;
@@ -125,7 +124,10 @@ constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 constexpr size_t MaxLedStrips = 2;					// Maximum number of LED strips
 
 constexpr size_t NumSerialChannels = 1;				// The number of serial IO channels (USB only)
-#define SERIAL_MAIN_DEVICE serialUSB
+constexpr size_t FirstAuxChannel = 1;
+constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
+
+#define SERIAL_USB_DEVICE serialUSB
 
 // SerialUSB
 constexpr Pin UsbVBusPin = PortCPin(11);			// Pin used to monitor VBUS on USB port

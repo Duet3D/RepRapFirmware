@@ -38,8 +38,8 @@ namespace CanMotion
 	};
 
 	static CanMessageBuffer urgentMessageBuffer;
-	static CanMessageBuffer *movementBufferList = nullptr;
-	static DriversStopList *volatile stopList = nullptr;
+	static CanMessageBuffer *_ecv_null movementBufferList = nullptr;
+	static DriversStopList *_ecv_null volatile stopList = nullptr;
 	static uint32_t currentMoveClocks;
 	static volatile bool revertAll = false;
 	static volatile bool revertedAll = false;
@@ -61,7 +61,7 @@ void CanMotion::FreeMovementBuffers() noexcept
 {
 	for (;;)
 	{
-		CanMessageBuffer *p = movementBufferList;
+		CanMessageBuffer *_ecv_null p = movementBufferList;
 		if (p == nullptr)
 		{
 			break;
@@ -82,7 +82,7 @@ void CanMotion::StartMovement() noexcept
 	revertAll = revertedAll = false;
 	for (;;)
 	{
-		DriversStopList *p = stopList;
+		DriversStopList *_ecv_null p = stopList;
 		if (p == nullptr)
 		{
 			break;
@@ -101,7 +101,7 @@ CanMessageBuffer *_ecv_null CanMotion::GetBuffer(const PrepParams& params, Drive
 	}
 
 	// Search for an existing buffer
-	CanMessageBuffer* buf = movementBufferList;
+	CanMessageBuffer *_ecv_null buf = movementBufferList;
 	while (buf != nullptr && buf->id.Dst() != canDriver.boardAddress)
 	{
 		buf = buf->next;
@@ -126,7 +126,7 @@ CanMessageBuffer *_ecv_null CanMotion::GetBuffer(const PrepParams& params, Drive
 		{
 			// This is the first CAN-connected board for this movement
 			move->accelerationClocks = params.TotalAccelClocks();
-			move->steadyClocks = params.steadyClocks;
+			move->steadyClocks = params.SteadyClocks();
 			move->decelClocks = params.TotalDecelClocks();
 			currentMoveClocks = params.TotalClocks();
 		}
@@ -138,8 +138,26 @@ CanMessageBuffer *_ecv_null CanMotion::GetBuffer(const PrepParams& params, Drive
 			move->decelClocks = buf->next->msg.moveLinearShaped.decelClocks;
 		}
 
-		move->acceleration = params.acceleration/params.totalDistance;					// scale the acceleration to correspond to unit distance
-		move->deceleration = -params.deceleration/params.totalDistance;					// scale the deceleration to correspond to unit distance
+#if SUPPORT_S_CURVE
+		if (params.jerk != (motioncalc_t)0.0)
+		{
+			// We don't support 3rd order motion on expansion boards yet, so the best we can do is compute an average acceleration and scale it to unit distance
+			move->acceleration = (params.TotalAccelClocks() <= 0)
+								? 0.0
+									: (float)((params.peakAcceleration * params.TotalAccelClocks() - (motioncalc_t)0.5 * params.jerk * (msquare((motioncalc_t)params.phaseClocks[0]) + msquare((motioncalc_t)params.phaseClocks[2])))/(params.TotalAccelClocks() * params.totalDistance));
+			move->deceleration = (params.TotalDecelClocks() <= 0)
+								? 0.0
+									: (float)((-params.peakDeceleration * params.TotalDecelClocks() - (motioncalc_t)0.5 * params.jerk * (msquare((motioncalc_t)params.phaseClocks[4]) + msquare((motioncalc_t)params.phaseClocks[6])))/(params.TotalDecelClocks() * params.totalDistance));
+		}
+		else
+		{
+			move->acceleration = (float)(params.peakAcceleration/params.totalDistance);			// scale the acceleration to correspond to unit distance
+			move->deceleration = -(float)(params.peakDeceleration/params.totalDistance);			// scale the deceleration to correspond to unit distance
+		}
+#else
+		move->acceleration = (float)(params.acceleration/params.totalDistance);					// scale the acceleration to correspond to unit distance
+		move->deceleration = -(float)(params.deceleration/params.totalDistance);					// scale the deceleration to correspond to unit distance
+#endif
 		move->extruderDrives = 0;
 		move->numDrivers = canDriver.localDriver + 1;
 		move->zero1 = move->zero2 = 0;
@@ -161,7 +179,7 @@ CanMessageBuffer *_ecv_null CanMotion::GetBuffer(const PrepParams& params, Drive
 // This is called by DDA::Prepare for each active CAN DM in the move
 void CanMotion::AddAxisMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept
 {
-	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
+	CanMessageBuffer *_ecv_null const buf = GetBuffer(params, canDriver);
 	if (buf != nullptr)
 	{
 		buf->msg.moveLinearShaped.perDrive[canDriver.localDriver].steps = steps;
@@ -170,7 +188,7 @@ void CanMotion::AddAxisMovement(const PrepParams& params, DriverId canDriver, in
 
 void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver, float extrusion, bool usePressureAdvance) noexcept
 {
-	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
+	CanMessageBuffer *_ecv_null const buf = GetBuffer(params, canDriver);
 	if (buf != nullptr)
 	{
 		buf->msg.moveLinearShaped.perDrive[canDriver.localDriver].extrusion = extrusion;
@@ -189,13 +207,13 @@ uint32_t CanMotion::FinishMovement(const DDA& dda, uint32_t moveStartTime, bool 
 	}
 	else
 	{
-		CanMessageBuffer *buf = movementBufferList;
+		CanMessageBuffer *_ecv_null buf = movementBufferList;
 		if (buf != nullptr)
 		{
 			MutexLocker lock((dda.IsCheckingEndstops()) ? &stopListMutex : nullptr);
 			do
 			{
-				CanMessageBuffer * const nextBuffer = buf->next;		// must get this before sending the buffer, because sending the buffer releases it
+				CanMessageBuffer *_ecv_null const nextBuffer = buf->next;		// must get this before sending the buffer, because sending the buffer releases it
 				CanMessageMovementLinearShaped& msg = buf->msg.moveLinearShaped;
 				if (msg.HasMotion())
 				{
@@ -239,7 +257,7 @@ bool CanMotion::CanPrepareMove() noexcept
 
 // This is called by the CanSender task to check if we have any urgent messages to send
 // The only urgent messages we may have currently are messages to stop drivers, or to tell them that all drivers have now been stopped and they need to revert to the requested stop position.
-CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
+CanMessageBuffer *_ecv_null CanMotion::GetUrgentMessage() noexcept
 {
 	if (!revertedAll)
 	{
@@ -248,7 +266,7 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 		// We have to be careful of race conditions here. The stop list links won't change while we are scanning it because we hold the mutex,
 		// but ISR may change the stop states to StopRequested up until the time at which it changes revertAll from false to true.
 		const bool revertingAll = revertAll;
-		for (DriversStopList *sl = stopList; sl != nullptr; sl = sl->next)
+		for (DriversStopList *_ecv_null sl = stopList; sl != nullptr; sl = sl->next)
 		{
 			if (!sl->sentRevertRequest)						// if we've already reverted the drivers on this board, no more to do
 			{
@@ -271,6 +289,7 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 					}
 				}
 
+				// Stop messages take priority over revert messages
 				if (driversToStop != 0)
 				{
 					auto stopMsg = urgentMessageBuffer.SetupRequestMessageNoRid<CanMessageStopMovement>(CanInterface::GetCanAddress(), sl->boardAddress);
@@ -308,28 +327,29 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 void CanMotion::StopDriverWhenProvisional(DriverId driver) noexcept
 {
 	// Search for the correct movement buffer
-	CanMessageBuffer* buf = movementBufferList;
-	while (buf != nullptr && buf->id.Dst() != driver.boardAddress)
+	CanMessageBuffer *_ecv_null buf = movementBufferList;
+	while (buf != nullptr)
 	{
+		if (buf->id.Dst() == driver.boardAddress)
+		{
+			// The move was found so set the steps to zero. We still send the message so that the drivers get enabled.
+			buf->msg.moveLinearShaped.perDrive[driver.localDriver].steps = 0;
+			break;
+		}
 		buf = buf->next;
-	}
-
-	// If the move was found, set the steps to zero. We still send the message so that the drivers get enabled.
-	if (buf != nullptr)
-	{
-		buf->msg.moveLinearShaped.perDrive[driver.localDriver].steps = 0;
 	}
 }
 
-// Tell a CAN-connected driver to stop moving after we have sent the movement message
+// Tell a CAN-connected driver to stop moving after we have sent the movement message.
+// Return true if we found it, we hadn't already requested a stop, and now we have.
 bool CanMotion::StopDriverWhenExecuting(DriverId driver, int32_t netStepsTaken) noexcept
 {
-	DriversStopList *sl = stopList;
+	DriversStopList *_ecv_null sl = stopList;
 	while (sl != nullptr)
 	{
 		if (sl->boardAddress == driver.boardAddress)
 		{
-			if (sl->stopStates[driver.localDriver] == DriverStopState::active)			// if active and stop not yet requested
+			if (driver.localDriver < sl->numDrivers && sl->stopStates[driver.localDriver] == DriverStopState::active)			// if active and stop not yet requested
 			{
 				sl->stopSteps[driver.localDriver] = netStepsTaken;						// must assign this one first
 				sl->stopStates[driver.localDriver] = DriverStopState::stopRequested;

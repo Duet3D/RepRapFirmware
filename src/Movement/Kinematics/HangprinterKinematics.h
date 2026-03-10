@@ -113,7 +113,8 @@ private:
 	float springKsOrigin[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	float relaxedSpringLengthsOrigin[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	float fOrigin[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
-	float printRadiusSquared = 0.0F;
+	// Member printRadiusSquared is declared in parent class RoundBedKinematics
+	//float printRadiusSquared = 0.0F;
 
 	float SpringK(float const springLength) const noexcept;
 	void StaticForces(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept;

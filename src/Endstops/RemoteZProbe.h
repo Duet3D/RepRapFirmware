@@ -22,16 +22,16 @@ public:
 	RemoteZProbe(unsigned int num, CanAddress bn, ZProbeType p_type) noexcept : ZProbe(num, p_type), boardAddress(bn), lastValue(0) { }
 	~RemoteZProbe() noexcept override;
 
-	uint32_t GetRawReading() const noexcept override;
+	int32_t GetRawReading() const noexcept override;
 	bool SetProbing(bool isProbing) noexcept override;
 	GCodeResult AppendPinNames(const StringRef& str) noexcept override;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) override;
 	GCodeResult Create(const StringRef& pinNames, const StringRef& reply) noexcept;
-	void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState, uint32_t reading) noexcept override;
+	void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState, int32_t reading) noexcept override;
 	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
 
 	// Process a remote reading that relates to this Z probe
-	void UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint32_t reading) noexcept override;
+	void UpdateRemoteReading(CanAddress src, uint8_t handleMinor, int32_t reading) noexcept override;
 
 	// Functions used only with modulated Z probes
 	void SetIREmitter(bool on) const noexcept override { }
@@ -44,12 +44,15 @@ public:
 	GCodeResult CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
 	float GetLatestHeight() const noexcept override;
 
-	void ScanningProbeCallback(RemoteInputHandle h, uint32_t val) noexcept;
+	void ScanningProbeCallback(RemoteInputHandle h, int32_t val) noexcept;
+
+protected:
+	bool IsRemote() const noexcept override { return true; }
 
 private:
 	CanAddress boardAddress;
 	RemoteInputHandle handle;
-	uint32_t lastValue;							// the most recent value received from a scanning analog Z probe
+	int32_t lastValue;							// the most recent value received from a scanning analog Z probe
 
 	static constexpr uint32_t ActiveProbeReportInterval = 2;
 	static constexpr uint32_t InactiveProbeReportInterval = 25;

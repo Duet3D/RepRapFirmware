@@ -526,7 +526,7 @@ void SbcInterface::ExchangeData() noexcept
 		// Evaluate an expression
 		case SbcRequest::EvaluateExpression:
 		{
-			String<MaxGCodeLength> expression;
+			String<MaxSbcExpressionLength> expression;
 			const GCodeChannel channel = transfer.ReadEvaluateExpression(packet->length, expression.GetRef());
 			if (channel.IsValid())
 			{
@@ -543,7 +543,7 @@ void SbcInterface::ExchangeData() noexcept
 					MutexLocker lock(gb->mutex, SbcYieldTimeout);
 					if (lock.IsAcquired())
 					{
-						ExpressionParser parser(gb, expression.c_str(), expression.c_str() + expression.strlen());
+						ExpressionParser parser(gb, expression.c_str());
 						const ExpressionValue val = parser.Parse();
 						parser.CheckForExtraCharacters();
 						if (val.GetType() == TypeCode::HeapArray)
@@ -554,7 +554,7 @@ void SbcInterface::ExchangeData() noexcept
 							{
 								ObjectExplorationContext context;
 								ReportHeapArrayAsJson(json, context, nullptr, val.ahVal, "");
-								packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), json);
+								packetAcknowledged = transfer.WriteEvaluationResult(channel, expression.c_str(), json);
 							}
 							else
 							{
@@ -570,7 +570,7 @@ void SbcInterface::ExchangeData() noexcept
 								ObjectExplorationContext context;
 								context.AddIndex(val.param >> 8);
 								val.omVal->ReportItemAsJsonFull(json, context, nullptr, val, "");
-								packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), json);
+								packetAcknowledged = transfer.WriteEvaluationResult(channel, expression.c_str(), json);
 							}
 							else
 							{
@@ -580,7 +580,7 @@ void SbcInterface::ExchangeData() noexcept
 						else
 						{
 							// Write plain result
-							packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), val);
+							packetAcknowledged = transfer.WriteEvaluationResult(channel, expression.c_str(), val);
 						}
 					}
 					else
@@ -593,8 +593,9 @@ void SbcInterface::ExchangeData() noexcept
 					// Get the error message and send it back to DSF
 					String<StringLength100> errorMessage;
 					e.GetMessage(errorMessage.GetRef(), nullptr);
-					packetAcknowledged = transfer.WriteEvaluationError(expression.c_str(), errorMessage.c_str());
+					packetAcknowledged = transfer.WriteEvaluationError(channel, expression.c_str(), errorMessage.c_str());
 				}
+				skipNextDelay = true;
 			}
 			else
 			{
@@ -716,7 +717,7 @@ void SbcInterface::ExchangeData() noexcept
 		{
 			bool createVariable;
 			String<MaxVariableNameLength> varName;
-			String<MaxGCodeLength> expression;
+			String<MaxGCodeStringLength> expression;
 			const GCodeChannel channel = transfer.ReadSetVariable(createVariable, varName.GetRef(), expression.GetRef());
 
 			// Make sure we can access the gb safely...
@@ -744,7 +745,7 @@ void SbcInterface::ExchangeData() noexcept
 			const bool isGlobal = StringStartsWith(varName.c_str(), "global.");
 			if (!isGlobal && !StringStartsWith(varName.c_str(), "var."))
 			{
-				packetAcknowledged = transfer.WriteSetVariableError(varName.c_str(), "expected a global or local variable");
+				packetAcknowledged = transfer.WriteSetVariableError(channel, varName.c_str(), "expected a global or local variable");
 				break;
 			}
 			WriteLockedPointer<VariableSet> vset = (isGlobal) ? reprap.GetGlobalVariablesForWriting() : WriteLockedPointer<VariableSet>(nullptr, &gb->GetVariables());
@@ -797,7 +798,7 @@ void SbcInterface::ExchangeData() noexcept
 
 					if (hadError)
 					{
-						packetAcknowledged = transfer.WriteSetVariableError(varName.c_str(), expression.c_str());
+						packetAcknowledged = transfer.WriteSetVariableError(channel, varName.c_str(), expression.c_str());
 						break;
 					}
 
@@ -812,21 +813,21 @@ void SbcInterface::ExchangeData() noexcept
 				// For now we don't allow an existing variable to be reassigned using a 'var' or 'global' statement. We may need to allow it for 'global' statements.
 				// Save memory by re-using 'expression' to capture the error message
 				expression.printf("variable '%s' already exists", varName.c_str());
-				packetAcknowledged = transfer.WriteSetVariableError(varName.c_str(), expression.c_str());
+				packetAcknowledged = transfer.WriteSetVariableError(channel, varName.c_str(), expression.c_str());
 				break;
 			}
 			if (!createVariable && v == nullptr)
 			{
 				// Save memory by re-using 'expression' to capture the error message
 				expression.printf("unknown variable '%s'", varName.c_str());
-				packetAcknowledged = transfer.WriteSetVariableError(varName.c_str(), expression.c_str());
+				packetAcknowledged = transfer.WriteSetVariableError(channel, varName.c_str(), expression.c_str());
 				break;
 			}
 
 			// Evaluate the expression and assign it
 			try
 			{
-				ExpressionParser parser(gb, expression.c_str(), expression.c_str() + expression.strlen());
+				ExpressionParser parser(gb, expression.c_str());
 				ExpressionValue ev = parser.Parse();
 				if (v == nullptr)
 				{
@@ -850,7 +851,7 @@ void SbcInterface::ExchangeData() noexcept
 					{
 						ObjectExplorationContext context;
 						ReportHeapArrayAsJson(json, context, nullptr, ev.ahVal, "");
-						packetAcknowledged = transfer.WriteSetVariableResult(varName.c_str(), json);
+						packetAcknowledged = transfer.WriteSetVariableResult(channel, varName.c_str(), json);
 					}
 					else
 					{
@@ -866,7 +867,7 @@ void SbcInterface::ExchangeData() noexcept
 						ObjectExplorationContext context;
 						context.AddIndex(ev.param >> 8);
 						ev.omVal->ReportItemAsJsonFull(json, context, nullptr, ev, "");
-						packetAcknowledged = transfer.WriteSetVariableResult(varName.c_str(), json);
+						packetAcknowledged = transfer.WriteSetVariableResult(channel, varName.c_str(), json);
 					}
 					else
 					{
@@ -876,7 +877,7 @@ void SbcInterface::ExchangeData() noexcept
 				else
 				{
 					// Write plain result
-					packetAcknowledged = transfer.WriteSetVariableResult(varName.c_str(), ev);
+					packetAcknowledged = transfer.WriteSetVariableResult(channel, varName.c_str(), ev);
 				}
 
 				if (isGlobal)
@@ -889,7 +890,7 @@ void SbcInterface::ExchangeData() noexcept
 				// Get the error message and send it back to DSF
 				// Save memory by re-using 'expression' to capture the error message
 				e.GetMessage(expression.GetRef(), nullptr);
-				packetAcknowledged = transfer.WriteSetVariableError(varName.c_str(), expression.c_str());
+				packetAcknowledged = transfer.WriteSetVariableError(channel, varName.c_str(), expression.c_str());
 			}
 			break;
 		}
@@ -1030,6 +1031,52 @@ void SbcInterface::ExchangeData() noexcept
 				fileSuccess = success;
 				fileOperation = FileOperation::none;
 				fileSemaphore.Give();
+			}
+			break;
+		}
+
+		// Request to update the last G-code result
+		case SbcRequest::SetLastCodeResult:
+		{
+			GCodeResult result;
+			const GCodeChannel channel = transfer.ReadSetLastCodeResult(result);
+
+			// Make sure we can access the gb safely...
+			if (!channel.IsValid())
+			{
+				REPORT_INTERNAL_ERROR;
+				break;
+			}
+
+			GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+			if (gb == nullptr)
+			{
+				REPORT_INTERNAL_ERROR;
+				break;
+			}
+
+			MutexLocker lock(gb->mutex, SbcYieldTimeout);
+			if (!lock.IsAcquired())
+			{
+				packetAcknowledged = false;
+				break;
+			}
+
+			gb->SetLastResult(result);
+			break;
+		}
+
+		// Called when keys provided exclusively by DSF in SBC mode have changed
+		case SbcRequest::ObjectModelKeyChanged:
+		{
+			const char *key = transfer.ReadData(packet->length);
+			if (StringEqualsIgnoreCase(key, "network"))
+			{
+				reprap.NetworkUpdated();
+			}
+			else if (StringEqualsIgnoreCase(key, "volumes"))
+			{
+				reprap.VolumesUpdated();
 			}
 			break;
 		}
@@ -1192,7 +1239,7 @@ void SbcInterface::ExchangeData() noexcept
 			{
 				if (reprap.Debug(Module::SbcInterface))
 				{
-					debugPrintf("Requesting macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
+					debugPrintf("Requesting macro file '%s' (channel %d, fromCode %s)\n", requestedMacroFile, (int)i, fromCode ? "true" : "false");
 				}
 				gb->MacroRequestSent();
 				gb->Invalidate();
@@ -1262,7 +1309,7 @@ void SbcInterface::ExchangeData() noexcept
 					{
 						if (reprap.Debug(Module::SbcInterface))
 						{
-							debugPrintf("Requesting non-blocking macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
+							debugPrintf("Requesting non-blocking macro file '%s' (channel %i, fromCode %s)\n", requestedMacroFile, (int)i, fromCode ? "true" : "false");
 						}
 						gb->MacroRequestSent();
 						gb->Invalidate();
@@ -1276,7 +1323,7 @@ void SbcInterface::ExchangeData() noexcept
 					{
 						// Unfortunately, the explicit line number is stripped from the G-code data when we get here.
 						// That means we need to prepend it again before the full code is sent over to the SBC
-						String<MaxGCodeLength> code;
+						String<MaxGCodeStringLength> code;
 						code.printf("N%" PRIu32 " %s", gb->GetExplicitLineNumber(), gb->DataStart());
 						gb->SetFinished(transfer.WriteDoCode(channel, code.c_str(), code.strlen()));
 					}
@@ -1290,7 +1337,7 @@ void SbcInterface::ExchangeData() noexcept
 	}
 
 	// Send pause notification on demand
-	if (reportPause && transfer.WritePrintPaused(pauseFilePosition, pauseReason))
+	if (reportPause && transfer.WritePrintPaused(pauseFilePosition, pauseFilePosition2, pauseReason))
 	{
 		reportPause = false;
 	}
@@ -1886,7 +1933,7 @@ void SbcInterface::DefragmentBufferedCodes() noexcept
 	if (rxPointer != txPointer || txEnd != 0)
 	{
 		const uint16_t bufferSpace = (txEnd == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
-		if (bufferSpace > MaxCodeBufferSize)
+		if (bufferSpace > MaxGCodeBinaryLength)
 		{
 			// There is still enough space left for at least one more code, don't worry about fragmentation yet
 			return;
@@ -1902,7 +1949,7 @@ void SbcInterface::DefragmentBufferedCodes() noexcept
 			// Ring buffer overlapped (rxPointer..txEnd, 0..txPointer)
 			if (!DefragmentCodeBlock(rxPointer, txEnd) &&
 				!DefragmentCodeBlock(0, txPointer) &&
-				SpiCodeBufferSize - (size_t)txEnd > MaxCodeBufferSize)
+				SpiCodeBufferSize - (size_t)txEnd > MaxGCodeBinaryLength)
 			{
 				size_t endBufferSize = txEnd - rxPointer;
 				memmoveu32(reinterpret_cast<uint32_t*>(codeBuffer + SpiCodeBufferSize - endBufferSize), reinterpret_cast<uint32_t*>(codeBuffer + rxPointer), endBufferSize / sizeof(uint32_t));

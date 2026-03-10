@@ -78,7 +78,7 @@ struct ExpressionValue final
 	};
 
 	ExpressionValue() noexcept : type((uint32_t)TypeCode::None) { }
-	explicit constexpr ExpressionValue(bool b) noexcept : type((uint32_t)TypeCode::Bool), param(0), bVal(b) { }
+	explicit constexpr ExpressionValue(bool b) noexcept : type((uint32_t)TypeCode::Bool_tc), param(0), bVal(b) { }
 	explicit constexpr ExpressionValue(char c) noexcept : type((uint32_t)TypeCode::Char), param(0), cVal(c) { }
 	explicit constexpr ExpressionValue(float f) noexcept : type((uint32_t)TypeCode::Float), param(MaxFloatDigitsDisplayedAfterPoint), fVal(f) { }
 	constexpr ExpressionValue(float f, uint8_t numDecimalPlaces) noexcept : type((uint32_t)TypeCode::Float), param(numDecimalPlaces), fVal(f) { }
@@ -119,7 +119,7 @@ struct ExpressionValue final
 	explicit ExpressionValue(ArrayHandle h) noexcept : type((uint32_t)TypeCode::HeapArray), param(0), ahVal(h) { }
 	// End note
 
-	explicit ExpressionValue(const IoPort& p) noexcept : type((uint32_t)TypeCode::Port), param(0), iopVal(&p) { }
+	explicit ExpressionValue(const IoPort& p) noexcept : type((uint32_t)TypeCode::Port_tc), param(0), iopVal(&p) { }
 	explicit ExpressionValue(const UniqueId& id) noexcept : type((uint32_t)TypeCode::UniqueId_tc), param(0), uniqueIdVal(&id) { }
 #if SUPPORT_CAN_EXPANSION
 	ExpressionValue(const char *_ecv_array s, ExpansionDetail p) noexcept : type((uint32_t)TypeCode::CanExpansionBoardDetails), param((uint32_t)p), sVal(s) { }
@@ -173,10 +173,10 @@ struct ExpressionValue final
 	const char *_ecv_array GetFloatFormatString() const noexcept { return ::GetFloatFormatString(fVal, param); }
 
 	// Append a string representation of this value to a string
-	void AppendAsString(const StringRef& str) const noexcept;
+	void AppendAsString(const StringRef& str, bool quoteStrings = false) const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
-	void ExtractRequestedPart(const StringRef& rslt) const noexcept pre(type == TYPE_OF(CanExpansionBoardDetails));
+	void ExtractRequestedPart(const StringRef& rslt, bool quoteStrings) const noexcept pre(type == (uint32_t)TypeCode::CanExpansionBoardDetails);
 #endif
 };
 

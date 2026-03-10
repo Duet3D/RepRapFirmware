@@ -34,7 +34,7 @@ public:
 #else
 	explicit FileWriteBuffer(FileWriteBuffer *_ecv_null n) noexcept : next(n), index(0) { }
 #endif
-	static void UsingSbcMode() { fileWriteBufLen = SbcFileWriteBufLen; }	// only called by RepRap on startup
+	static void UsingSbcMode() noexcept { fileWriteBufLen = SbcFileWriteBufLen; }	// only called by RepRap on startup
 
 	FileWriteBuffer *_ecv_null Next() const noexcept { return next; }
 	void SetNext(FileWriteBuffer *_ecv_null n) noexcept { next = n; }

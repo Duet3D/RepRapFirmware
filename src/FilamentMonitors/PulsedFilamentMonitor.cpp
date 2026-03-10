@@ -397,7 +397,7 @@ GCodeResult PulsedFilamentMonitor::Configure(const CanMessageGenericParser& pars
 }
 
 // Store collected data in a CAN message slot
-void PulsedFilamentMonitor::GetLiveData(FilamentMonitorDataNew2& data) const noexcept
+void PulsedFilamentMonitor::GetLiveData(FilamentMonitorDataV2& data) const noexcept
 {
 	data.ClearReservedFields();
 	data.position = sensorValue & 0x0FFF;
@@ -408,7 +408,7 @@ void PulsedFilamentMonitor::GetLiveData(FilamentMonitorDataNew2& data) const noe
 
 #if SUPPORT_CAN_EXPANSION
 
-void PulsedFilamentMonitor::UpdateLiveData(const FilamentMonitorDataNew2& data) noexcept
+void PulsedFilamentMonitor::UpdateLiveData(const FilamentMonitorDataV2& data) noexcept
 {
 	sensorValue = data.position;
 }

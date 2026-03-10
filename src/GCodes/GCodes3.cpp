@@ -395,8 +395,8 @@ GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 	Platform& pfm = platform;
 	const bool ok = endstopsToWaitFor.IterateWhile([&pfm, activeHigh](unsigned int axis, unsigned int) noexcept -> bool
 								{
-									const bool stopped = pfm.GetEndstops().Stopped(axis);
-									return stopped == activeHigh;
+									const bool isStopped = pfm.GetEndstops().Stopped(axis);
+									return isStopped == activeHigh;
 								}
 							 )
 				&& portsToWaitFor.IterateWhile([&pfm, activeHigh](unsigned int port, unsigned int) noexcept -> bool
@@ -410,6 +410,7 @@ GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 // Handle M581
 GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	if (gb.GetCommandFraction() > 1) { return GCodeResult::errorNotSupported; }
 	const unsigned int triggerNumber = gb.GetLimitedUIValue('T', MaxTriggers);
 	return triggers[triggerNumber].Configure(triggerNumber, gb, reply);
 }
@@ -419,7 +420,7 @@ GCodeResult GCodes::CheckTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS
 {
 	const unsigned int triggerNumber = gb.GetLimitedUIValue('T', MaxTriggers);
 	const bool unconditional = gb.Seen('S') && gb.GetUIValue() == 1;
-	if (unconditional || triggers[triggerNumber].CheckLevel())
+	if (unconditional || triggers[triggerNumber].CheckLevel(triggerNumber))
 	{
 		triggersPending.SetBit(triggerNumber);
 	}
@@ -588,6 +589,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	if (seen || seenExtrude)
 	{
+#if SUPPORT_S_CURVE
+		move.UpdateSCurveFlagAndJerk();
+#endif
 		reprap.MoveUpdated();
 #if SUPPORT_CAN_EXPANSION
 		rslt = max(rslt, move.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply));
@@ -935,6 +939,9 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 
 	if (seen)
 	{
+#if SUPPORT_S_CURVE
+		move.UpdateSCurveFlagAndJerk();
+#endif
 		reprap.MoveUpdated();
 	}
 	else
@@ -1238,8 +1245,7 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 						}
 						text += 6;			// skip ", z = "
 					}
-					// no break
-
+					[[fallthrough]];
 				case 7:		// new layer, but we are given the Z height, not the layer number
 				case 8:
 					{

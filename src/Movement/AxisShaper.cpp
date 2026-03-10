@@ -34,7 +34,7 @@ constexpr ObjectModelArrayTableEntry AxisShaper::objectModelArrayTable[] =
 	{
 		nullptr,					// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT(self->numImpulses),
-		OBJECT_MODEL_ARRAY_VALUE(self->coefficients[context.GetLastIndex()], 3)
+		OBJECT_MODEL_ARRAY_VALUE((float)self->coefficients[context.GetLastIndex()], 3)
 	},
 	// 1. Durations
 	{
@@ -65,7 +65,7 @@ AxisShaper::AxisShaper() noexcept
 	: type(InputShaperType::none),
 	  frequency(DefaultFrequency),
 	  zeta(DefaultDamping),
-	  numImpulses(1), prepareAdvanceTime(MoveTiming::UsualMinimumPreparedTime)
+	  numImpulses(1), shapingTime(0), prepareAdvanceTime(MoveTiming::UsualMinimumPreparedTime)
 {
 	coefficients[0] = 1.0;
 	delays[0] = 0;
@@ -269,23 +269,13 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			}
 		}
 		coefficients[numImpulses - 1] = (motioncalc_t)1.0 - sum;
+		shapingTime = delays[numImpulses - 1];
 		prepareAdvanceTime = max<uint32_t>(longestSegment + MoveTiming::AbsoluteMinimumPreparedTime, MoveTiming::UsualMinimumPreparedTime);
 
 		reprap.MoveUpdated();
 
 #if SUPPORT_CAN_EXPANSION
-# if USE_DOUBLE_MOTIONCALC
-		{
-			float fCoefficients[MaxImpulses];
-			for (size_t i = 0; i < numImpulses; ++i)
-			{
-				fCoefficients[i] = (float)coefficients[i];
-			}
-			return reprap.GetMove().UpdateRemoteInputShaping(numImpulses, fCoefficients, delays, reply);
-		}
-# else
 		return UpdateRemoteInputShaping(reply);
-# endif
 #else
 		// Fall through to return GCodeResult::ok
 #endif
@@ -332,12 +322,12 @@ GCodeResult AxisShaper::UpdateRemoteInputShaping(const StringRef& reply) const n
 				{
 					CanMessageBuffer *const buf = CanMessageBuffer::BlockingAllocate();
 					const CanRequestId rid = CanInterface::AllocateRequestId(addr, buf);
-					auto msg = buf->SetupRequestMessage<CanMessageSetInputShapingNew>(rid, CanInterface::GetCanAddress(), addr);
+					auto msg = buf->SetupRequestMessage<CanMessageSetInputShapingV1>(rid, CanInterface::GetCanAddress(), addr);
 					msg->numImpulses = numImpulses;
 					for (unsigned int i = 0; i < numImpulses; ++i)
 					{
-						msg->impulses[i].coefficient = coefficients[i];
-						msg->impulses[i].delay = delays[i];
+						msg->impulses[i].coefficient = (float)coefficients[i];
+						msg->impulses[i].impulseDelay = delays[i];
 					}
 					buf->dataLength = msg->GetActualDataLength();
 					msg->SetRequestId(rid);
@@ -358,7 +348,7 @@ GCodeResult AxisShaper::UpdateRemoteInputShaping(const StringRef& reply) const n
 #if SUPPORT_REMOTE_COMMANDS
 
 // Handle a request from the master board to set input shaping parameters
-GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShapingNew& msg, size_t dataLength, const StringRef& reply) noexcept
+GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShapingV1& msg, size_t dataLength, const StringRef& reply) noexcept
 {
 	if (msg.numImpulses <= MaxImpulses && dataLength >= msg.GetActualDataLength())
 	{
@@ -366,7 +356,7 @@ GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShapingNew& m
 		for (size_t i = 0; i < numImpulses; ++i)
 		{
 			coefficients[i] = msg.impulses[i].coefficient;
-			delays[i] = msg.impulses[i].delay;
+			delays[i] = msg.impulses[i].impulseDelay;
 		}
 		return GCodeResult::ok;
 	}

@@ -34,6 +34,79 @@ void Move::SetAcceleration(size_t drive, float value, bool reduced) noexcept
 	}
 }
 
+#if SUPPORT_S_CURVE
+
+// This is called whenever M201 changes normal accelerations or acceleration time, when changing axis/extruder driver assignment (in case new axes/extruders are created), and when changing the step mode.
+// It determines whether we should use S-curve acceleration and if so it recalculates the axis and extruder jerk values in case the accelerations or acceleration time has changed.
+// After calling this, call reprap.moveUpdated in case usingSCurve has changed. Callers normally need to do this anyway to account for other changes they make, so we don't do it here.
+// We now allow S-curve to be enabled even if there are some remote drivers, even though we don't support S-curve over CAN. We just require that all local drivers use phase stepping.
+// This is primarily so that I (DC) can test S-curve acceleration on my toolchanger, which has some extruders and the Z axis driven from CAN-connected boards.
+void Move::UpdateSCurveFlagAndJerk() noexcept
+{
+	if (accelerationTime > 0.0)
+	{
+		// Enable S-curve acceleration if all drives are using phase stepping
+		bool allLocalDrivesUsingPhaseStepping = true;
+		for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); axis++)
+		{
+			jerks[axis] = normalAccelerations[axis] / accelerationTime;
+			if (
+# if SUPPORT_CAN_EXPANSION
+				AxisHasLocalDriver(axis) &&
+# endif
+				GetStepMode(axis) != StepMode::phase
+			   )
+			{
+				allLocalDrivesUsingPhaseStepping = false;
+			}
+		}
+
+		for (size_t extruder = 0; extruder < reprap.GetGCodes().GetNumExtruders(); extruder++)
+		{
+			const size_t drive = ExtruderToLogicalDrive(extruder);
+			jerks[drive] = normalAccelerations[drive] / accelerationTime;
+			if (
+# if SUPPORT_CAN_EXPANSION
+				ExtruderHasLocalDriver(extruder) &&
+# endif
+				GetStepMode(drive) != StepMode::phase
+			   )
+			{
+				allLocalDrivesUsingPhaseStepping = false;
+			}
+		}
+		usingSCurve = allLocalDrivesUsingPhaseStepping;
+	}
+	else
+	{
+		usingSCurve = false;
+	}
+}
+
+#endif
+
+#if SUPPORT_S_CURVE && SUPPORT_CAN_EXPANSION
+
+bool Move::AxisHasLocalDriver(size_t axis) const noexcept
+{
+	for (size_t i = 0; i < axisDrivers[axis].numDrivers; ++i)
+	{
+		const DriverId id = axisDrivers[axis].driverNumbers[i];
+		if (id.IsLocal())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool Move::ExtruderHasLocalDriver(size_t extruder) const noexcept
+{
+	return extruderDrivers[extruder].IsLocal();
+}
+
+#endif
+
 // Set the microstepping for local drivers, returning true if successful. All drivers for the same axis must use the same microstepping.
 // Caller must deal with remote drivers.
 bool Move::SetMicrostepping(size_t drive, unsigned int microsteps, bool interp, const StringRef& reply) noexcept
@@ -338,7 +411,7 @@ GCodeResult Move::ConfigureNonlinearExtrusion(GCodeBuffer& gb, const StringRef& 
 // Return the position of an endstop in steps. Only called for kinematics that home drives individually.
 int32_t Move::GetEndstopPositionSteps(size_t drive, bool highEnd) noexcept
 {
-	return kinematics->GetEndstopPosition(drive, highEnd) * driveStepsPerMm[drive];
+	return (int32_t)(kinematics->GetEndstopPosition(drive, highEnd) * driveStepsPerMm[drive]);
 }
 
 // This is called from the step ISR as well as other places, so keep it fast
@@ -1196,9 +1269,9 @@ void Move::ReportM569Parameters(size_t drive, const StringRef& reply) noexcept
 				const uint32_t tcoolthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tcoolthrs);
 				const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
 				bool bdummy;
-				const unsigned int microstepping = SmartDrivers::GetMicrostepping(drive, bdummy);
-				const float tcoolMmPerSec = (microstepping * SmartDrivers::GetDriverMaxClockFrequency())/(256 * tcoolthrs * DriveStepsPerMm(axis));
-				const float tpwmMmPerSec = (microstepping * SmartDrivers::GetDriverMinClockFrequency())/(256 * tpwmthrs * DriveStepsPerMm(axis));
+				const unsigned int ms = SmartDrivers::GetMicrostepping(drive, bdummy);
+				const float tcoolMmPerSec = (ms * SmartDrivers::GetDriverMaxClockFrequency())/(256 * tcoolthrs * DriveStepsPerMm(axis));
+				const float tpwmMmPerSec = (ms * SmartDrivers::GetDriverMinClockFrequency())/(256 * tpwmthrs * DriveStepsPerMm(axis));
 				const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
 				const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
 				const unsigned int pwmScaleSum = pwmScale & 0xFF;
@@ -1234,28 +1307,49 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	// Prepare for movement
 	PrepParams params;
 
-	// Normalise the move to unit distance
-	params.totalDistance = 1.0;
+#if SUPPORT_S_CURVE
+	params.initialAcceleration = params.peakAcceleration = msg.acceleration;
+	params.initialDeceleration = params.peakDeceleration = -msg.deceleration;
+	params.phaseClocks[1] = msg.accelerationClocks;
+	params.phaseClocks[3] = msg.steadyClocks;
+	params.phaseClocks[5] = msg.decelClocks;
+	params.phaseClocks[0] = params.phaseClocks[2] = params.phaseClocks[4] = params.phaseClocks[6] = 0;
+#else
 	params.acceleration = msg.acceleration;
 	params.deceleration = -msg.deceleration;
 	params.accelClocks = msg.accelerationClocks;
 	params.steadyClocks = msg.steadyClocks;
 	params.decelClocks = msg.decelClocks;
+#endif
 	uint32_t clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
 
 	// We occasionally receive a message for a very short move with zero clocks needed. This messes up the calculations, so add one steady clock in this case.
 	if (clocksNeeded == 0)
 	{
+#if SUPPORT_S_CURVE
+		clocksNeeded = params.phaseClocks[3] = 1;
+#else
 		clocksNeeded = params.steadyClocks = 1;
+#endif
 	}
 
-	const float accelDistanceExTopSpeed = -0.5 * params.acceleration * fsquare((float)params.accelClocks);
-	const float decelDistanceExTopSpeed = 0.5 * params.deceleration * fsquare((float)params.decelClocks);
-	const float topSpeed = (params.totalDistance - accelDistanceExTopSpeed - decelDistanceExTopSpeed)/clocksNeeded;
+	// Normalise the move to unit distance
+	params.totalDistance = (motioncalc_t)1.0;
+	const motioncalc_t accelDistanceExTopSpeed = -(motioncalc_t)0.5 * msg.acceleration * msquare((motioncalc_t)msg.accelerationClocks);
+	const motioncalc_t decelDistanceExTopSpeed = (motioncalc_t)0.5 * msg.deceleration * msquare((motioncalc_t)msg.decelClocks);
+	const motioncalc_t topSpeed = (params.totalDistance - (accelDistanceExTopSpeed + decelDistanceExTopSpeed))/clocksNeeded;
 
-	params.accelDistance =      accelDistanceExTopSpeed + topSpeed * params.accelClocks;
-	const float decelDistance = decelDistanceExTopSpeed + topSpeed * params.decelClocks;
-	params.decelStartDistance =  1.0 - decelDistance;
+#if SUPPORT_S_CURVE
+	params.distances[1] = accelDistanceExTopSpeed + topSpeed * msg.accelerationClocks;
+	params.distances[5] = decelDistanceExTopSpeed + topSpeed * msg.decelClocks;
+	params.distances[3] = params.totalDistance - (params.distances[1] + params.distances[5]);
+	params.distances[0] = params.distances[2] = params.distances[4] = params.distances[6] = (motioncalc_t)0.0;
+	params.jerk = (motioncalc_t)0.0;
+#else
+	params.accelDistance = accelDistanceExTopSpeed + topSpeed * msg.accelerationClocks;
+	const motioncalc_t decelDistance = decelDistanceExTopSpeed + topSpeed * msg.decelClocks;
+	params.decelStartDistance = params.totalDistance - decelDistance;
+#endif
 
 	MovementFlags segFlags;
 	segFlags.nonPrintingMove = !msg.usePressureAdvance;

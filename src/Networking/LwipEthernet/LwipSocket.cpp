@@ -192,12 +192,12 @@ void LwipSocket::ConnectionError(err_t err) noexcept
 }
 
 // Initialise a TCP socket
-void LwipSocket::Init(SocketNumber skt, TcpPort serverPort, NetworkProtocol p, bool outgoing) noexcept
+void LwipSocket::Init(SocketNumber skt, TcpPort serverPort, NetworkProtocol p, bool p_outgoing) noexcept
 {
 	UNUSED(skt);
-	this->outgoing = outgoing;
+	outgoing = p_outgoing;
 
-	if (this->outgoing)
+	if (outgoing)
 	{
 		remotePort = serverPort;
 		whenConnecting = millis();

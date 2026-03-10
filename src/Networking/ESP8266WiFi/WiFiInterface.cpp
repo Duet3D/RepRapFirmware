@@ -2247,7 +2247,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	MemoryChecker mc1, mc2, mc3, mc4, mc5;
 # endif
 	{
-		AtomicCriticalSectionLocker lock;	// disable interrupts for this section in case it helps prevent the DMA memory corruption
+		AtomicCriticalSectionLocker alock;	// disable interrupts for this section in case it helps prevent the DMA memory corruption
 		DmacManager::DisableChannel(DmacChanWiFiTx);
 		if (!DmacManager::DisableChannel(DmacChanWiFiRx))
 		{
