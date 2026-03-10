@@ -210,24 +210,25 @@ namespace DataCollection
 		// Add timestamp
 		lastTransmissionTime = millis();
 		AddDataToBuffer(lastTransmissionTime);
-		AddDataToBuffer((uint8_t)',');
 
 		const uint32_t now = StepTimer::GetTimerTicks();
 
 		// Add X,Y,Z position to buffer
 		Move& move = reprap.GetMove();
 		float coords[MaxAxes];
-//		move.GetLiveMachineCoordinates(coords);
 		move.UpdateLiveMachineCoordinates(coords, reprap.GetGCodes().GetPrimaryMovementState().currentTool);
 		for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); axis++)
 		{
-			AddDataToBuffer(coords[axis], 7, 2);
-//			AddAxisPosition(axis, now);
 			AddDataToBuffer((uint8_t)',');
+			AddDataToBuffer(coords[axis], 7, 2);
 		}
 
-		// Add E0 position to buffer
-		AddAxisPosition(ExtruderToLogicalDrive(0), now);
+		// Add all extruder positions to buffer
+		for (size_t extruder = 0; extruder < reprap.GetGCodes().GetNumExtruders(); extruder++)
+		{
+			AddDataToBuffer((uint8_t)',');
+			AddAxisPosition(ExtruderToLogicalDrive(extruder), now);
+		}
 
 		// Add analog sensor
 		// TODO will need to poll this faster
