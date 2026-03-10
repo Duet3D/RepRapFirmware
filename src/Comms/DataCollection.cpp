@@ -125,16 +125,24 @@ namespace DataCollection
 	// Convert a float to an ASCII array of length 5, implied decimal place before last 2 characters
 	static bool SerialiseFloat(float input, uint8_t* output, size_t &len, size_t decimals)
 	{
-		int limit = 1;
+		float limit = 1;
 		const size_t decimalAndSignChars = decimals > 0 ? decimals + 2 : 1;
 		for (size_t i = decimalAndSignChars; i < len; i++)
 		{
 			limit *= 10;
 		}
 
-		if (unlikely(abs(input) >= limit))
+		if (unlikely(fabsf(input) >= limit))
 		{
-			float decimalResolution = decimals > 0 ? pow(0.1, decimals) : 0;
+			float decimalResolution = 0.0f;
+			if (decimals > 0)
+			{
+				decimalResolution = 1.0f;
+				for (size_t i = 0; i < decimals; i++)
+				{
+					decimalResolution *= 0.1f;
+				}
+			}
 			input = input < 0 ? -(limit - decimalResolution) : (limit - decimalResolution);
 		}
 
