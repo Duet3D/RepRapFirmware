@@ -44,7 +44,7 @@
 
 constexpr uint16_t MinimumReadInterval = 1000;			// ms
 constexpr uint32_t BME280_Frequency = 4000000;			// maximum for BME280 is 10MHz
-constexpr SpiMode BME280_SpiMode = SPI_MODE_0;			// BME280 does mode 0 or mode 3 depending on value of CLK at falling edge of CS
+constexpr SpiMode BME280_SpiMode = SpiMode::mode0;		// BME280 does mode 0 or mode 3 depending on value of CLK at falling edge of CS
 constexpr size_t MaxRegistersToRead = 26;
 
 // Sensor type descriptors

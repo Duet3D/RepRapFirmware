@@ -23,7 +23,7 @@ const uint32_t MAX31865_Frequency = 4000000;	// maximum for MAX31865 is 5MHz
 // If the inactive state of SCL is LOW (CPOL = 0) (in the case of the MAX31865, this is sampled on the falling edge of CS):
 // The MAX31865 changes data after the rising edge of CLK, and samples input data on the falling edge.
 // This requires NCPHA = 0.
-const SpiMode MAX31865_SpiMode = SPI_MODE_1;
+const SpiMode MAX31865_SpiMode = SpiMode::mode1;
 
 // Define the minimum interval between readings. The MAX31865 needs 62.5ms in 50Hz filter mode.
 const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in milliseconds

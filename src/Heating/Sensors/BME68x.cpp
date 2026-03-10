@@ -45,7 +45,7 @@
 
 constexpr uint16_t MinimumReadInterval = 1000;			// ms
 constexpr uint32_t BME68x_Frequency = 4000000;			// maximum for BME68x is 10MHz
-constexpr SpiMode BME68x_SpiMode = SPI_MODE_0;			// BME68x supports SPI mode 0
+constexpr SpiMode BME68x_SpiMode = SpiMode::mode0;		// BME68x supports SPI mode 0
 
 // Gas range lookup table for resistance calculation
 static const float gas_range_lookup1[16] = {
