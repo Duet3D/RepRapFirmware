@@ -92,6 +92,10 @@
 # define SUPPORT_BME280			0
 #endif
 
+#ifndef SUPPORT_BME68X
+# define SUPPORT_BME68X			0
+#endif
+
 #ifndef SUPPORT_ADS131A02
 # define SUPPORT_ADS131A02		0
 #endif
