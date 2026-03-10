@@ -1391,7 +1391,7 @@ void Move::GetLiveMachineCoordinates(float coords[MaxAxes]) const noexcept
 #if SUPPORT_PHASE_STEPPING
 			MotionParameters params;
 			dms[i].GetCurrentMotion(now, 1, params);
-			currentMotorPositions[i] = params.position;
+			currentMotorPositions[i] = static_cast<int32_t>(params.position);
 #else
 			currentMotorPositions[i] = dms[i].currentMotorPosition - currentBacklashSteps[i];
 #endif
