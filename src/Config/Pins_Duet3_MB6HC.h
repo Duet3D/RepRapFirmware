@@ -102,6 +102,8 @@ constexpr size_t MaxPortsPerHeater = 3;
 
 constexpr size_t MaxBedHeaters = 12;
 constexpr size_t MaxChamberHeaters = 8;
+constexpr size_t MaxHeatersPerBed = 4;
+constexpr size_t MaxHeatersPerChamber = 4;
 
 constexpr size_t NumThermistorInputs = 4;
 constexpr size_t NumTmcDriversSenseChannels = 1;

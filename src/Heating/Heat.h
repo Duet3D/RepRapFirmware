@@ -57,15 +57,19 @@ public:
 	void SetExtrusionMinTemp(float t) noexcept;							// Set minimum extrusion temperature
 	void SetRetractionMinTemp(float t) noexcept;						// Set minimum retraction temperature
 
-	int GetBedHeater(size_t index) const noexcept						// Get a hot bed heater number
+	int GetBedHeater(size_t index) const noexcept						// Get the first bed heater number (deprecated, use mapping methods)
 	pre(index < MaxBedHeaters);
-	void SetBedHeater(size_t index, int heater)	 noexcept				// Set a hot bed heater number
-	pre(index < MaxBedHeaters; -1 <= heater; heater < MaxHeaters);
+	void SetBedHeaters(size_t index, const int32_t heaterNumbers[], size_t count) noexcept;	// Set multiple bed heaters for a slot
+	void ClearBedHeaters(size_t index) noexcept;						// Clear all bed heaters for a slot
+	size_t GetBedHeaterCount(size_t index) const noexcept;			// Get the number of bed heaters for a slot
+	int GetBedHeaterAt(size_t index, size_t pos) const noexcept;		// Get a specific bed heater for a slot
 
-	int GetChamberHeater(size_t index) const noexcept					// Get a chamber heater number
+	int GetChamberHeater(size_t index) const noexcept					// Get the first chamber heater number (deprecated, use mapping methods)
 	pre(index < MaxChamberHeaters);
-	void SetChamberHeater(size_t index, int heater)	 noexcept			// Set a chamber heater number
-	pre(index < MaxChamberHeaters; -1 <= heater; heater < MaxHeaters);
+	void SetChamberHeaters(size_t index, const int32_t heaterNumbers[], size_t count) noexcept;	// Set multiple chamber heaters for a slot
+	void ClearChamberHeaters(size_t index) noexcept;					// Clear all chamber heaters for a slot
+	size_t GetChamberHeaterCount(size_t index) const noexcept;		// Get the number of chamber heaters for a slot
+	int GetChamberHeaterAt(size_t index, size_t pos) const noexcept;	// Get a specific chamber heater for a slot
 
 	HeaterFunction GetHeaterFunction(int heater) const noexcept;		// Check if this heater is a bed heater, chamber heater or tool heater
 	void SetAsToolHeater(int8_t heater) const noexcept;					// called when a tool is created that uses this heater
@@ -90,6 +94,8 @@ public:
 
 	float GetHighestTemperatureLimit() const noexcept;					// Get the highest temperature limit of any heater
 	size_t GetNumHeatersToReport() const noexcept;
+	size_t GetNumBedSlotsToReport() const noexcept;
+	size_t GetNumChamberSlotsToReport() const noexcept;
 	size_t GetNumSensorsToReport() const noexcept;
 
 	void Diagnostics(const StringRef& reply) noexcept;					// Output useful information
@@ -180,8 +186,10 @@ private:
 	float retractionMinTemp;									// Minimum temperature to allow regular retraction
 	unsigned int sensorOrderingErrors;							// Counts any issue with unordered temperature sensors
 	bool coldExtrude;											// Is cold extrusion allowed?
-	int8_t bedHeaters[MaxBedHeaters];							// Indices of the hot bed heaters to use or -1 if none is available
-	int8_t chamberHeaters[MaxChamberHeaters];					// Indices of the chamber heaters to use or -1 if none is available
+	int8_t bedHeaterMapping[MaxBedHeaters][MaxHeatersPerBed];		// Heater indices for each bed slot
+	size_t bedHeaterCount[MaxBedHeaters];							// Number of heaters assigned to each bed slot
+	int8_t chamberHeaterMapping[MaxChamberHeaters][MaxHeatersPerChamber]; // Heater indices for each chamber slot
+	size_t chamberHeaterCount[MaxChamberHeaters];					// Number of heaters assigned to each chamber slot
 	int8_t heaterBeingTuned;									// which PID is currently being tuned
 	int8_t lastHeaterTuned;										// which PID we last finished tuning
 
@@ -226,14 +234,34 @@ inline void Heat::SetRetractionMinTemp(float t) noexcept
 	reprap.HeatUpdated();
 }
 
-inline int Heat::GetBedHeater(size_t index) const noexcept
+inline int Heat::GetBedHeater(size_t slot) const noexcept
 {
-	return bedHeaters[index];
+	return (bedHeaterCount[slot] > 0) ? bedHeaterMapping[slot][0] : -1;
 }
 
-inline int Heat::GetChamberHeater(size_t index) const noexcept
+inline int Heat::GetChamberHeater(size_t slot) const noexcept
 {
-	return chamberHeaters[index];
+	return (chamberHeaterCount[slot] > 0) ? chamberHeaterMapping[slot][0] : -1;
+}
+
+inline size_t Heat::GetBedHeaterCount(size_t slot) const noexcept
+{
+	return bedHeaterCount[slot];
+}
+
+inline size_t Heat::GetChamberHeaterCount(size_t slot) const noexcept
+{
+	return chamberHeaterCount[slot];
+}
+
+inline int Heat::GetBedHeaterAt(size_t slot, size_t index) const noexcept
+{
+	return (index < bedHeaterCount[slot]) ? bedHeaterMapping[slot][index] : -1;
+}
+
+inline int Heat::GetChamberHeaterAt(size_t slot, size_t index) const noexcept
+{
+	return (index < chamberHeaterCount[slot]) ? chamberHeaterMapping[slot][index] : -1;
 }
 
 #endif

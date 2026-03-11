@@ -98,6 +98,8 @@ constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors p
 
 constexpr size_t MaxBedHeaters = 1;
 constexpr size_t MaxChamberHeaters = 1;
+constexpr size_t MaxHeatersPerBed = 4;
+constexpr size_t MaxHeatersPerChamber = 4;
 constexpr int8_t DefaultBedHeater = -1;
 
 constexpr size_t NumThermistorInputs = 2;
