@@ -113,7 +113,6 @@ constexpr ObjectModelTableEntry Heat::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
 	// 0. Heat class
-	{ "bedHeaterControlMask",	OBJECT_MODEL_FUNC((int32_t)self->bedHeaterControlMask.GetRaw()),				ObjectModelEntryFlags::none },
 	{ "bedHeaters",				OBJECT_MODEL_FUNC_ARRAY(0), 													ObjectModelEntryFlags::none },
 	{ "chamberHeaters",			OBJECT_MODEL_FUNC_ARRAY(1),				 										ObjectModelEntryFlags::none },
 	{ "coldExtrudeTemperature",	OBJECT_MODEL_FUNC((self->coldExtrude) ? 0.0f : self->extrusionMinTemp, 1),		ObjectModelEntryFlags::none },
@@ -121,7 +120,7 @@ constexpr ObjectModelTableEntry Heat::objectModelTable[] =
 	{ "heaters",				OBJECT_MODEL_FUNC_ARRAY(2),														ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t Heat::objectModelTableDescriptor[] = { 1, 6 };
+constexpr uint8_t Heat::objectModelTableDescriptor[] = { 1, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heat)
 
@@ -129,7 +128,7 @@ ReadWriteLock Heat::heatersLock;
 ReadWriteLock Heat::sensorsLock;
 
 Heat::Heat() noexcept
-	: sensorCount(0), sensorsRoot(nullptr), sensorOrderingErrors(0), coldExtrude(false), bedHeaterControlMask(BedIndicesBitmap(1)), heaterBeingTuned(-1), lastHeaterTuned(-1)
+	: sensorCount(0), sensorsRoot(nullptr), sensorOrderingErrors(0), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
 #if SUPPORT_REMOTE_COMMANDS
 	, newHeaterFaultState(0), newDriverFaultState(0)
 #endif
@@ -712,12 +711,6 @@ void Heat::SetBedHeater(size_t index, int heater) noexcept
 			h->SetAsBedHeater();
 		}
 	}
-	reprap.HeatUpdated();
-}
-
-void Heat::SetBedHeaterControlMask(BedIndicesBitmap mask) noexcept
-{
-	bedHeaterControlMask = mask;
 	reprap.HeatUpdated();
 }
 

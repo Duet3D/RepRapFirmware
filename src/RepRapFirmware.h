@@ -425,7 +425,6 @@ typedef Bitmap<uint32_t> InputPortsBitmap;			// Type of a bitmap representing a 
 
 #endif
 
-typedef Bitmap<uint16_t> BedIndicesBitmap;			// Type of a bitmap representing a set of bed heater slot indices
 typedef Bitmap<uint32_t> TriggerNumbersBitmap;		// Type of a bitmap representing a set of trigger numbers
 typedef Bitmap<uint64_t> ToolNumbersBitmap;			// Type of a bitmap representing a set of tool numbers
 
@@ -442,7 +441,6 @@ static_assert(MaxAxesPlusExtruders <= LogicalDrivesBitmap::MaxBits());
 static_assert(MaxExtruders <= ExtrudersBitmap::MaxBits());
 static_assert(NumDirectDrivers <= LocalDriversBitmap::MaxBits());
 static_assert(MaxHeaters <= HeatersBitmap::MaxBits());
-static_assert(MaxBedHeaters <= BedIndicesBitmap::MaxBits());
 static_assert(MaxFans <= FansBitmap::MaxBits());
 static_assert(MaxSensors <= SensorsBitmap::MaxBits());
 static_assert(MaxSensors <= SensorsBitmap::MaxBits());
