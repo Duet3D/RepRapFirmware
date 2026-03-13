@@ -97,13 +97,12 @@ constexpr unsigned int MaxTriggers = 32;			// Must be <= 32 because we store a b
 #define SERIAL_AUX2_DEVICE serialUart2
 
 #ifdef SERIAL_USB2_DEVICE
+constexpr size_t NumUsbChannels = 2;
 constexpr size_t NumSerialChannels = 4;				// The number of serial IO channels not counting the WiFi serial connection (USB, USB2, and two auxiliary UARTs)
-constexpr size_t FirstAuxChannel = 2;
 #else
+constexpr size_t NumUsbChannels = 1;
 constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels not counting the WiFi serial connection (USB and two auxiliary UARTs)
-constexpr size_t FirstAuxChannel = 1;
 #endif
-constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 
 // Shared SPI (USART 1)
 constexpr Pin APIN_USART_SSPI_SCK = PortBPin(13);

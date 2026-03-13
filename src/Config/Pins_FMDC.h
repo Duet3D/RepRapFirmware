@@ -109,9 +109,8 @@ constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 constexpr size_t MaxLedStrips = 2;					// Maximum number of LED strips
 
+constexpr size_t NumUsbChannels = 1;
 constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB and one auxiliary UART)
-constexpr size_t FirstAuxChannel = 1;
-constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 
 #define SERIAL_USB_DEVICE (serialUSB)
 #define SERIAL_AUX_DEVICE (serialUart0)
