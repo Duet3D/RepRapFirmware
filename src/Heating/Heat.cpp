@@ -91,13 +91,13 @@ constexpr ObjectModelArrayTableEntry Heat::objectModelArrayTable[] =
 	{
 		&heatersLock,
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(MaxBedHeaters),
-		OBJECT_MODEL_ARRAY_VALUE((self->bedHeaterCount[context.GetLastIndex()] > 0) ? (int32_t)self->bedHeaterMapping[context.GetLastIndex()][0] : (int32_t)-1)
+		OBJECT_MODEL_ARRAY_VALUE((int32_t)self->bedHeaters.GetFirstHeater(context.GetLastIndex()))
 	},
 	// 1. Chamber heaters (deprecated, reports first heater per slot)
 	{
 		&heatersLock,
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(MaxChamberHeaters),
-		OBJECT_MODEL_ARRAY_VALUE((self->chamberHeaterCount[context.GetLastIndex()] > 0) ? (int32_t)self->chamberHeaterMapping[context.GetLastIndex()][0] : (int32_t)-1)
+		OBJECT_MODEL_ARRAY_VALUE((int32_t)self->chamberHeaters.GetFirstHeater(context.GetLastIndex()))
 	},
 	// 2. Heaters
 	{
@@ -108,25 +108,25 @@ constexpr ObjectModelArrayTableEntry Heat::objectModelArrayTable[] =
 	// 3. Bed heater mapping inner array (heaters within a slot)
 	{
 		&heatersLock,
-		OBJECT_MODEL_ARRAY_COUNT((size_t)self->bedHeaterCount[context.GetLastIndex()]),	// GetLastIndex() because only the outer array index has been pushed at this point
-		OBJECT_MODEL_ARRAY_VALUE((int32_t)self->bedHeaterMapping[context.GetIndex(1)][context.GetLastIndex()])
+		OBJECT_MODEL_ARRAY_COUNT(self->bedHeaters.GetHeaterCount(context.GetLastIndex())),	// GetLastIndex() because only the outer array index has been pushed at this point
+		OBJECT_MODEL_ARRAY_VALUE((int32_t)self->bedHeaters.GetHeaterAt(context.GetIndex(1), context.GetLastIndex()))
 	},
 	// 4. Bed heater mapping outer array (slots)
 	{
 		&heatersLock,
-		OBJECT_MODEL_ARRAY_COUNT(self->GetNumBedSlotsToReport()),
+		OBJECT_MODEL_ARRAY_COUNT(self->bedHeaters.GetNumSlotsToReport()),
 		OBJECT_MODEL_ARRAY_VALUE(self, 3, true)
 	},
 	// 5. Chamber heater mapping inner array (heaters within a slot)
 	{
 		&heatersLock,
-		OBJECT_MODEL_ARRAY_COUNT((size_t)self->chamberHeaterCount[context.GetLastIndex()]),	// GetLastIndex() because only the outer array index has been pushed at this point
-		OBJECT_MODEL_ARRAY_VALUE((int32_t)self->chamberHeaterMapping[context.GetIndex(1)][context.GetLastIndex()])
+		OBJECT_MODEL_ARRAY_COUNT(self->chamberHeaters.GetHeaterCount(context.GetLastIndex())),	// GetLastIndex() because only the outer array index has been pushed at this point
+		OBJECT_MODEL_ARRAY_VALUE((int32_t)self->chamberHeaters.GetHeaterAt(context.GetIndex(1), context.GetLastIndex()))
 	},
 	// 6. Chamber heater mapping outer array (slots)
 	{
 		&heatersLock,
-		OBJECT_MODEL_ARRAY_COUNT(self->GetNumChamberSlotsToReport()),
+		OBJECT_MODEL_ARRAY_COUNT(self->chamberHeaters.GetNumSlotsToReport()),
 		OBJECT_MODEL_ARRAY_VALUE(self, 5, true)
 	}
 };
@@ -159,24 +159,6 @@ Heat::Heat() noexcept
 	, newHeaterFaultState(0), newDriverFaultState(0)
 #endif
 {
-	for (size_t i = 0; i < MaxBedHeaters; i++)
-	{
-		bedHeaterCount[i] = 0;
-		for (int8_t& h : bedHeaterMapping[i])
-		{
-			h = -1;
-		}
-	}
-
-	for (size_t i = 0; i < MaxChamberHeaters; i++)
-	{
-		chamberHeaterCount[i] = 0;
-		for (int8_t& h : chamberHeaterMapping[i])
-		{
-			h = -1;
-		}
-	}
-
 	for (Heater*& h : heaters)
 	{
 		h = nullptr;
@@ -579,31 +561,9 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 void Heat::Diagnostics(const StringRef& reply) noexcept
 {
 	reply.copy("=== Heat ===\nBed heaters");
-	for (size_t i = 0; i < MaxBedHeaters; i++)
-	{
-		if (bedHeaterCount[i] > 0)
-		{
-			reply.catf(" [%u:", i);
-			for (size_t k = 0; k < bedHeaterCount[i]; k++)
-			{
-				reply.catf("%s%d", (k > 0) ? "," : "", bedHeaterMapping[i][k]);
-			}
-			reply.cat(']');
-		}
-	}
+	bedHeaters.AppendDiagnostics(reply);
 	reply.cat(", chamber heaters");
-	for (size_t i = 0; i < MaxChamberHeaters; i++)
-	{
-		if (chamberHeaterCount[i] > 0)
-		{
-			reply.catf(" [%u:", i);
-			for (size_t k = 0; k < chamberHeaterCount[i]; k++)
-			{
-				reply.catf("%s%d", (k > 0) ? "," : "", chamberHeaterMapping[i][k]);
-			}
-			reply.cat(']');
-		}
-	}
+	chamberHeaters.AppendDiagnostics(reply);
 	reply.catf(", ordering errs %u", sensorOrderingErrors);
 
 	for (size_t heater : ARRAY_INDICES(heaters))
@@ -691,21 +651,21 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROW
 
 bool Heat::SlowHeatersAtSetTemperatures(float tolerance, bool waitOnFault) const noexcept
 {
-	for (size_t i = 0; i < MaxBedHeaters; i++)
+	for (size_t i = 0; i < bedHeaters.GetMaxSlots(); i++)
 	{
-		for (size_t k = 0; k < bedHeaterCount[i]; k++)
+		for (size_t k = 0; k < bedHeaters.GetHeaterCount(i); k++)
 		{
-			if (!HeaterAtSetTemperature(bedHeaterMapping[i][k], true, tolerance, waitOnFault))
+			if (!HeaterAtSetTemperature(bedHeaters.GetHeaterAt(i, k), true, tolerance, waitOnFault))
 			{
 				return false;
 			}
 		}
 	}
-	for (size_t i = 0; i < MaxChamberHeaters; i++)
+	for (size_t i = 0; i < chamberHeaters.GetMaxSlots(); i++)
 	{
-		for (size_t k = 0; k < chamberHeaterCount[i]; k++)
+		for (size_t k = 0; k < chamberHeaters.GetHeaterCount(i); k++)
 		{
-			if (!HeaterAtSetTemperature(chamberHeaterMapping[i][k], true, tolerance, waitOnFault))
+			if (!HeaterAtSetTemperature(chamberHeaters.GetHeaterAt(i, k), true, tolerance, waitOnFault))
 			{
 				return false;
 			}
@@ -753,55 +713,41 @@ void Heat::SetBedHeaters(size_t slot, const int32_t heaterNumbers[], size_t coun
 {
 	// Switch off and clear any previously assigned heaters
 	ClearBedHeaters(slot);
-	const size_t numToSet = min<size_t>(count, MaxHeatersPerBed);
-	for (size_t i = 0; i < numToSet; i++)
+	bedHeaters.SetHeaters(slot, heaterNumbers, count);
+	for (size_t i = 0; i < bedHeaters.GetHeaterCount(slot); i++)
 	{
-		bedHeaterMapping[slot][i] = (int8_t)heaterNumbers[i];
-		const auto h = FindHeater(heaterNumbers[i]);
+		const auto h = FindHeater(bedHeaters.GetHeaterAt(slot, i));
 		if (h.IsNotNull())
 		{
-			h->SetAsBedHeater();
+			h->SetFunction(HeaterFunction::bed);
 		}
 	}
-	bedHeaterCount[slot] = numToSet;
 	reprap.HeatUpdated();
 }
 
 void Heat::ClearBedHeaters(size_t slot) noexcept
 {
-	for (size_t i = 0; i < bedHeaterCount[slot]; i++)
+	for (size_t i = 0; i < bedHeaters.GetHeaterCount(slot); i++)
 	{
-		const auto h = FindHeater(bedHeaterMapping[slot][i]);
+		const auto h = FindHeater(bedHeaters.GetHeaterAt(slot, i));
 		if (h.IsNotNull())
 		{
 			h->SwitchOff();
 		}
-		bedHeaterMapping[slot][i] = -1;
 	}
-	bedHeaterCount[slot] = 0;
+	bedHeaters.ClearHeaters(slot);
+	reprap.HeatUpdated();
 }
 
 HeaterFunction Heat::GetHeaterFunction(int heater) const noexcept
 {
-	for (size_t i = 0; i < MaxBedHeaters; i++)
+	if (bedHeaters.ContainsHeater(heater))
 	{
-		for (size_t k = 0; k < bedHeaterCount[i]; k++)
-		{
-			if (heater == bedHeaterMapping[i][k])
-			{
-				return HeaterFunction::bed;
-			}
-		}
+		return HeaterFunction::bed;
 	}
-	for (size_t i = 0; i < MaxChamberHeaters; i++)
+	if (chamberHeaters.ContainsHeater(heater))
 	{
-		for (size_t k = 0; k < chamberHeaterCount[i]; k++)
-		{
-			if (heater == chamberHeaterMapping[i][k])
-			{
-				return HeaterFunction::chamber;
-			}
-		}
+		return HeaterFunction::chamber;
 	}
 	return HeaterFunction::tool;
 }
@@ -810,32 +756,30 @@ void Heat::SetChamberHeaters(size_t slot, const int32_t heaterNumbers[], size_t 
 {
 	// Switch off and clear any previously assigned heaters
 	ClearChamberHeaters(slot);
-	const size_t numToSet = min<size_t>(count, MaxHeatersPerChamber);
-	for (size_t i = 0; i < numToSet; i++)
+	chamberHeaters.SetHeaters(slot, heaterNumbers, count);
+	for (size_t i = 0; i < chamberHeaters.GetHeaterCount(slot); i++)
 	{
-		chamberHeaterMapping[slot][i] = (int8_t)heaterNumbers[i];
-		const auto h = FindHeater(heaterNumbers[i]);
+		const auto h = FindHeater(chamberHeaters.GetHeaterAt(slot, i));
 		if (h.IsNotNull())
 		{
-			h->SetAsChamberHeater();
+			h->SetFunction(HeaterFunction::chamber);
 		}
 	}
-	chamberHeaterCount[slot] = numToSet;
 	reprap.HeatUpdated();
 }
 
 void Heat::ClearChamberHeaters(size_t slot) noexcept
 {
-	for (size_t i = 0; i < chamberHeaterCount[slot]; i++)
+	for (size_t i = 0; i < chamberHeaters.GetHeaterCount(slot); i++)
 	{
-		const auto h = FindHeater(chamberHeaterMapping[slot][i]);
+		const auto h = FindHeater(chamberHeaters.GetHeaterAt(slot, i));
 		if (h.IsNotNull())
 		{
 			h->SwitchOff();
 		}
-		chamberHeaterMapping[slot][i] = -1;
 	}
-	chamberHeaterCount[slot] = 0;
+	chamberHeaters.ClearHeaters(slot);
+	reprap.HeatUpdated();
 }
 
 // This is called when a tool is created that uses this heater
@@ -1287,27 +1231,6 @@ size_t Heat::GetNumHeatersToReport() const noexcept
 	return ret;
 }
 
-// Return the highest used bed slot number plus one, to omit trailing empty slots from the object model
-size_t Heat::GetNumBedSlotsToReport() const noexcept
-{
-	size_t ret = MaxBedHeaters;
-	while (ret != 0 && bedHeaterCount[ret - 1] == 0)
-	{
-		--ret;
-	}
-	return ret;
-}
-
-// Return the highest used chamber slot number plus one, to omit trailing empty slots from the object model
-size_t Heat::GetNumChamberSlotsToReport() const noexcept
-{
-	size_t ret = MaxChamberHeaters;
-	while (ret != 0 && chamberHeaterCount[ret - 1] == 0)
-	{
-		--ret;
-	}
-	return ret;
-}
 
 // Return the highest used sensor number plus one
 size_t Heat::GetNumSensorsToReport() const noexcept
@@ -1406,29 +1329,25 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const noexcept
 {
 	String<StringLength256> bufSpace;
 	const StringRef buf = bufSpace.GetRef();
-	for (size_t index = 0; index < MaxBedHeaters; index++)
-	{
-		if (bedHeaterCount[index] > 0)
-		{
-			const auto h = FindHeater(bedHeaterMapping[index][0]);
-			if (h.IsNotNull() && h->GetStatus() == HeaterStatus::active)
-			{
-				buf.catf("M140 P%u S%.1f\n", index, (double)h->GetActiveTemperature());
-			}
-		}
-	}
-	for (size_t index = 0; index < MaxChamberHeaters; index++)
-	{
-		if (chamberHeaterCount[index] > 0)
-		{
-			const auto h = FindHeater(chamberHeaterMapping[index][0]);
-			if (h.IsNotNull() && h->GetStatus() == HeaterStatus::active)
-			{
-				buf.catf("M141 P%u S%.1f\n", index, (double)h->GetActiveTemperature());
-			}
-		}
-	}
+	WriteCollectionTempSettings(buf, bedHeaters, "M140");
+	WriteCollectionTempSettings(buf, chamberHeaters, "M141");
 	return (buf.strlen() == 0) || f->Write(buf.c_str());
+}
+
+// Unified helper to write temperature settings for a heater collection
+template<size_t N, size_t M> void Heat::WriteCollectionTempSettings(const StringRef& buf, const HeaterCollection<N, M>& collection, const char *mCode) const noexcept
+{
+	for (size_t index = 0; index < N; index++)
+	{
+		if (collection.GetHeaterCount(index) > 0)
+		{
+			const auto h = FindHeater(collection.GetHeaterAt(index, 0));
+			if (h.IsNotNull() && h->GetStatus() == HeaterStatus::active)
+			{
+				buf.catf("%s P%u S%.1f\n", mCode, index, (double)h->GetActiveTemperature());
+			}
+		}
+	}
 }
 
 #endif
