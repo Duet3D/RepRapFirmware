@@ -117,7 +117,7 @@ template<size_t NumSlots, size_t MaxPerSlot> void HeaterCollection<NumSlots, Max
 	{
 		if (count[i] > 0)
 		{
-			reply.catf(" [%u:", i);
+			reply.catf(" %u:[", i);
 			for (size_t k = 0; k < count[i]; k++)
 			{
 				reply.catf("%s%d", (k > 0) ? "," : "", mapping[i][k]);
