@@ -8,6 +8,8 @@
 #ifndef SRC_HARDWARE_SAME5X_ETHERNET_GMACINTERFACE_H_
 #define SRC_HARDWARE_SAME5X_ETHERNET_GMACINTERFACE_H_
 
+#include <Core.h>
+
 extern "C" {
 #include "lwip/err.h"
 #include "lwip/ip_addr.h"

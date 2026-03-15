@@ -41,6 +41,7 @@ Licence: GPL
 #include <GPIO/GpInPort.h>
 #include <GPIO/GpOutPort.h>
 #include <Comms/AuxDevice.h>
+#include <Comms/UsbDevice.h>
 #include <General/IPAddress.h>
 #include <General/function_ref.h>
 
@@ -294,10 +295,7 @@ public:
 	bool SetDateTime(time_t t) noexcept;							// Sets the current RTC date and time or returns false on error
 
   	// Communications and data storage
-	void AppendUsbReply(const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept;
-#ifdef SERIAL_USB2_DEVICE
-	void AppendUsb2Reply(const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept;
-#endif
+	void AppendUsbReply(size_t usbNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept;
 	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, bool rawMessage) noexcept;
 	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, const char *_ecv_array msg, bool rawMessage) noexcept;
 
@@ -610,16 +608,7 @@ private:
   	// Serial/USB
 	uint8_t commsParams[NumSerialChannels];							// the M575 S parameter for each serial channel
 	AuxMode GetChannelMode(size_t chan) const noexcept;
-	uint32_t usbMessageSeq = 0;										// message sequence number when in PanelDue mode
-
-	volatile OutputStack usbOutput;
-	Mutex usbMutex;
-
-#ifdef SERIAL_USB2_DEVICE
-	volatile OutputStack usb2Output;
-	Mutex usb2Mutex;
-	uint32_t usb2MessageSeq = 0;
-#endif
+	UsbDevice usbDevices[NumUsbChannels];
 
 #if HAS_AUX_DEVICES
 	AuxDevice auxDevices[NumAuxChannels];
