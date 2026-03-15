@@ -35,8 +35,6 @@ public:
 	SerialCDC *GetDevice() noexcept { return device; }
 
 private:
-	static constexpr uint32_t UsbTimeout = 2000;	// milliseconds
-
 	SerialCDC *_ecv_null device;
 	Mutex mutex;
 	volatile OutputStack output;
