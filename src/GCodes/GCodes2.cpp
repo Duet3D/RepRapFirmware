@@ -2028,33 +2028,27 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 						if (chamberCount == 0)
 						{
-							// If no values are specified, wait for all chamber heaters in all slots
+							// If no values are specified, wait for all chamber heaters
 							for (size_t i = 0; i < MaxChamberHeaters; i++)
 							{
-								for (size_t k = 0; k < reprap.GetHeat().GetChamberHeaterCount(i); k++)
+								const int8_t heater = reprap.GetHeat().GetChamberHeater(i);
+								if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance, gb.IsFileChannel()))
 								{
-									const int heater = reprap.GetHeat().GetChamberHeaterAt(i, k);
-									if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance, gb.IsFileChannel()))
-									{
-										return false;
-									}
+									return false;
 								}
 							}
 						}
 						else
 						{
-							// Otherwise wait only for all heaters in the specified chamber slots
+							// Otherwise wait only for the specified chamber heaters
 							for (size_t i = 0; i < chamberCount; i++)
 							{
-								if (chamberIndices[i] < MaxChamberHeaters)
+								if (chamberIndices[i] >= 0 && chamberIndices[i] < MaxChamberHeaters)
 								{
-									for (size_t k = 0; k < reprap.GetHeat().GetChamberHeaterCount(chamberIndices[i]); k++)
+									const int8_t heater = reprap.GetHeat().GetChamberHeater(chamberIndices[i]);
+									if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance, gb.IsFileChannel()))
 									{
-										const int heater = reprap.GetHeat().GetChamberHeaterAt(chamberIndices[i], k);
-										if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance, gb.IsFileChannel()))
-										{
-											return false;
-										}
+										return false;
 									}
 								}
 							}
@@ -2252,69 +2246,35 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					bool seen = false;
 
 					// Check if the heater index is passed
-					const unsigned int slot = gb.Seen('P') ? gb.GetLimitedUIValue('P', (code == 140) ? MaxBedHeaters : MaxChamberHeaters) : 0;
-					const size_t maxHeatersPerSlot = (code == 140) ? MaxHeatersPerBed : MaxHeatersPerChamber;
+					const unsigned int index = gb.Seen('P') ? gb.GetLimitedUIValue('P', (code == 140) ? MaxBedHeaters : MaxChamberHeaters) : 0;
 
-					// See if the heater number(s) are being set
+					// See if the heater number is being set
 					if (gb.Seen('H'))
 					{
 						seen = true;
-						int32_t heaterNumbers[maxHeatersPerSlot];
-						size_t heaterCount = maxHeatersPerSlot;
-						gb.GetIntArray(heaterNumbers, heaterCount, false);
-
-						// Check if clearing (H-1)
-						if (heaterCount == 1 && heaterNumbers[0] < 0)
+						int heater = gb.GetIValue();
+						if (heater < 0)
 						{
-							if (code == 141)
-							{
-								heat.ClearChamberHeaters(slot);
-							}
-							else
-							{
-								heat.ClearBedHeaters(slot);
-							}
+							heater = -1;
+						}
+						else if (heater >= (int)MaxHeaters)
+						{
+							reply.printf("Invalid heater number '%d'", heater);
+							result = GCodeResult::error;
+							break;
+						}
+
+						if (code == 141)
+						{
+							heat.SetChamberHeater(index, heater);
 						}
 						else
 						{
-							// Validate all heater numbers
-							for (size_t i = 0; i < heaterCount; i++)
-							{
-								if (heaterNumbers[i] < 0 || heaterNumbers[i] >= (int32_t)MaxHeaters)
-								{
-									reply.printf("Invalid heater number '%" PRId32 "'", heaterNumbers[i]);
-									result = GCodeResult::error;
-									break;
-								}
-								if (Tool::IsHeaterAssignedToTool(heaterNumbers[i]))
-								{
-									reply.printf("Heater %" PRId32 " is already assigned to a tool", heaterNumbers[i]);
-									result = GCodeResult::error;
-									break;
-								}
-								const HeaterFunction fn = heat.GetHeaterFunction(heaterNumbers[i]);
-								if ((code == 140 && fn == HeaterFunction::chamber) || (code == 141 && fn == HeaterFunction::bed))
-								{
-									reply.printf("Heater %" PRId32 " is already assigned as a %s heater", heaterNumbers[i], (fn == HeaterFunction::bed) ? "bed" : "chamber");
-									result = GCodeResult::error;
-									break;
-								}
-							}
-							if (result != GCodeResult::error)
-							{
-								if (code == 141)
-								{
-									heat.SetChamberHeaters(slot, heaterNumbers, heaterCount);
-								}
-								else
-								{
-									heat.SetBedHeaters(slot, heaterNumbers, heaterCount);
-								}
-							}
+							heat.SetBedHeater(index, heater);
 						}
 					}
 
-					const size_t numHeaters = (code == 141) ? heat.GetChamberHeaterCount(slot) : heat.GetBedHeaterCount(slot);
+					const int8_t currentHeater = (code == 141) ? heat.GetChamberHeater(index) : heat.GetBedHeater(index);
 					const char *_ecv_array const heaterName = (code == 141) ? "chamber" : "bed";
 
 					// Active temperature
@@ -2322,28 +2282,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						seen = true;
 						const float temperature = gb.GetFValue();
-						if (numHeaters == 0)
+						if (currentHeater < 0)
 						{
 							if (temperature > 0.0)							// turning off a non-existent bed or chamber heater is not an error
 							{
-								reply.printf("No %s heater has been configured for slot %d", heaterName, slot);
+								reply.printf("No %s heater has been configured for slot %d", heaterName, index);
 								result = GCodeResult::error;
 							}
 						}
 						else
 						{
-							for (size_t i = 0; i < numHeaters; ++i)
+							if (temperature <= NEARLY_ABS_ZERO)
 							{
-								const int heater = (code == 141) ? heat.GetChamberHeaterAt(slot, i) : heat.GetBedHeaterAt(slot, i);
-								if (temperature <= NEARLY_ABS_ZERO)
-								{
-									heat.SwitchOff(heater);
-								}
-								else
-								{
-									heat.SetActiveTemperature(heater, temperature);		// may throw
-									result = heat.SetActiveOrStandby(heater, nullptr, true, reply);
-								}
+								heat.SwitchOff(currentHeater);
+							}
+							else
+							{
+								heat.SetActiveTemperature(currentHeater, temperature);		// may throw
+								result = heat.SetActiveOrStandby(currentHeater, nullptr, true, reply);
 							}
 						}
 					}
@@ -2352,36 +2308,27 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (gb.Seen('R'))
 					{
 						seen = true;
-						if (numHeaters == 0)
+						if (currentHeater < 0)
 						{
-							reply.printf("No %s heater has been configured for slot %d", heaterName, slot);
+							reply.printf("No %s heater has been configured for slot %d", heaterName, index);
 							result = GCodeResult::error;
 						}
 						else
 						{
-							const float standbyTemp = gb.GetFValue();
-							for (size_t i = 0; i < numHeaters; i++)
-							{
-								const int heater = (code == 141) ? heat.GetChamberHeaterAt(slot, i) : heat.GetBedHeaterAt(slot, i);
-								heat.SetStandbyTemperature(heater, standbyTemp);
-							}
+							heat.SetStandbyTemperature(currentHeater, gb.GetFValue());
 						}
 					}
 
 					if (!seen)
 					{
-						if (numHeaters == 0)
+						if (currentHeater < 0)
 						{
-							reply.printf("No %s heater has been configured for slot %d", heaterName, slot);
+							reply.printf("No %s heater has been configured for slot %d", heaterName, index);
 						}
 						else
 						{
-							reply.printf("%c%s heaters for slot %d:", toupper(heaterName[0]), heaterName + 1, slot);
-							for (size_t i = 0; i < numHeaters; i++)
-							{
-								const int heater = (code == 141) ? heat.GetChamberHeaterAt(slot, i) : heat.GetBedHeaterAt(slot, i);
-								reply.catf(" %d (%.1f" DEGREE_SYMBOL "C)", heater, (double)heat.GetHeaterTemperature(heater));
-							}
+							reply.printf("%c%s heater %d (slot %d) is currently at %.1f" DEGREE_SYMBOL "C",
+								toupper(heaterName[0]), heaterName + 1, currentHeater, index, (double)reprap.GetHeat().GetHeaterTemperature(currentHeater));
 						}
 					}
 				}
@@ -2393,15 +2340,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 144: // Set bed to standby, or to active if S1 parameter given
 				{
-					const unsigned int slot = gb.Seen('P') ? gb.GetLimitedUIValue('P', MaxBedHeaters) : 0;
-					const size_t numHeaters = reprap.GetHeat().GetBedHeaterCount(slot);
-					if (numHeaters > 0)
+					const unsigned int index = gb.Seen('P') ? gb.GetLimitedUIValue('P', MaxBedHeaters) : 0;
+					const int8_t bedHeater = reprap.GetHeat().GetBedHeater(index);
+					if (bedHeater >= 0)
 					{
 						const bool setActive = gb.Seen('S') && gb.GetIValue() == 1;
-						for (size_t i = 0; i < numHeaters; i++)
-						{
-							result = reprap.GetHeat().SetActiveOrStandby(reprap.GetHeat().GetBedHeaterAt(slot, i), nullptr, setActive, reply);
-						}
+						result = reprap.GetHeat().SetActiveOrStandby(bedHeater, nullptr, setActive, reply);
 					}
 				}
 				break;
@@ -2423,9 +2367,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (!gb.IsCancelWaitRequested())
 				{
 					// Check if the heater index is passed
-					const uint32_t slot = gb.Seen('P') ? gb.GetLimitedUIValue('P', (code == 190) ? MaxBedHeaters : MaxChamberHeaters) : 0;
-					const size_t numHeaters = (code == 191) ? reprap.GetHeat().GetChamberHeaterCount(slot) : reprap.GetHeat().GetBedHeaterCount(slot);
-					if (numHeaters > 0)
+					const uint32_t index = gb.Seen('P') ? gb.GetLimitedUIValue('P', (code == 190) ? MaxBedHeaters : MaxChamberHeaters) : 0;
+					const int8_t heater = (code == 191) ? reprap.GetHeat().GetChamberHeater(index) : reprap.GetHeat().GetBedHeater(index);
+					if (heater >= 0)
 					{
 						float temperature;
 						bool waitWhenCooling;
@@ -2444,21 +2388,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							break;		// no target temperature given
 						}
 
-						for (size_t i = 0; i < numHeaters; i++)
+						reprap.GetHeat().SetActiveTemperature(heater, temperature);		// may throw
+						result = reprap.GetHeat().SetActiveOrStandby(heater, nullptr, true, reply);
+						if (!reprap.GetHeat().HeaterAtSetTemperature(heater, waitWhenCooling, TemperatureCloseEnough, gb.IsFileChannel()))
 						{
-							const int heater = (code == 191) ? reprap.GetHeat().GetChamberHeaterAt(slot, i) : reprap.GetHeat().GetBedHeaterAt(slot, i);
-							reprap.GetHeat().SetActiveTemperature(heater, temperature);		// may throw
-							result = reprap.GetHeat().SetActiveOrStandby(heater, nullptr, true, reply);
-						}
-
-						// Wait for all heaters in the slot to reach temperature
-						for (size_t i = 0; i < numHeaters; i++)
-						{
-							const int heater = (code == 191) ? reprap.GetHeat().GetChamberHeaterAt(slot, i) : reprap.GetHeat().GetBedHeaterAt(slot, i);
-							if (!reprap.GetHeat().HeaterAtSetTemperature(heater, waitWhenCooling, TemperatureCloseEnough, gb.IsFileChannel()))
-							{
-								return false;
-							}
+							return false;
 						}
 					}
 				}
