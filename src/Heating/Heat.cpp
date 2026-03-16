@@ -517,7 +517,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 
 				// Send a board health message
 				{
-					CanMessageBoardStatusV0 * const boardStatusMsg = buf.SetupRequestMessageNoRid<CanMessageBoardStatusV0>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+					CanMessageBoardStatusV1 * const boardStatusMsg = buf.SetupRequestMessageNoRid<CanMessageBoardStatusV1>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 					boardStatusMsg->Clear();
 
 					const StepTimer::Ticks movementDelayNeeded = StepTimer::CheckMovementDelayIncreasedNoClear();
@@ -534,19 +534,19 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 					// We must add fields in the following order: VIN, V12, MCU temperature
 					size_t index = 0;
 #if HAS_VOLTAGE_MONITOR
-					boardStatusMsg->values[index++] = reprap.GetPlatform().GetPowerVoltages();
+					boardStatusMsg->shortValues[index++] = reprap.GetPlatform().GetPowerVoltages();
 					boardStatusMsg->hasVin = true;
 #endif
 #if HAS_12V_MONITOR
-					boardStatusMsg->values[index++] = reprap.GetPlatform().GetV12Voltages();
+					boardStatusMsg->shortValues[index++] = reprap.GetPlatform().GetV12Voltages();
 					boardStatusMsg->hasV12 = true;
 #endif
 #if HAS_CPU_TEMP_SENSOR
-					boardStatusMsg->values[index++] = reprap.GetPlatform().GetMcuTemperatures();
+					boardStatusMsg->shortValues[index++] = reprap.GetPlatform().GetMcuTemperatures();
 					boardStatusMsg->hasMcuTemp = true;
 #endif
 					// Add the analog handle data
-					boardStatusMsg->numAnalogHandles = InputMonitor::AddAnalogHandleDataV0((uint8_t*)boardStatusMsg + boardStatusMsg->GetAnalogHandlesOffset(), boardStatusMsg->GetMaxAnalogHandleSpace());
+					boardStatusMsg->numAnalogHandles = InputMonitor::AddAnalogHandleDataV1((uint8_t*)boardStatusMsg + boardStatusMsg->GetAnalogHandlesOffset(), boardStatusMsg->GetMaxAnalogHandleSpace());
 					buf.dataLength = boardStatusMsg->GetActualDataLength();
 					CanInterface::SendMessageNoReplyNoFree(&buf);
 				}

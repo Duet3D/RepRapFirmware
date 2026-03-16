@@ -18,7 +18,7 @@
 
 struct CanMessageCreateInputMonitorV1;
 struct CanMessageChangeInputMonitorV1;
-struct CanMessageInputChangedV1;
+struct CanMessageInputChangedV2;
 class CanMessageBuffer;
 
 class InputMonitor
@@ -33,11 +33,11 @@ public:
 	static GCodeResult Create(const CanMessageCreateInputMonitorV1& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept;
 	static GCodeResult Change(const CanMessageChangeInputMonitorV1& msg, const StringRef& reply, uint8_t& extra) noexcept;
 
-	static uint32_t AddStateChanges(CanMessageInputChangedV1 *msg) noexcept;
+	static uint32_t AddStateChanges(CanMessageInputChangedV2 *msg) noexcept;
 	static void ReadInputs(CanMessageBuffer *buf) noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
-	static unsigned int AddAnalogHandleDataV0(uint8_t *buffer, size_t spaceLeft) noexcept;
+	static unsigned int AddAnalogHandleDataV1(uint8_t *buffer, size_t spaceLeft) noexcept;
 #endif
 
 	static void CommonDigitalPortInterrupt(CallbackParameter cbp) noexcept;
@@ -56,6 +56,7 @@ private:
 
 	InputMonitor *next;
 	uint32_t whenLastSent;
+	uint32_t whenStateChanged;
 	IoPort port;
 	uint16_t handle;
 	uint16_t minInterval;
