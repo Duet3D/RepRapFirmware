@@ -194,39 +194,63 @@ extern const ip_addr_t ip_addr_any_type;
 #define ip_addr_get_network(target, host, netmask) do{if(IP_IS_V6(host)){ \
   ip4_addr_set_zero(ip_2_ip4(target)); IP_SET_TYPE(target, IPADDR_TYPE_V6); } else { \
   ip4_addr_get_network(ip_2_ip4(target), ip_2_ip4(host), ip_2_ip4(netmask)); IP_SET_TYPE(target, IPADDR_TYPE_V4); }}while(0)
-/** @ingroup ipaddr */
-#define ip_addr_netcmp(addr1, addr2, mask) ((IP_IS_V6(addr1) && IP_IS_V6(addr2)) ? \
+/**
+ * @ingroup ipaddr
+ * @deprecated Renamed to @ref ip_addr_net_eq
+ */
+#define ip_addr_netcmp(addr1, addr2, mask) ip_addr_net_eq((addr1), (addr2), (mask))
+/** @ingroup ipaddr
+ *  Check if two ip addresses are share the same network, for a specific netmask. */
+#define ip_addr_net_eq(addr1, addr2, mask) ((IP_IS_V6(addr1) && IP_IS_V6(addr2)) ? \
   0 : \
-  ip4_addr_netcmp(ip_2_ip4(addr1), ip_2_ip4(addr2), mask))
-/** @ingroup ipaddr */
-#define ip_addr_cmp(addr1, addr2)    ((IP_GET_TYPE(addr1) != IP_GET_TYPE(addr2)) ? 0 : (IP_IS_V6_VAL(*(addr1)) ? \
-  ip6_addr_cmp(ip_2_ip6(addr1), ip_2_ip6(addr2)) : \
-  ip4_addr_cmp(ip_2_ip4(addr1), ip_2_ip4(addr2))))
-/** @ingroup ipaddr */
-#define ip_addr_cmp_zoneless(addr1, addr2)    ((IP_GET_TYPE(addr1) != IP_GET_TYPE(addr2)) ? 0 : (IP_IS_V6_VAL(*(addr1)) ? \
-  ip6_addr_cmp_zoneless(ip_2_ip6(addr1), ip_2_ip6(addr2)) : \
-  ip4_addr_cmp(ip_2_ip4(addr1), ip_2_ip4(addr2))))
-/** @ingroup ipaddr */
+  ip4_addr_net_eq(ip_2_ip4(addr1), ip_2_ip4(addr2), mask))
+/**
+ * @ingroup ipaddr
+ * @deprecated Renamed to @ref ip_addr_eq
+ */
+#define ip_addr_cmp(addr1, addr2) ip_addr_eq((addr1), (addr2))
+/** @ingroup ipaddr
+ *  Check if two ip addresses are equal. */
+#define ip_addr_eq(addr1, addr2)    ((IP_GET_TYPE(addr1) != IP_GET_TYPE(addr2)) ? 0 : (IP_IS_V6_VAL(*(addr1)) ? \
+  ip6_addr_eq(ip_2_ip6(addr1), ip_2_ip6(addr2)) : \
+  ip4_addr_eq(ip_2_ip4(addr1), ip_2_ip4(addr2))))
+/**
+ * @ingroup ipaddr
+ * @deprecated Renamed to @ref ip_addr_zoneless_eq
+ */
+#define ip_addr_cmp_zoneless(addr1, addr2) ip_addr_zoneless_eq((addr1), (addr2))
+/** @ingroup ipaddr
+ *  Check if two ip addresses are equal, ignoring the zone. */
+#define ip_addr_zoneless_eq(addr1, addr2)    ((IP_GET_TYPE(addr1) != IP_GET_TYPE(addr2)) ? 0 : (IP_IS_V6_VAL(*(addr1)) ? \
+  ip6_addr_zoneless_eq(ip_2_ip6(addr1), ip_2_ip6(addr2)) : \
+  ip4_addr_eq(ip_2_ip4(addr1), ip_2_ip4(addr2))))
+/** @ingroup ipaddr
+ *  Check if an ip address is the 'any' address. */
 #define ip_addr_isany(ipaddr)        (((ipaddr) == NULL) ? 1 : ((IP_IS_V6(ipaddr)) ? \
   ip6_addr_isany(ip_2_ip6(ipaddr)) : \
   ip4_addr_isany(ip_2_ip4(ipaddr))))
-/** @ingroup ipaddr */
+/** @ingroup ipaddr
+ *  Check if an ip address is the 'any' address, by value. */
 #define ip_addr_isany_val(ipaddr)        ((IP_IS_V6_VAL(ipaddr)) ? \
   ip6_addr_isany_val(*ip_2_ip6(&(ipaddr))) : \
   ip4_addr_isany_val(*ip_2_ip4(&(ipaddr))))
-/** @ingroup ipaddr */
+/** @ingroup ipaddr
+ *  Check if an ip address is a broadcast address. */
 #define ip_addr_isbroadcast(ipaddr, netif) ((IP_IS_V6(ipaddr)) ? \
   0 : \
   ip4_addr_isbroadcast(ip_2_ip4(ipaddr), netif))
-/** @ingroup ipaddr */
+/** @ingroup ipaddr
+ *  Check inf an ip address is a multicast address. */
 #define ip_addr_ismulticast(ipaddr)  ((IP_IS_V6(ipaddr)) ? \
   ip6_addr_ismulticast(ip_2_ip6(ipaddr)) : \
   ip4_addr_ismulticast(ip_2_ip4(ipaddr)))
-/** @ingroup ipaddr */
+/** @ingroup ipaddr
+ *  Check inf an ip address is a loopback address. */
 #define ip_addr_isloopback(ipaddr)  ((IP_IS_V6(ipaddr)) ? \
   ip6_addr_isloopback(ip_2_ip6(ipaddr)) : \
   ip4_addr_isloopback(ip_2_ip4(ipaddr)))
-/** @ingroup ipaddr */
+/** @ingroup ipaddr
+ *  Check inf an ip address is a link-local address. */
 #define ip_addr_islinklocal(ipaddr)  ((IP_IS_V6(ipaddr)) ? \
   ip6_addr_islinklocal(ip_2_ip6(ipaddr)) : \
   ip4_addr_islinklocal(ip_2_ip4(ipaddr)))
@@ -295,8 +319,10 @@ typedef ip4_addr_t ip_addr_t;
 #define ip_addr_set_loopback(is_ipv6, ipaddr)   ip4_addr_set_loopback(ipaddr)
 #define ip_addr_set_hton(dest, src)             ip4_addr_set_hton(dest, src)
 #define ip_addr_get_network(target, host, mask) ip4_addr_get_network(target, host, mask)
-#define ip_addr_netcmp(addr1, addr2, mask)      ip4_addr_netcmp(addr1, addr2, mask)
-#define ip_addr_cmp(addr1, addr2)               ip4_addr_cmp(addr1, addr2)
+#define ip_addr_netcmp(addr1, addr2, mask)      ip4_addr_net_eq(addr1, addr2, mask)
+#define ip_addr_net_eq(addr1, addr2, mask)      ip4_addr_net_eq(addr1, addr2, mask)
+#define ip_addr_cmp(addr1, addr2)               ip4_addr_eq(addr1, addr2)
+#define ip_addr_eq(addr1, addr2)                ip4_addr_eq(addr1, addr2)
 #define ip_addr_isany(ipaddr)                   ip4_addr_isany(ipaddr)
 #define ip_addr_isany_val(ipaddr)               ip4_addr_isany_val(ipaddr)
 #define ip_addr_isloopback(ipaddr)              ip4_addr_isloopback(ipaddr)
@@ -343,8 +369,11 @@ typedef ip6_addr_t ip_addr_t;
 #define ip_addr_set_hton(dest, src)             ip6_addr_set_hton(dest, src)
 #define ip_addr_get_network(target, host, mask) ip6_addr_set_zero(target)
 #define ip_addr_netcmp(addr1, addr2, mask)      0
-#define ip_addr_cmp(addr1, addr2)               ip6_addr_cmp(addr1, addr2)
-#define ip_addr_cmp_zoneless(addr1, addr2)      ip6_addr_cmp_zoneless(addr1, addr2)
+#define ip_addr_net_eq(addr1, addr2, mask)      0
+#define ip_addr_cmp(addr1, addr2)               ip6_addr_eq(addr1, addr2)
+#define ip_addr_eq(addr1, addr2)                ip6_addr_eq(addr1, addr2)
+#define ip_addr_cmp_zoneless(addr1, addr2)      ip6_addr_zoneless_eq(addr1, addr2)
+#define ip_addr_zoneless_eq(addr1, addr2)       ip6_addr_zoneless_eq(addr1, addr2)
 #define ip_addr_isany(ipaddr)                   ip6_addr_isany(ipaddr)
 #define ip_addr_isany_val(ipaddr)               ip6_addr_isany_val(ipaddr)
 #define ip_addr_isloopback(ipaddr)              ip6_addr_isloopback(ipaddr)
@@ -404,7 +433,7 @@ extern const ip_addr_t ip_addr_broadcast;
 
 extern const ip_addr_t ip6_addr_any;
 
-/** 
+/**
  * @ingroup ip6addr
  * IP6_ADDR_ANY can be used as a fixed ip_addr_t
  * for the IPv6 wildcard address
@@ -424,8 +453,9 @@ extern const ip_addr_t ip6_addr_any;
 
 #endif
 
+/** @ingroup ipaddr
+ *  Macro representing the 'any' address. */
 #if LWIP_IPV4 && LWIP_IPV6
-/** @ingroup ipaddr */
 #define IP_ANY_TYPE    (&ip_addr_any_type)
 #else
 #define IP_ANY_TYPE    IP_ADDR_ANY

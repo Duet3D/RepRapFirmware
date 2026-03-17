@@ -40,7 +40,7 @@
 #include "lwip/opt.h"
 
 #ifdef __cplusplus
-# define NOEXCEPT	noexcept
+# define NOEXCEPT      noexcept
 extern "C" {
 #else
 # define NOEXCEPT
@@ -425,6 +425,16 @@ sys_thread_t sys_thread_new(const char *name, lwip_thread_fn thread, void *arg, 
 #endif /* NO_SYS */
 
 /**
+ * @ingroup lwip_opts_lock
+ * Called as first thing in the lwIP TCPIP thread. Can be used in conjunction
+ * with @ref LWIP_ASSERT_CORE_LOCKED to check core locking.
+ * @see @ref multithreading
+ */
+#if !defined LWIP_MARK_TCPIP_THREAD || defined __DOXYGEN__
+#define LWIP_MARK_TCPIP_THREAD()
+#endif
+
+/**
  * @ingroup sys_misc
  * sys_init() must be called before anything else.
  * Initialize the sys_arch layer.
@@ -436,6 +446,11 @@ void sys_init(void);
  * Ticks/jiffies since power up.
  */
 u32_t sys_jiffies(void);
+#endif
+
+#ifdef LWIP_FUZZ_SYS_NOW
+/* This offset should be added to the time 'sys_now()' returns */
+extern u32_t sys_now_offset;
 #endif
 
 /**

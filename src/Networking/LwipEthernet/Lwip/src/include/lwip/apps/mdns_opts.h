@@ -32,6 +32,7 @@
  * This file is part of the lwIP TCP/IP stack.
  *
  * Author: Erik Ekman <erik@kryo.se>
+ * Author: Jasper Verschueren <jasper.verschueren@apart-audio.com>
  *
  */
 
@@ -59,11 +60,51 @@
 #define MDNS_MAX_SERVICES               1
 #endif
 
+/** The minimum delay between probes in ms. RFC 6762 require 250ms.
+ * In noisy WiFi environment, adding 30-50ms to this value help a lot for
+ * a successful Apple BCT tests.
+ */
+#ifndef MDNS_PROBE_DELAY_MS
+#define MDNS_PROBE_DELAY_MS           250
+#endif
+
+/** The maximum number of received packets stored in chained list of known
+ * answers for pending truncated questions. This value define the size of
+ * the MDNS_PKTS mempool.
+ * Up to MDNS_MAX_STORED_PKTS pbuf can be stored in addition to TC questions
+ * that are pending.
+ */
+#ifndef MDNS_MAX_STORED_PKTS
+#define MDNS_MAX_STORED_PKTS            4
+#endif
+
+/** Payload size allocated for each outgoing UDP packet. Will be allocated with
+ * PBUF_RAM and freed after packet was sent.
+ * According to RFC 6762, there is no reason to retain the 512 bytes restriction
+ * for link-local multicast packet.
+ * 512 bytes isn't enough when 2 services need to be probed.
+ */
+#ifndef MDNS_OUTPUT_PACKET_SIZE
+#define MDNS_OUTPUT_PACKET_SIZE      ((MDNS_MAX_SERVICES == 1) ? 512 : 1450)
+#endif
+
 /** MDNS_RESP_USENETIF_EXTCALLBACK==1: register an ext_callback on the netif
  * to automatically restart probing/announcing on status or address change.
  */
 #ifndef MDNS_RESP_USENETIF_EXTCALLBACK
 #define MDNS_RESP_USENETIF_EXTCALLBACK  LWIP_NETIF_EXT_STATUS_CALLBACK
+#endif
+
+/**
+ * LWIP_MDNS_SEARCH==1: Turn on search over multicast DNS module.
+ */
+#ifndef LWIP_MDNS_SEARCH
+#define LWIP_MDNS_SEARCH                1
+#endif
+
+/** The maximum number of running requests */
+#ifndef MDNS_MAX_REQUESTS
+#define MDNS_MAX_REQUESTS               2
 #endif
 
 /**
@@ -78,4 +119,3 @@
  */
 
 #endif /* LWIP_HDR_APPS_MDNS_OPTS_H */
-

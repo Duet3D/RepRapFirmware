@@ -84,6 +84,21 @@
 #define LWIP_NETCONN            	0
 #define LWIP_SOCKET             	0
 
+/*
+   -----------------------------------------------
+   ---------- Application layer (altcp) -----------
+   -----------------------------------------------
+*/
+
+#ifdef SUPPORT_HTTPS
+#define LWIP_ALTCP                  1
+#define LWIP_ALTCP_TLS              1
+#define LWIP_ALTCP_TLS_MBEDTLS      1
+#else
+#define LWIP_ALTCP                  0
+#define LWIP_ALTCP_TLS              0
+#endif
+
 /* Uncomment following line to use DHCP instead of fixed IP */
 #define DHCP_USED
 

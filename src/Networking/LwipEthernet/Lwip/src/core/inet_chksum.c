@@ -1,6 +1,6 @@
 /**
  * @file
- * Internet checksum functions.\n
+ * Internet checksum functions.
  *
  * These are some reference implementations of the checksum algorithm, with the
  * aim of being simple, correct and fully portable. Checksumming is the
@@ -74,7 +74,7 @@ u16_t lwip_standard_chksum(const void *dataptr, int len);
  * @return host order (!) lwip checksum (non-inverted Internet sum)
  *
  * @note accumulator size limits summable length to 64k
- * @note host endianess is irrelevant (p3 RFC1071)
+ * @note host endianness is irrelevant (p3 RFC1071)
  */
 u16_t
 lwip_standard_chksum(const void *dataptr, int len)

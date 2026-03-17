@@ -79,6 +79,8 @@ struct mqtt_connect_client_info_t {
   const char* will_topic;
   /** will_msg, see will_topic */
   const char* will_msg;
+  /** will_msg length, 0 to compute length from will_msg string */
+  u8_t will_msg_len;
   /** will_qos, see will_topic */
   u8_t will_qos;
   /** will_retain, see will_topic */
@@ -134,7 +136,7 @@ enum {
   MQTT_DATA_FLAG_LAST = 1
 };
 
-/** 
+/**
  * @ingroup mqtt
  * Function prototype for MQTT incoming publish data callback function. Called when data
  * arrives to a subscribed topic @see mqtt_subscribe
@@ -149,7 +151,7 @@ enum {
 typedef void (*mqtt_incoming_data_cb_t)(void *arg, const u8_t *data, u16_t len, u8_t flags);
 
 
-/** 
+/**
  * @ingroup mqtt
  * Function prototype for MQTT incoming publish function. Called when an incoming publish
  * arrives to a subscribed topic @see mqtt_subscribe
@@ -183,7 +185,7 @@ void mqtt_client_free(mqtt_client_t* client);
 
 u8_t mqtt_client_is_connected(mqtt_client_t *client);
 
-void mqtt_set_inpub_callback(mqtt_client_t *client, mqtt_incoming_publish_cb_t,
+void mqtt_set_inpub_callback(mqtt_client_t *client, mqtt_incoming_publish_cb_t pub_cb,
                              mqtt_incoming_data_cb_t data_cb, void *arg);
 
 err_t mqtt_sub_unsub(mqtt_client_t *client, const char *topic, u8_t qos, mqtt_request_cb_t cb, void *arg, u8_t sub);
