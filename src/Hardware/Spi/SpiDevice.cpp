@@ -25,8 +25,8 @@ constexpr uint32_t DefaultSharedSpiClockFrequency = 2000000;
 constexpr uint32_t SpiTimeout = 10000;
 
 #if SAME5x
-SpiDevice::SpiDevice(uint8_t sercomNum, DmaChannel p_dmaChanTx, DmaPriority p_dmaPrioTx, uint32_t dataInPad, uint32_t dataOutPad) noexcept
-	: hardware(Serial::Sercoms[sercomNum]), sercomNumber(sercomNum), dmaChanTx(p_dmaChanTx), dmaPrioTx(p_dmaPrioTx)
+SpiDevice::SpiDevice(const SpiParameters& params) noexcept
+	: hardware(Serial::Sercoms[params.sercomNumber]), sercomNumber(params.sercomNumber), dmaChanTx(params.dmaChanTx), dmaPrioTx(params.dmaPrioTx)
 #elif USART_SPI
 SpiDevice::SpiDevice(uint8_t spiInstanceNum) noexcept
 	: hardware(USART_SSPI)			// we ignore the parameter and support just one shared SPI
@@ -36,10 +36,19 @@ SpiDevice::SpiDevice(uint8_t spiInstanceNum) noexcept
 #endif
 {
 #if SAME5x
-	Serial::EnableSercomClock(sercomNum);
+	SetPinMode(params.mosiPin, INPUT_PULLDOWN);
+	SetPinMode(params.misoPin, INPUT_PULLDOWN);
+	SetPinMode(params.sclkPin, INPUT_PULLDOWN);
+	SetPinFunction(params.mosiPin, params.pinFunction);
+	SetPinFunction(params.misoPin, params.pinFunction);
+	SetPinFunction(params.sclkPin, params.pinFunction);
+	SetDriveStrength(params.mosiPin, 2);
+	SetDriveStrength(params.sclkPin, 2);								// some devices (e.g. TFT LCD font chip) need fast rise and fall times
+
+	Serial::EnableSercomClock(params.sercomNumber);
 
 	// Set up the SERCOM
-	const uint32_t regCtrlA = SERCOM_SPI_CTRLA_MODE(3) | SERCOM_SPI_CTRLA_DIPO(dataInPad) | SERCOM_SPI_CTRLA_DOPO(dataOutPad) | SERCOM_SPI_CTRLA_FORM(0);
+	const uint32_t regCtrlA = SERCOM_SPI_CTRLA_MODE(3) | SERCOM_SPI_CTRLA_DIPO(params.dataInPad) | SERCOM_SPI_CTRLA_DOPO(params.dataOutPad) | SERCOM_SPI_CTRLA_FORM(0);
 	const uint32_t regCtrlB = 0;											// 8 bits, slave select disabled, receiver disabled for now
 	const uint32_t regCtrlC = 0;											// not 32-bit mode
 

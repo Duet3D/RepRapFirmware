@@ -12,7 +12,7 @@
 #define SRC_HARDWARE_SPI_SHAREDSPICLIENT_H_
 
 #include <RepRapFirmware.h>
-#include "SpiMode.h"
+#include <SPI/SpiMode.h>
 #include <RTOSIface/RTOSIface.h>
 
 class SharedSpiDevice;

@@ -9,8 +9,9 @@
 #define SRC_HARDWARE_SPI_SPIDEVICE_H_
 
 #include <RepRapFirmware.h>
-#include "SpiMode.h"
 #include <RTOSIface/RTOSIface.h>
+#include <SPI/SpiMode.h>
+#include <SPI/SpiParameters.h>
 
 #if SAME5x
 # include <DmacManager.h>
@@ -22,7 +23,7 @@ class SpiDevice
 {
 public:
 #if SAME5x || SAMC21
-	SpiDevice(uint8_t sercomNum, DmaChannel p_dmaChanTx, DmaPriority p_dmaPrioTx, uint32_t dataInPad, uint32_t dataOutPad) noexcept;
+	SpiDevice(const SpiParameters& params) noexcept;
 #else
 	explicit SpiDevice(uint8_t spiInstanceNum) noexcept;
 #endif
