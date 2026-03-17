@@ -6,13 +6,13 @@
  *
  */
 
-#include "UsbDevice.h"
+#include <Comms/UsbDeviceRrf.h>
 
 #include <Comms/AuxDevice.h>
 #include <Devices.h>
 #include <Platform/RepRap.h>
 
-void UsbDevice::Init(SerialCDC *p_device, Pin vBusPin, const char *mutexName) noexcept
+void UsbDeviceRrf::Init(SerialCDC *p_device, Pin vBusPin, const char *mutexName) noexcept
 {
 	device = p_device;
 	mutex.Create(mutexName);
@@ -23,13 +23,13 @@ void UsbDevice::Init(SerialCDC *p_device, Pin vBusPin, const char *mutexName) no
 #endif
 }
 
-void UsbDevice::Shutdown() noexcept
+void UsbDeviceRrf::Shutdown() noexcept
 {
 	device->end();
 	output.ReleaseAll();
 }
 
-void UsbDevice::Reset(Pin vBusPin) noexcept
+void UsbDeviceRrf::Reset(Pin vBusPin) noexcept
 {
 	device->end();
 #if SAME5x && !CORE_USES_TINYUSB
@@ -39,12 +39,12 @@ void UsbDevice::Reset(Pin vBusPin) noexcept
 #endif
 }
 
-bool UsbDevice::IsConnected() const noexcept
+bool UsbDeviceRrf::IsConnected() const noexcept
 {
 	return device != nullptr && device->IsConnected();
 }
 
-bool UsbDevice::Flush() noexcept
+bool UsbDeviceRrf::Flush() noexcept
 {
 	bool hasMore = !output.IsEmpty();
 	if (hasMore)
@@ -82,7 +82,7 @@ bool UsbDevice::Flush() noexcept
 	return hasMore;
 }
 
-void UsbDevice::AppendReply(size_t channel, AuxMode channelMode, const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept
+void UsbDeviceRrf::AppendReply(size_t channel, AuxMode channelMode, const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept
 {
 	if (!device->IsConnected())
 	{
@@ -116,7 +116,7 @@ void UsbDevice::AppendReply(size_t channel, AuxMode channelMode, const GCodeBuff
 	}
 }
 
-void UsbDevice::SendRawMessage(size_t channel, AuxMode channelMode, const GCodeBuffer *_ecv_null gb, const char *_ecv_array message, bool rawMessage) noexcept
+void UsbDeviceRrf::SendRawMessage(size_t channel, AuxMode channelMode, const GCodeBuffer *_ecv_null gb, const char *_ecv_array message, bool rawMessage) noexcept
 {
 	MutexLocker lock(mutex);
 
@@ -151,7 +151,7 @@ void UsbDevice::SendRawMessage(size_t channel, AuxMode channelMode, const GCodeB
 	}
 }
 
-void UsbDevice::SendBlockingMessage(const char *_ecv_array message) noexcept
+void UsbDeviceRrf::SendBlockingMessage(const char *_ecv_array message) noexcept
 {
 	MutexLocker lock(mutex);
 	const char *_ecv_array p = message;

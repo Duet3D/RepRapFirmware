@@ -6,8 +6,8 @@
  *
  */
 
-#ifndef SRC_COMMS_USBDEVICE_H_
-#define SRC_COMMS_USBDEVICE_H_
+#ifndef SRC_COMMS_USBDEVICERRF_H_
+#define SRC_COMMS_USBDEVICERRF_H_
 
 #include <RepRapFirmware.h>
 #include <Comms/AuxDevice.h>
@@ -17,10 +17,10 @@
 class SerialCDC;
 class GCodeBuffer;
 
-class UsbDevice
+class UsbDeviceRrf
 {
 public:
-	UsbDevice() noexcept : device(nullptr), seq(0) { }
+	UsbDeviceRrf() noexcept : device(nullptr), seq(0) { }
 
 	void Init(SerialCDC *p_device, Pin vBusPin, const char *mutexName) noexcept;
 	void Shutdown() noexcept;
@@ -41,4 +41,4 @@ private:
 	uint32_t seq;
 };
 
-#endif // SRC_COMMS_USBDEVICE_H_
+#endif // SRC_COMMS_USBDEVICERRF_H_
