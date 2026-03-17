@@ -70,7 +70,6 @@
 #include "lwip/sys.h"
 
 #include <string.h> /* memset */
-#include <stdio.h>  /* snprintf */
 
 #if LWIP_MDNS_RESPONDER
 
@@ -830,17 +829,8 @@ static void
 mdns_debug_print_answer(struct mdns_packet *pkt, struct mdns_answer *a)
 {
 #ifdef LWIP_DEBUG
-  /* Arbitrarily chose 200 -> don't want to see more then that. It's only
-   * for debug so not that important. */
-  char string[200];
-  int i;
-  int pos;
-
-  pos = snprintf(string, sizeof(string), "Type = %2d, class = %1d, rdata = ", a->info.type, a->info.klass);
-  for (i = 0; ((i < a->rd_length) && ((pos + 4*i) < 195)) ; i++) {
-    snprintf(&string[pos + 4*i], 5, "%3d ", (u8_t)pbuf_get_at(pkt->pbuf, (u16_t)(a->rd_offset + i)));
-  }
-  LWIP_DEBUGF(MDNS_DEBUG, ("MDNS: %s\n", string));
+  LWIP_DEBUGF(MDNS_DEBUG, ("MDNS: Type = %2d, class = %1d, rd_length = %d\n", a->info.type, a->info.klass, (int)a->rd_length));
+  LWIP_UNUSED_ARG(pkt);
 #else
   LWIP_UNUSED_ARG(pkt);
   LWIP_UNUSED_ARG(a);
