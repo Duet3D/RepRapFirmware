@@ -315,7 +315,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 		}
 
 		const uint32_t spiFrequency = (gb.Seen('Q')) ? gb.GetLimitedUIValue('Q', 500000, 10000001) : DefaultAccelerometerSpiFrequency;
-		auto temp = new LISAccelerometer(SharedSpiDevice::GetMainSharedSpiDevice(), spiFrequency, spiCsPort.GetPin(), irqPort.GetPin());
+		auto temp = new LISAccelerometer(Platform::GetSharedSpiDevice(), spiFrequency, spiCsPort.GetPin(), irqPort.GetPin());
 		if (temp->CheckPresent())
 		{
 			accelerometer = temp;

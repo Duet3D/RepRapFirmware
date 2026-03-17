@@ -15,33 +15,4 @@ SharedSpiDevice::SharedSpiDevice(uint8_t sercomNum) noexcept
 	mutex.Create("SPI");
 }
 
-// Static members
-
-SharedSpiDevice *_ecv_null SharedSpiDevice::mainSharedSpiDevice = nullptr;
-
-void SharedSpiDevice::Init() noexcept
-{
-#if SAME5x
-	SetPinMode(SharedSpiMosiPin, INPUT_PULLDOWN);
-	SetPinMode(SharedSpiMisoPin, INPUT_PULLDOWN);
-	SetPinMode(SharedSpiSclkPin, INPUT_PULLDOWN);
-	SetPinFunction(SharedSpiMosiPin, SharedSpiPinFunction);
-	SetPinFunction(SharedSpiMisoPin, SharedSpiPinFunction);
-	SetPinFunction(SharedSpiSclkPin, SharedSpiPinFunction);
-	SetDriveStrength(SharedSpiMosiPin, 2);
-	SetDriveStrength(SharedSpiSclkPin, 2);								// some devices (e.g. TFT LCD font chip) need fast rise and fall times
-	mainSharedSpiDevice = new SharedSpiDevice(SharedSpiSercomNumber);
-#elif USART_SPI
-	SetPinFunction(APIN_USART_SSPI_SCK, USARTSPISckPeriphMode);
-	SetPinFunction(APIN_USART_SSPI_MOSI, USARTSPIMosiPeriphMode);
-	SetPinFunction(APIN_USART_SSPI_MISO, USARTSPIMisoPeriphMode);
-	mainSharedSpiDevice = new SharedSpiDevice(0);
-#else
-	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_SCK]);
-	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_MOSI]);
-	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_MISO]);
-	mainSharedSpiDevice = new SharedSpiDevice(0);
-#endif
-}
-
 // End

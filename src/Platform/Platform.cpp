@@ -335,6 +335,7 @@ bool Platform::deliberateError = false;						// true if we deliberately caused a
 String<StringLength256> Platform::genericDebugBuffer;
 bool Platform::hasGenericDebug = false;
 bool Platform::shouldTurnOffHeaters = false;
+SharedSpiDevice *_ecv_null Platform::mainSharedSpiDevice = nullptr;
 
 Platform::Platform() noexcept :
 #if HAS_MASS_STORAGE
@@ -481,7 +482,27 @@ void Platform::Init() noexcept
 	IoPort::Init();
 
 	// Shared SPI subsystem
-	SharedSpiDevice::Init();
+#if SAME5x
+	SetPinMode(SharedSpiMosiPin, INPUT_PULLDOWN);
+	SetPinMode(SharedSpiMisoPin, INPUT_PULLDOWN);
+	SetPinMode(SharedSpiSclkPin, INPUT_PULLDOWN);
+	SetPinFunction(SharedSpiMosiPin, SharedSpiPinFunction);
+	SetPinFunction(SharedSpiMisoPin, SharedSpiPinFunction);
+	SetPinFunction(SharedSpiSclkPin, SharedSpiPinFunction);
+	SetDriveStrength(SharedSpiMosiPin, 2);
+	SetDriveStrength(SharedSpiSclkPin, 2);								// some devices (e.g. TFT LCD font chip) need fast rise and fall times
+	mainSharedSpiDevice = new SharedSpiDevice(SharedSpiSercomNumber);
+#elif USART_SPI
+	SetPinFunction(APIN_USART_SSPI_SCK, USARTSPISckPeriphMode);
+	SetPinFunction(APIN_USART_SSPI_MOSI, USARTSPIMosiPeriphMode);
+	SetPinFunction(APIN_USART_SSPI_MISO, USARTSPIMisoPeriphMode);
+	mainSharedSpiDevice = new SharedSpiDevice(0);
+#else
+	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_SCK]);
+	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_MOSI]);
+	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_MISO]);
+	mainSharedSpiDevice = new SharedSpiDevice(0);
+#endif
 
 	// File management and SD card interfaces
 	for (size_t i = 0; i < NumSdCards; ++i)

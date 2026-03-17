@@ -27,6 +27,7 @@ Licence: GPL
 #include <RepRapFirmware.h>
 #include <ObjectModel/ObjectModel.h>
 #include <Hardware/IoPorts.h>
+#include <Hardware/Spi/SharedSpiDevice.h>
 #include <Fans/FansManager.h>
 
 #include <TemperatureError.h>
@@ -236,6 +237,8 @@ public:
 
 	void Diagnostics(unsigned int part, const StringRef& reply) noexcept;
 	static constexpr unsigned int NumPlatformDiagnosticParts = 7;
+
+	static SharedSpiDevice& GetSharedSpiDevice() noexcept { return *_ecv_not_null(mainSharedSpiDevice); }
 
 	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf, unsigned int d) THROWS(GCodeException);
 	static const char *_ecv_array GetResetReasonText() noexcept;
@@ -517,6 +520,8 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
+	static SharedSpiDevice *_ecv_null mainSharedSpiDevice;
+
 	void RawMessage(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array message) noexcept;	// called by Message after handling error/warning flags
 	float GetCpuTemperature() const noexcept;
 	GCodeResult PrintTestReport(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) const THROWS(GCodeException);

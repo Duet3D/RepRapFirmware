@@ -56,6 +56,7 @@
 #include <Hardware/Spi/SharedSpiClient.h>
 #include <Hardware/Spi/SharedSpiDevice.h>
 #include <General/Portability.h>
+#include <Platform/Platform.h>
 
 // Enable debug information for SD/MMC SPI module
 //#define SD_MMC_SPI_DEBUG
@@ -349,7 +350,7 @@ void sd_mmc_spi_init(const Pin csPins[SD_MMC_SPI_MEM_CNT]) noexcept
 	// Initialize SPI interface and enable it
 	for (size_t i = 0; i < SD_MMC_SPI_MEM_CNT; ++i)
 	{
-		sd_mmc_spi_devices[i] = new SharedSpiClient(SharedSpiDevice::GetMainSharedSpiDevice(), SD_MMC_SPI_MAX_CLOCK, SpiMode::mode0, csPins[i], false);
+		sd_mmc_spi_devices[i] = new SharedSpiClient(Platform::GetSharedSpiDevice(), SD_MMC_SPI_MAX_CLOCK, SpiMode::mode0, csPins[i], false);
 	}
 }
 

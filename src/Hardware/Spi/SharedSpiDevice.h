@@ -22,13 +22,8 @@ public:
 	// Release ownership of this SPI
 	void Release() noexcept { mutex.Release(); }
 
-	static void Init() noexcept;
-	static SharedSpiDevice& GetMainSharedSpiDevice() noexcept { return *mainSharedSpiDevice; }
-
 private:
 	Mutex mutex;
-
-	static SharedSpiDevice *_ecv_null mainSharedSpiDevice;
 };
 
 #endif /* SRC_HARDWARE_SPI_SHAREDSPIDEVICE_H_ */
