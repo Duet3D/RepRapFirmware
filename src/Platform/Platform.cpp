@@ -715,7 +715,7 @@ void Platform::Exit() noexcept
 	active = false;
 
 	// Close down USB and serial ports and release output buffers
-	for (UsbDevice& dev : usbDevices)
+	for (UsbDeviceRrf& dev : usbDevices)
 	{
 		dev.Shutdown();
 	}
@@ -766,7 +766,7 @@ bool Platform::FlushMessages() noexcept
 
 	// Write non-blocking data to USB lines
 	bool usbHasMore = false;
-	for (UsbDevice& port : usbDevices)
+	for (UsbDeviceRrf& port : usbDevices)
 	{
 		if (port.Flush())
 		{
@@ -3627,7 +3627,7 @@ void Platform::SetBoardType() noexcept
 	driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);
 #elif defined(DUET3_MB6XD)
 	board = GetMB6XDBoardType();
-#elif defined(FMDC_V02) || defined(FMDC_V03)
+#elif defined(FMDC_V03)
 	board = BoardType::FMDC;
 #elif defined(DUET_NG)
 	// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
@@ -3688,7 +3688,7 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0";
 	case BoardType::Duet3_6XD_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
 	case BoardType::Duet3_6XD_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or later";
-#elif defined(FMDC_V02) || defined(FMDC_V03)
+#elif defined(FMDC_V03)
 	case BoardType::FMDC:					return "Duet 3 " BOARD_SHORT_NAME;
 #elif defined(DUET_NG)
 	// This is the string that the Duet 2 ATE uses to identify the board. The version number must be at the end.
@@ -3728,7 +3728,7 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3_6XD_v100:			return "duet3mb6xd100";
 	case BoardType::Duet3_6XD_v101:			return "duet3mb6xd101";
 	case BoardType::Duet3_6XD_v102:			return "duet3mb6xd102";
-#elif defined(FMDC_V02) || defined(FMDC_V03)
+#elif defined(FMDC_V03)
 	case BoardType::FMDC:					return "fmdc";
 #elif defined(DUET_NG)
 	case BoardType::DuetWiFi_10:			return "duetwifi10";

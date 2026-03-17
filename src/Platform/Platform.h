@@ -41,7 +41,7 @@ Licence: GPL
 #include <GPIO/GpInPort.h>
 #include <GPIO/GpOutPort.h>
 #include <Comms/AuxDevice.h>
-#include <Comms/UsbDevice.h>
+#include <Comms/UsbDeviceRrf.h>
 #include <General/IPAddress.h>
 #include <General/function_ref.h>
 
@@ -122,7 +122,7 @@ enum class BoardType : uint8_t
 	Duet3_6XD_v100 = 2,
 	Duet3_6XD_v101 = 3,
 	Duet3_6XD_v102 = 4,
-#elif defined(FMDC_V02) || defined(FMDC_V03)
+#elif defined(FMDC_V03)
 	FMDC,
 #elif defined(DUET_NG)
 	DuetWiFi_10 = 1,
@@ -608,7 +608,7 @@ private:
   	// Serial/USB
 	uint8_t commsParams[NumSerialChannels];							// the M575 S parameter for each serial channel
 	AuxMode GetChannelMode(size_t chan) const noexcept;
-	UsbDevice usbDevices[NumUsbChannels];
+	UsbDeviceRrf usbDevices[NumUsbChannels];
 
 #if HAS_AUX_DEVICES
 	AuxDevice auxDevices[NumAuxChannels];
