@@ -16,7 +16,7 @@ TFTLcd::TFTLcd(PixelNumber nr, PixelNumber nc, Pin fontCsPin, SpiMode mode, uint
 TFTLcd::TFTLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode, uint8_t sercomNum, uint32_t dataInPad, uint32_t dataOutPad) noexcept
 	: Lcd(nr, nc, fnts, nFonts),
 #endif
-	  spiDev(sercomNum, dataInPad, dataOutPad),
+	  spiDev(sercomNum, DmacChanLcdTx, DmacPrioLcdTx, dataInPad, dataOutPad),
 	  fgColour(Colours::White), bgColour(Colours::Blue),
 	  spiMode(mode)
 {

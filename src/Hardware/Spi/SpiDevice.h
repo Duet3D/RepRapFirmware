@@ -12,7 +12,7 @@
 #include "SpiMode.h"
 #include <RTOSIface/RTOSIface.h>
 
-#if SAME5x && defined(FMDC_V03)
+#if SAME5x
 # include <DmacManager.h>
 #endif
 
@@ -22,7 +22,7 @@ class SpiDevice
 {
 public:
 #if SAME5x || SAMC21
-	SpiDevice(uint8_t sercomNum, uint32_t dataInPad, uint32_t dataOutPad) noexcept;
+	SpiDevice(uint8_t sercomNum, DmaChannel p_dmaChanTx, DmaPriority p_dmaPrioTx, uint32_t dataInPad, uint32_t dataOutPad) noexcept;
 #else
 	explicit SpiDevice(uint8_t spiInstanceNum) noexcept;
 #endif
@@ -40,9 +40,9 @@ public:
 	// Send and receive data returning true if successful.
 	// If this is a shared SPI device then the caller must already own the mutex.
 	// Either way, caller must already have asserted CS for the selected SPI slave.
-	bool TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t *_ecv_array null rx_data, size_t len) const noexcept;
+	bool TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t *_ecv_array null rx_data, size_t len) noexcept;
 
-#if SAME5x && defined(FMDC_V03)
+#if SAME5x
 	bool TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data, uint16_t *_ecv_array null rx_data, size_t len) noexcept;
 
 	static void DmaComplete(CallbackParameter param, DmaCallbackReason reason) noexcept;
@@ -53,16 +53,16 @@ private:
 	bool waitForTxEmpty() const noexcept;
 	bool waitForRxReady() const noexcept;
 
-#if SAME5x && defined(FMDC_V03)
+#if SAME5x
 	void DmaComplete(DmaCallbackReason reason) noexcept;
 #endif
 
 #if SAME5x
 	Sercom * const hardware;
 	const uint8_t sercomNumber;
-# if defined(FMDC_V03)
 	TaskBase *null waitingTask = nullptr;
-# endif
+	DmaChannel dmaChanTx;
+	DmaPriority dmaPrioTx;
 #elif USART_SPI
 	Usart * const hardware;
 #else

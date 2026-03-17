@@ -25,8 +25,8 @@ constexpr uint32_t DefaultSharedSpiClockFrequency = 2000000;
 constexpr uint32_t SpiTimeout = 10000;
 
 #if SAME5x
-SpiDevice::SpiDevice(uint8_t sercomNum, uint32_t dataInPad, uint32_t dataOutPad) noexcept
-	: hardware(Serial::Sercoms[sercomNum]), sercomNumber(sercomNum)
+SpiDevice::SpiDevice(uint8_t sercomNum, DmaChannel p_dmaChanTx, DmaPriority p_dmaPrioTx, uint32_t dataInPad, uint32_t dataOutPad) noexcept
+	: hardware(Serial::Sercoms[sercomNum]), sercomNumber(sercomNum), dmaChanTx(p_dmaChanTx), dmaPrioTx(p_dmaPrioTx)
 #elif USART_SPI
 SpiDevice::SpiDevice(uint8_t spiInstanceNum) noexcept
 	: hardware(USART_SSPI)			// we ignore the parameter and support just one shared SPI
@@ -260,7 +260,7 @@ void SpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode
 }
 
 // Send and receive data returning true if successful
-bool SpiDevice::TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t *_ecv_array null rx_data, size_t len) const noexcept
+bool SpiDevice::TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t *_ecv_array null rx_data, size_t len) noexcept
 {
 	// Clear any existing data
 #if SAME5x
@@ -271,38 +271,57 @@ bool SpiDevice::TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t
 	(void)hardware->SPI_RDR;
 #endif
 
-	for (uint32_t i = 0; i < len; ++i)
-	{
-		uint32_t dOut = (tx_data == nullptr) ? 0x000000FF : (uint32_t)*tx_data++;
-		if (waitForTxReady())			// we have to write the first byte after enabling the device without waiting for DRE to be set
-		{
-			return false;
-		}
-
-		// Write to transmit register
 #if SAME5x
-		hardware->SPI.DATA.reg = dOut;
-#elif USART_SPI
-		hardware->US_THR = dOut;
-#else
-		if (i + 1 == len)
-		{
-			dOut |= SPI_TDR_LASTXFER;
-		}
-		hardware->SPI_TDR = dOut;
+	if (len >= 40 && rx_data == nullptr && tx_data != nullptr)
+	{
+		// Sending a large amount of data to LCD, so use DMA
+		DmacManager::DisableChannel(dmaChanTx);
+		DmacManager::SetSourceAddress(dmaChanTx, tx_data);
+		DmacManager::SetDestinationAddress(dmaChanTx, &(hardware->SPI.DATA));
+		DmacManager::SetBtctrl(dmaChanTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_BYTE | DMAC_BTCTRL_BLOCKACT_NOACT);
+		DmacManager::SetDataLength(dmaChanTx, len);
+		DmacManager::SetTriggerSourceSercomTx(dmaChanTx, sercomNumber);
+		waitingTask = TaskBase::GetCallerTaskHandle();
+		DmacManager::SetInterruptCallback(dmaChanTx, SpiDevice::DmaComplete, CallbackParameter((void *)this));
+		DmacManager::EnableCompletedInterrupt(dmaChanTx);
+		DmacManager::EnableChannel(dmaChanTx, dmaPrioTx);
+		TaskBase::TakeIndexed(NotifyIndices::Spi, 10);			// maximum 3kb transfer should complete in about 2ms @ 14MHz clock speed
+	}
+	else
 #endif
-
-		// Some devices are transmit-only e.g. 12864 display, so don't wait for received data if we don't need to
-		if (rx_data != nullptr)
+	{
+		for (uint32_t i = 0; i < len; ++i)
 		{
-			// Wait for receive register
-			if (waitForRxReady())
+			uint32_t dOut = (tx_data == nullptr) ? 0x000000FF : (uint32_t)*tx_data++;
+			if (waitForTxReady())			// we have to write the first byte after enabling the device without waiting for DRE to be set
 			{
 				return false;
 			}
 
-			// Get data from receive register
-			const uint8_t dIn =
+			// Write to transmit register
+#if SAME5x
+			hardware->SPI.DATA.reg = dOut;
+#elif USART_SPI
+			hardware->US_THR = dOut;
+#else
+			if (i + 1 == len)
+			{
+				dOut |= SPI_TDR_LASTXFER;
+			}
+			hardware->SPI_TDR = dOut;
+#endif
+
+			// Some devices are transmit-only e.g. 12864 display, so don't wait for received data if we don't need to
+			if (rx_data != nullptr)
+			{
+				// Wait for receive register
+				if (waitForRxReady())
+				{
+					return false;
+				}
+
+				// Get data from receive register
+				const uint8_t dIn =
 #if SAME5x
 					(uint8_t)hardware->SPI.DATA.reg;
 #elif USART_SPI
@@ -310,7 +329,8 @@ bool SpiDevice::TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t
 #else
 					(uint8_t)hardware->SPI_RDR;
 #endif
-			*rx_data++ = dIn;
+				*rx_data++ = dIn;
+			}
 		}
 	}
 
@@ -336,7 +356,7 @@ bool SpiDevice::TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t
 	return true;	// success
 }
 
-#if SAME5x && defined(FMDC_V03)
+#if SAME5x
 
 // Send and receive data returning true if successful, using 16-bit data transfers (needed when using 9-bit characters). 'len' is in 16-bit words.
 bool SpiDevice::TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data, uint16_t *_ecv_array null rx_data, size_t len) noexcept
@@ -351,19 +371,19 @@ bool SpiDevice::TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data,
 #endif
 
 #if SAME5x
-	if (len >= 50 && rx_data == nullptr && tx_data != nullptr)
+	if (len >= 40 && rx_data == nullptr && tx_data != nullptr)
 	{
 		// Sending a large amount of data to LCD, so use DMA. Currently only the TFT LCD uses this device, so we use a fixed DMA channel number.
-		DmacManager::DisableChannel(DmacChanLcdTx);
-		DmacManager::SetSourceAddress(DmacChanLcdTx, tx_data);
-		DmacManager::SetDestinationAddress(DmacChanLcdTx, &(hardware->SPI.DATA));
-		DmacManager::SetBtctrl(DmacChanLcdTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_HWORD | DMAC_BTCTRL_BLOCKACT_NOACT);
-		DmacManager::SetDataLength(DmacChanLcdTx, len);
-		DmacManager::SetTriggerSourceSercomTx(DmacChanLcdTx, sercomNumber);
+		DmacManager::DisableChannel(dmaChanTx);
+		DmacManager::SetSourceAddress(dmaChanTx, tx_data);
+		DmacManager::SetDestinationAddress(dmaChanTx, &(hardware->SPI.DATA));
+		DmacManager::SetBtctrl(dmaChanTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_HWORD | DMAC_BTCTRL_BLOCKACT_NOACT);
+		DmacManager::SetDataLength(dmaChanTx, len);
+		DmacManager::SetTriggerSourceSercomTx(dmaChanTx, sercomNumber);
 		waitingTask = TaskBase::GetCallerTaskHandle();
-		DmacManager::SetInterruptCallback(DmacChanLcdTx, SpiDevice::DmaComplete, CallbackParameter((void *)this));
-		DmacManager::EnableCompletedInterrupt(DmacChanLcdTx);
-		DmacManager::EnableChannel(DmacChanLcdTx, DmacPrioLcdTx);
+		DmacManager::SetInterruptCallback(dmaChanTx, SpiDevice::DmaComplete, CallbackParameter((void *)this));
+		DmacManager::EnableCompletedInterrupt(dmaChanTx);
+		DmacManager::EnableChannel(dmaChanTx, dmaPrioTx);
 		TaskBase::TakeIndexed(NotifyIndices::Spi, 10);			// maximum 3kb transfer should complete in about 2ms @ 14MHz clock speed
 	}
 	else

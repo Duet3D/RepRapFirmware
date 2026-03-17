@@ -481,9 +481,10 @@ constexpr DmaChannel DmacChanWiFiTx = 0;
 constexpr DmaChannel DmacChanWiFiRx = 1;
 constexpr DmaChannel DmacChanTmcTx = 2;
 constexpr DmaChannel DmacChanTmcRx = 3;
-constexpr DmaChannel DmacChanLcdTx = 4;
+constexpr DmaChannel DmacChanSspiTx = 4;
+constexpr DmaChannel DmacChanLcdTx = 5;
 
-constexpr unsigned int NumDmaChannelsUsed = 5;
+constexpr unsigned int NumDmaChannelsUsed = 6;
 
 // The DMAC has priority levels 0-3 but on revision A chips it is unsafe to use multiple levels
 // Fortunately, all our SAME54P20Achips seem to be revision D
@@ -491,7 +492,8 @@ constexpr DmaPriority DmacPrioTmcTx = 0;
 constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 100kbps so this is not very critical
 constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
-constexpr DmaPriority DmacPrioLcdTx = 3;				// high speed SPI in slave mode
+constexpr DmaPriority DmacPrioSspiTx = 3;				// high speed SPI in master mode
+constexpr DmaPriority DmacPrioLcdTx = 3;				// high speed SPI in master mode
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers

@@ -15,7 +15,7 @@ class SharedSpiDevice : public SpiDevice
 {
 public:
 #if SAME5x || SAMC21
-	SharedSpiDevice(uint8_t sercomNum, uint32_t dataInPad, uint32_t dataOutPad) noexcept;
+	SharedSpiDevice(uint8_t sercomNum, DmaChannel dmaChan, DmaPriority dmaPrio, uint32_t dataInPad, uint32_t dataOutPad) noexcept;
 #else
 	explicit SharedSpiDevice(uint8_t spiInstanceNum) noexcept;
 #endif
