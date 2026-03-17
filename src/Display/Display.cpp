@@ -266,9 +266,9 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 			SetPinMode(LcdFontCsPin, OUTPUT_HIGH);							// in case the font chip is fitted, deselect it
 			InitDisplay(gb,
 # if USE_FONT_CHIP
-							new LcdILI9488(LcdFontCsPin, LcdSercomNumber),
+							new LcdILI9488(LcdFontCsPin, LcdSercomNumber, LcdDataInPad, LcdDataOutPad),
 # else
-							new LcdILI9488(tftFonts, ARRAY_SIZE(tftFonts), LcdSercomNumber),
+							new LcdILI9488(tftFonts, ARRAY_SIZE(tftFonts), LcdSercomNumber, LcdDataInPad, LcdDataOutPad),
 # endif
 								LcdSpiCsPin, NoPin, false);
 			touchController = new ResistiveTouch(RtpSpiCsPin, RtpPenPin);

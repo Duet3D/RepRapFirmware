@@ -21,7 +21,11 @@
 class SpiDevice
 {
 public:
-	explicit SpiDevice(uint8_t sercomNum) noexcept;
+#if SAME5x || SAMC21
+	SpiDevice(uint8_t sercomNum, uint32_t dataInPad, uint32_t dataOutPad) noexcept;
+#else
+	explicit SpiDevice(uint8_t spiInstanceNum) noexcept;
+#endif
 
 	void Disable() const noexcept;
 	void Enable() const noexcept;

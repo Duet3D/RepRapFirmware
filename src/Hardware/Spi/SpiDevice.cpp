@@ -24,12 +24,14 @@
 constexpr uint32_t DefaultSharedSpiClockFrequency = 2000000;
 constexpr uint32_t SpiTimeout = 10000;
 
-SpiDevice::SpiDevice(uint8_t sercomNum) noexcept
 #if SAME5x
+SpiDevice::SpiDevice(uint8_t sercomNum, uint32_t dataInPad, uint32_t dataOutPad) noexcept
 	: hardware(Serial::Sercoms[sercomNum]), sercomNumber(sercomNum)
 #elif USART_SPI
+SpiDevice::SpiDevice(uint8_t spiInstanceNum) noexcept
 	: hardware(USART_SSPI)			// we ignore the parameter and support just one shared SPI
 #else
+SpiDevice::SpiDevice(uint8_t spiInstanceNum) noexcept
 	: hardware(SHARED_SPI)			// we ignore the parameter and support just one shared SPI
 #endif
 {
@@ -37,7 +39,7 @@ SpiDevice::SpiDevice(uint8_t sercomNum) noexcept
 	Serial::EnableSercomClock(sercomNum);
 
 	// Set up the SERCOM
-	const uint32_t regCtrlA = SERCOM_SPI_CTRLA_MODE(3) | SERCOM_SPI_CTRLA_DIPO(3) | SERCOM_SPI_CTRLA_DOPO(0) | SERCOM_SPI_CTRLA_FORM(0);
+	const uint32_t regCtrlA = SERCOM_SPI_CTRLA_MODE(3) | SERCOM_SPI_CTRLA_DIPO(dataInPad) | SERCOM_SPI_CTRLA_DOPO(dataOutPad) | SERCOM_SPI_CTRLA_FORM(0);
 	const uint32_t regCtrlB = 0;											// 8 bits, slave select disabled, receiver disabled for now
 	const uint32_t regCtrlC = 0;											// not 32-bit mode
 

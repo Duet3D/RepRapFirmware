@@ -491,7 +491,7 @@ void Platform::Init() noexcept
 	SetPinFunction(SharedSpiSclkPin, SharedSpiPinFunction);
 	SetDriveStrength(SharedSpiMosiPin, 2);
 	SetDriveStrength(SharedSpiSclkPin, 2);								// some devices (e.g. TFT LCD font chip) need fast rise and fall times
-	mainSharedSpiDevice = new SharedSpiDevice(SharedSpiSercomNumber);
+	mainSharedSpiDevice = new SharedSpiDevice(SharedSpiSercomNumber, SspiDataInPad, SspiDataOutPad);
 #elif USART_SPI
 	SetPinFunction(APIN_USART_SSPI_SCK, USARTSPISckPeriphMode);
 	SetPinFunction(APIN_USART_SSPI_MOSI, USARTSPIMosiPeriphMode);

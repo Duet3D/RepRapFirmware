@@ -261,6 +261,8 @@ constexpr GpioPinFunction NeopixelOutPinFunction = GpioPinFunction::H;		// QSPI 
 
 // Shared SPI definitions
 constexpr uint8_t SharedSpiSercomNumber = 7;
+constexpr uint32_t SspiDataInPad = 3;
+constexpr uint32_t SspiDataOutPad = 0;
 constexpr Pin SharedSpiMosiPin = PortCPin(12);
 constexpr Pin SharedSpiMisoPin = PortCPin(15);
 constexpr Pin SharedSpiSclkPin = PortCPin(13);

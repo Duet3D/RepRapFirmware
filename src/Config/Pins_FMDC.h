@@ -238,6 +238,8 @@ constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 // Therefore the available frequencies are 15MHz, 10MHz, 7.5MHz, 6MHz, 5MHz.
 constexpr uint32_t LcdSpiClockFrequency = 15000000;
 constexpr unsigned int LcdSercomNumber = 0;
+constexpr uint32_t LcdDataInPad = 3;
+constexpr uint32_t LcdDataOutPad = 0;
 constexpr Pin LcdSpiMosiPin = PortAPin(4);
 constexpr Pin LcdSpiMisoPin = PortAPin(7);
 constexpr Pin LcdSpiSclkPin = PortAPin(5);
@@ -272,6 +274,8 @@ constexpr Pin RtpPenPin = PortAPin(3);
 
 // Shared SPI definitions
 constexpr uint8_t SharedSpiSercomNumber = 7;
+constexpr uint32_t SspiDataInPad = 3;
+constexpr uint32_t SspiDataOutPad = 0;
 constexpr Pin SharedSpiMosiPin = PortCPin(12);
 constexpr Pin SharedSpiMisoPin = PortCPin(15);
 constexpr Pin SharedSpiSclkPin = PortCPin(13);
