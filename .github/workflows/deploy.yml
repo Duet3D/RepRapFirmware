@@ -41,6 +41,13 @@ jobs:
           path: "./LibTinyusb"
           submodules: "recursive"
 
+      - name: "Check out LibMbedTls"
+        uses: actions/checkout@v5
+        with:
+          repository: "Duet3D/LibMbedTls"
+          ref: "master"
+          path: "./LibMbedTls"
+
       - name: "Check out RepRapFirmware"
         uses: actions/checkout@v5
         with:
@@ -80,35 +87,16 @@ jobs:
           sudo apt-get install -y libarchive-tools default-jre
           curl -L -O "https://pkg.duet3d.com/eclipse-cpp-2025-09-R-linux-gtk-x86_64.tar.gz"
           sudo bsdtar -x -f ./eclipse-cpp-2025-09-R-linux-gtk-x86_64.tar.gz -C /opt
+          echo "/opt/eclipse" >> $GITHUB_PATH
 
       - name: "Set up ARM GCC"
         run: |
-          curl -L -o ./arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi.tar.xz "https://developer.arm.com/-/media/Files/downloads/gnu/13.2.Rel1/binrel/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi.tar.xz?rev=e434b9ea4afc4ed7998329566b764309&hash=CA590209F5774EE1C96E6450E14A3E26"
-          bsdtar -x -f ./arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi.tar.xz
+          curl -L -o ./arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi.tar.xz "https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/binrel/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi.tar.xz"
+          bsdtar -x -f ./arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi.tar.xz
 
-      - name: "Set up Eclipse workspace"
+      - name: "Build RepRapFirmware"
         run: |
-          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin -importAll ./
-
-      - name: "Build RepRapFirmware Duet2"
-        run: |
-          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin -cleanBuild "RepRapFirmware/Duet2"
-
-      - name: "Build RepRapFirmware Duet2_SBC"
-        run: |
-          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin -cleanBuild "RepRapFirmware/Duet2_SBC"
-
-      - name: "Build RepRapFirmare Duet3Mini5plus"
-        run: |
-          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin -cleanBuild "RepRapFirmware/Duet3Mini5plus"
-
-      - name: "Build RepRapFirmare Duet3_MB6HC"
-        run: |
-          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin -cleanBuild "RepRapFirmware/Duet3_MB6HC"
-
-      - name: "Build RepRapFirmare Duet3_MB6XD"
-        run: |
-          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin -cleanBuild "RepRapFirmware/Duet3_MB6XD"
+          ./RepRapFirmware/Scripts/build-headless.sh $GITHUB_WORKSPACE/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin
 
       - name: "Arrange files"
         run: |
