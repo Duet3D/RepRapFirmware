@@ -6,7 +6,7 @@
 /*
  * Copyright (c) 2017 Benjamin Aigner
  * Copyright (c) 2015 Inico Technologies Ltd. , Author: Ivan Delamer <delamer@inicotech.com>
- * 
+ *
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
@@ -32,10 +32,10 @@
  * OF SUCH DAMAGE.
  *
  * Author: Benjamin Aigner <aignerb@technikum-wien.at>
- * 
+ *
  * Based on the original 6lowpan implementation of lwIP ( @see 6lowpan.c)
  */
- 
+
 #ifndef LWIP_HDR_LOWPAN6_BLE_H
 #define LWIP_HDR_LOWPAN6_BLE_H
 
@@ -66,8 +66,8 @@ err_t rfc7668_if_init(struct netif *netif);
 err_t tcpip_rfc7668_input(struct pbuf *p, struct netif *inp);
 #endif
 
-void ble_addr_to_eui64(uint8_t *dst, const uint8_t *src, int public_addr);
-void eui64_to_ble_addr(uint8_t *dst, const uint8_t *src);
+void ble_addr_to_eui64(u8_t *dst, const u8_t *src, int public_addr);
+void eui64_to_ble_addr(u8_t *dst, const u8_t *src);
 
 #ifdef __cplusplus
 }

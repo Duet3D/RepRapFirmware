@@ -93,7 +93,7 @@ static void netconn_drain(struct netconn *conn);
 #endif /* LWIP_TCPIP_CORE_LOCKING */
 
 #if LWIP_NETCONN_FULLDUPLEX
-const u8_t netconn_deleted = 0;
+static const u8_t netconn_deleted = 0;
 
 int
 lwip_netconn_is_deallocated_msg(void *msg)
@@ -106,9 +106,9 @@ lwip_netconn_is_deallocated_msg(void *msg)
 #endif /* LWIP_NETCONN_FULLDUPLEX */
 
 #if LWIP_TCP
-const u8_t netconn_aborted = 0;
-const u8_t netconn_reset = 0;
-const u8_t netconn_closed = 0;
+static const u8_t netconn_aborted = 0;
+static const u8_t netconn_reset = 0;
+static const u8_t netconn_closed = 0;
 
 /** Translate an error to a unique void* passed via an mbox */
 static void *
@@ -221,6 +221,7 @@ recv_udp(void *arg, struct udp_pcb *pcb, struct pbuf *p,
   struct netbuf *buf;
   struct netconn *conn;
   u16_t len;
+  err_t err;
 #if LWIP_SO_RCVBUF
   int recv_avail;
 #endif /* LWIP_SO_RCVBUF */
@@ -269,8 +270,10 @@ recv_udp(void *arg, struct udp_pcb *pcb, struct pbuf *p,
   }
 
   len = p->tot_len;
-  if (sys_mbox_trypost(&conn->recvmbox, buf) != ERR_OK) {
+  err = sys_mbox_trypost(&conn->recvmbox, buf);
+  if (err != ERR_OK) {
     netbuf_delete(buf);
+    LWIP_DEBUGF(API_MSG_DEBUG, ("recv_udp: sys_mbox_trypost failed, err=%d\n", err));
     return;
   } else {
 #if LWIP_SO_RCVBUF
@@ -469,7 +472,7 @@ err_tcp(void *arg, err_t err)
   }
   /* pass error message to acceptmbox to wake up pending accept */
   if (NETCONN_MBOX_VALID(conn, &conn->acceptmbox)) {
-    /* use trypost to preven deadlock */
+    /* use trypost to prevent deadlock */
     sys_mbox_trypost(&conn->acceptmbox, mbox_msg);
   }
 
@@ -492,7 +495,7 @@ err_tcp(void *arg, err_t err)
         conn->current_msg->err = err;
       }
       op_completed_sem = LWIP_API_MSG_SEM(conn->current_msg);
-      LWIP_ASSERT("inavlid op_completed_sem", sys_sem_valid(op_completed_sem));
+      LWIP_ASSERT("invalid op_completed_sem", sys_sem_valid(op_completed_sem));
       conn->current_msg = NULL;
       /* wake up the waiting task */
       sys_sem_signal(op_completed_sem);
@@ -716,6 +719,9 @@ netconn_alloc(enum netconn_type t, netconn_callback callback)
   conn->pending_err = ERR_OK;
   conn->type = t;
   conn->pcb.tcp = NULL;
+#if LWIP_NETCONN_FULLDUPLEX
+  conn->mbox_threads_waiting = 0;
+#endif
 
   /* If all sizes are the same, every compiler should optimize this switch to nothing */
   switch (NETCONNTYPE_GROUP(t)) {
@@ -756,10 +762,8 @@ netconn_alloc(enum netconn_type t, netconn_callback callback)
   sys_mbox_set_invalid(&conn->acceptmbox);
 #endif
   conn->state        = NETCONN_NONE;
-#if LWIP_SOCKET
   /* initialize socket to -1 since 0 is a valid socket */
-  conn->socket       = -1;
-#endif /* LWIP_SOCKET */
+  conn->callback_arg.socket = -1;
   conn->callback     = callback;
 #if LWIP_TCP
   conn->current_msg  = NULL;
@@ -975,7 +979,7 @@ lwip_netconn_do_close_internal(struct netconn *conn  WRITE_DELAYED_PARAM)
   /* Try to close the connection */
   if (shut_close) {
 #if LWIP_SO_LINGER
-    /* check linger possibilites before calling tcp_close */
+    /* check linger possibilities before calling tcp_close */
     err = ERR_OK;
     /* linger enabled/required at all? (i.e. is there untransmitted data left?) */
     if ((conn->linger >= 0) && (conn->pcb.tcp->unsent || conn->pcb.tcp->unacked)) {
@@ -1469,7 +1473,7 @@ lwip_netconn_do_listen(void *m)
           /* "Socket API like" dual-stack support: If IP to listen to is IP6_ADDR_ANY,
             * and NETCONN_FLAG_IPV6_V6ONLY is NOT set, use IP_ANY_TYPE to listen
             */
-          if (ip_addr_cmp(&msg->conn->pcb.ip->local_ip, IP6_ADDR_ANY) &&
+          if (ip_addr_eq(&msg->conn->pcb.ip->local_ip, IP6_ADDR_ANY) &&
               (netconn_get_ipv6only(msg->conn) == 0)) {
             /* change PCB type to IPADDR_TYPE_ANY */
             IP_SET_TYPE_VAL(msg->conn->pcb.tcp->local_ip,  IPADDR_TYPE_ANY);

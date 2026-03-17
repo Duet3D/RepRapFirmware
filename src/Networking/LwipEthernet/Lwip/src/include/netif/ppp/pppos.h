@@ -50,7 +50,6 @@ extern "C" {
  * completed. */
 enum {
   PDIDLE = 0,  /* Idle state - waiting. */
-  PDSTART,     /* Process start flag. */
   PDADDRESS,   /* Process address field. */
   PDCONTROL,   /* Process control field. */
   PDPROTOCOL1, /* Process protocol field 1. */
@@ -59,7 +58,7 @@ enum {
 };
 
 /* PPPoS serial output callback function prototype */
-typedef u32_t (*pppos_output_cb_fn)(ppp_pcb *pcb, u8_t *data, u32_t len, void *ctx);
+typedef u32_t (*pppos_output_cb_fn)(ppp_pcb *pcb, const void *data, u32_t len, void *ctx);
 
 /*
  * Extended asyncmap - allows any character to be escaped.
@@ -103,11 +102,11 @@ ppp_pcb *pppos_create(struct netif *pppif, pppos_output_cb_fn output_cb,
 
 #if !NO_SYS && !PPP_INPROC_IRQ_SAFE
 /* Pass received raw characters to PPPoS to be decoded through lwIP TCPIP thread. */
-err_t pppos_input_tcpip(ppp_pcb *ppp, u8_t *s, int l);
+err_t pppos_input_tcpip(ppp_pcb *ppp, const void *s, int l);
 #endif /* !NO_SYS && !PPP_INPROC_IRQ_SAFE */
 
 /* PPP over Serial: this is the input function to be called for received data. */
-void pppos_input(ppp_pcb *ppp, u8_t* data, int len);
+void pppos_input(ppp_pcb *ppp, const void* data, int len);
 
 
 /*

@@ -94,7 +94,7 @@
  *
  * To save memory, the maximum tag length is limited (@see LWIP_HTTPD_MAX_TAG_NAME_LEN).
  * To save memory, the maximum insertion string length is limited (@see
- * LWIP_HTTPD_MAX_TAG_INSERT_LEN). If this is not enought, @ref LWIP_HTTPD_SSI_MULTIPART
+ * LWIP_HTTPD_MAX_TAG_INSERT_LEN). If this is not enough, @ref LWIP_HTTPD_SSI_MULTIPART
  * can be used.
  */
 #if !defined LWIP_HTTPD_SSI || defined __DOXYGEN__
@@ -112,13 +112,23 @@
 /** Set this to 0 to prevent parsing the file extension at runtime to decide
  * if a file should be scanned for SSI tags or not.
  * Default is 1 (file extensions are checked using the g_pcSSIExtensions array)
- * Set to 2 to override this runtime test function.
+ * Set to 2 to override this runtime test function. In this case, you have to
+ * provide an external function that does the check:
+ *   u8_t http_uri_is_ssi(struct fs_file *file, const char *uri)
  *
  * This is enabled by default, but if you only use a newer version of makefsdata
  * supporting the "-ssi" option, this info is already present in
  */
 #if !defined LWIP_HTTPD_SSI_BY_FILE_EXTENSION || defined __DOXYGEN__
 #define LWIP_HTTPD_SSI_BY_FILE_EXTENSION  1
+#endif
+
+/** This is a list of file extensions handled as SSI files. This define
+ * is used to initialize a 'const char *const[]'. It is only used if
+ * LWIP_HTTPD_SSI_BY_FILE_EXTENSION != 0.
+ */
+#if !defined LWIP_HTTPD_SSI_EXTENSIONS || defined __DOXYGEN__
+#define LWIP_HTTPD_SSI_EXTENSIONS ".shtml", ".shtm", ".ssi", ".xml", ".json"
 #endif
 
 /** Set this to 1 to support HTTP POST */
@@ -175,7 +185,7 @@
 #define HTTPD_DEBUG         LWIP_DBG_OFF
 #endif
 
-/** Set this to 1 to use a memp pool for allocating 
+/** Set this to 1 to use a memp pool for allocating
  * struct http_state instead of the heap.
  * If enabled, you'll need to define MEMP_NUM_PARALLEL_HTTPD_CONNS
  * (and MEMP_NUM_PARALLEL_HTTPD_SSI_CONNS for SSI) to set the size of
@@ -363,6 +373,16 @@
  */
 #if !defined LWIP_HTTPD_FILE_STATE || defined __DOXYGEN__
 #define LWIP_HTTPD_FILE_STATE         0
+#endif
+
+/** Set this to 1 to add the pextension field to the fs_file structure.
+ * This is included here to retain compatibility with legacy code that
+ * relies on the presence of the pextension field.
+ * New code should use LWIP_HTTPD_FILE_STATE instead.
+ * This option may be removed in a future version of lwip.
+ */
+#if !defined LWIP_HTTPD_FILE_EXTENSION || defined __DOXYGEN__
+#define LWIP_HTTPD_FILE_EXTENSION     0
 #endif
 
 /** HTTPD_PRECALCULATED_CHECKSUM==1: include precompiled checksums for

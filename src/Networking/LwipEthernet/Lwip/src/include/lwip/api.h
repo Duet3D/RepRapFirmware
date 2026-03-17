@@ -153,27 +153,27 @@ enum netconn_state {
 };
 
 /** Used to inform the callback function about changes
- * 
+ *
  * Event explanation:
- * 
+ *
  * In the netconn implementation, there are three ways to block a client:
- * 
+ *
  * - accept mbox (sys_arch_mbox_fetch(&conn->acceptmbox, &accept_ptr, 0); in netconn_accept())
  * - receive mbox (sys_arch_mbox_fetch(&conn->recvmbox, &buf, 0); in netconn_recv_data())
  * - send queue is full (sys_arch_sem_wait(LWIP_API_MSG_SEM(msg), 0); in lwip_netconn_do_write())
- * 
+ *
  * The events have to be seen as events signaling the state of these mboxes/semaphores. For non-blocking
  * connections, you need to know in advance whether a call to a netconn function call would block or not,
  * and these events tell you about that.
- * 
- * RCVPLUS events say: Safe to perform a potentially blocking call call once more. 
+ *
+ * RCVPLUS events say: Safe to perform a potentially blocking call call once more.
  * They are counted in sockets - three RCVPLUS events for accept mbox means you are safe
  * to call netconn_accept 3 times without being blocked.
  * Same thing for receive mbox.
- * 
+ *
  * RCVMINUS events say: Your call to to a possibly blocking function is "acknowledged".
  * Socket implementation decrements the counter.
- * 
+ *
  * For TX, there is no need to count, its merely a flag. SENDPLUS means you may send something.
  * SENDPLUS occurs when enough data was delivered to peer so netconn_send() can be called again.
  * A SENDMINUS event occurs when the next call to a netconn_send() would be blocking.
@@ -246,10 +246,10 @@ struct netconn {
       all threads when closing while threads are waiting. */
   int mbox_threads_waiting;
 #endif
-  /** only used for socket layer */
-#if LWIP_SOCKET
-  int socket;
-#endif /* LWIP_SOCKET */
+  union {
+    int socket;
+    void *ptr;
+  } callback_arg;
 #if LWIP_SO_SNDTIMEO
   /** timeout to wait for sending data (which means enqueueing data for sending
       in internal buffers) in milliseconds */
@@ -372,6 +372,9 @@ err_t   netconn_err(struct netconn *conn);
 #define netconn_set_flags(conn, set_flags)     do { (conn)->flags = (u8_t)((conn)->flags |  (set_flags)); } while(0)
 #define netconn_clear_flags(conn, clr_flags)   do { (conn)->flags = (u8_t)((conn)->flags & (u8_t)(~(clr_flags) & 0xff)); } while(0)
 #define netconn_is_flag_set(conn, flag)        (((conn)->flags & (flag)) != 0)
+
+#define netconn_set_callback_arg(conn, arg)   do { (conn)->callback_arg.ptr = (arg); } while(0)
+#define netconn_get_callback_arg(conn)        ((conn)->callback_arg.ptr)
 
 /** Set the blocking status of netconn calls (@todo: write/send is missing) */
 #define netconn_set_nonblocking(conn, val)  do { if(val) { \

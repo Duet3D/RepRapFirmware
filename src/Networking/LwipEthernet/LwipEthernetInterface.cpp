@@ -403,7 +403,7 @@ void LwipEthernetInterface::Start() noexcept
 		{
 			// Initialise mDNS subsystem
 			mdns_resp_init();
-			mdns_resp_add_netif(&gs_net_if, hostname, MdnsTtl);
+			mdns_resp_add_netif(&gs_net_if, hostname);
 
 			// Initialise NetBIOS responder
 			netbiosns_init();
@@ -745,8 +745,8 @@ void GetServiceTxtEntries(struct mdns_service *service, void *txt_userdata)
 void LwipEthernetInterface::RebuildMdnsServices() noexcept
 {
 	mdns_resp_remove_netif(&gs_net_if);
-	mdns_resp_add_netif(&gs_net_if, reprap.GetNetwork().GetHostname(), MdnsTtl);
-	mdns_resp_add_service(&gs_net_if, "echo", "_echo", DNSSD_PROTO_TCP, 0, 0, nullptr, nullptr);
+	mdns_resp_add_netif(&gs_net_if, reprap.GetNetwork().GetHostname());
+	mdns_resp_add_service(&gs_net_if, "echo", "_echo", DNSSD_PROTO_TCP, 0, nullptr, nullptr);
 
 	for (size_t protocol = 0; protocol < NumSelectableProtocols; protocol++)
 	{
@@ -758,7 +758,7 @@ void LwipEthernetInterface::RebuildMdnsServices() noexcept
 		)
 		{
 			service_get_txt_fn_t txtFunc = (protocol == HttpProtocol) ? GetServiceTxtEntries : nullptr;
-			mdns_resp_add_service(&gs_net_if, ProtocolNames[protocol], MdnsServiceStrings[protocol], DNSSD_PROTO_TCP, portNumbers[protocol], MdnsTtl, txtFunc, nullptr);
+			mdns_resp_add_service(&gs_net_if, ProtocolNames[protocol], MdnsServiceStrings[protocol], DNSSD_PROTO_TCP, portNumbers[protocol], txtFunc, nullptr);
 		}
 	}
 
