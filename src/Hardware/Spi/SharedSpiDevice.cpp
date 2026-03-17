@@ -9,11 +9,7 @@
 
 // SharedSpiDevice members
 
-#if SAME5x || SAMC21
 SharedSpiDevice::SharedSpiDevice(const SpiParameters& params) noexcept : SpiDevice(params)
-#else
-SharedSpiDevice::SharedSpiDevice(uint8_t spiInstanceNum) noexcept : SpiDevice(spiInstanceNum)
-#endif
 {
 	mutex.Create("SPI");
 }

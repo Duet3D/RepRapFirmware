@@ -468,13 +468,13 @@ void Platform::Init() noexcept
 	commsParams[FirstAuxChannel + 1] = 0;
 #endif
 
-#ifdef DUET3_MB6XD
-	SetPinMode(ModbusTxPin, OUTPUT_LOW);		// turn off the RS485 transmitter
-#endif
-#ifdef DUET3_MB6HC
+	// Turn off the RS485 transmitter
+#if defined(DUET3_MB6XD)
+	SetPinMode(ModbusTxPin, OUTPUT_LOW);
+#elif defined(DUET3_MB6HC)
 	if (board == BoardType::Duet3_6HC_v102c)
 	{
-		SetPinMode(ModbusTxPin, OUTPUT_LOW);	// turn off the RS485 transmitter
+		SetPinMode(ModbusTxPin, OUTPUT_LOW);
 	}
 #endif
 
@@ -482,19 +482,7 @@ void Platform::Init() noexcept
 	IoPort::Init();
 
 	// Shared SPI subsystem
-#if SAME5x
 	mainSharedSpiDevice = new SharedSpiDevice(SharedSpiParams);
-#elif USART_SPI
-	SetPinFunction(APIN_USART_SSPI_SCK, USARTSPISckPeriphMode);
-	SetPinFunction(APIN_USART_SSPI_MOSI, USARTSPIMosiPeriphMode);
-	SetPinFunction(APIN_USART_SSPI_MISO, USARTSPIMisoPeriphMode);
-	mainSharedSpiDevice = new SharedSpiDevice(0);
-#else
-	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_SCK]);
-	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_MOSI]);
-	ConfigurePin(g_APinDescription[APIN_SHARED_SPI_MISO]);
-	mainSharedSpiDevice = new SharedSpiDevice(0);
-#endif
 
 	// File management and SD card interfaces
 	for (size_t i = 0; i < NumSdCards; ++i)
@@ -576,11 +564,11 @@ void Platform::Init() noexcept
 #endif
 
 	// If MISO from a MAX31856 board breaks after initialising the MAX31856 then if MISO floats low and reads as all zeros, this looks like a temperature of 0C and no error.
-	// Enable the pullup resistor, with luck this will make it float high instead.
+	// Enable the pullup resistor, this makes it float high instead.
 #if SAME5x
 	// nothing to do here
 #else
-	SetPinMode(APIN_USART_SSPI_MISO, INPUT_PULLUP, false);
+	SetPinMode(SharedSpiParams.misoPin, INPUT_PULLUP, false);
 #endif
 
 #ifdef PCCB

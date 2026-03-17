@@ -2,6 +2,7 @@
 #define PINS_DUET3_MB6HC_H__
 
 #include <PinDescription.h>
+#include <SPI/SpiParameters.h>
 
 #define BOARD_SHORT_NAME		"MB6HC"
 #define BOARD_NAME				"Duet 3 MB6HC"
@@ -135,14 +136,15 @@ constexpr size_t NumUsbChannels = 1;
 constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels not counting the WiFi serial connection (USB and two auxiliary UARTs)
 #endif
 
-
-// Shared SPI (USART 1)
-constexpr Pin APIN_USART_SSPI_SCK = PortBPin(13);
-constexpr GpioPinFunction USARTSPIMosiPeriphMode = GpioPinFunction::C;
-constexpr Pin APIN_USART_SSPI_MOSI = PortBPin(1);
-constexpr GpioPinFunction USARTSPIMisoPeriphMode = GpioPinFunction::C;
-constexpr Pin APIN_USART_SSPI_MISO = PortBPin(0);
-constexpr GpioPinFunction USARTSPISckPeriphMode = GpioPinFunction::C;
+// Shared SPI definitions
+constexpr SpiParameters SharedSpiParams =
+{
+	.usartNumber = 0,
+	.mosiPin = PortBPin(1),
+	.misoPin = PortBPin(0),
+	.sclkPin = PortBPin(13),
+	.pinFunction = GpioPinFunction::C,
+};
 
 constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB port
 
@@ -243,11 +245,6 @@ constexpr Pin EthernetPhyOtherPins[] = {
 		PortDPin(5), PortDPin(6), PortDPin(7), PortDPin(8), PortDPin(9)
 };
 constexpr auto EthernetPhyOtherPinsFunction = GpioPinFunction::A;
-
-// Shared SPI definitions
-#define USART_SPI		1
-#define USART_SSPI		USART0
-#define ID_SSPI			ID_USART0
 
 // List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
 // The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
