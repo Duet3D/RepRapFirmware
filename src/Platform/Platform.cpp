@@ -40,7 +40,7 @@
 #include "Logger.h"
 #include "Tasks.h"
 #include <Cache.h>
-#include <Hardware/Spi/SharedSpiDevice.h>
+#include <SPI/SharedSpiDevice.h>
 #include <Math/Isqrt.h>
 #include <Hardware/I2C.h>
 #include <Hardware/NonVolatileMemory.h>
