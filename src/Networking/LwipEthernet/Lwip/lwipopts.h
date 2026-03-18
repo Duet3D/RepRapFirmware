@@ -94,6 +94,7 @@
 #define LWIP_ALTCP                  1
 #define LWIP_ALTCP_TLS              1
 #define LWIP_ALTCP_TLS_MBEDTLS      1
+#define ALTCP_MBEDTLS_USE_SESSION_CACHE  1
 #else
 #define LWIP_ALTCP                  0
 #define LWIP_ALTCP_TLS              0
