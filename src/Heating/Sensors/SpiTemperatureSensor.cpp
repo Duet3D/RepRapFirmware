@@ -11,7 +11,7 @@
 
 #include <Platform/Platform.h>
 #include <Platform/Tasks.h>
-#include <Hardware/Spi/SharedSpiDevice.h>
+#include <SPI/SharedSpiDevice.h>
 
 SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *_ecv_array name, SpiMode spiMode, uint32_t clockFrequency) noexcept
 	: SensorWithPort(sensorNum, name), device(Platform::GetSharedSpiDevice(), clockFrequency, spiMode, NoPin, false)

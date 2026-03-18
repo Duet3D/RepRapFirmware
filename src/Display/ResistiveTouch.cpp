@@ -7,7 +7,6 @@
 
 #if SUPPORT_RESISTIVE_TOUCH
 
-#include <Hardware/Spi/SharedSpiDevice.h>
 #include <Platform/Platform.h>
 
 ResistiveTouch::ResistiveTouch(Pin csp, Pin irqp) noexcept

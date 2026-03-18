@@ -11,7 +11,6 @@
 
 #if USE_FONT_CHIP
 
-#include <Hardware/Spi/SharedSpiDevice.h>
 #include <Platform/Platform.h>
 
 // This font chip contains several fonts. We are only interested in the 12-dot and 16 dot high Unicode Latin/Greek Cyrillic and Arabic fonts.

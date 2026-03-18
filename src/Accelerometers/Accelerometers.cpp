@@ -15,7 +15,7 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <RTOSIface/RTOSIface.h>
 #include <Platform/TaskPriorities.h>
-#include <Hardware/Spi/SharedSpiDevice.h>
+#include <SPI/SharedSpiDevice.h>
 #include <AppNotifyIndices.h>
 
 #if SUPPORT_CAN_EXPANSION

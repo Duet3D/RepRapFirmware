@@ -53,8 +53,8 @@
 #include "sd_mmc.h"
 #include <cstring>
 
-#include <Hardware/Spi/SharedSpiClient.h>
-#include <Hardware/Spi/SharedSpiDevice.h>
+#include <SPI/SharedSpiClient.h>
+#include <SPI/SharedSpiDevice.h>
 #include <General/Portability.h>
 #include <Platform/Platform.h>
 

@@ -6,7 +6,7 @@
  */
 
 #include "MonoLcd.h"
-#include <Hardware/Spi/SharedSpiDevice.h>
+#include <SPI/SharedSpiDevice.h>
 #include <Platform/Platform.h>
 
 #if SUPPORT_12864_LCD

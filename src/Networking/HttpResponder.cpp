@@ -1439,7 +1439,7 @@ void HttpResponder::DoUpload() noexcept
 				SendJsonResponse("upload");
 				return;
 			}
-		} while (!skt->UsingTls() && (bytesWritten < FileWriteBufLen) && skt->ReadBuffer(buffer, len));
+		} while (!skt->UsingTls() && bytesWritten < FileWriteBufLen && skt->ReadBuffer(buffer, len));
 	}
 	else if (!skt->CanRead() || millis() - timer >= HttpSessionTimeout)
 	{

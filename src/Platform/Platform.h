@@ -27,7 +27,7 @@ Licence: GPL
 #include <RepRapFirmware.h>
 #include <ObjectModel/ObjectModel.h>
 #include <Hardware/IoPorts.h>
-#include <Hardware/Spi/SharedSpiDevice.h>
+#include <SPI/SharedSpiDevice.h>
 #include <Fans/FansManager.h>
 
 #include <TemperatureError.h>
