@@ -15,6 +15,10 @@
 #include <Networking/NetworkInterface.h>
 #include <Networking/NetworkDefs.h>
 
+extern "C" {
+#include "lwip/opt.h"
+}
+
 // We have 8 sockets available for Ethernet
 const size_t NumHttpSockets = 5;				// sockets 0-4 are for HTTP
 const SocketNumber FtpSocketNumber = 5;
@@ -31,7 +35,8 @@ const size_t NumEthernetSockets = 8;
 
 // Forward declarations
 class LwipSocket;
-struct tcp_pcb;
+struct altcp_pcb;
+struct altcp_tls_config;
 
 // The main network class that drives Ethernet network.
 class LwipEthernetInterface : public NetworkInterface
@@ -63,9 +68,9 @@ public:
 	const MacAddress& GetMacAddress() const noexcept override { return macAddress; }
 
 	// LwIP interfaces
-	bool ConnectionEstablished(tcp_pcb *pcb) noexcept;
+	bool ConnectionEstablished(altcp_pcb *pcb) noexcept;
 
-	void OpenDataPort(TcpPort port) noexcept override;
+	void OpenDataPort(TcpPort port, bool useTls = false) noexcept override;
 	void TerminateDataPort() noexcept override;
 
 protected:
@@ -96,13 +101,25 @@ private:
 	void ShutdownProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumSelectableProtocols);
 
+#if LWIP_ALTCP_TLS
+	bool SupportsTls() const noexcept override { return true; }
+	bool LoadTlsCertificates(const StringRef& reply) noexcept override;
+	void FreeTlsConfig() noexcept;
+	uint8_t *ReadPemFile(const char *filename, size_t& len) noexcept;
+#endif
+
 	Platform& platform;
 
 	LwipSocket *sockets[NumEthernetSockets];
 	size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
 
 	bool closeDataPort;
-	tcp_pcb *listeningPcbs[NumTcpProtocols];
+	altcp_pcb *listeningPcbs[NumTcpProtocols];
+
+#if LWIP_ALTCP_TLS
+	altcp_pcb *tlsListeningPcbs[NumSelectableProtocols];
+	altcp_tls_config *tlsConfig = nullptr;
+#endif
 
 	bool activated;
 	bool initialised;

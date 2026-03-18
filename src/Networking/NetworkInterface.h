@@ -38,12 +38,17 @@ public:
 
 	virtual void UpdateHostname(const char *_ecv_array hostname) noexcept = 0;
 
-	virtual void OpenDataPort(TcpPort port) noexcept = 0;
+	virtual void OpenDataPort(TcpPort port, bool useTls = false) noexcept = 0;
 	virtual void TerminateDataPort() noexcept = 0;
+
+	virtual bool SupportsTls() const noexcept { return false; }
+	virtual bool LoadTlsCertificates(const StringRef& reply) noexcept { reply.copy("TLS not supported by this interface"); return false; }
 
 	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept;
 	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown = true) noexcept;
 	GCodeResult ReportProtocols(const StringRef& reply) const noexcept;
+
+	TcpPort GetTlsPortNumber(NetworkProtocol p) const noexcept pre(p < NumSelectableProtocols) { return tlsPortNumbers[p]; }
 
 	Mutex interfaceMutex;										// mutex to protect against multiple tasks using the same interface concurrently. Public so that sockets can lock it.
 
@@ -66,7 +71,9 @@ protected:
 
 	uint32_t ipAddresses[NumSelectableProtocols];				// IP address of the corresponding server, used by client protocols only
 	TcpPort portNumbers[NumSelectableProtocols];				// port number used for each protocol
-	bool protocolEnabled[NumSelectableProtocols];				// whether each protocol is enabled
+	TcpPort tlsPortNumbers[NumSelectableProtocols];				// TLS port number for each protocol
+	bool protocolEnabled[NumSelectableProtocols];				// whether the plain protocol is enabled
+	bool tlsProtocolEnabled[NumSelectableProtocols];			// whether the TLS variant of the protocol is enabled
 
 private:
 	NetworkState state;

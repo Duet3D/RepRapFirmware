@@ -76,7 +76,7 @@ public:
 	GCodeResult SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept override;
 	const MacAddress& GetMacAddress() const noexcept override { return macAddress; }
 
-	void OpenDataPort(TcpPort port) noexcept override;
+	void OpenDataPort(TcpPort port, bool useTls = false) noexcept override;
 	void TerminateDataPort() noexcept override;
 
 	// The remaining functions are specific to the WiFi version
@@ -93,6 +93,9 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL
+
+	// TODO: implement TLS support for WiFi interface
+	bool LoadTlsCertificates(const StringRef& reply) noexcept override { reply.copy("TLS not yet supported on WiFi interface"); return false; }
 
 	// Disable a network protocol that is enabled. If 'permanent' is true we will leave this protocol disables, otherwise we are about to re-enable it with different parameters.
 	void IfaceStartProtocol(NetworkProtocol protocol) noexcept override;

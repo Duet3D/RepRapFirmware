@@ -425,8 +425,9 @@ void W5500Interface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IP
 	gateway = p_gateway;
 }
 
-void W5500Interface::OpenDataPort(TcpPort port) noexcept
+void W5500Interface::OpenDataPort(TcpPort port, bool useTls) noexcept
 {
+	UNUSED(useTls);
 	sockets[FtpDataSocket]->Init(FtpDataSocket, port, FtpDataProtocol);
 }
 

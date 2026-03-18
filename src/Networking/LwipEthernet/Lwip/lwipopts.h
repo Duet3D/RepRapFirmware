@@ -90,7 +90,7 @@
    -----------------------------------------------
 */
 
-#ifdef SUPPORT_HTTPS
+#ifdef MBEDTLS_CONFIG_FILE
 #define LWIP_ALTCP                  1
 #define LWIP_ALTCP_TLS              1
 #define LWIP_ALTCP_TLS_MBEDTLS      1
@@ -131,7 +131,11 @@
  * a lot of data that needs to be copied, this should be set high.
  */
 #if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
+# ifdef MBEDTLS_CONFIG_FILE
+#define MEM_SIZE                		49152    // 48KiB - LwIP shares its heap with MbedTls
+# else
 #define MEM_SIZE                		16384
+# endif
 #else
 #define MEM_SIZE                		14848
 #endif

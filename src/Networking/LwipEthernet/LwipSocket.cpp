@@ -29,6 +29,7 @@ extern Mutex lwipMutex;
 extern "C" {
 #include "lwip/pbuf.h"
 #include "lwip/tcp.h"
+#include "lwip/altcp.h"
 
 static void conn_err(void *arg, err_t err)
 {
@@ -39,7 +40,7 @@ static void conn_err(void *arg, err_t err)
 	}
 }
 
-static err_t conn_recv(void *arg, tcp_pcb *pcb, pbuf *p, err_t err)
+static err_t conn_recv(void *arg, altcp_pcb *pcb, pbuf *p, err_t err)
 {
 	UNUSED(err);
 
@@ -57,11 +58,11 @@ static err_t conn_recv(void *arg, tcp_pcb *pcb, pbuf *p, err_t err)
 		return ERR_OK;
 	}
 
-	tcp_abort(pcb);
+	altcp_abort(pcb);
 	return ERR_ABRT;
 }
 
-static err_t conn_sent(void *arg, tcp_pcb *pcb, u16_t len)
+static err_t conn_sent(void *arg, altcp_pcb *pcb, u16_t len)
 {
 	UNUSED(pcb);
 
@@ -81,36 +82,53 @@ static err_t conn_sent(void *arg, tcp_pcb *pcb, u16_t len)
 // LwipSocket class
 
 LwipSocket::LwipSocket(NetworkInterface *iface) noexcept : Socket(iface), connectionPcb(nullptr),
+#if LWIP_ALTCP_TLS
+		localTlsPort(0),
+#endif
 		receivedData(nullptr), state(SocketState::disabled)
 {
 	ReInit();
 }
 
-bool LwipSocket::AcceptConnection(tcp_pcb *pcb) noexcept
+bool LwipSocket::UsingTls() const noexcept
 {
-	if ((state == SocketState::listening && pcb->local_port == localPort) ||
-		 (state == SocketState::connecting && pcb->remote_port == remotePort))
+#if LWIP_ALTCP_TLS
+	return (state == SocketState::connected) && (altcp_get_port(connectionPcb, 1) == localTlsPort);
+#else
+	return false;
+#endif
+}
+
+bool LwipSocket::AcceptConnection(altcp_pcb *pcb) noexcept
+{
+	const TcpPort incomingPort = altcp_get_port(pcb, 1);
+	if ((state == SocketState::listening && (incomingPort == localPort
+#if LWIP_ALTCP_TLS
+			|| incomingPort == localTlsPort
+#endif
+		)) ||
+		 (state == SocketState::connecting && altcp_get_port(pcb, 0) == remotePort))
 	{
 		ReInit();
 		state = SocketState::connected;
 		whenConnected = millis();
 
 		connectionPcb = pcb;
-		remoteIPAddress.SetV4LittleEndian(pcb->remote_ip.addr);
+		remoteIPAddress.SetV4LittleEndian(altcp_get_ip(pcb, 0)->addr);
 
 		if (outgoing)
 		{
-			localPort = pcb->local_port;
+			localPort = altcp_get_port(pcb, 1);
 		}
 		else
 		{
-			remotePort = pcb->remote_port;
+			remotePort = altcp_get_port(pcb, 0);
 		}
 
-		tcp_arg(pcb, this);
-		tcp_err(pcb, conn_err);
-		tcp_recv(pcb, conn_recv);
-		tcp_sent(pcb, conn_sent);
+		altcp_arg(pcb, this);
+		altcp_err(pcb, conn_err);
+		altcp_recv(pcb, conn_recv);
+		altcp_sent(pcb, conn_sent);
 		return true;
 	}
 	return false;
@@ -161,10 +179,10 @@ void LwipSocket::ConnectionClosedGracefully() noexcept
 {
 	if (connectionPcb != nullptr)
 	{
-		tcp_err(connectionPcb, nullptr);
-		tcp_recv(connectionPcb, nullptr);
-		tcp_sent(connectionPcb, nullptr);
-		tcp_close(connectionPcb);
+		altcp_err(connectionPcb, nullptr);
+		altcp_recv(connectionPcb, nullptr);
+		altcp_sent(connectionPcb, nullptr);
+		altcp_close(connectionPcb);
 		connectionPcb = nullptr;
 	}
 
@@ -208,6 +226,9 @@ void LwipSocket::Init(SocketNumber skt, TcpPort serverPort, NetworkProtocol p, b
 		localPort = serverPort;
 		state = SocketState::listening;
 	}
+#if LWIP_ALTCP_TLS
+	localTlsPort = 0;
+#endif
 	protocol = p;
 	ReInit();
 }
@@ -251,10 +272,10 @@ void LwipSocket::Terminate() noexcept
 		MutexLocker lock(lwipMutex);
 		if (connectionPcb != nullptr)
 		{
-			tcp_err(connectionPcb, nullptr);
-			tcp_recv(connectionPcb, nullptr);
-			tcp_sent(connectionPcb, nullptr);
-			tcp_abort(connectionPcb);
+			altcp_err(connectionPcb, nullptr);
+			altcp_recv(connectionPcb, nullptr);
+			altcp_sent(connectionPcb, nullptr);
+			altcp_abort(connectionPcb);
 			connectionPcb = nullptr;
 		}
 
@@ -315,7 +336,7 @@ bool LwipSocket::ReadChar(char& c) noexcept
 			// Tell lwip we have taken this data
 			if (connectionPcb != nullptr)
 			{
-				tcp_recved(connectionPcb, rlen);
+				altcp_recved(connectionPcb, rlen);
 			}
 		}
 
@@ -363,7 +384,7 @@ void LwipSocket::Taken(size_t len) noexcept
 			// Notify LwIP
 			if (connectionPcb != nullptr)
 			{
-				tcp_recved(connectionPcb, rlen);
+				altcp_recved(connectionPcb, rlen);
 			}
 		}
 	}
@@ -426,16 +447,16 @@ void LwipSocket::Poll() noexcept
 		{
 			if (connectionPcb != nullptr)
 			{
-				tcp_err(connectionPcb, nullptr);
-				tcp_recv(connectionPcb, nullptr);
-				tcp_sent(connectionPcb, nullptr);
+				altcp_err(connectionPcb, nullptr);
+				altcp_recv(connectionPcb, nullptr);
+				altcp_sent(connectionPcb, nullptr);
 				if (unAcked == 0)
 				{
-					tcp_close(connectionPcb);
+					altcp_close(connectionPcb);
 				}
 				else
 				{
-					tcp_abort(connectionPcb);
+					altcp_abort(connectionPcb);
 				}
 				connectionPcb = nullptr;
 			}
@@ -480,11 +501,11 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 
 	if (!CanSend())
 	{
-		// Don't bother if we cannot send anything at all+
+		// Don't bother if we cannot send anything at all
 		return 0;
 	}
 
-	const size_t bytesLeft = tcp_sndbuf(connectionPcb);
+	const size_t bytesLeft = altcp_sndbuf(connectionPcb);
 	if (length != 0 && bytesLeft != 0)
 	{
 		// See how many bytes we can send
@@ -498,7 +519,7 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 		err_t err;
 		do
 		{
-			err = tcp_write(connectionPcb, data, bytesToSend, 0);
+			err = altcp_write(connectionPcb, data, bytesToSend, 0);
 			if (ERR_IS_FATAL(err))
 			{
 				Terminate();
@@ -506,10 +527,10 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 			}
 			else if (err == ERR_MEM)
 			{
-				if (bytesToSend == 1 || tcp_sndqueuelen(connectionPcb) >= TCP_SND_QUEUELEN)
+				if (bytesToSend == 1 || altcp_sndqueuelen(connectionPcb) >= TCP_SND_QUEUELEN)
 				{
 					// The buffers are full - try again later
-					tcp_output(connectionPcb);
+					altcp_output(connectionPcb);
 					return 0;
 				}
 				bytesToSend /= 2;
@@ -518,7 +539,7 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 		while (err == ERR_MEM);
 
 		// Try to send it now
-		if (ERR_IS_FATAL(tcp_output(connectionPcb)))
+		if (ERR_IS_FATAL(altcp_output(connectionPcb)))
 		{
 			Terminate();
 			return 0;

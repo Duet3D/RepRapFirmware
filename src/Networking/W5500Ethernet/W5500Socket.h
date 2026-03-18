@@ -19,6 +19,7 @@ public:
 	explicit W5500Socket(NetworkInterface *_ecv_from iface) noexcept;
 	void Init(SocketNumber s, TcpPort serverPort, NetworkProtocol p) noexcept;
 
+	bool UsingTls() const noexcept override { return false; }
 	void Poll() noexcept override;
 	void Close() noexcept override;
 	void Terminate() noexcept override;

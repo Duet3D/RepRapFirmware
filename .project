@@ -10,6 +10,7 @@
 		<project>CoreN2G</project>
 		<project>Duet3ATE</project>
 		<project>LibTinyusb</project>
+		<project>LibMbedTls</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

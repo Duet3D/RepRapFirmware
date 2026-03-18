@@ -124,7 +124,9 @@ build-libs:
         $(WORKSPACE)/CANlib/SAME51_RTOS/libCANlib.a \
         $(WORKSPACE)/CANlib/SAM4S_RTOS/libCANlib.a \
         $(WORKSPACE)/LibTinyusb/SAME70/libLibTinyusb.a \
-        $(WORKSPACE)/LibTinyusb/SAME5x/libLibTinyusb.a
+        $(WORKSPACE)/LibTinyusb/SAME5x/libLibTinyusb.a \
+        $(WORKSPACE)/LibMbedTls/SAME70/libLibMbedTls.a \
+        $(WORKSPACE)/LibMbedTls/SAME5x/libLibMbedTls.a
 
 $(WORKSPACE)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS/libCoreN2G.a:
 	$(Q)echo "  BUILD   CoreN2G/SAME70_CAN_SDHC_USB_RTOS"
@@ -165,6 +167,14 @@ $(WORKSPACE)/CANlib/SAME51_RTOS/libCANlib.a:
 $(WORKSPACE)/LibTinyusb/SAME5x/libLibTinyusb.a:
 	$(Q)echo "  BUILD   LibTinyusb/SAME5x"
 	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibTinyusb SAME5x
+
+$(WORKSPACE)/LibMbedTls/SAME70/libLibMbedTls.a:
+	$(Q)echo "  BUILD   LibMbedTls/SAME70"
+	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibMbedTls SAME70
+
+$(WORKSPACE)/LibMbedTls/SAME5x/libLibMbedTls.a:
+	$(Q)echo "  BUILD   LibMbedTls/SAME5x"
+	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibMbedTls SAME5x
 
 $(WORKSPACE)/CoreN2G/SAME5x_SDHC_USB_RTOS/libCoreN2G.a:
 	$(Q)echo "  BUILD   CoreN2G/SAME5x_SDHC_USB_RTOS"
@@ -216,4 +226,5 @@ clean-all: clean
 	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/RRFLibraries clean
 	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CANlib clean
 	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibTinyusb clean
+	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibMbedTls clean
 	$(Q)echo "Clean all complete"

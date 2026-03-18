@@ -16,6 +16,7 @@ DUET3MINI_COREN2G_LIB := $(WORKSPACE)/CoreN2G/SAME5x_CAN_SDHC_USB_RTOS/libCoreN2
 DUET3MINI_RRFLIBS_LIB := $(WORKSPACE)/RRFLibraries/SAME51_RTOS/libRRFLibraries.a
 DUET3MINI_CANLIB_LIB := $(WORKSPACE)/CANlib/SAME51_RTOS/libCANlib.a
 DUET3MINI_LIBTINYUSB_LIB := $(WORKSPACE)/LibTinyusb/SAME5x/libLibTinyusb.a
+DUET3MINI_MBEDTLS_LIB := $(WORKSPACE)/LibMbedTls/SAME5x/libLibMbedTls.a
 
 DUET3MINI_SRC_DIR := src
 
@@ -39,7 +40,6 @@ DUET3MINI_CPP_SRCS := $(shell find $(DUET3MINI_SRC_DIR) -name '*.cpp' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/snmp/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/tftp/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/lwiperf/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/altcp_tls/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/sntp/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/http/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/mqtt/*' \
@@ -59,7 +59,6 @@ DUET3MINI_C_SRCS := $(shell find $(DUET3MINI_SRC_DIR) -name '*.c' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/snmp/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/tftp/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/lwiperf/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/altcp_tls/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/sntp/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/http/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/mqtt/*' \
@@ -72,6 +71,9 @@ DUET3MINI_C_SRCS := $(shell find $(DUET3MINI_SRC_DIR) -name '*.c' \
 
 # Include paths
 DUET3MINI_INCLUDES := \
+	-I$(WORKSPACE)/LibMbedTls/include \
+	-I$(WORKSPACE)/LibMbedTls/library \
+	-I$(WORKSPACE)/LibMbedTls/configs \
 	-I$(WORKSPACE)/CoreN2G \
 	-I$(WORKSPACE)/CoreN2G/src \
 	-I$(WORKSPACE)/CoreN2G/src/SAME5x_C21 \
@@ -105,7 +107,8 @@ DUET3MINI_DEFINES := \
 	-D__SAME54P20A__ \
 	-DRTOS \
 	-DDUET3MINI_V04 \
-	-D_XOPEN_SOURCE
+	-D_XOPEN_SOURCE \
+	-DMBEDTLS_CONFIG_FILE='"config-rrf.h"'
 
 # Compiler flags - C
 DUET3MINI_CFLAGS := -c -std=gnu99 \
@@ -192,7 +195,9 @@ DUET3MINI_LDLIBS := \
 	-L$(WORKSPACE)/FreeRTOS/SAME51 \
 	-L$(WORKSPACE)/CANlib/SAME51_RTOS \
 	-L$(WORKSPACE)/LibTinyusb/SAME5x \
+	-L$(WORKSPACE)/LibMbedTls/SAME5x \
 	-lCoreN2G \
+	-lLibMbedTls \
 	-lCANlib \
 	-lRRFLibraries \
 	-lFreeRTOS \
@@ -225,7 +230,7 @@ Duet3Mini5plus: $(DUET3MINI_TARGET_UF2)
 	@$(SIZE) $(DUET3MINI_TARGET_ELF)
 
 # Link ELF file
-$(DUET3MINI_TARGET_ELF): $(DUET3MINI_OBJS) $(DUET3MINI_COREN2G_LIB) $(DUET3MINI_RRFLIBS_LIB) $(DUET3MINI_FREERTOS_LIB) $(DUET3MINI_LIBTINYUSB_LIB) $(DUET3MINI_CANLIB_LIB)
+$(DUET3MINI_TARGET_ELF): $(DUET3MINI_OBJS) $(DUET3MINI_COREN2G_LIB) $(DUET3MINI_RRFLIBS_LIB) $(DUET3MINI_FREERTOS_LIB) $(DUET3MINI_LIBTINYUSB_LIB) $(DUET3MINI_CANLIB_LIB) $(DUET3MINI_MBEDTLS_LIB)
 	$(Q)echo "  LD      $@"
 	$(Q)mkdir -p $(@D)
 	$(Q)$(LD) $(DUET3MINI_LDFLAGS1) -o $@ $(DUET3MINI_LDFLAGS2) -Wl,--start-group $(DUET3MINI_OBJS) $(DUET3MINI_LDLIBS) $(DUET3MINI_LDLIBS_POST)
@@ -288,6 +293,6 @@ clean-Duet3Mini5plus:
 
 # Library dependencies (rules defined in main Makefile to avoid duplicates)
 .PHONY: duet3mini-libs
-duet3mini-libs: $(DUET3MINI_FREERTOS_LIB) $(DUET3MINI_COREN2G_LIB) $(DUET3MINI_RRFLIBS_LIB) $(DUET3MINI_LIBTINYUSB_LIB)
+duet3mini-libs: $(DUET3MINI_FREERTOS_LIB) $(DUET3MINI_COREN2G_LIB) $(DUET3MINI_RRFLIBS_LIB) $(DUET3MINI_LIBTINYUSB_LIB) $(DUET3MINI_MBEDTLS_LIB)
 	@echo "All required libraries built successfully"
 

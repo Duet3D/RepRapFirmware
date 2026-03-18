@@ -557,7 +557,7 @@ void FtpResponder::ProcessLine() noexcept
 			passivePort = random(1024, 65535);
 			passivePortOpenTime = millis();
 
-			skt->GetInterface()->OpenDataPort(passivePort);
+			skt->GetInterface()->OpenDataPort(passivePort, skt->UsingTls());
 			if (reprap.Debug(Module::Webserver))
 			{
 				debugPrintf("FTP data port open at port %u\n", passivePort);

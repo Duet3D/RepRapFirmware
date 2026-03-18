@@ -1732,8 +1732,9 @@ void WiFiInterface::UpdateSocketStatus(uint16_t connectedSockets, uint16_t other
 }
 
 // Open the FTP data port
-void WiFiInterface::OpenDataPort(TcpPort port) noexcept
+void WiFiInterface::OpenDataPort(TcpPort port, bool useTls) noexcept
 {
+	UNUSED(useTls);
 	for (WiFiSocket *s : sockets)
 	{
 		if (s->GetProtocol() == FtpDataProtocol)

@@ -60,6 +60,10 @@
 
 #if LWIP_ALTCP_TLS && LWIP_ALTCP_TLS_MBEDTLS
 
+/* Allow access to private ssl_context fields (e.g. out_left) needed by LwIP.
+ * Must be defined before any mbedTLS header is included. */
+#define MBEDTLS_ALLOW_PRIVATE_ACCESS
+
 #include "lwip/altcp.h"
 #include "lwip/altcp_tls.h"
 #include "lwip/priv/altcp_priv.h"
@@ -70,7 +74,6 @@
 /* @todo: which includes are really needed? */
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
-#include "mbedtls/certs.h"
 #include "mbedtls/x509.h"
 #include "mbedtls/ssl.h"
 #include "mbedtls/net_sockets.h"
@@ -81,7 +84,7 @@
 #include "mbedtls/ssl_cache.h"
 #include "mbedtls/ssl_ticket.h"
 
-#include "mbedtls/ssl_internal.h" /* to call mbedtls_flush_output after ERR_MEM */
+#include "ssl_misc.h" /* mbedtls_ssl_flush_output (library-internal, was ssl_internal.h) */
 
 #include <string.h>
 
@@ -405,20 +408,23 @@ altcp_mbedtls_handle_rx_appldata(struct altcp_pcb *conn, altcp_mbedtls_state_t *
         LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("new connection on same source port\n"));
         LWIP_ASSERT("TODO: new connection on same source port, close this connection", 0);
       } else if ((ret != MBEDTLS_ERR_SSL_WANT_READ) && (ret != MBEDTLS_ERR_SSL_WANT_WRITE)) {
+        pbuf_free(buf);
         if (ret == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) {
           LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("connection was closed gracefully\n"));
+          return ERR_OK;
         } else if (ret == MBEDTLS_ERR_NET_CONN_RESET) {
           LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("connection was reset by peer\n"));
+          return ERR_OK;
         }
-        pbuf_free(buf);
-        return ERR_OK;
+        /* Fatal SSL error (e.g. peer ignored record_size_limit and sent an oversized record).
+           Abort immediately to avoid a zombie connection. */
+        LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("fatal SSL error %d, aborting connection\n", ret));
+        altcp_abort(conn);
+        return ERR_ABRT;
       } else {
         pbuf_free(buf);
         return ERR_OK;
       }
-      pbuf_free(buf);
-      altcp_abort(conn);
-      return ERR_ABRT;
     } else {
       err_t err;
       if (ret) {
@@ -678,25 +684,37 @@ altcp_tls_init_session(struct altcp_tls_session *session)
 err_t
 altcp_tls_get_session(struct altcp_pcb *conn, struct altcp_tls_session *session)
 {
+#if defined(MBEDTLS_SSL_CLI_C)
   if (session && conn && conn->state) {
     altcp_mbedtls_state_t *state = (altcp_mbedtls_state_t *)conn->state;
     int ret = mbedtls_ssl_get_session(&state->ssl_context, &session->data);
     return ret < 0 ? ERR_VAL : ERR_OK;
   }
   return ERR_ARG;
+#else
+  LWIP_UNUSED_ARG(conn);
+  LWIP_UNUSED_ARG(session);
+  return ERR_VAL;
+#endif
 }
 
 err_t
 altcp_tls_set_session(struct altcp_pcb *conn, struct altcp_tls_session *session)
 {
+#if defined(MBEDTLS_SSL_CLI_C)
   if (session && conn && conn->state) {
     altcp_mbedtls_state_t *state = (altcp_mbedtls_state_t *)conn->state;
     int ret = -1;
-    if (session->data.start)
+    if (session->data.MBEDTLS_PRIVATE(start))
       ret = mbedtls_ssl_set_session(&state->ssl_context, &session->data);
     return ret < 0 ? ERR_VAL : ERR_OK;
   }
   return ERR_ARG;
+#else
+  LWIP_UNUSED_ARG(conn);
+  LWIP_UNUSED_ARG(session);
+  return ERR_VAL;
+#endif
 }
 
 void
@@ -785,7 +803,7 @@ altcp_tls_create_config(int is_server, u8_t cert_count, u8_t pkey_count, int hav
   struct altcp_tls_config *conf;
   mbedtls_x509_crt *mem;
 
-  if (TCP_WND < MBEDTLS_SSL_MAX_CONTENT_LEN) {
+  if (TCP_WND < MBEDTLS_SSL_IN_CONTENT_LEN) {
     LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG|LWIP_DBG_LEVEL_SERIOUS,
       ("altcp_tls: TCP_WND is smaller than the RX decrypion buffer, connection RX might stall!\n"));
   }
@@ -909,7 +927,8 @@ err_t altcp_tls_config_server_add_privkey_cert(struct altcp_tls_config *config,
     return ERR_VAL;
   }
 
-  ret = mbedtls_pk_parse_key(pkey, (const unsigned char *) privkey, privkey_len, privkey_pass, privkey_pass_len);
+  ret = mbedtls_pk_parse_key(pkey, (const unsigned char *) privkey, privkey_len, privkey_pass, privkey_pass_len,
+                             mbedtls_ctr_drbg_random, &altcp_tls_entropy_rng->ctr_drbg);
   if (ret != 0) {
     LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("mbedtls_pk_parse_public_key failed: %d\n", ret));
     mbedtls_x509_crt_free(srvcert);
@@ -1012,7 +1031,8 @@ altcp_tls_create_config_client_2wayauth(const u8_t *ca, size_t ca_len, const u8_
   }
 
   mbedtls_pk_init(conf->pkey);
-  ret = mbedtls_pk_parse_key(conf->pkey, privkey, privkey_len, privkey_pass, privkey_pass_len);
+  ret = mbedtls_pk_parse_key(conf->pkey, privkey, privkey_len, privkey_pass, privkey_pass_len,
+                             mbedtls_ctr_drbg_random, &altcp_tls_entropy_rng->ctr_drbg);
   if (ret != 0) {
     LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("mbedtls_pk_parse_key failed: %d 0x%x\n", ret, -1*ret));
     altcp_tls_free_config(conf);
