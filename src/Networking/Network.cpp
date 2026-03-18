@@ -598,8 +598,7 @@ GCodeResult Network::ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& 
 								int mqttInterface =  MqttClient::GetInterface();
 								if (mqttInterface == static_cast<int>(interface) || mqttInterface < 0)
 								{
-									result = EnableProtocol(interface, protocol, port,
-																				ip.GetV4LittleEndian(), secure, reply);
+									result = EnableProtocol(interface, protocol, port, ip.GetV4LittleEndian(), secure, reply);
 
 									if (mqttInterface < 0 && result == GCodeResult::ok)
 									{

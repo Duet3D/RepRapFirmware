@@ -168,17 +168,16 @@ GCodeResult NetworkInterface::ReportProtocols(const StringRef& reply) const noex
 
 void NetworkInterface::ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
 {
-	if (protocolEnabled[protocol] && tlsProtocolEnabled[protocol])
+	if (protocolEnabled[protocol] || tlsProtocolEnabled[protocol])
 	{
-		reply.lcatf("%s is enabled on port %u, TLS on port %u", ProtocolNames[protocol], portNumbers[protocol], tlsPortNumbers[protocol]);
-	}
-	else if (protocolEnabled[protocol])
-	{
-		reply.lcatf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
-	}
-	else if (tlsProtocolEnabled[protocol])
-	{
-		reply.lcatf("%s TLS is enabled on port %u", ProtocolNames[protocol], tlsPortNumbers[protocol]);
+		if (protocolEnabled[protocol])
+		{
+			reply.lcatf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
+		}
+		if (tlsProtocolEnabled[protocol])
+		{
+			reply.lcatf("%sS is enabled on port %u", ProtocolNames[protocol], tlsPortNumbers[protocol]);
+		}
 	}
 	else
 	{
