@@ -94,7 +94,7 @@
 #define LWIP_ALTCP                  1
 #define LWIP_ALTCP_TLS              1
 #define LWIP_ALTCP_TLS_MBEDTLS      1
-#define ALTCP_MBEDTLS_USE_SESSION_CACHE  1
+#define ALTCP_MBEDTLS_USE_SESSION_CACHE  0
 #else
 #define LWIP_ALTCP                  0
 #define LWIP_ALTCP_TLS              0
@@ -133,12 +133,16 @@
  */
 #if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
 # ifdef MBEDTLS_CONFIG_FILE
-#define MEM_SIZE                		49152    // 48KiB - LwIP shares its heap with MbedTls
+#define MEM_SIZE                		65536    // 64KiB - LwIP shares its heap with MbedTls
 # else
 #define MEM_SIZE                		16384
 # endif
 #else
+# ifdef MBEDTLS_CONFIG_FILE
+#define MEM_SIZE                		45056    // 44KiB - LwIP shares its heap with MbedTls
+# else
 #define MEM_SIZE                		14848
+# endif
 #endif
 
 /**
@@ -152,27 +156,36 @@
  * MEMP_NUM_TCP_PCB: the number of simultaneously active TCP connections.
  * (requires the LWIP_TCP option)
  */
-#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
-# define MEMP_NUM_TCP_PCB				10
-#else
-# define MEMP_NUM_TCP_PCB				8
-#endif
+#define MEMP_NUM_TCP_PCB				10
 
 /**
  * MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP connections.
  * (requires the LWIP_TCP option)
  */
-#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
-# define MEMP_NUM_TCP_PCB_LISTEN		10
-#else
-# define MEMP_NUM_TCP_PCB_LISTEN		7
+#define MEMP_NUM_TCP_PCB_LISTEN		10
+
+/**
+ * MEMP_NUM_ALTCP_PCB: With TLS enabled, each connection uses a 2-layer altcp stack
+ * (outer TLS altcp_pcb + inner TCP-wrapping altcp_pcb), so the default of
+ * MEMP_NUM_TCP_PCB is insufficient. Double it and add extra for listeners.
+ */
+#ifdef MBEDTLS_CONFIG_FILE
+# define MEMP_NUM_ALTCP_PCB			(2 * MEMP_NUM_TCP_PCB + 4)
 #endif
+
+/**
+ * MEMP_NUM_SYS_TIMEOUT: The internal minimum is 7 for our config
+ * (TCP+ARP+2xDHCP+ACD+IGMP+IP_REASSEMBLY). mDNS probing/announcing adds
+ * dynamic sys_timeout() calls at runtime that exhaust the default pool.
+ * Use 12 to give comfortable headroom.
+ */
+#define MEMP_NUM_SYS_TIMEOUT			12
 
 /**
  * MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments.
  * (requires the LWIP_TCP option)
  */
-# define MEMP_NUM_TCP_SEG				10
+#define MEMP_NUM_TCP_SEG				12
 
 /**
  * MEMP_NUM_REASSDATA: the number of IP packets simultaneously queued for

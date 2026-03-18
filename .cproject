@@ -258,7 +258,7 @@
 									<listOptionValue builtIn="false" value="DUET3_MB6HC"/>
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="noexcept="/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same70.h\&quot;"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1738681846" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.1952106689" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
@@ -335,7 +335,7 @@
 									<listOptionValue builtIn="false" value="DUET3_MB6HC"/>
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same70.h\&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1240779290" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.1208796918" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
@@ -469,7 +469,7 @@
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="USE_CAN0"/>
 									<listOptionValue builtIn="false" value="noexcept="/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same70.h\&quot;"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1589331260" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.344980217" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
@@ -547,7 +547,7 @@
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
 									<listOptionValue builtIn="false" value="USE_CAN0"/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same70.h\&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1181997841" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.784276622" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
@@ -852,7 +852,7 @@
 									<listOptionValue builtIn="false" value="DUET3MINI_V04"/>
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="noexcept="/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same5x.h\&quot;"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.flags.832818004" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
 								<option id="gnu.c.compiler.option.warnings.wwritestrings.324234373" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
@@ -928,7 +928,7 @@
 									<listOptionValue builtIn="false" value="DUET3MINI_V04"/>
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same5x.h\&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1758907806" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.1984964653" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
@@ -1061,7 +1061,7 @@
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="noexcept="/>
 									<listOptionValue builtIn="false" value="DEBUG"/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same5x.h\&quot;"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.flags.1707248932" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
 								<option id="gnu.c.compiler.option.warnings.wwritestrings.1825419781" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
@@ -1141,7 +1141,7 @@
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
 									<listOptionValue builtIn="false" value="DEBUG"/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same5x.h\&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1592850060" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.1378260707" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
@@ -1269,7 +1269,7 @@
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="DUET3_ATE"/>
 									<listOptionValue builtIn="false" value="noexcept="/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same5x.h\&quot;"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.flags.129901167" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
 								<option id="gnu.c.compiler.option.warnings.wwritestrings.920429024" name="Treat strings always as const (-Wwrite-strings)" superClass="gnu.c.compiler.option.warnings.wwritestrings" useByScannerDiscovery="false" value="true" valueType="boolean"/>
@@ -1349,7 +1349,7 @@
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="DUET3_ATE"/>
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same5x.h\&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.449505816" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.2037142917" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
@@ -1493,7 +1493,7 @@
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="noexcept="/>
 									<listOptionValue builtIn="false" value="DEBUG"/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same70.h\&quot;"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1375046536" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.977498232" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
@@ -1572,7 +1572,7 @@
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
 									<listOptionValue builtIn="false" value="DEBUG"/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same70.h\&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.314608141" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.69489869" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
@@ -1706,7 +1706,7 @@
 									<listOptionValue builtIn="false" value="DUET3_MB6XD"/>
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="noexcept="/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same70.h\&quot;"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1606632073" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.14880249" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
@@ -1783,7 +1783,7 @@
 									<listOptionValue builtIn="false" value="DUET3_MB6XD"/>
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same70.h\&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1853970062" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.2141116099" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
@@ -2096,7 +2096,7 @@
 									<listOptionValue builtIn="false" value="USE_EMBEDDED_FILES"/>
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="noexcept="/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same70.h\&quot;"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1241223746" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.266087535" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
@@ -2174,7 +2174,7 @@
 									<listOptionValue builtIn="false" value="USE_EMBEDDED_FILES"/>
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same70.h\&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.1147751964" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.2140529595" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>
@@ -2308,7 +2308,7 @@
 									<listOptionValue builtIn="false" value="DUET3_MB6HC"/>
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="noexcept="/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same70.h\&quot;"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1422059822" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.dialect.flags.1205640883" name="Other dialect flags" superClass="gnu.c.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu99" valueType="string"/>
@@ -2386,7 +2386,7 @@
 									<listOptionValue builtIn="false" value="MQTTC_PAL_FILE=&quot;Networking/MQTT/mqtt_pal.h&quot;"/>
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
 									<listOptionValue builtIn="false" value="NO_S_CURVE=1"/>
-									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-rrf.h\&quot;"/>
+									<listOptionValue builtIn="false" value="MBEDTLS_CONFIG_FILE=\&quot;config-same70.h\&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.dialect.std.379827873" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.dialect.flags.263987495" name="Other dialect flags" superClass="gnu.cpp.compiler.option.dialect.flags" useByScannerDiscovery="true" value="-std=gnu++17" valueType="string"/>

@@ -114,7 +114,7 @@ DUET3MB6XD_DEFINES := \
 	-DRTOS \
 	-DDUET3_MB6XD \
 	-D_XOPEN_SOURCE \
-	-DMBEDTLS_CONFIG_FILE='"config-rrf.h"'
+	-DMBEDTLS_CONFIG_FILE='"config-same70.h"'
 
 # Compiler flags - C
 DUET3MB6XD_CFLAGS := -c -std=gnu99 \

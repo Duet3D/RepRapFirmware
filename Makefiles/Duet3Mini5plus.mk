@@ -108,7 +108,7 @@ DUET3MINI_DEFINES := \
 	-DRTOS \
 	-DDUET3MINI_V04 \
 	-D_XOPEN_SOURCE \
-	-DMBEDTLS_CONFIG_FILE='"config-rrf.h"'
+	-DMBEDTLS_CONFIG_FILE='"config-same5x.h"'
 
 # Compiler flags - C
 DUET3MINI_CFLAGS := -c -std=gnu99 \
