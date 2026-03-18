@@ -9,6 +9,7 @@
 #define SRC_DUET3MINI_PINS_DUET3MINI_H_
 
 #include <PinDescription.h>
+#include <SPI/SpiParameters.h>
 
 #define DEFAULT_BOARD_TYPE		 BoardType::Duet3Mini_Unknown
 
@@ -88,6 +89,8 @@ constexpr size_t MaxPortsPerHeater = 2;
 
 constexpr size_t MaxBedHeaters = 4;
 constexpr size_t MaxChamberHeaters = 4;
+constexpr size_t MaxHeatersPerBed = 4;
+constexpr size_t MaxHeatersPerChamber = 4;
 
 constexpr size_t NumThermistorInputs = 3;
 constexpr size_t NumTmcDriversSenseChannels = 2;
@@ -112,18 +115,41 @@ constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 #define SERIAL_AUX2_DEVICE (serialUart1)
 
 #ifdef DUET3_ATE
+constexpr size_t NumUsbChannels = 2;
 constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB, USB2, and one auxiliary UART) - reserve the third UART for ATE use
-constexpr size_t FirstAuxChannel = 2;
 #else
 # ifdef SERIAL_USB2_DEVICE
+constexpr size_t NumUsbChannels = 2;
 constexpr size_t NumSerialChannels = 4;				// The number of serial IO channels (USB, USB2, and two auxiliary UART)
-constexpr size_t FirstAuxChannel = 2;
 # else
+constexpr size_t NumUsbChannels = 1;
 constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB and two auxiliary UARTs)
-constexpr size_t FirstAuxChannel = 1;
 # endif
 #endif
-constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
+
+// DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
+// When static arbitration within a priority level is selected, lower channel number have higher priority.
+// So we use the low channel numbers for the highest priority sources.
+constexpr DmaChannel DmacChanSbcTx = 0;
+constexpr DmaChannel DmacChanSbcRx = 1;
+constexpr DmaChannel DmacChanWiFiTx = 2;
+constexpr DmaChannel DmacChanWiFiRx = 3;
+constexpr DmaChannel DmacChanLedTx = 4;
+constexpr DmaChannel DmacChanTmcTx = 5;
+constexpr DmaChannel DmacChanTmcRx = 6;
+constexpr DmaChannel DmacChanSspiTx = 7;
+constexpr DmaChannel DmacChanSspiRx = 8;
+constexpr unsigned int NumDmaChannelsUsed = 9;
+
+// The DMAC has priority levels 0-3 but on revision A chips it is unsafe to use multiple levels
+// Fortunately, all our SAME54P20Achips seem to be revision D
+constexpr DmaPriority DmacPrioTmcTx = 0;
+constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 100kbps so this is not very critical
+constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
+constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
+constexpr DmaPriority DmacPrioLed = 1;					// QSPI in master mode
+constexpr DmaPriority DmacPrioSspiTx = 3;				// SPI in master mode
+constexpr DmaPriority DmacPrioSspiRx = 2;				// SPI in master mode
 
 // SerialUSB
 constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB port
@@ -259,11 +285,20 @@ constexpr GpioPinFunction NeopixelOutPinFunction = GpioPinFunction::H;		// QSPI 
 #define LEDSTRIP_USES_USART		(0)
 
 // Shared SPI definitions
-constexpr uint8_t SharedSpiSercomNumber = 7;
-constexpr Pin SharedSpiMosiPin = PortCPin(12);
-constexpr Pin SharedSpiMisoPin = PortCPin(15);
-constexpr Pin SharedSpiSclkPin = PortCPin(13);
-constexpr GpioPinFunction SharedSpiPinFunction = GpioPinFunction::C;
+constexpr SpiParameters SharedSpiParams =
+{
+	.sercomNumber = 7,
+	.mosiPin = PortCPin(12),
+	.misoPin = PortCPin(15),
+	.sclkPin = PortCPin(13),
+	.pinFunction = GpioPinFunction::C,
+	.dataInPad = 3,
+	.dataOutPad = 0,
+	.dmaChanTx = DmacChanSspiTx,
+	.dmaChanRx = DmacChanSspiRx,
+	.dmaPrioTx = DmacPrioSspiTx,
+	.dmaPrioRx = DmacPrioSspiRx,
+};
 
 // Serial on IO0
 constexpr uint8_t Serial0SercomNumber = 2;
@@ -482,27 +517,6 @@ constexpr size_t NumRealPins = 32+32+32+13;
 constexpr size_t NumVirtualPins = 0;
 
 static_assert(NumNamedPins == NumRealPins + NumVirtualPins);
-
-// DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
-// When static arbitration within a priority level is selected, lower channel number have higher priority.
-// So we use the low channel numbers for the highest priority sources.
-constexpr DmaChannel DmacChanSbcTx = 0;
-constexpr DmaChannel DmacChanSbcRx = 1;
-constexpr DmaChannel DmacChanWiFiTx = 2;
-constexpr DmaChannel DmacChanWiFiRx = 3;
-constexpr DmaChannel DmacChanLedTx = 4;
-constexpr DmaChannel DmacChanTmcTx = 5;
-constexpr DmaChannel DmacChanTmcRx = 6;
-
-constexpr unsigned int NumDmaChannelsUsed = 7;
-
-// The DMAC has priority levels 0-3 but on revision A chips it is unsafe to use multiple levels
-// Fortunately, all our SAME54P20Achips seem to be revision D
-constexpr DmaPriority DmacPrioTmcTx = 0;
-constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 100kbps so this is not very critical
-constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
-constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
-constexpr DmaPriority DmacPrioLed = 1;					// QSPI in master mode
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers

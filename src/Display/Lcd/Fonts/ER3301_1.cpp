@@ -11,7 +11,7 @@
 
 #if USE_FONT_CHIP
 
-#include <Hardware/Spi/SharedSpiDevice.h>
+#include <Platform/Platform.h>
 
 // This font chip contains several fonts. We are only interested in the 12-dot and 16 dot high Unicode Latin/Greek Cyrillic and Arabic fonts.
 // We number those as fonts 0 and 1. Fonts 2 and 3 are the same ones expanded to double size.
@@ -93,7 +93,7 @@ static uint32_t LookupCharacter(uint16_t codePoint, const FontDescriptor& font) 
 }
 
 ER3301_1::ER3301_1(Pin csPin) noexcept
-	: spiClient(SharedSpiDevice::GetMainSharedSpiDevice(), SpiFrequency, SpiMode::mode0, csPin, false), currentAddress(0)
+	: spiClient(Platform::GetSharedSpiDevice(), SpiFrequency, SpiMode::mode0, csPin, false), currentAddress(0)
 {
 }
 

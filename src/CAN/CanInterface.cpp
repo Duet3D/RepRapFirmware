@@ -492,7 +492,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 		{
 			// In expansion mode this task just send notifications when the states of input handles change
 			CanMessageBuffer buf;
-			auto msg = buf.SetupRequestMessageNoRid<CanMessageInputChangedV1>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+			auto msg = buf.SetupRequestMessageNoRid<CanMessageInputChangedV2>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 			msg->states = 0;
 			msg->numHandles = 0;
 
@@ -502,7 +502,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 			if (stallNotifications != 0)
 			{
 				constexpr RemoteInputHandle h(RemoteInputHandle::typeStallEndstop, 0, 0);
-				(void)msg->AddEntry(h.asU16(), (uint32_t)stallNotifications, true);
+				(void)msg->AddEntry(h.asU16(), StepTimer::GetMasterTime(), (uint32_t)stallNotifications, true);
 			}
 #endif
 			const uint32_t timeToWait = InputMonitor::AddStateChanges(msg);

@@ -12,7 +12,7 @@
 #if SUPPORT_RESISTIVE_TOUCH
 
 #include "DisplayOrientation.h"
-#include <Hardware/Spi/SharedSpiClient.h>
+#include <SPI/SharedSpiClient.h>
 
 class ResistiveTouch
 {

@@ -79,7 +79,7 @@ public:
 	static unsigned int GetNumberOfContiguousTools() noexcept;
 	static bool ExtruderMovementAllowed(const Tool *_ecv_null tool, bool extruding, unsigned int extruder) noexcept;
 	static bool DisplayColdExtrusionWarnings() noexcept;
-	static bool IsHeaterAssignedToTool(int8_t heater) noexcept;
+	static bool IsHeaterAssignedToTool(int heater) noexcept;
 	static GCodeResult SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & outBuf) THROWS(GCodeException);
 	static void CheckZHopsValid(AxesBitmap axesHomed) noexcept;
 

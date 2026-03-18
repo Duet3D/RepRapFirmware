@@ -658,45 +658,30 @@ void Heater::ClearModelAndMonitors() noexcept
 	modelSetByUser = monitorsSetByUser = false;
 }
 
-// This is called when this heater is declared to be a tool heater using M563
-void Heater::SetAsToolHeater() noexcept
+// This is called when a heater is assigned a function (tool, bed or chamber)
+void Heater::SetFunction(HeaterFunction func) noexcept
 {
-	function = HeaterFunction::tool;
+	function = func;
 	if (!modelSetByUser)
 	{
 		(void)SetDefaultModel(function);
 	}
 	if (!monitorsSetByUser && sensorNumber >= 0 && sensorNumber < (int)MaxSensors)
 	{
-		monitors[0].Set(sensorNumber, DefaultHotEndTemperatureLimit, HeaterMonitorAction::GenerateFault, HeaterMonitorTrigger::TemperatureExceeded);
-	}
-}
-
-// This is called when a heater is declared to be a bed or chamber heater using M140
-void Heater::SetAsBedHeater() noexcept
-{
-	function = HeaterFunction::bed;
-	if (!modelSetByUser)
-	{
-		(void)SetDefaultModel(function);
-	}
-	if (!monitorsSetByUser && sensorNumber >= 0 && sensorNumber < (int)MaxSensors)
-	{
-		monitors[0].Set(sensorNumber, DefaultBedTemperatureLimit, HeaterMonitorAction::GenerateFault, HeaterMonitorTrigger::TemperatureExceeded);
-	}
-}
-
-// This is called when a heater is declared to be a bed or chamber heater using M141
-void Heater::SetAsChamberHeater() noexcept
-{
-	function = HeaterFunction::chamber;
-	if (!modelSetByUser)
-	{
-		(void)SetDefaultModel(function);
-	}
-	if (!monitorsSetByUser && sensorNumber >= 0 && sensorNumber < (int)MaxSensors)
-	{
-		monitors[0].Set(sensorNumber, DefaultChamberTemperatureLimit, HeaterMonitorAction::GenerateFault, HeaterMonitorTrigger::TemperatureExceeded);
+		float tempLimit;
+		switch (func)
+		{
+		case HeaterFunction::bed:
+			tempLimit = DefaultBedTemperatureLimit;
+			break;
+		case HeaterFunction::chamber:
+			tempLimit = DefaultChamberTemperatureLimit;
+			break;
+		default:
+			tempLimit = DefaultHotEndTemperatureLimit;
+			break;
+		}
+		monitors[0].Set(sensorNumber, tempLimit, HeaterMonitorAction::GenerateFault, HeaterMonitorTrigger::TemperatureExceeded);
 	}
 }
 

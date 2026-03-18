@@ -558,12 +558,12 @@ private:
 template<class T> class SimpleRange
 {
 public:
-	explicit SimpleRange(T limit) noexcept : _end(limit) {}
+	explicit SimpleRange(T p_limit) noexcept : limit(p_limit) {}
 	SimpleRangeIterator<T> begin() const noexcept { return SimpleRangeIterator<T>(0); }
-	SimpleRangeIterator<T> end() const noexcept { return SimpleRangeIterator<T>(_end); 	}
+	SimpleRangeIterator<T> end() const noexcept { return SimpleRangeIterator<T>(limit); }
 
 private:
-	const T _end;
+	const T limit;
 };
 
 // Macro to create a SimpleRange from an array

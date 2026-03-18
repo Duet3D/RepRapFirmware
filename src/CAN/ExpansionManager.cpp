@@ -289,7 +289,7 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 			// Currently only Z probes use analog handles, so ask the EndstopsManager to deal with it
 			if (data.handle.parts.type == RemoteInputHandle::typeZprobe)
 			{
-				reprap.GetPlatform().GetEndstops().HandleRemoteAnalogZProbeValueChange(address, data.handle.parts.major, data.handle.parts.minor, data.reading, data.when);
+				reprap.GetPlatform().GetEndstops().HandleRemoteAnalogZProbeValueChange(address, data.handle.parts.major, data.handle.parts.minor, data.when, data.reading);
 			}
 		}
 	}
@@ -337,7 +337,7 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 			// Currently only Z probes use analog handles, so ask the EndstopsManager to deal with it
 			if (data.handle.parts.type == RemoteInputHandle::typeZprobe)
 			{
-				reprap.GetPlatform().GetEndstops().HandleRemoteAnalogZProbeValueChange(address, data.handle.parts.major, data.handle.parts.minor, data.reading, buf->timeStamp);
+				reprap.GetPlatform().GetEndstops().HandleRemoteAnalogZProbeValueChange(address, data.handle.parts.major, data.handle.parts.minor, buf->timeStamp, data.reading);
 			}
 		}
 	}

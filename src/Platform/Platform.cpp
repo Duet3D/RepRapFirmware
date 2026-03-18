@@ -40,7 +40,7 @@
 #include "Logger.h"
 #include "Tasks.h"
 #include <Cache.h>
-#include <Hardware/Spi/SharedSpiDevice.h>
+#include <SPI/SharedSpiDevice.h>
 #include <Math/Isqrt.h>
 #include <Hardware/I2C.h>
 #include <Hardware/NonVolatileMemory.h>
@@ -335,6 +335,7 @@ bool Platform::deliberateError = false;						// true if we deliberately caused a
 String<StringLength256> Platform::genericDebugBuffer;
 bool Platform::hasGenericDebug = false;
 bool Platform::shouldTurnOffHeaters = false;
+SharedSpiDevice *_ecv_null Platform::mainSharedSpiDevice = nullptr;
 
 Platform::Platform() noexcept :
 #if HAS_MASS_STORAGE
@@ -450,17 +451,11 @@ void Platform::Init() noexcept
 
 	// Comms
 	commsParams[0] = 2;							// USB is in raw mode by default
-	usbMutex.Create("USB");
-#if SAME5x && !CORE_USES_TINYUSB
-    SERIAL_USB_DEVICE.Start();
-#else
-    SERIAL_USB_DEVICE.Start(UsbVBusPin);
-#endif
+	usbDevices[0].Init(&SERIAL_USB_DEVICE, UsbVBusPin, "USB");
 
-#if defined(SERIAL_USB2_DEVICE) && CORE_USES_TINYUSB
+#ifdef SERIAL_USB2_DEVICE
 	commsParams[1] = 2;							// USB2 is in raw mode by default
-	usb2Mutex.Create("USB2");
-	SERIAL_USB2_DEVICE.Start(NoPin);			// No VBUS pin for second USB channel
+	usbDevices[1].Init(&SERIAL_USB2_DEVICE, NoPin, "USB2");
 #endif
 
 #if HAS_AUX_DEVICES
@@ -473,13 +468,13 @@ void Platform::Init() noexcept
 	commsParams[FirstAuxChannel + 1] = 0;
 #endif
 
-#ifdef DUET3_MB6XD
-	SetPinMode(ModbusTxPin, OUTPUT_LOW);		// turn off the RS485 transmitter
-#endif
-#ifdef DUET3_MB6HC
+	// Turn off the RS485 transmitter
+#if defined(DUET3_MB6XD)
+	SetPinMode(ModbusTxPin, OUTPUT_LOW);
+#elif defined(DUET3_MB6HC)
 	if (board == BoardType::Duet3_6HC_v102c)
 	{
-		SetPinMode(ModbusTxPin, OUTPUT_LOW);	// turn off the RS485 transmitter
+		SetPinMode(ModbusTxPin, OUTPUT_LOW);
 	}
 #endif
 
@@ -487,7 +482,7 @@ void Platform::Init() noexcept
 	IoPort::Init();
 
 	// Shared SPI subsystem
-	SharedSpiDevice::Init();
+	mainSharedSpiDevice = new SharedSpiDevice(SharedSpiParams);
 
 	// File management and SD card interfaces
 	for (size_t i = 0; i < NumSdCards; ++i)
@@ -569,11 +564,11 @@ void Platform::Init() noexcept
 #endif
 
 	// If MISO from a MAX31856 board breaks after initialising the MAX31856 then if MISO floats low and reads as all zeros, this looks like a temperature of 0C and no error.
-	// Enable the pullup resistor, with luck this will make it float high instead.
+	// Enable the pullup resistor, this makes it float high instead.
 #if SAME5x
 	// nothing to do here
 #else
-	SetPinMode(APIN_USART_SSPI_MISO, INPUT_PULLUP, false);
+	SetPinMode(SharedSpiParams.misoPin, INPUT_PULLUP, false);
 #endif
 
 #ifdef PCCB
@@ -721,13 +716,10 @@ void Platform::Exit() noexcept
 	active = false;
 
 	// Close down USB and serial ports and release output buffers
-	SERIAL_USB_DEVICE.end();
-	usbOutput.ReleaseAll();
-
-#ifdef SERIAL_USB2_DEVICE
-	SERIAL_USB2_DEVICE.end();
-	usb2Output.ReleaseAll();
-#endif
+	for (UsbDeviceRrf& dev : usbDevices)
+	{
+		dev.Shutdown();
+	}
 
 #if HAS_AUX_DEVICES
 	for (AuxDevice& dev : auxDevices)
@@ -773,81 +765,15 @@ bool Platform::FlushMessages() noexcept
 	}
 #endif
 
-	// Write non-blocking data to the USB line
-	bool usbHasMore = !usbOutput.IsEmpty();				// test first to see if we can avoid getting the mutex
-	if (usbHasMore)
+	// Write non-blocking data to USB lines
+	bool usbHasMore = false;
+	for (UsbDeviceRrf& port : usbDevices)
 	{
-		MutexLocker lock(usbMutex);
-		OutputBuffer *_ecv_null usbOutputBuffer = usbOutput.GetFirstItem();
-		if (usbOutputBuffer == nullptr)
+		if (port.Flush())
 		{
-			(void) usbOutput.Pop();
+			usbHasMore = true;
 		}
-		else if (!SERIAL_USB_DEVICE.IsConnected())
-		{
-			// If the USB port is not opened, free the data left for writing
-			OutputBuffer::ReleaseAll(usbOutputBuffer);
-			(void) usbOutput.Pop();
-		}
-		else
-		{
-			// Write as much data as we can...
-			const size_t bytesToWrite = min<size_t>(SERIAL_USB_DEVICE.canWrite(), usbOutputBuffer->BytesLeft());
-			if (bytesToWrite != 0)
-			{
-				SERIAL_USB_DEVICE.print(usbOutputBuffer->Read(bytesToWrite), bytesToWrite);
-			}
-
-			if (usbOutputBuffer->BytesLeft() == 0)
-			{
-				usbOutput.ReleaseFirstItem();
-			}
-			else
-			{
-				usbOutput.ApplyTimeout(UsbTimeout);
-			}
-		}
-		usbHasMore = !usbOutput.IsEmpty();
 	}
-
-#ifdef SERIAL_USB2_DEVICE
-	// Write non-blocking data to the second USB line
-	bool usb2HasMore = !usb2Output.IsEmpty();
-	if (usb2HasMore)
-	{
-		MutexLocker lock(usb2Mutex);
-		OutputBuffer *_ecv_null usb2OutputBuffer = usb2Output.GetFirstItem();
-		if (usb2OutputBuffer == nullptr)
-		{
-			(void) usb2Output.Pop();
-		}
-		else if (!SERIAL_USB2_DEVICE.IsConnected())
-		{
-			// If the USB port is not opened, free the data left for writing
-			OutputBuffer::ReleaseAll(usb2OutputBuffer);
-			(void) usb2Output.Pop();
-		}
-		else
-		{
-			// Write as much data as we can...
-			const size_t bytesToWrite = min<size_t>(SERIAL_USB2_DEVICE.canWrite(), usb2OutputBuffer->BytesLeft());
-			if (bytesToWrite != 0)
-			{
-				SERIAL_USB2_DEVICE.print(usb2OutputBuffer->Read(bytesToWrite), bytesToWrite);
-			}
-
-			if (usb2OutputBuffer->BytesLeft() == 0)
-			{
-				usb2Output.ReleaseFirstItem();
-			}
-			else
-			{
-				usb2Output.ApplyTimeout(UsbTimeout);
-			}
-		}
-		usb2HasMore = !usb2Output.IsEmpty();
-	}
-#endif
 
 	return auxHasMore || usbHasMore;
 }
@@ -2277,81 +2203,10 @@ bool Platform::WritePlatformParameters(FileStore *f, bool includingG31) const no
 
 // USB port functions
 
-void Platform::AppendUsbReply(const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept
+void Platform::AppendUsbReply(size_t usbNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept
 {
-	if (!SERIAL_USB_DEVICE.IsConnected())
-	{
-		// If the serial USB line is not open, discard the message right away
-		OutputBuffer::ReleaseAll(buffer);
-		usbMessageSeq = 0;							// reset the sequence number for when the USB port connects
-	}
-	else
-	{
-		// Else append incoming data to the stack
-		MutexLocker lock(usbMutex);
-		if (rawMessage || GetChannelMode(0) == AuxMode::raw)
-		{
-			usbOutput.Push(buffer);
-		}
-		else
-		{
-			OutputBuffer *buf;
-			if (OutputBuffer::Allocate(buf))
-			{
-				usbMessageSeq++;
-				RepRap::StartJsonResponse(gb, buf);
-				buf->catf("\"seq\":%" PRIu32 ",\"resp\":", usbMessageSeq);
-				buf->EncodeReply(buffer);
-				buf->cat("}\n");
-				usbOutput.Push(buf);
-			}
-			else
-			{
-				OutputBuffer::ReleaseAll(buffer);
-			}
-		}
-	}
+	usbDevices[usbNumber].AppendReply(usbNumber, GetChannelMode(usbNumber), gb, buffer, rawMessage);
 }
-
-#ifdef SERIAL_USB2_DEVICE
-
-void Platform::AppendUsb2Reply(const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept
-{
-	if (!SERIAL_USB2_DEVICE.IsConnected())
-	{
-		// If the serial USB line is not open, discard the message right away
-		OutputBuffer::ReleaseAll(buffer);
-		usb2MessageSeq = 0;							// reset the sequence number for when the USB port connects
-	}
-	else
-	{
-		// Else append incoming data to the stack
-		MutexLocker lock(usb2Mutex);
-		if (rawMessage || GetChannelMode(1) == AuxMode::raw)
-		{
-			usb2Output.Push(buffer);
-		}
-		else
-		{
-			OutputBuffer *buf;
-			if (OutputBuffer::Allocate(buf))
-			{
-				usb2MessageSeq++;
-				RepRap::StartJsonResponse(gb, buf);
-				buf->catf("\"seq\":%" PRIu32 ",\"resp\":", usb2MessageSeq);
-				buf->EncodeReply(buffer);
-				buf->cat("}\n");
-				usb2Output.Push(buf);
-			}
-			else
-			{
-				OutputBuffer::ReleaseAll(buffer);
-			}
-		}
-	}
-}
-
-#endif
 
 // Aux port functions
 
@@ -2514,7 +2369,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			if (chan == 1)
 			{
 				reply.printf("Channel 1 (USB2): %s mode, %s", modeString, crcMode);
-				if (SERIAL_USB2_DEVICE.IsConnected())
+				if (usbDevices[1].IsConnected())
 				{
 					reply.cat(", connected");
 				}
@@ -2524,7 +2379,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 #endif
 			{
 				reply.printf("Channel 0 (USB): %s mode, %s", modeString, crcMode);
-				if (SERIAL_USB_DEVICE.IsConnected())
+				if (usbDevices[0].IsConnected())
 				{
 					reply.cat(", connected");
 				}
@@ -3274,99 +3129,17 @@ void Platform::RawMessage(const GCodeBuffer *_ecv_null gb, MessageType type, con
 
 	if ((type & BlockingUsbMessage) != 0)
 	{
-		// Debug output sends messages in blocking mode. We now give up sending if we are close to software watchdog timeout.
-		MutexLocker lock(usbMutex);
-		const char *_ecv_array p = message;
-		size_t len = strlen(p);
-		while (SERIAL_USB_DEVICE.IsConnected() && len != 0 && !reprap.SpinTimeoutImminent())
-		{
-			const size_t written = SERIAL_USB_DEVICE.print(p, len);
-			len -= written;
-			p += written;
-		}
-		// We no longer flush afterwards
+		usbDevices[0].SendBlockingMessage(message);
 	}
 	else if ((type & UsbMessage) != 0)
 	{
-		// Message that is to be sent via the USB line (non-blocking)
-		MutexLocker lock(usbMutex);
-
-		if (GetChannelMode(0) == AuxMode::raw || message[0] == '{' || (type & RawMessageFlag) != 0)
-		{
-			// Ensure we have a valid buffer to write to that isn't referenced for other destinations
-			OutputBuffer *_ecv_null usbOutputBuffer = usbOutput.GetLastItem();
-			if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
-			{
-				if (OutputBuffer::Allocate(usbOutputBuffer))
-				{
-					if (usbOutput.Push(usbOutputBuffer))
-					{
-						usbOutputBuffer->cat(message);
-					}
-					// else the stack is full, so discard the message
-				}
-				// else we can't allocate a buffer, so discard the message
-			}
-			else
-			{
-				usbOutputBuffer->cat(message);		// append the message
-			}
-		}
-		else
-		{
-			// We need to wrap the message in JSON before sending it to USB
-			OutputBuffer *buf;
-			if (OutputBuffer::Allocate(buf))
-			{
-				usbMessageSeq++;
-				RepRap::StartJsonResponse(gb, buf);
-				buf->catf("\"seq\":%" PRIu32 ",\"resp\":\"%.s\"}\n", usbMessageSeq, message);
-				usbOutput.Push(buf);
-			}
-			// else we can't allocate a buffer, so discard the message
-		}
+		usbDevices[0].SendRawMessage(0, GetChannelMode(0), gb, message, (type & RawMessageFlag) != 0);
 	}
 
 #ifdef SERIAL_USB2_DEVICE
 	if ((type & Usb2Message) != 0)
 	{
-		// Message that is to be sent via the USB2 line (non-blocking)
-		MutexLocker lock(usb2Mutex);
-
-		if (GetChannelMode(1) == AuxMode::raw || message[0] == '{' || (type & RawMessageFlag) != 0)
-		{
-			// Ensure we have a valid buffer to write to that isn't referenced for other destinations
-			OutputBuffer *_ecv_null usb2OutputBuffer = usb2Output.GetLastItem();
-			if (usb2OutputBuffer == nullptr || usb2OutputBuffer->IsReferenced())
-			{
-				if (OutputBuffer::Allocate(usb2OutputBuffer))
-				{
-					if (usb2Output.Push(usb2OutputBuffer))
-					{
-						usb2OutputBuffer->cat(message);
-					}
-					// else the stack is full, so discard the message
-				}
-				// else we can't allocate a buffer, so discard the message
-			}
-			else
-			{
-				usb2OutputBuffer->cat(message);		// append the message
-			}
-		}
-		else
-		{
-			// We need to wrap the message in JSON before sending it to USB2
-			OutputBuffer *buf;
-			if (OutputBuffer::Allocate(buf))
-			{
-				usb2MessageSeq++;
-				RepRap::StartJsonResponse(gb, buf);
-				buf->catf("\"seq\":%" PRIu32 ",\"resp\":\"%.s\"}\n", usb2MessageSeq, message);
-				usb2Output.Push(buf);
-			}
-			// else we can't allocate a buffer, so discard the message
-		}
+		usbDevices[1].SendRawMessage(1, GetChannelMode(1), gb, message, (type & RawMessageFlag) != 0);
 	}
 #endif
 }
@@ -3437,13 +3210,13 @@ void Platform::Message(const GCodeBuffer *_ecv_null gb, MessageType type, Output
 
 		if ((type & (UsbMessage | BlockingUsbMessage)) != 0)
 		{
-			AppendUsbReply(gb, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
+			AppendUsbReply(0, gb, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
 
 #ifdef SERIAL_USB2_DEVICE
 		if ((type & Usb2Message) != 0)
 		{
-			AppendUsb2Reply(gb, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
+			AppendUsbReply(1, gb, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
 #endif
 
@@ -3548,16 +3321,17 @@ void Platform::Message(MessageType type, const char *_ecv_array message) noexcep
 // Send a debug message to USB using minimal stack
 void Platform::DebugMessage(const char *_ecv_array fmt, va_list vargs) noexcept
 {
-	MutexLocker lock(usbMutex);
-	vuprintf([](char c) -> bool
+	MutexLocker lock(usbDevices[0].GetMutex());
+	SerialCDC *usbDev = usbDevices[0].GetDevice();
+	vuprintf([usbDev](char c) -> bool
 				{
 					if (c != 0)
 					{
-						while (SERIAL_USB_DEVICE.IsConnected() && !reprap.SpinTimeoutImminent())
+						while (usbDev->IsConnected() && !reprap.SpinTimeoutImminent())
 						{
-							if (SERIAL_USB_DEVICE.canWrite() != 0)
+							if (usbDev->canWrite() != 0)
 							{
-								SERIAL_USB_DEVICE.write(c);
+								usbDev->write(c);
 								return true;
 							}
 						}
@@ -3779,18 +3553,12 @@ void Platform::ResetChannel(size_t chan) noexcept
 {
 	if (chan == 0)
 	{
-		SERIAL_USB_DEVICE.end();
-#if SAME5x && !CORE_USES_TINYUSB
-        SERIAL_USB_DEVICE.Start();
-#else
-        SERIAL_USB_DEVICE.Start(UsbVBusPin);
-#endif
+		usbDevices[0].Reset(UsbVBusPin);
 	}
 #ifdef SERIAL_USB2_DEVICE
 	else if (chan == 1)
 	{
-		SERIAL_USB2_DEVICE.end();
-        SERIAL_USB2_DEVICE.Start(NoPin);
+		usbDevices[1].Reset(NoPin);
 	}
 #endif
 #if HAS_AUX_DEVICES
@@ -3883,7 +3651,7 @@ void Platform::SetBoardType() noexcept
 	driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);
 #elif defined(DUET3_MB6XD)
 	board = GetMB6XDBoardType();
-#elif defined(FMDC_V02) || defined(FMDC_V03)
+#elif defined(FMDC_V03)
 	board = BoardType::FMDC;
 #elif defined(DUET_NG)
 	// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
@@ -3944,7 +3712,7 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0";
 	case BoardType::Duet3_6XD_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
 	case BoardType::Duet3_6XD_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or later";
-#elif defined(FMDC_V02) || defined(FMDC_V03)
+#elif defined(FMDC_V03)
 	case BoardType::FMDC:					return "Duet 3 " BOARD_SHORT_NAME;
 #elif defined(DUET_NG)
 	// This is the string that the Duet 2 ATE uses to identify the board. The version number must be at the end.
@@ -3984,7 +3752,7 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3_6XD_v100:			return "duet3mb6xd100";
 	case BoardType::Duet3_6XD_v101:			return "duet3mb6xd101";
 	case BoardType::Duet3_6XD_v102:			return "duet3mb6xd102";
-#elif defined(FMDC_V02) || defined(FMDC_V03)
+#elif defined(FMDC_V03)
 	case BoardType::FMDC:					return "fmdc";
 #elif defined(DUET_NG)
 	case BoardType::DuetWiFi_10:			return "duetwifi10";

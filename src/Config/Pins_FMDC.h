@@ -9,6 +9,7 @@
 #define SRC_DUET3MINI_PINS_DUET3MINI_H_
 
 #include <PinDescription.h>
+#include <SPI/SpiParameters.h>
 
 #define DEFAULT_BOARD_TYPE		 BoardType::FMDC
 
@@ -82,6 +83,8 @@ constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors p
 
 constexpr size_t MaxBedHeaters = 4;
 constexpr size_t MaxChamberHeaters = 4;
+constexpr size_t MaxHeatersPerBed = 4;
+constexpr size_t MaxHeatersPerChamber = 4;
 
 constexpr size_t NumThermistorInputs = 2;
 constexpr size_t NumTmcDriversSenseChannels = 1;
@@ -107,15 +110,39 @@ constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 constexpr size_t MaxLedStrips = 2;					// Maximum number of LED strips
 
+constexpr size_t NumUsbChannels = 1;
 constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB and one auxiliary UART)
-constexpr size_t FirstAuxChannel = 1;
-constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 
 #define SERIAL_USB_DEVICE (serialUSB)
 #define SERIAL_AUX_DEVICE (serialUart0)
 
 // SerialUSB
 constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB port
+
+// DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
+// When static arbitration within a priority level is selected, lower channel number have higher priority.
+// So we use the low channel numbers for the highest priority sources.
+constexpr DmaChannel DmacChanWiFiTx = 0;
+constexpr DmaChannel DmacChanWiFiRx = 1;
+constexpr DmaChannel DmacChanTmcTx = 2;
+constexpr DmaChannel DmacChanTmcRx = 3;
+constexpr DmaChannel DmacChanSspiTx = 4;
+constexpr DmaChannel DmacChanSspiRx = 5;
+constexpr DmaChannel DmacChanLcdTx = 6;
+constexpr DmaChannel DmacChanLcdRx = 7;					// this one is not actually used
+
+constexpr unsigned int NumDmaChannelsUsed = 8;
+
+// The DMAC has priority levels 0-3 but on revision A chips it is unsafe to use multiple levels
+// Fortunately, all our SAME54P20Achips seem to be revision D
+constexpr DmaPriority DmacPrioTmcTx = 0;
+constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 100kbps so this is not very critical
+constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
+constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
+constexpr DmaPriority DmacPrioSspiTx = 3;				// high speed SPI in master mode
+constexpr DmaPriority DmacPrioSspiRx = 2;				// high speed SPI in master mode
+constexpr DmaPriority DmacPrioLcdTx = 3;				// high speed SPI in master mode
+constexpr DmaPriority DmacPrioLcdRx = 3;				// high speed SPI in master mode
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
@@ -236,12 +263,23 @@ constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 // Using an SPI CLK of 60MHz we can only divide by 2, 4, 6 etc.
 // Therefore the available frequencies are 15MHz, 10MHz, 7.5MHz, 6MHz, 5MHz.
 constexpr uint32_t LcdSpiClockFrequency = 15000000;
-constexpr unsigned int LcdSercomNumber = 0;
-constexpr Pin LcdSpiMosiPin = PortAPin(4);
-constexpr Pin LcdSpiMisoPin = PortAPin(7);
-constexpr Pin LcdSpiSclkPin = PortAPin(5);
+
+constexpr SpiParameters LcdSpiParams =
+{
+	.sercomNumber = 0,
+	.mosiPin = PortAPin(4),
+	.misoPin = PortAPin(7),
+	.sclkPin = PortAPin(5),
+	.pinFunction = GpioPinFunction::D,
+	.dataInPad = 3,
+	.dataOutPad = 0,
+	.dmaChanTx = DmacChanLcdTx,
+	.dmaChanRx = DmacChanLcdRx,
+	.dmaPrioTx = DmacPrioLcdTx,
+	.dmaPrioRx = DmacPrioLcdRx,
+};
+
 constexpr Pin LcdSpiCsPin = PortAPin(6);
-constexpr GpioPinFunction LcdSpiPinFunction = GpioPinFunction::D;
 
 constexpr Pin LcdDcPin = PortCPin(5);
 constexpr Pin LcdResetPin = PortCPin(6);
@@ -270,11 +308,20 @@ constexpr Pin RtpSpiCsPin = PortCPin(18);
 constexpr Pin RtpPenPin = PortAPin(3);
 
 // Shared SPI definitions
-constexpr uint8_t SharedSpiSercomNumber = 7;
-constexpr Pin SharedSpiMosiPin = PortCPin(12);
-constexpr Pin SharedSpiMisoPin = PortCPin(15);
-constexpr Pin SharedSpiSclkPin = PortCPin(13);
-constexpr GpioPinFunction SharedSpiPinFunction = GpioPinFunction::C;
+constexpr SpiParameters SharedSpiParams =
+{
+	.sercomNumber = 7,
+	.mosiPin = PortCPin(12),
+	.misoPin = PortCPin(15),
+	.sclkPin = PortCPin(13),
+	.pinFunction = GpioPinFunction::C,
+	.dataInPad = 3,
+	.dataOutPad = 0,
+	.dmaChanTx = DmacChanSspiTx,
+	.dmaChanRx = DmacChanSspiRx,
+	.dmaPrioTx = DmacPrioSspiTx,
+	.dmaPrioRx = DmacPrioSspiRx,
+};
 
 // Serial on IO0
 constexpr uint8_t Serial0SercomNumber = 2;
@@ -468,25 +515,6 @@ constexpr size_t NumRealPins = 32+32+29;
 constexpr size_t NumVirtualPins = 0;
 
 static_assert(NumNamedPins == NumRealPins + NumVirtualPins);
-
-// DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
-// When static arbitration within a priority level is selected, lower channel number have higher priority.
-// So we use the low channel numbers for the highest priority sources.
-constexpr DmaChannel DmacChanWiFiTx = 0;
-constexpr DmaChannel DmacChanWiFiRx = 1;
-constexpr DmaChannel DmacChanTmcTx = 2;
-constexpr DmaChannel DmacChanTmcRx = 3;
-constexpr DmaChannel DmacChanLcdTx = 4;
-
-constexpr unsigned int NumDmaChannelsUsed = 5;
-
-// The DMAC has priority levels 0-3 but on revision A chips it is unsafe to use multiple levels
-// Fortunately, all our SAME54P20Achips seem to be revision D
-constexpr DmaPriority DmacPrioTmcTx = 0;
-constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 100kbps so this is not very critical
-constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
-constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
-constexpr DmaPriority DmacPrioLcdTx = 3;				// high speed SPI in slave mode
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers

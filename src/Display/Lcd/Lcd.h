@@ -6,7 +6,7 @@
 #if SUPPORT_DIRECT_LCD
 
 #include <Print.h>
-#include <Hardware/Spi/SharedSpiClient.h>
+#include <SPI/SharedSpiClient.h>
 #include <General/SafeVsnprintf.h>
 #include <ObjectModel/ObjectModel.h>
 

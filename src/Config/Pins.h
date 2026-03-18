@@ -21,7 +21,7 @@
 # elif defined(DUET3MINI_V04)
 #  define DUET3MINI		1
 #  define PLATFORM Duet3Mini
-# elif defined(FMDC_V02) || defined(FMDC_V03)
+# elif defined(FMDC_V03)
 #  define DUET3MINI		1
 #  define PLATFORM FMDC
 # else
@@ -38,6 +38,10 @@
 #endif
 
 #include P_INCLUDE_FILE
+
+// Derive channel counts from platform-specific values
+constexpr size_t FirstAuxChannel = NumUsbChannels;
+constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 
 // Apply default values to anything not configured
 #ifndef SUPPORT_NONLINEAR_EXTRUSION

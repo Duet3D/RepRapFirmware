@@ -162,7 +162,8 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 }
 
 // Handle an input state change message
-static void HandleInputStateChanged(const CanMessageInputChangedV1& msg, CanAddress src) noexcept
+// This is the old version, retained for now for compatibility with expansion boards running older firmware. Remove it in due course.
+static void HandleInputStateChangedV1(const CanMessageInputChangedV1& msg, CanAddress src, uint16_t timeStamp) noexcept
 {
 	bool endstopStatesChanged = false;
 	Platform& p = reprap.GetPlatform();
@@ -173,12 +174,12 @@ static void HandleInputStateChanged(const CanMessageInputChangedV1& msg, CanAddr
 		switch (handle.parts.type)
 		{
 		case RemoteInputHandle::typeEndstop:
-			p.GetEndstops().HandleRemoteEndstopChange(src, handle.parts.major, handle.parts.minor, state);
+			p.GetEndstops().HandleRemoteEndstopChange(src, handle.parts.major, handle.parts.minor, timeStamp, state);
 			endstopStatesChanged = true;
 			break;
 
 		case RemoteInputHandle::typeZprobe:
-			p.GetEndstops().HandleRemoteZProbeChange(src, handle.parts.major, handle.parts.minor, state, msg.GetEntryReading(i));
+			p.GetEndstops().HandleRemoteZProbeChange(src, handle.parts.major, handle.parts.minor, timeStamp, state, msg.GetEntryReading(i));
 			endstopStatesChanged = true;
 			break;
 
@@ -188,7 +189,48 @@ static void HandleInputStateChanged(const CanMessageInputChangedV1& msg, CanAddr
 
 		case RemoteInputHandle::typeStallEndstop:
 			// In this case there should be exactly one handle and the 'reading' is a bitmap of stalled drivers
-			p.GetEndstops().HandleStalledRemoteDrivers(src, LocalDriversBitmap((LocalDriversBitmap::BaseType)msg.GetEntryReading(i)));
+			p.GetEndstops().HandleStalledRemoteDrivers(src, LocalDriversBitmap((LocalDriversBitmap::BaseType)msg.GetEntryReading(i)), timeStamp);
+			break;
+
+		default:
+			break;
+		}
+	}
+
+	if (endstopStatesChanged)
+	{
+		reprap.GetMove().OnEndstopOrZProbeStatesChanged();
+	}
+}
+
+// Handle an input state change message
+static void HandleInputStateChangedV2(const CanMessageInputChangedV2& msg, CanAddress src) noexcept
+{
+	bool endstopStatesChanged = false;
+	Platform& p = reprap.GetPlatform();
+	for (unsigned int i = 0; i < msg.numHandles; ++i)
+	{
+		const RemoteInputHandle handle(msg.GetEntryHandle(i));
+		const bool state = (msg.states & (1u << i)) != 0;
+		switch (handle.parts.type)
+		{
+		case RemoteInputHandle::typeEndstop:
+			p.GetEndstops().HandleRemoteEndstopChange(src, handle.parts.major, handle.parts.minor, msg.GetWhen(i), state);
+			endstopStatesChanged = true;
+			break;
+
+		case RemoteInputHandle::typeZprobe:
+			p.GetEndstops().HandleRemoteZProbeChange(src, handle.parts.major, handle.parts.minor, msg.GetWhen(i), msg.GetEntryReading(i), state);
+			endstopStatesChanged = true;
+			break;
+
+		case RemoteInputHandle::typeGpIn:
+			p.HandleRemoteGpInChange(src, handle.parts.major, handle.parts.minor, state);
+			break;
+
+		case RemoteInputHandle::typeStallEndstop:
+			// In this case there should be exactly one handle and the 'reading' is a bitmap of stalled drivers
+			p.GetEndstops().HandleStalledRemoteDrivers(src, LocalDriversBitmap((LocalDriversBitmap::BaseType)msg.GetEntryReading(i)), msg.GetWhen(i));
 			break;
 
 		default:
@@ -616,7 +658,12 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			{
 			case CanMessageType::inputStateChangedV1:
 				//TODO we should preferably handle this one using a separate high-priority queue or buffer
-				HandleInputStateChanged(buf->msg.inputChangedV1, buf->id.Src());
+				HandleInputStateChangedV1(buf->msg.inputChangedV1, buf->id.Src(), buf->timeStamp);
+				break;
+
+			case CanMessageType::inputStateChangedV2:
+				//TODO we should preferably handle this one using a separate high-priority queue or buffer
+				HandleInputStateChangedV2(buf->msg.inputChangedV2, buf->id.Src());
 				break;
 
 			case CanMessageType::firmwareBlockRequest:

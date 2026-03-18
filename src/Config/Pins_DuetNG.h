@@ -2,6 +2,7 @@
 #define PINS_DUETNG_H__
 
 #include <PinDescription.h>
+#include <SPI/SpiParameters.h>
 
 // Pins definition file for Duet 2 WiFi/Ethernet
 // This file is normally #included by #including RepRapFirmware.h, which includes this file
@@ -100,6 +101,8 @@ constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors p
 
 constexpr size_t MaxBedHeaters = 4;
 constexpr size_t MaxChamberHeaters = 4;
+constexpr size_t MaxHeatersPerBed = 4;
+constexpr size_t MaxHeatersPerChamber = 4;
 
 constexpr size_t NumThermistorInputs = 8;
 constexpr size_t NumTmcDriversSenseChannels = 2;
@@ -125,9 +128,8 @@ constexpr unsigned int MaxTriggers = 16;			// Must be <= 32 because we store a b
 constexpr size_t MaxSpindles = 4;					// Maximum number of configurable spindles
 constexpr size_t MaxLedStrips = 2;					// Maximum number of LED strips
 
+constexpr size_t NumUsbChannels = 1;
 constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
-constexpr size_t FirstAuxChannel = 1;
-constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 
 #define SERIAL_USB_DEVICE	serialUSB
 #define SERIAL_AUX_DEVICE	serialUart
@@ -244,9 +246,14 @@ constexpr Pin LcdBeepPin = PortDPin(21);		// connlcd.10	-> exp1.10
 #endif
 
 // Shared SPI definitions
-#define USART_SPI		1
-#define USART_SSPI		USART0
-#define ID_SSPI			ID_USART0
+constexpr SpiParameters SharedSpiParams =
+{
+	.usartNumber = 0,
+	.mosiPin = PortBPin(1),
+	.misoPin = PortBPin(0),
+	.sclkPin = PortBPin(13),
+	.pinFunction = GpioPinFunction::C,
+};
 
 // List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
 // The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
@@ -441,14 +448,6 @@ constexpr size_t NumRealPins = 32+32+32+32+6+16+16;				// including SX1509B expa
 constexpr size_t NumVirtualPins = 0;
 
 static_assert(NumNamedPins == NumRealPins + NumVirtualPins);
-
-// USARTs used for SPI
-constexpr Pin APIN_USART_SSPI_MOSI = PortBPin(1);
-constexpr GpioPinFunction USARTSPIMosiPeriphMode = GpioPinFunction::C;
-constexpr Pin APIN_USART_SSPI_MISO = PortBPin(0);
-constexpr GpioPinFunction USARTSPIMisoPeriphMode = GpioPinFunction::C;
-constexpr Pin APIN_USART_SSPI_SCK = PortBPin(13);
-constexpr GpioPinFunction USARTSPISckPeriphMode = GpioPinFunction::C;
 
 // SD Card
 constexpr Pin HsmciClockPin = PortAPin(29);
