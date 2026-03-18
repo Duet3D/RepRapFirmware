@@ -17,6 +17,7 @@
 #include <Platform/RepRap.h>
 #include <RepRapFirmware.h>
 #include <GCodes/GCodes.h>
+#include <Storage/CRC16.h>
 
 #if SAME70
 
@@ -30,6 +31,8 @@ namespace DataCollection
 	static uint32_t lastTransmissionTime = 0;
 
 	static constexpr size_t MaxBufferLen = 100;		// max number of bytes supported in a single message
+	static constexpr size_t CrcFieldDigits = 5;
+	static constexpr size_t MessageSuffixLen = 1 + CrcFieldDigits + 1; // '*' + CRC16 + '\n'
 	static __nocache volatile uint8_t buffer[MaxBufferLen];
 	static __nocache volatile size_t bufferLen = 0;
 
@@ -44,7 +47,7 @@ namespace DataCollection
 
 	bool AddDataToBuffer(uint8_t val)
 	{
-		if (bufferLen >= MaxBufferLen - 1) // leave 1 space for '\n'
+		if (bufferLen >= MaxBufferLen - MessageSuffixLen)
 		{
 			return false;
 		}
@@ -52,6 +55,33 @@ namespace DataCollection
 		buffer[bufferLen] = val;
 		bufferLen++;
 		return true;
+	}
+
+	static bool AppendCrcAndNewline()
+	{
+		CRC16 crc;
+		for (size_t i = 0; i < bufferLen; i++)
+		{
+			crc.Update(buffer[i]);
+		}
+
+		char crcText[CrcFieldDigits + 1];
+		SafeSnprintf(crcText, ARRAY_SIZE(crcText), "%05u", static_cast<unsigned int>(crc.Get()));
+
+		if (!AddDataToBuffer((uint8_t)'*'))
+		{
+			return false;
+		}
+
+		for (size_t i = 0; i < CrcFieldDigits; i++)
+		{
+			if (!AddDataToBuffer(static_cast<uint8_t>(crcText[i])))
+			{
+				return false;
+			}
+		}
+
+		return AddDataToBuffer((uint8_t)'\n');
 	}
 
 	// Set up the PDC or DMAC to send a register and receive the status, but don't enable it yet
@@ -193,7 +223,7 @@ namespace DataCollection
 		return AddDataToBuffer(asciiPos, len);
 	}
 
-	static void AddAxisPosition(size_t axisOrExtruder, uint32_t when)
+	[[maybe_unused]] static void AddAxisPosition(size_t axisOrExtruder, uint32_t when)
 	{
 		Move& move = reprap.GetMove();
 
@@ -209,7 +239,8 @@ namespace DataCollection
 
 		// Add timestamp
 		lastTransmissionTime = millis();
-		AddDataToBuffer(lastTransmissionTime);
+		// AddDataToBuffer(lastTransmissionTime);
+		AddDataToBuffer(static_cast<uint32_t>(0));
 
 		const uint32_t now = StepTimer::GetTimerTicks();
 
@@ -224,10 +255,16 @@ namespace DataCollection
 		}
 
 		// Add all extruder positions to buffer
+		static float last_e_positions[MaxExtruders] = {0};
 		for (size_t extruder = 0; extruder < reprap.GetGCodes().GetNumExtruders(); extruder++)
 		{
+			MotionParameters params;
+			const size_t logicalExtruder = ExtruderToLogicalDrive(extruder);
+			move.GetCurrentMotion(logicalExtruder, now, params);
+			const float pos = params.position * move.GetMicrostepping(logicalExtruder) / move.DriveStepsPerMm(logicalExtruder);
 			AddDataToBuffer((uint8_t)',');
-			AddAxisPosition(ExtruderToLogicalDrive(extruder), now);
+			AddDataToBuffer(static_cast<uint32_t>(pos == last_e_positions[extruder] ? 0 : 1));
+			last_e_positions[extruder] = pos;
 		}
 
 		// Add analog sensor
@@ -249,8 +286,7 @@ namespace DataCollection
 			}
 		}
 
-		buffer[bufferLen] = (uint8_t)'\n';
-		bufferLen++;
+		AppendCrcAndNewline();
 
 		SendDataToUart();
 	}
