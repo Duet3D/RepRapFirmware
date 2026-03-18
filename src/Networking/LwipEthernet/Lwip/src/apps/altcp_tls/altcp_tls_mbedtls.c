@@ -1179,6 +1179,15 @@ altcp_mbedtls_close(struct altcp_pcb *conn)
   if (inner_conn) {
     err_t err;
     altcp_poll_fn oldpoll = inner_conn->poll;
+    /* Send TLS close_notify before closing TCP, as required for a proper TLS shutdown */
+    altcp_mbedtls_state_t *state = (altcp_mbedtls_state_t *)conn->state;
+    if (state != NULL && (state->flags & ALTCP_MBEDTLS_FLAGS_HANDSHAKE_DONE)) {
+      if (state->ssl_context.out_left) {
+        altcp_mbedtls_flush_output(state);
+      }
+      mbedtls_ssl_close_notify(&state->ssl_context);
+      altcp_output(inner_conn);
+    }
     altcp_mbedtls_remove_callbacks(conn->inner_conn);
     err = altcp_close(conn->inner_conn);
     if (err != ERR_OK) {

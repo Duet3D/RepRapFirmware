@@ -29,6 +29,7 @@ bool FtpResponder::TryAccept(Socket *_ecv_from s, NetworkProtocol protocol) noex
 		{
 			clientPointer = 0;
 			skt = s;
+			dataConnectionTls = false;		// default per RFC 4217: client must send PROT P to use TLS on the data channel
 			if (reprap.Debug(Module::Webserver))
 			{
 				debugPrintf("FTP connection accepted\n");
@@ -506,10 +507,22 @@ void FtpResponder::ProcessLine() noexcept
 		// get features
 		else if (StringEqualsIgnoreCase(clientMessage, "FEAT"))
 		{
-			outBuf->copy(	"211-Features:\r\n"
-							"PASV\r\n"			// support PASV mode
-							"211 End\r\n"
-						);
+			if (skt->UsingTls())
+			{
+				outBuf->copy(	"211-Features:\r\n"
+								"PASV\r\n"
+								"PBSZ\r\n"
+								"PROT\r\n"
+								"211 End\r\n"
+							);
+			}
+			else
+			{
+				outBuf->copy(	"211-Features:\r\n"
+								"PASV\r\n"
+								"211 End\r\n"
+							);
+			}
 			Commit(ResponderState::reading);
 		}
 		// get current dir
@@ -547,6 +560,32 @@ void FtpResponder::ProcessLine() noexcept
 			}
 			Commit(ResponderState::reading);
 		}
+		// protection buffer size (required before PROT, only meaningful over TLS)
+		else if (StringStartsWith(clientMessage, "PBSZ"))
+		{
+			outBuf->copy("200 PBSZ=0 OK.\r\n");
+			Commit(ResponderState::reading);
+		}
+		// data channel protection level
+		else if (StringStartsWith(clientMessage, "PROT"))
+		{
+			const char *_ecv_array const level = GetParameter("PROT");
+			if (StringEqualsIgnoreCase(level, "P"))
+			{
+				dataConnectionTls = true;
+				outBuf->copy("200 PROT P OK.\r\n");
+			}
+			else if (StringEqualsIgnoreCase(level, "C"))
+			{
+				dataConnectionTls = false;
+				outBuf->copy("200 PROT C OK.\r\n");
+			}
+			else
+			{
+				outBuf->copy("504 Unknown protection level.\r\n");
+			}
+			Commit(ResponderState::reading);
+		}
 		// enter passive mode mode
 		else if (StringEqualsIgnoreCase(clientMessage, "PASV"))
 		{
@@ -557,10 +596,10 @@ void FtpResponder::ProcessLine() noexcept
 			passivePort = random(1024, 65535);
 			passivePortOpenTime = millis();
 
-			skt->GetInterface()->OpenDataPort(passivePort, skt->UsingTls());
+			skt->GetInterface()->OpenDataPort(passivePort, dataConnectionTls);
 			if (reprap.Debug(Module::Webserver))
 			{
-				debugPrintf("FTP data port open at port %u\n", passivePort);
+				debugPrintf("FTP data port open at port %u (%s)\n", passivePort, dataConnectionTls ? "secure" : "insecure");
 			}
 
 			// send FTP response

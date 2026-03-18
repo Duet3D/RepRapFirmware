@@ -464,6 +464,7 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 			else if (tlsProtocolEnabled[protocol])
 			{
 				sockets[skt]->Init(skt, tlsPortNumbers[protocol], protocol);
+				sockets[skt]->InitTls(tlsPortNumbers[protocol]);
 			}
 #endif
 		}
@@ -484,6 +485,7 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 		else if (tlsProtocolEnabled[protocol])
 		{
 			sockets[FtpSocketNumber]->Init(FtpSocketNumber, tlsPortNumbers[protocol], protocol);
+			sockets[FtpSocketNumber]->InitTls(tlsPortNumbers[protocol]);
 		}
 #endif
 		break;
@@ -503,6 +505,7 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 		else if (tlsProtocolEnabled[protocol])
 		{
 			sockets[TelnetSocketNumber]->Init(TelnetSocketNumber, tlsPortNumbers[protocol], protocol);
+			sockets[TelnetSocketNumber]->InitTls(tlsPortNumbers[protocol]);
 		}
 #endif
 		break;
