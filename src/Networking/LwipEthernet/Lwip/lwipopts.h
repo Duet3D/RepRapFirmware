@@ -94,7 +94,6 @@
 #define LWIP_ALTCP                  1
 #define LWIP_ALTCP_TLS              1
 #define LWIP_ALTCP_TLS_MBEDTLS      1
-#define ALTCP_MBEDTLS_USE_SESSION_CACHE  0
 #else
 #define LWIP_ALTCP                  0
 #define LWIP_ALTCP_TLS              0
@@ -133,16 +132,12 @@
  */
 #if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
 # ifdef MBEDTLS_CONFIG_FILE
-#define MEM_SIZE                		65536    // 64KiB - LwIP shares its heap with MbedTls
+#define MEM_SIZE                		49152    // 48KiB - LwIP shares its heap with MbedTls
 # else
 #define MEM_SIZE                		16384
 # endif
 #else
-# ifdef MBEDTLS_CONFIG_FILE
-#define MEM_SIZE                		45056    // 44KiB - LwIP shares its heap with MbedTls
-# else
 #define MEM_SIZE                		14848
-# endif
 #endif
 
 /**
@@ -156,36 +151,27 @@
  * MEMP_NUM_TCP_PCB: the number of simultaneously active TCP connections.
  * (requires the LWIP_TCP option)
  */
-#define MEMP_NUM_TCP_PCB				10
+#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
+# define MEMP_NUM_TCP_PCB				10
+#else
+# define MEMP_NUM_TCP_PCB				8
+#endif
 
 /**
  * MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP connections.
  * (requires the LWIP_TCP option)
  */
-#define MEMP_NUM_TCP_PCB_LISTEN		10
-
-/**
- * MEMP_NUM_ALTCP_PCB: With TLS enabled, each connection uses a 2-layer altcp stack
- * (outer TLS altcp_pcb + inner TCP-wrapping altcp_pcb), so the default of
- * MEMP_NUM_TCP_PCB is insufficient. Double it and add extra for listeners.
- */
-#ifdef MBEDTLS_CONFIG_FILE
-# define MEMP_NUM_ALTCP_PCB			(2 * MEMP_NUM_TCP_PCB + 4)
+#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
+# define MEMP_NUM_TCP_PCB_LISTEN		10
+#else
+# define MEMP_NUM_TCP_PCB_LISTEN		7
 #endif
-
-/**
- * MEMP_NUM_SYS_TIMEOUT: The internal minimum is 7 for our config
- * (TCP+ARP+2xDHCP+ACD+IGMP+IP_REASSEMBLY). mDNS probing/announcing adds
- * dynamic sys_timeout() calls at runtime that exhaust the default pool.
- * Use 12 to give comfortable headroom.
- */
-#define MEMP_NUM_SYS_TIMEOUT			12
 
 /**
  * MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments.
  * (requires the LWIP_TCP option)
  */
-#define MEMP_NUM_TCP_SEG				12
+#define MEMP_NUM_TCP_SEG				10
 
 /**
  * MEMP_NUM_REASSDATA: the number of IP packets simultaneously queued for
@@ -224,15 +210,10 @@
 /**
  * PBUF_POOL_SIZE: the number of buffers in the pbuf pool. Needs to be enough for IP packet reassembly.
  */
-#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
-// When SBC mode is enabled we allocate the SBC transfer buffers from the PBUF pool memory.
+// When SBC mode is enabled on the SAME70 we allocate the SBC transfer buffers from the PBUF pool memory.
 // This means that the PBUF pool must be large enough to accommodate those buffers, which currently need 16384 bytes.
-// The non-cached RAM size is set in file Cache.cpp in project CoreN2G. Currently it is set to 80kb.
-// We may as well use the remainder of the non-cached RAM block for additional pbufs, so we allocate a few more here.
-# define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 8)
-#else
-# define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 4)
-#endif
+// The non-cached RAM size is set in file Cache.cpp in project CoreN2G. Currently it is set to 72kb.
+#define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 4)
 
 /**
  * PBUF_POOL_BUFSIZE: the size of each pbuf in the pbuf pool.
