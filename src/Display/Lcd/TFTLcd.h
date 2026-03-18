@@ -18,9 +18,9 @@ class TFTLcd : public Lcd
 {
 public:
 #if USE_FONT_CHIP
-	TFTLcd(PixelNumber nr, PixelNumber nc, Pin fontCsPin, SpiMode mode, uint8_t sercomNum) noexcept;
+	TFTLcd(PixelNumber nr, PixelNumber nc, Pin fontCsPin, SpiMode mode, const SpiParameters& params) noexcept;
 #else
-	TFTLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode, uint8_t sercomNum) noexcept;
+	TFTLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode, const SpiParameters& params) noexcept;
 #endif
 
 	virtual ~TFTLcd();

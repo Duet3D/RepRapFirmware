@@ -14,7 +14,7 @@
 class SharedSpiDevice : public SpiDevice
 {
 public:
-	explicit SharedSpiDevice(uint8_t sercomNum) noexcept;
+	explicit SharedSpiDevice(const SpiParameters& params) noexcept;
 
 	// Get ownership of this SPI, return true if successful
 	bool Take(uint32_t timeout) noexcept { return mutex.Take(timeout); }
@@ -22,13 +22,8 @@ public:
 	// Release ownership of this SPI
 	void Release() noexcept { mutex.Release(); }
 
-	static void Init() noexcept;
-	static SharedSpiDevice& GetMainSharedSpiDevice() noexcept { return *mainSharedSpiDevice; }
-
 private:
 	Mutex mutex;
-
-	static SharedSpiDevice *_ecv_null mainSharedSpiDevice;
 };
 
 #endif /* SRC_HARDWARE_SPI_SHAREDSPIDEVICE_H_ */

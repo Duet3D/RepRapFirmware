@@ -10,13 +10,13 @@
 #if SUPPORT_ILI9488_LCD
 
 #if USE_FONT_CHIP
-TFTLcd::TFTLcd(PixelNumber nr, PixelNumber nc, Pin fontCsPin, SpiMode mode, uint8_t sercomNum) noexcept
+TFTLcd::TFTLcd(PixelNumber nr, PixelNumber nc, Pin fontCsPin, SpiMode mode, const SpiParameters& params) noexcept
 	: Lcd(nr, nc, fontCsPin),
 #else
-TFTLcd::TFTLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode, uint8_t sercomNum) noexcept
+TFTLcd::TFTLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode, const SpiParameters& params) noexcept
 	: Lcd(nr, nc, fnts, nFonts),
 #endif
-	  spiDev(sercomNum),
+	  spiDev(params),
 	  fgColour(Colours::White), bgColour(Colours::Blue),
 	  spiMode(mode)
 {

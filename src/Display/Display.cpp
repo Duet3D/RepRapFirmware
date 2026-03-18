@@ -257,18 +257,13 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 
 #if SUPPORT_ILI9488_LCD
 		case 3:		// SPI TFT display with ILI9488 controller
-			SetPinFunction(LcdSpiMosiPin, LcdSpiPinFunction);
-			SetPinFunction(LcdSpiMisoPin, LcdSpiPinFunction);
-			SetPinFunction(LcdSpiSclkPin, LcdSpiPinFunction);
-			SetDriveStrength(LcdSpiMosiPin, 2);
-			SetDriveStrength(LcdSpiSclkPin, 2);
 			SetPinMode(LcdFlashCsPin, OUTPUT_HIGH);							// in case the flash chip is fitted, deselect it
 			SetPinMode(LcdFontCsPin, OUTPUT_HIGH);							// in case the font chip is fitted, deselect it
 			InitDisplay(gb,
 # if USE_FONT_CHIP
-							new LcdILI9488(LcdFontCsPin, LcdSercomNumber),
+							new LcdILI9488(LcdFontCsPin, LcdSpiParams),
 # else
-							new LcdILI9488(tftFonts, ARRAY_SIZE(tftFonts), LcdSercomNumber),
+							new LcdILI9488(tftFonts, ARRAY_SIZE(tftFonts), LcdSpiParams),
 # endif
 								LcdSpiCsPin, NoPin, false);
 			touchController = new ResistiveTouch(RtpSpiCsPin, RtpPenPin);

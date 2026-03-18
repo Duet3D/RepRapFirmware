@@ -8,9 +8,10 @@
 #if SUPPORT_RESISTIVE_TOUCH
 
 #include <Hardware/Spi/SharedSpiDevice.h>
+#include <Platform/Platform.h>
 
 ResistiveTouch::ResistiveTouch(Pin csp, Pin irqp) noexcept
-	: spiDev(SharedSpiDevice::GetMainSharedSpiDevice(), SpiFrequency, SpiMode::mode0, csp, false),
+	: spiDev(Platform::GetSharedSpiDevice(), SpiFrequency, SpiMode::mode0, csp, false),
 	  csPin(csp), irqPin(irqp)
 {
 	SetPinMode(csPin, OUTPUT_HIGH);

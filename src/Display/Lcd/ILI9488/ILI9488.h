@@ -17,9 +17,9 @@ class LcdILI9488 : public TFTLcd
 public:
 	// Construct a GLCD driver
 #if USE_FONT_CHIP
-	LcdILI9488(Pin fontCsPin, uint8_t sercomNum) noexcept;
+	LcdILI9488(Pin fontCsPin, const SpiParameters& params) noexcept;
 #else
-	LcdILI9488(const LcdFont * const fnts[], size_t nFonts, uint8_t sercomNum) noexcept;
+	LcdILI9488(const LcdFont * const fnts[], size_t nFonts, const SpiParameters& params) noexcept;
 #endif
 
 	~LcdILI9488();

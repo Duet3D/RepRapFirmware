@@ -9,11 +9,12 @@
 
 #if SUPPORT_SPI_SENSORS
 
+#include <Platform/Platform.h>
 #include <Platform/Tasks.h>
 #include <Hardware/Spi/SharedSpiDevice.h>
 
 SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *_ecv_array name, SpiMode spiMode, uint32_t clockFrequency) noexcept
-	: SensorWithPort(sensorNum, name), device(SharedSpiDevice::GetMainSharedSpiDevice(), clockFrequency, spiMode, NoPin, false)
+	: SensorWithPort(sensorNum, name), device(Platform::GetSharedSpiDevice(), clockFrequency, spiMode, NoPin, false)
 {
     SetResult(0.0, TemperatureError::notInitialised);
 }

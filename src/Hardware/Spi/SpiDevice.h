@@ -9,10 +9,11 @@
 #define SRC_HARDWARE_SPI_SPIDEVICE_H_
 
 #include <RepRapFirmware.h>
-#include "SpiMode.h"
 #include <RTOSIface/RTOSIface.h>
+#include <SPI/SpiMode.h>
+#include <SPI/SpiParameters.h>
 
-#if SAME5x && (defined(FMDC_V02) || defined(FMDC_V03))
+#if SAME5x || SAMC21
 # include <DmacManager.h>
 #endif
 
@@ -21,14 +22,14 @@
 class SpiDevice
 {
 public:
-	explicit SpiDevice(uint8_t sercomNum) noexcept;
+	explicit SpiDevice(const SpiParameters& params) noexcept;
 
 	void Disable() const noexcept;
 	void Enable() const noexcept;
 
 	// Set the clock frequency, SPI mode and character length. 9-bit mode is currently only implemented on the SAME5x.
 	void SetClockFrequencyAndMode(uint32_t freq, SpiMode mode
-#if SAME5x
+#if SAME5x || SAMC21
 									, bool nineBits
 #endif
 								 ) const noexcept;
@@ -36,9 +37,9 @@ public:
 	// Send and receive data returning true if successful.
 	// If this is a shared SPI device then the caller must already own the mutex.
 	// Either way, caller must already have asserted CS for the selected SPI slave.
-	bool TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t *_ecv_array null rx_data, size_t len) const noexcept;
+	bool TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t *_ecv_array null rx_data, size_t len) noexcept;
 
-#if SAME5x && (defined(FMDC_V02) || defined(FMDC_V03))
+#if SAME5x || SAMC21
 	bool TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data, uint16_t *_ecv_array null rx_data, size_t len) noexcept;
 
 	static void DmaComplete(CallbackParameter param, DmaCallbackReason reason) noexcept;
@@ -49,20 +50,20 @@ private:
 	bool waitForTxEmpty() const noexcept;
 	bool waitForRxReady() const noexcept;
 
-#if SAME5x && (defined(FMDC_V02) || defined(FMDC_V03))
+#if SAME5x || SAMC21
 	void DmaComplete(DmaCallbackReason reason) noexcept;
 #endif
 
-#if SAME5x
+#if SAME5x || SAMC21
 	Sercom * const hardware;
 	const uint8_t sercomNumber;
-# if defined(FMDC_V02) || defined(FMDC_V03)
 	TaskBase *null waitingTask = nullptr;
-# endif
-#elif USART_SPI
+	DmaChannel dmaChanTx;
+	DmaPriority dmaPrioTx;
+#elif SAME70 || SAM4E || SAM4S
 	Usart * const hardware;
 #else
-	Spi * const hardware;
+# error Unsupported configuration
 #endif
 };
 
