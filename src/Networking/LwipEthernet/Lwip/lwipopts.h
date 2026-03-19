@@ -94,6 +94,8 @@
 #define LWIP_ALTCP                  1
 #define LWIP_ALTCP_TLS              1
 #define LWIP_ALTCP_TLS_MBEDTLS      1
+#define ALTCP_MBEDTLS_USE_SESSION_CACHE   1
+#define ALTCP_MBEDTLS_SESSION_CACHE_SIZE  4
 #else
 #define LWIP_ALTCP                  0
 #define LWIP_ALTCP_TLS              0
@@ -155,6 +157,19 @@
 # define MEMP_NUM_TCP_PCB				10
 #else
 # define MEMP_NUM_TCP_PCB				8
+#endif
+
+/**
+ * MEMP_NUM_ALTCP_PCB: the number of simultaneously active ALTCP wrapper PCBs.
+ *
+ * When TLS is enabled, each TLS endpoint can consume more than one ALTCP PCB
+ * (wrapper + inner TCP layer), so this must be larger than MEMP_NUM_TCP_PCB
+ * to avoid allocation failures when opening FTPS data ports.
+ */
+#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
+# define MEMP_NUM_ALTCP_PCB			16
+#else
+# define MEMP_NUM_ALTCP_PCB			10
 #endif
 
 /**
