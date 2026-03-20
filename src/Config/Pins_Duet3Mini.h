@@ -148,7 +148,7 @@ constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 100kbps so this 
 constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioLed = 1;					// QSPI in master mode
-constexpr DmaPriority DmacPrioSspiTx = 3;				// SPI in master mode
+constexpr DmaPriority DmacPrioSspiTx = 0;				// SPI in master mode
 constexpr DmaPriority DmacPrioSspiRx = 2;				// SPI in master mode
 
 // SerialUSB

@@ -15,17 +15,6 @@
 class DotStarLedStrip : public LocalLedStrip
 {
 public:
-	enum class ColorOrder : uint8_t
-	{
-		BGR = 0,
-		BRG,
-		RGB,
-		RBG,
-		GBR,
-		GRB,
-		count
-	};
-
 	DotStarLedStrip() noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException) override;
@@ -40,14 +29,13 @@ protected:
 	size_t GetBytesPerLed() const noexcept override;
 
 private:
-	GCodeResult SendDotStarData(uint32_t data, uint32_t numLeds, bool following) noexcept;
+	GCodeResult SendDotStarData(LedParams params) noexcept;
 
 	static constexpr uint32_t DefaultDotStarSpiClockFrequency = 1000000;	// 1MHz default
 
 	unsigned int numRemaining = 0;											// how much of the current request remains after the current transfer
 	unsigned int totalSent = 0;												// total amount of data sent since the start frame
 	bool needStartFrame = true;
-	ColorOrder colorOrder;
 };
 
 #endif
