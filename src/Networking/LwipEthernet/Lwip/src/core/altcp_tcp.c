@@ -242,7 +242,9 @@ altcp_tcp_set_poll(struct altcp_pcb *conn, u8_t interval)
   if (conn != NULL) {
     struct tcp_pcb *pcb = (struct tcp_pcb *)conn->state;
     ALTCP_TCP_ASSERT_CONN(conn);
-    tcp_poll(pcb, altcp_tcp_poll, interval);
+    if ((pcb != NULL) && (pcb->state != LISTEN)) {
+      tcp_poll(pcb, altcp_tcp_poll, interval);
+    }
   }
 }
 

@@ -246,9 +246,8 @@ altcp_mbedtls_lower_recv(void *arg, struct altcp_pcb *inner_conn, struct pbuf *p
   if (p == NULL) {
     /* remote host sent FIN, remember this (SSL state is destroyed
         when both sides are closed only!) */
-    if ((state->flags & (ALTCP_MBEDTLS_FLAGS_HANDSHAKE_DONE | ALTCP_MBEDTLS_FLAGS_UPPER_CALLED)) ==
-        (ALTCP_MBEDTLS_FLAGS_HANDSHAKE_DONE | ALTCP_MBEDTLS_FLAGS_UPPER_CALLED)) {
-      /* need to notify upper layer (e.g. 'accept' called or 'connect' succeeded) */
+    if (state->flags & ALTCP_MBEDTLS_FLAGS_HANDSHAKE_DONE) {
+      /* Handshake was completed, this is a normal connection close */
       if ((state->rx != NULL) || (state->rx_app != NULL)) {
         state->flags |= ALTCP_MBEDTLS_FLAGS_RX_CLOSE_QUEUED;
         /* this is a normal close (FIN) but we have unprocessed data, so delay the FIN */
@@ -260,7 +259,7 @@ altcp_mbedtls_lower_recv(void *arg, struct altcp_pcb *inner_conn, struct pbuf *p
         return conn->recv(conn->arg, conn, NULL, ERR_OK);
       }
     } else {
-      /* before connection setup is done: call 'err' */
+      /* before handshake is done: call 'err' */
       if (conn->err) {
         conn->err(conn->arg, ERR_ABRT);
       }
@@ -860,7 +859,7 @@ altcp_tls_create_config(int is_server, u8_t cert_count, u8_t pkey_count, int hav
 
   mbedtls_ssl_conf_rng(&conf->conf, mbedtls_ctr_drbg_random, &altcp_tls_entropy_rng->ctr_drbg);
 #if ALTCP_MBEDTLS_LIB_DEBUG != LWIP_DBG_OFF
-  mbedtls_ssl_conf_dbg(&conf->conf, altcp_mbedtls_debug, stdout);
+  mbedtls_ssl_conf_dbg(&conf->conf, altcp_mbedtls_debug, NULL);
 #endif
 #if defined(MBEDTLS_SSL_CACHE_C) && ALTCP_MBEDTLS_USE_SESSION_CACHE
   mbedtls_ssl_conf_session_cache(&conf->conf, &conf->cache, mbedtls_ssl_cache_get, mbedtls_ssl_cache_set);
@@ -1165,8 +1164,9 @@ altcp_mbedtls_listen(struct altcp_pcb *conn, u8_t backlog, err_t *err)
 static void
 altcp_mbedtls_abort(struct altcp_pcb *conn)
 {
-  if (conn != NULL) {
+  if (conn != NULL && conn->inner_conn != NULL) {
     altcp_abort(conn->inner_conn);
+    conn->inner_conn = NULL;
   }
 }
 
@@ -1181,17 +1181,48 @@ altcp_mbedtls_close(struct altcp_pcb *conn)
   if (inner_conn) {
     err_t err;
     altcp_poll_fn oldpoll = inner_conn->poll;
-    /* Send TLS close_notify before closing TCP, as required for a proper TLS shutdown */
     altcp_mbedtls_state_t *state = (altcp_mbedtls_state_t *)conn->state;
+
+    /* Avoid re-entrant lower_err() freeing 'conn' while we are in close().
+       Reattach callbacks only if close must be retried. */
+    altcp_mbedtls_remove_callbacks(inner_conn);
+
+     /* Try to send TLS close_notify before closing TCP.
+       If it cannot be flushed yet, return ERR_INPROGRESS so caller retries from poll. */
     if (state != NULL && (state->flags & ALTCP_MBEDTLS_FLAGS_HANDSHAKE_DONE)) {
+      int notify_ret;
+
       if (state->ssl_context.out_left) {
         altcp_mbedtls_flush_output(state);
+        if (state->ssl_context.out_left) {
+          altcp_output(inner_conn);
+          altcp_mbedtls_setup_callbacks(conn, inner_conn);
+          altcp_poll(inner_conn, oldpoll, inner_conn->pollinterval);
+          return ERR_INPROGRESS;
+        }
       }
-      mbedtls_ssl_close_notify(&state->ssl_context);
+
+      notify_ret = mbedtls_ssl_close_notify(&state->ssl_context);
+      if (notify_ret == MBEDTLS_ERR_SSL_WANT_READ || notify_ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+        altcp_output(inner_conn);
+        altcp_mbedtls_setup_callbacks(conn, inner_conn);
+        altcp_poll(inner_conn, oldpoll, inner_conn->pollinterval);
+        return ERR_INPROGRESS;
+      }
+
+      if (state->ssl_context.out_left) {
+        altcp_mbedtls_flush_output(state);
+        if (state->ssl_context.out_left) {
+          altcp_output(inner_conn);
+          altcp_mbedtls_setup_callbacks(conn, inner_conn);
+          altcp_poll(inner_conn, oldpoll, inner_conn->pollinterval);
+          return ERR_INPROGRESS;
+        }
+      }
       altcp_output(inner_conn);
     }
-    altcp_mbedtls_remove_callbacks(conn->inner_conn);
-    err = altcp_close(conn->inner_conn);
+
+    err = altcp_close(inner_conn);
     if (err != ERR_OK) {
       /* not closed, set up all callbacks again */
       altcp_mbedtls_setup_callbacks(conn, inner_conn);
@@ -1280,23 +1311,31 @@ altcp_mbedtls_write(struct altcp_pcb *conn, const void *dataptr, u16_t len, u8_t
   }
   ret = mbedtls_ssl_write(&state->ssl_context, (const unsigned char *)dataptr, len);
   /* try to send data... */
-  altcp_output(conn->inner_conn);
+  if (conn->inner_conn != NULL) {
+    altcp_output(conn->inner_conn);
+  }
   if (ret >= 0) {
     if (ret == len) {
       /* update application sent counter */
       state->overhead_bytes_adjust -= ret;
       return ERR_OK;
     } else {
-      /* @todo/@fixme: assumption: either everything sent or error */
-      LWIP_ASSERT("ret <= 0", 0);
+      /* partial write: caller should retry remaining bytes later */
+      if (ret > 0) {
+        state->overhead_bytes_adjust -= ret;
+      }
       return ERR_MEM;
     }
   } else {
-    if (ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
-      /* @todo: convert error to err_t */
+    if (ret == MBEDTLS_ERR_SSL_WANT_WRITE || ret == MBEDTLS_ERR_SSL_WANT_READ) {
       return ERR_MEM;
     }
-    LWIP_ASSERT("unhandled error", 0);
+    if (ret == MBEDTLS_ERR_NET_CONN_RESET
+        || ret == MBEDTLS_ERR_NET_SEND_FAILED
+        || ret == MBEDTLS_ERR_NET_INVALID_CONTEXT) {
+      return ERR_CLSD;
+    }
+    LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("tls_write: mbedtls_ssl_write failed: %d\n", ret));
     return ERR_VAL;
   }
 }
@@ -1333,9 +1372,13 @@ altcp_mbedtls_bio_send(void *ctx, const unsigned char *dataptr, size_t size)
         return written;
       }
       return 0; /* MBEDTLS_ERR_SSL_WANT_WRITE; */
+    } else if (err == ERR_CLSD || err == ERR_RST || err == ERR_ABRT || err == ERR_CONN) {
+      if (written) {
+        return written;
+      }
+      return MBEDTLS_ERR_NET_CONN_RESET;
     } else {
-      LWIP_ASSERT("tls_write, tcp_write: err != ERR MEM", 0);
-      /* @todo: return MBEDTLS_ERR_NET_CONN_RESET or MBEDTLS_ERR_NET_SEND_FAILED */
+      LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("tls_write: altcp_write failed with err=%d\n", err));
       return MBEDTLS_ERR_NET_SEND_FAILED;
     }
   }
