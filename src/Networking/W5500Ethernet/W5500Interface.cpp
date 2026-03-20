@@ -425,10 +425,11 @@ void W5500Interface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IP
 	gateway = p_gateway;
 }
 
-void W5500Interface::OpenDataPort(TcpPort port, bool useTls) noexcept
+bool W5500Interface::OpenDataPort(TcpPort port, bool useTls) noexcept
 {
 	UNUSED(useTls);
 	sockets[FtpDataSocket]->Init(FtpDataSocket, port, FtpDataProtocol);
+	return true;
 }
 
 // Close FTP data port and purge associated resources

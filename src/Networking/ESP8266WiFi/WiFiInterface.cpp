@@ -1732,7 +1732,7 @@ void WiFiInterface::UpdateSocketStatus(uint16_t connectedSockets, uint16_t other
 }
 
 // Open the FTP data port
-void WiFiInterface::OpenDataPort(TcpPort port, bool useTls) noexcept
+bool WiFiInterface::OpenDataPort(TcpPort port, bool useTls) noexcept
 {
 	UNUSED(useTls);
 	for (WiFiSocket *s : sockets)
@@ -1747,6 +1747,7 @@ void WiFiInterface::OpenDataPort(TcpPort port, bool useTls) noexcept
 
 	ftpDataPort = port;
 	SendListenCommand(ftpDataPort, FtpDataProtocol, 1);
+	return true;
 }
 
 // Close FTP data port and purge associated resources

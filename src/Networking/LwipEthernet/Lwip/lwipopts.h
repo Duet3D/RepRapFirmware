@@ -134,7 +134,7 @@
  */
 #if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
 # ifdef MBEDTLS_CONFIG_FILE
-#define MEM_SIZE                		49152    // 48KiB - LwIP shares its heap with MbedTls
+#define MEM_SIZE                		65536    // 64KiB - LwIP shares its heap with MbedTls
 # else
 #define MEM_SIZE                		16384
 # endif
@@ -164,10 +164,11 @@
  *
  * When TLS is enabled, each TLS endpoint can consume more than one ALTCP PCB
  * (wrapper + inner TCP layer), so this must be larger than MEMP_NUM_TCP_PCB
- * to avoid allocation failures when opening FTPS data ports.
+ * to avoid allocation failures when opening FTPS data ports. This has a direct
+ * impact on LwIP heap memory if TLS is used
  */
 #if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
-# define MEMP_NUM_ALTCP_PCB			16
+# define MEMP_NUM_ALTCP_PCB			20
 #else
 # define MEMP_NUM_ALTCP_PCB			10
 #endif
@@ -364,6 +365,7 @@ extern uint32_t random32(void) noexcept;
  * LWIP_STATS==1: Enable statistics collection in lwip_stats.
  */
 #define LWIP_STATS                        1
+
 
 /**
  * LWIP_STATS_DISPLAY==1: Compile in the statistics output functions.

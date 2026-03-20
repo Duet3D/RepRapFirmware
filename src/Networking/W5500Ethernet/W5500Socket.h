@@ -22,6 +22,7 @@ public:
 	bool UsingTls() const noexcept override { return false; }
 	void Poll() noexcept override;
 	void Close() noexcept override;
+	bool IsClosing() const noexcept override { return (state == SocketState::closing); };
 	void Terminate() noexcept override;
 	void TerminateAndDisable() noexcept override;
 	bool ReadChar(char& c) noexcept override;

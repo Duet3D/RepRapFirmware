@@ -76,7 +76,6 @@ static err_t conn_sent(void *arg, altcp_pcb *pcb, u16_t len)
 }
 
 }	// end extern "C"
-
 //***************************************************************************************************
 
 // LwipSocket class
@@ -85,7 +84,7 @@ LwipSocket::LwipSocket(NetworkInterface *iface) noexcept : Socket(iface), connec
 #if LWIP_ALTCP_TLS
 		localTlsPort(0),
 #endif
-		receivedData(nullptr), state(SocketState::disabled)
+		receivedData(nullptr), state(SocketState::disabled), txShutdownRequested(false)
 {
 	ReInit();
 }
@@ -182,11 +181,21 @@ void LwipSocket::ConnectionClosedGracefully() noexcept
 		altcp_err(connectionPcb, nullptr);
 		altcp_recv(connectionPcb, nullptr);
 		altcp_sent(connectionPcb, nullptr);
-		altcp_close(connectionPcb);
-		connectionPcb = nullptr;
+		err_t err = altcp_close(connectionPcb);
+		if (err == ERR_OK)
+		{
+			connectionPcb = nullptr;
+		}
+		else if (ERR_IS_FATAL(err))
+		{
+			altcp_abort(connectionPcb);
+			connectionPcb = nullptr;
+			state = SocketState::aborted;
+			return;
+		}
 	}
 
-	if (state == SocketState::closing && !outgoing)
+	if (connectionPcb == nullptr && state == SocketState::closing && !outgoing)
 	{
 		state = SocketState::listening;
 	}
@@ -199,14 +208,20 @@ void LwipSocket::ConnectionClosedGracefully() noexcept
 
 void LwipSocket::ConnectionError(err_t err) noexcept
 {
+	if (reprap.Debug(Module::Network))
+	{
+		debugPrintf("LWIP socket error: proto=%d lport=%u rport=%u state=%d err=%d\n", (int)protocol, localPort, remotePort, (int)state, (int)err);
+	}
+
 	DiscardReceivedData();
 	connectionPcb = nullptr;
+	txShutdownRequested = false;
 
+	// For server sockets, always return to listening after an error so new
+	// inbound connections are not rejected in conn_accept.
 	state = (localPort == 0 || outgoing)
 				? SocketState::disabled
-				: (responderFound && state != SocketState::closing)
-				  	? SocketState::aborted
-				  	: SocketState::listening;
+				: SocketState::listening;
 }
 
 // Initialise a TCP socket
@@ -245,6 +260,7 @@ void LwipSocket::ReInit() noexcept
 	whenConnected = whenWritten = whenClosed = 0;
 	responderFound = false;
 	readIndex = unAcked = 0;
+	txShutdownRequested = false;
 }
 
 // Close a connection when the last packet has been sent
@@ -269,6 +285,11 @@ void LwipSocket::Terminate() noexcept
 {
 	if (state != SocketState::disabled)
 	{
+		if (reprap.Debug(Module::Network))
+		{
+			debugPrintf("LWIP socket terminate: proto=%d lport=%u rport=%u state=%d\n", (int)protocol, localPort, remotePort, (int)state);
+		}
+
 		MutexLocker lock(lwipMutex);
 		if (connectionPcb != nullptr)
 		{
@@ -303,7 +324,6 @@ pbuf *LwipSocket::GetNextReceivedPbuf() noexcept
 	pbuf *rdata;
 	while ((rdata = receivedData) != nullptr && rdata->len == 0)
 	{
-		debugPrintf("Discarding empty pbuf\n");
 		MutexLocker lock(lwipMutex);
 		receivedData = rdata->next;
 		rdata->next = nullptr;
@@ -406,6 +426,10 @@ void LwipSocket::Poll() noexcept
 		// Check for connection attempt timeout
 		if (millis() - whenConnecting >= ConnectTimeout)
 		{
+			if (reprap.Debug(Module::Network))
+			{
+				debugPrintf("LWIP connect timeout: proto=%d rport=%u\n", (int)protocol, remotePort);
+			}
 			Terminate();
 		}
 		break;
@@ -420,6 +444,10 @@ void LwipSocket::Poll() noexcept
 			// Are we still waiting for data to be written?
 			if (whenWritten != 0 && millis() - whenWritten >= MaxWriteTime)
 			{
+				if (reprap.Debug(Module::Network))
+				{
+					debugPrintf("LWIP write timeout: proto=%d lport=%u rport=%u\n", (int)protocol, localPort, remotePort);
+				}
 				Terminate();
 			}
 		}
@@ -432,6 +460,10 @@ void LwipSocket::Poll() noexcept
 			}
 			else if (millis() - whenConnected >= FindResponderTimeout)
 			{
+				if (reprap.Debug(Module::Network))
+				{
+					debugPrintf("LWIP responder timeout: proto=%d lport=%u rport=%u\n", (int)protocol, localPort, remotePort);
+				}
 				Terminate();
 			}
 		}
@@ -440,35 +472,104 @@ void LwipSocket::Poll() noexcept
 	case SocketState::peerDisconnecting:
 	case SocketState::closing:
 	{
-		// The connection is being closed, but we may be waiting for sent data to be ACKed
-		// or for the received data to be processed by a NetworkResponder
-		bool timeoutExceeded = millis() - whenClosed > MaxAckTime;
-		if (unAcked == 0 || timeoutExceeded)
+		// The connection is being closed. First half-close TX, then wait for peer FIN before full close.
+		const bool isTlsConnection = (connectionPcb != nullptr)
+#if LWIP_ALTCP_TLS
+			&& (localTlsPort != 0)
+			&& (altcp_get_port(connectionPcb, 1) == localTlsPort)
+#endif
+			;
+		const uint32_t closeTimeout = isTlsConnection ? (MaxAckTime * 8u) : MaxAckTime;
+		const bool timeoutExceeded = millis() - whenClosed > closeTimeout;
+
+		if (connectionPcb != nullptr && state == SocketState::closing && !txShutdownRequested)
 		{
-			if (connectionPcb != nullptr)
+			if (isTlsConnection)
 			{
-				altcp_err(connectionPcb, nullptr);
-				altcp_recv(connectionPcb, nullptr);
-				altcp_sent(connectionPcb, nullptr);
-				if (unAcked == 0)
+				// For TLS sockets, avoid TCP half-close because it bypasses TLS close_notify
+				txShutdownRequested = true;
+			}
+			else
+			{
+				const err_t err = altcp_shutdown(connectionPcb, 0, 1);
+				if (err == ERR_OK || err == ERR_CONN)
 				{
-					altcp_close(connectionPcb);
+					txShutdownRequested = true;
+				}
+				else if (timeoutExceeded)
+				{
+					if (!isTlsConnection)
+					{
+						if (reprap.Debug(Module::Network))
+						{
+							debugPrintf("LWIP closing timeout abort: proto=%d lport=%u rport=%u unacked=%u\n", (int)protocol, localPort, remotePort, (unsigned int)unAcked);
+						}
+						altcp_err(connectionPcb, nullptr);
+						altcp_recv(connectionPcb, nullptr);
+						altcp_sent(connectionPcb, nullptr);
+						altcp_abort(connectionPcb);
+						connectionPcb = nullptr;
+					}
+				}
+			}
+		}
+
+		const bool canFinalize = timeoutExceeded
+			|| (state == SocketState::peerDisconnecting && unAcked == 0)
+			|| (isTlsConnection && state == SocketState::closing && unAcked == 0);
+		if (canFinalize && connectionPcb != nullptr)
+		{
+			altcp_err(connectionPcb, nullptr);
+			altcp_recv(connectionPcb, nullptr);
+			altcp_sent(connectionPcb, nullptr);
+			if (!timeoutExceeded)
+			{
+				const err_t closeErr = altcp_close(connectionPcb);
+				if (closeErr == ERR_OK)
+				{
+					connectionPcb = nullptr;
+				}
+				// If close cannot complete yet (e.g. ERR_INPROGRESS), keep the PCB and retry next poll
+			}
+			else
+			{
+				if (!isTlsConnection)
+				{
+					if (reprap.Debug(Module::Network))
+					{
+						debugPrintf("LWIP close timeout abort: proto=%d lport=%u rport=%u unacked=%u\n", (int)protocol, localPort, remotePort, (unsigned int)unAcked);
+					}
+					altcp_abort(connectionPcb);
+					connectionPcb = nullptr;
 				}
 				else
 				{
-					altcp_abort(connectionPcb);
+					const err_t closeErr = altcp_close(connectionPcb);
+					if (closeErr == ERR_OK)
+					{
+						connectionPcb = nullptr;
+					}
 				}
-				connectionPcb = nullptr;
 			}
+		}
 
-			if (receivedData == nullptr || timeoutExceeded)
+		if (connectionPcb == nullptr)
+		{
+			if (receivedData == nullptr || timeoutExceeded || !outgoing)
 			{
+				// For incoming sockets, once the PCB is gone the transaction is over.
+				// Drop any stale buffered data and return to listening immediately
 				DiscardReceivedData();
 				state = (localPort == 0 || outgoing) ? SocketState::disabled : SocketState::listening;
 			}
 		}
 		break;
 	}
+
+	case SocketState::aborted:
+		// Keep aborted as a transient state only; recycle passive sockets
+		state = (localPort == 0 || outgoing) ? SocketState::disabled : SocketState::listening;
+		break;
 
 	default:
 		// Nothing to do

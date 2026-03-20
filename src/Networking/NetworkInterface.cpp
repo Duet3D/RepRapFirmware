@@ -72,10 +72,6 @@ GCodeResult NetworkInterface::EnableProtocol(NetworkProtocol protocol, int port,
 			tlsPortNumbers[protocol] = newTlsPort;
 			if (!tlsProtocolEnabled[protocol])
 			{
-				if (!LoadTlsCertificates(reply))
-				{
-					return GCodeResult::error;
-				}
 				tlsProtocolEnabled[protocol] = true;
 				if (GetState() == NetworkState::active)
 				{

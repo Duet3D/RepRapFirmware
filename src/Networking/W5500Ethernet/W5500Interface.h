@@ -55,7 +55,7 @@ public:
 	GCodeResult SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept override;
 	const MacAddress& GetMacAddress() const noexcept override { return macAddress; }
 
-	void OpenDataPort(TcpPort port, bool useTls = false) noexcept override;
+	bool OpenDataPort(TcpPort port, bool useTls = false) noexcept override;
 	void TerminateDataPort() noexcept override;
 
 protected:

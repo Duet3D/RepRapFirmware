@@ -70,7 +70,7 @@ public:
 	// LwIP interfaces
 	bool ConnectionEstablished(altcp_pcb *pcb) noexcept;
 
-	void OpenDataPort(TcpPort port, bool useTls = false) noexcept override;
+	bool OpenDataPort(TcpPort port, bool useTls = false) noexcept override;
 	void TerminateDataPort() noexcept override;
 
 protected:
@@ -103,9 +103,9 @@ private:
 
 #if LWIP_ALTCP_TLS
 	bool SupportsTls() const noexcept override { return true; }
-	bool LoadTlsCertificates(const StringRef& reply) noexcept override;
-	void FreeTlsConfig() noexcept;
 	uint8_t *ReadPemFile(const char *filename, size_t& len) noexcept;
+	bool LoadTlsCertificates() noexcept override;
+	void FreeTlsConfig() noexcept;
 #endif
 
 	Platform& platform;

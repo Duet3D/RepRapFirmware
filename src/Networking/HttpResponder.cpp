@@ -1014,18 +1014,8 @@ void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWeb
 	}
 
 	outBuf->catf("Content-Length: %lu\r\n", fileToSend->Length());
-
-	// Keep the connection alive only on TLS connections if the client requests it
-	const char *const _ecv_array null connHdr = GetHeaderValue("Connection");
-	const bool keepOpen = skt->UsingTls() && (connHdr != nullptr && StringEqualsIgnoreCase(connHdr, "keep-alive"));
-	outBuf->catf("Connection: %s\r\n\r\n", keepOpen ? "keep-alive" : "close");
-
-	if (keepOpen)
-	{
-		ResetParser();
-		timer = millis();
-	}
-	Commit(keepOpen ? ResponderState::reading : ResponderState::free, false);
+	outBuf->cat("Connection: close\r\n\r\n");
+	Commit();
 #else
 	RejectMessage("file not found", 404);
 #endif

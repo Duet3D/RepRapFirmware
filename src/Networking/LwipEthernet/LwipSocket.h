@@ -43,7 +43,7 @@ public:
 	void TerminateAndDisable() noexcept override;
 	void Poll() noexcept override;
 	void Close() noexcept override;
-	bool IsClosing() const noexcept { return (state == SocketState::closing); }
+	bool IsClosing() const noexcept override { return (state == SocketState::closing) || (state == SocketState::peerDisconnecting); }
 	void Terminate() noexcept override;
 	bool ReadChar(char& c) noexcept override;
 	bool ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept override;
@@ -87,6 +87,7 @@ private:
 
 	SocketState state;
 	size_t unAcked;
+	bool txShutdownRequested;
 };
 
 #endif	// HAS_LWIP_NETWORKING

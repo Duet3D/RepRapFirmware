@@ -38,11 +38,8 @@ public:
 
 	virtual void UpdateHostname(const char *_ecv_array hostname) noexcept = 0;
 
-	virtual void OpenDataPort(TcpPort port, bool useTls = false) noexcept = 0;
+	virtual bool OpenDataPort(TcpPort port, bool useTls = false) noexcept = 0;
 	virtual void TerminateDataPort() noexcept = 0;
-
-	virtual bool SupportsTls() const noexcept { return false; }
-	virtual bool LoadTlsCertificates(const StringRef& reply) noexcept { reply.copy("TLS not supported by this interface"); return false; }
 
 	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept;
 	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown = true) noexcept;
@@ -53,6 +50,9 @@ public:
 	Mutex interfaceMutex;										// mutex to protect against multiple tasks using the same interface concurrently. Public so that sockets can lock it.
 
 protected:
+	virtual bool SupportsTls() const noexcept { return false; }
+	virtual bool LoadTlsCertificates() noexcept { return false; }
+
 	// Disable a network protocol that is enabled. If 'permanent' is true we will leave this protocol disables, otherwise we are about to re-enable it with different parameters.
 	virtual void IfaceShutdownProtocol(NetworkProtocol protocol, bool permanent) noexcept
 		pre(protocol < NumSelectableProtocols; GetState() == NetworkState::active)

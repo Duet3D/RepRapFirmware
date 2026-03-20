@@ -17,9 +17,10 @@
 #include <Platform/TaskPriorities.h>
 
 #if HAS_NETWORKING
-#include "NetworkClient.h"
-#include "NetworkBuffer.h"
-#include "NetworkInterface.h"
+# include "NetworkClient.h"
+# include "NetworkBuffer.h"
+# include "NetworkInterface.h"
+# include "Socket.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 #if HAS_LWIP_NETWORKING
@@ -924,6 +925,11 @@ bool Network::FindResponder(Socket *_ecv_from skt, NetworkProtocol protocol) noe
 		{
 			return true;
 		}
+	}
+
+	if (reprap.Debug(Module::Network))
+	{
+		debugPrintf("No responder accepted: proto=%d lport=%u rport=%u\n", (int)protocol, skt->GetLocalPort(), skt->GetRemotePort());
 	}
 #endif
 	return false;
