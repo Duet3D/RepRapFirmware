@@ -45,7 +45,7 @@ export DEBUG_FLAGS
 .DEFAULT_GOAL := help
 
 # Available build configurations
-CONFIGS := Duet3_MB6HC Duet3_MB6XD Duet3_CAN0 Duet3Mini5plus Duet3_MB6HC_no_SD PCCB_10 FMDC_V03
+CONFIGS := Duet3_MB6HC Duet3_MB6XD Duet3_CAN0 Duet3Mini5plus Duet3_MB6HC_no_SD FMDC_V03
 
 # Print available targets
 .PHONY: help
@@ -59,7 +59,6 @@ help:
 	$(Q)echo "  Duet3_MB6XD         - Duet 3 MB6XD expansion (SAME70)"
 	$(Q)echo "  Duet3_CAN0          - Duet 3 CAN expansion (SAME70)"
 	$(Q)echo "  Duet3Mini5plus      - Duet 3 Mini 5+ (SAME51)"
-	$(Q)echo "  PCCB_10             - PCCB version 1.0"
 	$(Q)echo "  FMDC_V03            - FMDC version 0.3"
 	$(Q)echo "  Duet3_MB6HC_no_SD   - Duet 3 MB6HC without SD card support"
 	$(Q)echo ""
@@ -201,7 +200,6 @@ $(WORKSPACE)/CANlib/SAM4S_RTOS/libCANlib.a:
 -include Makefiles/Duet3_MB6XD.mk
 -include Makefiles/Duet3_CAN0.mk
 -include Makefiles/Duet3Mini5plus.mk
--include Makefiles/PCCB_10.mk
 -include Makefiles/FMDC_V03.mk
 -include Makefiles/Duet3_MB6HC_no_SD.mk
 
