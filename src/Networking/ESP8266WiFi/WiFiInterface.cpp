@@ -182,25 +182,6 @@ static bool spi_dma_check_rx_complete() noexcept;
 AsyncSerial *serialWiFiDevice;
 # define SERIAL_WIFI_DEVICE	(*serialWiFiDevice)
 
-# if !defined(SERIAL_WIFI_ISR0) || !defined(SERIAL_WIFI_ISR2) || !defined(SERIAL_WIFI_ISR3)
-#  error SERIAL_WIFI_ISRn not defined
-# endif
-
-void SERIAL_WIFI_ISR0() noexcept
-{
-	serialWiFiDevice->Interrupt0();
-}
-
-void SERIAL_WIFI_ISR2() noexcept
-{
-	serialWiFiDevice->Interrupt2();
-}
-
-void SERIAL_WIFI_ISR3() noexcept
-{
-	serialWiFiDevice->Interrupt3();
-}
-
 #else
 
 #define SERIAL_WIFI_DEVICE	(serialWiFi)
@@ -320,6 +301,7 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 	actualSsid.copy("(unknown)");
 	wiFiServerVersion.copy("(unknown)");
 
+	// Set up the UART that is used to program the WiFi module and extract status information
 #ifdef DUET3MINI
 	serialWiFiDevice = new AsyncSerial(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512, SerialWiFiPortInit, SerialWiFiPortDeinit);
 	serialWiFiDevice->setInterruptPriority(NvicPriorityWiFiUartRx, NvicPriorityWiFiUartTx);
@@ -2107,6 +2089,7 @@ void WiFiInterface::SetupSpi() noexcept
 #if SAME5x
 	WiFiSpiSercom->SPI.INTENCLR.reg = 0xFF;		// disable all interrupts
 	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;		// clear any pending interrupts
+	Serial::SetSercomVector(WiFiSpiSercomNumber, nullptr, CommonSpiInterrupt, nullptr, nullptr, this);
 #else
 	(void)ESP_SPI->SPI_SR;						// clear any pending interrupt
 	ESP_SPI->SPI_IDR = SPI_IER_NSSR;			// disable the interrupt
@@ -2405,6 +2388,15 @@ void WiFiInterface::GetNewStatus() noexcept
 	}
 }
 
+#if SAME5x
+
+/*static*/ void WiFiInterface::CommonSpiInterrupt(void *param) noexcept
+{
+	((WiFiInterface*)param)->SpiInterrupt();
+}
+
+#else
+
 # ifndef ESP_SPI_HANDLER
 #  error ESP_SPI_HANDLER not defined
 # endif
@@ -2415,7 +2407,9 @@ void ESP_SPI_HANDLER() noexcept
 	wifiInterface->SpiInterrupt();
 }
 
-void WiFiInterface::SpiInterrupt() noexcept
+#endif
+
+inline void WiFiInterface::SpiInterrupt() noexcept
 {
 #if SAME5x
 	const uint8_t status = WiFiSpiSercom->SPI.INTFLAG.reg;

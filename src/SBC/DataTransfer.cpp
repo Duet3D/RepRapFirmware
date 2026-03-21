@@ -350,12 +350,15 @@ pre(bytesToTransfer <= inBuffer.limit; bytesToTransfer <= outBuffer.limit)
 	digitalWrite(SbcTfrReadyPin, transferReadyHigh);
 }
 
-
+#if SAME5x
+void SbcSpiHandler(void*) noexcept
+#else
 #ifndef SBC_SPI_HANDLER
 # error SBC_SPI_HANDLER undefined
 #endif
 
 extern "C" void SBC_SPI_HANDLER() noexcept
+#endif
 {
 #if SAME5x
 	const uint8_t status = SbcSpiSercom->SPI.INTFLAG.reg;
@@ -479,6 +482,7 @@ void DataTransfer::Init() noexcept
 	SbcSpiSercom->SPI.CTRLB.reg = SERCOM_SPI_CTRLB_RXEN | SERCOM_SPI_CTRLB_SSDE | SERCOM_SPI_CTRLB_PLOADEN;
 	while (SbcSpiSercom->SPI.SYNCBUSY.reg & SERCOM_SPI_SYNCBUSY_MASK) { };
 	SbcSpiSercom->SPI.CTRLC.reg = SERCOM_SPI_CTRLC_DATA32B;
+	Serial::SetSercomVector(SbcSpiSercomNumber, nullptr, SbcSpiHandler, nullptr, nullptr, nullptr);
 #else
 	// Initialize SPI
 	SetPinFunction(APIN_SBC_SPI_MOSI, SBCPinPeriphMode);

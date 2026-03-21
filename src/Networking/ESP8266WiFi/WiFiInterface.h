@@ -87,9 +87,12 @@ public:
 	void ResetWiFiForUpload(bool external) noexcept;
 	const char *_ecv_array GetWiFiServerVersion() const noexcept { return wiFiServerVersion.c_str(); }
 	static const char *_ecv_array TranslateWiFiState(WiFiState w) noexcept;
-	void SpiInterrupt() noexcept;
 	void EspRequestsTransfer() noexcept;
 	void UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClosedSockets, int8_t p_rssi) noexcept;
+
+#if !SAME5x
+	void SpiInterrupt() noexcept;
+#endif
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -109,6 +112,11 @@ private:
 #if HAS_CLIENTS
 	void ConnectProtocol(NetworkProtocol protocol) noexcept
 		pre(protocol < NumSelectableProtocols);
+#endif
+
+#if SAME5x
+	void SpiInterrupt() noexcept;
+	static void CommonSpiInterrupt(void* param) noexcept;
 #endif
 
 	NetworkProtocol GetProtocolByLocalPort(TcpPort port) const noexcept;
