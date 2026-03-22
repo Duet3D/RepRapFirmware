@@ -1,6 +1,6 @@
 # HTTPS / TLS Setup for RepRapFirmware
 
-RRF supports TLS-encrypted protocols on boards with an Ethernet interface (e.g. Duet 3 MB6HC, MB6XD). All three selectable TCP protocols can be secured with TLS:
+RRF supports TLS-encrypted protocols on boards with an Ethernet interface (e.g. Duet 3 MB6HC, MB6XD, Mini 5+). All three selectable TCP protocols can be secured with TLS:
 
 | Protocol | Default port | Plain command | TLS variant | Default TLS port |
 |----------|-------------|--------------|------------|------------------|
@@ -188,4 +188,16 @@ Or double-click `server.crt` → **Install Certificate** → **Local Machine** �
 - RRF uses **mbedTLS** via lwIP's `altcp_tls` layer.
 - Only PEM-encoded keys and certificates are supported. DER-encoded files will not work.
 - The private key must **not** be password-protected (no passphrase).
-- RSA keys work but are significantly slower on Cortex-M7 targets; EC P-256 is strongly preferred.
+- RSA keys work but are significantly slower on Cortex-M targets; EC P-256 is strongly preferred.
+
+### Cipher suite and curve requirements
+
+- **Duet 3 Mini 5+ (SAME5x):** Only the `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256` cipher suite is supported. The server certificate **must** use an EC P-256 key (secp256r1 / prime256v1). P-384 keys and AES-256 cipher suites are not supported.
+- **Duet 3 MB6HC / MB6XD (SAME70):** Both `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256` and `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384` are supported. P-256 and P-384 keys are both accepted.
+- All modern browsers and TLS clients support P-256 and AES-128-GCM-SHA256.
+
+### Performance
+
+The TLS handshake involves computationally expensive elliptic-curve operations. Expect the first connection to take approximately 250–350 ms on the Mini 5+ (Cortex-M4 @ 120 MHz) and approximately 100–170 ms on the MB6HC (Cortex-M7 @ 300 MHz). Subsequent connections from the same client may be faster if the session cache is used (up to 2 cached sessions on Mini 5+, 4 on MB6HC).
+
+AES-GCM record encryption and decryption uses the hardware AES peripheral and adds negligible overhead to data transfers.

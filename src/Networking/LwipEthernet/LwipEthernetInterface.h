@@ -20,7 +20,13 @@ extern "C" {
 }
 
 // We have 8 sockets available for Ethernet
-const size_t NumHttpSockets = 5;				// sockets 0-4 are for HTTP
+const size_t NumHttpSockets = 5;					// sockets 0-4 are for HTTP
+#if SAME70
+const size_t NumTlsHttpSockets = NumHttpSockets;	// SAME70 has enough RAM for TLS on all HTTP sockets
+#else
+const size_t NumTlsHttpSockets = 3;					// Reduce number of concurrent HTTPS sessions to save RAM
+#endif
+
 const SocketNumber FtpSocketNumber = 5;
 const SocketNumber FtpDataSocketNumber = 6;
 const SocketNumber TelnetSocketNumber = 7;

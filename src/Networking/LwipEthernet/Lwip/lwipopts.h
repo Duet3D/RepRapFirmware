@@ -91,14 +91,18 @@
 */
 
 #ifdef MBEDTLS_CONFIG_FILE
-#define LWIP_ALTCP                  1
-#define LWIP_ALTCP_TLS              1
-#define LWIP_ALTCP_TLS_MBEDTLS      1
-#define ALTCP_MBEDTLS_USE_SESSION_CACHE   1
-#define ALTCP_MBEDTLS_SESSION_CACHE_SIZE  4
+# define LWIP_ALTCP              1
+# define LWIP_ALTCP_TLS          1
+# define LWIP_ALTCP_TLS_MBEDTLS  1
+# define ALTCP_MBEDTLS_USE_SESSION_CACHE   1
+# if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
+#  define ALTCP_MBEDTLS_SESSION_CACHE_SIZE  4
+# else
+#  define ALTCP_MBEDTLS_SESSION_CACHE_SIZE  2	// must match MBEDTLS_SSL_CACHE_DEFAULT_MAX_ENTRIES
+# endif
 #else
-#define LWIP_ALTCP                  0
-#define LWIP_ALTCP_TLS              0
+# define LWIP_ALTCP              0
+# define LWIP_ALTCP_TLS          0
 #endif
 
 /* Uncomment following line to use DHCP instead of fixed IP */
@@ -139,7 +143,11 @@
 #define MEM_SIZE                		16384
 # endif
 #else
+#ifdef MBEDTLS_CONFIG_FILE
+#define MEM_SIZE                	   36864    // 36KiB - LwIP shares its heap with MbedTls
+# else
 #define MEM_SIZE                		14848
+# endif
 #endif
 
 /**
@@ -156,7 +164,7 @@
 #if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
 # define MEMP_NUM_TCP_PCB				10
 #else
-# define MEMP_NUM_TCP_PCB				8
+# define MEMP_NUM_TCP_PCB				9
 #endif
 
 /**
@@ -167,10 +175,10 @@
  * to avoid allocation failures when opening FTPS data ports. This has a direct
  * impact on LwIP heap memory if TLS is used
  */
-#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
-# define MEMP_NUM_ALTCP_PCB			20
+#ifdef MBEDTLS_CONFIG_FILE
+# define MEMP_NUM_ALTCP_PCB			(MEMP_NUM_TCP_PCB * 2)
 #else
-# define MEMP_NUM_ALTCP_PCB			10
+# define MEMP_NUM_ALTCP_PCB			MEMP_NUM_TCP_PCB
 #endif
 
 /**

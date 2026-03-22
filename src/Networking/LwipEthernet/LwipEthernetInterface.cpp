@@ -134,7 +134,13 @@ const char * const MdnsTlsServiceStrings[NumSelectableProtocols] =
 
 const char * const MdnsTxtRecords[2] = { "product=" FIRMWARE_NAME, "version=" VERSION };
 constexpr unsigned int MdnsTtl = 10 * 60;			// same value as on the Duet 0.6/0.8.5
+
 constexpr uint8_t ListenBacklog = 8;
+#if SAME70
+constexpr uint8_t TlsListenBacklog = 2;				// We have more RAM on SAME70 for backlogged incoming TLS connections
+#else
+constexpr uint8_t TlsListenBacklog = 0;				// Don't use backlog for incoming TLS connections to keep RAM usage low
+#endif
 
 /*-----------------------------------------------------------------------------------*/
 
@@ -457,7 +463,7 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 			}
 			else
 			{
-				altcp_pcb *const listeningPcb = altcp_listen_with_backlog(pcb, ListenBacklog);
+				altcp_pcb *const listeningPcb = altcp_listen_with_backlog(pcb, TlsListenBacklog);
 				if (listeningPcb == nullptr)
 				{
 					platform.Message(ErrorMessage, "tcp_listen call for TLS failed\n");
@@ -482,14 +488,14 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 			{
 				sockets[skt]->Init(skt, portNumbers[protocol], protocol);
 #if LWIP_ALTCP_TLS
-				if (tlsProtocolEnabled[protocol])
+				if (tlsProtocolEnabled[protocol] && skt < NumTlsHttpSockets)
 				{
 					sockets[skt]->InitTls(tlsPortNumbers[protocol]);
 				}
 #endif
 			}
 #if LWIP_ALTCP_TLS
-			else if (tlsProtocolEnabled[protocol])
+			else if (tlsProtocolEnabled[protocol] && skt < NumTlsHttpSockets)
 			{
 				sockets[skt]->Init(skt, tlsPortNumbers[protocol], protocol);
 				sockets[skt]->InitTls(tlsPortNumbers[protocol]);
