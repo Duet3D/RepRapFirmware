@@ -138,7 +138,7 @@
  */
 #if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
 # ifdef MBEDTLS_CONFIG_FILE
-#define MEM_SIZE                		65536    // 64KiB - LwIP shares its heap with MbedTls
+#define MEM_SIZE                		43008    // 42KiB - LwIP shares its heap with MbedTls
 # else
 #define MEM_SIZE                		16384
 # endif
