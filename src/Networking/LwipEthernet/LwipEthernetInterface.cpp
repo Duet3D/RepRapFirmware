@@ -137,9 +137,9 @@ constexpr unsigned int MdnsTtl = 10 * 60;			// same value as on the Duet 0.6/0.8
 
 constexpr uint8_t ListenBacklog = 8;
 #if SAME70
-constexpr uint8_t TlsListenBacklog = 2;				// We have more RAM on SAME70 for backlogged incoming TLS connections
+constexpr uint8_t TlsListenBacklog = 4;				// Limit backlog for incoming TLS connections to reduce RAM usage
 #else
-constexpr uint8_t TlsListenBacklog = 0;				// Don't use backlog for incoming TLS connections to keep RAM usage low
+constexpr uint8_t TlsListenBacklog = 2;
 #endif
 
 /*-----------------------------------------------------------------------------------*/
