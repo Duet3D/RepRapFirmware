@@ -103,7 +103,7 @@ private:
 	pre(protocol < NumSelectableProtocols);
 
 #if LWIP_ALTCP_TLS
-	bool SupportsTls() const noexcept override { return true; }
+	bool SupportsTls() const noexcept override { return tlsConfig != nullptr; }
 	uint8_t *ReadPemFile(const char *filename, size_t& len) noexcept;
 	bool LoadTlsCertificates(const StringRef& reply) noexcept override;
 	void FreeTlsConfig() noexcept;
