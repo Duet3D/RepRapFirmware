@@ -1857,7 +1857,7 @@ void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 	}
 #endif
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	if (platform->IsChanEnabled(FirstAuxChannel) && !platform->IsChanRaw(FirstAuxChannel))
 	{
 		platform->PanelDueBeep(freq, ms);
@@ -1883,7 +1883,7 @@ void RepRap::SetMessage(c_string msg) noexcept
 #endif
 	StateUpdated();
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	if (platform->IsChanEnabled(FirstAuxChannel) && !platform->IsChanRaw(FirstAuxChannel))
 	{
 		platform->SendPanelDueMessage(FirstAuxChannel, msg);
@@ -2121,10 +2121,10 @@ void RepRap::PrepareToLoadIap() noexcept
 	{
 		if (*p != 0x7E)
 		{
-			SERIAL_AUX_DEVICE.printf("At %08" PRIx32 ": %02x\n", reinterpret_cast<uint32_t>(p), *p);
+			asyncPorts[0]->printf("At %08" PRIx32 ": %02x\n", reinterpret_cast<uint32_t>(p), *p);
 		}
 	}
-	SERIAL_AUX_DEVICE.printf("Scan complete\n");
+	asyncPorts[0]->printf("Scan complete\n");
 	delay(1000);							// give it time to send the message
 #endif
 }

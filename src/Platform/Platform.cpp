@@ -345,9 +345,6 @@ Platform::Platform() noexcept :
 	nextDriveToPoll(0),
 	beepTicksToGo(0),
 	lastFanCheckTime(0),
-#if SUPPORT_PANELDUE_FLASH
-	panelDueUpdater(nullptr),
-#endif
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	sysFolder(DEFAULT_SYS_DIR), webFolder(DEFAULT_WEB_DIR),
 #endif
@@ -362,6 +359,13 @@ Platform::Platform() noexcept :
 #endif
 	powerDownWhenFansStop(false), delayedPowerDown(false)
 {
+	// The GCodes constructor calls GetAsyncPort and stored the port address in the GCodeInput object, so we need to initialise the async ports here
+#if NUM_ASYNC_PORTS != 0
+	asyncPorts[0] = new AsyncSerial(Serial0Params);
+#endif
+#if NUM_ASYNC_PORTS > 1
+	asyncPorts[1] = new AsyncSerial(Serial1Params);
+#endif
 }
 
 static RingBuffer<char> isrDebugBuffer;
@@ -458,13 +462,13 @@ void Platform::Init() noexcept
 	usbDevices[1].Init(&SERIAL_USB2_DEVICE, NoPin, "USB2");
 #endif
 
-#if HAS_AUX_DEVICES
-    auxDevices[0].Init(&SERIAL_AUX_DEVICE, AUX_BAUD_RATE);
+#if NUM_ASYNC_CHANNELS != 0
+    auxDevices[0].Init(asyncPorts[0], AUX_BAUD_RATE);
 	commsParams[FirstAuxChannel] = 1;			// by default we require a checksum on data from the aux port, to guard against overrun errors
 #endif
 
-#if defined(SERIAL_AUX2_DEVICE) && !defined(DUET3_ATE)
-    auxDevices[1].Init(&SERIAL_AUX2_DEVICE, AUX2_BAUD_RATE);
+#if NUM_ASYNC_CHANNELS > 1
+    auxDevices[1].Init(asyncPorts[1], AUX2_BAUD_RATE);
 	commsParams[FirstAuxChannel + 1] = 0;
 #endif
 
@@ -691,7 +695,7 @@ void Platform::PanelDueBeep(int freq, int ms) noexcept
 // Send a short message to the aux channel. There is no flow control on this port, so it can't block for long.
 void Platform::SendPanelDueMessage(size_t chan, const char *_ecv_array msg) noexcept
 {
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	if (chan < FirstAuxChannel)
 	{
 		// TODO add PanelDue support via USB(2)
@@ -721,7 +725,7 @@ void Platform::Exit() noexcept
 		dev.Shutdown();
 	}
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	for (AuxDevice& dev : auxDevices)
 	{
 		dev.Disable();
@@ -755,7 +759,7 @@ void Platform::SetNetMask(IPAddress nm) noexcept
 bool Platform::FlushMessages() noexcept
 {
 	bool auxHasMore = false;
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	for (AuxDevice& dev : auxDevices)
 	{
 		if (dev.Flush())
@@ -1360,7 +1364,7 @@ void Platform::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 		// Show the current error codes
 		reply.printf("Error status: 0x%02" PRIx32, errorCodeBits);		// we only use the bottom 5 bits at present, so print just 2 characters
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 		// Show the aux port status
 		for (size_t i = 0; i < ARRAY_SIZE(auxDevices); ++i)
 		{
@@ -2227,7 +2231,7 @@ static constexpr AuxMode auxModes[] =
 AuxMode Platform::GetChannelMode(size_t chan) const noexcept
 {
 	return (chan < FirstAuxChannel) ? auxModes[commsParams[chan] & 7]
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 			: (chan < NumSerialChannels) ? auxDevices[chan - FirstAuxChannel].GetMode()
 #endif
 				: AuxMode::disabled;
@@ -2239,7 +2243,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 	const size_t chan = gb.GetLimitedUIValue('P', NumSerialChannels);
 	GCodeBuffer *_ecv_null const gbp = reprap.GetGCodes().GetSerialGCodeBuffer(chan);
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	// If a baud rate has been provided, just store it for later use
 	const uint32_t baudRate = (gb.Seen('B')) ? gb.GetUIValue() : 0;
 #endif
@@ -2291,7 +2295,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			gbp->Disable();				// disable I/O for this serial channel
 		}
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 		commsParams[chan] = val;		// we limited the value of 'chan' when we fetched it, so no need for a range-check here
 		if (chan >= FirstAuxChannel)
 		{
@@ -2319,7 +2323,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 		}
 		reprap.InputsUpdated();
 	}
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	else if (baudRate != 0)
 	{
 		if (chan >= FirstAuxChannel)
@@ -2347,7 +2351,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			const char *_ecv_array modeString = (mode == AuxMode::device) ? "Device or Modbus RTU"
 												: (IsChanRaw(chan)) ? "raw"
 													: "PanelDue";
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 			if (chan >= FirstAuxChannel)
 			{
 				reply.printf("Channel %u (Aux %u): baud rate %" PRIu32 ", %s mode, ", chan, chan - FirstAuxChannel, GetBaudRate(chan), modeString);
@@ -2391,7 +2395,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 
 bool Platform::IsChanEnabled(size_t chan) const noexcept
 {
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	return chan < FirstAuxChannel || (chan <= ARRAY_SIZE(auxDevices) && auxDevices[chan - FirstAuxChannel].IsEnabledForGCodeIo());
 #else
 	return false;
@@ -2405,7 +2409,7 @@ bool Platform::IsChanRaw(size_t chan) const noexcept
 		return (commsParams[chan] & 0x02) != 0;
 	}
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	return chan > ARRAY_SIZE(auxDevices) || auxDevices[chan - FirstAuxChannel].IsRaw();
 #else
 	return true;
@@ -2515,7 +2519,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 		return GCodeResult::error;
 	}
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	size_t auxChannel = 0;
 	if (gb.GetCommandFraction() > 0)
 	{
@@ -2711,7 +2715,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 		}
 # endif
 
-# if HAS_AUX_DEVICES
+# if NUM_ASYNC_CHANNELS != 0
 	case 2:
 	{
 		uint8_t data[MaxI2cOrModbusValues] = {0};
@@ -2840,7 +2844,7 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 	const uint32_t numValues = gb.GetLimitedUIValue('B', 0, MaxI2cOrModbusValues + 1);
 	Variable *_ecv_null const resultVar = GetResultVariable(gb);
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	size_t auxChannel = 0;
 	if (gb.GetCommandFraction() > 0)
 	{
@@ -2970,7 +2974,7 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 		}
 #endif
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	case 2:		// Uart
 		{
 			uint8_t dataReceived[MaxI2cOrModbusValues];
@@ -3035,7 +3039,7 @@ void Platform::InitPanelDueUpdater() noexcept
 
 void Platform::AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, const char *_ecv_array msg, bool rawMessage) noexcept
 {
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	if (auxNumber < ARRAY_SIZE(auxDevices))
 	{
 		// Don't send anything to PanelDue while we are flashing it
@@ -3050,7 +3054,7 @@ void Platform::AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb,
 
 void Platform::AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *reply, bool rawMessage) noexcept
 {
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	if (auxNumber < ARRAY_SIZE(auxDevices))
 	{
 		// Don't send anything to PanelDue while we are flashing it
@@ -3142,7 +3146,7 @@ void Platform::Message(const GCodeBuffer *_ecv_null gb, MessageType type, Output
 	// Now send the message to all the destinations
 	unsigned int numDestinations = 0;
 	if ((type & (AuxMessage | ImmediateAuxMessage)) != 0)	{ ++numDestinations; }
-#ifdef SERIAL_AUX2_DEVICE
+#if NUM_ASYNC_CHANNELS > 1
 	if ((type & Aux2Message) != 0)							{ ++numDestinations; }
 #endif
 	if ((type & (UsbMessage | BlockingUsbMessage)) != 0)	{ ++numDestinations; }
@@ -3168,7 +3172,7 @@ void Platform::Message(const GCodeBuffer *_ecv_null gb, MessageType type, Output
 			AppendAuxReply(0, gb, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
 
-#ifdef SERIAL_AUX2_DEVICE
+#if NUM_ASYNC_CHANNELS > 1
 		if ((type & Aux2Message) != 0)
 		{
 			AppendAuxReply(1, gb, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
@@ -3508,7 +3512,7 @@ void Platform::AtxPowerOff() noexcept
 
 void Platform::SetBaudRate(size_t chan, uint32_t br) noexcept
 {
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	if (chan >= FirstAuxChannel && chan < NumSerialChannels)
 	{
 		auxDevices[chan - FirstAuxChannel].SetBaudRate(br);
@@ -3519,7 +3523,7 @@ void Platform::SetBaudRate(size_t chan, uint32_t br) noexcept
 uint32_t Platform::GetBaudRate(size_t chan) const noexcept
 {
 	return
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 		(chan >= FirstAuxChannel && chan < NumSerialChannels) ? auxDevices[chan - FirstAuxChannel].GetBaudRate() :
 #endif
 		0;
@@ -3538,7 +3542,7 @@ void Platform::ResetChannel(size_t chan) noexcept
 		usbDevices[1].Reset(NoPin);
 	}
 #endif
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	else if (chan >= FirstAuxChannel && chan < NumSerialChannels)
 	{
 		AuxDevice& device = auxDevices[chan - FirstAuxChannel];

@@ -84,7 +84,7 @@ public:
 	WifiFirmwareUploader *_ecv_null GetWifiUploader() const noexcept { return uploader; }
 	void StartWiFi() noexcept;
 	void ResetWiFi() noexcept;
-	void ResetWiFiForUpload(bool external) noexcept;
+	void ResetWiFiForUpload() noexcept;
 	const char *_ecv_array GetWiFiServerVersion() const noexcept { return wiFiServerVersion.c_str(); }
 	static const char *_ecv_array TranslateWiFiState(WiFiState w) noexcept;
 	void EspRequestsTransfer() noexcept;

@@ -22,6 +22,7 @@
 #include "WifiFirmwareUploader.h"
 #include <General/IP4String.h>
 #include "WiFiSocket.h"
+#include <AsyncSerial.h>
 #include <Cache.h>
 #include <AppNotifyIndices.h>
 
@@ -115,26 +116,6 @@ const uint32_t WiFiStableMillis = 100;
 
 const unsigned int MaxHttpConnections = 4;
 
-#if SAME5x
-
-void SerialWiFiPortInit(AsyncSerial*) noexcept
-{
-	for (Pin p : WiFiUartSercomPins)
-	{
-		SetPinFunction(p, WiFiUartSercomPinsMode);
-	}
-}
-
-void SerialWiFiPortDeinit(AsyncSerial*) noexcept
-{
-	for (Pin p : WiFiUartSercomPins)
-	{
-		SetPinMode(p, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
-	}
-}
-
-#endif
-
 // Static functions
 static inline void DisableSpi() noexcept
 {
@@ -177,22 +158,13 @@ static void spi_dma_disable() noexcept;
 static bool spi_dma_check_rx_complete() noexcept;
 #endif
 
-#ifdef DUET3MINI
-
 AsyncSerial *serialWiFiDevice;
-# define SERIAL_WIFI_DEVICE	(*serialWiFiDevice)
-
-#else
-
-#define SERIAL_WIFI_DEVICE	(serialWiFi)
-
-#endif
 
 static volatile bool transferPending = false;
 static WiFiInterface *wifiInterface;
 
 #if 0
-static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength) noexcept
+static void debugPrintBuffer(const char *_ecv_array msg, void *buf, size_t dataLength) noexcept
 {
 	const size_t MaxDataToPrint = 20;
 	const uint8_t * const data = reinterpret_cast<const uint8_t *>(buf);
@@ -302,11 +274,11 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 	wiFiServerVersion.copy("(unknown)");
 
 	// Set up the UART that is used to program the WiFi module and extract status information
-#ifdef DUET3MINI
-	serialWiFiDevice = new AsyncSerial(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512, SerialWiFiPortInit, SerialWiFiPortDeinit);
+	serialWiFiDevice = new AsyncSerial(SerialWiFiParams);
+#if SAME5x
 	serialWiFiDevice->setInterruptPriority(NvicPriorityWiFiUartRx, NvicPriorityWiFiUartTx);
 #else
-	SERIAL_WIFI_DEVICE.setInterruptPriority(NvicPriorityWiFiUart);
+	serialWiFiDevice->setInterruptPriority(NvicPriorityWiFiUart);
 #endif
 }
 
@@ -477,7 +449,7 @@ void WiFiInterface::Activate() noexcept
 #endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-		uploader = new WifiFirmwareUploader(SERIAL_WIFI_DEVICE, *this);
+		uploader = new WifiFirmwareUploader(*serialWiFiDevice, *this);
 #endif
 		if (requestedMode != WiFiState::disabled)
 		{
@@ -873,9 +845,9 @@ void WiFiInterface::Spin() noexcept
 	// Check for debug info received from the WiFi module
 	if (serialRunning)
 	{
-		while (!debugPrintPending && SERIAL_WIFI_DEVICE.available() != 0)
+		while (!debugPrintPending && serialWiFiDevice->available() != 0)
 		{
-			const char c = (char)SERIAL_WIFI_DEVICE.read();
+			const char c = (char)serialWiFiDevice->read();
 			if (c == '\n')
 			{
 				debugPrintPending = true;
@@ -2465,9 +2437,9 @@ void WiFiInterface::StartWiFi() noexcept
 	digitalWrite(EspEnablePin, true);
 
 #if WIFI_USES_ESP32
-	SERIAL_WIFI_DEVICE.begin(WiFiBaudRate_ESP32);				// initialise the UART, to receive debug info
+	serialWiFiDevice->begin(WiFiBaudRate_ESP32);				// initialise the UART, to receive debug info
 #else
-	SERIAL_WIFI_DEVICE.begin(WiFiBaudRate);						// initialise the UART, to receive debug info
+	serialWiFiDevice->begin(WiFiBaudRate);						// initialise the UART, to receive debug info
 #endif
 	debugMessageChars = 0;
 	serialRunning = true;
@@ -2491,7 +2463,7 @@ void WiFiInterface::ResetWiFi() noexcept
 
 	if (serialRunning)
 	{
-		SERIAL_WIFI_DEVICE.end();
+		serialWiFiDevice->end();
 		serialRunning = false;
 	}
 }
@@ -2502,11 +2474,11 @@ void WiFiInterface::ResetWiFi() noexcept
 // 0		1		0		Firmware download from UART
 // 1		1		0		Normal boot from flash memory
 // 0		0		1		SD card boot (not used in on Duet)
-void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
+void WiFiInterface::ResetWiFiForUpload() noexcept
 {
 	if (serialRunning)
 	{
-		SERIAL_WIFI_DEVICE.end();
+		serialWiFiDevice->end();
 		serialRunning = false;
 	}
 
@@ -2534,21 +2506,6 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 
 	// Make sure it has time to reset - no idea how long it needs, but 50ms should be plenty
 	delay(50);
-
-	if (external)
-	{
-#if !defined(DUET3MINI)
-		SetPinMode(APIN_SerialWiFi_TXD, INPUT_PULLUP);				// just enable pullups on TxD and RxD pins
-		SetPinMode(APIN_SerialWiFi_RXD, INPUT_PULLUP);
-#endif
-	}
-	else
-	{
-#if !SAME5x
-		SetPinFunction(APIN_SerialWiFi_TXD, SerialWiFiPeriphMode);	// connect the pins to the UART
-		SetPinFunction(APIN_SerialWiFi_RXD, SerialWiFiPeriphMode);	// connect the pins to the UART
-#endif
-	}
 
 #if !WIFI_USES_ESP32
 	// Release the reset on the ESP8266

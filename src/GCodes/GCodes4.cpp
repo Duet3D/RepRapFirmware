@@ -18,7 +18,7 @@
 # include <SBC/SbcInterface.h>
 #endif
 
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
+#if HAS_WIFI_NETWORKING || NUM_ASYNC_CHANNELS != 0
 # include <Comms/FirmwareUpdater.h>
 #endif
 
@@ -758,7 +758,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::flashing1:
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
+#if HAS_WIFI_NETWORKING || NUM_ASYNC_CHANNELS != 0
 
 		// Update additional modules before the main firmware
 		if (FirmwareUpdater::IsReady())

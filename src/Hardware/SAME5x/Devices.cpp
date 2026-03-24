@@ -24,52 +24,15 @@
 constexpr size_t AnalogInTaskStackWords = 300;
 static Task<AnalogInTaskStackWords> analogInTask;
 
-#ifdef SERIAL_AUX_DEVICE
-
-// Serial device support
-void Serial0PortInit(AsyncSerial *) noexcept
-{
-	SetPinFunction(Serial0TxPin, Serial0PinFunction);
-	SetPinFunction(Serial0RxPin, Serial0PinFunction);
-}
-
-void Serial0PortDeinit(AsyncSerial *) noexcept
-{
-	SetPinMode(Serial0TxPin, INPUT_PULLUP);
-	SetPinMode(Serial0RxPin, INPUT_PULLUP);
-}
-
-AsyncSerial serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512, Serial0PortInit, Serial0PortDeinit);
-
-#endif
-
-#ifdef SERIAL_AUX2_DEVICE
-
-void Serial1PortInit(AsyncSerial *) noexcept
-{
-	SetPinFunction(Serial1TxPin, Serial1PinFunction);
-	SetPinFunction(Serial1RxPin, Serial1PinFunction);
-}
-
-void Serial1PortDeinit(AsyncSerial *) noexcept
-{
-	SetPinMode(Serial1TxPin, INPUT_PULLUP);
-	SetPinMode(Serial1RxPin, INPUT_PULLUP);
-}
-
-AsyncSerial serialUart1(Serial1SercomNumber, Sercom1RxPad, 512, 512, Serial1PortInit, Serial1PortDeinit);
-
-#endif
-
 #if CORE_USES_TINYUSB
 
 constexpr size_t UsbDeviceTaskStackWords = 200;
 static Task<UsbDeviceTaskStackWords> usbDeviceTask;
 
-SerialCDC serialUSB;
-#ifdef SERIAL_USB2_DEVICE
+SerialCDC serialUSB(0);
+# ifdef SERIAL_USB2_DEVICE
 SerialCDC serialUSB2(1);
-#endif
+# endif
 
 #else
 

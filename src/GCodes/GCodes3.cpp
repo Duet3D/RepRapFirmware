@@ -21,7 +21,7 @@
 #include <Hardware/I2C.h>
 #include <Movement/StepperDrivers/SmartDrivers.h>
 
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+#if HAS_WIFI_NETWORKING || NUM_ASYNC_CHANNELS != 0 || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 # include <Comms/FirmwareUpdater.h>
 #endif
 
@@ -725,7 +725,7 @@ GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply) THROWS(
 	return GCodeResult::ok;
 }
 
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+#if HAS_WIFI_NETWORKING || NUM_ASYNC_CHANNELS != 0 || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Handle M997
 GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
@@ -746,7 +746,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THRO
 	}
 #endif
 
-#if HAS_AUX_DEVICES && ALLOW_ARBITRARY_PANELDUE_PORT	// Disabled until we allow PanelDue on another port
+#if NUM_ASYNC_CHANNELS != 0 && ALLOW_ARBITRARY_PANELDUE_PORT	// Disabled until we allow PanelDue on another port
 	if (gb.Seen('A'))
 	{
 		serialChannelForPanelDueFlashing = gb.GetLimitedUIValue('A', NumSerialChannels, 1);
@@ -804,14 +804,14 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THRO
 		}
 
 		// Check prerequisites of all modules to be updated, if any are not met then don't update any of them
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
+#if HAS_WIFI_NETWORKING || NUM_ASYNC_CHANNELS != 0
 		const auto result = FirmwareUpdater::CheckFirmwareUpdatePrerequisites(
 				firmwareUpdateModuleMap, gb, reply,
-# if HAS_AUX_DEVICES
+# if NUM_ASYNC_CHANNELS != 0
 				serialChannelForPanelDueFlashing,
-#else
+# else
 				0,
-#endif
+# endif
 				filenameString.GetRef());
 		if (result != GCodeResult::ok)
 		{

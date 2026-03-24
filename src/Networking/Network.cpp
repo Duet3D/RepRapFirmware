@@ -449,13 +449,13 @@ WifiFirmwareUploader *_ecv_null Network::GetWifiUploader() const noexcept
 	return nullptr;
 }
 
-void Network::ResetWiFiForUpload(bool external) noexcept
+void Network::ResetWiFiForUpload() noexcept
 {
 #if HAS_WIFI_NETWORKING
 	WiFiInterface *_ecv_null const wifiInterface = FindWiFiInterface();
 	if (wifiInterface != nullptr)
 	{
-		wifiInterface->ResetWiFiForUpload(external);
+		wifiInterface->ResetWiFiForUpload();
 	}
 #endif
 }

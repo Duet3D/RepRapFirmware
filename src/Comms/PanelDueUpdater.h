@@ -67,6 +67,6 @@ private:
 	AsyncSerial *_ecv_null GetAuxPort() noexcept;
 };
 
-#endif	// HAS_AUX_DEVICES
+#endif	// SUPPORT_PANELDUE_FLASH
 
 #endif /* SRC_COMMS_PANELDUEUPDATER_H_ */

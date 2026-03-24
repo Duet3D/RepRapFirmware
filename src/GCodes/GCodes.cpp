@@ -40,6 +40,7 @@
 #include <Tools/Tool.h>
 #include <Endstops/ZProbe.h>
 #include <ObjectModel/Variable.h>
+#include <AsyncSerial.h>
 
 #if HAS_SBC_INTERFACE
 # include <SBC/SbcInterface.h>
@@ -51,7 +52,7 @@
 
 constexpr const char *_ecv_array TargetUnreachableText = "target position outside machine limits";		// message used for both G0/1 and G2/3 moves
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 // Support for emergency stop from PanelDue
 bool GCodes::emergencyStopCommanded = false;
 
@@ -62,7 +63,7 @@ void GCodes::CommandEmergencyStop(AsyncSerial *p) noexcept
 #endif
 
 GCodes::GCodes(Platform& p) noexcept :
-#if HAS_AUX_DEVICES && ALLOW_ARBITRARY_PANELDUE_PORT
+#if NUM_ASYNC_CHANNELS != 0 && ALLOW_ARBITRARY_PANELDUE_PORT
 	serialChannelForPanelDueFlashing(1),
 #endif
 	platform(p),
@@ -136,8 +137,8 @@ GCodes::GCodes(Platform& p) noexcept :
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB2)] = nullptr;
 #endif
 
-#if HAS_AUX_DEVICES
-	StreamGCodeInput * const auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
+#if NUM_ASYNC_CHANNELS != 0
+	StreamGCodeInput * const auxInput = new StreamGCodeInput(*reprap.GetPlatform().GetAsyncPort(0));
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux)] = new GCodeBuffer(GCodeChannel::Aux, auxInput, fileInput, AuxMessage);
 #elif HAS_SBC_INTERFACE
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux)] = new GCodeBuffer(GCodeChannel::Aux, nullptr, fileInput, AuxMessage);
@@ -159,8 +160,8 @@ GCodes::GCodes(Platform& p) noexcept :
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::SBC)] = nullptr;
 #endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Daemon)] = new GCodeBuffer(GCodeChannel::Daemon, nullptr, fileInput, GenericMessage);
-#ifdef SERIAL_AUX2_DEVICE
-	StreamGCodeInput * const aux2Input = new StreamGCodeInput(SERIAL_AUX2_DEVICE);
+#if NUM_ASYNC_CHANNELS > 1
+	StreamGCodeInput * const aux2Input = new StreamGCodeInput(*reprap.GetPlatform().GetAsyncPort(1));
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)] = new GCodeBuffer(GCodeChannel::Aux2, aux2Input, fileInput, Aux2Message);
 #elif HAS_SBC_INTERFACE
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)] = new GCodeBuffer(GCodeChannel::Aux2, nullptr, fileInput, Aux2Message);
@@ -204,8 +205,11 @@ void GCodes::Init() noexcept
 	laserMaxPower = DefaultMaxLaserPower;
 	laserPowerSticky = false;
 
-#if HAS_AUX_DEVICES
-	SERIAL_AUX_DEVICE.SetInterruptCallback(GCodes::CommandEmergencyStop);
+#if NUM_ASYNC_CHANNELS != 0
+	reprap.GetPlatform().GetAsyncPort(0)->SetInterruptCallback(GCodes::CommandEmergencyStop);
+#endif
+#if NUM_ASYNC_CHANNELS > 1
+	reprap.GetPlatform().GetAsyncPort(1)->SetInterruptCallback(GCodes::CommandEmergencyStop);
 #endif
 }
 
@@ -434,11 +438,14 @@ void GCodes::Spin() noexcept
 		return;
 	}
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	if (emergencyStopCommanded)
 	{
 		DoEmergencyStop();
-		while (SERIAL_AUX_DEVICE.read() >= 0) { }
+		while (reprap.GetPlatform().GetAsyncPort(0)->read() >= 0) { }
+# if NUM_ASYNC_CHANNELS > 1
+		while (reprap.GetPlatform().GetAsyncPort(1)->read() >= 0) { }
+# endif
 		emergencyStopCommanded = false;
 		return;
 	}
@@ -4172,9 +4179,9 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 #if SUPPORT_ASYNC_MOVES
 			|| &gb == Queue2GCode()
 #endif
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 			|| (&gb == AuxGCode() && !platform.IsChanRaw(FirstAuxChannel))
-# ifdef SERIAL_AUX2_DEVICE
+# if NUM_ASYNC_CHANNELS > 1
 			|| (&gb == Aux2GCode() && !platform.IsChanRaw(FirstAuxChannel + 1))
 # endif
 #endif

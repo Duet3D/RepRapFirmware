@@ -2114,7 +2114,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						case 4:		// Telnet
 							type = TelnetMessage;
 							break;
-#ifdef SERIAL_AUX2_DEVICE
+#if NUM_ASYNC_CHANNELS > 1
 						case 5:		// AUX2
 							type = Aux2Message;
 							break;
@@ -4620,7 +4620,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+#if HAS_WIFI_NETWORKING || NUM_ASYNC_CHANNELS != 0 || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 			case 997:	// Perform firmware update
 				result = UpdateFirmware(gb, reply);
 				break;

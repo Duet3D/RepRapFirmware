@@ -335,12 +335,7 @@ void PanelDueUpdater::Spin() noexcept
 
 AsyncSerial *_ecv_null PanelDueUpdater::GetAuxPort() noexcept
 {
-	return
-			(serialChannel == 0 || serialChannel > NumSerialChannels) ? nullptr :
-#ifdef SERIAL_AUX2_DEVICE
-			(serialChannel == 2) ? &SERIAL_AUX2_DEVICE :
-#endif
-			&SERIAL_AUX_DEVICE;	// Channel 1
+	return (serialChannel < FirstAuxChannel || serialChannel >= NumSerialChannels) ? nullptr : reprap.GetPlatform().GetAsyncPort(serialChannel - FirstAuxChannel);
 }
 
 #endif
