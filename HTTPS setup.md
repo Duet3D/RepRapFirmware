@@ -223,12 +223,14 @@ Or double-click `server.crt` → **Install Certificate** → **Local Machine** �
 
 ### TLS client requirements
 
-RRF uses reduced TLS record buffers (2 KB) to fit within the limited RAM of embedded targets. To enforce this limit, the server **requires** that the client offers at least one of:
+RRF uses reduced TLS record buffers (2 KB) to fit within the limited RAM of embedded targets. For reliable operation, the TLS client should support at least one of:
 
-- `record_size_limit` (RFC 8449) - used by TLS 1.3 and modern TLS 1.2 clients
+- `record_size_limit` (RFC 8449) - supported by Firefox; not sent by Chromium-based browsers (Chrome, Microsoft Edge)
 - `max_fragment_length` (RFC 6066) - the older TLS 1.2 equivalent
 
-Clients that offer neither extension will have their handshake rejected with a `missing_extension` alert. All modern browsers (Chromium, Firefox, Safari) support `record_size_limit`. Some command-line tools (e.g. curl with OpenSSL) may not. If you encounter TLS handshake failures from non-browser clients, this is likely the cause.
+Clients that support neither extension may encounter problems with uploads and large data transfers, because the client may send TLS records larger than the server's 2 KB input buffer. Some command-line tools (e.g. curl with OpenSSL) also lack support.
+
+Optionally, the server can be configured to reject clients that offer neither extension by enabling `MBEDTLS_SSL_REJECT_MISSING_RECORD_SIZE_EXT` in the mbedTLS config. This is currently disabled but subject to change.
 
 ### Performance
 
