@@ -89,6 +89,31 @@ Copy both generated files to the `/sys/` directory on the Duet SD card:
 
 Plain and TLS variants of each protocol are **independent** — enabling one does not affect the other. Both variants can run simultaneously on separate ports.
 
+### Enable TLS on the network interface (M552)
+
+Before any TLS protocol variant can be used, TLS support must be enabled on the network interface itself using `M552 T1`. The default is `T0` (TLS disabled).
+
+```gcode
+M552 T1 S1        ; enable TLS support and bring up the network interface
+```
+
+`M552 T1` causes RRF to load `server.key` and `server.crt` from the SD card. If those files are missing or invalid, the command will report an error and TLS will not be available.
+
+To disable TLS support (revert to plain-only):
+
+```gcode
+M552 T0           ; disable TLS support (default)
+```
+
+> **Note:** `M552 T1` only enables the TLS layer. You must still use `M586` with `T1` to enable each individual TLS protocol variant (HTTPS, FTPS, TelnetS).
+
+### M552 T parameter
+
+- `T0` — TLS disabled (default); `server.key` and `server.crt` are not loaded
+- `T1` — TLS enabled; loads the key and certificate from `/sys/server.key` and `/sys/server.crt`
+
+---
+
 Send the following G-code (via USB, Telnet, or the existing HTTP interface).
 
 ### HTTPS
@@ -196,8 +221,17 @@ Or double-click `server.crt` → **Install Certificate** → **Local Machine** �
 - **Duet 3 MB6HC / MB6XD (SAME70):** Both `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256` and `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384` are supported. P-256 and P-384 keys are both accepted.
 - All modern browsers and TLS clients support P-256 and AES-128-GCM-SHA256.
 
+### TLS client requirements
+
+RRF uses reduced TLS record buffers (2 KB) to fit within the limited RAM of embedded targets. To enforce this limit, the server **requires** that the client offers at least one of:
+
+- `record_size_limit` (RFC 8449) - used by TLS 1.3 and modern TLS 1.2 clients
+- `max_fragment_length` (RFC 6066) - the older TLS 1.2 equivalent
+
+Clients that offer neither extension will have their handshake rejected with a `missing_extension` alert. All modern browsers (Chromium, Firefox, Safari) support `record_size_limit`. Some command-line tools (e.g. curl with OpenSSL) may not. If you encounter TLS handshake failures from non-browser clients, this is likely the cause.
+
 ### Performance
 
-The TLS handshake involves computationally expensive elliptic-curve operations. Expect the first connection to take approximately 250–350 ms on the Mini 5+ (Cortex-M4 @ 120 MHz) and approximately 100–170 ms on the MB6HC (Cortex-M7 @ 300 MHz). Subsequent connections from the same client may be faster if the session cache is used (up to 2 cached sessions on Mini 5+, 4 on MB6HC).
+The TLS handshake involves computationally expensive elliptic-curve operations. Expect the first connection to take approximately 80 ms on the Mini 5+ (Cortex-M4 @ 120 MHz) with the PUKCC hardware accelerator. Subsequent connections from the same client may be faster if the session cache is used.
 
 AES-GCM record encryption and decryption uses the hardware AES peripheral and adds negligible overhead to data transfers.
