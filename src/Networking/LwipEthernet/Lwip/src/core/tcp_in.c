@@ -951,7 +951,7 @@ tcp_process(struct tcp_pcb *pcb)
 #if LWIP_CALLBACK_API
             LWIP_ASSERT("pcb->listener->accept != NULL", pcb->listener->accept != NULL);
 #endif
-            tcp_backlog_accepted(pcb);
+            tcp_backlog_delayed(pcb);
             /* Call the accept function. */
             TCP_EVENT_ACCEPT(pcb->listener, pcb, pcb->callback_arg, ERR_OK, err);
           }

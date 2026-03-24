@@ -988,7 +988,7 @@ void WiFiInterface::Diagnostics(const StringRef& reply) noexcept
 }
 
 // Enable or disable the network
-GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept
+GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowed) noexcept
 {
 	// Translate enable mode to desired WiFi mode
 	const WiFiState modeRequested = (mode == 0) ? WiFiState::idle

@@ -3573,7 +3573,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (gb.Seen('S'))						// has the user turned the network interface on or off?
 					{
 						seen = true;
-						result = network.EnableInterface(interface, gb.GetIValue(), ssid.GetRef(), reply);
+						const int mode = gb.GetIValue();
+						const bool tlsAllowed = gb.Seen('T') && (gb.GetIValue() != 0);	// T1 enabled TLS, default is TLS disabled
+						result = network.EnableInterface(interface, mode, ssid.GetRef(), reply, tlsAllowed);
 					}
 
 					if (!seen)

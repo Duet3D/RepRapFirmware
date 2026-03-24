@@ -21,11 +21,6 @@ extern "C" {
 
 // We have 8 sockets available for Ethernet
 const size_t NumHttpSockets = 5;					// sockets 0-4 are for HTTP
-#if SAME70
-const size_t NumTlsHttpSockets = 4;					// save some RAM by reducing the number of active HTTPS sessions
-#else
-const size_t NumTlsHttpSockets = 3;
-#endif
 
 const SocketNumber FtpSocketNumber = 5;
 const SocketNumber FtpDataSocketNumber = 6;
@@ -56,7 +51,7 @@ public:
 	void Spin() noexcept override;
 	void Diagnostics(const StringRef& reply) noexcept override;
 
-	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
+	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowedParam = true) noexcept override;			// enable or disable the network
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
 	int EnableState() const noexcept override;
@@ -110,14 +105,13 @@ private:
 #if LWIP_ALTCP_TLS
 	bool SupportsTls() const noexcept override { return true; }
 	uint8_t *ReadPemFile(const char *filename, size_t& len) noexcept;
-	bool LoadTlsCertificates() noexcept override;
+	bool LoadTlsCertificates(const StringRef& reply) noexcept override;
 	void FreeTlsConfig() noexcept;
 #endif
 
 	Platform& platform;
 
 	LwipSocket *sockets[NumEthernetSockets];
-	size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
 
 	bool closeDataPort;
 	altcp_pcb *listeningPcbs[NumTcpProtocols];
@@ -130,6 +124,9 @@ private:
 	bool activated;
 	bool initialised;
 	bool usingDhcp = true;
+#if LWIP_ALTCP_TLS
+	bool tlsAllowed = true;							// if false, allocate the smaller non-TLS heap on first Start()
+#endif
 
 	IPAddress ipAddress;
 	IPAddress netmask;

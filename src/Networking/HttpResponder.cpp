@@ -1014,8 +1014,14 @@ void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWeb
 	}
 
 	outBuf->catf("Content-Length: %lu\r\n", fileToSend->Length());
-	outBuf->cat("Connection: close\r\n\r\n");
-	Commit();
+	const bool keepAlive = skt->UsingTls();
+	outBuf->catf("Connection: %s\r\n\r\n", keepAlive ? "keep-alive" : "close");
+	if (keepAlive)
+	{
+		ResetParser();
+		timer = millis();
+	}
+	Commit(keepAlive ? ResponderState::reading : ResponderState::free);
 #else
 	RejectMessage("file not found", 404);
 #endif

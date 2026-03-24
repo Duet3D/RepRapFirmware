@@ -385,7 +385,7 @@ void W5500Interface::Diagnostics(const StringRef& reply) noexcept
 }
 
 // Enable or disable the network
-GCodeResult W5500Interface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept
+GCodeResult W5500Interface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowed) noexcept
 {
 	if (!activated)
 	{

@@ -60,7 +60,7 @@ public:
 	void Start() noexcept;
 	void Stop() noexcept;
 
-	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
+	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowed = true) noexcept override;			// enable or disable the network
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
 	int EnableState() const noexcept override;
@@ -98,7 +98,7 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 	// TODO: implement TLS support for WiFi interface
-	bool LoadTlsCertificates() noexcept override { return false; }
+	bool LoadTlsCertificates(const StringRef& reply) noexcept override { return false; }
 
 	// Disable a network protocol that is enabled. If 'permanent' is true we will leave this protocol disables, otherwise we are about to re-enable it with different parameters.
 	void IfaceStartProtocol(NetworkProtocol protocol) noexcept override;

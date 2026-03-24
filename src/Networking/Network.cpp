@@ -360,7 +360,7 @@ GCodeResult Network::ReportProtocols(unsigned int interface, const StringRef& re
 #endif
 }
 
-GCodeResult Network::EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply) noexcept
+GCodeResult Network::EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowed) noexcept
 {
 #if HAS_NETWORKING
 	if (interface < GetNumNetworkInterfaces())
@@ -385,7 +385,7 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 # endif
 #endif // HAS_RESPONDERS
 		}
-		return iface->EnableInterface(mode, ssid, reply);
+		return iface->EnableInterface(mode, ssid, reply, tlsAllowed);
 	}
 	reply.printf("Invalid network interface '%d'\n", interface);
 	return GCodeResult::error;

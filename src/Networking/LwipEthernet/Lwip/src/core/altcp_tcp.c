@@ -76,13 +76,20 @@ altcp_tcp_accept(void *arg, struct tcp_pcb *new_tpcb, err_t err)
 {
   struct altcp_pcb *listen_conn = (struct altcp_pcb *)arg;
   if (new_tpcb && listen_conn && listen_conn->accept) {
+    err_t ret;
     /* create a new altcp_conn to pass to the next 'accept' callback */
     struct altcp_pcb *new_conn = altcp_alloc();
     if (new_conn == NULL) {
       return ERR_MEM;
     }
     altcp_tcp_setup(new_conn, new_tpcb);
-    return listen_conn->accept(listen_conn->arg, new_conn, err);
+    ret = listen_conn->accept(listen_conn->arg, new_conn, err);
+    if (ret == ERR_OK) {
+      /* Connection accepted by application - release the backlog slot
+         so the listen socket can accept new SYNs. */
+      tcp_backlog_accepted(new_tpcb);
+    }
+    return ret;
   }
   return ERR_ARG;
 }

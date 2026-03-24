@@ -92,7 +92,7 @@ LwipSocket::LwipSocket(NetworkInterface *iface) noexcept : Socket(iface), connec
 bool LwipSocket::UsingTls() const noexcept
 {
 #if LWIP_ALTCP_TLS
-	return (state == SocketState::connected) && (altcp_get_port(connectionPcb, 1) == localTlsPort);
+	return connectionPcb != nullptr && altcp_get_port(connectionPcb, 1) == localTlsPort;
 #else
 	return false;
 #endif
@@ -522,46 +522,35 @@ void LwipSocket::Poll() noexcept
 			altcp_err(connectionPcb, nullptr);
 			altcp_recv(connectionPcb, nullptr);
 			altcp_sent(connectionPcb, nullptr);
-			if (!timeoutExceeded)
+			if (timeoutExceeded)
+			{
+				if (reprap.Debug(Module::Network))
+				{
+					debugPrintf("LWIP close timeout abort: proto=%d lport=%u rport=%u unacked=%u\n", (int)protocol, localPort, remotePort, (unsigned int)unAcked);
+				}
+				altcp_abort(connectionPcb);
+				connectionPcb = nullptr;
+			}
+			else
 			{
 				const err_t closeErr = altcp_close(connectionPcb);
 				if (closeErr == ERR_OK)
 				{
 					connectionPcb = nullptr;
 				}
-				// If close cannot complete yet (e.g. ERR_INPROGRESS), keep the PCB and retry next poll
-			}
-			else
-			{
-				if (!isTlsConnection)
+				else if (ERR_IS_FATAL(closeErr))
 				{
-					if (reprap.Debug(Module::Network))
-					{
-						debugPrintf("LWIP close timeout abort: proto=%d lport=%u rport=%u unacked=%u\n", (int)protocol, localPort, remotePort, (unsigned int)unAcked);
-					}
 					altcp_abort(connectionPcb);
 					connectionPcb = nullptr;
 				}
-				else
-				{
-					const err_t closeErr = altcp_close(connectionPcb);
-					if (closeErr == ERR_OK)
-					{
-						connectionPcb = nullptr;
-					}
-				}
+				// If close cannot complete yet (e.g. ERR_INPROGRESS), keep the PCB and retry next poll
 			}
 		}
 
 		if (connectionPcb == nullptr)
 		{
-			if (receivedData == nullptr || timeoutExceeded || !outgoing)
-			{
-				// For incoming sockets, once the PCB is gone the transaction is over.
-				// Drop any stale buffered data and return to listening immediately
-				DiscardReceivedData();
-				state = (localPort == 0 || outgoing) ? SocketState::disabled : SocketState::listening;
-			}
+			DiscardReceivedData();
+			state = (localPort == 0 || outgoing) ? SocketState::disabled : SocketState::listening;
 		}
 		break;
 	}
@@ -616,7 +605,7 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 			bytesToSend = bytesLeft;
 		}
 
-		// Try to send data until we succeed
+		// Try to send data, halving the size on ERR_MEM until it fits
 		err_t err;
 		do
 		{
@@ -635,6 +624,11 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 					return 0;
 				}
 				bytesToSend /= 2;
+			}
+			else if (err != ERR_OK)
+			{
+				// Unexpected non-fatal error (e.g. ERR_CONN, ERR_VAL)
+				return 0;
 			}
 		}
 		while (err == ERR_MEM);

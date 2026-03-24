@@ -94,7 +94,10 @@
 # define LWIP_ALTCP              1
 # define LWIP_ALTCP_TLS          1
 # define LWIP_ALTCP_TLS_MBEDTLS  1
-# define ALTCP_MBEDTLS_USE_SESSION_CACHE   1
+# define ALTCP_MBEDTLS_AUTHMODE                 MBEDTLS_SSL_VERIFY_NONE       /* no client cert auth needed for web server */
+# define ALTCP_MBEDTLS_USE_SESSION_CACHE        1
+# define ALTCP_MBEDTLS_USE_SESSION_TICKETS      1
+# define ALTCP_MBEDTLS_SESSION_TICKET_CIPHER    MBEDTLS_CIPHER_AES_128_GCM    /* match our TLS cipher suite */
 # if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
 #  define ALTCP_MBEDTLS_SESSION_CACHE_SIZE  4
 # else
@@ -135,20 +138,34 @@
 /**
  * MEM_SIZE: the size of the heap memory. If the application will send
  * a lot of data that needs to be copied, this should be set high.
+ * We allocate the heap dynamically at the time the network is first enabled so that we can
+ * choose the appropriate size depending on whether TLS is required or not.
+ * LWIP_RAM_HEAP_POINTER must be set to the allocated buffer before lwip_init() is called.
  */
 #if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
 # ifdef MBEDTLS_CONFIG_FILE
-#define MEM_SIZE                		49152    // 48KiB - LwIP shares its heap with MbedTls
-# else
-#define MEM_SIZE                		16384
+#define MEM_SIZE_WITH_TLS               49152   // 48KiB - LwIP shares its heap with MbedTls
 # endif
+#define MEM_SIZE_WITHOUT_TLS            16384
 #else
-#ifdef MBEDTLS_CONFIG_FILE
-#define MEM_SIZE                		43008    // 42KiB - LwIP shares its heap with MbedTls
-# else
-#define MEM_SIZE                		14848
+# ifdef MBEDTLS_CONFIG_FILE
+#define MEM_SIZE_WITH_TLS               43008   // 42KiB - LwIP shares its heap with MbedTls
 # endif
+#define MEM_SIZE_WITHOUT_TLS            14848
 #endif
+
+// MEM_SIZE is set at runtime via lwipHeapSize (see LwipEthernetInterface.cpp).
+// We define a maximum here so that LwIP computes correct internal sizes (e.g. mem_size_t width).
+#ifdef MEM_SIZE_WITH_TLS
+# define MEM_SIZE                       MEM_SIZE_WITH_TLS
+#else
+# define MEM_SIZE                       MEM_SIZE_WITHOUT_TLS
+#endif
+
+// The heap is allocated dynamically in LwipEthernetInterface.cpp before lwip_init() is called.
+// This suppresses the static ram_heap[] BSS array that would otherwise always consume MEM_SIZE bytes.
+extern void *lwipRamHeap;
+#define LWIP_RAM_HEAP_POINTER           lwipRamHeap
 
 /**
  * MEMP_NUM_UDP_PCB: the number of UDP protocol control blocks. One
@@ -201,6 +218,13 @@
  * MEMP_NUM_REASSDATA: the number of IP packets simultaneously queued for
  * reassembly (whole packets, not fragments!)
  */
+/**
+ * MEMP_NUM_SYS_TIMEOUT: the default (LWIP_NUM_SYS_TIMEOUT_INTERNAL) only
+ * covers the cyclic timers.  mDNS probing, MQTT, and SNTP allocate dynamic
+ * timeouts on top of that, so add headroom.
+ */
+#define MEMP_NUM_SYS_TIMEOUT			(LWIP_NUM_SYS_TIMEOUT_INTERNAL + 4)
+
 #define MEMP_NUM_REASSDATA              5
 
 /**

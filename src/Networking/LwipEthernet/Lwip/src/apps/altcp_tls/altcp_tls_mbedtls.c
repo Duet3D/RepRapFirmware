@@ -299,7 +299,12 @@ altcp_mbedtls_lower_recv_process(struct altcp_pcb *conn, altcp_mbedtls_state_t *
       return ERR_OK;
     }
     if (ret != 0) {
-      LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("mbedtls_ssl_handshake failed: %d\n", ret));
+      if (ret == MBEDTLS_ERR_SSL_FATAL_ALERT_MESSAGE) {
+        LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("mbedtls_ssl_handshake: fatal alert received, type=%d\n",
+                    state->ssl_context.MBEDTLS_PRIVATE(in_msg)[1]));
+      } else {
+        LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("mbedtls_ssl_handshake failed: %d\n", ret));
+      }
       /* handshake failed, connection has to be closed */
       if (conn->err) {
         conn->err(conn->arg, ERR_CLSD);
@@ -417,7 +422,9 @@ altcp_mbedtls_handle_rx_appldata(struct altcp_pcb *conn, altcp_mbedtls_state_t *
         }
         /* Fatal SSL error (e.g. peer ignored record_size_limit and sent an oversized record).
            Abort immediately to avoid a zombie connection. */
-        LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("fatal SSL error %d, aborting connection\n", ret));
+        LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("fatal SSL error %d, in_msglen=%u, max=%d, aborting connection\n",
+                    ret, (unsigned)state->ssl_context.MBEDTLS_PRIVATE(in_msglen),
+                    MBEDTLS_SSL_IN_CONTENT_LEN));
         altcp_abort(conn);
         return ERR_ABRT;
       } else {
@@ -546,6 +553,14 @@ altcp_mbedtls_lower_sent(void *arg, struct altcp_pcb *inner_conn, u16_t len)
     state->overhead_bytes_adjust -= len;
     /* try to send more if we failed before (may increase overhead adjust counter) */
     altcp_mbedtls_flush_output(state);
+    /* If the handshake was blocked on WANT_WRITE, retry it now that TCP has
+       sent some data and freed buffer space. Without this, TLS 1.3's larger
+       server flight can deadlock: the client waits for the server's flight,
+       but mbedtls_ssl_handshake() is only called from lower_recv_process
+       which requires incoming data that will never arrive. */
+    if (!(state->flags & ALTCP_MBEDTLS_FLAGS_HANDSHAKE_DONE)) {
+      altcp_mbedtls_lower_recv_process(conn, state);
+    }
     /* remove calculated overhead from ACKed bytes len */
     app_len = len - (u16_t)overhead;
     /* update application write counter and inform application */
@@ -560,7 +575,6 @@ altcp_mbedtls_lower_sent(void *arg, struct altcp_pcb *inner_conn, u16_t len)
 
 /** Poll callback from lower connection (i.e. TCP)
  * Just pass this on to the application.
- * @todo: retry sending?
  */
 static err_t
 altcp_mbedtls_lower_poll(void *arg, struct altcp_pcb *inner_conn)
@@ -574,7 +588,12 @@ altcp_mbedtls_lower_poll(void *arg, struct altcp_pcb *inner_conn)
       altcp_mbedtls_state_t *state = (altcp_mbedtls_state_t *)conn->state;
       /* try to send more if we failed before */
       altcp_mbedtls_flush_output(state);
-      if (altcp_mbedtls_handle_rx_appldata(conn, state) == ERR_ABRT) {
+      /* Retry handshake if it was blocked on WANT_WRITE */
+      if (!(state->flags & ALTCP_MBEDTLS_FLAGS_HANDSHAKE_DONE)) {
+        if (altcp_mbedtls_lower_recv_process(conn, state) == ERR_ABRT) {
+          return ERR_ABRT;
+        }
+      } else if (altcp_mbedtls_handle_rx_appldata(conn, state) == ERR_ABRT) {
         return ERR_ABRT;
       }
     }
@@ -758,6 +777,13 @@ altcp_mbedtls_ref_entropy(void)
     if (altcp_tls_entropy_rng) {
       int ret;
       altcp_tls_entropy_rng->ref = 1;
+#if defined(MBEDTLS_PSA_CRYPTO_C)
+      if (psa_crypto_init() != PSA_SUCCESS) {
+        altcp_mbedtls_free_config(altcp_tls_entropy_rng);
+        altcp_tls_entropy_rng = NULL;
+        return ERR_ARG;
+      }
+#endif
       mbedtls_entropy_init(&altcp_tls_entropy_rng->entropy);
       mbedtls_ctr_drbg_init(&altcp_tls_entropy_rng->ctr_drbg);
       /* Seed the RNG, only once */
@@ -855,6 +881,13 @@ altcp_tls_create_config(int is_server, u8_t cert_count, u8_t pkey_count, int hav
     altcp_mbedtls_free_config(conf);
     return NULL;
   }
+
+#if defined(MBEDTLS_SSL_PROTO_TLS1_3) && !defined(MBEDTLS_SSL_PROTO_TLS1_2)
+  /* Enforce TLS 1.3-only when TLS 1.2 is not compiled in. */
+  mbedtls_ssl_conf_min_tls_version(&conf->conf, MBEDTLS_SSL_VERSION_TLS1_3);
+  mbedtls_ssl_conf_max_tls_version(&conf->conf, MBEDTLS_SSL_VERSION_TLS1_3);
+#endif
+
   mbedtls_ssl_conf_authmode(&conf->conf, ALTCP_MBEDTLS_AUTHMODE);
 
   mbedtls_ssl_conf_rng(&conf->conf, mbedtls_ctr_drbg_random, &altcp_tls_entropy_rng->ctr_drbg);
@@ -1222,6 +1255,14 @@ altcp_mbedtls_close(struct altcp_pcb *conn)
       altcp_output(inner_conn);
     }
 
+    /* Free SSL buffers early - close_notify has been sent (or handshake never
+       completed).  Only TCP close-wait remains.  Clearing HANDSHAKE_DONE
+       ensures any close-retry from poll skips the TLS path. */
+    if (state != NULL) {
+      mbedtls_ssl_free(&state->ssl_context);
+      state->flags &= ~ALTCP_MBEDTLS_FLAGS_HANDSHAKE_DONE;
+    }
+
     err = altcp_close(inner_conn);
     if (err != ERR_OK) {
       /* not closed, set up all callbacks again */
@@ -1256,13 +1297,12 @@ altcp_mbedtls_sndbuf(struct altcp_pcb *conn)
         size_t ssl_added = (u16_t)LWIP_MIN(ssl_expan, 0xFFFF);
         /* internal sndbuf smaller than our offset */
         if (ssl_added < sndbuf) {
-          size_t max_len = 0xFFFF;
+          /* Use mbedtls_ssl_get_max_out_record_payload to get the true max
+             application data per record. For TLS 1.3 this is OUT_CONTENT_LEN - 1
+             because the inner content type byte consumes one byte of payload. */
+          int max_payload = mbedtls_ssl_get_max_out_record_payload(&state->ssl_context);
+          size_t max_len = (max_payload > 0) ? (size_t)max_payload : MBEDTLS_SSL_OUT_CONTENT_LEN;
           size_t ret;
-#if defined(MBEDTLS_SSL_MAX_FRAGMENT_LENGTH)
-          /* @todo: adjust ssl_added to real value related to negotiated cipher */
-          size_t max_frag_len = mbedtls_ssl_get_max_frag_len(&state->ssl_context);
-          max_len = LWIP_MIN(max_frag_len, max_len);
-#endif
           /* Adjust sndbuf of inner_conn with what added by SSL */
           ret = LWIP_MIN(sndbuf - ssl_added, max_len);
           LWIP_ASSERT("sndbuf overflow", ret <= 0xFFFF);

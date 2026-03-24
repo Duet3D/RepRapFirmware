@@ -23,7 +23,7 @@ public:
 	virtual void Spin() noexcept = 0;
 	virtual void Diagnostics(const StringRef& reply) noexcept = 0;
 
-	virtual GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept = 0;
+	virtual GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowed = true) noexcept = 0;
 	virtual GCodeResult GetNetworkState(const StringRef& reply) noexcept = 0;
 	virtual int EnableState() const noexcept = 0;
 	virtual bool IsWiFiInterface() const noexcept = 0;
@@ -51,7 +51,7 @@ public:
 
 protected:
 	virtual bool SupportsTls() const noexcept { return false; }
-	virtual bool LoadTlsCertificates() noexcept { return false; }
+	virtual bool LoadTlsCertificates(const StringRef& reply) noexcept { return false; }
 
 	// Disable a network protocol that is enabled. If 'permanent' is true we will leave this protocol disables, otherwise we are about to re-enable it with different parameters.
 	virtual void IfaceShutdownProtocol(NetworkProtocol protocol, bool permanent) noexcept

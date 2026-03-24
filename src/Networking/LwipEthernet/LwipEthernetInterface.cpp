@@ -44,6 +44,7 @@ extern "C"
 #include "lwip/stats.h"
 #endif
 
+#include "lwip/mem.h"
 #include "lwip/dhcp.h"
 #include "lwip/tcp.h"
 #include "lwip/altcp.h"
@@ -57,6 +58,11 @@ extern "C"
 
 extern struct netif gs_net_if;
 }
+
+// LwIP heap buffer: defined here and referenced via LWIP_RAM_HEAP_POINTER in lwipopts.h.
+// Allocated dynamically in Start() to avoid consuming RAM when networking is never enabled.
+// Must have C linkage so that LwIP's C code (mem.c) can access it without name mangling.
+extern "C" { void *lwipRamHeap = nullptr; }
 
 #if LWIP_ALTCP_TLS_MBEDTLS
 // mbedTLS allocator wrappers — routes mbedtls_calloc/free through the lwIP heap.
@@ -334,7 +340,7 @@ uint8_t *LwipEthernetInterface::ReadPemFile(const char *filename, size_t& len) n
 
 // Load TLS certificate and private key from TlsCertFile and TlsKeyFile
 // Returns true if the TLS config was created successfully
-bool LwipEthernetInterface::LoadTlsCertificates() noexcept
+bool LwipEthernetInterface::LoadTlsCertificates(const StringRef& reply) noexcept
 {
 	if (tlsConfig != nullptr)
 	{
@@ -345,7 +351,7 @@ bool LwipEthernetInterface::LoadTlsCertificates() noexcept
 	uint8_t *certBuf = ReadPemFile(TlsCertFile, certLen);
 	if (certBuf == nullptr)
 	{
-		platform.MessageF(ErrorMessage, "Failed to load TLS certificate %s\n", TlsCertFile);
+		reply.printf("Failed to load TLS certificate %s", TlsCertFile);
 		return false;
 	}
 
@@ -353,7 +359,7 @@ bool LwipEthernetInterface::LoadTlsCertificates() noexcept
 	if (keyBuf == nullptr)
 	{
 		delete[] certBuf;
-		platform.MessageF(ErrorMessage, "Failed to load TLS key %s\n", TlsKeyFile);
+		reply.printf("Failed to load TLS key %s", TlsKeyFile);
 		return false;
 	}
 
@@ -365,7 +371,7 @@ bool LwipEthernetInterface::LoadTlsCertificates() noexcept
 
 	if (tlsConfig == nullptr)
 	{
-		platform.Message(ErrorMessage, "Failed to create TLS config - check certifiate and key files\n");
+		reply.copy("Failed to create TLS config - check certificate and key files");
 		return false;
 	}
 
@@ -442,9 +448,9 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 	// Create the TLS listener if TLS is enabled for this protocol
 	if (tlsProtocolEnabled[protocol] && tlsListeningPcbs[protocol] == nullptr)
 	{
-		if (!LoadTlsCertificates())
+		if (tlsConfig == nullptr)
 		{
-			// This function already outputs the error reasons, stop here
+			// TLS certificates were not loaded successfully, stop here
 			return;
 		}
 
@@ -488,14 +494,14 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 			{
 				sockets[skt]->Init(skt, portNumbers[protocol], protocol);
 #if LWIP_ALTCP_TLS
-				if (tlsProtocolEnabled[protocol] && skt < NumTlsHttpSockets)
+				if (tlsProtocolEnabled[protocol])
 				{
 					sockets[skt]->InitTls(tlsPortNumbers[protocol]);
 				}
 #endif
 			}
 #if LWIP_ALTCP_TLS
-			else if (tlsProtocolEnabled[protocol] && skt < NumTlsHttpSockets)
+			else if (tlsProtocolEnabled[protocol])
 			{
 				sockets[skt]->Init(skt, tlsPortNumbers[protocol], protocol);
 				sockets[skt]->InitTls(tlsPortNumbers[protocol]);
@@ -658,6 +664,20 @@ void LwipEthernetInterface::Start() noexcept
 	{
 		const char *hostname = reprap.GetNetwork().GetHostname();
 
+		// Allocate the LwIP heap buffer.  We do this here (lazily) rather than using a static BSS array
+		// so that systems that never enable Ethernet don't consume this RAM at all.
+		// The size depends on whether TLS is going to be used.
+#ifdef MEM_SIZE_WITH_TLS
+		const size_t heapSize = tlsAllowed ? (MEM_SIZE_WITH_TLS) : (MEM_SIZE_WITHOUT_TLS);
+#else
+		const size_t heapSize = MEM_SIZE_WITHOUT_TLS;
+#endif
+		// LwIP's mem_init() requires: LWIP_MEM_ALIGN_SIZE(heapSize) + 2 * SIZEOF_STRUCT_MEM bytes plus
+		// up to MEM_ALIGNMENT-1 bytes for alignment. We add MEM_ALIGNMENT extra to be safe.
+		const size_t heapAlloc = heapSize + 32 + MEM_ALIGNMENT;	// 32 > 2*SIZEOF_STRUCT_MEM, safe margin for alignment
+		lwipRamHeap = new uint8_t[heapAlloc];
+		mem_set_size((mem_size_t)heapSize);
+
 		// Allow the MAC address to be set only before LwIP is started...
 		ethernet_configure_interface(macAddress.bytes, hostname);
 		init_ethernet(DefaultIpAddress, DefaultNetMask, DefaultGateway);
@@ -789,14 +809,10 @@ void LwipEthernetInterface::Spin() noexcept
 			}
 #endif
 
-			// Poll the next TCP socket
-			sockets[nextSocketToPoll]->Poll();
-
-			// Move on to the next TCP socket for next time
-			++nextSocketToPoll;
-			if (nextSocketToPoll == NumEthernetSockets)
+			// Poll all TCP sockets
+			for (LwipSocket *s : sockets)
 			{
-				nextSocketToPoll = 0;
+				s->Poll();
 			}
 
 			// Check if the data port needs to be closed
@@ -834,11 +850,31 @@ void LwipEthernetInterface::Diagnostics(const StringRef& reply) noexcept
 }
 
 // Enable or disable the network. For Ethernet the ssid parameter is not used.
-GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept
+// tlsAllowed: if false (only honoured before the first Start()), allocate the smaller non-TLS LwIP heap.
+GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowedParam) noexcept
 {
 	if (!activated)
 	{
-		SetState((mode == 0) ? NetworkState::disabled : NetworkState::enabled);
+		if (mode == 0)
+		{
+			SetState(NetworkState::disabled);
+		}
+		else
+		{
+#if LWIP_ALTCP_TLS
+			if (!initialised)
+			{
+				tlsAllowed = tlsAllowedParam;
+			}
+#endif
+			Start();
+#if LWIP_ALTCP_TLS
+			if (tlsAllowed && !LoadTlsCertificates(reply))
+			{
+				return GCodeResult::warning;
+			}
+#endif
+		}
 	}
 	else if (mode == 0)
 	{
@@ -851,8 +887,20 @@ GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ss
 	}
 	else if (GetState() == NetworkState::disabled)
 	{
+#if LWIP_ALTCP_TLS
+		if (!initialised || (tlsConfig == nullptr && tlsAllowed && !tlsAllowedParam))
+		{
+			tlsAllowed = tlsAllowedParam;
+		}
+#endif
 		SetState(NetworkState::enabled);
 		Start();
+#if LWIP_ALTCP_TLS
+		if (tlsAllowed && !LoadTlsCertificates(reply))
+		{
+			return GCodeResult::warning;
+		}
+#endif
 	}
 	return GCodeResult::ok;
 }
@@ -1042,7 +1090,6 @@ void LwipEthernetInterface::InitSockets() noexcept
 			StartProtocol(i);
 		}
 	}
-	nextSocketToPoll = 0;
 }
 
 void LwipEthernetInterface::TerminateSockets() noexcept

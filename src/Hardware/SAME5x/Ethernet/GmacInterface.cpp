@@ -34,6 +34,8 @@ extern Mutex lwipMutex;
 
 #if defined(LWIP_DEBUG)
 constexpr size_t EthernetTaskStackWords = 700;
+#elif defined(MBEDTLS_CONFIG_FILE)
+constexpr size_t EthernetTaskStackWords = 1000;		// interestingly we need more RAM if LWIP_DEBUG is disabled
 #else
 constexpr size_t EthernetTaskStackWords = 300;
 #endif
