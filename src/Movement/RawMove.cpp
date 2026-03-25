@@ -13,6 +13,7 @@
 #include <Tools/Tool.h>
 #include <Movement/Move.h>
 #include <Movement/Kinematics/Kinematics.h>
+#include <PrintMonitor/PrintMonitor.h>
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -57,6 +58,7 @@ constexpr ObjectModelTableEntry MovementState::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. motionSystems[] members
 	{ "currentMove",			OBJECT_MODEL_FUNC(self, 1),																	ObjectModelEntryFlags::none },
+	{ "currentObject",			OBJECT_MODEL_FUNC_IF(reprap.GetPrintMonitor().IsPrinting(), (int32_t)self->currentObjectNumber),										ObjectModelEntryFlags::none },
 	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),									ObjectModelEntryFlags::live },
 	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->newToolNumber),											ObjectModelEntryFlags::none },
 	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),										ObjectModelEntryFlags::none },
@@ -95,7 +97,7 @@ constexpr ObjectModelTableEntry MovementState::objectModelTable[] =
 constexpr uint8_t MovementState::objectModelTableDescriptor[] =
 {
 	2 + SUPPORT_COORDINATE_ROTATION,
-	11 + SUPPORT_COORDINATE_ROTATION,
+	12 + SUPPORT_COORDINATE_ROTATION,
 	7,
 #if SUPPORT_COORDINATE_ROTATION
 	2

@@ -321,6 +321,9 @@ void GCodes::ChangeToObject(GCodeBuffer& gb, int objectNumber) noexcept
 {
 	MovementState& ms = GetMovementState(gb);
 	ms.currentObjectNumber = objectNumber;
+	reprap.JobUpdated();
+	reprap.MotionSystemUpdated();
+
 	const bool cancelCurrentObject = buildObjects.CheckObject(objectNumber);
 	if (cancelCurrentObject && !ms.currentObjectCancelled)
 	{
