@@ -10,6 +10,7 @@
 
 #include <PinDescription.h>
 #include <SPI/SpiParameters.h>
+#include <UART/UartParameters.h>
 
 #define DEFAULT_BOARD_TYPE		 BoardType::FMDC
 
@@ -111,10 +112,13 @@ constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 constexpr size_t MaxLedStrips = 2;					// Maximum number of LED strips
 
 constexpr size_t NumUsbChannels = 1;
-constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB and one auxiliary UART)
 
 #define SERIAL_USB_DEVICE (serialUSB)
-#define SERIAL_AUX_DEVICE (serialUart0)
+
+#define NUM_ASYNC_PORTS			(1)
+#define NUM_ASYNC_CHANNELS		(NUM_ASYNC_PORTS)
+
+constexpr size_t NumSerialChannels = NumUsbChannels + NUM_ASYNC_CHANNELS;		// The number of serial IO channels (USB and one auxiliary UART)
 
 // SerialUSB
 constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB port
@@ -178,6 +182,7 @@ constexpr Pin TMC22xxSercomTxPin = PortAPin(0);
 constexpr GpioPinFunction TMC22xxSercomTxPinPeriphMode = GpioPinFunction::D;
 constexpr Pin TMC22xxSercomRxPin = PortAPin(1);
 constexpr GpioPinFunction TMC22xxSercomRxPinPeriphMode = GpioPinFunction::D;
+constexpr uint8_t TMC22xxSercomTxPad = 0;
 constexpr uint8_t TMC22xxSercomRxPad = 1;
 
 #define TMC22xx_HAS_ENABLE_PINS			0
@@ -324,27 +329,30 @@ constexpr SpiParameters SharedSpiParams =
 };
 
 // Serial on IO0
-constexpr uint8_t Serial0SercomNumber = 2;
-constexpr uint8_t Sercom0RxPad = 1;
-#define SERIAL0_ISR0	SERCOM2_0_Handler
-#define SERIAL0_ISR1	SERCOM2_1_Handler
-#define SERIAL0_ISR2	SERCOM2_2_Handler
-#define SERIAL0_ISR3	SERCOM2_3_Handler
-
-constexpr Pin Serial0TxPin = PortBPin(25);
-constexpr Pin Serial0RxPin = PortBPin(24);
-constexpr GpioPinFunction Serial0PinFunction = GpioPinFunction::D;
+constexpr UartParameters Serial0Params =
+{
+	.sercomNumber = 2,
+	.rxPin = PortBPin(24),
+	.txPin = PortBPin(25),
+	.pinFunction = GpioPinFunction::D,
+	.dataInPad = 1,
+	.dataOutPad = 0,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
 
 // WiFi pins
-constexpr unsigned int WiFiUartSercomNumber = 3;
-constexpr uint8_t WiFiUartRxPad = 1;
-constexpr Pin WiFiUartSercomPins[] = { PortAPin(16), PortAPin(17) };
-constexpr GpioPinFunction WiFiUartSercomPinsMode = GpioPinFunction::D;
-constexpr IRQn WiFiUartSercomIRQn = SERCOM3_0_IRQn;			// this is the first of 4 interrupt numbers
-#define SERIAL_WIFI_ISR0	SERCOM3_0_Handler
-#define SERIAL_WIFI_ISR1	SERCOM3_1_Handler
-#define SERIAL_WIFI_ISR2	SERCOM3_2_Handler
-#define SERIAL_WIFI_ISR3	SERCOM3_3_Handler
+constexpr UartParameters SerialWiFiParams =
+{
+	.sercomNumber = 3,
+	.rxPin = PortAPin(16),
+	.txPin = PortAPin(17),
+	.pinFunction = GpioPinFunction::D,
+	.dataInPad = 1,
+	.dataOutPad = 0,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
 
 constexpr unsigned int WiFiSpiSercomNumber = 4;
 Sercom * const WiFiSpiSercom = SERCOM4;

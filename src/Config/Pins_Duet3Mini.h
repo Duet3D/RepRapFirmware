@@ -186,7 +186,7 @@ constexpr GpioPinFunction TMC22xxSercomTxPinPeriphMode = GpioPinFunction::D;
 constexpr Pin TMC22xxSercomRxPin = PortAPin(1);
 constexpr GpioPinFunction TMC22xxSercomRxPinPeriphMode = GpioPinFunction::D;
 constexpr uint8_t TMC22xxSercomRxPad = 1;
-constexpr uint8_t Tmc22xxSercomTxPad = 0;
+constexpr uint8_t TMC22xxSercomTxPad = 0;
 constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
 
 #define TMC22xx_HAS_ENABLE_PINS			0
@@ -349,7 +349,6 @@ constexpr UartParameters SerialWiFiParams =
 	.numRxSlots = 512,
 	.numTxSlots = 512
 };
-
 
 // WiFi module SPI interface
 constexpr unsigned int WiFiSpiSercomNumber = 4;

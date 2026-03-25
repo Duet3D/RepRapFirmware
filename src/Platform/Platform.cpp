@@ -47,6 +47,10 @@
 #include <Storage/CRC32.h>
 #include <Accelerometers/Accelerometers.h>
 
+#if NUM_ASYNC_PORTS != 0
+# include <AsyncSerial.h>
+#endif
+
 #if SUPPORT_PANELDUE_FLASH
 # include <Comms/PanelDueUpdater.h>
 #endif
