@@ -667,7 +667,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.SetState((zPendingRestore) ? GCodeState::resuming2 : GCodeState::resuming3);
 #else
 			SetMoveBufferDefaults(ms);
-			const bool restoreZ = (gb.GetState() != GCodeState::resuming1 || ms.coords[Z_AXIS] <= ms.GetPauseRestorePoint().moveCoords[Z_AXIS]);
+			const bool restoreZ = (gb.GetState() != GCodeState::resuming1 || ms.raw.coords[Z_AXIS] <= ms.GetPauseRestorePoint().moveCoords[Z_AXIS]);
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
 				if (   ms.currentUserPosition[axis] != ms.GetPauseRestorePoint().moveCoords[axis]
@@ -677,17 +677,17 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ms.currentUserPosition[axis] = ms.GetPauseRestorePoint().moveCoords[axis];
 					if (move.IsAxisLinear(axis))
 					{
-						ms.linearAxesMentioned = true;
+						ms.raw.linearAxesMentioned = true;
 					}
 					else if (move.IsAxisRotational(axis))
 					{
-						ms.rotationalAxesMentioned = true;
+						ms.raw.rotationalAxesMentioned = true;
 					}
 				}
 			}
 
 			ToolOffsetTransform(ms);
-			ms.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
+			ms.raw.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
 			gb.SetState((restoreZ) ? GCodeState::resuming3 : GCodeState::resuming2);
 			NewSegmentableMoveAvailable(ms);
 #endif
