@@ -1002,7 +1002,8 @@ bool GCodes::DoSynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCode
 	gb.SetState(newState);
 	pauseState = PauseState::pausing;
 
-	reprap.StateUpdated();																// test DWC/DSF that we have changed a restore point
+	reprap.StateUpdated();																// test DWC/DSF that we have changed a restore point (copy in 'state')
+	reprap.MotionSystemUpdated();														// tell DWC/DSF that a restore point (copy in 'move.motionSystems')
 	return true;
 }
 
@@ -1142,7 +1143,8 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 	pauseState = PauseState::pausing;
 	CancelWaitForTemperatures(true);
 
-	reprap.StateUpdated();																// tell DWC/DSF that we have changed the state
+	reprap.StateUpdated();																// tell DWC/DSF that we have changed the state and a restore point (copy in 'state')
+	reprap.MotionSystemUpdated();														// tell DWC/DSF that a restore point (copy in 'move.motionSystems')
 	return true;
 }
 

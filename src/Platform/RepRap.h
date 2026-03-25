@@ -159,6 +159,7 @@ public:
 	void LedStripsUpdated() noexcept { ++ledStripsSeq; }
 	void JobUpdated() noexcept { ++jobSeq; }
 	void MoveUpdated() noexcept { ++moveSeq; }
+	void MotionSystemUpdated() noexcept { MoveUpdated(); }			// motion systems in the OM are currently inside 'move'
 	void NetworkUpdated() noexcept { ++networkSeq; }
 	void SensorsUpdated() noexcept { ++sensorsSeq; }
 	void SpindlesUpdated() noexcept { ++spindlesSeq; }

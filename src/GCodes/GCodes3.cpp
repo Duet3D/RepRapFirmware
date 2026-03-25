@@ -48,7 +48,8 @@ GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply) THROWS
 	bool dummySeen;
 	gb.TryGetLimitedUIValue('S', sParam, dummySeen, NumVisibleRestorePoints);
 	SavePosition(gb, sParam);
-	reprap.StateUpdated();										// tell DWC/DSF that a restore point has been changed
+	reprap.StateUpdated();										// tell DWC/DSF that a restore point has been changed (copy in 'state')
+	reprap.MotionSystemUpdated();								// tell DWC/DSF that a restore point, nextToolNumber and the previousToolNumber have been updated (copy in 'move.motionSystems')
 	return GCodeResult::ok;
 }
 
