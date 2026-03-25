@@ -115,7 +115,11 @@ constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 	// 5. Motion systems
 	{
 		nullptr,					// no lock needed
-		OBJECT_MODEL_ARRAY_COUNT_NOSELF(NumMovementSystems),
+#if SUPPORT_ASYNC_MOVES
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetNumMotionSystemsUsed()),
+#else
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(1),
+#endif
 		OBJECT_MODEL_ARRAY_VALUE_NOSELF(&reprap.GetGCodes().GetMovementState(context.GetLastIndex())),
 	},
 
@@ -124,7 +128,7 @@ constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 	{
 		nullptr,					// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
-		OBJECT_MODEL_ARRAY_VALUE_NOSELF(reprap.GetGCodes().GetRotationCentre(reprap.GetGCodes().GetPrimaryMovementState(), context.GetLastIndex()))
+		OBJECT_MODEL_ARRAY_VALUE_NOSELF(reprap.GetGCodes().GetPrimaryMovementState().g68Centre[context.GetLastIndex()])
 	},
 #elif SUPPORT_KEEPOUT_ZONES
 	{
@@ -320,7 +324,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 
 #if SUPPORT_COORDINATE_ROTATION
 	// 15. move.rotation members
-	{ "angle",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRotationAngle(reprap.GetGCodes().GetPrimaryMovementState())),	ObjectModelEntryFlags::none },
+	{ "angle",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimaryMovementState().g68Angle),						ObjectModelEntryFlags::none },
 	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(6),																				ObjectModelEntryFlags::none },
 #endif
 };
