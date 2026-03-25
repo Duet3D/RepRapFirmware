@@ -3345,6 +3345,7 @@ void GCodes::NewMoveAvailable(MovementState& ms) noexcept
 // Cancel any macro or print in progress
 void GCodes::AbortPrint(GCodeBuffer& gb) noexcept
 {
+	AbortStateMachine(gb);						// clean up state machine side effects at all stack levels before unwinding
 	(void)gb.AbortFile(true);					// stop executing any files or macros that this GCodeBuffer is running
 	if (gb.IsFileChannel())						// if the current command came from a file being printed
 	{

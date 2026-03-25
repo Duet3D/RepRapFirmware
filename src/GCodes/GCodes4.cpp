@@ -2013,6 +2013,62 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #endif
 }
 
+// Clean up state machine side effects when aborting.
+// Walk the entire machine state stack and clean up any non-normal states before AbortFile() unwinds and deletes them
+void GCodes::AbortStateMachine(GCodeBuffer& gb) noexcept
+{
+	for (GCodeMachineState *ms = &gb.LatestMachineState(); ms != nullptr; ms = ms->GetPrevious())
+	{
+		const GCodeState state = ms->GetState();
+
+		switch (state)
+		{
+		case GCodeState::normal:
+			break;
+
+		case GCodeState::homing1:
+		case GCodeState::homing2:
+			toBeHomed.Clear();
+			break;
+
+		case GCodeState::toolChange0:
+		case GCodeState::toolChange1:
+		case GCodeState::toolChange2:
+		case GCodeState::toolChangeComplete:
+		case GCodeState::m109ToolChange0:
+		case GCodeState::m109ToolChange1:
+		case GCodeState::m109ToolChange2:
+		case GCodeState::m109ToolChangeComplete:
+		case GCodeState::m109WaitForTemperature:
+			doingToolChange = false;
+			break;
+
+		case GCodeState::flashing1:
+		case GCodeState::flashing2:
+			isFlashing = false;
+			break;
+
+		case GCodeState::processingEvent:
+		case GCodeState::finishedProcessingEvent:
+			Event::FinishedProcessing();
+			break;
+
+		default:
+			if (state >= GCodeState::firstProbingState && state <= GCodeState::lastProbingState)
+			{
+				reprap.GetHeat().SuspendHeaters(false);
+				doingManualBedProbe = false;
+				const auto zp = platform.GetEndstops().GetZProbe(currentZProbeNumber);
+				if (zp.IsNotNull())
+				{
+					zp->SetProbing(false);
+				}
+			}
+			break;
+		}
+	}
+}
+
 // Do a manual probe. This is in its own function to reduce the amount of stack space needed by RunStateMachine(). See the comment at the top of that function.
 void GCodes::DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps) noexcept
 {
