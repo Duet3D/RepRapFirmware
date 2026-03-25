@@ -334,13 +334,13 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "zProbes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbes),							ObjectModelEntryFlags::verbose },
 
 	// 3. state (see declaration of StateSubTableNumber above)
-	{ "atxPower",				OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerState()),	ObjectModelEntryFlags::none },
-	{ "atxPowerPort",			OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerPort()),	ObjectModelEntryFlags::none },
-	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),					ObjectModelEntryFlags::none },
-	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).GetCurrentToolNumber()),	ObjectModelEntryFlags::live | ObjectModelEntryFlags::obsolete },
+	{ "atxPower",				OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerState()),		ObjectModelEntryFlags::none },
+	{ "atxPowerPort",			OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerPort()),		ObjectModelEntryFlags::none },
+	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),													ObjectModelEntryFlags::none },
+	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).GetCurrentToolNumber()),		ObjectModelEntryFlags::live },
 	{ "deferredPowerDown",		OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->IsDeferredPowerDown()),	ObjectModelEntryFlags::none },
-	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),								ObjectModelEntryFlags::none },
-	{ "gpOut",					OBJECT_MODEL_FUNC_ARRAY(6),												ObjectModelEntryFlags::liveNotPanelDue },
+	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),																ObjectModelEntryFlags::none },
+	{ "gpOut",					OBJECT_MODEL_FUNC_ARRAY(6),																				ObjectModelEntryFlags::liveNotPanelDue },
 #if SUPPORT_LASER
 	// 2020-04-24: return the configured laser PWM even if the laser is temporarily turned off
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF(self->gCodes->GetMachineType() == MachineType::laser, self->gCodes->GetLaserPwm(), 2),	ObjectModelEntryFlags::live },
