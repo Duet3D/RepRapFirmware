@@ -91,11 +91,16 @@ constexpr size_t ResumeObjectRestorePointNumber = NumVisibleRestorePoints + 1;
 
 // Details of a move that are needed only by GCodes
 // CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
-class MovementState final : public RawMove
+class MovementState final INHERIT_OBJECT_MODEL
 {
+protected:
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
+
 public:
+	RawMove raw;
+
 #if SUPPORT_ASYNC_MOVES
-	AxesBitmap GetAxesAndExtrudersOwned() const noexcept { return axesAndExtrudersOwned; }	// Get the axes and extruders that this movement system owns
+	AxesBitmap GetAxesAndExtrudersOwned() const noexcept { return raw.axesAndExtrudersOwned; }	// Get the axes and extruders that this movement system owns
 	ParameterLettersBitmap GetOwnedAxisLetters() const noexcept { return ownedAxisLetters; } // Get the letters denoting axes that this movement system owns
 	LogicalDrivesBitmap AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept;	// try to allocate the requested axes, if we can't then return the logical drives we can't allocate
 	LogicalDrivesBitmap AllocateDrives(LogicalDrivesBitmap drivesNeeded) noexcept;			// try to allocate logical drives directly

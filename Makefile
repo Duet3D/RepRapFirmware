@@ -45,7 +45,7 @@ export DEBUG_FLAGS
 .DEFAULT_GOAL := help
 
 # Available build configurations
-CONFIGS := Duet2 Duet2_SBC Duet3_MB6HC Duet3_MB6XD Duet3_CAN0 Duet3Mini5plus Duet3_MB6HC_no_SD PCCB_10 FMDC_V03
+CONFIGS := Duet3_MB6HC Duet3_MB6XD Duet3_CAN0 Duet3Mini5plus Duet3_MB6HC_no_SD PCCB_10 FMDC_V03
 
 # Print available targets
 .PHONY: help
@@ -55,8 +55,6 @@ help:
 	$(Q)echo "============================"
 	$(Q)echo ""
 	$(Q)echo "Build targets:"
-	$(Q)echo "  Duet2               - Duet 2 WiFi/Ethernet (SAM4E)"
-	$(Q)echo "  Duet2_SBC           - Duet 2 + SBC (SAM4E)"
 	$(Q)echo "  Duet3_MB6HC         - Duet 3 MB6HC (SAME70)"
 	$(Q)echo "  Duet3_MB6XD         - Duet 3 MB6XD expansion (SAME70)"
 	$(Q)echo "  Duet3_CAN0          - Duet 3 CAN expansion (SAME70)"
@@ -78,10 +76,10 @@ help:
 	$(Q)echo "  DEBUG=1             - Build with debug symbols (-g3 -Og)"
 	$(Q)echo ""
 	$(Q)echo "Examples:"
-	$(Q)echo "  make Duet2                                # Build Duet 2 firmware"
+	$(Q)echo "  make Duet3_MB6HC                          # Build Duet 3 MB6HC firmware"
 	$(Q)echo "  make Duet3Mini5plus V=1                   # Build with verbose output"
 	$(Q)echo "  make Duet3_MB6HC DEBUG=1                  # Build with debug symbols"
-	$(Q)echo "  make CROSS_COMPILE=/path/to/arm-none-eabi- Duet2  # Custom toolchain"
+	$(Q)echo "  make CROSS_COMPILE=/path/to/arm-none-eabi- Duet3_MB6HC  # Custom toolchain"
 	$(Q)echo ""
 
 # Build all configurations
@@ -112,41 +110,21 @@ build-libs:
 
 # Common library build rules (to avoid duplicate recipes in board makefiles)
 # These are marked as .PHONY so Make always checks if they need rebuilding
-.PHONY: $(WORKSPACE)/CoreN2G/SAM4E_SDHC_USB_RTOS/libCoreN2G.a \
-        $(WORKSPACE)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS/libCoreN2G.a \
+.PHONY: $(WORKSPACE)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS/libCoreN2G.a \
         $(WORKSPACE)/CoreN2G/SAME5x_CAN_SDHC_USB_RTOS/libCoreN2G.a \
         $(WORKSPACE)/CoreN2G/SAME5x_SDHC_USB_RTOS/libCoreN2G.a \
         $(WORKSPACE)/CoreN2G/SAM4S_SDHC_USB_RTOS/libCoreN2G.a \
-        $(WORKSPACE)/RRFLibraries/SAM4E_RTOS/libRRFLibraries.a \
         $(WORKSPACE)/RRFLibraries/SAME70_RTOS/libRRFLibraries.a \
         $(WORKSPACE)/RRFLibraries/SAME51_RTOS/libRRFLibraries.a \
         $(WORKSPACE)/RRFLibraries/SAM4S_RTOS/libRRFLibraries.a \
-        $(WORKSPACE)/FreeRTOS/SAM4E/libFreeRTOS.a \
         $(WORKSPACE)/FreeRTOS/SAME70/libFreeRTOS.a \
         $(WORKSPACE)/FreeRTOS/SAME51/libFreeRTOS.a \
         $(WORKSPACE)/FreeRTOS/SAM4S/libFreeRTOS.a \
-        $(WORKSPACE)/CANlib/SAM4E_RTOS/libCANlib.a \
         $(WORKSPACE)/CANlib/SAME70_RTOS/libCANlib.a \
         $(WORKSPACE)/CANlib/SAME51_RTOS/libCANlib.a \
         $(WORKSPACE)/CANlib/SAM4S_RTOS/libCANlib.a \
         $(WORKSPACE)/LibTinyusb/SAME70/libLibTinyusb.a \
         $(WORKSPACE)/LibTinyusb/SAME5x/libLibTinyusb.a
-
-$(WORKSPACE)/CoreN2G/SAM4E_SDHC_USB_RTOS/libCoreN2G.a:
-	$(Q)echo "  BUILD   CoreN2G/SAM4E_SDHC_USB_RTOS"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CoreN2G SAM4E_SDHC_USB_RTOS
-
-$(WORKSPACE)/RRFLibraries/SAM4E_RTOS/libRRFLibraries.a:
-	$(Q)echo "  BUILD   RRFLibraries/SAM4E_RTOS"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/RRFLibraries SAM4E_RTOS
-
-$(WORKSPACE)/FreeRTOS/SAM4E/libFreeRTOS.a:
-	$(Q)echo "  BUILD   FreeRTOS/SAM4E"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/FreeRTOS SAM4E FREERTOS_CONFIG_DIR="$(CURDIR)/src"
-
-$(WORKSPACE)/CANlib/SAM4E_RTOS/libCANlib.a:
-	$(Q)echo "  BUILD   CANlib/SAM4E_RTOS"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CANlib SAM4E_RTOS
 
 $(WORKSPACE)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS/libCoreN2G.a:
 	$(Q)echo "  BUILD   CoreN2G/SAME70_CAN_SDHC_USB_RTOS"
@@ -209,8 +187,6 @@ $(WORKSPACE)/CANlib/SAM4S_RTOS/libCANlib.a:
 	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CANlib SAM4S_RTOS
 
 # Include dependency makefiles
--include Makefiles/Duet2.mk
--include Makefiles/Duet2_SBC.mk
 -include Makefiles/Duet3_MB6HC.mk
 -include Makefiles/Duet3_MB6XD.mk
 -include Makefiles/Duet3_CAN0.mk

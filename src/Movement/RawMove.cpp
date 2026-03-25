@@ -13,37 +13,129 @@
 #include <Tools/Tool.h>
 #include <Movement/Move.h>
 #include <Movement/Kinematics/Kinematics.h>
+#include <PrintMonitor/PrintMonitor.h>
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(MovementState, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(MovementState, _condition, __VA_ARGS__)
+#define OBJECT_MODEL_ARRAY_COUNT(_value)		OBJECT_MODEL_ARRAY_COUNT_BODY(MovementState, _value)
+#define OBJECT_MODEL_ARRAY_VALUE(...)			OBJECT_MODEL_ARRAY_VALUE_BODY(MovementState, __VA_ARGS__)
+
+constexpr ObjectModelArrayTableEntry MovementState::objectModelArrayTable[] =
+{
+	// 0. User position
+	{
+		nullptr,					// no lock needed
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetTotalAxes()),
+		OBJECT_MODEL_ARRAY_VALUE(self->raw.coords[context.GetLastIndex()], 3)
+	},
+
+	// 1. Restore points
+	{
+		nullptr,
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(NumVisibleRestorePoints),
+		OBJECT_MODEL_ARRAY_VALUE(&self->restorePoints[context.GetLastIndex()])
+	},
+
+#if SUPPORT_COORDINATE_ROTATION
+	// 2. Rotation centre coordinates
+	{
+		nullptr,					// no lock needed
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
+		OBJECT_MODEL_ARRAY_VALUE(self->g68Centre[context.GetLastIndex()], 3)
+	},
+#endif
+};
+
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(MovementState)
+
+constexpr ObjectModelTableEntry MovementState::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. motionSystems[] members
+	{ "currentMove",			OBJECT_MODEL_FUNC(self, 1),																	ObjectModelEntryFlags::none },
+	{ "currentObject",			OBJECT_MODEL_FUNC_IF(reprap.GetPrintMonitor().IsPrinting(), (int32_t)self->currentObjectNumber),										ObjectModelEntryFlags::none },
+	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),									ObjectModelEntryFlags::live },
+	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->newToolNumber),											ObjectModelEntryFlags::none },
+	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),										ObjectModelEntryFlags::none },
+	{ "printingAcceleration",	OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->raw.maxPrintingAcceleration), 1),		ObjectModelEntryFlags::none },
+	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(1),																	ObjectModelEntryFlags::none },
+#if SUPPORT_COORDINATE_ROTATION
+	{ "rotation",				OBJECT_MODEL_FUNC(self, 2),																	ObjectModelEntryFlags::liveNotPanelDue },
+#endif
+	{ "speedFactor",			OBJECT_MODEL_FUNC(self->speedFactor, 2),													ObjectModelEntryFlags::none },
+	{ "travelAcceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->raw.maxTravelAcceleration), 1),			ObjectModelEntryFlags::none },
+	{ "userPosition",			OBJECT_MODEL_FUNC_ARRAY(0),																	ObjectModelEntryFlags::live },
+	{ "virtualEPos",			OBJECT_MODEL_FUNC(self->latestVirtualExtruderPosition, 5),									ObjectModelEntryFlags::live },
+	{ "workplaceNumber",		OBJECT_MODEL_FUNC((int32_t)self->currentCoordinateSystem),									ObjectModelEntryFlags::none },
+
+	// 1. currentMove members
+	{ "acceleration",			OBJECT_MODEL_FUNC(reprap.GetMove().GetAccelerationMmPerSecSquared(self->GetNumber()), 1),	ObjectModelEntryFlags::liveNotPanelDue },
+	{ "deceleration",			OBJECT_MODEL_FUNC(reprap.GetMove().GetDecelerationMmPerSecSquared(self->GetNumber()), 1),	ObjectModelEntryFlags::liveNotPanelDue },
+	{ "distance",				OBJECT_MODEL_FUNC(reprap.GetMove().GetCurrentMoveDistance(self->GetNumber()), 2),			ObjectModelEntryFlags::liveNotPanelDue },
+	{ "duration",				OBJECT_MODEL_FUNC(reprap.GetMove().GetCurrentMoveDuration(self->GetNumber()), 2),			ObjectModelEntryFlags::liveNotPanelDue },
+	{ "extrusionRate",			OBJECT_MODEL_FUNC(reprap.GetMove().GetTotalExtrusionRate(self->GetNumber()), 2),			ObjectModelEntryFlags::liveNotPanelDue },
+//# if SUPPORT_LASER
+#if 0		// currently the laser support is global, not per motion system
+	{ "laserPwm",				OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetGCodes().GetMachineType() == MachineType::laser,
+															reprap.GetPlatform().GetLaserPwm(), 2),							ObjectModelEntryFlags::liveNotPanelDue },
+# endif
+	{ "requestedSpeed",			OBJECT_MODEL_FUNC(reprap.GetMove().GetRequestedSpeedMmPerSec(self->GetNumber()), 1),		ObjectModelEntryFlags::liveNotPanelDue },
+	{ "topSpeed",				OBJECT_MODEL_FUNC(reprap.GetMove().GetTopSpeedMmPerSec(self->GetNumber()), 1),				ObjectModelEntryFlags::liveNotPanelDue },
+
+#if SUPPORT_COORDINATE_ROTATION
+	// 2. motionSystems[].rotation members
+	{ "angle",					OBJECT_MODEL_FUNC(self->g68Angle, 2),														ObjectModelEntryFlags::liveNotPanelDue },
+	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(2),																	ObjectModelEntryFlags::liveNotPanelDue },
+#endif
+};
+
+constexpr uint8_t MovementState::objectModelTableDescriptor[] =
+{
+	2 + SUPPORT_COORDINATE_ROTATION,
+	12 + SUPPORT_COORDINATE_ROTATION,
+	7,
+#if SUPPORT_COORDINATE_ROTATION
+	2
+#endif
+};
+
+DEFINE_GET_OBJECT_MODEL_TABLE(MovementState)
 
 // Set up some default values in the move buffer for special moves, e.g. for Z probing and firmware retraction. The movement tool is set to null.
 void MovementState::SetDefaults(size_t firstDriveToZero) noexcept
 {
-	moveType = 0;
-	isCoordinated = false;
-	applyM220M221 = false;
-	usingStandardFeedrate = false;
-	usePressureAdvance = false;
+	raw.moveType = 0;
+	raw.isCoordinated = false;
+	raw.applyM220M221 = false;
+	raw.usingStandardFeedrate = false;
+	raw.usePressureAdvance = false;
 	doingArcMove = false;
-	checkEndstops = false;
-	reduceAcceleration = false;
-	hasPositiveExtrusion = false;
-	inverseTimeMode = false;
-	linearAxesMentioned = false;
-	rotationalAxesMentioned = false;
+	raw.checkEndstops = false;
+	raw.reduceAcceleration = false;
+	raw.hasPositiveExtrusion = false;
+	raw.inverseTimeMode = false;
+	raw.linearAxesMentioned = false;
+	raw.rotationalAxesMentioned = false;
 #if SUPPORT_SCANNING_PROBES
-	scanningProbeMove = false;
+	raw.scanningProbeMove = false;
 #endif
 #if SUPPORT_LASER
 	laserPixelData.Clear();
 #endif
-	filePos = noFilePosition;
-	movementTool = nullptr;
+	raw.filePos = noFilePosition;
+	raw.movementTool = nullptr;
 	moveFractionToSkip = 0.0;
 #if 0	// we don't use this yet
 	cosXyAngle = 1.0;
 #endif
 	for (size_t drive = firstDriveToZero; drive < MaxAxesPlusExtruders; ++drive)
 	{
-		coords[drive] = 0.0;					// clear extrusion
+		raw.coords[drive] = 0.0;				// clear extrusion
 	}
 }
 
@@ -54,10 +146,10 @@ void MovementState::ClearMove() noexcept
 	segmentsLeft = 0;
 	segMoveState = SegmentedMoveState::inactive;
 	doingArcMove = false;
-	checkEndstops = false;
-	reduceAcceleration = false;
-	moveType = 0;
-	applyM220M221 = false;
+	raw.checkEndstops = false;
+	raw.reduceAcceleration = false;
+	raw.moveType = 0;
+	raw.applyM220M221 = false;
 	moveFractionToSkip = 0.0;
 }
 
@@ -76,7 +168,7 @@ LogicalDrivesBitmap MovementState::allLogicalDrivesOwned;					// logical drives 
 	memseti32(lastKnownEndpoints, 0, ARRAY_SIZE(lastKnownEndpoints));
 	Move& move = reprap.GetMove();
 	move.CartesianToMotorSteps(initialPosition, lastKnownEndpoints, false);
-	move.SetMotorPositions(allLogicalDrives, lastKnownEndpoints, true);
+	move.SetMotorPositions(RawMove::allLogicalDrives, lastKnownEndpoints, true);
 }
 
 float MovementState::GetProportionDone() const noexcept
@@ -89,7 +181,7 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 {
 	msNumber = p_msNumber;
 	ClearMove();
-	filePos = noFilePosition;
+	raw.filePos = noFilePosition;
 	codeQueue->Clear();
 	currentCoordinateSystem = 0;
 
@@ -100,16 +192,16 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 	pausedInMacro = false;
 
 #if SUPPORT_ASYNC_MOVES
-	axesAndExtrudersOwned.Clear();
-	logicalDrivesOwned.Clear();
+	raw.axesAndExtrudersOwned.Clear();
+	raw.logicalDrivesOwned.Clear();
 	ownedAxisLetters.Clear();
 #endif
 
-	maxPrintingAcceleration = ConvertAcceleration(DefaultPrintingAcceleration);
-	maxTravelAcceleration = ConvertAcceleration(DefaultTravelAcceleration);
+	raw.maxPrintingAcceleration = ConvertAcceleration(DefaultPrintingAcceleration);
+	raw.maxTravelAcceleration = ConvertAcceleration(DefaultTravelAcceleration);
 
-	movementTool = currentTool = nullptr;
-	latestVirtualExtruderPosition = moveStartVirtualExtruderPosition = 0.0;
+	raw.movementTool = currentTool = nullptr;
+	latestVirtualExtruderPosition = raw.moveStartVirtualExtruderPosition = 0.0;
 	virtualFanSpeed = 0.0;
 	speedFactor = 1.0;
 	newToolNumber = -1;
@@ -133,8 +225,8 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 
 void MovementState::SetInitialMachineCoordinates(const float initialPosition[MaxAxesPlusExtruders]) noexcept
 {
-	memcpyf(coords, initialPosition, MaxAxesPlusExtruders);
-	reprap.GetMove().SetLastEndpoints(msNumber, allLogicalDrives, lastKnownEndpoints);
+	memcpyf(raw.coords, initialPosition, MaxAxesPlusExtruders);
+	reprap.GetMove().SetLastEndpoints(msNumber, RawMove::allLogicalDrives, lastKnownEndpoints);
 }
 
 // Reset the laser parameters (also resets iobits because that is shared with laser)
@@ -144,15 +236,15 @@ void MovementState::ResetLaser() noexcept
 	laserPixelData.Clear();
 #endif
 #if SUPPORT_LASER || SUPPORT_IOBITS
-	laserPwmOrIoBits.Clear();
+	raw.laserPwmOrIoBits.Clear();
 #endif
 }
 
 void MovementState::ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept
 {
-	if (segmentsLeft != 0 && applyM220M221)
+	if (segmentsLeft != 0 && raw.applyM220M221)
 	{
-		coords[ExtruderToLogicalDrive(extruder)] *= multiplier;		// last move not gone, so update it
+		raw.coords[ExtruderToLogicalDrive(extruder)] *= multiplier;		// last move not gone, so update it
 	}
 }
 
@@ -182,7 +274,7 @@ void MovementState::Diagnostics(const StringRef& reply) const noexcept
 				,
 				segmentsLeft
 #if SUPPORT_ASYNC_MOVES
-				, axesAndExtrudersOwned.GetRaw(), logicalDrivesOwned.GetRaw()
+				, raw.axesAndExtrudersOwned.GetRaw(), raw.logicalDrivesOwned.GetRaw()
 #endif
 									);
 	codeQueue->Diagnostics(reply);
@@ -203,10 +295,10 @@ void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes
 	rp.fanSpeed = virtualFanSpeed;
 
 #if SUPPORT_ASYNC_MOVES
-	rp.axesAndExtrudersOwned = axesAndExtrudersOwned;
+	rp.axesAndExtrudersOwned = raw.axesAndExtrudersOwned;
 #endif
 #if SUPPORT_LASER || SUPPORT_IOBITS
-	rp.laserPwmOrIoBits = laserPwmOrIoBits;
+	rp.laserPwmOrIoBits = raw.laserPwmOrIoBits;
 #endif
 #if SUPPORT_LASER
 	rp.laserPixelData = laserPixelData;
@@ -216,7 +308,7 @@ void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes
 // Restore current values from the pause restore point
 void MovementState::ResumeAfterPause() noexcept
 {
-	moveStartVirtualExtruderPosition = latestVirtualExtruderPosition = GetPauseRestorePoint().virtualExtruderPosition;	// reset the extruder position in case we are receiving absolute extruder moves
+	raw.moveStartVirtualExtruderPosition = latestVirtualExtruderPosition = GetPauseRestorePoint().virtualExtruderPosition;	// reset the extruder position in case we are receiving absolute extruder moves
 	moveFractionToSkip = GetPauseRestorePoint().proportionDone;
 	restartInitialUserC0 = GetPauseRestorePoint().initialUserC0;
 	restartInitialUserC1 = GetPauseRestorePoint().initialUserC1;
@@ -325,7 +417,7 @@ void MovementState::SetNewPositionOfOwnedAxes() noexcept
 {
 	// First apply any skew compensation
 	float ncoords[MaxAxes];
-	memcpyf(ncoords, coords, ARRAY_SIZE(ncoords));
+	memcpyf(ncoords, raw.coords, ARRAY_SIZE(ncoords));
 	Move& move = reprap.GetMove();
 	move.AxisAndBedTransform(ncoords, currentTool, true);
 
@@ -338,25 +430,25 @@ void MovementState::SetNewPositionOfOwnedAxes() noexcept
 	move.UpdateStartCoordinates(msNumber, ncoords);
 
 	// Update the motor endpoints in the DDA ring, in the DMs, and in lastKnownEndpoints
-	ChangeEndpointsAfterHoming(logicalDrivesOwned, endpoints);
+	ChangeEndpointsAfterHoming(raw.logicalDrivesOwned, endpoints);
 }
 
 // Fetch lastKnownEndpoints from the motors for our owned drives and update the endpoints in our DDA ring
 void MovementState::UpdateOwnedDriveEndpointsFromMotors() noexcept
 {
 	Move& move = reprap.GetMove();
-	logicalDrivesOwned.Iterate([&move](unsigned int drive, unsigned int count) noexcept
+	raw.logicalDrivesOwned.Iterate([&move](unsigned int drive, unsigned int count) noexcept
 								{
 									lastKnownEndpoints[drive] = move.GetLiveMotorPosition(drive) - move.GetCurrentBacklashSteps(drive);
 								}
 							  );
-	move.SetLastEndpoints(msNumber, logicalDrivesOwned, lastKnownEndpoints);
+	move.SetLastEndpoints(msNumber, raw.logicalDrivesOwned, lastKnownEndpoints);
 }
 
 // Update lastKnownEndpoints for our owned drives. Called when pausing.
 void MovementState::UpdateOwnedDriveLastEndpoints(const int32_t endpoints[MaxAxes]) noexcept
 {
-	logicalDrivesOwned.Iterate([this, endpoints](unsigned int drive, unsigned int count) noexcept
+	raw.logicalDrivesOwned.Iterate([this, endpoints](unsigned int drive, unsigned int count) noexcept
 								{
 									lastKnownEndpoints[drive] = endpoints[drive];
 								}
@@ -367,7 +459,7 @@ void MovementState::UpdateOwnedDriveLastEndpoints(const int32_t endpoints[MaxAxe
 void MovementState::SaveOwnDriveCoordinates() const noexcept
 {
 	Move& move = reprap.GetMove();
-	move.GetLastEndpoints(msNumber, logicalDrivesOwned, lastKnownEndpoints);
+	move.GetLastEndpoints(msNumber, raw.logicalDrivesOwned, lastKnownEndpoints);
 }
 
 void MovementState::ChangeEndpointsAfterHoming(LogicalDrivesBitmap drives, const int32_t endpoints[MaxAxes]) noexcept
@@ -416,7 +508,7 @@ void MovementState::ChangeSingleEndpointAfterHoming(size_t drive, int32_t ep) no
 // Release all owned axes and extruders
 void MovementState::ReleaseAllOwnedAxesAndExtruders() noexcept
 {
-	ReleaseAxesAndExtruders(axesAndExtrudersOwned);
+	ReleaseAxesAndExtruders(raw.axesAndExtrudersOwned);
 }
 
 // Release some of the axes/extruders that we own. We must also clear the cache of owned axis letters.
@@ -425,12 +517,12 @@ void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
 {
 	//debugPrintf("Release axes 0x%08" PRIx32, axesToRelease.GetRaw());
 	SaveOwnDriveCoordinates();										// save the positions of the drives we own before we release them, otherwise we will get the wrong positions when we allocate them again
-	LogicalDrivesBitmap axesAndExtrudersToRetain = axesAndExtrudersOwned & ~axesToRelease;
+	LogicalDrivesBitmap axesAndExtrudersToRetain = raw.axesAndExtrudersOwned & ~axesToRelease;
 	LogicalDrivesBitmap drivesToRetain;
 	FormClosure(axesAndExtrudersToRetain, drivesToRetain);
-	const LogicalDrivesBitmap drivesToRelease = logicalDrivesOwned & ~drivesToRetain;
-	axesAndExtrudersOwned = axesAndExtrudersToRetain;
-	logicalDrivesOwned = drivesToRetain;
+	const LogicalDrivesBitmap drivesToRelease = raw.logicalDrivesOwned & ~drivesToRetain;
+	raw.axesAndExtrudersOwned = axesAndExtrudersToRetain;
+	raw.logicalDrivesOwned = drivesToRetain;
 	allLogicalDrivesOwned.ClearBits(drivesToRelease);
 	ownedAxisLetters.Clear();										// clear the cache of owned axis letters
 	//debugPrintf(" still own 0x%08" PRIx32 " drives 0x%08" PRIx32 "\n", axesAndExtrudersOwned.GetRaw(), logicalDrivesOwned.GetRaw());
@@ -451,7 +543,7 @@ void MovementState::ReleaseNonToolAxesAndExtruders() noexcept
 LogicalDrivesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept
 {
 	// Sometimes we ask to allocate axes that we already own, e.g. when doing firmware retraction. Optimise this case.
-	AxesBitmap axesNeeded = axes & ~axesAndExtrudersOwned;
+	AxesBitmap axesNeeded = axes & ~raw.axesAndExtrudersOwned;
 	if (axesNeeded.IsEmpty())
 	{
 		ownedAxisLetters |= axisLetters;
@@ -463,7 +555,7 @@ LogicalDrivesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLetter
 	LogicalDrivesBitmap drivesNeeded;
 	FormClosure(axesNeeded, drivesNeeded);
 	//debugPrintf(" closure (0x%08" PRIx32 ", 0x%08" PRIx32, axesNeeded.GetRaw(), drivesNeeded.GetRaw());
-	drivesNeeded &= ~logicalDrivesOwned;
+	drivesNeeded &= ~raw.logicalDrivesOwned;
 
 	const LogicalDrivesBitmap unavailableDrives = drivesNeeded & allLogicalDrivesOwned;
 	if (unavailableDrives.IsEmpty())
@@ -473,18 +565,18 @@ LogicalDrivesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLetter
 
 		// Update the set of logical drives that we own
 		Move& move = reprap.GetMove();
-		move.GetLastEndpoints(msNumber, logicalDrivesOwned, lastKnownEndpoints);
+		move.GetLastEndpoints(msNumber, raw.logicalDrivesOwned, lastKnownEndpoints);
 		allLogicalDrivesOwned |= drivesNeeded;
-		logicalDrivesOwned |= drivesNeeded;
-		axesAndExtrudersOwned |= axesNeeded;
+		raw.logicalDrivesOwned |= drivesNeeded;
+		raw.axesAndExtrudersOwned |= axesNeeded;
 		//debugPrintf(" now own 0x%08" PRIx32 " drives 0x%08" PRIx32 "\n", axesAndExtrudersOwned.GetRaw(), logicalDrivesOwned.GetRaw());
 
 		// If we allocated any logical drives, get the last endpoints for those drives and update our Cartesian coordinates
 		if (!drivesNeeded.IsEmpty())
 		{
 			move.SetLastEndpoints(msNumber, drivesNeeded, lastKnownEndpoints);
-			move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), coords);
-			move.InverseAxisAndBedTransform(coords, currentTool);
+			move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), raw.coords);
+			move.InverseAxisAndBedTransform(raw.coords, currentTool);
 		}
 	}
 	return unavailableDrives;
@@ -496,18 +588,18 @@ LogicalDrivesBitmap MovementState::AllocateDrives(LogicalDrivesBitmap drivesNeed
 	AxesBitmap affectedAxes;
 	FormClosure(affectedAxes, drivesNeeded);
 
-	drivesNeeded &= ~logicalDrivesOwned;
+	drivesNeeded &= ~raw.logicalDrivesOwned;
 	const LogicalDrivesBitmap unavailableDrives = drivesNeeded & allLogicalDrivesOwned;
 	if (!drivesNeeded.IsEmpty() && unavailableDrives.IsEmpty())
 	{
 		Move& move = reprap.GetMove();
-		move.GetLastEndpoints(msNumber, logicalDrivesOwned, lastKnownEndpoints);
+		move.GetLastEndpoints(msNumber, raw.logicalDrivesOwned, lastKnownEndpoints);
 		allLogicalDrivesOwned |= drivesNeeded;
-		logicalDrivesOwned |= drivesNeeded;
-		axesAndExtrudersOwned |= affectedAxes;
+		raw.logicalDrivesOwned |= drivesNeeded;
+		raw.axesAndExtrudersOwned |= affectedAxes;
 		move.SetLastEndpoints(msNumber, drivesNeeded, lastKnownEndpoints);
-		move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), coords);
-		move.InverseAxisAndBedTransform(coords, currentTool);
+		move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), raw.coords);
+		move.InverseAxisAndBedTransform(raw.coords, currentTool);
 	}
 	return unavailableDrives;
 }
@@ -535,8 +627,8 @@ void MovementState::UpdateCoordinatesFromLastKnownEndpoints() noexcept
 	float machinePosition[MaxAxes];
 	Move& move = reprap.GetMove();
 	move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), machinePosition);
-	memcpyf(coords, machinePosition, reprap.GetGCodes().GetTotalAxes());
-	move.InverseAxisAndBedTransform(coords, currentTool);
+	memcpyf(raw.coords, machinePosition, reprap.GetGCodes().GetTotalAxes());
+	move.InverseAxisAndBedTransform(raw.coords, currentTool);
 }
 
 void AsyncMove::SetDefaults() noexcept

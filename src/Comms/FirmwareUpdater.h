@@ -14,12 +14,12 @@ namespace FirmwareUpdater
 {
 	enum {
 		Mainboard = 0,
-		Sbc = 2,				 // Module 2 used to be the DWC binary file, now it is used to update SBC firmware
+		Sbc = 2,				// Module 2 used to be the DWC binary file, now it is used to update SBC firmware
 #if HAS_WIFI_NETWORKING
 		WifiFirmwareModule = 1,
-		WifiExternalFirmwareModule = 3,
+		_unused = 3,			// Module 2 was WifiExternalFirmwareModule, no longer supported
 #endif
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 		PanelDueFirmwareModule = 4,
 #endif
 		NumUpdateModules

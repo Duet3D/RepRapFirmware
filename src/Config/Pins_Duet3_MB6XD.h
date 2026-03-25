@@ -2,6 +2,8 @@
 #define PINS_DUET3_MB6XD_H__
 
 #include <PinDescription.h>
+#include <SPI/SpiParameters.h>
+#include <UART/UartParameters.h>
 
 #define BOARD_SHORT_NAME		"MB6XD"
 #define BOARD_NAME				"Duet 3 MB6XD"
@@ -43,6 +45,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_BME280			1
+#define SUPPORT_BME68X			1
 #define SUPPORT_ADS131A02		1
 
 #define SUPPORT_ACCELEROMETERS	1
@@ -70,6 +73,8 @@ constexpr size_t MaxPortsPerHeater = 3;
 
 constexpr size_t MaxBedHeaters = 12;
 constexpr size_t MaxChamberHeaters = 8;
+constexpr size_t MaxHeatersPerBed = 4;
+constexpr size_t MaxHeatersPerChamber = 4;
 
 constexpr size_t NumThermistorInputs = 4;
 constexpr size_t NumTmcDriversSenseChannels = 1;
@@ -86,29 +91,51 @@ constexpr size_t MaxExtrudersPerTool = 12;			// Increased in 3.5.2 because a use
 
 constexpr unsigned int MaxTriggers = 32;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 
+// USB and other serial devices
 #define SERIAL_USB_DEVICE serialUSB
 #if CORE_USES_TINYUSB
-# define SERIAL_USB2_DEVICE serialUSB2
-#endif
-#define SERIAL_AUX_DEVICE serialUart1
-#define SERIAL_AUX2_DEVICE serialUart2
-
-#ifdef SERIAL_USB2_DEVICE
-constexpr size_t NumSerialChannels = 4;				// The number of serial IO channels not counting the WiFi serial connection (USB, USB2, and two auxiliary UARTs)
-constexpr size_t FirstAuxChannel = 2;
+constexpr size_t NumUsbChannels = 2;
+# define SERIAL_USB2_DEVICE (serialUSB2)
 #else
-constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels not counting the WiFi serial connection (USB and two auxiliary UARTs)
-constexpr size_t FirstAuxChannel = 1;
+constexpr size_t NumUsbChannels = 1;
 #endif
-constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 
-// Shared SPI (USART 1)
-constexpr Pin APIN_USART_SSPI_SCK = PortBPin(13);
-constexpr GpioPinFunction USARTSPIMosiPeriphMode = GpioPinFunction::C;
-constexpr Pin APIN_USART_SSPI_MOSI = PortBPin(1);
-constexpr GpioPinFunction USARTSPIMisoPeriphMode = GpioPinFunction::C;
-constexpr Pin APIN_USART_SSPI_MISO = PortBPin(0);
-constexpr GpioPinFunction USARTSPISckPeriphMode = GpioPinFunction::C;
+#define NUM_ASYNC_PORTS			(2)
+#define NUM_ASYNC_CHANNELS		(2)
+
+constexpr size_t NumSerialChannels = NumUsbChannels + NUM_ASYNC_CHANNELS;				// The number of serial IO channels not counting the WiFi serial connection (USB, USB2, and two auxiliary UARTs)
+
+constexpr UartParameters Serial0Params =
+{
+	.uartOrUsartInstance = 2,						// uart 2
+	.rxPin = PortDPin(25),
+	.txPin = PortDPin(26),
+	.pinFunction = GpioPinFunction::C,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
+
+constexpr UartParameters Serial1Params =
+{
+	.uartOrUsartInstance = 2 | 0x80,				// usart 2
+	.rxPin = PortDPin(15),
+	.txPin = PortDPin(16),
+	.pinFunction = GpioPinFunction::B,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
+
+constexpr auto Serial1PinFunction = GpioPinFunction::B;
+
+// Shared SPI definitions
+constexpr SpiParameters SharedSpiParams =
+{
+	.usartNumber = 0,
+	.mosiPin = PortBPin(1),
+	.misoPin = PortBPin(0),
+	.sclkPin = PortBPin(13),
+	.pinFunction = GpioPinFunction::C,
+};
 
 constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB port
 
@@ -183,11 +210,6 @@ constexpr Pin EthernetPhyOtherPins[] = {
 		PortDPin(5), PortDPin(6), PortDPin(7), PortDPin(8), PortDPin(9)
 };
 constexpr auto EthernetPhyOtherPinsFunction = GpioPinFunction::A;
-
-// Shared SPI definitions
-#define USART_SPI		1
-#define USART_SSPI		USART0
-#define ID_SSPI			ID_USART0
 
 // Modbus (board version 1.02 and later)
 constexpr Pin ModbusTxPin = PortDPin(24);
@@ -352,14 +374,6 @@ constexpr size_t NumRealPins = 32+32+32+32+6;
 constexpr size_t NumVirtualPins = 0;
 
 static_assert(NumNamedPins == NumRealPins + NumVirtualPins);
-
-// Serial Interfaces
-constexpr Pin APIN_Serial0_RXD = PortDPin(25);
-constexpr Pin APIN_Serial0_TXD = PortDPin(26);
-constexpr auto Serial0PinFunction = GpioPinFunction::C;
-constexpr Pin APIN_Serial1_RXD = PortDPin(15);
-constexpr Pin APIN_Serial1_TXD = PortDPin(16);
-constexpr auto Serial1PinFunction = GpioPinFunction::B;
 
 // SD Card
 constexpr Pin HsmciMclkPin = PortAPin(25);

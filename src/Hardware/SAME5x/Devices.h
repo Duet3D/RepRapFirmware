@@ -9,10 +9,6 @@
 #ifndef SRC_HARDWARE_SAME5X_DEVICES_H_
 #define SRC_HARDWARE_SAME5X_DEVICES_H_
 
-#include <AsyncSerial.h>
-
-extern AsyncSerial serialUart0, serialUart1;
-
 #define SUPPORT_USB		1		// needed by SerialCDC.h
 #include <SerialCDC.h>
 

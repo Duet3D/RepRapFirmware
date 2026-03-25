@@ -12,7 +12,7 @@
 #include <Movement/StepTimer.h>
 
 NeoPixelLedStrip::NeoPixelLedStrip(bool p_isRGBW) noexcept
-	: LocalLedStrip((p_isRGBW) ? LedStripType::NeoPixel_RGBW : LedStripType::NeoPixel_RGB, DefaultNeoPixelSpiClockFrequency),
+	: LocalLedStrip((p_isRGBW) ? LedStripType::NeoPixel_RGBW : LedStripType::NeoPixel_RGB, DefaultNeoPixelSpiClockFrequency, ColorOrder::GRB),
 	  isRGBW(p_isRGBW)
 {
 }
@@ -62,19 +62,7 @@ GCodeResult NeoPixelLedStrip::HandleM150(CanMessageGenericParser& parser, const 
 
 	LedParams params;
 	params.GetM150Params(parser);
-	params.ApplyBrightness();
-
-#if SUPPORT_DMA_NEOPIXEL
-	if (UsesDma())
-	{
-		SpiSendData(params);
-	}
-	else
-#endif
-	{
-		BitBangData(params);
-	}
-	return GCodeResult::ok;
+	return NeoPixelSendData(params);
 }
 
 #endif
@@ -96,6 +84,12 @@ GCodeResult NeoPixelLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply
 
 	LedParams params;
 	params.GetM150Params(gb);
+	return NeoPixelSendData(params);
+}
+
+GCodeResult NeoPixelLedStrip::NeoPixelSendData(LedParams& params) noexcept
+{
+	params.SwapColours(colorOrder);
 	params.ApplyBrightness();
 
 #if SUPPORT_DMA_NEOPIXEL
@@ -150,11 +144,11 @@ GCodeResult NeoPixelLedStrip::SpiSendData(const LedParams& params) noexcept
 	uint8_t *_ecv_array p = chunkBuffer + (bytesPerLed * numAlreadyInBuffer);
 	while (numLeds != 0 && p + bytesPerLed <= chunkBuffer + chunkBufferSize)
 	{
-		EncodeNeoPixelByte(p, (uint8_t)params.green);
+		EncodeNeoPixelByte(p, (uint8_t)params.firstColour);
 		p += 4;
-		EncodeNeoPixelByte(p, (uint8_t)params.red);
+		EncodeNeoPixelByte(p, (uint8_t)params.secondColour);
 		p += 4;
-		EncodeNeoPixelByte(p, (uint8_t)params.blue);
+		EncodeNeoPixelByte(p, (uint8_t)params.thirdColour);
 		p += 4;
 		if (isRGBW)
 		{
@@ -198,9 +192,9 @@ GCodeResult NeoPixelLedStrip::BitBangData(const LedParams& params) noexcept
 	uint8_t *_ecv_array p = chunkBuffer + (bytesPerLed * numAlreadyInBuffer);
 	while (numLeds != 0 && p + bytesPerLed <= chunkBuffer + chunkBufferSize)
 	{
-		*p++ = (uint8_t)params.green;
-		*p++ = (uint8_t)params.red;
-		*p++ = (uint8_t)params.blue;
+		*p++ = (uint8_t)params.firstColour;
+		*p++ = (uint8_t)params.secondColour;
+		*p++ = (uint8_t)params.thirdColour;
 		if (isRGBW)
 		{
 			*p++ = (uint8_t)params.white;

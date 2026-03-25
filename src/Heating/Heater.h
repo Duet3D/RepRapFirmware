@@ -106,9 +106,10 @@ public:
 	void ClearModelAndMonitors() noexcept;
 
 	HeaterFunction GetFunction() const noexcept { return function; }
-	void SetAsToolHeater() noexcept;
-	void SetAsBedHeater() noexcept;
-	void SetAsChamberHeater() noexcept;
+	void SetFunction(HeaterFunction func) noexcept;
+	void SetAsToolHeater() noexcept { SetFunction(HeaterFunction::tool); }
+	void SetAsBedHeater() noexcept { SetFunction(HeaterFunction::bed); }
+	void SetAsChamberHeater() noexcept { SetFunction(HeaterFunction::chamber); }
 
 	bool IsCoolingDevice() const noexcept { return model.IsInverted(); }
 

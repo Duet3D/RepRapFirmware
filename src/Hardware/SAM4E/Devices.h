@@ -8,11 +8,6 @@
 #ifndef SRC_HARDWARE_SAM4E_DEVICES_H_
 #define SRC_HARDWARE_SAM4E_DEVICES_H_
 
-#include <AsyncSerial.h>
-
-extern AsyncSerial serialUart;
-extern AsyncSerial serialWiFi;
-
 #define SUPPORT_USB		1		// needed by SerialCDC.h
 #include <SerialCDC.h>
 

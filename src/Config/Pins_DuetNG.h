@@ -2,6 +2,8 @@
 #define PINS_DUETNG_H__
 
 #include <PinDescription.h>
+#include <SPI/SpiParameters.h>
+#include <UART/UartParameters.h>
 
 // Pins definition file for Duet 2 WiFi/Ethernet
 // This file is normally #included by #including RepRapFirmware.h, which includes this file
@@ -100,6 +102,8 @@ constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors p
 
 constexpr size_t MaxBedHeaters = 4;
 constexpr size_t MaxChamberHeaters = 4;
+constexpr size_t MaxHeatersPerBed = 4;
+constexpr size_t MaxHeatersPerChamber = 4;
 
 constexpr size_t NumThermistorInputs = 8;
 constexpr size_t NumTmcDriversSenseChannels = 2;
@@ -125,14 +129,38 @@ constexpr unsigned int MaxTriggers = 16;			// Must be <= 32 because we store a b
 constexpr size_t MaxSpindles = 4;					// Maximum number of configurable spindles
 constexpr size_t MaxLedStrips = 2;					// Maximum number of LED strips
 
-constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
-constexpr size_t FirstAuxChannel = 1;
-constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
+// USB and serial ports
+constexpr size_t NumUsbChannels = 1;
+#define NUM_ASYNC_PORTS			(1)
+#define NUM_ASYNC_CHANNELS		(NUM_ASYNC_PORTS)
+
+constexpr size_t NumSerialChannels = NumUsbChannels + NUM_ASYNC_CHANNELS;	// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 
 #define SERIAL_USB_DEVICE	serialUSB
 #define SERIAL_AUX_DEVICE	serialUart
 
 constexpr Pin UsbVBusPin = PortCPin(22);			// Pin used to monitor VBUS on USB port
+
+// Serial
+constexpr UartParameters Serial0Params =
+{
+	.uartOrUsartInstance = 0,						// uart 0
+	.rxPin = PortAPin(9),
+	.txPin = PortAPin(10),
+	.pinFunction = GpioPinFunction::A,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
+
+constexpr UartParameters SerialWiFiParams =
+{
+	.uartOrUsartInstance = 1,						// uart 1
+	.rxPin = PortAPin(5),
+	.txPin = PortAPin(6),
+	.pinFunction = GpioPinFunction::C,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
 
 #define I2C_IFACE	Wire							// Which TWI interface we use
 #define I2C_IRQn	WIRE_ISR_ID						// The interrupt number it uses
@@ -163,10 +191,10 @@ constexpr Pin DIRECTION_PINS[NumDirectDrivers] =
 };
 
 // Pin assignments etc. using USART1 in SPI mode
+constexpr uint8_t Tmc2660UsartInstance = 1;
 Usart * const USART_TMC2660 = USART1;
 constexpr uint32_t  ID_TMC2660_SPI = ID_USART1;
 constexpr IRQn TMC2660_SPI_IRQn = USART1_IRQn;
-# define TMC2660_SPI_Handler	USART1_Handler
 
 constexpr Pin TMC2660MosiPin = PortAPin(22);
 constexpr Pin TMC2660MisoPin = PortAPin(21);
@@ -244,9 +272,14 @@ constexpr Pin LcdBeepPin = PortDPin(21);		// connlcd.10	-> exp1.10
 #endif
 
 // Shared SPI definitions
-#define USART_SPI		1
-#define USART_SSPI		USART0
-#define ID_SSPI			ID_USART0
+constexpr SpiParameters SharedSpiParams =
+{
+	.usartNumber = 0,
+	.mosiPin = PortBPin(1),
+	.misoPin = PortBPin(0),
+	.sclkPin = PortBPin(13),
+	.pinFunction = GpioPinFunction::C,
+};
 
 // List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
 // The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
@@ -442,14 +475,6 @@ constexpr size_t NumVirtualPins = 0;
 
 static_assert(NumNamedPins == NumRealPins + NumVirtualPins);
 
-// USARTs used for SPI
-constexpr Pin APIN_USART_SSPI_MOSI = PortBPin(1);
-constexpr GpioPinFunction USARTSPIMosiPeriphMode = GpioPinFunction::C;
-constexpr Pin APIN_USART_SSPI_MISO = PortBPin(0);
-constexpr GpioPinFunction USARTSPIMisoPeriphMode = GpioPinFunction::C;
-constexpr Pin APIN_USART_SSPI_SCK = PortBPin(13);
-constexpr GpioPinFunction USARTSPISckPeriphMode = GpioPinFunction::C;
-
 // SD Card
 constexpr Pin HsmciClockPin = PortAPin(29);
 constexpr Pin HsmciOtherPins[] = { PortAPin(28), PortAPin(30), PortAPin(31), PortAPin(26), PortAPin(27) };
@@ -466,16 +491,6 @@ constexpr GpioPinFunction TWIPeriphMode = GpioPinFunction::A;
 #define WIRE_INTERFACE_ID	ID_TWI0
 #define WIRE_ISR_HANDLER	TWI0_Handler
 #define WIRE_ISR_ID			TWI0_IRQn
-
-// Serial
-constexpr Pin APIN_Serial0_RXD = PortAPin(9);
-constexpr Pin APIN_Serial0_TXD = PortAPin(10);
-constexpr GpioPinFunction Serial0PeriphMode = GpioPinFunction::A;
-
-// Serial1
-constexpr Pin APIN_SerialWiFi_RXD = PortAPin(5);
-constexpr Pin APIN_SerialWiFi_TXD = PortAPin(6);
-constexpr GpioPinFunction SerialWiFiPeriphMode = GpioPinFunction::C;
 
 // Duet pin numbers to control the WiFi interface on the Duet WiFi
 #define ESP_SPI					SPI

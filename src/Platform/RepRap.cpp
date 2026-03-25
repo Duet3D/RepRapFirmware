@@ -334,13 +334,13 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "zProbes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbes),							ObjectModelEntryFlags::verbose },
 
 	// 3. state (see declaration of StateSubTableNumber above)
-	{ "atxPower",				OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerState()),	ObjectModelEntryFlags::none },
-	{ "atxPowerPort",			OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerPort()),	ObjectModelEntryFlags::none },
-	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),					ObjectModelEntryFlags::none },
-	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).GetCurrentToolNumber()),	ObjectModelEntryFlags::live },
+	{ "atxPower",				OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerState()),		ObjectModelEntryFlags::none },
+	{ "atxPowerPort",			OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerPort()),		ObjectModelEntryFlags::none },
+	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),													ObjectModelEntryFlags::none },
+	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).GetCurrentToolNumber()),		ObjectModelEntryFlags::live },
 	{ "deferredPowerDown",		OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->IsDeferredPowerDown()),	ObjectModelEntryFlags::none },
-	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),								ObjectModelEntryFlags::none },
-	{ "gpOut",					OBJECT_MODEL_FUNC_ARRAY(6),												ObjectModelEntryFlags::liveNotPanelDue },
+	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),																ObjectModelEntryFlags::none },
+	{ "gpOut",					OBJECT_MODEL_FUNC_ARRAY(6),																				ObjectModelEntryFlags::liveNotPanelDue },
 #if SUPPORT_LASER
 	// 2020-04-24: return the configured laser PWM even if the laser is temporarily turned off
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF(self->gCodes->GetMachineType() == MachineType::laser, self->gCodes->GetLaserPwm(), 2),	ObjectModelEntryFlags::live },
@@ -355,12 +355,12 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "macroRestarted",			OBJECT_MODEL_FUNC(self->gCodes->GetMacroRestarted()),					ObjectModelEntryFlags::none },
 	{ "messageBox",				OBJECT_MODEL_FUNC_IF_NOSELF(MessageBox::HaveCurrent(), MessageBox::GetCurrent(), 0), ObjectModelEntryFlags::important },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
-	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none },
+	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none | ObjectModelEntryFlags::obsolete },
 #if HAS_VOLTAGE_MONITOR
 	{ "powerFailScript",		OBJECT_MODEL_FUNC(self->gCodes->GetPowerFailScript()),					ObjectModelEntryFlags::none },
 #endif
-	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).previousToolNumber),	ObjectModelEntryFlags::none },
-	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(7),												ObjectModelEntryFlags::none },
+	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).previousToolNumber),	ObjectModelEntryFlags::none | ObjectModelEntryFlags::obsolete },
+	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(7),												ObjectModelEntryFlags::obsolete },
 	{ "startupError",			OBJECT_MODEL_FUNC_IF(!self->configErrorMessage.IsNull(), self, 6),		ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
 	{ "thisActive",
@@ -1857,7 +1857,7 @@ void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 	}
 #endif
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	if (platform->IsChanEnabled(FirstAuxChannel) && !platform->IsChanRaw(FirstAuxChannel))
 	{
 		platform->PanelDueBeep(freq, ms);
@@ -1883,7 +1883,7 @@ void RepRap::SetMessage(c_string msg) noexcept
 #endif
 	StateUpdated();
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 	if (platform->IsChanEnabled(FirstAuxChannel) && !platform->IsChanRaw(FirstAuxChannel))
 	{
 		platform->SendPanelDueMessage(FirstAuxChannel, msg);
@@ -2121,10 +2121,10 @@ void RepRap::PrepareToLoadIap() noexcept
 	{
 		if (*p != 0x7E)
 		{
-			SERIAL_AUX_DEVICE.printf("At %08" PRIx32 ": %02x\n", reinterpret_cast<uint32_t>(p), *p);
+			asyncPorts[0]->printf("At %08" PRIx32 ": %02x\n", reinterpret_cast<uint32_t>(p), *p);
 		}
 	}
-	SERIAL_AUX_DEVICE.printf("Scan complete\n");
+	asyncPorts[0]->printf("Scan complete\n");
 	delay(1000);							// give it time to send the message
 #endif
 }

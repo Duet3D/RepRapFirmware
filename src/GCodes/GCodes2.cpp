@@ -737,7 +737,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_SCANNING_PROBES
 			&& code != 558
 #endif
-			&& code != 140 && code != 569 && code != 581 && code != 586 && code != 587		// these are the only M-codes we implement that can have fractional parts
+			&& code != 569 && code != 581 && code != 586 && code != 587		// these are the only M-codes we implement that can have fractional parts
 #if SUPPORT_PHASE_STEPPING
 			&& code != 970
 #endif
@@ -2028,27 +2028,33 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 						if (chamberCount == 0)
 						{
-							// If no values are specified, wait for all chamber heaters
+							// If no values are specified, wait for all chamber heaters in all slots
 							for (size_t i = 0; i < MaxChamberHeaters; i++)
 							{
-								const int8_t heater = reprap.GetHeat().GetChamberHeater(i);
-								if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance, gb.IsFileChannel()))
+								for (size_t k = 0; k < reprap.GetHeat().GetChamberHeaterCount(i); k++)
 								{
-									return false;
+									const int heater = reprap.GetHeat().GetChamberHeaterAt(i, k);
+									if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance, gb.IsFileChannel()))
+									{
+										return false;
+									}
 								}
 							}
 						}
 						else
 						{
-							// Otherwise wait only for the specified chamber heaters
+							// Otherwise wait only for all heaters in the specified chamber slots
 							for (size_t i = 0; i < chamberCount; i++)
 							{
-								if (chamberIndices[i] >= 0 && chamberIndices[i] < MaxChamberHeaters)
+								if (chamberIndices[i] < MaxChamberHeaters)
 								{
-									const int8_t heater = reprap.GetHeat().GetChamberHeater(chamberIndices[i]);
-									if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance, gb.IsFileChannel()))
+									for (size_t k = 0; k < reprap.GetHeat().GetChamberHeaterCount(chamberIndices[i]); k++)
 									{
-										return false;
+										const int heater = reprap.GetHeat().GetChamberHeaterAt(chamberIndices[i], k);
+										if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance, gb.IsFileChannel()))
+										{
+											return false;
+										}
 									}
 								}
 							}
@@ -2108,7 +2114,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						case 4:		// Telnet
 							type = TelnetMessage;
 							break;
-#ifdef SERIAL_AUX2_DEVICE
+#if NUM_ASYNC_CHANNELS > 1
 						case 5:		// AUX2
 							type = Aux2Message;
 							break;
@@ -2239,78 +2245,76 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			// M135 (set PID sample interval) is no longer supported
 
-			case 140: // Bed temperature; also M140.1 to set bed heater control list
-				if (gb.GetCommandFraction() == 1)
-				{
-					Heat& heat = reprap.GetHeat();
-
-					if (gb.Seen('S'))
-					{
-						// Set bed heaters to control by M140 S/R without explicit P parameter. S-1 clears the list
-						int32_t slots[MaxBedHeaters];
-						size_t slotCount = MaxBedHeaters;
-						gb.GetIntArray(slots, slotCount, false);
-						heat.SetBedHeaterControlMask(BedIndicesBitmap::MakeFromArray(slots, slotCount));
-					}
-					else
-					{
-						// Report list of controlled bed heater slots
-						const BedIndicesBitmap mask = heat.GetBedHeaterControlMask();
-						bool first = true;
-
-						reply.copy("Controlled bed heater slots:");
-						for (size_t i = 0; i < MaxBedHeaters; i++)
-						{
-							if (mask.IsBitSet(i))
-							{
-								reply.catf("%s %u", first ? "" : ",", i);
-								first = false;
-							}
-						}
-						if (first)
-						{
-							reply.cat(" none");
-						}
-					}
-					break;
-				}
-				[[fallthrough]];
+			case 140: // Bed temperature
 			case 141: // Chamber temperature
 				{
 					Heat& heat = reprap.GetHeat();
 					bool seen = false;
-					const bool seenP = gb.Seen('P');
 
 					// Check if the heater index is passed
-					const unsigned int index = seenP ? gb.GetLimitedUIValue('P', (code == 140) ? MaxBedHeaters : MaxChamberHeaters) : 0;
+					const unsigned int slot = gb.Seen('P') ? gb.GetLimitedUIValue('P', (code == 140) ? MaxBedHeaters : MaxChamberHeaters) : 0;
+					const size_t maxHeatersPerSlot = (code == 140) ? MaxHeatersPerBed : MaxHeatersPerChamber;
 
-					// See if the heater number is being set
+					// See if the heater number(s) are being set
 					if (gb.Seen('H'))
 					{
 						seen = true;
-						int heater = gb.GetIValue();
-						if (heater < 0)
-						{
-							heater = -1;
-						}
-						else if (heater >= (int)MaxHeaters)
-						{
-							reply.printf("Invalid heater number '%d'", heater);
-							result = GCodeResult::error;
-							break;
-						}
+						int32_t heaterNumbers[maxHeatersPerSlot];
+						size_t heaterCount = maxHeatersPerSlot;
+						gb.GetIntArray(heaterNumbers, heaterCount, false);
 
-						if (code == 141)
+						// Check if clearing (H-1)
+						if (heaterCount == 1 && heaterNumbers[0] < 0)
 						{
-							heat.SetChamberHeater(index, heater);
+							if (code == 141)
+							{
+								heat.ClearChamberHeaters(slot);
+							}
+							else
+							{
+								heat.ClearBedHeaters(slot);
+							}
 						}
 						else
 						{
-							heat.SetBedHeater(index, heater);
+							// Validate all heater numbers
+							for (size_t i = 0; i < heaterCount; i++)
+							{
+								if (heaterNumbers[i] < 0 || heaterNumbers[i] >= (int32_t)MaxHeaters)
+								{
+									reply.printf("Invalid heater number '%" PRId32 "'", heaterNumbers[i]);
+									result = GCodeResult::error;
+									break;
+								}
+								if (Tool::IsHeaterAssignedToTool(heaterNumbers[i]))
+								{
+									reply.printf("Heater %" PRId32 " is already assigned to a tool", heaterNumbers[i]);
+									result = GCodeResult::error;
+									break;
+								}
+								const HeaterFunction fn = heat.GetHeaterFunction(heaterNumbers[i]);
+								if ((code == 140 && fn == HeaterFunction::chamber) || (code == 141 && fn == HeaterFunction::bed))
+								{
+									reply.printf("Heater %" PRId32 " is already assigned as a %s heater", heaterNumbers[i], (fn == HeaterFunction::bed) ? "bed" : "chamber");
+									result = GCodeResult::error;
+									break;
+								}
+							}
+							if (result != GCodeResult::error)
+							{
+								if (code == 141)
+								{
+									heat.SetChamberHeaters(slot, heaterNumbers, heaterCount);
+								}
+								else
+								{
+									heat.SetBedHeaters(slot, heaterNumbers, heaterCount);
+								}
+							}
 						}
 					}
 
-					const int currentHeater = (code == 141) ? heat.GetChamberHeater(index) : heat.GetBedHeater(index);
+					const size_t numHeaters = (code == 141) ? heat.GetChamberHeaterCount(slot) : heat.GetBedHeaterCount(slot);
 					const char *_ecv_array const heaterName = (code == 141) ? "chamber" : "bed";
 
 					// Active temperature
@@ -2318,58 +2322,27 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						seen = true;
 						const float temperature = gb.GetFValue();
-						if (code == 140 && !seenP)
+						if (numHeaters == 0)
 						{
-							// Apply to all bed heater indices in the control mask
-							const BedIndicesBitmap mask = heat.GetBedHeaterControlMask();
-							for (unsigned int i = 0; i < MaxBedHeaters; ++i)
+							if (temperature > 0.0)							// turning off a non-existent bed or chamber heater is not an error
 							{
-								if (mask.IsBitSet(i))
-								{
-									const int heater = heat.GetBedHeater(i);
-									if (heater < 0)
-									{
-										if (temperature > 0.0)				// turning off a non-existent bed heater is not an error
-										{
-											reply.lcatf("No bed heater has been configured for slot %u", i);
-											result = GCodeResult::error;
-										}
-									}
-									else if (temperature <= NEARLY_ABS_ZERO)
-									{
-										heat.SwitchOff(heater);
-									}
-									else
-									{
-										heat.SetActiveTemperature(heater, temperature);		// may throw
-										if (result == GCodeResult::ok)
-										{
-											result = heat.SetActiveOrStandby(heater, nullptr, true, reply);
-										}
-									}
-								}
+								reply.printf("No %s heater has been configured for slot %d", heaterName, slot);
+								result = GCodeResult::error;
 							}
 						}
 						else
 						{
-							if (currentHeater < 0)
+							for (size_t i = 0; i < numHeaters; ++i)
 							{
-								if (temperature > 0.0)							// turning off a non-existent bed or chamber heater is not an error
-								{
-									reply.printf("No %s heater has been configured for slot %d", heaterName, index);
-									result = GCodeResult::error;
-								}
-							}
-							else
-							{
+								const int heater = (code == 141) ? heat.GetChamberHeaterAt(slot, i) : heat.GetBedHeaterAt(slot, i);
 								if (temperature <= NEARLY_ABS_ZERO)
 								{
-									heat.SwitchOff(currentHeater);
+									heat.SwitchOff(heater);
 								}
 								else
 								{
-									heat.SetActiveTemperature(currentHeater, temperature);		// may throw
-									result = heat.SetActiveOrStandby(currentHeater, nullptr, true, reply);
+									heat.SetActiveTemperature(heater, temperature);		// may throw
+									result = heat.SetActiveOrStandby(heater, nullptr, true, reply);
 								}
 							}
 						}
@@ -2379,52 +2352,36 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (gb.Seen('R'))
 					{
 						seen = true;
-						const float standbyTemp = gb.GetFValue();
-						if (code == 140 && !seenP)
+						if (numHeaters == 0)
 						{
-							// Apply to all bed heater indices in the control mask
-							const BedIndicesBitmap mask = heat.GetBedHeaterControlMask();
-							for (unsigned int i = 0; i < MaxBedHeaters; ++i)
-							{
-								if (mask.IsBitSet(i))
-								{
-									const int heater = heat.GetBedHeater(i);
-									if (heater < 0)
-									{
-										reply.lcatf("No bed heater has been configured for slot %u", i);
-										result = GCodeResult::error;
-									}
-									else
-									{
-										heat.SetStandbyTemperature(heater, standbyTemp);
-									}
-								}
-							}
+							reply.printf("No %s heater has been configured for slot %d", heaterName, slot);
+							result = GCodeResult::error;
 						}
 						else
 						{
-							if (currentHeater < 0)
+							const float standbyTemp = gb.GetFValue();
+							for (size_t i = 0; i < numHeaters; i++)
 							{
-								reply.printf("No %s heater has been configured for slot %d", heaterName, index);
-								result = GCodeResult::error;
-							}
-							else
-							{
-								heat.SetStandbyTemperature(currentHeater, standbyTemp);
+								const int heater = (code == 141) ? heat.GetChamberHeaterAt(slot, i) : heat.GetBedHeaterAt(slot, i);
+								heat.SetStandbyTemperature(heater, standbyTemp);
 							}
 						}
 					}
 
 					if (!seen)
 					{
-						if (currentHeater < 0)
+						if (numHeaters == 0)
 						{
-							reply.printf("No %s heater has been configured for slot %d", heaterName, index);
+							reply.printf("No %s heater has been configured for slot %d", heaterName, slot);
 						}
 						else
 						{
-							reply.printf("%c%s heater %d (slot %d) is currently at %.1f" DEGREE_SYMBOL "C",
-								toupper(heaterName[0]), heaterName + 1, currentHeater, index, (double)reprap.GetHeat().GetHeaterTemperature(currentHeater));
+							reply.printf("%c%s heaters for slot %d:", toupper(heaterName[0]), heaterName + 1, slot);
+							for (size_t i = 0; i < numHeaters; i++)
+							{
+								const int heater = (code == 141) ? heat.GetChamberHeaterAt(slot, i) : heat.GetBedHeaterAt(slot, i);
+								reply.catf(" %d (%.1f" DEGREE_SYMBOL "C)", heater, (double)heat.GetHeaterTemperature(heater));
+							}
 						}
 					}
 				}
@@ -2436,12 +2393,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 144: // Set bed to standby, or to active if S1 parameter given
 				{
-					const unsigned int index = gb.Seen('P') ? gb.GetLimitedUIValue('P', MaxBedHeaters) : 0;
-					const int8_t bedHeater = reprap.GetHeat().GetBedHeater(index);
-					if (bedHeater >= 0)
+					const unsigned int slot = gb.Seen('P') ? gb.GetLimitedUIValue('P', MaxBedHeaters) : 0;
+					const size_t numHeaters = reprap.GetHeat().GetBedHeaterCount(slot);
+					if (numHeaters > 0)
 					{
 						const bool setActive = gb.Seen('S') && gb.GetIValue() == 1;
-						result = reprap.GetHeat().SetActiveOrStandby(bedHeater, nullptr, setActive, reply);
+						for (size_t i = 0; i < numHeaters; i++)
+						{
+							result = reprap.GetHeat().SetActiveOrStandby(reprap.GetHeat().GetBedHeaterAt(slot, i), nullptr, setActive, reply);
+						}
 					}
 				}
 				break;
@@ -2463,9 +2423,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (!gb.IsCancelWaitRequested())
 				{
 					// Check if the heater index is passed
-					const uint32_t index = gb.Seen('P') ? gb.GetLimitedUIValue('P', (code == 190) ? MaxBedHeaters : MaxChamberHeaters) : 0;
-					const int8_t heater = (code == 191) ? reprap.GetHeat().GetChamberHeater(index) : reprap.GetHeat().GetBedHeater(index);
-					if (heater >= 0)
+					const uint32_t slot = gb.Seen('P') ? gb.GetLimitedUIValue('P', (code == 190) ? MaxBedHeaters : MaxChamberHeaters) : 0;
+					const size_t numHeaters = (code == 191) ? reprap.GetHeat().GetChamberHeaterCount(slot) : reprap.GetHeat().GetBedHeaterCount(slot);
+					if (numHeaters > 0)
 					{
 						float temperature;
 						bool waitWhenCooling;
@@ -2484,11 +2444,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							break;		// no target temperature given
 						}
 
-						reprap.GetHeat().SetActiveTemperature(heater, temperature);		// may throw
-						result = reprap.GetHeat().SetActiveOrStandby(heater, nullptr, true, reply);
-						if (!reprap.GetHeat().HeaterAtSetTemperature(heater, waitWhenCooling, TemperatureCloseEnough, gb.IsFileChannel()))
+						for (size_t i = 0; i < numHeaters; i++)
 						{
-							return false;
+							const int heater = (code == 191) ? reprap.GetHeat().GetChamberHeaterAt(slot, i) : reprap.GetHeat().GetBedHeaterAt(slot, i);
+							reprap.GetHeat().SetActiveTemperature(heater, temperature);		// may throw
+							result = reprap.GetHeat().SetActiveOrStandby(heater, nullptr, true, reply);
+						}
+
+						// Wait for all heaters in the slot to reach temperature
+						for (size_t i = 0; i < numHeaters; i++)
+						{
+							const int heater = (code == 191) ? reprap.GetHeat().GetChamberHeaterAt(slot, i) : reprap.GetHeat().GetBedHeaterAt(slot, i);
+							if (!reprap.GetHeat().HeaterAtSetTemperature(heater, waitWhenCooling, TemperatureCloseEnough, gb.IsFileChannel()))
+							{
+								return false;
+							}
 						}
 					}
 				}
@@ -2724,9 +2694,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						if (newSpeedFactor >= 0.01)
 						{
 							// If the last move hasn't gone yet, update its feed rate if it is not a firmware retraction
-							if (ms.segmentsLeft != 0 && ms.applyM220M221)
+							if (ms.segmentsLeft != 0 && ms.raw.applyM220M221)
 							{
-								ms.feedRate *= newSpeedFactor / ms.speedFactor;
+								ms.raw.feedRate *= newSpeedFactor / ms.speedFactor;
 							}
 							ms.speedFactor = newSpeedFactor;
 							reprap.MoveUpdated();
@@ -2887,7 +2857,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 								// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
 								// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
-								ms.coords[axis] += differences[axis];
+								ms.raw.coords[axis] += differences[axis];
 								if (amountPushed != differences[axis])
 								{
 									haveResidual = true;
@@ -2899,9 +2869,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							// The pipeline is empty, so execute the babystepping move immediately if it is safe to do
 							SetMoveBufferDefaults(ms);
-							ms.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
-							ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetLinearAxes());
-							ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetRotationalAxes());
+							ms.raw.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
+							ms.raw.linearAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetLinearAxes());
+							ms.raw.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetRotationalAxes());
 							NewSingleSegmentMoveAvailable(ms);
 						}
 					}
@@ -4238,8 +4208,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							// An axis letter is given, so try to level the given axis
 							const float correctionAngle = atanf((z2 - z1) / (a2 - a1)) * 180.0 / Pi;
 							const float correctionFactor = gb.Seen('S') ? gb.GetPositiveFValue() : 1.0;
-							ms.coords[axisToUse] += correctionAngle * correctionFactor;
-							ms.rotationalAxesMentioned = true;
+							ms.raw.coords[axisToUse] += correctionAngle * correctionFactor;
+							ms.raw.rotationalAxesMentioned = true;
 
 							reply.printf("%c axis is off by %.2f deg", axisLetters[axisToUse], (double)correctionAngle);
 							HandleReply(gb, GCodeResult::notFinished, reply.c_str());
@@ -4257,9 +4227,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 									((z4 - z3) * (a2 - a1) - (z2 - z1) * (a4 - a3));
 							const float zS = ((z1 - z2) * (a4 * z3 - a3 * z4) - (z3 - z4) * (a2 * z1 - a1 * z2)) /
 									((z4 - z3) * (a2 - a1) - (z2 - z1) * (a4 - a3));
-							ms.coords[(x1 == x2) ? Y_AXIS : X_AXIS] += aS;
-							ms.coords[Z_AXIS] += zS;
-							ms.linearAxesMentioned = true;
+							ms.raw.coords[(x1 == x2) ? Y_AXIS : X_AXIS] += aS;
+							ms.raw.coords[Z_AXIS] += zS;
+							ms.raw.linearAxesMentioned = true;
 
 							reply.printf("%c is offset by %.2fmm, Z is offset by %.2fmm", (x2 == x1) ? 'Y' : 'X', (double)aS, (double)zS);
 							HandleReply(gb, GCodeResult::notFinished, reply.c_str());
@@ -4276,8 +4246,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							gb.LatestMachineState().feedRate = gb.GetFValue();
 						}
-						ms.feedRate = gb.ConvertSpeed(gb.LatestMachineState().feedRate, ms.linearAxesMentioned);		// don't apply the speed factor
-						ms.usingStandardFeedrate = true;
+						ms.raw.feedRate = gb.ConvertSpeed(gb.LatestMachineState().feedRate, ms.raw.linearAxesMentioned);		// don't apply the speed factor
+						ms.raw.usingStandardFeedrate = true;
 						NewSingleSegmentMoveAvailable(ms);
 
 						gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
@@ -4650,7 +4620,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+#if HAS_WIFI_NETWORKING || NUM_ASYNC_CHANNELS != 0 || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 			case 997:	// Perform firmware update
 				result = UpdateFirmware(gb, reply);
 				break;

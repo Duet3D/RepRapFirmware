@@ -172,7 +172,7 @@ const char *_ecv_array GetFloatFormatString(float val, unsigned int numDigitsAft
 	// Else use 'f' format.
 	static constexpr const char *_ecv_array FormatStringsF[] = { "%.1f", "%.2f", "%.3f", "%.4f", "%.5f", "%.6f", "%.7f" };
 	static constexpr const char *_ecv_array FormatStringsG[] = { "%.1g", "%.2g", "%.3g", "%.4g", "%.5g", "%.6g", "%.7g" };
-	static constexpr float MaxValueToDisplayWithAllDecimals[] = { 999999.9, 99999.99, 9999.99, 999, 99.99, 9.99, 0.99 };
+	static constexpr float MaxValueToDisplayWithAllDecimals[] = { 999999.9, 99999.99, 9999.99, 999.99, 99.99, 9.99, 0.99 };
 
 	static_assert(ARRAY_SIZE(FormatStringsF) == MaxFloatDigitsDisplayedAfterPoint);
 	static_assert(ARRAY_SIZE(FormatStringsG) == MaxFloatDigitsDisplayedAfterPoint);

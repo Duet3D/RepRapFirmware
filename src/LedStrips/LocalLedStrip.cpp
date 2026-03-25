@@ -16,6 +16,8 @@
 # include <CanMessageGenericParser.h>
 #endif
 
+#include <utility>		// for std::swap
+
 #if SAME70
 alignas(4) __nocache uint8_t LocalLedStrip::dmaBuffer[DmaBufferSize];		// buffer for sending data to LEDs by DMA on SAME7x processors
 #endif
@@ -37,8 +39,8 @@ constexpr uint8_t LocalLedStrip::objectModelTableDescriptor[] = { 1, 1 + SUPPORT
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(LocalLedStrip, LedStripBase)
 
-LocalLedStrip::LocalLedStrip(LedStripType p_type, uint32_t p_freq) noexcept
-	: LedStripBase(p_type), frequency(p_freq)
+LocalLedStrip::LocalLedStrip(LedStripType p_type, uint32_t p_freq, ColorOrder defaultColorOrder) noexcept
+	: LedStripBase(p_type), frequency(p_freq), colorOrder(defaultColorOrder)
 {
 }
 
@@ -69,6 +71,12 @@ GCodeResult LocalLedStrip::CommonConfigure(GCodeBuffer &gb, const StringRef &rep
 
 		// See if the maximum strip length was provided (the default value is set up by the constructor)
 		gb.TryGetUIValue('U', maxLeds, seen);
+
+		uint32_t order;
+		if (gb.TryGetLimitedUIValue('K', order, seen, (uint32_t)ColorOrder::count))
+		{
+			colorOrder = (ColorOrder)order;
+		}
 
 		return AllocateChunkBuffer(reply);
 	}
@@ -105,6 +113,18 @@ GCodeResult LocalLedStrip::CommonConfigure(CanMessageGenericParser& parser, cons
 	else
 	{
 		rslt = GCodeResult::ok;
+	}
+
+	uint32_t order;
+	if (parser.GetUintParam('K', order))
+	{
+		if (order >= (uint32_t)ColorOrder::count)
+		{
+			reply.printf("Invalid color order K=%lu", order);
+			return GCodeResult::warning;
+		}
+		colorOrder = (ColorOrder)order;
+		seen = true;
 	}
 
 	extra = (useDma) ? 0x01 : 0;
@@ -189,15 +209,15 @@ GCodeResult LocalLedStrip::CommonReportDetails(const StringRef &reply) noexcept
 
 void LocalLedStrip::LedParams::GetM150Params(GCodeBuffer& gb) THROWS(GCodeException)
 {
-	red = green = blue = white = 0;
+	firstColour = secondColour = thirdColour = white = 0;
 	brightness = 128;
 	numLeds = 1;
 	following = false;
 
 	bool dummy = false;
-	gb.TryGetLimitedUIValue('R', red, dummy, 256);
-	gb.TryGetLimitedUIValue('U', green, dummy, 256);
-	gb.TryGetLimitedUIValue('B', blue, dummy, 256);
+	gb.TryGetLimitedUIValue('R', firstColour, dummy, 256);
+	gb.TryGetLimitedUIValue('U', secondColour, dummy, 256);
+	gb.TryGetLimitedUIValue('B', thirdColour, dummy, 256);
 	gb.TryGetLimitedUIValue('W', white, dummy, 256);						// W value is used by RGBW NeoPixels only
 
 	if (gb.Seen('P'))
@@ -213,18 +233,59 @@ void LocalLedStrip::LedParams::GetM150Params(GCodeBuffer& gb) THROWS(GCodeExcept
 	gb.TryGetBValue('F', following, dummy);
 }
 
+// Put the colours in the right order. On entry, firstColour is the red amount, secondColour is the green amount, thirdColor is the blue amount.
+void LocalLedStrip::LedParams::SwapColours(ColorOrder order) noexcept
+{
+	switch (order)
+	{
+	case ColorOrder::BGR:
+		std::swap(firstColour, thirdColour);
+		break;
+
+	case ColorOrder::BRG:
+		{
+			const uint32_t red = firstColour;
+			firstColour = thirdColour;
+			thirdColour = secondColour;
+			secondColour = red;
+		}
+		break;
+
+	case ColorOrder::RGB:
+	default:
+		break;																// already in the right order
+
+	case ColorOrder::RBG:
+		std::swap(secondColour, thirdColour);
+		break;
+
+	case ColorOrder::GBR:
+		{
+			const uint32_t red = firstColour;
+			firstColour = secondColour;
+			secondColour = thirdColour;
+			thirdColour = red;
+		}
+		break;
+
+	case ColorOrder::GRB:
+		std::swap(firstColour, secondColour);
+		break;
+	}
+}
+
 #if SUPPORT_REMOTE_COMMANDS
 
 void LocalLedStrip::LedParams::GetM150Params(CanMessageGenericParser& parser) noexcept
 {
-	red = green = blue = white = 0;
+	firstColour = secondColour = thirdColour = white = 0;
 	brightness = 128;
 	numLeds = 1;
 	following = false;
 
-	(void)parser.GetUintParam('R', red);
-	(void)parser.GetUintParam('U', green);
-	(void)parser.GetUintParam('B', blue);
+	(void)parser.GetUintParam('R', firstColour);
+	(void)parser.GetUintParam('U', secondColour);
+	(void)parser.GetUintParam('B', thirdColour);
 	(void)parser.GetUintParam('W', white);									// W value is used by RGBW NeoPixels only
 
 	if (!parser.GetUintParam('P', brightness))								// P takes precedence over Y
@@ -244,9 +305,9 @@ void LocalLedStrip::LedParams::GetM150Params(CanMessageGenericParser& parser) no
 // Apply the brightness value to the red/green/blue/white values. This is needed for Neopixel strips, which don't have a 'brightness' value sent to them.
 void LocalLedStrip::LedParams::ApplyBrightness() noexcept
 {
-	red = ((red * brightness) + 255) >> 8;
-	green = ((green * brightness) + 255) >> 8;
-	blue = ((blue * brightness) + 255) >> 8;
+	firstColour = ((firstColour * brightness) + 255) >> 8;
+	secondColour = ((secondColour * brightness) + 255) >> 8;
+	thirdColour = ((thirdColour * brightness) + 255) >> 8;
 	white = ((white * brightness) + 255) >> 8;
 	brightness = 255;														// in case we call this again
 }

@@ -9,18 +9,19 @@
 #define SRC_DISPLAY_LCD_TFTLCD_H_
 
 #include "Lcd.h"
-#include <Hardware/Spi/SpiDevice.h>
 
 #if SUPPORT_ILI9488_LCD
+
+#include <SPI/SpiDevice.h>
 
 // This class represents a TFT LCD that uses an exclusive SPI channel to send data to the screen
 class TFTLcd : public Lcd
 {
 public:
 #if USE_FONT_CHIP
-	TFTLcd(PixelNumber nr, PixelNumber nc, Pin fontCsPin, SpiMode mode, uint8_t sercomNum) noexcept;
+	TFTLcd(PixelNumber nr, PixelNumber nc, Pin fontCsPin, SpiMode mode, const SpiParameters& params) noexcept;
 #else
-	TFTLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode, uint8_t sercomNum) noexcept;
+	TFTLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode, const SpiParameters& params) noexcept;
 #endif
 
 	virtual ~TFTLcd();

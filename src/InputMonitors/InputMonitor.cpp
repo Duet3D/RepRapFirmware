@@ -13,6 +13,7 @@
 #include <Hardware/IoPorts.h>
 #include <CAN/CanInterface.h>
 #include <CanMessageBuffer.h>
+#include <Movement/StepTimer.h>
 
 InputMonitor * volatile InputMonitor::monitorsList = nullptr;
 ReadWriteLock InputMonitor::listLock;
@@ -100,6 +101,7 @@ void InputMonitor::DigitalInterrupt() noexcept
 		state = newState;
 		if (active)
 		{
+			whenStateChanged = StepTimer::GetTimerTicks();
 			sendDue = true;
 			CanInterface::WakeAsyncSenderFromIsr();
 		}
@@ -114,6 +116,7 @@ void InputMonitor::AnalogInterrupt(int32_t reading) noexcept
 		state = newState;
 		if (active)
 		{
+			whenStateChanged = StepTimer::GetTimerTicks();
 			sendDue = true;
 			CanInterface::WakeAsyncSender();
 		}
@@ -276,7 +279,7 @@ void InputMonitor::AnalogInterrupt(int32_t reading) noexcept
 
 // Check the input monitors and add any pending ones to the message
 // Return the number of ticks before we should be woken again, or TaskBase::TimeoutUnlimited if we shouldn't be work until an input changes state
-/*static*/ uint32_t InputMonitor::AddStateChanges(CanMessageInputChangedV1 *msg) noexcept
+/*static*/ uint32_t InputMonitor::AddStateChanges(CanMessageInputChangedV2 *msg) noexcept
 {
 	uint32_t timeToWait = TaskBase::TimeoutUnlimited;
 	ReadLocker lock(listLock);
@@ -296,7 +299,7 @@ void InputMonitor::AnalogInterrupt(int32_t reading) noexcept
 					monitorState = p->state;
 				}
 
-				if (msg->AddEntry(p->handle, p->GetAnalogValue(), monitorState))
+				if (msg->AddEntry(p->handle, StepTimer::ConvertToMasterTime(p->whenStateChanged), p->GetAnalogValue(), monitorState))
 				{
 					p->whenLastSent = now;
 				}
@@ -356,21 +359,22 @@ void InputMonitor::AnalogInterrupt(int32_t reading) noexcept
 #if SUPPORT_REMOTE_COMMANDS
 
 // Append analog handle data to the supplied buffer
-/*static*/ unsigned int InputMonitor::AddAnalogHandleDataV0(uint8_t *buffer, size_t spaceLeft) noexcept
+/*static*/ unsigned int InputMonitor::AddAnalogHandleDataV1(uint8_t *buffer, size_t spaceLeft) noexcept
 {
 	unsigned int count = 0;
 	ReadLocker lock(listLock);
 	InputMonitor *h = monitorsList;
-	while (h != nullptr && spaceLeft >= sizeof(AnalogHandleDataV0))
+	while (h != nullptr && spaceLeft >= sizeof(AnalogHandleDataV1))
 	{
 		if (!h->IsDigital())
 		{
-			AnalogHandleDataV0 data;
-			data.reading = h->GetAnalogValue();
+			AnalogHandleDataV1 data;
 			data.handle.all = h->handle;
-			memcpy(buffer, &data, sizeof(AnalogHandleDataV0));
-			buffer += sizeof(AnalogHandleDataV0);
-			spaceLeft -= sizeof(AnalogHandleDataV0);
+			data.when = (uint16_t)StepTimer::GetMasterTime();
+			data.reading = h->GetAnalogValue();
+			memcpy(buffer, &data, sizeof(AnalogHandleDataV1));
+			buffer += sizeof(AnalogHandleDataV1);
+			spaceLeft -= sizeof(AnalogHandleDataV1);
 			++count;
 		}
 		h = h->next;

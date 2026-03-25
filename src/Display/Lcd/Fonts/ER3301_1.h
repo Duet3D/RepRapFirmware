@@ -12,7 +12,7 @@
 
 #if USE_FONT_CHIP
 
-#include <Hardware/Spi/SharedSpiClient.h>
+#include <SPI/SharedSpiClient.h>
 
 class ER3301_1
 {

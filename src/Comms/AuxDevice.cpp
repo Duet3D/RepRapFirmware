@@ -7,7 +7,7 @@
 
 #include "AuxDevice.h"
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
@@ -177,7 +177,7 @@ void AuxDevice::Diagnostics(const StringRef& reply, unsigned int index) noexcept
 #if SUPPORT_MODBUS_RTU
 
 // Configure the Tx/!Rx port returning true if success
-bool AuxDevice::ConfigureDirectionPort(const char *pinName, const StringRef& reply) THROWS(GCodeException)
+bool AuxDevice::ConfigureDirectionPort(const char *_ecv_array pinName, const StringRef& reply) THROWS(GCodeException)
 {
 	return txNotRx.AssignPort(pinName, reply, PinUsedBy::gpout, PinAccess::write0);
 }
@@ -190,7 +190,7 @@ void AuxDevice::AppendDirectionPortName(const StringRef& reply) const noexcept
 // Send some Modbus registers. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the command.
 // After receiving the GCodeResult::ok response the caller must call CheckModbusResult until it doesn't return GCodeResult::notFinished.
 // If the function code requires sending 16-bit data then 'data' must be 16-bit aligned
-GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, const uint8_t *data) noexcept
+GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, const uint8_t *_ecv_array data) noexcept
 {
 	if (p_numRegisters == 0 || p_numRegisters > MaxModbusRegisters)
 	{
@@ -217,7 +217,7 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 	{
 	case ModbusFunction::writeSingleCoil:
 	case ModbusFunction::writeSingleRegister:
-		numRegistersOrDataWord = ((const uint16_t*)data)[0];
+		numRegistersOrDataWord = ((const uint16_t *_ecv_array)data)[0];
 		ModbusWriteWord(numRegistersOrDataWord);
 		bytesExpected = 8;
 		break;
@@ -240,7 +240,7 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 		ModbusWriteByte((uint8_t)(2 * numRegistersOrDataWord));
 		for (size_t i = 0; i < numRegistersOrDataWord; ++i)
 		{
-			ModbusWriteWord(((const uint16_t*)data)[i]);
+			ModbusWriteWord(((const uint16_t *_ecv_array)data)[i]);
 		}
 		bytesExpected = 8;
 		break;
@@ -261,7 +261,7 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 // Read some Modbus registers. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the command.
 // After receiving the GCodeResult::ok response the caller must call CheckModbusResult until it doesn't return GCodeResult::notFinished.
 // If the function code calls for receiving word data then 'data' must be aligned on a 16-bit boundary
-GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, uint8_t *data) noexcept
+GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, uint8_t *_ecv_array data) noexcept
 {
 	if (   p_numRegisters == 0
 		|| p_numRegisters > MaxModbusRegisters

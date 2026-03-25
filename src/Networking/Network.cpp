@@ -99,7 +99,7 @@ Network::Network(Platform& p) noexcept : platform(p)
 	interfaces[0] = new LwipEthernetInterface(p);
 # elif defined(DUET_NG) || defined(DUET3MINI_V04)
 	interfaces[0] = nullptr;			// we set this up in Init()
-# elif defined(FMDC_V02) || defined(FMDC_V03)
+# elif defined(FMDC_V03)
 	interfaces[0] = new WiFiInterface(p);
 # elif defined(DUET_M)
 	interfaces[0] = new W5500Interface(p);
@@ -449,13 +449,13 @@ WifiFirmwareUploader *_ecv_null Network::GetWifiUploader() const noexcept
 	return nullptr;
 }
 
-void Network::ResetWiFiForUpload(bool external) noexcept
+void Network::ResetWiFiForUpload() noexcept
 {
 #if HAS_WIFI_NETWORKING
 	WiFiInterface *_ecv_null const wifiInterface = FindWiFiInterface();
 	if (wifiInterface != nullptr)
 	{
-		wifiInterface->ResetWiFiForUpload(external);
+		wifiInterface->ResetWiFiForUpload();
 	}
 #endif
 }

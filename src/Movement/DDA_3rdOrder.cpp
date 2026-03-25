@@ -411,6 +411,7 @@ static MovementProfile debugProfile;
 			const double t5Distance = (lastPhase) ? moveDistanceLeft : plannedProfile.distances[5];
 			params.distances[5] = (motioncalc_t)(t5Distance * recipMovementRatio);
 			double t5 = MovementProfile::SmallestNonNegativeQuadraticSolution(OneHalfDouble * plannedProfile.peakDeceleration, speed, -t5Distance);
+			params.phaseClocks[5] = doubleToU32(t5, __LINE__);
 			totalClocks += params.phaseClocks[5];
 			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
 			{

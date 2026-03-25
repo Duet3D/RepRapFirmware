@@ -9,6 +9,8 @@
 #define SRC_DUET3MINI_PINS_DUET3MINI_H_
 
 #include <PinDescription.h>
+#include <SPI/SpiParameters.h>
+#include <UART/UartParameters.h>
 
 #define DEFAULT_BOARD_TYPE		 BoardType::Duet3Mini_Unknown
 
@@ -56,6 +58,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20038000;
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_BME280			1
+#define SUPPORT_BME68X			1
 #define SUPPORT_ADS131A02		1
 
 #define SUPPORT_12864_LCD		1					// set nonzero to support 12864 LCD and rotary encoder
@@ -87,6 +90,8 @@ constexpr size_t MaxPortsPerHeater = 2;
 
 constexpr size_t MaxBedHeaters = 4;
 constexpr size_t MaxChamberHeaters = 4;
+constexpr size_t MaxHeatersPerBed = 4;
+constexpr size_t MaxHeatersPerChamber = 4;
 
 constexpr size_t NumThermistorInputs = 3;
 constexpr size_t NumTmcDriversSenseChannels = 2;
@@ -104,31 +109,51 @@ constexpr size_t MaxExtrudersPerTool = 8;
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 
 #define SERIAL_USB_DEVICE (serialUSB)
+
 #if CORE_USES_TINYUSB
-# define SERIAL_USB2_DEVICE serialUSB2
+constexpr size_t NumUsbChannels = 2;
+# define SERIAL_USB2_DEVICE (serialUSB2)
+#else
+constexpr size_t NumUsbChannels = 1;
 #endif
-#define SERIAL_AUX_DEVICE (serialUart0)
-#define SERIAL_AUX2_DEVICE (serialUart1)
+
+#define NUM_ASYNC_PORTS			(2)
 
 #ifdef DUET3_ATE
-constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB, USB2, and one auxiliary UART) - reserve the third UART for ATE use
-constexpr size_t FirstAuxChannel = 2;
+# define NUM_ASYNC_CHANNELS		(NUM_ASYNC_PORTS - 1)	// reserve the second async port for the ATE
+constexpr size_t AteUartPortNumber = NUM_ASYNC_CHANNELS;
 #else
-# ifdef SERIAL_USB2_DEVICE
-constexpr size_t NumSerialChannels = 4;				// The number of serial IO channels (USB, USB2, and two auxiliary UART)
-constexpr size_t FirstAuxChannel = 2;
-# else
-constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB and two auxiliary UARTs)
-constexpr size_t FirstAuxChannel = 1;
-# endif
+# define NUM_ASYNC_CHANNELS		(NUM_ASYNC_PORTS)
 #endif
-constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
+
+constexpr size_t NumSerialChannels = NumUsbChannels + NUM_ASYNC_CHANNELS;
+
+// DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
+// When static arbitration within a priority level is selected, lower channel number have higher priority.
+// So we use the low channel numbers for the highest priority sources.
+constexpr DmaChannel DmacChanSbcTx = 0;
+constexpr DmaChannel DmacChanSbcRx = 1;
+constexpr DmaChannel DmacChanWiFiTx = 2;
+constexpr DmaChannel DmacChanWiFiRx = 3;
+constexpr DmaChannel DmacChanLedTx = 4;
+constexpr DmaChannel DmacChanTmcTx = 5;
+constexpr DmaChannel DmacChanTmcRx = 6;
+constexpr DmaChannel DmacChanSspiTx = 7;
+constexpr DmaChannel DmacChanSspiRx = 8;
+constexpr unsigned int NumDmaChannelsUsed = 9;
+
+// The DMAC has priority levels 0-3 but on revision A chips it is unsafe to use multiple levels
+// Fortunately, all our SAME54P20Achips seem to be revision D
+constexpr DmaPriority DmacPrioTmcTx = 0;
+constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 100kbps so this is not very critical
+constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
+constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
+constexpr DmaPriority DmacPrioLed = 1;					// QSPI in master mode
+constexpr DmaPriority DmacPrioSspiTx = 0;				// SPI in master mode
+constexpr DmaPriority DmacPrioSspiRx = 2;				// SPI in master mode
 
 // SerialUSB
 constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB port
-
-//#define I2C_IFACE	Wire							// First and only I2C interface
-//#define I2C_IRQn	WIRE_ISR_ID
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
@@ -156,12 +181,12 @@ constexpr uint32_t CclDiagInputs[NumDirectDrivers] =
 // UART interface to stepper drivers
 constexpr uint8_t TMC22xxSercomNumber = 1;
 Sercom * const SERCOM_TMC22xx = SERCOM1;
-constexpr IRQn TMC22xx_SERCOM_IRQn = SERCOM1_0_IRQn;
 constexpr Pin TMC22xxSercomTxPin = PortAPin(0);
 constexpr GpioPinFunction TMC22xxSercomTxPinPeriphMode = GpioPinFunction::D;
 constexpr Pin TMC22xxSercomRxPin = PortAPin(1);
 constexpr GpioPinFunction TMC22xxSercomRxPinPeriphMode = GpioPinFunction::D;
 constexpr uint8_t TMC22xxSercomRxPad = 1;
+constexpr uint8_t TMC22xxSercomTxPad = 0;
 constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
 
 #define TMC22xx_HAS_ENABLE_PINS			0
@@ -258,35 +283,46 @@ constexpr GpioPinFunction NeopixelOutPinFunction = GpioPinFunction::H;		// QSPI 
 #define LEDSTRIP_USES_USART		(0)
 
 // Shared SPI definitions
-constexpr uint8_t SharedSpiSercomNumber = 7;
-constexpr Pin SharedSpiMosiPin = PortCPin(12);
-constexpr Pin SharedSpiMisoPin = PortCPin(15);
-constexpr Pin SharedSpiSclkPin = PortCPin(13);
-constexpr GpioPinFunction SharedSpiPinFunction = GpioPinFunction::C;
+constexpr SpiParameters SharedSpiParams =
+{
+	.sercomNumber = 7,
+	.mosiPin = PortCPin(12),
+	.misoPin = PortCPin(15),
+	.sclkPin = PortCPin(13),
+	.pinFunction = GpioPinFunction::C,
+	.dataInPad = 3,
+	.dataOutPad = 0,
+	.dmaChanTx = DmacChanSspiTx,
+	.dmaChanRx = DmacChanSspiRx,
+	.dmaPrioTx = DmacPrioSspiTx,
+	.dmaPrioRx = DmacPrioSspiRx,
+};
 
 // Serial on IO0
-constexpr uint8_t Serial0SercomNumber = 2;
-constexpr uint8_t Sercom0RxPad = 1;
-#define SERIAL0_ISR0	SERCOM2_0_Handler
-#define SERIAL0_ISR1	SERCOM2_1_Handler
-#define SERIAL0_ISR2	SERCOM2_2_Handler
-#define SERIAL0_ISR3	SERCOM2_3_Handler
-
-constexpr Pin Serial0TxPin = PortBPin(25);
-constexpr Pin Serial0RxPin = PortBPin(24);
-constexpr GpioPinFunction Serial0PinFunction = GpioPinFunction::D;
+constexpr UartParameters Serial0Params =
+{
+	.sercomNumber = 2,
+	.rxPin = PortBPin(24),
+	.txPin = PortBPin(25),
+	.pinFunction = GpioPinFunction::D,
+	.dataInPad = 1,
+	.dataOutPad = 0,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
 
 // Serial on IO1
-constexpr uint8_t Serial1SercomNumber = 5;
-constexpr uint8_t Sercom1RxPad = 1;
-#define SERIAL1_ISR0	SERCOM5_0_Handler
-#define SERIAL1_ISR1	SERCOM5_1_Handler
-#define SERIAL1_ISR2	SERCOM5_2_Handler
-#define SERIAL1_ISR3	SERCOM5_3_Handler
-
-constexpr Pin Serial1TxPin = PortBPin(31);
-constexpr Pin Serial1RxPin = PortBPin(30);
-constexpr GpioPinFunction Serial1PinFunction = GpioPinFunction::D;
+constexpr UartParameters Serial1Params =
+{
+	.sercomNumber = 5,
+	.rxPin = PortBPin(30),
+	.txPin = PortBPin(31),
+	.pinFunction = GpioPinFunction::D,
+	.dataInPad = 1,
+	.dataOutPad = 0,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
 
 // Ethernet pins
 constexpr Pin EthernetMacPins[] =
@@ -301,17 +337,20 @@ constexpr Pin EthernetClockOutPin = PortAPin(16);
 constexpr GpioPinFunction EthernetClockOutPinFunction = GpioPinFunction::M;
 constexpr unsigned int EthernetClockOutGclkNumber = 2;
 
-// WiFi pins
-constexpr unsigned int WiFiUartSercomNumber = 3;
-constexpr uint8_t WiFiUartRxPad = 1;
-constexpr Pin WiFiUartSercomPins[] = { PortAPin(16), PortAPin(17) };
-constexpr GpioPinFunction WiFiUartSercomPinsMode = GpioPinFunction::D;
-constexpr IRQn WiFiUartSercomIRQn = SERCOM3_0_IRQn;			// this is the first of 4 interrupt numbers
-#define SERIAL_WIFI_ISR0	SERCOM3_0_Handler
-#define SERIAL_WIFI_ISR1	SERCOM3_1_Handler
-#define SERIAL_WIFI_ISR2	SERCOM3_2_Handler
-#define SERIAL_WIFI_ISR3	SERCOM3_3_Handler
+// WiFi UART pins
+constexpr UartParameters SerialWiFiParams =
+{
+	.sercomNumber = 3,
+	.rxPin = PortAPin(16),
+	.txPin = PortAPin(17),
+	.pinFunction = GpioPinFunction::D,
+	.dataInPad = 1,
+	.dataOutPad = 0,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
 
+// WiFi module SPI interface
 constexpr unsigned int WiFiSpiSercomNumber = 4;
 Sercom * const WiFiSpiSercom = SERCOM4;
 constexpr Pin EspMosiPin = PortAPin(15);
@@ -321,7 +360,6 @@ constexpr Pin EspSSPin = PortAPin(14);
 constexpr Pin WiFiSpiSercomPins[] = { EspSclkPin, EspMisoPin, EspSSPin, EspMosiPin };
 constexpr GpioPinFunction WiFiSpiSercomPinsMode = GpioPinFunction::D;
 constexpr IRQn WiFiSpiSercomIRQn = SERCOM4_1_IRQn;			// this is the transmit complete interrupt, the only one we use
-#define ESP_SPI_HANDLER		SERCOM4_1_Handler
 
 constexpr Pin EspResetPin = EthernetPhyResetPin;
 constexpr Pin EspEnablePin = PortCPin(20);
@@ -338,7 +376,6 @@ constexpr Pin SbcTfrReadyPin = PortAPin(3);
 constexpr Pin SbcSpiSercomPins[] = { PortAPin(4), PortAPin(5), PortAPin(6), PortAPin(7) };
 constexpr GpioPinFunction SbcSpiSercomPinsMode = GpioPinFunction::D;
 constexpr IRQn SbcSpiSercomIRQn = SERCOM0_1_IRQn;			// this is the transfer complete interrupt, the only one we use
-#define SBC_SPI_HANDLER		SERCOM0_1_Handler
 
 // CAN
 constexpr unsigned int CanDeviceNumber = 1;					// we use CAN1
@@ -481,27 +518,6 @@ constexpr size_t NumRealPins = 32+32+32+13;
 constexpr size_t NumVirtualPins = 0;
 
 static_assert(NumNamedPins == NumRealPins + NumVirtualPins);
-
-// DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
-// When static arbitration within a priority level is selected, lower channel number have higher priority.
-// So we use the low channel numbers for the highest priority sources.
-constexpr DmaChannel DmacChanSbcTx = 0;
-constexpr DmaChannel DmacChanSbcRx = 1;
-constexpr DmaChannel DmacChanWiFiTx = 2;
-constexpr DmaChannel DmacChanWiFiRx = 3;
-constexpr DmaChannel DmacChanLedTx = 4;
-constexpr DmaChannel DmacChanTmcTx = 5;
-constexpr DmaChannel DmacChanTmcRx = 6;
-
-constexpr unsigned int NumDmaChannelsUsed = 7;
-
-// The DMAC has priority levels 0-3 but on revision A chips it is unsafe to use multiple levels
-// Fortunately, all our SAME54P20Achips seem to be revision D
-constexpr DmaPriority DmacPrioTmcTx = 0;
-constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 100kbps so this is not very critical
-constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
-constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
-constexpr DmaPriority DmacPrioLed = 1;					// QSPI in master mode
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers
