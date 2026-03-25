@@ -2694,9 +2694,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						if (newSpeedFactor >= 0.01)
 						{
 							// If the last move hasn't gone yet, update its feed rate if it is not a firmware retraction
-							if (ms.segmentsLeft != 0 && ms.applyM220M221)
+							if (ms.segmentsLeft != 0 && ms.raw.applyM220M221)
 							{
-								ms.feedRate *= newSpeedFactor / ms.speedFactor;
+								ms.raw.feedRate *= newSpeedFactor / ms.speedFactor;
 							}
 							ms.speedFactor = newSpeedFactor;
 							reprap.MoveUpdated();
@@ -2857,7 +2857,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 								// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
 								// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
-								ms.coords[axis] += differences[axis];
+								ms.raw.coords[axis] += differences[axis];
 								if (amountPushed != differences[axis])
 								{
 									haveResidual = true;
@@ -2869,9 +2869,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							// The pipeline is empty, so execute the babystepping move immediately if it is safe to do
 							SetMoveBufferDefaults(ms);
-							ms.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
-							ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetLinearAxes());
-							ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetRotationalAxes());
+							ms.raw.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
+							ms.raw.linearAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetLinearAxes());
+							ms.raw.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetRotationalAxes());
 							NewSingleSegmentMoveAvailable(ms);
 						}
 					}
@@ -4208,8 +4208,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							// An axis letter is given, so try to level the given axis
 							const float correctionAngle = atanf((z2 - z1) / (a2 - a1)) * 180.0 / Pi;
 							const float correctionFactor = gb.Seen('S') ? gb.GetPositiveFValue() : 1.0;
-							ms.coords[axisToUse] += correctionAngle * correctionFactor;
-							ms.rotationalAxesMentioned = true;
+							ms.raw.coords[axisToUse] += correctionAngle * correctionFactor;
+							ms.raw.rotationalAxesMentioned = true;
 
 							reply.printf("%c axis is off by %.2f deg", axisLetters[axisToUse], (double)correctionAngle);
 							HandleReply(gb, GCodeResult::notFinished, reply.c_str());
@@ -4227,9 +4227,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 									((z4 - z3) * (a2 - a1) - (z2 - z1) * (a4 - a3));
 							const float zS = ((z1 - z2) * (a4 * z3 - a3 * z4) - (z3 - z4) * (a2 * z1 - a1 * z2)) /
 									((z4 - z3) * (a2 - a1) - (z2 - z1) * (a4 - a3));
-							ms.coords[(x1 == x2) ? Y_AXIS : X_AXIS] += aS;
-							ms.coords[Z_AXIS] += zS;
-							ms.linearAxesMentioned = true;
+							ms.raw.coords[(x1 == x2) ? Y_AXIS : X_AXIS] += aS;
+							ms.raw.coords[Z_AXIS] += zS;
+							ms.raw.linearAxesMentioned = true;
 
 							reply.printf("%c is offset by %.2fmm, Z is offset by %.2fmm", (x2 == x1) ? 'Y' : 'X', (double)aS, (double)zS);
 							HandleReply(gb, GCodeResult::notFinished, reply.c_str());
@@ -4246,8 +4246,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							gb.LatestMachineState().feedRate = gb.GetFValue();
 						}
-						ms.feedRate = gb.ConvertSpeed(gb.LatestMachineState().feedRate, ms.linearAxesMentioned);		// don't apply the speed factor
-						ms.usingStandardFeedrate = true;
+						ms.raw.feedRate = gb.ConvertSpeed(gb.LatestMachineState().feedRate, ms.raw.linearAxesMentioned);		// don't apply the speed factor
+						ms.raw.usingStandardFeedrate = true;
 						NewSingleSegmentMoveAvailable(ms);
 
 						gb.SetState(GCodeState::waitingForSpecialMoveToComplete);

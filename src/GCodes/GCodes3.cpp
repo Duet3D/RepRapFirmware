@@ -113,7 +113,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 		ToolOffsetTransform(ms);
 
 		Move& move = reprap.GetMove();
-		if (move.GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesIncluded, false, limitAxes) != LimitPositionResult::ok)
+		if (move.GetKinematics().LimitPosition(ms.raw.coords, nullptr, numVisibleAxes, axesIncluded, false, limitAxes) != LimitPositionResult::ok)
 		{
 			ToolOffsetInverseTransform(ms);					// make sure the limits are reflected in the user position
 		}
@@ -529,7 +529,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 					reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numTotalAxes, initialCoords);
 					for (MovementState& ms : moveStates)
 					{
-						ms.coords[drive] = initialCoords[drive];		// user has defined a new axis, so set its position
+						ms.raw.coords[drive] = initialCoords[drive];		// user has defined a new axis, so set its position
 						ToolOffsetInverseTransform(ms);
 					}
 					reprap.MoveUpdated();

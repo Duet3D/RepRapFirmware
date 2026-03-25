@@ -288,7 +288,7 @@ public:
 	// Return laser PWM in 0..1. Only the primary movement queue is permitted to control the laser.
 	float GetLaserPwm() const noexcept
 	{
-		return (float)moveStates[0].laserPwmOrIoBits.laserPwm * (1.0/65535.0);
+		return (float)moveStates[0].raw.laserPwmOrIoBits.laserPwm * (1.0/65535.0);
 	}
 # endif
 #endif
