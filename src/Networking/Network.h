@@ -93,7 +93,7 @@ public:
 	// WiFi interfaces
 	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & longReply);
 	WifiFirmwareUploader *_ecv_null GetWifiUploader() const noexcept;
-	void ResetWiFiForUpload(bool external) noexcept;
+	void ResetWiFiForUpload() noexcept;
 	const char *_ecv_array GetWiFiServerVersion() const noexcept;
 
 #if HAS_NETWORKING

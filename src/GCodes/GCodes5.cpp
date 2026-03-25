@@ -341,17 +341,17 @@ GCodeResult GCodes::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& repl
 	{
 		// For backwards compatibility with old versions of Marlin (e.g. for Cura and the Prusa fork of slic3r), set both accelerations
 		seen = true;
-		ms.maxTravelAcceleration = ms.maxPrintingAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
+		ms.raw.maxTravelAcceleration = ms.raw.maxPrintingAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
 	}
 	if (gb.Seen('P'))
 	{
 		seen = true;
-		ms.maxPrintingAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
+		ms.raw.maxPrintingAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
 	}
 	if (gb.Seen('T'))
 	{
 		seen = true;
-		ms.maxTravelAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
+		ms.raw.maxTravelAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
 	}
 	if (seen)
 	{
@@ -360,7 +360,7 @@ GCodeResult GCodes::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& repl
 	else
 	{
 		reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f mm/sec^2",
-						(double)InverseConvertAcceleration(ms.maxPrintingAcceleration), (double)InverseConvertAcceleration(ms.maxTravelAcceleration));
+						(double)InverseConvertAcceleration(ms.raw.maxPrintingAcceleration), (double)InverseConvertAcceleration(ms.raw.maxTravelAcceleration));
 	}
 	return GCodeResult::ok;
 }

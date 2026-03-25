@@ -15,7 +15,7 @@ enum class AuxMode : uint8_t
 	disabled, raw, panelDue, device,
 };
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 
 #include <Platform/OutputMemory.h>
 #include <RTOSIface/RTOSIface.h>

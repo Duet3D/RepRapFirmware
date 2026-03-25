@@ -288,7 +288,7 @@ public:
 	// Return laser PWM in 0..1. Only the primary movement queue is permitted to control the laser.
 	float GetLaserPwm() const noexcept
 	{
-		return (float)moveStates[0].laserPwmOrIoBits.laserPwm * (1.0/65535.0);
+		return (float)moveStates[0].raw.laserPwmOrIoBits.laserPwm * (1.0/65535.0);
 	}
 # endif
 #endif
@@ -527,7 +527,7 @@ private:
 	void StopObject(GCodeBuffer& gb) noexcept;
 	void ChangeToObject(GCodeBuffer& gb, int i) noexcept;
 
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+#if HAS_WIFI_NETWORKING || NUM_ASYNC_CHANNELS != 0 || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// Handle M997
 #endif
 
@@ -599,7 +599,7 @@ private:
 #endif
 	Pwm_t ConvertLaserPwm(float reqVal) const noexcept;
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 # if ALLOW_ARBITRARY_PANELDUE_PORT
 	uint8_t serialChannelForPanelDueFlashing;
 # else

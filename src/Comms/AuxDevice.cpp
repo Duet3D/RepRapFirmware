@@ -7,7 +7,7 @@
 
 #include "AuxDevice.h"
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>

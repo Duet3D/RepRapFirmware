@@ -104,10 +104,8 @@ constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 # define SUPPORT_ADS131A02		0
 #endif
 
-#define HAS_AUX_DEVICES			(defined(SERIAL_AUX_DEVICE))		// if SERIAL_AUX_DEVICE is defined then we have one or more aux devices
-
 #ifndef SUPPORT_PANELDUE_FLASH
-# define SUPPORT_PANELDUE_FLASH	HAS_AUX_DEVICES
+# define SUPPORT_PANELDUE_FLASH	(NUM_ASYNC_CHANNELS != 0)
 #endif
 
 #ifndef ALLOW_ARBITRARY_PANELDUE_PORT
@@ -335,8 +333,8 @@ constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 # define SUPPORT_MODBUS_RTU				0
 #endif
 
-#if SUPPORT_MODBUS_RTU && !HAS_AUX_DEVICES
-# error Cannot support Modbus RTU without aux devices
+#if SUPPORT_MODBUS_RTU && (NUM_ASYNC_CHANNELS == 0)
+# error Cannot support Modbus RTU without async channels
 #endif
 
 // Function to look up a pin name pass back the corresponding index into the pin table

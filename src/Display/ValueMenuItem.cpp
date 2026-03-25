@@ -171,11 +171,11 @@ void ValueMenuItem::Draw(Lcd &_ecv_from lcd, PixelNumber rightMargin, bool highl
 						break;
 
 					case 38:	// requested speed
-						currentValue.SetFloat(reprap.GetMove().GetRequestedSpeedMmPerSec());
+						currentValue.SetFloat(reprap.GetMove().GetRequestedSpeedMmPerSec(0));
 						break;
 
 					case 39:	// top speed
-						currentValue.SetFloat(reprap.GetMove().GetTopSpeedMmPerSec());
+						currentValue.SetFloat(reprap.GetMove().GetTopSpeedMmPerSec(0));
 						break;
 
 					default:

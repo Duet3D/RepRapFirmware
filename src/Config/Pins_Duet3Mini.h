@@ -10,6 +10,7 @@
 
 #include <PinDescription.h>
 #include <SPI/SpiParameters.h>
+#include <UART/UartParameters.h>
 
 #define DEFAULT_BOARD_TYPE		 BoardType::Duet3Mini_Unknown
 
@@ -108,24 +109,24 @@ constexpr size_t MaxExtrudersPerTool = 8;
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 
 #define SERIAL_USB_DEVICE (serialUSB)
+
 #if CORE_USES_TINYUSB
-# define SERIAL_USB2_DEVICE serialUSB2
+constexpr size_t NumUsbChannels = 2;
+# define SERIAL_USB2_DEVICE (serialUSB2)
+#else
+constexpr size_t NumUsbChannels = 1;
 #endif
-#define SERIAL_AUX_DEVICE (serialUart0)
-#define SERIAL_AUX2_DEVICE (serialUart1)
+
+#define NUM_ASYNC_PORTS			(2)
 
 #ifdef DUET3_ATE
-constexpr size_t NumUsbChannels = 2;
-constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB, USB2, and one auxiliary UART) - reserve the third UART for ATE use
+# define NUM_ASYNC_CHANNELS		(NUM_ASYNC_PORTS - 1)	// reserve the second async port for the ATE
+constexpr size_t AteUartPortNumber = NUM_ASYNC_CHANNELS;
 #else
-# ifdef SERIAL_USB2_DEVICE
-constexpr size_t NumUsbChannels = 2;
-constexpr size_t NumSerialChannels = 4;				// The number of serial IO channels (USB, USB2, and two auxiliary UART)
-# else
-constexpr size_t NumUsbChannels = 1;
-constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB and two auxiliary UARTs)
-# endif
+# define NUM_ASYNC_CHANNELS		(NUM_ASYNC_PORTS)
 #endif
+
+constexpr size_t NumSerialChannels = NumUsbChannels + NUM_ASYNC_CHANNELS;
 
 // DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
 // When static arbitration within a priority level is selected, lower channel number have higher priority.
@@ -154,9 +155,6 @@ constexpr DmaPriority DmacPrioSspiRx = 2;				// SPI in master mode
 // SerialUSB
 constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB port
 
-//#define I2C_IFACE	Wire							// First and only I2C interface
-//#define I2C_IRQn	WIRE_ISR_ID
-
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // Drivers
@@ -183,12 +181,12 @@ constexpr uint32_t CclDiagInputs[NumDirectDrivers] =
 // UART interface to stepper drivers
 constexpr uint8_t TMC22xxSercomNumber = 1;
 Sercom * const SERCOM_TMC22xx = SERCOM1;
-constexpr IRQn TMC22xx_SERCOM_IRQn = SERCOM1_0_IRQn;
 constexpr Pin TMC22xxSercomTxPin = PortAPin(0);
 constexpr GpioPinFunction TMC22xxSercomTxPinPeriphMode = GpioPinFunction::D;
 constexpr Pin TMC22xxSercomRxPin = PortAPin(1);
 constexpr GpioPinFunction TMC22xxSercomRxPinPeriphMode = GpioPinFunction::D;
 constexpr uint8_t TMC22xxSercomRxPad = 1;
+constexpr uint8_t Tmc22xxSercomTxPad = 0;
 constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
 
 #define TMC22xx_HAS_ENABLE_PINS			0
@@ -301,28 +299,30 @@ constexpr SpiParameters SharedSpiParams =
 };
 
 // Serial on IO0
-constexpr uint8_t Serial0SercomNumber = 2;
-constexpr uint8_t Sercom0RxPad = 1;
-#define SERIAL0_ISR0	SERCOM2_0_Handler
-#define SERIAL0_ISR1	SERCOM2_1_Handler
-#define SERIAL0_ISR2	SERCOM2_2_Handler
-#define SERIAL0_ISR3	SERCOM2_3_Handler
-
-constexpr Pin Serial0TxPin = PortBPin(25);
-constexpr Pin Serial0RxPin = PortBPin(24);
-constexpr GpioPinFunction Serial0PinFunction = GpioPinFunction::D;
+constexpr UartParameters Serial0Params =
+{
+	.sercomNumber = 2,
+	.rxPin = PortBPin(24),
+	.txPin = PortBPin(25),
+	.pinFunction = GpioPinFunction::D,
+	.dataInPad = 1,
+	.dataOutPad = 0,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
 
 // Serial on IO1
-constexpr uint8_t Serial1SercomNumber = 5;
-constexpr uint8_t Sercom1RxPad = 1;
-#define SERIAL1_ISR0	SERCOM5_0_Handler
-#define SERIAL1_ISR1	SERCOM5_1_Handler
-#define SERIAL1_ISR2	SERCOM5_2_Handler
-#define SERIAL1_ISR3	SERCOM5_3_Handler
-
-constexpr Pin Serial1TxPin = PortBPin(31);
-constexpr Pin Serial1RxPin = PortBPin(30);
-constexpr GpioPinFunction Serial1PinFunction = GpioPinFunction::D;
+constexpr UartParameters Serial1Params =
+{
+	.sercomNumber = 5,
+	.rxPin = PortBPin(30),
+	.txPin = PortBPin(31),
+	.pinFunction = GpioPinFunction::D,
+	.dataInPad = 1,
+	.dataOutPad = 0,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
 
 // Ethernet pins
 constexpr Pin EthernetMacPins[] =
@@ -337,17 +337,21 @@ constexpr Pin EthernetClockOutPin = PortAPin(16);
 constexpr GpioPinFunction EthernetClockOutPinFunction = GpioPinFunction::M;
 constexpr unsigned int EthernetClockOutGclkNumber = 2;
 
-// WiFi pins
-constexpr unsigned int WiFiUartSercomNumber = 3;
-constexpr uint8_t WiFiUartRxPad = 1;
-constexpr Pin WiFiUartSercomPins[] = { PortAPin(16), PortAPin(17) };
-constexpr GpioPinFunction WiFiUartSercomPinsMode = GpioPinFunction::D;
-constexpr IRQn WiFiUartSercomIRQn = SERCOM3_0_IRQn;			// this is the first of 4 interrupt numbers
-#define SERIAL_WIFI_ISR0	SERCOM3_0_Handler
-#define SERIAL_WIFI_ISR1	SERCOM3_1_Handler
-#define SERIAL_WIFI_ISR2	SERCOM3_2_Handler
-#define SERIAL_WIFI_ISR3	SERCOM3_3_Handler
+// WiFi UART pins
+constexpr UartParameters SerialWiFiParams =
+{
+	.sercomNumber = 3,
+	.rxPin = PortAPin(16),
+	.txPin = PortAPin(17),
+	.pinFunction = GpioPinFunction::D,
+	.dataInPad = 1,
+	.dataOutPad = 0,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
 
+
+// WiFi module SPI interface
 constexpr unsigned int WiFiSpiSercomNumber = 4;
 Sercom * const WiFiSpiSercom = SERCOM4;
 constexpr Pin EspMosiPin = PortAPin(15);

@@ -3,6 +3,7 @@
 
 #include <PinDescription.h>
 #include <SPI/SpiParameters.h>
+#include <UART/UartParameters.h>
 
 #define BOARD_SHORT_NAME		"MB6HC"
 #define BOARD_NAME				"Duet 3 MB6HC"
@@ -121,20 +122,49 @@ constexpr size_t MaxExtrudersPerTool = 12;			// Increased in 3.5.2 because a use
 
 constexpr unsigned int MaxTriggers = 32;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 
-#define SERIAL_USB_DEVICE serialUSB
+// USB and other serial devices
+#define SERIAL_USB_DEVICE (serialUSB)
 #if CORE_USES_TINYUSB
-# define SERIAL_USB2_DEVICE serialUSB2
-#endif
-#define SERIAL_AUX_DEVICE serialUart1
-#define SERIAL_AUX2_DEVICE serialUart2
-
-#ifdef SERIAL_USB2_DEVICE
 constexpr size_t NumUsbChannels = 2;
-constexpr size_t NumSerialChannels = 4;				// The number of serial IO channels not counting the WiFi serial connection (USB, USB2, and two auxiliary UARTs)
+# define SERIAL_USB2_DEVICE (serialUSB2)
 #else
 constexpr size_t NumUsbChannels = 1;
-constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels not counting the WiFi serial connection (USB and two auxiliary UARTs)
 #endif
+
+#define NUM_ASYNC_PORTS			(2)
+#define NUM_ASYNC_CHANNELS		(2)
+
+constexpr size_t NumSerialChannels = NumUsbChannels + NUM_ASYNC_CHANNELS;				// The number of serial IO channels not counting the WiFi serial connection (USB, USB2, and two auxiliary UARTs)
+
+constexpr UartParameters Serial0Params =
+{
+	.uartOrUsartInstance = 2,						// uart 2
+	.rxPin = PortDPin(25),
+	.txPin = PortDPin(26),
+	.pinFunction = GpioPinFunction::C,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
+
+constexpr UartParameters Serial1Params =
+{
+	.uartOrUsartInstance = 2 | 0x80,				// usart 2
+	.rxPin = PortDPin(15),
+	.txPin = PortDPin(16),
+	.pinFunction = GpioPinFunction::B,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
+
+constexpr UartParameters SerialWiFiParams =
+{
+	.uartOrUsartInstance = 4,						// uart 4
+	.rxPin = PortDPin(18),
+	.txPin = PortDPin(19),
+	.pinFunction = GpioPinFunction::C,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
 
 // Shared SPI definitions
 constexpr SpiParameters SharedSpiParams =
@@ -406,14 +436,6 @@ constexpr size_t NumVirtualPins = 0;
 
 static_assert(NumNamedPins == NumRealPins + NumVirtualPins);
 
-// Serial Interfaces
-constexpr Pin APIN_Serial0_RXD = PortDPin(25);
-constexpr Pin APIN_Serial0_TXD = PortDPin(26);
-constexpr auto Serial0PinFunction = GpioPinFunction::C;
-constexpr Pin APIN_Serial1_RXD = PortDPin(15);
-constexpr Pin APIN_Serial1_TXD = PortDPin(16);
-constexpr auto Serial1PinFunction = GpioPinFunction::B;
-
 // SD Card
 constexpr Pin HsmciMclkPin = PortAPin(25);
 constexpr auto HsmciMclkPinFunction = GpioPinFunction::D;
@@ -451,10 +473,6 @@ constexpr Pin APIN_ESP_SPI_MISO = PortCPin(26);
 constexpr Pin APIN_ESP_SPI_SCK  = PortCPin(24);
 constexpr Pin APIN_ESP_SPI_SS0  = PortCPin(25);
 constexpr GpioPinFunction SPIPeriphMode = GpioPinFunction::C;
-
-constexpr Pin APIN_SerialWiFi_TXD = PortDPin(19);
-constexpr Pin APIN_SerialWiFi_RXD = PortDPin(18);
-constexpr GpioPinFunction SerialWiFiPeriphMode = GpioPinFunction::C;
 
 constexpr Pin EspEnablePin = PortCPin(14);			// Low on this in holds the WiFi module in reset (ESP_EN)
 constexpr Pin EspDataReadyPin = PortAPin(2);		// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)

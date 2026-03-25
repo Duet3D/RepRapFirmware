@@ -12,6 +12,7 @@
 #include <Platform/Tasks.h>
 #include <Hardware/NonVolatileMemory.h>
 #include <Cache.h>
+#include <AsyncSerial.h>
 #if SAME70 || SAM4S || SAM4E
 # include <Reset.h>
 #endif
@@ -55,10 +56,10 @@
 				fullReason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
 			}
 
-#if HAS_AUX_DEVICES
-			if (SERIAL_AUX_DEVICE.canWrite() == 0
-# ifdef SERIAL_AUX2_DEVICE
-				|| SERIAL_AUX2_DEVICE.canWrite() == 0
+#if NUM_ASYNC_CHANNELS != 0
+			if (   reprap.GetPlatform().GetAsyncPort(0)->canWrite() == 0
+# if NUM_ASYNC_CHANNELS > 1
+				|| reprap.GetPlatform().GetAsyncPort(1)->canWrite() == 0
 # endif
 			   )
 			{

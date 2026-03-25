@@ -16,64 +16,6 @@
 # include <Platform/TaskPriorities.h>
 #endif
 
-AsyncSerial serialUart1(UART2, UART2_IRQn, ID_UART2, 512, 512,
-					[](AsyncSerial*) noexcept
-					{
-						SetPinFunction(APIN_Serial0_RXD, Serial0PinFunction);
-						SetPinFunction(APIN_Serial0_TXD, Serial0PinFunction);
-					},
-					[](AsyncSerial*) noexcept
-					{
-						ClearPinFunction(APIN_Serial0_RXD);
-						ClearPinFunction(APIN_Serial0_TXD);
-					}
-				);
-
-USARTClass serialUart2(USART2, USART2_IRQn, ID_USART2, 512, 512,
-					[](AsyncSerial*) noexcept
-					{
-						SetPinFunction(APIN_Serial1_RXD, Serial1PinFunction);
-						SetPinFunction(APIN_Serial1_TXD, Serial1PinFunction);
-					},
-					[](AsyncSerial*) noexcept
-					{
-						ClearPinFunction(APIN_Serial1_RXD);
-						ClearPinFunction(APIN_Serial1_TXD);
-					}
-				);
-
-#if defined(DUET3_MB6HC)
-AsyncSerial serialWiFi(UART4, UART4_IRQn, ID_UART4, 512, 512,
-					[](AsyncSerial*) noexcept
-					{
-						SetPinFunction(APIN_SerialWiFi_RXD, SerialWiFiPeriphMode);
-						SetPinFunction(APIN_SerialWiFi_TXD, SerialWiFiPeriphMode);
-					},
-					[](AsyncSerial*) noexcept
-					{
-						ClearPinFunction(APIN_SerialWiFi_RXD);
-						ClearPinFunction(APIN_SerialWiFi_TXD);
-					}
-				);
-#endif
-
-void UART2_Handler(void) noexcept
-{
-	serialUart1.IrqHandler();
-}
-
-void USART2_Handler(void) noexcept
-{
-	serialUart2.IrqHandler();
-}
-
-#if defined(DUET3_MB6HC)
-void UART4_Handler(void) noexcept
-{
-	serialWiFi.IrqHandler();
-}
-#endif
-
 void SdhcInit() noexcept
 {
 	SetPinFunction(HsmciMclkPin, HsmciMclkPinFunction);
