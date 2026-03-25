@@ -280,6 +280,7 @@ void GCodes::Reset() noexcept
 
 	pauseState = PauseState::notPaused;
 #if SUPPORT_ASYNC_MOVES
+	numMotionSystemsUsed = 1;
 	pausedMovementSystemNumber = 0;
 #endif
 #if HAS_VOLTAGE_MONITOR
