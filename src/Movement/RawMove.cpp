@@ -48,26 +48,43 @@ constexpr ObjectModelTableEntry MovementState::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. motionSystems[] members
+	{ "currentMove",			OBJECT_MODEL_FUNC(self, 1),																	ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->raw.maxPrintingAcceleration), 1),		ObjectModelEntryFlags::none },
 #if SUPPORT_COORDINATE_ROTATION
-	{ "rotation",				OBJECT_MODEL_FUNC(self, 1),																	ObjectModelEntryFlags::none },
+	{ "rotation",				OBJECT_MODEL_FUNC(self, 2),																	ObjectModelEntryFlags::liveNotPanelDue },
 #endif
 	{ "speedFactor",			OBJECT_MODEL_FUNC(self->speedFactor, 2),													ObjectModelEntryFlags::none },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->raw.maxTravelAcceleration), 1),			ObjectModelEntryFlags::none },
 	{ "userPosition",			OBJECT_MODEL_FUNC_ARRAY(0),																	ObjectModelEntryFlags::live },
 	{ "virtualEPos",			OBJECT_MODEL_FUNC(self->latestVirtualExtruderPosition, 5),									ObjectModelEntryFlags::live },
 	{ "workplaceNumber",		OBJECT_MODEL_FUNC((int32_t)self->currentCoordinateSystem),									ObjectModelEntryFlags::none },
+
+	// 1. currentMove members
+	{ "acceleration",			OBJECT_MODEL_FUNC(reprap.GetMove().GetAccelerationMmPerSecSquared(self->GetNumber()), 1),	ObjectModelEntryFlags::liveNotPanelDue },
+	{ "deceleration",			OBJECT_MODEL_FUNC(reprap.GetMove().GetDecelerationMmPerSecSquared(self->GetNumber()), 1),	ObjectModelEntryFlags::liveNotPanelDue },
+	{ "distance",				OBJECT_MODEL_FUNC(reprap.GetMove().GetCurrentMoveDistance(self->GetNumber()), 2),			ObjectModelEntryFlags::liveNotPanelDue },
+	{ "duration",				OBJECT_MODEL_FUNC(reprap.GetMove().GetCurrentMoveDuration(self->GetNumber()), 2),			ObjectModelEntryFlags::liveNotPanelDue },
+	{ "extrusionRate",			OBJECT_MODEL_FUNC(reprap.GetMove().GetTotalExtrusionRate(self->GetNumber()), 2),			ObjectModelEntryFlags::liveNotPanelDue },
+//# if SUPPORT_LASER
+#if 0		// currently the laser support is global, not per motion system
+	{ "laserPwm",				OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetGCodes().GetMachineType() == MachineType::laser,
+															reprap.GetPlatform().GetLaserPwm(), 2),							ObjectModelEntryFlags::liveNotPanelDue },
+# endif
+	{ "requestedSpeed",			OBJECT_MODEL_FUNC(reprap.GetMove().GetRequestedSpeedMmPerSec(self->GetNumber()), 1),		ObjectModelEntryFlags::liveNotPanelDue },
+	{ "topSpeed",				OBJECT_MODEL_FUNC(reprap.GetMove().GetTopSpeedMmPerSec(self->GetNumber()), 1),				ObjectModelEntryFlags::liveNotPanelDue },
+
 #if SUPPORT_COORDINATE_ROTATION
-	// 1. motionSystems[].rotation members
-	{ "angle",					OBJECT_MODEL_FUNC(self->g68Angle, 2),														ObjectModelEntryFlags::none },
-	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(1),																	ObjectModelEntryFlags::none },
+	// 2. motionSystems[].rotation members
+	{ "angle",					OBJECT_MODEL_FUNC(self->g68Angle, 2),														ObjectModelEntryFlags::liveNotPanelDue },
+	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(1),																	ObjectModelEntryFlags::liveNotPanelDue },
 #endif
 };
 
 constexpr uint8_t MovementState::objectModelTableDescriptor[] =
 {
-	1 + SUPPORT_COORDINATE_ROTATION,
-	6 + SUPPORT_COORDINATE_ROTATION,
+	2 + SUPPORT_COORDINATE_ROTATION,
+	7 + SUPPORT_COORDINATE_ROTATION,
+	7,
 #if SUPPORT_COORDINATE_ROTATION
 	2
 #endif
