@@ -32,8 +32,16 @@ constexpr ObjectModelArrayTableEntry MovementState::objectModelArrayTable[] =
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetTotalAxes()),
 		OBJECT_MODEL_ARRAY_VALUE(self->raw.coords[context.GetLastIndex()], 3)
 	},
+
+	// 1. Restore points
+	{
+		nullptr,
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(NumVisibleRestorePoints),
+		OBJECT_MODEL_ARRAY_VALUE(&self->restorePoints[context.GetLastIndex()])
+	},
+
 #if SUPPORT_COORDINATE_ROTATION
-	// 1. Rotation centre coordinates
+	// 2. Rotation centre coordinates
 	{
 		nullptr,					// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
@@ -49,7 +57,11 @@ constexpr ObjectModelTableEntry MovementState::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. motionSystems[] members
 	{ "currentMove",			OBJECT_MODEL_FUNC(self, 1),																	ObjectModelEntryFlags::none },
+	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),									ObjectModelEntryFlags::live },
+	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->newToolNumber),											ObjectModelEntryFlags::none },
+	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),										ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->raw.maxPrintingAcceleration), 1),		ObjectModelEntryFlags::none },
+	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(1),																	ObjectModelEntryFlags::none },
 #if SUPPORT_COORDINATE_ROTATION
 	{ "rotation",				OBJECT_MODEL_FUNC(self, 2),																	ObjectModelEntryFlags::liveNotPanelDue },
 #endif
@@ -76,14 +88,14 @@ constexpr ObjectModelTableEntry MovementState::objectModelTable[] =
 #if SUPPORT_COORDINATE_ROTATION
 	// 2. motionSystems[].rotation members
 	{ "angle",					OBJECT_MODEL_FUNC(self->g68Angle, 2),														ObjectModelEntryFlags::liveNotPanelDue },
-	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(1),																	ObjectModelEntryFlags::liveNotPanelDue },
+	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(2),																	ObjectModelEntryFlags::liveNotPanelDue },
 #endif
 };
 
 constexpr uint8_t MovementState::objectModelTableDescriptor[] =
 {
 	2 + SUPPORT_COORDINATE_ROTATION,
-	7 + SUPPORT_COORDINATE_ROTATION,
+	11 + SUPPORT_COORDINATE_ROTATION,
 	7,
 #if SUPPORT_COORDINATE_ROTATION
 	2
