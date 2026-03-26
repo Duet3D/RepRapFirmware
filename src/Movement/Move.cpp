@@ -3422,7 +3422,7 @@ void Move::PollOneDriver(size_t driver) noexcept
 	if (currentBrakePwm[driver] != 0.0 && reprap.GetPlatform().GetVinVoltage() > 10.0)
 	{
 		const float newBrakePwm = min<float>(brakeVoltages[driver]/reprap.GetPlatform().GetVinVoltage(), 1.0);
-		if (fabsf(newBrakePwm - currentBrakePwm[driver] >= 0.05))
+		if (fabsf(newBrakePwm - currentBrakePwm[driver]) >= 0.05)
 		{
 			brakePorts[driver].WriteAnalog(newBrakePwm);
 			currentBrakePwm[driver] = newBrakePwm;
