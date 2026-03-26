@@ -36,6 +36,15 @@ namespace DataCollection
 	static __nocache volatile uint8_t buffer[MaxBufferLen];
 	static __nocache volatile size_t bufferLen = 0;
 
+	[[nodiscard]] bool IsTxInProgress() noexcept
+	{
+#  if SAME70
+		return (xdmac_channel_get_status(XDMAC) & (XDMAC_GS_ST0 << DmacChanDataCollectionTx)) != 0;
+#  else
+		return false;
+#  endif
+	}
+
 	void ClearBuffer()
 	{
 		for (size_t i = 0; i < MaxBufferLen; i++)
@@ -223,18 +232,13 @@ namespace DataCollection
 		return AddDataToBuffer(asciiPos, len);
 	}
 
-	[[maybe_unused]] static void AddAxisPosition(size_t axisOrExtruder, uint32_t when)
-	{
-		Move& move = reprap.GetMove();
-
-		MotionParameters params;
-		move.GetCurrentMotion(axisOrExtruder, when, params);
-		const float pos = params.position * move.GetMicrostepping(axisOrExtruder) / move.DriveStepsPerMm(axisOrExtruder);
-		AddDataToBuffer(pos, 7, 2);
-	}
-
 	void CollectAndSendData()
 	{
+		if (IsTxInProgress())
+		{
+			return;
+		}
+
 		ClearBuffer();
 
 		// Add timestamp
@@ -258,10 +262,9 @@ namespace DataCollection
 		static float last_e_positions[MaxExtruders] = {0};
 		for (size_t extruder = 0; extruder < reprap.GetGCodes().GetNumExtruders(); extruder++)
 		{
-			MotionParameters params;
 			const size_t logicalExtruder = ExtruderToLogicalDrive(extruder);
-			move.GetCurrentMotion(logicalExtruder, now, params);
-			const float pos = params.position * move.GetMicrostepping(logicalExtruder) / move.DriveStepsPerMm(logicalExtruder);
+			const float microstep_pos = move.GetCurrentPosition(logicalExtruder, now);
+			const float pos = microstep_pos * move.GetMicrostepping(logicalExtruder) / move.DriveStepsPerMm(logicalExtruder);
 			AddDataToBuffer((uint8_t)',');
 			AddDataToBuffer(static_cast<uint32_t>(pos == last_e_positions[extruder] ? 0 : 1));
 			last_e_positions[extruder] = pos;

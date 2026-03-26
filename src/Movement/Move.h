@@ -449,6 +449,11 @@ public:
 	void InvertCurrentMotorSteps(size_t driver) noexcept;
 #endif
 
+	float GetCurrentPosition(size_t axisOrExtruder, uint32_t when)
+	{
+		return dms[axisOrExtruder].GetCurrentPosition(when);
+	}
+
 #if SUPPORT_PHASE_STEPPING
 	void ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config);	// configure Ka & Kv parameters for phase stepping
 	PhaseStepParams GetPhaseStepParams(size_t axisOrExtruder) const noexcept;
