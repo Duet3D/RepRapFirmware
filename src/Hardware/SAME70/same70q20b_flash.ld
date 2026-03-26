@@ -52,8 +52,8 @@ SEARCH_DIR(.)
 MEMORY
 {
   rom (rx)  : ORIGIN = 0x00400000, LENGTH = 0x00100000
-  ram_not_cached (rw) : ORIGIN = 0x20400000, LENGTH = 0x00014000		/* we currently allocate 80kb of non-cached RAM */
-  ram (rwx) : ORIGIN = 0x20414000, LENGTH = 0x0004C000					/* that leaves 304Kb of cached RAM */
+  ram_not_cached (rw) : ORIGIN = 0x20400000, LENGTH = 0x00012000		/* we currently allocate 72kb of non-cached RAM */
+  ram (rwx) : ORIGIN = 0x20412000, LENGTH = 0x0004E000					/* that leaves 312Kb of cached RAM */
 }
 
 /* Section Definitions */

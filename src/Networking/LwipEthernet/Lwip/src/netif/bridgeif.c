@@ -120,7 +120,7 @@ typedef struct bridgeif_private_s {
 } bridgeif_private_t;
 
 /* netif data index to get the bridge on input */
-u8_t bridgeif_netif_client_id = 0xff;
+static u8_t bridgeif_netif_client_id = 0xff;
 
 /**
  * @ingroup bridgeif
@@ -421,7 +421,7 @@ bridgeif_init(struct netif *netif)
   LWIP_ASSERT("bridgeif needs an input callback", (netif->input != NULL));
 #if !BRIDGEIF_PORT_NETIFS_OUTPUT_DIRECT
   if (netif->input == tcpip_input) {
-    LWIP_DEBUGF(BRIDGEIF_DEBUG | LWIP_DBG_ON, ("bridgeif does not need tcpip_input, use netif_input/ethernet_input instead"));
+    LWIP_DEBUGF(BRIDGEIF_DEBUG | LWIP_DBG_ON, ("bridgeif does not need tcpip_input, use netif_input/ethernet_input instead\n"));
   }
 #endif
 

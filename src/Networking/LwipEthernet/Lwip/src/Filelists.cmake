@@ -5,12 +5,16 @@
 #
 # This file is NOT designed (on purpose) to be used as cmake
 # subdir via add_subdirectory()
-# The intention is to provide greater flexibility to users to 
+# The intention is to provide greater flexibility to users to
 # create their own targets using the *_SRCS variables.
 
+if(NOT ${CMAKE_VERSION} VERSION_LESS "3.10.0")
+    include_guard(GLOBAL)
+endif()
+
 set(LWIP_VERSION_MAJOR    "2")
-set(LWIP_VERSION_MINOR    "1")
-set(LWIP_VERSION_REVISION "2")
+set(LWIP_VERSION_MINOR    "2")
+set(LWIP_VERSION_REVISION "1")
 # LWIP_VERSION_RC is set to LWIP_RC_RELEASE for official releases
 # LWIP_VERSION_RC is set to LWIP_RC_DEVELOPMENT for Git versions
 # Numbers 1..31 are reserved for release candidates
@@ -24,11 +28,11 @@ elseif ("${LWIP_VERSION_RC}" STREQUAL "LWIP_RC_DEVELOPMENT")
     set(LWIP_VERSION_STRING
         "${LWIP_VERSION_MAJOR}.${LWIP_VERSION_MINOR}.${LWIP_VERSION_REVISION}.dev"
     )
-else ("${LWIP_VERSION_RC}" STREQUAL "LWIP_RC_RELEASE")
+else()
     set(LWIP_VERSION_STRING
         "${LWIP_VERSION_MAJOR}.${LWIP_VERSION_MINOR}.${LWIP_VERSION_REVISION}.rc${LWIP_VERSION_RC}"
     )
-endif ("${LWIP_VERSION_RC}" STREQUAL "LWIP_RC_RELEASE")
+endif()
 
 # The minimum set of files needed for lwIP.
 set(lwipcore_SRCS
@@ -54,6 +58,7 @@ set(lwipcore_SRCS
     ${LWIP_DIR}/src/core/udp.c
 )
 set(lwipcore4_SRCS
+    ${LWIP_DIR}/src/core/ipv4/acd.c
     ${LWIP_DIR}/src/core/ipv4/autoip.c
     ${LWIP_DIR}/src/core/ipv4/dhcp.c
     ${LWIP_DIR}/src/core/ipv4/etharp.c
@@ -93,8 +98,11 @@ set(lwipnetif_SRCS
     ${LWIP_DIR}/src/netif/ethernet.c
     ${LWIP_DIR}/src/netif/bridgeif.c
     ${LWIP_DIR}/src/netif/bridgeif_fdb.c
-    ${LWIP_DIR}/src/netif/slipif.c
 )
+
+if (NOT ${LWIP_EXCLUDE_SLIPIF})
+	list(APPEND lwipnetif_SRCS ${LWIP_DIR}/src/netif/slipif.c)
+endif()
 
 # 6LoWPAN
 set(lwipsixlowpan_SRCS
@@ -194,6 +202,8 @@ set(lwipsntp_SRCS
 # MDNS responder
 set(lwipmdns_SRCS
     ${LWIP_DIR}/src/apps/mdns/mdns.c
+    ${LWIP_DIR}/src/apps/mdns/mdns_out.c
+    ${LWIP_DIR}/src/apps/mdns/mdns_domain.c
 )
 
 # NetBIOS name server
@@ -203,7 +213,7 @@ set(lwipnetbios_SRCS
 
 # TFTP server files
 set(lwiptftp_SRCS
-    ${LWIP_DIR}/src/apps/tftp/tftp_server.c
+    ${LWIP_DIR}/src/apps/tftp/tftp.c
 )
 
 # MQTT client files
@@ -240,7 +250,6 @@ set(lwipallapps_SRCS
     ${lwipnetbios_SRCS}
     ${lwiptftp_SRCS}
     ${lwipmqtt_SRCS}
-    ${lwipmbedtls_SRCS}
 )
 
 # Generate lwip/init.h (version info)
@@ -255,7 +264,7 @@ configure_file(${DOXYGEN_IN} ${DOXYGEN_OUT})
 
 find_package(Doxygen)
 if (DOXYGEN_FOUND)
-    message("Doxygen build started")
+    message(STATUS "Doxygen build started")
 
     add_custom_target(lwipdocs
         COMMAND ${CMAKE_COMMAND} -E remove_directory ${DOXYGEN_DIR}/${DOXYGEN_OUTPUT_DIR}/html
@@ -264,7 +273,7 @@ if (DOXYGEN_FOUND)
         COMMENT "Generating API documentation with Doxygen"
         VERBATIM)
 else (DOXYGEN_FOUND)
-    message("Doxygen needs to be installed to generate the doxygen documentation")
+    message(STATUS "Doxygen needs to be installed to generate the doxygen documentation")
 endif (DOXYGEN_FOUND)
 
 # lwIP libraries
@@ -277,3 +286,8 @@ add_library(lwipallapps EXCLUDE_FROM_ALL ${lwipallapps_SRCS})
 target_compile_options(lwipallapps PRIVATE ${LWIP_COMPILER_FLAGS})
 target_compile_definitions(lwipallapps PRIVATE ${LWIP_DEFINITIONS}  ${LWIP_MBEDTLS_DEFINITIONS})
 target_include_directories(lwipallapps PRIVATE ${LWIP_INCLUDE_DIRS} ${LWIP_MBEDTLS_INCLUDE_DIRS})
+
+add_library(lwipmbedtls EXCLUDE_FROM_ALL ${lwipmbedtls_SRCS})
+target_compile_options(lwipmbedtls PRIVATE ${LWIP_COMPILER_FLAGS})
+target_compile_definitions(lwipmbedtls PRIVATE ${LWIP_DEFINITIONS}  ${LWIP_MBEDTLS_DEFINITIONS})
+target_include_directories(lwipmbedtls PRIVATE ${LWIP_INCLUDE_DIRS} ${LWIP_MBEDTLS_INCLUDE_DIRS})

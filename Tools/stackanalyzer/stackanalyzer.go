@@ -129,6 +129,9 @@ func getFailingBlock(mapFile string, faultedAddress uint64) ([]string, uint64, e
 
 		// Lines with only one field indicate the next function
 		if len(fields) < 2 {
+			if len(fields) == 0 {
+				continue
+			}
 			prevFaultFunction = faultFunction
 			faultFunction = fields[0]
 			continue

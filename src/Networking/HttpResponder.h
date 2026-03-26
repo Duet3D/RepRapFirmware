@@ -82,6 +82,7 @@ private:
 	bool RemoveAuthentication() noexcept;
 
 	bool CharFromClient(char c) noexcept;
+	void ResetParser() noexcept;
 	void SendFile(const char *_ecv_array nameOfFileToSend, bool isWebFile) noexcept;
 	void SendGCodeReply() noexcept;
 	void SendJsonResponse(const char *_ecv_array command) noexcept;

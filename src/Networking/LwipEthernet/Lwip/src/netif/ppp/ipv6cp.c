@@ -67,7 +67,7 @@
     L'Institut d'Informatique et de Mathématiques Appliquées de Grenoble (IMAG)
     est une fédération d'unités mixtes de recherche du CNRS, de l'Institut National
     Polytechnique de Grenoble et de l'Université Joseph Fourier regroupant
-    sept laboratoires dont le laboratoire Logiciels, Systèmes, Réseaux (LSR).
+    sept laboratoires don't le laboratoire Logiciels, Systèmes, Réseaux (LSR).
 
     This work has been done in the context of GIE DYADE (joint R & D venture
     between BULL S.A. and INRIA).
@@ -913,7 +913,7 @@ static int ipv6cp_reqci(fsm *f, u_char *inp, int *len, int reject_if_disagree) {
     next = inp;
     while (l) {
 	orc = CONFACK;			/* Assume success */
-	cip = p = next;			/* Remember begining of CI */
+	cip = p = next;			/* Remember beginning of CI */
 	if (l < 2 ||			/* Not enough data for CI header or */
 	    p[1] < 2 ||			/*  CI length too small or */
 	    p[1] > l) {			/*  CI length too big? */
@@ -1006,7 +1006,7 @@ endswitch:
 	IPV6CPDEBUG((" (%s)\n", CODENAME(orc)));
 
 	if (orc == CONFACK &&		/* Good CI */
-	    rc != CONFACK)		/*  but prior CI wasnt? */
+	    rc != CONFACK)		/*  but prior CI wasn't? */
 	    continue;			/* Don't send this one */
 
 	if (orc == CONFNAK) {		/* Nak this CI? */
@@ -1134,9 +1134,9 @@ static int ipv6_demand_conf(int u) {
     if (!sifnpmode(u, PPP_IPV6, NPMODE_QUEUE))
 	return 0;
 
-    ppp_notice("ipv6_demand_conf");
-    ppp_notice("local  LL address %s", llv6_ntoa(wo->ourid));
-    ppp_notice("remote LL address %s", llv6_ntoa(wo->hisid));
+    ppp_notice(("ipv6_demand_conf"));
+    ppp_notice(("local  LL address %s", llv6_ntoa(wo->ourid)));
+    ppp_notice(("remote LL address %s", llv6_ntoa(wo->hisid)));
 
     return 1;
 }
@@ -1166,17 +1166,17 @@ static void ipv6cp_up(fsm *f) {
     if(!no_ifaceid_neg) {
 #endif /* UNUSED */
 	if (eui64_iszero(ho->hisid)) {
-	    ppp_error("Could not determine remote LL address");
+	    ppp_error(("Could not determine remote LL address"));
 	    ipv6cp_close(f->pcb, "Could not determine remote LL address");
 	    return;
 	}
 	if (eui64_iszero(go->ourid)) {
-	    ppp_error("Could not determine local LL address");
+	    ppp_error(("Could not determine local LL address"));
 	    ipv6cp_close(f->pcb, "Could not determine local LL address");
 	    return;
 	}
 	if (eui64_equals(go->ourid, ho->hisid)) {
-	    ppp_error("local and remote LL addresses are equal");
+	    ppp_error(("local and remote LL addresses are equal"));
 	    ipv6cp_close(f->pcb, "local and remote LL addresses are equal");
 	    return;
 	}
@@ -1244,8 +1244,8 @@ static void ipv6cp_up(fsm *f) {
 	sifnpmode(f->pcb, PPP_IPV6, NPMODE_PASS);
 #endif /* DEMAND_SUPPORT */
 
-	ppp_notice("local  LL address %s", llv6_ntoa(go->ourid));
-	ppp_notice("remote LL address %s", llv6_ntoa(ho->hisid));
+	ppp_notice(("local  LL address %s", llv6_ntoa(go->ourid)));
+	ppp_notice(("remote LL address %s", llv6_ntoa(ho->hisid)));
     }
 
     np_up(f->pcb, PPP_IPV6);

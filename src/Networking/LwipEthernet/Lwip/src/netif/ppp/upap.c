@@ -206,7 +206,7 @@ static void upap_timeout(void *arg) {
 
     if (pcb->upap.us_transmits >= pcb->settings.pap_max_transmits) {
 	/* give up in disgust */
-	ppp_error("No response to PAP authenticate-requests");
+	ppp_error(("No response to PAP authenticate-requests"));
 	pcb->upap.us_clientstate = UPAPCS_BADAUTH;
 	auth_withpeer_fail(pcb, PPP_PAP);
 	return;
@@ -286,12 +286,12 @@ static void upap_lowerdown(ppp_pcb *pcb) {
 static void upap_protrej(ppp_pcb *pcb) {
 
     if (pcb->upap.us_clientstate == UPAPCS_AUTHREQ) {
-	ppp_error("PAP authentication failed due to protocol-reject");
+	ppp_error(("PAP authentication failed due to protocol-reject"));
 	auth_withpeer_fail(pcb, PPP_PAP);
     }
 #if PPP_SERVER
     if (pcb->upap.us_serverstate == UPAPSS_LISTEN) {
-	ppp_error("PAP authentication of peer failed (protocol-reject)");
+	ppp_error(("PAP authentication of peer failed (protocol-reject)"));
 	auth_peer_fail(pcb, PPP_PAP);
     }
 #endif /* PPP_SERVER */
@@ -439,11 +439,11 @@ static void upap_rauthreq(ppp_pcb *pcb, u_char *inp, int id, int len) {
 
     if (retcode == UPAP_AUTHACK) {
 	pcb->upap.us_serverstate = UPAPSS_OPEN;
-	ppp_notice("PAP peer authentication succeeded for %q", rhostname);
+	ppp_notice(("PAP peer authentication succeeded for %q", rhostname));
 	auth_peer_success(pcb, PPP_PAP, 0, ruser, ruserlen);
     } else {
 	pcb->upap.us_serverstate = UPAPSS_BADAUTH;
-	ppp_warn("PAP peer authentication failed for %q", rhostname);
+	ppp_warn(("PAP peer authentication failed for %q", rhostname));
 	auth_peer_fail(pcb, PPP_PAP);
     }
 
@@ -481,6 +481,7 @@ static void upap_rauthack(ppp_pcb *pcb, u_char *inp, int id, int len) {
 	}
     }
 
+    UNTIMEOUT(upap_timeout, pcb);
     pcb->upap.us_clientstate = UPAPCS_OPEN;
 
     auth_withpeer_success(pcb, PPP_PAP, 0);
@@ -516,9 +517,10 @@ static void upap_rauthnak(ppp_pcb *pcb, u_char *inp, int id, int len) {
 	}
     }
 
+    UNTIMEOUT(upap_timeout, pcb);
     pcb->upap.us_clientstate = UPAPCS_BADAUTH;
 
-    ppp_error("PAP authentication failed");
+    ppp_error(("PAP authentication failed"));
     auth_withpeer_fail(pcb, PPP_PAP);
 }
 
@@ -533,7 +535,7 @@ static void upap_sauthreq(ppp_pcb *pcb) {
 
     outlen = UPAP_HEADERLEN + 2 * sizeof (u_char) +
 	pcb->upap.us_userlen + pcb->upap.us_passwdlen;
-    p = pbuf_alloc(PBUF_RAW, (u16_t)(PPP_HDRLEN +outlen), PPP_CTRL_PBUF_TYPE);
+    p = pbuf_alloc(PBUF_RAW, (u16_t)(PPP_HDRLEN +outlen), PBUF_RAM);
     if(NULL == p)
         return;
     if(p->tot_len != p->len) {
@@ -570,7 +572,7 @@ static void upap_sresp(ppp_pcb *pcb, u_char code, u_char id, const char *msg, in
     int outlen;
 
     outlen = UPAP_HEADERLEN + sizeof (u_char) + msglen;
-    p = pbuf_alloc(PBUF_RAW, (u16_t)(PPP_HDRLEN +outlen), PPP_CTRL_PBUF_TYPE);
+    p = pbuf_alloc(PBUF_RAW, (u16_t)(PPP_HDRLEN +outlen), PBUF_RAM);
     if(NULL == p)
         return;
     if(p->tot_len != p->len) {

@@ -85,7 +85,7 @@ public:
 	void CreateAdditionalInterface() noexcept;
 #endif
 
-	GCodeResult EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply) noexcept;
+	GCodeResult EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowed = true) noexcept;
 	GCodeResult EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept;
 	GCodeResult DisableProtocol(unsigned int interface, NetworkProtocol protocol, const StringRef& reply) noexcept;
 	GCodeResult ReportProtocols(unsigned int interface, const StringRef& reply) const noexcept;

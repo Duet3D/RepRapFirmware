@@ -49,7 +49,7 @@ extern "C" {
  * @{
  */
 
-#ifdef ERR_TIMEOUT			// Atmel Start file err_codes.h defies this
+#ifdef ERR_TIMEOUT                     // Atmel Start file err_codes.h defies this
 # undef ERR_TIMEOUT
 #endif
 

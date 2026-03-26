@@ -10,6 +10,7 @@
 #if SUPPORT_HTTP
 
 #include "Network.h"
+#include "NetworkInterface.h"
 #include "Socket.h"
 #include "GCodes/GCodes.h"
 #include "General/IP4String.h"
@@ -454,13 +455,25 @@ bool HttpResponder::CharFromClient(char c) noexcept
 	return false;
 }
 
+void HttpResponder::ResetParser() noexcept
+{
+	clientPointer = 0;
+	parseState = HttpParseState::doingCommandWord;
+	numCommandWords = 0;
+	numQualKeys = 0;
+	numHeaderKeys = 0;
+	commandWords[0] = clientMessage;
+}
+
 // Get the Json response for this command.
 // 'value' is null-terminated, but we also pass its length in case it contains embedded nulls, which matters when uploading files.
 // Return true if we generated a json response to send, false if we didn't and changed the state instead.
 // This may also return true with response == nullptr if we tried to generate a response but ran out of buffers.
 bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer *_ecv_null &response, bool& keepOpen) noexcept
 {
-	keepOpen = false;	// assume we don't want to persist the connection
+	// Keep connections alive if this is an encrypted connection. Without it, every connection
+	// takes ~165ms for TLS setup (on a 6HC), which adds significant computing time and latency
+	keepOpen = skt->UsingTls();
 
 	const char *_ecv_array _ecv_null parameter;
 	if (StringEqualsIgnoreCase(request, "connect") && (parameter = GetKeyValue("password")) != nullptr)
@@ -1001,8 +1014,14 @@ void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWeb
 	}
 
 	outBuf->catf("Content-Length: %lu\r\n", fileToSend->Length());
-	outBuf->cat("Connection: close\r\n\r\n");
-	Commit();
+	const bool keepAlive = skt->UsingTls();
+	outBuf->catf("Connection: %s\r\n\r\n", keepAlive ? "keep-alive" : "close");
+	if (keepAlive)
+	{
+		ResetParser();
+		timer = millis();
+	}
+	Commit(keepAlive ? ResponderState::reading : ResponderState::free);
 #else
 	RejectMessage("file not found", 404);
 #endif
@@ -1161,6 +1180,11 @@ void HttpResponder::SendJsonResponse(const char *_ecv_array command) noexcept
 	}
 
 	// Here if everything is OK
+	if (keepOpen)
+	{
+		ResetParser();
+		timer = millis();
+	}
 	Commit(keepOpen ? ResponderState::reading : ResponderState::free, false);
 	if (reprap.Debug(Module::Webserver))
 	{

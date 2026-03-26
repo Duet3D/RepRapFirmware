@@ -8,6 +8,7 @@
 		<project>Duet3ATE</project>
 		<project>FreeRTOS</project>
 		<project>LibTinyusb</project>
+		<project>LibMbedTls</project>
 		<project>RRFLibraries</project>
 	</projects>
 	<buildSpec>
