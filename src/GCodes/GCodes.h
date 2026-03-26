@@ -252,16 +252,10 @@ public:
 	const KeepoutZone *GetKeepoutZone(size_t) const noexcept { return &keepoutZone; }
 #endif
 
-#if SUPPORT_OBJECT_MODEL
 	float GetWorkplaceOffset(size_t axis, size_t workplaceNumber) const noexcept
 	{
 		return workplaceCoordinates[workplaceNumber][axis];
 	}
-
-# if SUPPORT_COORDINATE_ROTATION
-	float GetRotationAngle(const MovementState& ms) const noexcept { return ms.g68Angle; }
-	float GetRotationCentre(const MovementState& ms, size_t index) const noexcept pre(index < 2) { return ms.g68Centre[index]; }
-# endif
 
 	size_t GetNumInputs() const noexcept { return NumGCodeChannels; }
 	const GCodeBuffer *_ecv_null GetInput(size_t n) const noexcept { return gcodeSources[n]; }
@@ -280,17 +274,20 @@ public:
 	bool IsHeaterUsedByDifferentCurrentTool(int heaterNumber, const Tool *tool) const noexcept;	// Check if the specified heater is used by a current tool other than the specified one
 	void MessageBoxClosed(bool cancelled, bool shouldAbort, bool m292, uint32_t seq, ExpressionValue rslt) noexcept;
 
-# if HAS_VOLTAGE_MONITOR
-	const char *_ecv_array null GetPowerFailScript() const noexcept { return powerFailScript; }
-# endif
+#if SUPPORT_ASYNC_MOVES
+	size_t GetNumMotionSystemsUsed() const noexcept { return numMotionSystemsUsed; }
+#endif
 
-# if SUPPORT_LASER
+#if HAS_VOLTAGE_MONITOR
+	const char *_ecv_array null GetPowerFailScript() const noexcept { return powerFailScript; }
+#endif
+
+#if SUPPORT_LASER
 	// Return laser PWM in 0..1. Only the primary movement queue is permitted to control the laser.
 	float GetLaserPwm() const noexcept
 	{
-		return (float)moveStates[0].laserPwmOrIoBits.laserPwm * (1.0/65535.0);
+		return (float)moveStates[0].raw.laserPwmOrIoBits.laserPwm * (1.0/65535.0);
 	}
-# endif
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -527,7 +524,7 @@ private:
 	void StopObject(GCodeBuffer& gb) noexcept;
 	void ChangeToObject(GCodeBuffer& gb, int i) noexcept;
 
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+#if HAS_WIFI_NETWORKING || NUM_ASYNC_CHANNELS != 0 || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// Handle M997
 #endif
 
@@ -599,7 +596,7 @@ private:
 #endif
 	Pwm_t ConvertLaserPwm(float reqVal) const noexcept;
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 # if ALLOW_ARBITRARY_PANELDUE_PORT
 	uint8_t serialChannelForPanelDueFlashing;
 # else
@@ -786,6 +783,10 @@ private:
 	bool displayNoToolWarning;					// True if we need to display a 'no tool selected' warning
 	bool m501SeenInConfigFile;					// true if M501 was executed from config.g
 	bool daemonRunning;
+
+#if SUPPORT_ASYNC_MOVES
+	uint8_t numMotionSystemsUsed;
+#endif
 	char filamentToLoad[FilamentNameLength];	// Name of the filament being loaded
 
 	static constexpr const float MinServoPulseWidth = 544.0, MaxServoPulseWidth = 2400.0;

@@ -7,7 +7,7 @@
 
 #include "FirmwareUpdater.h"
 
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+#if HAS_WIFI_NETWORKING || NUM_ASYNC_CHANNELS != 0 || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
@@ -18,7 +18,7 @@
 # include <Networking/ESP8266WiFi/WifiFirmwareUploader.h>
 #endif
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 # include <Comms/PanelDueUpdater.h>
 #endif
 
@@ -34,17 +34,12 @@ namespace FirmwareUpdater
 			const StringRef& filenameRef) noexcept
 	{
 #if HAS_WIFI_NETWORKING && (HAS_MASS_STORAGE || HAS_EMBEDDED_FILES)
-		if (moduleMap.IsBitSet(WifiExternalFirmwareModule) || moduleMap.IsBitSet(WifiFirmwareModule))
+		if (moduleMap.IsBitSet(WifiFirmwareModule))
 		{
 			GCodeResult result;
 			if (!reprap.GetGCodes().CheckNetworkCommandAllowed(gb, reply, result))
 			{
 				return result;
-			}
-			if (moduleMap.IsBitSet(WifiExternalFirmwareModule) && moduleMap.IsBitSet(WifiFirmwareModule))
-			{
-				reply.copy("Invalid combination of firmware update modules");
-				return GCodeResult::error;
 			}
 			if (moduleMap.IsBitSet(WifiFirmwareModule))
 			{
@@ -103,15 +98,6 @@ namespace FirmwareUpdater
 		switch(module)
 		{
 # if HAS_WIFI_NETWORKING
-		case WifiExternalFirmwareModule:
-# ifdef DUET_NG
-			if (reprap.GetPlatform().IsDuetWiFi())
-# endif
-			{
-				reprap.GetNetwork().ResetWiFiForUpload(true);
-			}
-			break;
-
 		case WifiFirmwareModule:
 # ifdef DUET_NG
 			if (reprap.GetPlatform().IsDuetWiFi())

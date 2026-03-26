@@ -112,12 +112,23 @@ constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 		OBJECT_MODEL_ARRAY_VALUE_NOSELF(reprap.GetGCodes().GetWorkplaceOffset(context.GetIndex(1), context.GetLastIndex()), 3)
 	},
 
+	// 5. Motion systems
+	{
+		nullptr,					// no lock needed
+#if SUPPORT_ASYNC_MOVES
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetNumMotionSystemsUsed()),
+#else
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(1),
+#endif
+		OBJECT_MODEL_ARRAY_VALUE_NOSELF(&reprap.GetGCodes().GetMovementState(context.GetLastIndex())),
+	},
+
 #if SUPPORT_COORDINATE_ROTATION
-	// 5. Rotation centre coordinates
+	// 6. Rotation centre coordinates
 	{
 		nullptr,					// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
-		OBJECT_MODEL_ARRAY_VALUE_NOSELF(reprap.GetGCodes().GetRotationCentre(reprap.GetGCodes().GetPrimaryMovementState(), context.GetLastIndex()))
+		OBJECT_MODEL_ARRAY_VALUE_NOSELF(reprap.GetGCodes().GetPrimaryMovementState().g68Centre[context.GetLastIndex()])
 	},
 #elif SUPPORT_KEEPOUT_ZONES
 	{
@@ -128,7 +139,7 @@ constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 #endif
 
 #if SUPPORT_KEEPOUT_ZONES
-	// 6. Keepout zone list
+	// 7. Keepout zone list
 	{
 		nullptr,					// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetNumKeepoutZones()),
@@ -169,41 +180,42 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "extruders",				OBJECT_MODEL_FUNC_ARRAY(1),																		ObjectModelEntryFlags::liveNotPanelDue },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 1),																		ObjectModelEntryFlags::none },
 #if SUPPORT_KEEPOUT_ZONES
-	{ "keepout",				OBJECT_MODEL_FUNC_ARRAY(6),																		ObjectModelEntryFlags::notPanelDue },
+	{ "keepout",				OBJECT_MODEL_FUNC_ARRAY(7),																		ObjectModelEntryFlags::notPanelDue },
 #endif
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
 	{ "limitAxes",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().LimitAxes()),										ObjectModelEntryFlags::none },
+	{ "motionSystems",			OBJECT_MODEL_FUNC_ARRAY(5),																		ObjectModelEntryFlags::liveNotPanelDue },
 	{ "noMovesBeforeHoming",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().NoMovesBeforeHoming()),								ObjectModelEntryFlags::none },
-	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).maxPrintingAcceleration), 1),	ObjectModelEntryFlags::none },
+	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).raw.maxPrintingAcceleration), 1),	ObjectModelEntryFlags::obsolete },
 	{ "queue",					OBJECT_MODEL_FUNC_ARRAY(2),																		ObjectModelEntryFlags::none },
 #if SUPPORT_COORDINATE_ROTATION
-	{ "rotation",				OBJECT_MODEL_FUNC(self, 15),																	ObjectModelEntryFlags::notPanelDue },
+	{ "rotation",				OBJECT_MODEL_FUNC(self, 15),																	ObjectModelEntryFlags::notPanelDue | ObjectModelEntryFlags::obsolete },
 #endif
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).speedFactor, 2),	ObjectModelEntryFlags::none },
-	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).maxTravelAcceleration), 1),		ObjectModelEntryFlags::none },
+	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).raw.maxTravelAcceleration), 1),		ObjectModelEntryFlags::obsolete },
 #if SUPPORT_S_CURVE
 	{ "usingSCurve",			OBJECT_MODEL_FUNC(self->usingSCurve),															ObjectModelEntryFlags::none },
 #endif
-	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).latestVirtualExtruderPosition, 5),		ObjectModelEntryFlags::liveNotPanelDue },
-	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetCurrentMovementState(context).currentCoordinateSystem),		ObjectModelEntryFlags::none },
+	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).latestVirtualExtruderPosition, 5),		ObjectModelEntryFlags::liveNotPanelDue | ObjectModelEntryFlags::obsolete },
+	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetCurrentMovementState(context).currentCoordinateSystem),		ObjectModelEntryFlags::obsolete },
 
 	// 1. Move.Idle members
 	{ "factor",					OBJECT_MODEL_FUNC(self->GetIdleCurrentFactor(), 1),												ObjectModelEntryFlags::none },
 	{ "timeout",				OBJECT_MODEL_FUNC(0.001f * (float)self->idleTimeout, 1),										ObjectModelEntryFlags::none },
 
 	// 2. move.currentMove members
-	{ "acceleration",			OBJECT_MODEL_FUNC(self->GetAccelerationMmPerSecSquared(), 1),									ObjectModelEntryFlags::live },
-	{ "deceleration",			OBJECT_MODEL_FUNC(self->GetDecelerationMmPerSecSquared(), 1),									ObjectModelEntryFlags::live },
-	{ "distance",				OBJECT_MODEL_FUNC(self->GetCurrentMoveDistance(), 2),											ObjectModelEntryFlags::liveNotPanelDue },
-	{ "duration",				OBJECT_MODEL_FUNC(self->GetCurrentMoveDuration(), 2),											ObjectModelEntryFlags::liveNotPanelDue },
-	{ "extrusionRate",			OBJECT_MODEL_FUNC(self->GetTotalExtrusionRate(), 2),											ObjectModelEntryFlags::live },
+	{ "acceleration",			OBJECT_MODEL_FUNC(self->GetAccelerationMmPerSecSquared(0), 1),									ObjectModelEntryFlags::liveNotPanelDue },
+	{ "deceleration",			OBJECT_MODEL_FUNC(self->GetDecelerationMmPerSecSquared(0), 1),									ObjectModelEntryFlags::liveNotPanelDue },
+	{ "distance",				OBJECT_MODEL_FUNC(self->GetCurrentMoveDistance(0), 2),											ObjectModelEntryFlags::liveNotPanelDue },
+	{ "duration",				OBJECT_MODEL_FUNC(self->GetCurrentMoveDuration(0), 2),											ObjectModelEntryFlags::liveNotPanelDue },
+	{ "extrusionRate",			OBJECT_MODEL_FUNC(self->GetTotalExtrusionRate(0), 2),											ObjectModelEntryFlags::liveNotPanelDue },
 # if SUPPORT_LASER
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetGCodes().GetMachineType() == MachineType::laser,
-															reprap.GetPlatform().GetLaserPwm(), 2),								ObjectModelEntryFlags::live },
+															reprap.GetPlatform().GetLaserPwm(), 2),								ObjectModelEntryFlags::liveNotPanelDue },
 # endif
-	{ "requestedSpeed",			OBJECT_MODEL_FUNC(self->GetRequestedSpeedMmPerSec(), 1),										ObjectModelEntryFlags::live },
-	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeedMmPerSec(), 1),												ObjectModelEntryFlags::live },
+	{ "requestedSpeed",			OBJECT_MODEL_FUNC(self->GetRequestedSpeedMmPerSec(0), 1),										ObjectModelEntryFlags::liveNotPanelDue },
+	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeedMmPerSec(0), 1),												ObjectModelEntryFlags::liveNotPanelDue },
 
 	// 3. move.calibration members
 	{ "final",					OBJECT_MODEL_FUNC(self, 5),																		ObjectModelEntryFlags::none },
@@ -312,15 +324,15 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 
 #if SUPPORT_COORDINATE_ROTATION
 	// 15. move.rotation members
-	{ "angle",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRotationAngle(reprap.GetGCodes().GetPrimaryMovementState())),	ObjectModelEntryFlags::none },
-	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(5),																				ObjectModelEntryFlags::none },
+	{ "angle",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimaryMovementState().g68Angle),						ObjectModelEntryFlags::none },
+	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(6),																				ObjectModelEntryFlags::none },
 #endif
 };
 
 constexpr uint8_t Move::objectModelTableDescriptor[] =
 {
 	15 + SUPPORT_COORDINATE_ROTATION,
-	17 + SUPPORT_COORDINATE_ROTATION + SUPPORT_KEEPOUT_ZONES + 2 * SUPPORT_S_CURVE,
+	18 + SUPPORT_COORDINATE_ROTATION + SUPPORT_KEEPOUT_ZONES + 2 * SUPPORT_S_CURVE,
 	2,
 	7 + SUPPORT_LASER,
 	3,
@@ -1382,19 +1394,12 @@ void Move::GetLiveMachineCoordinates(float coords[MaxAxes]) const noexcept
 	// Get the positions of each motor
 	int32_t currentMotorPositions[MaxAxes];
 	{
-		AtomicCriticalSectionLocker lock;											// to make sure we get a consistent set of coordinates
-#if SUPPORT_PHASE_STEPPING
+		AtomicCriticalSectionLocker lock; // to make sure we get a consistent set of coordinates
 		const uint32_t now = StepTimer::GetTimerTicks();
-#endif
 		for (size_t i = 0; i < numTotalAxes; ++i)
 		{
-#if SUPPORT_PHASE_STEPPING
-			MotionParameters params;
-			dms[i].GetCurrentMotion(now, 1, params);
-			currentMotorPositions[i] = static_cast<int32_t>(params.position);
-#else
-			currentMotorPositions[i] = dms[i].currentMotorPosition - currentBacklashSteps[i];
-#endif
+			const float position = dms[i].GetCurrentPosition(now);
+			currentMotorPositions[i] = std::lrint(position - currentBacklashSteps[i]);
 		}
 	}
 
@@ -2251,16 +2256,12 @@ PhaseStepParams Move::GetPhaseStepParams(size_t axisOrExtruder) const noexcept
 }
 
 // Get the motor position in the current move so far, also speed and acceleration. Units are full steps and step clocks.
-bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) const noexcept
-{
-	return dms[driver].GetCurrentMotion(when, phaseStepMultiplier[driver], mParams);
-}
-
-// Get the motor position in the current move so far, also speed and acceleration. Units are full steps and step clocks.
 // segments might be updated
 bool Move::UpdateCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
 {
-	return dms[driver].UpdateCurrentMotion(when, phaseStepMultiplier[driver], mParams);
+	const bool ret = dms[driver].UpdateCurrentMotion(when, mParams);
+	mParams.Scale(phaseStepMultiplier[driver]);
+	return ret;
 }
 
 bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept

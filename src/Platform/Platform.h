@@ -59,6 +59,8 @@ Licence: GPL
 # include <RemoteInputHandle.h>
 #endif
 
+class AsyncSerial;
+
 #if SUPPORT_PANELDUE_FLASH
 class PanelDueUpdater;
 #endif
@@ -265,10 +267,8 @@ public:
 	const char *_ecv_array GetElectronicsString() const noexcept;
 	const char *_ecv_array GetBoardString() const noexcept;
 
-#if SUPPORT_OBJECT_MODEL
 	size_t GetNumGpInputsToReport() const noexcept;
 	size_t GetNumGpOutputsToReport() const noexcept;
-#endif
 
 #if defined(DUET_NG) || defined(DUET3MINI)
 	bool IsDuetWiFi() const noexcept;
@@ -307,6 +307,10 @@ public:
 	void ResetChannel(size_t chan) noexcept;						// Re-initialise a serial channel
 	bool IsChanEnabled(size_t chan) const noexcept;					// Any device on the serial line?
     bool IsChanRaw(size_t chan) const noexcept;						// Is the serial line in raw mode?
+
+#if NUM_ASYNC_PORTS != 0
+    AsyncSerial *GetAsyncPort(size_t auxNumber) pre(auxNumber < NUM_ASYNC_PORTS) noexcept { return asyncPorts[auxNumber]; }
+#endif
 
 #if SUPPORT_PANELDUE_FLASH
 	PanelDueUpdater *_ecv_null GetPanelDueUpdater() noexcept { return panelDueUpdater; }
@@ -617,11 +621,14 @@ private:
 	AuxMode GetChannelMode(size_t chan) const noexcept;
 	UsbDeviceRrf usbDevices[NumUsbChannels];
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_PORTS != 0
+	AsyncSerial *_ecv_null asyncPorts[NUM_ASYNC_PORTS] = { 0 };
+#endif
+#if (NUM_ASYNC_CHANNELS != 0)
 	AuxDevice auxDevices[NumAuxChannels];
 #endif
 #if SUPPORT_PANELDUE_FLASH
-	PanelDueUpdater *_ecv_null panelDueUpdater;
+	PanelDueUpdater *_ecv_null panelDueUpdater = nullptr;
 #endif
 
 	// Files

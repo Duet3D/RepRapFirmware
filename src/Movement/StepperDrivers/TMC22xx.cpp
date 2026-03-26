@@ -1898,7 +1898,7 @@ inline void TmcDriverState::StartTransfer() noexcept
 		uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX;										// reset transmitter and receiver
 #endif
 
-		SetupDMARead(GetReadRegNumber(registerToRead));														// set up the DMAC
+		SetupDMARead(GetReadRegNumber(registerToRead));										// set up the DMAC
 
 #if TMC22xx_USES_SERCOM
 		dmaFinishedReason = DmaCallbackReason::none;
@@ -2240,7 +2240,7 @@ void SmartDrivers::Init() noexcept
 	SetPinFunction(TMC22xxSercomTxPin, TMC22xxSercomTxPinPeriphMode);
 	SetPinFunction(TMC22xxSercomRxPin, TMC22xxSercomRxPinPeriphMode);
 
-	Serial::InitUart(TMC22xxSercomNumber, DriversBaudRate, TMC22xxSercomRxPad, true);
+	Serial::InitUart(TMC22xxSercomNumber, DriversBaudRate, TMC22xxSercomRxPad, TMC22xxSercomTxPad, true);
 	DmacManager::SetInterruptCallback(DmacChanTmcRx, TransferCompleteCallback, CallbackParameter(0));
 # else
 	SetPinFunction(TMC22xxUartTxPin, TMC22xxUartPeriphMode);

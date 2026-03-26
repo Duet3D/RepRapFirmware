@@ -15,6 +15,7 @@
 #include <Movement/StepTimer.h>
 #include <Endstops/Endstop.h>
 #include <Cache.h>
+#include <Serial.h>
 
 # if SAME70
 #  include <xdmac/xdmac.h>
@@ -864,14 +865,9 @@ inline void TmcDriverState::StartTransfer() noexcept
 }
 
 // ISR for the USART
+static void Tmc2660SpiHandler(void*) noexcept SPEED_CRITICAL;
 
-#ifndef TMC2660_SPI_Handler
-# error TMC handler name not defined
-#endif
-
-extern "C" void TMC2660_SPI_Handler(void) noexcept SPEED_CRITICAL;
-
-void TMC2660_SPI_Handler(void) noexcept
+static void Tmc2660SpiHandler(void*) noexcept
 {
 	TmcDriverState *_ecv_array _ecv_null driver = currentDriver;	// capture volatile variable
 	if (driver != nullptr)
@@ -935,10 +931,7 @@ void SmartDrivers::Init(const Pin driverSelectPins[NumDirectDrivers], size_t num
 	USART_TMC2660->US_BRGR = SystemCoreClockFreq/DriversSpiClockFrequency;		// set SPI clock frequency
 	USART_TMC2660->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
 
-	// We need a few microseconds of delay here for the USART to sort itself out before we send any data,
-	// otherwise the processor generates two short reset pulses on its own NRST pin, and resets itself.
-	// 2016-07-07: removed this delay, because we no longer send commands to the TMC2660 drivers immediately.
-	//delay(10);
+	Serial::SetUsartVector(Tmc2660UsartInstance, Tmc2660SpiHandler, nullptr);
 #else
 	// Set up the SPI interface with data changing on the falling edge of the clock and captured on the rising edge
 	spi_reset(SPI_TMC2660);										// this clears the transmit and receive registers and puts the SPI into slave mode

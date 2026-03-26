@@ -24,100 +24,15 @@
 constexpr size_t AnalogInTaskStackWords = 300;
 static Task<AnalogInTaskStackWords> analogInTask;
 
-#ifdef SERIAL_AUX_DEVICE
-
-// Serial device support
-void Serial0PortInit(AsyncSerial *) noexcept
-{
-	SetPinFunction(Serial0TxPin, Serial0PinFunction);
-	SetPinFunction(Serial0RxPin, Serial0PinFunction);
-}
-
-void Serial0PortDeinit(AsyncSerial *) noexcept
-{
-	SetPinMode(Serial0TxPin, INPUT_PULLUP);
-	SetPinMode(Serial0RxPin, INPUT_PULLUP);
-}
-
-AsyncSerial serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512, Serial0PortInit, Serial0PortDeinit);
-
-# if !defined(SERIAL0_ISR0) || !defined(SERIAL0_ISR1) || !defined(SERIAL0_ISR2) || !defined(SERIAL0_ISR3)
-#  error SERIAL0_ISRn not defined
-# endif
-
-void SERIAL0_ISR0() noexcept
-{
-	serialUart0.Interrupt0();
-}
-
-void SERIAL0_ISR1() noexcept
-{
-	serialUart0.Interrupt1();
-}
-
-void SERIAL0_ISR2() noexcept
-{
-	serialUart0.Interrupt2();
-}
-
-void SERIAL0_ISR3() noexcept
-{
-	serialUart0.Interrupt3();
-}
-
-#endif
-
-#ifdef SERIAL_AUX2_DEVICE
-
-void Serial1PortInit(AsyncSerial *) noexcept
-{
-	SetPinFunction(Serial1TxPin, Serial1PinFunction);
-	SetPinFunction(Serial1RxPin, Serial1PinFunction);
-}
-
-void Serial1PortDeinit(AsyncSerial *) noexcept
-{
-	SetPinMode(Serial1TxPin, INPUT_PULLUP);
-	SetPinMode(Serial1RxPin, INPUT_PULLUP);
-}
-
-AsyncSerial serialUart1(Serial1SercomNumber, Sercom1RxPad, 512, 512, Serial1PortInit, Serial1PortDeinit);
-
-# if !defined(SERIAL1_ISR0) || !defined(SERIAL1_ISR1) || !defined(SERIAL1_ISR2) || !defined(SERIAL1_ISR3)
-#  error SERIAL1_ISRn not defined
-# endif
-
-void SERIAL1_ISR0() noexcept
-{
-	serialUart1.Interrupt0();
-}
-
-void SERIAL1_ISR1() noexcept
-{
-	serialUart1.Interrupt1();
-}
-
-void SERIAL1_ISR2() noexcept
-{
-	serialUart1.Interrupt2();
-}
-
-void SERIAL1_ISR3() noexcept
-{
-	serialUart1.Interrupt3();
-}
-
-#endif
-
 #if CORE_USES_TINYUSB
 
 constexpr size_t UsbDeviceTaskStackWords = 200;
 static Task<UsbDeviceTaskStackWords> usbDeviceTask;
 
-SerialCDC serialUSB;
-#ifdef SERIAL_USB2_DEVICE
+SerialCDC serialUSB(0);
+# ifdef SERIAL_USB2_DEVICE
 SerialCDC serialUSB2(1);
-#endif
+# endif
 
 #else
 
