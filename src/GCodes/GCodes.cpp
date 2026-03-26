@@ -5121,7 +5121,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 				OutputBuffer *_ecv_null statusBuf = GenerateJsonStatusResponse(0, -1, ResponseSource::AUX);		// older PanelDueFirmware using M408
 				if (statusBuf != nullptr)
 				{
-					platform.Message(gb.GetResponseMessageType(), statusBuf);
+					platform.Message(gb.GetNativeResponseMessageType(), statusBuf);
 				}
 			}
 			break;
