@@ -1394,19 +1394,12 @@ void Move::GetLiveMachineCoordinates(float coords[MaxAxes]) const noexcept
 	// Get the positions of each motor
 	int32_t currentMotorPositions[MaxAxes];
 	{
-		AtomicCriticalSectionLocker lock;											// to make sure we get a consistent set of coordinates
-#if SUPPORT_PHASE_STEPPING
+		AtomicCriticalSectionLocker lock; // to make sure we get a consistent set of coordinates
 		const uint32_t now = StepTimer::GetTimerTicks();
-#endif
 		for (size_t i = 0; i < numTotalAxes; ++i)
 		{
-#if SUPPORT_PHASE_STEPPING
-			MotionParameters params;
-			dms[i].GetCurrentMotion(now, 1, params);
-			currentMotorPositions[i] = static_cast<int32_t>(params.position);
-#else
-			currentMotorPositions[i] = dms[i].currentMotorPosition - currentBacklashSteps[i];
-#endif
+			const float position = dms[i].GetCurrentPosition(now);
+			currentMotorPositions[i] = std::lrint(position - currentBacklashSteps[i]);
 		}
 	}
 
@@ -2263,16 +2256,12 @@ PhaseStepParams Move::GetPhaseStepParams(size_t axisOrExtruder) const noexcept
 }
 
 // Get the motor position in the current move so far, also speed and acceleration. Units are full steps and step clocks.
-bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) const noexcept
-{
-	return dms[driver].GetCurrentMotion(when, phaseStepMultiplier[driver], mParams);
-}
-
-// Get the motor position in the current move so far, also speed and acceleration. Units are full steps and step clocks.
 // segments might be updated
 bool Move::UpdateCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
 {
-	return dms[driver].UpdateCurrentMotion(when, phaseStepMultiplier[driver], mParams);
+	const bool ret = dms[driver].UpdateCurrentMotion(when, mParams);
+	mParams.Scale(phaseStepMultiplier[driver]);
+	return ret;
 }
 
 bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept

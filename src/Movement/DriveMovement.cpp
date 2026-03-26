@@ -48,9 +48,7 @@ void DriveMovement::Init(size_t drv) noexcept
 #if SUPPORT_PHASE_STEPPING
 	stepMode = StepMode::stepDir;
 #endif
-#if SUPPORT_PHASE_STEPPING || SUPPORT_S_CURVE
 	u = (motioncalc_t)0.0;
-#endif
 #if SUPPORT_S_CURVE
 	peakDeltaV = peakDeltaA = (motioncalc_t)0.0;
 	finalSpeed = finalAcc = (motioncalc_t)0.0;
@@ -283,15 +281,14 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 		seg->SetExecuting();
 #if SUPPORT_S_CURVE
 		UpdateSpeedAndAccelerationChange(seg->CalcU(), seg->GetSpeedChange(), seg->GetA(), seg->GetAccChange());
+#else
+		u = seg->CalcU(); // used for GetCurrentPosition()
 #endif
 
 		// Calculate the movement parameters
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
 
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-#  if !SUPPORT_S_CURVE // we already calculated and set u if we are supporting 3rd order motion control
-		u = seg->CalcU();
-#  endif
 		if (IsPhaseStepEnabled())
 		{
 			state = DMState::phaseStepping;
