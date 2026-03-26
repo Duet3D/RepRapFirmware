@@ -293,7 +293,7 @@ void TelnetResponder::ProcessLine() noexcept
 	{
 		// All other codes are stored for the GCodes class
 		NetworkGCodeInput * const telnetInput = reprap.GetGCodes().GetTelnetInput();
-		telnetInput->Put(TelnetMessage, clientMessage);
+		telnetInput->Put(clientMessage);
 		haveCompleteLine = false;
 		clientPointer = 0;
 	}
