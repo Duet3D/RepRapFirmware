@@ -48,6 +48,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 #define SUPPORT_CAN_EXPANSION	0
 
 #define SUPPORT_LED_STRIPS		1
+#define SUPPORT_DMA_NEOPIXEL	1					// using QSPI for Neopixels
+#define NEOPIXEL_USES_QSPI		1					// using QSPI for Neopixels
 #define SUPPORT_LASER			0					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		0					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
@@ -89,7 +91,7 @@ constexpr size_t MaxChamberHeaters = 4;
 constexpr size_t MaxHeatersPerBed = 4;
 constexpr size_t MaxHeatersPerChamber = 4;
 
-constexpr size_t NumThermistorInputs = 2;
+constexpr size_t NumThermistorInputs = 3;
 constexpr size_t NumTmcDriversSenseChannels = 1;
 
 constexpr size_t MaxZProbes = 2;
@@ -117,7 +119,7 @@ constexpr size_t NumUsbChannels = 1;
 
 #define SERIAL_USB_DEVICE (serialUSB)
 
-#define NUM_ASYNC_PORTS			(1)
+#define NUM_ASYNC_PORTS			(0)
 #define NUM_ASYNC_CHANNELS		(NUM_ASYNC_PORTS)
 
 constexpr size_t NumSerialChannels = NumUsbChannels + NUM_ASYNC_CHANNELS;		// The number of serial IO channels (USB and one auxiliary UART)
@@ -127,6 +129,10 @@ constexpr Pin UsbVBusPin = NoPin;				// Pin used to monitor VBUS on USB port
 
 constexpr size_t NumSdCards = 0;
 
+// Neopixel output
+constexpr Pin NeopixelOutPin = PortAPin(8);
+constexpr GpioPinFunction NeopixelOutPinFunction = GpioPinFunction::H;		// QSPI Data[0]
+#define LEDSTRIP_USES_USART		(0)
 
 // DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
 // When static arbitration within a priority level is selected, lower channel number have higher priority.
@@ -186,18 +192,14 @@ constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortBPin(23) };
 constexpr Pin DriverDiagPins[NumDirectDrivers] = { PortBPin(07) };
 
 // Thermistors
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(0), PortCPin(2) }; 	// Thermistor pin numbers
-constexpr Pin VssaSensePin = PortBPin(4);
-constexpr Pin VrefSensePin = PortBPin(5);
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortAPin(11), PortBPin(8), PortBPin(9) }; 	// Thermistor pin numbers
 
-constexpr float DefaultThermistorSeriesR = 2200.0;							// Thermistor series resistor value in ohms
-constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / NumThermistorInputs) * 4700.0/((DefaultThermistorSeriesR / NumThermistorInputs) + 4700.0);
-																			// there are 2 temperature sensing channels and a 4K7 load resistor
-constexpr float VrefSeriesR = 27.0;
+constexpr float DefaultThermistorSeriesR = 4700.0;							// Thermistor series resistor value in ohms
 
 // Analogue pin numbers
-constexpr Pin PowerMonitorVinDetectPin = PortCPin(3);						// Vin monitor
-constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 voltage divider
+constexpr Pin PowerMonitorVinDetectPin = PortAPin(2);						// Vin monitor
+constexpr float VinDividerRatio = (60.4 + 4.7)/4.7;							// to be confirmed
+constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;
 
 #ifdef DEBUG
 constexpr Pin DiagPin = NoPin;												// Diag/status LED pin is shared with SWD
@@ -205,7 +207,7 @@ constexpr Pin DiagPin = NoPin;												// Diag/status LED pin is shared with 
 constexpr Pin DiagPin = PortAPin(31);										// Diag/status LED pin
 #endif
 
-constexpr Pin ActLedPin = NoPin;											// Activity LED pin (not present)
+constexpr Pin ActLedPin = PortAPin(30);										// Activity LED pin
 
 constexpr bool DiagOnPolarity = false;
 constexpr bool ActOnPolarity = false;
