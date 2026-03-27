@@ -3348,6 +3348,7 @@ void GCodes::NewMoveAvailable(MovementState& ms) noexcept
 // Cancel any macro or print in progress
 void GCodes::AbortPrint(GCodeBuffer& gb) noexcept
 {
+	AbortStateMachine(gb);						// clean up state machine side effects at all stack levels before unwinding
 	(void)gb.AbortFile(true);					// stop executing any files or macros that this GCodeBuffer is running
 	if (gb.IsFileChannel())						// if the current command came from a file being printed
 	{
@@ -3397,11 +3398,11 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char *_ecv_array fileName, bool 
 #if HAS_SBC_INTERFACE
 	if (reprap.UsingSbcInterface())
 	{
-		if (!gb.RequestMacroFile(fileName, gb.IsBinary() && codeRunning != AsyncSystemMacroCode))
+		if (!gb.RequestMacroFile(fileName, gb.LatestMachineState().lastCodeFromSbc && codeRunning != AsyncSystemMacroCode))
 		{
 			if (reportMissing)
 			{
-				MessageType mt = (gb.IsBinary() && codeRunning != SystemHelperMacroCode)
+				MessageType mt = (gb.LatestMachineState().lastCodeFromSbc && codeRunning != SystemHelperMacroCode)
 									? (MessageType)(gb.GetResponseMessageType() | WarningMessageFlag | PushFlag)
 										: WarningMessage;
 				platform.MessageF(mt, "Macro file %s not found\n", fileName);

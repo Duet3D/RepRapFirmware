@@ -40,7 +40,7 @@
  * * Replace "struct tcp_pcb" with "struct altcp_pcb"
  * * Prefix all called tcp API functions with "altcp_" instead of "tcp_" to link
  *   against the altcp functions
- * * @ref altcp_new (and @ref altcp_new_ip_type/@ref altcp_new_ip6) take
+ * * @ref altcp_new (and @ref altcp_new_ip_type / @ref altcp_new_ip6) take
  *   an @ref altcp_allocator_t as an argument, whereas the original tcp API
  *   functions take no arguments.
  * * An @ref altcp_allocator_t allocator is an object that holds a pointer to an
@@ -75,7 +75,7 @@
  * It is not defined by lwIP itself but by the TLS port (e.g. altcp_tls to mbedTLS
  * adaption). However, the parameters used to create it are defined in @ref
  * altcp_tls.h (see @ref altcp_tls_create_config_server_privkey_cert for servers
- * and @ref altcp_tls_create_config_client/@ref altcp_tls_create_config_client_2wayauth
+ * and @ref altcp_tls_create_config_client / @ref altcp_tls_create_config_client_2wayauth
  * for clients).
  *
  * For mbedTLS, ensure that certificates can be parsed by 'mbedtls_x509_crt_parse()' and
@@ -158,7 +158,7 @@ altcp_free(struct altcp_pcb *conn)
 
 /**
  * @ingroup altcp
- * altcp_new_ip6: @ref altcp_new for IPv6 
+ * altcp_new_ip6: @ref altcp_new for IPv6
  */
 struct altcp_pcb *
 altcp_new_ip6(altcp_allocator_t *allocator)
@@ -166,9 +166,9 @@ altcp_new_ip6(altcp_allocator_t *allocator)
   return altcp_new_ip_type(allocator, IPADDR_TYPE_V6);
 }
 
-/** 
+/**
  * @ingroup altcp
- * altcp_new: @ref altcp_new for IPv4 
+ * altcp_new: @ref altcp_new for IPv4
  */
 struct altcp_pcb *
 altcp_new(altcp_allocator_t *allocator)
@@ -501,6 +501,24 @@ altcp_get_port(struct altcp_pcb *conn, int local)
   return 0;
 }
 
+#if LWIP_TCP_KEEPALIVE
+void
+altcp_keepalive_disable(struct altcp_pcb *conn)
+{
+  if (conn && conn->fns && conn->fns->keepalive_disable) {
+    conn->fns->keepalive_disable(conn);
+  }
+}
+
+void
+altcp_keepalive_enable(struct altcp_pcb *conn, u32_t idle, u32_t intvl, u32_t count)
+{
+  if (conn && conn->fns && conn->fns->keepalive_enable) {
+      conn->fns->keepalive_enable(conn, idle, intvl, count);
+  }
+}
+#endif
+
 #ifdef LWIP_DEBUG
 enum tcp_state
 altcp_dbg_get_tcp_state(struct altcp_pcb *conn)
@@ -665,6 +683,24 @@ altcp_default_get_port(struct altcp_pcb *conn, int local)
   }
   return 0;
 }
+
+#if LWIP_TCP_KEEPALIVE
+void
+altcp_default_keepalive_disable(struct altcp_pcb *conn)
+{
+  if (conn && conn->inner_conn) {
+    altcp_keepalive_disable(conn->inner_conn);
+  }
+}
+
+void
+altcp_default_keepalive_enable(struct altcp_pcb *conn, u32_t idle, u32_t intvl, u32_t count)
+{
+  if (conn && conn->inner_conn) {
+      altcp_keepalive_enable(conn->inner_conn, idle, intvl, count);
+  }
+}
+#endif
 
 #ifdef LWIP_DEBUG
 enum tcp_state

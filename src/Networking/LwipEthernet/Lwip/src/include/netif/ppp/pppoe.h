@@ -128,7 +128,7 @@ PACK_STRUCT_END
 #define PPPOE_TAG_RELAYSID    0x0110  /* relay session id */
 #define PPPOE_TAG_SNAME_ERR   0x0201  /* service name error */
 #define PPPOE_TAG_ACSYS_ERR   0x0202  /* AC system error */
-#define PPPOE_TAG_GENERIC_ERR 0x0203  /* gerneric error */
+#define PPPOE_TAG_GENERIC_ERR 0x0203  /* generic error */
 
 #define PPPOE_CODE_PADI       0x09    /* Active Discovery Initiation */
 #define PPPOE_CODE_PADO       0x07    /* Active Discovery Offer */
@@ -149,10 +149,10 @@ struct pppoe_softc {
   u16_t sc_session;            /* PPPoE session id */
   u8_t sc_state;               /* discovery phase or session connected */
 
-#ifdef PPPOE_TODO
-  u8_t *sc_service_name;       /* if != NULL: requested name of service */
-  u8_t *sc_concentrator_name;  /* if != NULL: requested concentrator id */
-#endif /* PPPOE_TODO */
+#if PPPOE_SCNAME_SUPPORT
+  const char *sc_service_name;      /* if != NULL: requested name of service */
+  const char *sc_concentrator_name; /* if != NULL: requested concentrator id */
+#endif /* PPPOE_SCNAME_SUPPORT */
   u8_t sc_ac_cookie[PPPOE_MAX_AC_COOKIE_LEN]; /* content of AC cookie we must echo back */
   u8_t sc_ac_cookie_len;       /* length of cookie data */
 #ifdef PPPOE_SERVER

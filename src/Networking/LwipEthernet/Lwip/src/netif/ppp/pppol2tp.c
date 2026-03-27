@@ -172,6 +172,9 @@ static err_t pppol2tp_write(ppp_pcb *ppp, void *ctx, struct pbuf *p) {
   LWIP_UNUSED_ARG(ppp);
 #endif /* MIB2_STATS */
 
+  /* skip address & flags */
+  pbuf_remove_header(p, 2);
+
   ph = pbuf_alloc(PBUF_TRANSPORT, (u16_t)(PPPOL2TP_OUTPUT_DATA_HEADER_LEN), PBUF_RAM);
   if(!ph) {
     LINK_STATS_INC(link.memerr);
@@ -353,7 +356,7 @@ static void pppol2tp_input(void *arg, struct udp_pcb *pcb, struct pbuf *p, const
     goto free_and_return;
   }
 
-  if (!ip_addr_cmp(&l2tp->remote_ip, addr)) {
+  if (!ip_addr_eq(&l2tp->remote_ip, addr)) {
     goto free_and_return;
   }
 
@@ -440,7 +443,7 @@ static void pppol2tp_input(void *arg, struct udp_pcb *pcb, struct pbuf *p, const
 
   /* printf("LEN=%d, TUNNEL_ID=%d, SESSION_ID=%d, NS=%d, NR=%d, OFFSET=%d\n", len, tunnel_id, session_id, ns, nr, offset); */
   PPPDEBUG(LOG_DEBUG, ("pppol2tp: input packet, len=%"U16_F", tunnel=%"U16_F", session=%"U16_F", ns=%"U16_F", nr=%"U16_F"\n",
-    len, tunnel_id, session_id, ns, nr));
+    p->tot_len, tunnel_id, session_id, ns, nr));
 
   /* Control packet */
   if (hflags & PPPOL2TP_HEADERFLAG_CONTROL) {
@@ -463,8 +466,16 @@ static void pppol2tp_input(void *arg, struct udp_pcb *pcb, struct pbuf *p, const
   /*
    * skip address & flags if necessary
    *
-   * RFC 2661 does not specify whether the PPP frame in the L2TP payload should
-   * have a HDLC header or not. We handle both cases for compatibility.
+   * RFC 2661 (L2TPv2) does not specify whether the PPP frame in the L2TP payload
+   * should have a HDLC header or not, both behaviors are seen in the wild.
+   *
+   * On the other hand, L2TPv3 draft-ietf-l2tpext-l2tp-ppp versions 00 and 01 say
+   * it must be included, versions 02 to 05 say it must be omitted, and versions
+   * 06 and onwards say it should be omitted so it changed along the path when
+   * L2TPv3 was designed.  Latest versions state that receivers must handle both
+   * cases.
+   *
+   * We handle both cases for compatibility.
    */
   if (p->len >= 2) {
     GETSHORT(hflags, inp);
@@ -530,6 +541,11 @@ static void pppol2tp_dispatch_control_packet(pppol2tp_pcb *l2tp, u16_t port, str
   l2tp->peer_ns = ns+1;
 
   p = pbuf_coalesce(p, PBUF_RAW);
+  if (p->next != NULL) {
+    PPPDEBUG(LOG_DEBUG, ("pppol2tp: pbuf_coalesce failed: %d\n", p->tot_len));
+    return;
+  }
+
   inp = (u8_t*)p->payload;
   /* Decode AVPs */
   while (p->len > 0) {
@@ -749,7 +765,6 @@ static void pppol2tp_timeout(void *arg) {
       retry_wait = LWIP_MIN(PPPOL2TP_CONTROL_TIMEOUT * l2tp->sccrq_retried, PPPOL2TP_SLOW_RETRY);
       PPPDEBUG(LOG_DEBUG, ("pppol2tp: sccrq_retried=%d\n", l2tp->sccrq_retried));
       if ((err = pppol2tp_send_sccrq(l2tp)) != 0) {
-        l2tp->sccrq_retried--;
         PPPDEBUG(LOG_DEBUG, ("pppol2tp: failed to send SCCRQ, error=%d\n", err));
         LWIP_UNUSED_ARG(err); /* if PPPDEBUG is disabled */
       }
@@ -765,7 +780,6 @@ static void pppol2tp_timeout(void *arg) {
       PPPDEBUG(LOG_DEBUG, ("pppol2tp: icrq_retried=%d\n", l2tp->icrq_retried));
       if ((s16_t)(l2tp->peer_nr - l2tp->our_ns) < 0) { /* the SCCCN was not acknowledged */
         if ((err = pppol2tp_send_scccn(l2tp, l2tp->our_ns -1)) != 0) {
-          l2tp->icrq_retried--;
           PPPDEBUG(LOG_DEBUG, ("pppol2tp: failed to send SCCCN, error=%d\n", err));
           LWIP_UNUSED_ARG(err); /* if PPPDEBUG is disabled */
           sys_timeout(PPPOL2TP_CONTROL_TIMEOUT, pppol2tp_timeout, l2tp);
@@ -773,7 +787,6 @@ static void pppol2tp_timeout(void *arg) {
         }
       }
       if ((err = pppol2tp_send_icrq(l2tp, l2tp->our_ns)) != 0) {
-        l2tp->icrq_retried--;
         PPPDEBUG(LOG_DEBUG, ("pppol2tp: failed to send ICRQ, error=%d\n", err));
         LWIP_UNUSED_ARG(err); /* if PPPDEBUG is disabled */
       }
@@ -788,7 +801,6 @@ static void pppol2tp_timeout(void *arg) {
       }
       PPPDEBUG(LOG_DEBUG, ("pppol2tp: iccn_retried=%d\n", l2tp->iccn_retried));
       if ((err = pppol2tp_send_iccn(l2tp, l2tp->our_ns)) != 0) {
-        l2tp->iccn_retried--;
         PPPDEBUG(LOG_DEBUG, ("pppol2tp: failed to send ICCN, error=%d\n", err));
         LWIP_UNUSED_ARG(err); /* if PPPDEBUG is disabled */
       }

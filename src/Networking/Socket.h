@@ -33,8 +33,10 @@ public:
 	TcpPort GetRemotePort() const noexcept { return remotePort; }
 	NetworkProtocol GetProtocol() const noexcept { return protocol; }
 
+	virtual bool UsingTls() const noexcept = 0;
 	virtual void Poll() noexcept = 0;
 	virtual void Close() noexcept = 0;
+	virtual bool IsClosing() const noexcept = 0;
 	virtual void Terminate() noexcept = 0;
 	virtual void TerminateAndDisable() noexcept = 0;
 	virtual bool ReadChar(char& c) noexcept = 0;

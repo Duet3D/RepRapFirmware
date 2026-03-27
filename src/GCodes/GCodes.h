@@ -376,6 +376,7 @@ private:
 	void DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps) noexcept;
 
 	void StartPrinting(bool fromStart) noexcept;								// Start printing the file already selected
+	void AbortStateMachine(GCodeBuffer& gb) noexcept;								// Clean up state machine side effects before aborting
 	void StopPrint(GCodeBuffer *_ecv_null gbp, StopPrintReason reason) noexcept;	// Stop the current print
 
 	bool DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;					// Get G Codes from a file and print them

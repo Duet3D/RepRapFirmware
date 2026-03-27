@@ -385,7 +385,7 @@ void W5500Interface::Diagnostics(const StringRef& reply) noexcept
 }
 
 // Enable or disable the network
-GCodeResult W5500Interface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept
+GCodeResult W5500Interface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowed) noexcept
 {
 	if (!activated)
 	{
@@ -425,9 +425,11 @@ void W5500Interface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IP
 	gateway = p_gateway;
 }
 
-void W5500Interface::OpenDataPort(TcpPort port) noexcept
+bool W5500Interface::OpenDataPort(TcpPort port, bool useTls) noexcept
 {
+	UNUSED(useTls);
 	sockets[FtpDataSocket]->Init(FtpDataSocket, port, FtpDataProtocol);
+	return true;
 }
 
 // Close FTP data port and purge associated resources

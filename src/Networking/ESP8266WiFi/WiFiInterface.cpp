@@ -960,7 +960,7 @@ void WiFiInterface::Diagnostics(const StringRef& reply) noexcept
 }
 
 // Enable or disable the network
-GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept
+GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowed) noexcept
 {
 	// Translate enable mode to desired WiFi mode
 	const WiFiState modeRequested = (mode == 0) ? WiFiState::idle
@@ -1686,8 +1686,9 @@ void WiFiInterface::UpdateSocketStatus(uint16_t connectedSockets, uint16_t other
 }
 
 // Open the FTP data port
-void WiFiInterface::OpenDataPort(TcpPort port) noexcept
+bool WiFiInterface::OpenDataPort(TcpPort port, bool useTls) noexcept
 {
+	UNUSED(useTls);
 	for (WiFiSocket *s : sockets)
 	{
 		if (s->GetProtocol() == FtpDataProtocol)
@@ -1700,6 +1701,7 @@ void WiFiInterface::OpenDataPort(TcpPort port) noexcept
 
 	ftpDataPort = port;
 	SendListenCommand(ftpDataPort, FtpDataProtocol, 1);
+	return true;
 }
 
 // Close FTP data port and purge associated resources

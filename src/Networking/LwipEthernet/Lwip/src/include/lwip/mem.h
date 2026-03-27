@@ -43,7 +43,7 @@
 extern "C" {
 #endif
 
-#if MEM_LIBC_MALLOC
+#if MEM_CUSTOM_ALLOCATOR
 
 #include "lwip/arch.h"
 
@@ -74,6 +74,13 @@ void *mem_trim(void *mem, mem_size_t size);
 void *mem_malloc(mem_size_t size);
 void *mem_calloc(mem_size_t count, mem_size_t size);
 void  mem_free(void *mem);
+
+#if !MEM_CUSTOM_ALLOCATOR && !MEM_USE_POOLS
+/** Set the usable heap size before calling mem_init() / lwip_init().
+ * Allows allocating a smaller heap when TLS is not needed, saving RAM.
+ * The size must not exceed MEM_SIZE (the compiled-in maximum). */
+void  mem_set_size(mem_size_t size);
+#endif
 
 #ifdef __cplusplus
 }

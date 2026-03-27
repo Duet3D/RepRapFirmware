@@ -29,6 +29,7 @@ bool FtpResponder::TryAccept(Socket *_ecv_from s, NetworkProtocol protocol) noex
 		{
 			clientPointer = 0;
 			skt = s;
+			dataConnectionTls = false;		// default per RFC 4217: client must send PROT P to use TLS on the data channel
 			if (reprap.Debug(Module::Webserver))
 			{
 				debugPrintf("FTP connection accepted\n");
@@ -87,8 +88,23 @@ bool FtpResponder::Spin() noexcept
 		return true;
 
 	case ResponderState::waitingForPasvPort:
+		if (!skt->CanSend())
+		{
+			if (reprap.Debug(Module::Webserver))
+			{
+				debugPrintf("FTP PASV cancelled: control connection lost, port=%u\n", passivePort);
+			}
+			ConnectionLost();
+			return true;
+		}
+
 		if (millis() - passivePortOpenTime > ftpPasvPortTimeout && (outBuf != nullptr || OutputBuffer::Allocate(outBuf)))
 		{
+			if (reprap.Debug(Module::Webserver))
+			{
+				debugPrintf("FTP PASV timeout: port=%u elapsed=%lu state=%d\n", passivePort, (unsigned long)(millis() - passivePortOpenTime), (int)responderState);
+			}
+
 			outBuf->copy("425 Failed to establish connection.\r\n");
 			Commit(ResponderState::reading);
 
@@ -98,6 +114,24 @@ bool FtpResponder::Spin() noexcept
 		return false;
 
 	case ResponderState::pasvPortOpened:
+		if (dataSocket != nullptr && !dataSocket->CanRead() && !dataSocket->CanSend())
+		{
+			if (reprap.Debug(Module::Webserver))
+			{
+				debugPrintf("FTP data connection dropped before transfer command\n");
+			}
+
+			CloseDataPort();
+			if (outBuf != nullptr || OutputBuffer::Allocate(outBuf))
+			{
+				outBuf->copy("425 Data connection lost, use PASV again.\r\n");
+				Commit(ResponderState::reading);
+				return true;
+			}
+			responderState = ResponderState::reading;
+			return true;
+		}
+
 		if (dataBuf != nullptr || OutputBuffer::Allocate(dataBuf))
 		{
 			return ReadData();
@@ -123,6 +157,12 @@ bool FtpResponder::Spin() noexcept
 		return true;
 
 	case ResponderState::pasvTransferComplete:
+		if (dataSocket != nullptr && dataSocket->IsClosing())
+		{
+			// Wait for pending data to go first
+			return false;
+		}
+
 		if (outBuf != nullptr || OutputBuffer::Allocate(outBuf))
 		{
 			// Is the main FTP connection still available?
@@ -506,10 +546,22 @@ void FtpResponder::ProcessLine() noexcept
 		// get features
 		else if (StringEqualsIgnoreCase(clientMessage, "FEAT"))
 		{
-			outBuf->copy(	"211-Features:\r\n"
-							"PASV\r\n"			// support PASV mode
-							"211 End\r\n"
-						);
+			if (skt->UsingTls())
+			{
+				outBuf->copy(	"211-Features:\r\n"
+								"PASV\r\n"
+								"PBSZ\r\n"
+								"PROT\r\n"
+								"211 End\r\n"
+							);
+			}
+			else
+			{
+				outBuf->copy(	"211-Features:\r\n"
+								"PASV\r\n"
+								"211 End\r\n"
+							);
+			}
 			Commit(ResponderState::reading);
 		}
 		// get current dir
@@ -547,20 +599,51 @@ void FtpResponder::ProcessLine() noexcept
 			}
 			Commit(ResponderState::reading);
 		}
+		// protection buffer size (required before PROT, only meaningful over TLS)
+		else if (StringStartsWith(clientMessage, "PBSZ"))
+		{
+			outBuf->copy("200 PBSZ=0 OK.\r\n");
+			Commit(ResponderState::reading);
+		}
+		// data channel protection level
+		else if (StringStartsWith(clientMessage, "PROT"))
+		{
+			const char *_ecv_array const level = GetParameter("PROT");
+			if (StringEqualsIgnoreCase(level, "P"))
+			{
+				dataConnectionTls = true;
+				outBuf->copy("200 PROT P OK.\r\n");
+			}
+			else if (StringEqualsIgnoreCase(level, "C"))
+			{
+				dataConnectionTls = false;
+				outBuf->copy("200 PROT C OK.\r\n");
+			}
+			else
+			{
+				outBuf->copy("504 Unknown protection level.\r\n");
+			}
+			Commit(ResponderState::reading);
+		}
 		// enter passive mode mode
 		else if (StringEqualsIgnoreCase(clientMessage, "PASV"))
 		{
 			// reset error conditions
 			uploadError = sendError = false;
 
-			// open random port > 1023
+			// try to open random port > 1023
 			passivePort = random(1024, 65535);
 			passivePortOpenTime = millis();
 
-			skt->GetInterface()->OpenDataPort(passivePort);
+			if (!skt->GetInterface()->OpenDataPort(passivePort, dataConnectionTls))
+			{
+				outBuf->copy("425 Failed to open data connection.\r\n");
+				Commit(ResponderState::reading);
+				break;
+			}
 			if (reprap.Debug(Module::Webserver))
 			{
-				debugPrintf("FTP data port open at port %u\n", passivePort);
+				debugPrintf("FTP data port open at port %u (%s)\n", passivePort, dataConnectionTls ? "secure" : "insecure");
 			}
 
 			// send FTP response
@@ -676,8 +759,14 @@ void FtpResponder::ProcessLine() noexcept
 		break;
 
 	case ResponderState::pasvPortOpened:
+		// enter passive mode mode
+		if (StringEqualsIgnoreCase(clientMessage, "PASV"))
+		{
+			outBuf->copy("503 Only one concurrent data connection is supported.\r\n");
+			Commit(ResponderState::pasvPortOpened);
+		}
 		// list directory entries
-		if (StringStartsWith(clientMessage, "LIST"))
+		else if (StringStartsWith(clientMessage, "LIST"))
 		{
 			const char *_ecv_array const pathname = GetParameter("LIST");
 			String<MaxFilenameLength> location;
@@ -702,6 +791,13 @@ void FtpResponder::ProcessLine() noexcept
 								dirChar, fileInfo.size, MassStorage::GetMonthName(timeInfo.tm_mon + 1),
 								timeInfo.tm_mday, timeInfo.tm_year + 1900, fileInfo.fileName.c_str());
 					} while (MassStorage::FindNext(fileInfo));
+				}
+
+				if (dataBuf->Length() == 0)
+				{
+					// Send an empty line if the directory is empty, else we encounter a quirk with
+					// MbedTls because then it fails to shut down the TLS connection correctly
+					dataBuf->copy("\r\n");
 				}
 			}
 			else
@@ -789,6 +885,12 @@ void FtpResponder::ProcessLine() noexcept
 
 	case ResponderState::uploading:
 	case ResponderState::sendingPasvData:
+		// enter passive mode mode
+		if (StringEqualsIgnoreCase(clientMessage, "PASV"))
+		{
+			outBuf->copy("503 Only one concurrent data connection is supported.\r\n");
+			Commit(responderState);
+		}
 		// abort current transfer
 		if (StringEqualsIgnoreCase(clientMessage, "ABOR"))
 		{
@@ -912,14 +1014,19 @@ void FtpResponder::CloseDataPort() noexcept
 		debugPrintf("FTP data port is being closed\n");
 	}
 
+	passivePort = 0;
+	passivePortOpenTime = 0;
+
 	if (dataSocket != nullptr)
 	{
 		dataSocket->Close();								// close it gracefully
 		dataSocket = nullptr;
 	}
-	else if (skt != nullptr)
+
+	if (skt != nullptr)
 	{
-		skt->GetInterface()->TerminateDataPort();			// in case it has been partially set up
+		// Close the passive listener too (including PASV timeout/failed-connect paths)
+		skt->GetInterface()->TerminateDataPort();
 	}
 
 	OutputBuffer::ReleaseAll(dataBuf);

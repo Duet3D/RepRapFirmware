@@ -21,16 +21,25 @@
 
 /** Makefsdata can generate *all* files deflate-compressed (where file size shrinks).
  * Since nearly all browsers support this, this is a good way to reduce ROM size.
- * To compress the files, "miniz.c" must be downloaded seperately.
+ * To compress the files, "miniz.c" must be downloaded separately OR
+ * MAKEFS_SUPPORT_DEFLATE_ZLIB must be set and the zlib library and headers
+ * must be present on the system compiling this program.
  */
 #ifndef MAKEFS_SUPPORT_DEFLATE
 #define MAKEFS_SUPPORT_DEFLATE 0
-#endif
+#ifndef MAKEFS_SUPPORT_DEFLATE_ZLIB
+#define MAKEFS_SUPPORT_DEFLATE_ZLIB 0
+#endif /* MAKEFS_SUPPORT_DEFLATE_ZLIB */
+#endif /* MAKEFS_SUPPORT_DEFLATE */
 
 #define COPY_BUFSIZE (1024*1024) /* 1 MByte */
 
 #if MAKEFS_SUPPORT_DEFLATE
+#if MAKEFS_SUPPORT_DEFLATE_ZLIB
+#include <zlib.h>
+#else
 #include "../miniz.c"
+#endif /* MAKEFS_SUPPORT_DEFLATE */
 
 typedef unsigned char uint8;
 typedef unsigned short uint16;
@@ -49,12 +58,13 @@ typedef unsigned int uint;
 static uint8 s_outbuf[OUT_BUF_SIZE];
 static uint8 s_checkbuf[OUT_BUF_SIZE];
 
+#ifndef MAKEFS_SUPPORT_DEFLATE_ZLIB
 /* tdefl_compressor contains all the state needed by the low-level compressor so it's a pretty big struct (~300k).
    This example makes it a global vs. putting it on the stack, of course in real-world usage you'll probably malloc() or new it. */
 tdefl_compressor g_deflator;
-tinfl_decompressor g_inflator;
+#endif /* MAKEFS_SUPPORT_DEFLATE_ZLIB */
 
-int deflate_level = 10; /* default compression level, can be changed via command line */
+static int deflate_level; /* default compression level, can be changed via command line */
 #define USAGE_ARG_DEFLATE " [-defl<:compr_level>]"
 #else /* MAKEFS_SUPPORT_DEFLATE */
 #define USAGE_ARG_DEFLATE ""
@@ -63,12 +73,14 @@ int deflate_level = 10; /* default compression level, can be changed via command
 #ifdef WIN32
 
 #define GETCWD(path, len)             GetCurrentDirectoryA(len, path)
+#define GETCWD_SUCCEEDED(ret)         (ret != 0)
 #define CHDIR(path)                   SetCurrentDirectoryA(path)
 #define CHDIR_SUCCEEDED(ret)          (ret == TRUE)
 
-#elif __linux__
+#elif __linux__ || __APPLE__
 
 #define GETCWD(path, len)             getcwd(path, len)
+#define GETCWD_SUCCEEDED(ret)         (ret != NULL)
 #define CHDIR(path)                   chdir(path)
 #define CHDIR_SUCCEEDED(ret)          (ret == 0)
 
@@ -81,6 +93,10 @@ int deflate_level = 10; /* default compression level, can be changed via command
 #define NEWLINE     "\r\n"
 #define NEWLINE_LEN 2
 
+/* Define this here since we don't include any external C files and ports might override it */
+#define LWIP_PLATFORM_ASSERT(x) do {printf("Assertion \"%s\" failed at line %d in %s\n", \
+                                     x, __LINE__, __FILE__); fflush(NULL); abort();} while(0)
+
 /* define this to get the header variables we use to build HTTP headers */
 #define LWIP_HTTPD_DYNAMIC_HEADERS 1
 #define LWIP_HTTPD_SSI             1
@@ -92,8 +108,8 @@ int deflate_level = 10; /* default compression level, can be changed via command
 #include "../core/def.c"
 
 /** (Your server name here) */
-const char *serverID = "Server: "HTTPD_SERVER_AGENT"\r\n";
-char serverIDBuffer[1024];
+static const char *serverID = "Server: "HTTPD_SERVER_AGENT"\r\n";
+static char serverIDBuffer[1024];
 
 /* change this to suit your MEM_ALIGNMENT */
 #define PAYLOAD_ALIGNMENT 4
@@ -128,26 +144,26 @@ static int file_can_be_compressed(const char* filename);
 /* 5 bytes per char + 3 bytes per line */
 static char file_buffer_c[COPY_BUFSIZE * 5 + ((COPY_BUFSIZE / HEX_BYTES_PER_LINE) * 3)];
 
-char curSubdir[MAX_PATH_LEN];
-char lastFileVar[MAX_PATH_LEN];
-char hdr_buf[4096];
+static char curSubdir[MAX_PATH_LEN-3];
+static char lastFileVar[MAX_PATH_LEN];
+static char hdr_buf[4096];
 
-unsigned char processSubs = 1;
-unsigned char includeHttpHeader = 1;
-unsigned char useHttp11 = 0;
-unsigned char supportSsi = 1;
-unsigned char precalcChksum = 0;
-unsigned char includeLastModified = 0;
+static unsigned char processSubs = 1;
+static unsigned char includeHttpHeader = 1;
+static unsigned char useHttp11 = 0;
+static unsigned char supportSsi = 1;
+static unsigned char precalcChksum = 0;
+static unsigned char includeLastModified = 0;
 #if MAKEFS_SUPPORT_DEFLATE
-unsigned char deflateNonSsiFiles = 0;
-size_t deflatedBytesReduced = 0;
-size_t overallDataBytes = 0;
+static unsigned char deflateNonSsiFiles = 0;
+static size_t deflatedBytesReduced = 0;
+static size_t overallDataBytes = 0;
 #endif
-const char *exclude_list = NULL;
-const char *ncompress_list = NULL;
+static const char *exclude_list = NULL;
+static const char *ncompress_list = NULL;
 
-struct file_entry *first_file = NULL;
-struct file_entry *last_file = NULL;
+static struct file_entry *first_file = NULL;
+static struct file_entry *last_file = NULL;
 
 static char *ssi_file_buffer;
 static char **ssi_file_lines;
@@ -190,7 +206,7 @@ int main(int argc, char *argv[])
   memset(path, 0, sizeof(path));
   memset(appPath, 0, sizeof(appPath));
 
-  printf(NEWLINE " makefsdata - HTML to C source converter" NEWLINE);
+  printf(NEWLINE " makefsdata v" LWIP_VERSION_STRING " - HTML to C source converter" NEWLINE);
   printf("     by Jim Pettinato               - circa 2003 " NEWLINE);
   printf("     extended by Simon Goldschmidt  - 2009 " NEWLINE NEWLINE);
 
@@ -229,19 +245,20 @@ int main(int argc, char *argv[])
         printf("Writing to file \"%s\"\n", targetfile);
       } else if (!strcmp(argv[i], "-m")) {
         includeLastModified = 1;
-      } else if (!strcmp(argv[i], "-defl")) {
+      } else if (strstr(argv[i], "-defl") == argv[i]) {
 #if MAKEFS_SUPPORT_DEFLATE
-        char *colon = strstr(argv[i], ":");
-        if (colon) {
-          if (colon[1] != 0) {
-            int defl_level = atoi(&colon[1]);
-            if ((defl_level >= 0) && (defl_level <= 10)) {
-              deflate_level = defl_level;
-            } else {
-              printf("ERROR: deflate level must be [0..10]" NEWLINE);
-              exit(0);
-            }
+        const char *colon = &argv[i][5];
+        if (*colon == ':') {
+          int defl_level = atoi(&colon[1]);
+          if ((colon[1] != 0) && (defl_level >= 0) && (defl_level <= 10)) {
+            deflate_level = defl_level;
+          } else {
+            printf("ERROR: deflate level must be [0..10]" NEWLINE);
+            exit(0);
           }
+        } else {
+          /* default to highest compression */
+          deflate_level = 10;
         }
         deflateNonSsiFiles = 1;
         printf("Deflating all non-SSI files with level %d (but only if size is reduced)" NEWLINE, deflate_level);
@@ -253,7 +270,7 @@ int main(int argc, char *argv[])
         printf("Excluding files with extensions %s" NEWLINE, exclude_list);
       } else if (strstr(argv[i], "-xc:") == argv[i]) {
         ncompress_list = &argv[i][4];
-        printf("Skipping compresion for files with extensions %s" NEWLINE, ncompress_list);
+        printf("Skipping compression for files with extensions %s" NEWLINE, ncompress_list);
       } else if ((strstr(argv[i], "-?")) || (strstr(argv[i], "-h"))) {
         print_usage();
         exit(0);
@@ -272,7 +289,10 @@ int main(int argc, char *argv[])
     exit(-1);
   }
 
-  GETCWD(appPath, MAX_PATH_LEN);
+  if(!GETCWD_SUCCEEDED(GETCWD(appPath, MAX_PATH_LEN))) {
+    printf("Unable to get current dir." NEWLINE);
+    exit(-1);
+  }
   /* if command line param or subdir named 'fs' not found spout usage verbiage */
   if (!CHDIR_SUCCEEDED(CHDIR(path))) {
     /* if no subdir named 'fs' (or the one which was given) exists, spout usage verbiage */
@@ -280,7 +300,10 @@ int main(int argc, char *argv[])
     print_usage();
     exit(-1);
   }
-  CHDIR(appPath);
+  if(!CHDIR_SUCCEEDED(CHDIR(appPath))) {
+    printf("Invalid path: \"%s\"." NEWLINE, appPath);
+    exit(-1);
+  }
 
   printf("HTTP %sheader will %s statically included." NEWLINE,
          (includeHttpHeader ? (useHttp11 ? "1.1 " : "1.0 ") : ""),
@@ -306,7 +329,10 @@ int main(int argc, char *argv[])
     exit(-1);
   }
 
-  CHDIR(path);
+  if(!CHDIR_SUCCEEDED(CHDIR(path))) {
+    printf("Invalid path: \"%s\"." NEWLINE, path);
+    exit(-1);
+  }
 
   fprintf(data_file, "#include \"lwip/apps/fs.h\"" NEWLINE);
   fprintf(data_file, "#include \"lwip/def.h\"" NEWLINE NEWLINE NEWLINE);
@@ -340,7 +366,11 @@ int main(int argc, char *argv[])
   fclose(data_file);
   fclose(struct_file);
 
-  CHDIR(appPath);
+  if(!CHDIR_SUCCEEDED(CHDIR(appPath))) {
+    printf("Invalid path: \"%s\"." NEWLINE, appPath);
+    exit(-1);
+  }
+
   /* append struct_file to data_file */
   printf(NEWLINE "Creating target file..." NEWLINE NEWLINE);
   concat_files("fsdata.tmp", "fshdr.tmp", targetfile);
@@ -469,13 +499,19 @@ int process_sub(FILE *data_file, FILE *struct_file)
             continue;
           }
           if (freelen > 0) {
-            CHDIR(currName);
+            if(!CHDIR_SUCCEEDED(CHDIR(currName))) {
+              printf("Invalid path: \"%s\"." NEWLINE, currName);
+              exit(-1);
+            }
             strncat(curSubdir, "/", freelen);
             strncat(curSubdir, currName, freelen - 1);
             curSubdir[sizeof(curSubdir) - 1] = 0;
             printf("processing subdirectory %s/..." NEWLINE, curSubdir);
             filesProcessed += process_sub(data_file, struct_file);
-            CHDIR("..");
+            if(!CHDIR_SUCCEEDED(CHDIR(".."))) {
+              printf("Unable to get back to parent dir of: \"%s\"." NEWLINE, currName);
+              exit(-1);
+            }
             curSubdir[sublen] = 0;
           } else {
             printf("WARNING: cannot process sub due to path length restrictions: \"%s/%s\"\n", curSubdir, currName);
@@ -562,11 +598,17 @@ static u8_t *get_file_data(const char *filename, int *file_size, int can_be_comp
     if (can_be_compressed) {
       if (fsize < OUT_BUF_SIZE) {
         u8_t *ret_buf;
+#ifndef MAKEFS_SUPPORT_DEFLATE_ZLIB
         tdefl_status status;
+#else /* MAKEFS_SUPPORT_DEFLATE_ZLIB */
+        int status;
+#endif /* MAKEFS_SUPPORT_DEFLATE_ZLIB */
         size_t in_bytes = fsize;
         size_t out_bytes = OUT_BUF_SIZE;
         const void *next_in = buf;
         void *next_out = s_outbuf;
+        memset(s_outbuf, 0, sizeof(s_outbuf));
+#ifndef MAKEFS_SUPPORT_DEFLATE_ZLIB
         /* create tdefl() compatible flags (we have to compose the low-level flags ourselves, or use tdefl_create_comp_flags_from_zip_params() but that means MINIZ_NO_ZLIB_APIS can't be defined). */
         mz_uint comp_flags = s_tdefl_num_probes[MZ_MIN(10, deflate_level)] | ((deflate_level <= 3) ? TDEFL_GREEDY_PARSING_FLAG : 0);
         if (!deflate_level) {
@@ -577,12 +619,18 @@ static u8_t *get_file_data(const char *filename, int *file_size, int can_be_comp
           printf("tdefl_init() failed!\n");
           exit(-1);
         }
-        memset(s_outbuf, 0, sizeof(s_outbuf));
         status = tdefl_compress(&g_deflator, next_in, &in_bytes, next_out, &out_bytes, TDEFL_FINISH);
         if (status != TDEFL_STATUS_DONE) {
           printf("deflate failed: %d\n", status);
           exit(-1);
         }
+#else /* MAKEFS_SUPPORT_DEFLATE_ZLIB */
+        status = compress2(next_out, &out_bytes, next_in, in_bytes, deflate_level);
+        if (status != Z_OK) {
+          printf("deflate failed: %d\n", status);
+          exit(-1);
+        }
+#endif /*  MAKEFS_SUPPORT_DEFLATE_ZLIB */
         LWIP_ASSERT("out_bytes <= COPY_BUFSIZE", out_bytes <= OUT_BUF_SIZE);
         if (out_bytes < fsize) {
           ret_buf = (u8_t *)malloc(out_bytes);
@@ -590,16 +638,22 @@ static u8_t *get_file_data(const char *filename, int *file_size, int can_be_comp
           memcpy(ret_buf, s_outbuf, out_bytes);
           {
             /* sanity-check compression be inflating and comparing to the original */
-            tinfl_status dec_status;
-            tinfl_decompressor inflator;
             size_t dec_in_bytes = out_bytes;
             size_t dec_out_bytes = OUT_BUF_SIZE;
             next_out = s_checkbuf;
+            memset(s_checkbuf, 0, sizeof(s_checkbuf));
+#ifndef MAKEFS_SUPPORT_DEFLATE_ZLIB
+            tinfl_status dec_status;
+            tinfl_decompressor inflator;
 
             tinfl_init(&inflator);
-            memset(s_checkbuf, 0, sizeof(s_checkbuf));
             dec_status = tinfl_decompress(&inflator, (const mz_uint8 *)ret_buf, &dec_in_bytes, s_checkbuf, (mz_uint8 *)next_out, &dec_out_bytes, 0);
             LWIP_ASSERT("tinfl_decompress failed", dec_status == TINFL_STATUS_DONE);
+#else /* MAKEFS_SUPPORT_DEFLATE_ZLIB */
+            int dec_status;
+            dec_status = uncompress2 (s_checkbuf, &dec_out_bytes, ret_buf, &dec_in_bytes);
+            LWIP_ASSERT("tinfl_decompress failed", dec_status == Z_OK);
+#endif /* MAKEFS_SUPPORT_DEFLATE_ZLIB */
             LWIP_ASSERT("tinfl_decompress size mismatch", fsize == dec_out_bytes);
             LWIP_ASSERT("decompressed memcmp failed", !memcmp(s_checkbuf, buf, fsize));
           }
@@ -614,7 +668,7 @@ static u8_t *get_file_data(const char *filename, int *file_size, int can_be_comp
           printf(" - uncompressed: (would be %d bytes larger using deflate)" NEWLINE, (int)(out_bytes - fsize));
         }
       } else {
-        printf(" - uncompressed: (file is larger than deflate bufer)" NEWLINE);
+        printf(" - uncompressed: (file is larger than deflate buffer)" NEWLINE);
       }
     } else {
       printf(" - cannot be compressed" NEWLINE);
@@ -841,6 +895,10 @@ static int is_ssi_file(const char *filename)
       /* build up the relative path to this file */
       size_t sublen = strlen(curSubdir);
       size_t freelen = sizeof(curSubdir) - sublen - 1;
+      if (sublen + strlen(filename) + 1 >= sizeof(curSubdir)) {
+        /* prevent buffer overflow */
+        return 0;
+      }
       strncat(curSubdir, "/", freelen);
       strncat(curSubdir, filename, freelen - 1);
       curSubdir[sizeof(curSubdir) - 1] = 0;
@@ -853,6 +911,7 @@ static int is_ssi_file(const char *filename)
       }
       curSubdir[sublen] = 0;
       return ret;
+#if LWIP_HTTPD_SSI_BY_FILE_EXTENSION
     } else {
       /* check file extension */
       size_t loop;
@@ -861,6 +920,7 @@ static int is_ssi_file(const char *filename)
           return 1;
         }
       }
+#endif /* LWIP_HTTPD_SSI_BY_FILE_EXTENSION */
     }
   }
   return 0;
@@ -920,9 +980,9 @@ int process_file(FILE *data_file, FILE *struct_file, const char *filename)
   int flags_printed;
 
   /* create qualified name (@todo: prepend slash or not?) */
-  sprintf(qualifiedName, "%s/%s", curSubdir, filename);
+  snprintf(qualifiedName, sizeof(qualifiedName), "%s/%s", curSubdir, filename);
   /* create C variable name */
-  strcpy(varname, qualifiedName);
+  strncpy(varname, qualifiedName, sizeof(varname));
   /* convert slashes & dots to underscores */
   fix_filename_for_c(varname, MAX_PATH_LEN);
   register_filename(varname);
@@ -1042,17 +1102,17 @@ int file_write_http_header(FILE *data_file, const char *filename, int file_size,
   }
 
   fprintf(data_file, NEWLINE "/* HTTP header */");
-  if (strstr(filename, "404") == filename) {
+  if (strstr(filename, "404.") == filename) {
     response_type = HTTP_HDR_NOT_FOUND;
     if (useHttp11) {
       response_type = HTTP_HDR_NOT_FOUND_11;
     }
-  } else if (strstr(filename, "400") == filename) {
+  } else if (strstr(filename, "400.") == filename) {
     response_type = HTTP_HDR_BAD_REQUEST;
     if (useHttp11) {
       response_type = HTTP_HDR_BAD_REQUEST_11;
     }
-  } else if (strstr(filename, "501") == filename) {
+  } else if (strstr(filename, "501.") == filename) {
     response_type = HTTP_HDR_NOT_IMPL;
     if (useHttp11) {
       response_type = HTTP_HDR_NOT_IMPL_11;

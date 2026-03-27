@@ -1,12 +1,12 @@
 /**
  * @file
  * SMTP client module
- * 
+ *
  * Author: Simon Goldschmidt
  *
  * @defgroup smtp SMTP client
  * @ingroup apps
- * 
+ *
  * This is simple SMTP client for raw API.
  * It is a minimal implementation of SMTP as specified in RFC 5321.
  *
@@ -29,7 +29,7 @@
 
  * When using from any other thread than the tcpip_thread (for NO_SYS==0), use
  * smtp_send_mail_int()!
- * 
+ *
  * SMTP_BODYDH usage:
 @code{.c}
  int my_smtp_bodydh_fn(void *arg, struct smtp_bodydh *bdh)
@@ -42,11 +42,11 @@
     ++bdh->state;
     return BDH_WORKING;
  }
- 
- smtp_send_mail_bodycback("sender", "recipient", "subject", 
+
+ smtp_send_mail_bodycback("sender", "recipient", "subject",
                 my_smtp_bodydh_fn, my_smtp_result_fn, some_argument);
 @endcode
- * 
+ *
  * @todo:
  * - attachments (the main difficulty here is streaming base64-encoding to
  *   prevent having to allocate a buffer for the whole encoded file at once)
@@ -577,7 +577,7 @@ leave:
  * @param body email body (must be NULL-terminated)
  * @param callback_fn callback function
  * @param callback_arg user argument to callback_fn
- * @returns - ERR_OK if structures were allocated and no error occured starting the connection
+ * @returns - ERR_OK if structures were allocated and no error occurred starting the connection
  *            (this does not mean the email has been successfully sent!)
  *          - another err_t on error.
  */
@@ -1305,7 +1305,7 @@ smtp_process(void *arg, struct altcp_pcb *pcb, struct pbuf *p)
     LWIP_DEBUGF(SMTP_DEBUG_TRACE, ("smtp_process: received response code: %d\n", response_code));
     if (smtp_is_response_finished(s) != ERR_OK) {
       LWIP_DEBUGF(SMTP_DEBUG_TRACE, ("smtp_process: partly received response code: %d\n", response_code));
-      /* wait for next packet to complete the respone */
+      /* wait for next packet to complete the response */
       return;
     }
   } else {
@@ -1498,7 +1498,6 @@ smtp_send_mail_bodycback(const char *from, const char* to, const char* subject,
   LWIP_ASSERT("string is too long", len <= 0xffff);
   s->subject_len = (u16_t)len;
   s->body = NULL;
-  LWIP_ASSERT("string is too long", len <= 0xffff);
   s->callback_fn = callback_fn;
   s->callback_arg = callback_arg;
   s->bodydh->callback_fn = bodycback_fn;

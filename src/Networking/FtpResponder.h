@@ -40,6 +40,7 @@ protected:
 	static const uint32_t ftpPasvPortTimeout = 10000;	// maximum time to wait for an FTP data connection in milliseconds
 
 	Socket *_ecv_from _ecv_null dataSocket;
+	bool dataConnectionTls;								// true if the data connection should use TLS
 	TcpPort passivePort;
 	uint32_t passivePortOpenTime;
 	OutputBuffer *_ecv_null dataBuf;

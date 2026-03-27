@@ -45,7 +45,7 @@ export DEBUG_FLAGS
 .DEFAULT_GOAL := help
 
 # Available build configurations
-CONFIGS := Duet3_MB6HC Duet3_MB6XD Duet3_CAN0 Duet3Mini5plus Duet3_MB6HC_no_SD PCCB_10 FMDC_V03
+CONFIGS := Duet3_MB6HC Duet3_MB6XD Duet3_CAN0 Duet3Mini5plus Duet3_MB6HC_no_SD FMDC_V03
 
 # Print available targets
 .PHONY: help
@@ -59,7 +59,6 @@ help:
 	$(Q)echo "  Duet3_MB6XD         - Duet 3 MB6XD expansion (SAME70)"
 	$(Q)echo "  Duet3_CAN0          - Duet 3 CAN expansion (SAME70)"
 	$(Q)echo "  Duet3Mini5plus      - Duet 3 Mini 5+ (SAME51)"
-	$(Q)echo "  PCCB_10             - PCCB version 1.0"
 	$(Q)echo "  FMDC_V03            - FMDC version 0.3"
 	$(Q)echo "  Duet3_MB6HC_no_SD   - Duet 3 MB6HC without SD card support"
 	$(Q)echo ""
@@ -124,7 +123,9 @@ build-libs:
         $(WORKSPACE)/CANlib/SAME51_RTOS/libCANlib.a \
         $(WORKSPACE)/CANlib/SAM4S_RTOS/libCANlib.a \
         $(WORKSPACE)/LibTinyusb/SAME70/libLibTinyusb.a \
-        $(WORKSPACE)/LibTinyusb/SAME5x/libLibTinyusb.a
+        $(WORKSPACE)/LibTinyusb/SAME5x/libLibTinyusb.a \
+        $(WORKSPACE)/LibMbedTls/SAME70/libLibMbedTls.a \
+        $(WORKSPACE)/LibMbedTls/SAME5x/libLibMbedTls.a
 
 $(WORKSPACE)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS/libCoreN2G.a:
 	$(Q)echo "  BUILD   CoreN2G/SAME70_CAN_SDHC_USB_RTOS"
@@ -166,6 +167,14 @@ $(WORKSPACE)/LibTinyusb/SAME5x/libLibTinyusb.a:
 	$(Q)echo "  BUILD   LibTinyusb/SAME5x"
 	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibTinyusb SAME5x
 
+$(WORKSPACE)/LibMbedTls/SAME70/libLibMbedTls.a:
+	$(Q)echo "  BUILD   LibMbedTls/SAME70"
+	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibMbedTls SAME70
+
+$(WORKSPACE)/LibMbedTls/SAME5x/libLibMbedTls.a:
+	$(Q)echo "  BUILD   LibMbedTls/SAME5x"
+	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibMbedTls SAME5x
+
 $(WORKSPACE)/CoreN2G/SAME5x_SDHC_USB_RTOS/libCoreN2G.a:
 	$(Q)echo "  BUILD   CoreN2G/SAME5x_SDHC_USB_RTOS"
 	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CoreN2G SAME5x_SDHC_USB_RTOS
@@ -191,7 +200,6 @@ $(WORKSPACE)/CANlib/SAM4S_RTOS/libCANlib.a:
 -include Makefiles/Duet3_MB6XD.mk
 -include Makefiles/Duet3_CAN0.mk
 -include Makefiles/Duet3Mini5plus.mk
--include Makefiles/PCCB_10.mk
 -include Makefiles/FMDC_V03.mk
 -include Makefiles/Duet3_MB6HC_no_SD.mk
 
@@ -216,4 +224,5 @@ clean-all: clean
 	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/RRFLibraries clean
 	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CANlib clean
 	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibTinyusb clean
+	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibMbedTls clean
 	$(Q)echo "Clean all complete"

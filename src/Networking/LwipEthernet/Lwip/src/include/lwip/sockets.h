@@ -43,6 +43,10 @@
 
 #if LWIP_SOCKET /* don't build if not configured for use in lwipopts.h */
 
+#if LWIP_SOCKET_EXTERNAL_HEADERS
+#include LWIP_SOCKET_EXTERNAL_HEADER_SOCKETS_H
+#else /* LWIP_SOCKET_EXTERNAL_HEADERS */
+
 #include "lwip/ip_addr.h"
 #include "lwip/netif.h"
 #include "lwip/err.h"
@@ -54,6 +58,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* sockaddr and pals include length fields */
+#define LWIP_SOCKET_HAVE_SA_LEN  1
 
 /* If your port already typedef's sa_family_t, define SA_FAMILY_T_DEFINED
    to prevent this code from redefining it. */
@@ -124,11 +131,13 @@ struct iovec {
 };
 #endif
 
+typedef int msg_iovlen_t;
+
 struct msghdr {
   void         *msg_name;
   socklen_t     msg_namelen;
   struct iovec *msg_iov;
-  int           msg_iovlen;
+  msg_iovlen_t  msg_iovlen;
   void         *msg_control;
   socklen_t     msg_controllen;
   int           msg_flags;
@@ -400,7 +409,7 @@ typedef struct ipv6_mreq {
  * we restrict parameters to at most 128 bytes.
  */
 #if !defined(FIONREAD) || !defined(FIONBIO)
-#define IOCPARM_MASK    0x7fU           /* parameters must be < 128 bytes */
+#define IOCPARM_MASK    0x7fUL          /* parameters must be < 128 bytes */
 #define IOC_VOID        0x20000000UL    /* no parameters */
 #define IOC_OUT         0x40000000UL    /* copy out parameters */
 #define IOC_IN          0x80000000UL    /* copy in parameters */
@@ -524,6 +533,16 @@ struct timeval {
   long    tv_usec;        /* and microseconds */
 };
 #endif /* LWIP_TIMEVAL_PRIVATE */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* LWIP_SOCKET_EXTERNAL_HEADERS */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define lwip_socket_init() /* Compatibility define, no init needed. */
 void lwip_socket_thread_init(void); /* LWIP_NETCONN_SEM_PER_THREAD==1: initialize thread-local semaphore */

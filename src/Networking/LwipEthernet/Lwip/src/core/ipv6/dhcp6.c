@@ -16,8 +16,8 @@
  * - only start requests if a valid local address is available on the netif
  * - only start information requests if required (not for every RA)
  *
- * dhcp6_enable_stateful() enables stateful DHCPv6 for a netif (stateless disabled)\n
- * dhcp6_enable_stateless() enables stateless DHCPv6 for a netif (stateful disabled)\n
+ * dhcp6_enable_stateful() enables stateful DHCPv6 for a netif (stateless disabled)<br>
+ * dhcp6_enable_stateless() enables stateless DHCPv6 for a netif (stateful disabled)<br>
  * dhcp6_disable() disable DHCPv6 for a netif
  *
  * When enabled, requests are only issued after receipt of RA with the
@@ -240,7 +240,7 @@ dhcp6_get_struct(struct netif *netif, const char *dbg_requester)
       netif_set_client_data(netif, LWIP_NETIF_CLIENT_DATA_INDEX_DHCP6, NULL);
       return NULL;
     }
-    LWIP_DEBUGF(DHCP6_DEBUG | LWIP_DBG_TRACE, ("%s: allocated dhcp6", dbg_requester));
+    LWIP_DEBUGF(DHCP6_DEBUG | LWIP_DBG_TRACE, ("%s: allocated dhcp6\n", dbg_requester));
     dhcp6->pcb_allocated = 1;
   }
   return dhcp6;
@@ -299,7 +299,7 @@ err_t
 dhcp6_enable_stateful(struct netif *netif)
 {
   LWIP_UNUSED_ARG(netif);
-  LWIP_DEBUGF(DHCP6_DEBUG | LWIP_DBG_TRACE, ("stateful dhcp6 not implemented yet"));
+  LWIP_DEBUGF(DHCP6_DEBUG | LWIP_DBG_TRACE, ("stateful dhcp6 not implemented yet\n"));
   return ERR_VAL;
 }
 
@@ -324,12 +324,12 @@ dhcp6_enable_stateless(struct netif *netif)
     return ERR_MEM;
   }
   if (dhcp6_stateless_enabled(dhcp6)) {
-    LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE, ("dhcp6_enable_stateless(): stateless DHCPv6 already enabled"));
+    LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE, ("dhcp6_enable_stateless(): stateless DHCPv6 already enabled\n"));
     return ERR_OK;
   } else if (dhcp6->state != DHCP6_STATE_OFF) {
     /* stateful running */
     /* @todo: stop stateful once it is implemented */
-    LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE, ("dhcp6_enable_stateless(): switching from stateful to stateless DHCPv6"));
+    LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE, ("dhcp6_enable_stateless(): switching from stateful to stateless DHCPv6\n"));
   }
   LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE, ("dhcp6_enable_stateless(): stateless DHCPv6 enabled\n"));
   dhcp6_set_state(dhcp6, DHCP6_STATE_STATELESS_IDLE, "dhcp6_enable_stateless");
@@ -451,7 +451,16 @@ dhcp6_msg_finalize(u16_t options_out_len, struct pbuf *p_out)
 static void
 dhcp6_information_request(struct netif *netif, struct dhcp6 *dhcp6)
 {
-  const u16_t requested_options[] = {DHCP6_OPTION_DNS_SERVERS, DHCP6_OPTION_DOMAIN_LIST, DHCP6_OPTION_SNTP_SERVERS};
+  const u16_t requested_options[] = {
+#if LWIP_DHCP6_PROVIDE_DNS_SERVERS
+    DHCP6_OPTION_DNS_SERVERS,
+    DHCP6_OPTION_DOMAIN_LIST
+#endif
+#if LWIP_DHCP6_GET_NTP_SRV
+    , DHCP6_OPTION_SNTP_SERVERS
+#endif
+  };
+
   u16_t msecs;
   struct pbuf *p_out;
   u16_t options_out_len;
@@ -527,7 +536,7 @@ dhcp6_handle_config_reply(struct netif *netif, struct pbuf *p_msg_in)
     u16_t idx;
     u8_t n;
 
-    memset(&dns_addr, 0, sizeof(dns_addr));
+    ip_addr_set_zero_ip6(&dns_addr);
     dns_addr6 = ip_2_ip6(&dns_addr);
     for (n = 0, idx = op_start; (idx < op_start + op_len) && (n < LWIP_DHCP6_PROVIDE_DNS_SERVERS);
          n++, idx += sizeof(struct ip6_addr_packed)) {
@@ -570,7 +579,7 @@ dhcp6_handle_config_reply(struct netif *netif, struct pbuf *p_msg_in)
 }
 #endif /* LWIP_IPV6_DHCP6_STATELESS */
 
-/** This function is called from nd6 module when an RA messsage is received
+/** This function is called from nd6 module when an RA message is received
  * It triggers DHCPv6 requests (if enabled).
  */
 void
@@ -636,7 +645,7 @@ dhcp6_parse_reply(struct pbuf *p, struct dhcp6 *dhcp6)
       /* overflow */
       return ERR_BUF;
     }
-    /* copy option + length, might be split accross pbufs */
+    /* copy option + length, might be split across pbufs */
     op_len = (u8_t *)pbuf_get_contiguous(p, op_len_buf, 4, 4, offset);
     if (op_len == NULL) {
       /* failed to get option and length */

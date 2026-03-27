@@ -106,14 +106,11 @@ err_t            tcp_process_refused_data(struct tcp_pcb *pcb);
 #define tcp_output_nagle(tpcb) (tcp_do_output_nagle(tpcb) ? tcp_output(tpcb) : ERR_OK)
 
 
-#define TCP_SEQ_LT(a,b)     ((s32_t)((u32_t)(a) - (u32_t)(b)) < 0)
-#define TCP_SEQ_LEQ(a,b)    ((s32_t)((u32_t)(a) - (u32_t)(b)) <= 0)
-#define TCP_SEQ_GT(a,b)     ((s32_t)((u32_t)(a) - (u32_t)(b)) > 0)
-#define TCP_SEQ_GEQ(a,b)    ((s32_t)((u32_t)(a) - (u32_t)(b)) >= 0)
+#define TCP_SEQ_LT(a,b)     (((u32_t)((u32_t)(a) - (u32_t)(b)) & 0x80000000u) != 0)
+#define TCP_SEQ_LEQ(a,b)    (!(TCP_SEQ_LT(b,a)))
+#define TCP_SEQ_GT(a,b)     TCP_SEQ_LT(b,a)
+#define TCP_SEQ_GEQ(a,b)    TCP_SEQ_LEQ(b,a)
 /* is b<=a<=c? */
-#if 0 /* see bug #10548 */
-#define TCP_SEQ_BETWEEN(a,b,c) ((c)-(b) >= (a)-(b))
-#endif
 #define TCP_SEQ_BETWEEN(a,b,c) (TCP_SEQ_GEQ(a,b) && TCP_SEQ_LEQ(a,c))
 
 #ifndef TCP_TMR_INTERVAL
@@ -361,7 +358,7 @@ extern struct tcp_pcb ** const tcp_pcb_lists[NUM_TCP_PCB_LISTS];
                             for (tcp_tmp_pcb = *(pcbs); \
           tcp_tmp_pcb != NULL; \
         tcp_tmp_pcb = tcp_tmp_pcb->next) { \
-                                LWIP_ASSERT("TCP_REG: already registered\n", tcp_tmp_pcb != (npcb)); \
+                                LWIP_ASSERT("TCP_REG: already registered", tcp_tmp_pcb != (npcb)); \
                             } \
                             LWIP_ASSERT("TCP_REG: pcb->state != CLOSED", ((pcbs) == &tcp_bound_pcbs) || ((npcb)->state != CLOSED)); \
                             (npcb)->next = *(pcbs); \
@@ -467,6 +464,9 @@ void tcp_rexmit_seg(struct tcp_pcb *pcb, struct tcp_seg *seg);
 void tcp_rst(const struct tcp_pcb* pcb, u32_t seqno, u32_t ackno,
        const ip_addr_t *local_ip, const ip_addr_t *remote_ip,
        u16_t local_port, u16_t remote_port);
+void tcp_rst_netif(struct netif *netif, u32_t seqno, u32_t ackno,
+                   const ip_addr_t *local_ip, const ip_addr_t *remote_ip,
+                   u16_t local_port, u16_t remote_port);
 
 u32_t tcp_next_iss(struct tcp_pcb *pcb);
 
