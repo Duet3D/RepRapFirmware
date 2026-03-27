@@ -107,7 +107,6 @@ DUET3MINI_DEFINES := \
 	-D__SAME54P20A__ \
 	-DRTOS \
 	-DDUET3MINI_V04 \
-	-D_XOPEN_SOURCE \
 	-DMBEDTLS_CONFIG_FILE='"config-same5x.h"'
 
 # Compiler flags - C
@@ -164,6 +163,7 @@ DUET3MINI_CXXFLAGS := -c -std=gnu++17 \
 	-Wsign-promo \
 	$(DUET3MINI_INCLUDES) \
 	$(DUET3MINI_DEFINES) \
+	-D_XOPEN_SOURCE \
 	$(DEBUG_FLAGS)
 
 # Linker flags - split into LDFLAGS1 (before -o) and LDFLAGS2 (after -o)
@@ -186,7 +186,8 @@ DUET3MINI_LDFLAGS2 := \
 	-Wl,--entry=Reset_Handler \
 	-Wl,--unresolved-symbols=report-all \
 	-Wl,--warn-common \
-	-Wl,--warn-section-align
+	-Wl,--warn-section-align \
+	-Wl,--warn-unresolved-symbols
 
 # Library search paths
 DUET3MINI_LDLIBS := \
