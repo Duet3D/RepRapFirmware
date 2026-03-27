@@ -275,7 +275,7 @@ constexpr Pin EncoderPinSw = PortBPin(9);
 
 constexpr Pin LcdA0Pin = PortAPin(2);
 constexpr Pin LcdBeepPin = PortAPin(9);
-// We no longer need to declare the Lcd Neopixel pin for the Mini 18764 display, which is PortBPin(12) shared with io3.out
+// We no longer need to declare the Lcd Neopixel pin for the Mini 12864 display, which is PortBPin(12) shared with io3.out
 
 // Neopixel output
 constexpr Pin NeopixelOutPin = PortAPin(8);
