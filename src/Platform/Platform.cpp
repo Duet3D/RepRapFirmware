@@ -3668,6 +3668,8 @@ void Platform::SetBoardType() noexcept
 	board = BoardType::DuetM_10;
 #elif defined(PCCB_10)
 	board = BoardType::PCCB_v10;
+#elif defined INDX
+	board = BoardType::Indx;
 #else
 # error Undefined board type
 #endif
@@ -3707,6 +3709,8 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::DuetM_10:				return "Duet Maestro 1.0";
 #elif defined(PCCB_10)
 	case BoardType::PCCB_v10:				return "PC001373";
+#elif defined(INDX)
+	case BoardType::Indx:					return "INDX";
 #else
 # error Undefined board type
 #endif
@@ -3746,6 +3750,8 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::DuetM_10:				return "duetmaestro100";
 #elif defined(PCCB_10)
 	case BoardType::PCCB_v10:				return "pc001373";
+#elif defined(INDX)
+	case BoardType::Indx:					return "indx";
 #else
 # error Undefined board type
 #endif
