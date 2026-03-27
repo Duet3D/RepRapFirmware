@@ -1964,7 +1964,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						reply.catf(" + %s", additionalExpansionName);
 					}
 				}
-#elif defined(DUET3MINI) && !defined(FMDC_V03)
+#elif defined(DUET3MINI) && !defined(FMDC_V03) && !defined(INDX)
 				{
 					const char *const expansionString = platform.GetExpansionBoardName();
 					if (expansionString != nullptr)
