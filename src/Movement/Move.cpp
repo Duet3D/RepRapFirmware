@@ -562,7 +562,7 @@ void Move::Init() noexcept
 
 #if HAS_SMART_DRIVERS
 	// Initialise TMC driver module
-# if SUPPORT_TMC51xx
+# if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
 	SmartDrivers::Init();
 # elif SUPPORT_TMC22xx
 #  if TMC22xx_VARIABLE_NUM_DRIVERS

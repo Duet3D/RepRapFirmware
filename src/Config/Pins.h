@@ -132,6 +132,10 @@ constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 # define SUPPORT_TMC51xx		0
 #endif
 
+#ifndef SUPPORT_TMC2240_SPI
+# define SUPPORT_TMC2240_SPI	0
+#endif
+
 #ifndef VARIABLE_NUM_DRIVERS
 # define VARIABLE_NUM_DRIVERS	0
 #endif
@@ -148,7 +152,7 @@ constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 # define SUPPORT_OBJECT_MODEL	0
 #endif
 
-#define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx || SUPPORT_TMC51xx)
+#define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI)
 #ifndef HAS_STALL_DETECT
 # define HAS_STALL_DETECT		(SUPPORT_TMC2660 || SUPPORT_TMC51xx)
 #endif

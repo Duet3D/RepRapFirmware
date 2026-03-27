@@ -413,13 +413,7 @@ void Platform::Init() noexcept
 	// Do any board-specific initialisation that needs to be done early and does not depend on the board revision
 
 	// Make sure the on-board drivers are disabled
-#if defined(DUET_NG) || defined(PCCB_10)
-	SetPinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
-#elif defined(DUET_M) || defined(DUET3MINI)
-	SetPinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
-#elif defined(DUET3_MB6HC)
-	SetPinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
-#endif
+	SetPinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
 
 	// Make sure any WiFi module is held in reset
 #if defined(DUET_NG)
@@ -492,11 +486,13 @@ void Platform::Init() noexcept
 	// Shared SPI subsystem
 	mainSharedSpiDevice = new SharedSpiDevice(SharedSpiParams);
 
+#if HAS_MASS_STORAGE
 	// File management and SD card interfaces
 	for (size_t i = 0; i < NumSdCards; ++i)
 	{
 		SetPinMode(SdCardDetectPins[i], INPUT_PULLUP, true);
 	}
+#endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	MassStorage::Init();

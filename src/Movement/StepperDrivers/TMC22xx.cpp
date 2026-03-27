@@ -2098,7 +2098,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 					driversStepped.Clear();
 					driversState = DriversState::stepping;
 #else
-					fastDigitalWriteLow(GlobalTmc22xxEnablePin);
+					fastDigitalWriteLow(GlobalTmcEnablePin);
 					driversState = DriversState::ready;
 #endif
 				}
@@ -2232,7 +2232,7 @@ void SmartDrivers::Init() noexcept
 #endif
 
 	// Make sure the ENN pins are high
-	SetPinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
 
 #if TMC22xx_SINGLE_UART
 	// Set up the single UART that communicates with all TMC22xx drivers
@@ -2330,7 +2330,7 @@ void SmartDrivers::Init() noexcept
 // Shut down the drivers and stop any related interrupts
 void SmartDrivers::Exit() noexcept
 {
-	SetPinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
 #if TMC22xx_SINGLE_UART
 # if TMC22xx_USES_SERCOM
 	DmacManager::SetInterruptCallback(DmacChanTmcRx, nullptr, CallbackParameter(nullptr));
@@ -2430,7 +2430,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 	else if (driversState != DriversState::shutDown)
 	{
 		driversState = DriversState::noPower;				// flag that there is no power to the drivers
-		fastDigitalWriteHigh(GlobalTmc22xxEnablePin);		// disable the drivers
+		fastDigitalWriteHigh(GlobalTmcEnablePin);			// disable the drivers
 	}
 }
 
