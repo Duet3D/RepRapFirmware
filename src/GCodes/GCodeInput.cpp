@@ -80,8 +80,8 @@ size_t StreamGCodeInput::BytesCached() const noexcept
 
 // Dynamic G-code input class for caching codes from software-defined sources
 
-RegularGCodeInput::RegularGCodeInput() noexcept
-	: state(GCodeInputState::idle), writingPointer(0), readingPointer(0)
+RegularGCodeInput::RegularGCodeInput(MessageType mt) noexcept
+	: mtype(mt), state(GCodeInputState::idle), writingPointer(0), readingPointer(0)
 {
 }
 
@@ -111,49 +111,18 @@ size_t RegularGCodeInput::BufferSpaceLeft() const noexcept
 	return (readingPointer - writingPointer - 1u) % GCodeInputBufferSize;
 }
 
-// BufferedStreamGCodeInput methods
-void BufferedStreamGCodeInput::Reset() noexcept
+// Check a character for urgent commands: M112 (emergency stop), M122 (diagnostics) and M108 (cancel wait for temperature).
+// Return true if the character should not be buffered (leading whitespace or urgent command handled)
+bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 {
-	RegularGCodeInput::Reset();
-	while (device.available() > 0)
-	{
-		device.read();
-	}
-}
-
-bool BufferedStreamGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept
-{
-	if (device.available() != 0)
-	{
-		const size_t spaceLeft = BufferSpaceLeft();
-		if (spaceLeft >= GCodeInputUSBReadThreshold)
-		{
-			const size_t maxToTransfer = (readingPointer > writingPointer || writingPointer == 0) ? spaceLeft : GCodeInputBufferSize - writingPointer;
-			writingPointer = (writingPointer + device.readBytes(buffer + writingPointer, maxToTransfer)) % GCodeInputBufferSize;
-		}
-	}
-	return StandardGCodeInput::FillBuffer(gb);
-}
-
-// NetworkGCodeInput methods
-void NetworkGCodeInput::Put(MessageType mtype, char c) noexcept
-{
-	if (BufferSpaceLeft() == 0)
-	{
-		// Don't let the buffer overflow if we run out of space
-		return;
-	}
-
-	// Check for M112 (emergency stop), M122 (diagnostics) and M108 (abort wait for temperature) while receiving new characters
 	switch (state)
 	{
 		case GCodeInputState::idle:
 			if (c <= ' ')
 			{
 				// ignore whitespaces at the beginning
-				return;
+				return true;
 			}
-
 			state = (c == 'M' || c == 'm') ? GCodeInputState::doingMCode : GCodeInputState::doingCode;
 			break;
 
@@ -169,7 +138,10 @@ void NetworkGCodeInput::Put(MessageType mtype, char c) noexcept
 			break;
 
 		case GCodeInputState::doingMCode1:
-			state = (c == '0') ? GCodeInputState::doingMCode10 : (c == '1') ? GCodeInputState::doingMCode11: (c == '2') ? GCodeInputState::doingMCode12 : GCodeInputState::doingCode;
+			state = (c == '0') ? GCodeInputState::doingMCode10
+				  : (c == '1') ? GCodeInputState::doingMCode11
+				  : (c == '2') ? GCodeInputState::doingMCode12
+				  : GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingMCode10:
@@ -189,7 +161,7 @@ void NetworkGCodeInput::Put(MessageType mtype, char c) noexcept
 			{
 				reprap.GetGCodes().CancelWaitForTemperatures(false);
 				// Normally we would call Reset and then return here to prevent the command being executed twice.
-				// However, DWC will be expecting an empty response, which we can't send from here because that will result in deadlock if no buffer is available.
+				// However, the host may be expecting an empty response, which we can't always send from here.
 				// So we allow the command to be queued and executed again, which is harmless.
 			}
 			state = GCodeInputState::doingCode;
@@ -204,7 +176,7 @@ void NetworkGCodeInput::Put(MessageType mtype, char c) noexcept
 
 				// But don't run it twice
 				Reset();
-				return;
+				return true;
 			}
 			state = GCodeInputState::doingCode;
 			break;
@@ -213,18 +185,70 @@ void NetworkGCodeInput::Put(MessageType mtype, char c) noexcept
 			// Only execute M122 here if there is no parameter
 			if (c < ' ' || c == ';')
 			{
-				// Diagnostics requested - report them now
-				// Don't use the Network task itself to send them because this may result in deadlock if there is insufficient buffer space,
-				// because the Network task itself is used to send the output to the clients and free the buffers.
-				// Ask the main task to do it instead.
+				// Diagnostics requested - defer to the main task to avoid race conditions if called from another task
 				reprap.DeferredDiagnostics(mtype);
 
 				// But don't report them twice
 				Reset();
-				return;
+				return true;
 			}
 			state = GCodeInputState::doingCode;
 			break;
+	}
+	return false;
+}
+
+// BufferedStreamGCodeInput methods
+void BufferedStreamGCodeInput::Reset() noexcept
+{
+	RegularGCodeInput::Reset();
+	while (device.available() > 0)
+	{
+		device.read();
+	}
+}
+
+// Read from the device into our ring buffer and scan for urgent commands (M112/M108/M122)
+void BufferedStreamGCodeInput::Spin() noexcept
+{
+	if (device.available() != 0)
+	{
+		const size_t spaceLeft = BufferSpaceLeft();
+		if (spaceLeft >= GCodeInputUSBReadThreshold)
+		{
+			const size_t maxToTransfer = (readingPointer > writingPointer || writingPointer == 0) ? spaceLeft : GCodeInputBufferSize - writingPointer;
+			const size_t bytesRead = device.readBytes(buffer + writingPointer, maxToTransfer);
+			for (size_t i = 0; i < bytesRead; ++i)
+			{
+				if (CheckForUrgentCommand(buffer[(writingPointer + i) % GCodeInputBufferSize]))
+				{
+					// Urgent command handled and buffer was reset, don't update writingPointer
+					return;
+				}
+			}
+			writingPointer = (writingPointer + bytesRead) % GCodeInputBufferSize;
+		}
+	}
+}
+
+bool BufferedStreamGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept
+{
+	return StandardGCodeInput::FillBuffer(gb);
+}
+
+// NetworkGCodeInput methods
+void NetworkGCodeInput::Put(char c) noexcept
+{
+	if (BufferSpaceLeft() == 0)
+	{
+		// Don't let the buffer overflow if we run out of space
+		return;
+	}
+
+	// Check for urgent commands (M112, M122, M108) while receiving new characters
+	if (CheckForUrgentCommand(c))
+	{
+		return;
 	}
 
 	// Feed another character into the buffer
@@ -235,7 +259,7 @@ void NetworkGCodeInput::Put(MessageType mtype, char c) noexcept
 	}
 }
 
-bool NetworkGCodeInput::Put(MessageType mtype, const char *_ecv_array buf) noexcept
+bool NetworkGCodeInput::Put(const char *_ecv_array buf) noexcept
 {
 	const size_t len = strlen(buf) + 1;
 	MutexLocker lock(bufMutex, 200);
@@ -246,7 +270,7 @@ bool NetworkGCodeInput::Put(MessageType mtype, const char *_ecv_array buf) noexc
 		{
 			for (size_t i = 0; i < len; i++)
 			{
-				Put(mtype, buf[i]);
+				Put(buf[i]);
 			}
 			return true;
 		}
@@ -254,7 +278,7 @@ bool NetworkGCodeInput::Put(MessageType mtype, const char *_ecv_array buf) noexc
 	return false;
 }
 
-NetworkGCodeInput::NetworkGCodeInput() noexcept : RegularGCodeInput()
+NetworkGCodeInput::NetworkGCodeInput(MessageType mt) noexcept : RegularGCodeInput(mt)
 {
 	bufMutex.Create("NetworkGCodeInput");
 }
