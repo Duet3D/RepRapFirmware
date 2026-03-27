@@ -132,7 +132,7 @@ GCodes::GCodes(Platform& p) noexcept :
 #endif
 
 #ifdef SERIAL_USB2_DEVICE
-	BufferedStreamGCodeInput * const usb2Input = new BufferedStreamGCodeInput(SERIAL_USB2_DEVICE);
+	usb2Input = new BufferedStreamGCodeInput(SERIAL_USB2_DEVICE, UsbMessage);
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB2)] = new GCodeBuffer(GCodeChannel::USB2, usb2Input, fileInput, Usb2Message, Compatibility::Marlin);
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB2)] = nullptr;
@@ -453,9 +453,12 @@ void GCodes::Spin() noexcept
 	}
 #endif
 
-#if defined(SERIAL_MAIN_DEVICE) && (!SAME5x || CORE_USES_TINYUSB)
+#if defined(SERIAL_USB_DEVICE) && (!SAME5x || CORE_USES_TINYUSB)
 	// Read from USB into the input buffer and check for out-of-band urgent commands (M112/M122/M108)
 	usbInput->Spin();
+# if defined(SERIAL_USB2_DEVICE)
+	usb2Input->Spin();
+# endif
 #endif
 
 	CheckTriggers();
