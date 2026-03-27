@@ -30,3 +30,4 @@
 /.clangd
 /.clang-format
 /src/Temp/
+/.settings/

@@ -104,24 +104,25 @@ GCodes::GCodes(Platform& p) noexcept :
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)] = nullptr;
 #endif
 #if SUPPORT_HTTP || HAS_SBC_INTERFACE
-	httpInput = new NetworkGCodeInput();
+	httpInput = new NetworkGCodeInput(HttpMessage);
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)] = new GCodeBuffer(GCodeChannel::HTTP, httpInput, fileInput, HttpMessage);
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)] = nullptr;
 #endif // SUPPORT_HTTP || HAS_SBC_INTERFACE
 #if SUPPORT_TELNET || HAS_SBC_INTERFACE
-	telnetInput = new NetworkGCodeInput();
+	telnetInput = new NetworkGCodeInput(TelnetMessage);
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)] = new GCodeBuffer(GCodeChannel::Telnet, telnetInput, fileInput, TelnetMessage, Compatibility::Marlin);
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)] = nullptr;
 #endif // SUPPORT_TELNET || HAS_SBC_INTERFACE
 #ifdef SERIAL_USB_DEVICE
 # if SAME5x && !CORE_USES_TINYUSB
-	// SAME5x USB driver already uses an efficient buffer for receiving data from USB
+	// SAME5x USB driver already uses an efficient buffer for receiving data from USB.
+	// Note: this path does not support out-of-band emergency command detection (M112)
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_USB_DEVICE);
 # else
 	// Old USB driver and tinyusb drivers are inefficient when read in single-character mode
-	BufferedStreamGCodeInput * const usbInput = new BufferedStreamGCodeInput(SERIAL_USB_DEVICE);
+	usbInput = new BufferedStreamGCodeInput(SERIAL_USB_DEVICE, UsbMessage);
 # endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)] = new GCodeBuffer(GCodeChannel::USB, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
 #elif HAS_SBC_INTERFACE
@@ -450,6 +451,11 @@ void GCodes::Spin() noexcept
 		emergencyStopCommanded = false;
 		return;
 	}
+#endif
+
+#if defined(SERIAL_MAIN_DEVICE) && (!SAME5x || CORE_USES_TINYUSB)
+	// Read from USB into the input buffer and check for out-of-band urgent commands (M112/M122/M108)
+	usbInput->Spin();
 #endif
 
 	CheckTriggers();

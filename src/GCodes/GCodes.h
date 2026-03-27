@@ -613,6 +613,9 @@ private:
 	NetworkGCodeInput* httpInput;										// These cache incoming G-codes...
 	NetworkGCodeInput* telnetInput;										// ...
 #endif
+#if defined(SERIAL_MAIN_DEVICE) && (!SAME5x || CORE_USES_TINYUSB)
+	BufferedStreamGCodeInput* usbInput;									// USB input with out-of-band urgent command scanning
+#endif
 
 	GCodeBuffer *_ecv_null gcodeSources[NumGCodeChannels];						// The various sources of gcodes
 
