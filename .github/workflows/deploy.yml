@@ -16,14 +16,14 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: "Duet3D/CANlib"
-          ref: "3.6-dev"
+          ref: "3.7-dev"
           path: "./CANlib"
 
       - name: "Check out CoreN2G"
         uses: actions/checkout@v5
         with:
           repository: "Duet3D/CoreN2G"
-          ref: "3.6-dev"
+          ref: "3.7-dev"
           path: "./CoreN2G"
 
       - name: "Check out FreeRTOS"
@@ -52,7 +52,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: "Duet3D/RepRapFirmware"
-          ref: "3.6-dev"
+          ref: "3.7-dev"
           path: "./RepRapFirmware"
 
       - name: "Check out RRFLibraries"
