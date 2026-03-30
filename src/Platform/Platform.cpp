@@ -2416,7 +2416,7 @@ bool Platform::IsChanRaw(size_t chan) const noexcept
 #endif
 }
 
-# if !defined(DUET_NG)			// we don't support this on Duet 2 because we are running low on flash memory space
+# if NUM_ASYNC_CHANNELS != 0 && !defined(DUET_NG)			// we don't support this on Duet 2 because we are running low on flash memory space
 
 /**
  * Converts a single byte of hex value to its ASCII hex representation.
@@ -2448,7 +2448,7 @@ static inline void ConvertHexToAsciiHex(uint8_t hex, uint8_t asciiHex[2])
 	}
 }
 
-static inline void CalculateNordsonUltimusVCheckSum(uint8_t *_ecv_array data, size_t len, uint8_t checksum[2])
+static inline void CalculateNordsonUltimusVCheckSum(uint8_t *_ecv_array data, size_t len, uint8_t checksum[2]) noexcept
 {
 	uint16_t sum = 0;
 	for (size_t i = 0; i < len; i++)
@@ -2460,6 +2460,8 @@ static inline void CalculateNordsonUltimusVCheckSum(uint8_t *_ecv_array data, si
 }
 
 #endif
+
+#if NUM_ASYNC_CHANNELS != 0 || defined(I2C_IFACE)
 
 static Variable *_ecv_null GetResultVariable(GCodeBuffer& gb) THROWS(GCodeException)
 {
@@ -2483,6 +2485,8 @@ static Variable *_ecv_null GetResultVariable(GCodeBuffer& gb) THROWS(GCodeExcept
 	}
 	return resultVar;
 }
+
+#endif
 
 // Handle M260 and M260.1 - send and possibly receive via I2C, or send via Modbus
 GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
@@ -2841,8 +2845,10 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 // Handle M261 and M261.1
 GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
+#if NUM_ASYNC_CHANNELS != 0 || defined(I2C_IFACE)
 	const uint32_t numValues = gb.GetLimitedUIValue('B', 0, MaxI2cOrModbusValues + 1);
 	Variable *_ecv_null const resultVar = GetResultVariable(gb);
+#endif
 
 #if NUM_ASYNC_CHANNELS != 0
 	size_t auxChannel = 0;

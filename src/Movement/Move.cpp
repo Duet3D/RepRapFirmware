@@ -307,9 +307,11 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->DriveStepsPerMm(ExtruderToLogicalDrive(context.GetLastIndex())), 2),										ObjectModelEntryFlags::none },
 
 	// 11. move.extruders[].nonlinear members
+#if SUPPORT_NONLINEAR_EXTRUSION
 	{ "a",					OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].A, 3),									ObjectModelEntryFlags::none },
 	{ "b",					OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].B, 3),									ObjectModelEntryFlags::none },
 	{ "upperLimit",			OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].limit, 2),								ObjectModelEntryFlags::none },
+#endif
 
 	// 12. move.axes[].microstepping members
 	{ "interpolated",		OBJECT_MODEL_FUNC(self->GetMicrostepInterpolation(context.GetLastIndex())),									ObjectModelEntryFlags::none },
@@ -348,7 +350,11 @@ constexpr uint8_t Move::objectModelTableDescriptor[] =
 	24 + SUPPORT_PHASE_STEPPING,											// section 9: move.axes[]
 	17 + SUPPORT_PHASE_STEPPING,											// section 10: move.extruders[]
 #endif
+#if SUPPORT_NONLINEAR_EXTRUSION
 	3,																		// section 11: move.extruders[].nonlinear
+#else
+	0,
+#endif
 	2,																		// section 12: move.axes[].microstepping
 	2,																		// section 13: move.extruders[].microstepping
 	1,																		// section 5: boards.drivers

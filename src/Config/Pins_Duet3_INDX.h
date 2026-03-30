@@ -49,7 +49,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 
 #define SUPPORT_LED_STRIPS		1
 #define SUPPORT_DMA_NEOPIXEL	1					// using QSPI for Neopixels
-#define NEOPIXEL_USES_QSPI		1					// using QSPI for Neopixels
+#define NEOPIXEL_USES_QSPI	1					// using QSPI for Neopixels
 #define SUPPORT_LASER			0					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		0					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
@@ -63,6 +63,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 #define SUPPORT_ASYNC_MOVES		0
 #define SUPPORT_PANELDUE_FLASH	0
 #define SUPPORT_SPI_SENSORS		0
+#define SUPPORT_SLOW_DRIVERS	0
 
 #define USE_CACHE				1					// set nonzero to enable the cache
 #define USE_MPU					0					// set nonzero to enable the memory protection unit
@@ -115,9 +116,14 @@ constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 constexpr size_t MaxLedStrips = 2;					// Maximum number of LED strips
 
-constexpr size_t NumUsbChannels = 1;
-
 #define SERIAL_USB_DEVICE (serialUSB)
+
+#if CORE_USES_TINYUSB
+constexpr size_t NumUsbChannels = 2;
+# define SERIAL_USB2_DEVICE (serialUSB2)
+#else
+constexpr size_t NumUsbChannels = 1;
+#endif
 
 #define NUM_ASYNC_PORTS			(0)
 #define NUM_ASYNC_CHANNELS		(NUM_ASYNC_PORTS)
@@ -125,7 +131,7 @@ constexpr size_t NumUsbChannels = 1;
 constexpr size_t NumSerialChannels = NumUsbChannels + NUM_ASYNC_CHANNELS;		// The number of serial IO channels (USB and one auxiliary UART)
 
 // SerialUSB
-constexpr Pin UsbVBusPin = NoPin;				// Pin used to monitor VBUS on USB port
+constexpr Pin UsbVBusPin = NoPin;					// tinyUsb doesn't need to detect Vbus
 
 constexpr size_t NumSdCards = 0;
 
@@ -143,10 +149,9 @@ constexpr DmaChannel DmacChanTmcTx = 2;
 constexpr DmaChannel DmacChanTmcRx = 3;
 constexpr DmaChannel DmacChanSspiTx = 4;
 constexpr DmaChannel DmacChanSspiRx = 5;
-constexpr DmaChannel DmacChanLcdTx = 6;
-constexpr DmaChannel DmacChanLcdRx = 7;					// this one is not actually used
+constexpr DmaChannel DmacChanLedTx = 6;
 
-constexpr unsigned int NumDmaChannelsUsed = 8;
+constexpr unsigned int NumDmaChannelsUsed = 7;
 
 // The DMAC has priority levels 0-3 but on revision A chips it is unsafe to use multiple levels
 // Fortunately, all our SAME54P20Achips seem to be revision D
@@ -156,8 +161,7 @@ constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioSspiTx = 3;				// high speed SPI in master mode
 constexpr DmaPriority DmacPrioSspiRx = 2;				// high speed SPI in master mode
-constexpr DmaPriority DmacPrioLcdTx = 3;				// high speed SPI in master mode
-constexpr DmaPriority DmacPrioLcdRx = 3;				// high speed SPI in master mode
+constexpr DmaPriority DmacPrioLed = 3;				// high speed SPI in master mode
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
@@ -199,15 +203,16 @@ constexpr float DefaultThermistorSeriesR = 4700.0;							// Thermistor series re
 // Analogue pin numbers
 constexpr Pin PowerMonitorVinDetectPin = PortAPin(2);						// Vin monitor
 constexpr float VinDividerRatio = (60.4 + 4.7)/4.7;							// to be confirmed
-constexpr float VinMonitorVoltageRange = VinDividerRatio * 3.3;
+constexpr float PowerMonitorVoltageRange = VinDividerRatio * 3.3;
 
 #ifdef DEBUG
 constexpr Pin DiagPin = NoPin;												// Diag/status LED pin is shared with SWD
+constexpr Pin ActLedPin = NoPin;											// Activity LED pin
 #else
 constexpr Pin DiagPin = PortAPin(31);										// Diag/status LED pin
+constexpr Pin ActLedPin = PortAPin(30);										// Activity LED pin
 #endif
 
-constexpr Pin ActLedPin = PortAPin(30);										// Activity LED pin
 
 constexpr bool DiagOnPolarity = false;
 constexpr bool ActOnPolarity = false;
@@ -227,49 +232,6 @@ constexpr SpiParameters SharedSpiParams =
 	.dmaPrioTx = DmacPrioSspiTx,
 	.dmaPrioRx = DmacPrioSspiRx,
 };
-
-// Serial on IO0
-constexpr UartParameters Serial0Params =
-{
-	.sercomNumber = 2,
-	.rxPin = PortBPin(24),
-	.txPin = PortBPin(25),
-	.pinFunction = GpioPinFunction::D,
-	.dataInPad = 1,
-	.dataOutPad = 0,
-	.numRxSlots = 512,
-	.numTxSlots = 512
-};
-
-// WiFi pins
-constexpr UartParameters SerialWiFiParams =
-{
-	.sercomNumber = 3,
-	.rxPin = PortAPin(16),
-	.txPin = PortAPin(17),
-	.pinFunction = GpioPinFunction::D,
-	.dataInPad = 1,
-	.dataOutPad = 0,
-	.numRxSlots = 512,
-	.numTxSlots = 512
-};
-
-constexpr unsigned int WiFiSpiSercomNumber = 4;
-Sercom * const WiFiSpiSercom = SERCOM4;
-constexpr Pin EspMosiPin = PortAPin(15);
-constexpr Pin EspMisoPin = PortAPin(13);
-constexpr Pin EspSclkPin = PortAPin(12);
-constexpr Pin EspSSPin = PortAPin(14);
-constexpr Pin WiFiSpiSercomPins[] = { EspSclkPin, EspMisoPin, EspSSPin, EspMosiPin };
-constexpr GpioPinFunction WiFiSpiSercomPinsMode = GpioPinFunction::D;
-constexpr IRQn WiFiSpiSercomIRQn = SERCOM4_1_IRQn;			// this is the transmit complete interrupt, the only one we use
-#define ESP_SPI_HANDLER		SERCOM4_1_Handler
-
-constexpr Pin EspResetPin = PortBPin(14);
-constexpr Pin EspEnablePin = PortCPin(11);
-constexpr Pin EspDataReadyPin = PortAPin(18);
-constexpr Pin SamTfrReadyPin = PortAPin(19);
-constexpr Pin SamCsPin = PortAPin(14);
 
 // List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
 // The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
