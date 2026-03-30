@@ -26,6 +26,13 @@ jobs:
           ref: "3.7-dev"
           path: "./CoreN2G"
 
+      - name: "Check out Duet3Expansion"
+        uses: actions/checkout@v5
+        with:
+          repository: "Duet3D/Duet3Expansion"
+          ref: "3.7-dev"
+          path: "./Duet3Expansion"
+
       - name: "Check out FreeRTOS"
         uses: actions/checkout@v5
         with:
