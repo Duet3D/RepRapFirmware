@@ -112,18 +112,16 @@ size_t RegularGCodeInput::BufferSpaceLeft() const noexcept
 }
 
 // Check a character for urgent commands: M112 (emergency stop), M122 (diagnostics) and M108 (cancel wait for temperature).
-// Return true if the character should not be buffered (leading whitespace or urgent command handled)
+// Return true if an urgent command was handled and the buffer was reset
 bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 {
 	switch (state)
 	{
 		case GCodeInputState::idle:
-			if (c <= ' ')
+			if (c > ' ')
 			{
-				// ignore whitespaces at the beginning
-				return true;
+				state = (c == 'M' || c == 'm') ? GCodeInputState::doingMCode : GCodeInputState::doingCode;
 			}
-			state = (c == 'M' || c == 'm') ? GCodeInputState::doingMCode : GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingCode:
@@ -199,14 +197,6 @@ bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 }
 
 // BufferedStreamGCodeInput methods
-void BufferedStreamGCodeInput::Reset() noexcept
-{
-	RegularGCodeInput::Reset();
-	while (device.available() > 0)
-	{
-		device.read();
-	}
-}
 
 // Read from the device into our ring buffer and scan for urgent commands (M112/M108/M122)
 void BufferedStreamGCodeInput::Spin() noexcept
@@ -216,17 +206,30 @@ void BufferedStreamGCodeInput::Spin() noexcept
 		const size_t spaceLeft = BufferSpaceLeft();
 		if (spaceLeft >= GCodeInputUSBReadThreshold)
 		{
-			const size_t maxToTransfer = (readingPointer > writingPointer || writingPointer == 0) ? spaceLeft : GCodeInputBufferSize - writingPointer;
-			const size_t bytesRead = device.readBytes(buffer + writingPointer, maxToTransfer);
-			for (size_t i = 0; i < bytesRead; ++i)
+			const size_t maxToTransfer = min<size_t>(spaceLeft, GCodeInputBufferSize - writingPointer);
+			const size_t endPointer = writingPointer + device.readBytes(buffer + writingPointer, maxToTransfer);
+			while (writingPointer != endPointer)
 			{
-				if (CheckForUrgentCommand(buffer[(writingPointer + i) % GCodeInputBufferSize]))
+				const size_t pos = writingPointer;
+				if (CheckForUrgentCommand(buffer[pos]))
 				{
-					// Urgent command handled and buffer was reset, don't update writingPointer
+					// Urgent command handled and buffer was reset (writingPointer is now 0).
+					// Copy any remaining bytes after the trigger into the buffer so that
+					// following commands (e.g. M999 after M112) can still be processed
+					const size_t remaining = endPointer - pos - 1;
+					if (remaining != 0)
+					{
+						memmove(buffer, buffer + pos + 1, remaining);
+						writingPointer = remaining;
+					}
 					return;
 				}
+				writingPointer++;
 			}
-			writingPointer = (writingPointer + bytesRead) % GCodeInputBufferSize;
+			if (writingPointer == GCodeInputBufferSize)
+			{
+				writingPointer = 0;
+			}
 		}
 	}
 }

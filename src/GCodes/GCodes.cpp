@@ -548,7 +548,7 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 
 	if ((gb.IsExecuting()
 #if HAS_SBC_INTERFACE
-		 && !gb.IsSendRequested()
+			|| gb.IsSendRequested() || gb.IsExecutingOnSbc()
 #endif
 		) || (gb.IsWaitingForTemperatures())							// this is needed to get reports sent when the GB is waiting for temperatures to be reached
 	   )
@@ -614,7 +614,11 @@ bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	}
 	else
 	{
-		const bool gotCommand = (gb.GetNormalInput() != nullptr) && gb.GetNormalInput()->FillBuffer(&gb);
+		const bool gotCommand =
+#if HAS_SBC_INTERFACE
+			!gb.IsExecutingOnSbc() &&
+#endif
+			(gb.GetNormalInput() != nullptr) && gb.GetNormalInput()->FillBuffer(&gb);
 		if (gotCommand)
 		{
 			gb.DecodeCommand();
@@ -1716,6 +1720,7 @@ void GCodes::Diagnostics(const StringRef& reply) noexcept
 			gb->Diagnostics(reply);
 		}
 	}
+
 }
 
 #if SUPPORT_ASYNC_MOVES
@@ -4205,7 +4210,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	case Compatibility::NanoDLP:				// nanoDLP is like Marlin except that G0 and G1 commands return "Z_move_comp<LF>" before "ok<LF>"
 	case Compatibility::Marlin:
 	default:
-		if (gb.IsLastCommand() && !gb.IsDoingFileMacro())
+		if (gb.IsLastCommand() && !gb.IsDoingFileMacro(true))
 		{
 			// Put "ok" at the end
 			const char *_ecv_array const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";

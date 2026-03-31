@@ -242,6 +242,14 @@ void GCodeBuffer::Diagnostics(const StringRef& reply) noexcept
 		reply.cat('"');
 		break;
 
+#if HAS_SBC_INTERFACE
+	case GCodeBufferState::executingOnSbc:
+		reply.cat("is doing \"");
+		AppendFullCommand(reply);
+		reply.cat("\" on the SBC");
+		break;
+#endif
+
 	default:
 		reply.cat("is assembling a command");
 		break;
