@@ -158,7 +158,7 @@ constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB po
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // Drivers
-constexpr Pin GlobalTmc22xxEnablePin = PortCPin(28);	// The pin that drives ENN of all drivers
+constexpr Pin GlobalTmcEnablePin = PortCPin(28);	// The pin that drives ENN of all drivers
 PortGroup * const StepPio = &(PORT->Group[2]);		// The PIO that all the step pins are on (port C)
 
 constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCPin(24), PortCPin(19), PortCPin(16), PortCPin(30), PortCPin(18) };
@@ -275,7 +275,7 @@ constexpr Pin EncoderPinSw = PortBPin(9);
 
 constexpr Pin LcdA0Pin = PortAPin(2);
 constexpr Pin LcdBeepPin = PortAPin(9);
-// We no longer need to declare the Lcd Neopixel pin for the Mini 18764 display, which is PortBPin(12) shared with io3.out
+// We no longer need to declare the Lcd Neopixel pin for the Mini 12864 display, which is PortBPin(12) shared with io3.out
 
 // Neopixel output
 constexpr Pin NeopixelOutPin = PortAPin(8);

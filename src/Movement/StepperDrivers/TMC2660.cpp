@@ -908,7 +908,7 @@ void SmartDrivers::Init(const Pin driverSelectPins[NumDirectDrivers], size_t num
 	numTmc2660Drivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
 
 	// Make sure the ENN pins are high
-	SetPinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
 
 	// The pins are already set up for SPI in the pins table
 	SetPinFunction(TMC2660MosiPin, TMC2660PeriphMode);
@@ -967,7 +967,7 @@ void SmartDrivers::Init(const Pin driverSelectPins[NumDirectDrivers], size_t num
 // Shut down the drivers and stop any related interrupts. Don't call Spin() again after calling this as it may re-enable them.
 void SmartDrivers::Exit() noexcept
 {
-	digitalWrite(GlobalTmc2660EnablePin, HIGH);
+	digitalWrite(GlobalTmcEnablePin, HIGH);
 	NVIC_DisableIRQ(TMC2660_SPI_IRQn);
 	driversState = DriversState::noPower;
 }
@@ -1138,7 +1138,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 
 				if (allInitialised)
 				{
-					digitalWrite(GlobalTmc2660EnablePin, LOW);
+					digitalWrite(GlobalTmcEnablePin, LOW);
 					driversState = DriversState::ready;
 				}
 			}
@@ -1157,7 +1157,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 	}
 	else if (driversState != DriversState::noPower)
 	{
-		digitalWrite(GlobalTmc2660EnablePin, HIGH);			// disable the drivers
+		digitalWrite(GlobalTmcEnablePin, HIGH);			// disable the drivers
 		driversState = DriversState::noPower;
 		EndstopOrZProbe::SetDriversNotStalled(LocalDriversBitmap::MakeLowestNBits(MaxSmartDrivers));
 	}
@@ -1166,7 +1166,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 // This is called from the tick ISR, possibly while Spin (with powered either true or false) is being executed
 void SmartDrivers::TurnDriversOff() noexcept
 {
-	digitalWrite(GlobalTmc2660EnablePin, HIGH);				// disable the drivers
+	digitalWrite(GlobalTmcEnablePin, HIGH);				// disable the drivers
 	driversState = DriversState::noPower;
 	EndstopOrZProbe::SetDriversNotStalled(LocalDriversBitmap::MakeLowestNBits(MaxSmartDrivers));
 }
