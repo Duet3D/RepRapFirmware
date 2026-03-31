@@ -296,7 +296,7 @@ void SbcInterface::ExchangeData() noexcept
 				OutputBuffer *outBuf = reprap.GetModelResponse(nullptr, key.c_str(), flags.c_str());
 				if (outBuf != nullptr && outBuf->Length() > SbcTransferBufferSize - sizeof(PacketHeader) - sizeof(StringHeader))
 				{
-					if (!transfer.WriteObjectModel(nullptr))
+					if (transfer.WriteObjectModel(nullptr))
 					{
 						// Cannot store this object model response even if we wanted to
 						reprap.GetPlatform().MessageF(ErrorMessage, "Cannot store excessively long object model response, discarding request (total length %d, key %s, flags %s)", outBuf->Length(), key.c_str(), flags.c_str());
@@ -614,7 +614,26 @@ void SbcInterface::ExchangeData() noexcept
 				MessageType type;
 				if (transfer.ReadMessage(type, buf))
 				{
-					// FIXME Push flag is not supported yet
+					// Check if this is a targeted reply to a single channel whose code is executing on the SBC
+					// (e.g. a response to M121 retransmitted by DSF). If so, mark the GB as finished.
+					if ((type & PushFlag) == 0)
+					{
+						const Bitmap<uint32_t> destBits((uint32_t)type & (uint32_t)DestinationsMask);
+						for (size_t channel = 0; channel < NumGCodeChannels; channel++)
+						{
+							if (destBits.IsOnlyBitSet(channel))
+							{
+								GCodeBuffer *const gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel(channel));
+								if (gb != nullptr && gb->IsExecutingOnSbc())
+								{
+									gb->SetFinished(true);
+								}
+								break;
+							}
+						}
+					}
+
+					// Output message to the target
 					reprap.GetPlatform().Message(type, buf);
 				}
 				else
@@ -1325,11 +1344,17 @@ void SbcInterface::ExchangeData() noexcept
 						// That means we need to prepend it again before the full code is sent over to the SBC
 						String<MaxGCodeStringLength> code;
 						code.printf("N%" PRIu32 " %s", gb->GetExplicitLineNumber(), gb->DataStart());
-						gb->SetFinished(transfer.WriteDoCode(channel, code.c_str(), code.strlen()));
+						if (transfer.WriteDoCode(channel, code.c_str(), code.strlen()))
+						{
+							gb->SentToSbc();
+						}
 					}
 					else
 					{
-						gb->SetFinished(transfer.WriteDoCode(channel, gb->DataStart(), gb->DataLength()));
+						if (transfer.WriteDoCode(channel, gb->DataStart(), gb->DataLength()))
+						{
+							gb->SentToSbc();
+						}
 					}
 				}
 			}
@@ -1433,6 +1458,11 @@ void SbcInterface::InvalidateResources() noexcept
 		{
 			// Skip GBs that are not available due to the build configuration
 			break;
+		}
+
+		if (gb->IsExecutingOnSbc())
+		{
+			gb->SetFinished(true);
 		}
 
 		if (gb->IsWaitingForMacro())
