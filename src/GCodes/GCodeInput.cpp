@@ -81,7 +81,7 @@ size_t StreamGCodeInput::BytesCached() const noexcept
 // Dynamic G-code input class for caching codes from software-defined sources
 
 RegularGCodeInput::RegularGCodeInput(MessageType mt) noexcept
-	: mtype(mt), state(GCodeInputState::idle), writingPointer(0), readingPointer(0)
+	: mtype(mt), state(GCodeInputState::idle), writingFile(false), writingPointer(0), readingPointer(0)
 {
 }
 
@@ -115,6 +115,11 @@ size_t RegularGCodeInput::BufferSpaceLeft() const noexcept
 // Return true if an urgent command was handled and the buffer was reset
 bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 {
+	if (writingFile)
+	{
+		return false;
+	}
+
 	switch (state)
 	{
 		case GCodeInputState::idle:

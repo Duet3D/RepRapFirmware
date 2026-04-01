@@ -1329,7 +1329,12 @@ void GCodeBuffer::WaitForAcknowledgement(uint32_t seq) noexcept
 
 bool GCodeBuffer::OpenFileToWrite(const char *_ecv_array directory, const char *_ecv_array fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept
 {
-	return NOT_BINARY_AND(stringParser.OpenFileToWrite(directory, fileName, size, binaryWrite, fileCRC32));
+	if (NOT_BINARY_AND(stringParser.OpenFileToWrite(directory, fileName, size, binaryWrite, fileCRC32)))
+	{
+		normalInput->SetWritingFile(true);
+		return true;
+	}
+	return false;
 }
 
 bool GCodeBuffer::IsWritingFile() const noexcept
@@ -1340,6 +1345,10 @@ bool GCodeBuffer::IsWritingFile() const noexcept
 void GCodeBuffer::WriteToFile() noexcept
 {
 	IF_NOT_BINARY(stringParser.WriteToFile());
+	if (!IsWritingFile())
+	{
+		normalInput->SetWritingFile(false);
+	}
 }
 
 bool GCodeBuffer::IsWritingBinary() const noexcept
@@ -1355,6 +1364,7 @@ bool GCodeBuffer::WriteBinaryToFile(char b) noexcept
 void GCodeBuffer::FinishWritingBinary() noexcept
 {
 	IF_NOT_BINARY(stringParser.FinishWritingBinary());
+	normalInput->SetWritingFile(false);
 }
 
 #endif
