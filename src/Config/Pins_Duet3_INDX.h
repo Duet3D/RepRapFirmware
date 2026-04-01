@@ -133,7 +133,7 @@ constexpr size_t NumSerialChannels = NumUsbChannels + NUM_ASYNC_CHANNELS;		// Th
 // SerialUSB
 constexpr Pin UsbVBusPin = NoPin;					// tinyUsb doesn't need to detect Vbus
 
-constexpr size_t NumSdCards = 0;
+constexpr size_t NumSdCards = 1;					// not actually an SD card, this is the embedded filestore
 
 // Neopixel output
 constexpr Pin NeopixelOutPin = PortAPin(8);
@@ -161,7 +161,7 @@ constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioSspiTx = 3;				// high speed SPI in master mode
 constexpr DmaPriority DmacPrioSspiRx = 2;				// high speed SPI in master mode
-constexpr DmaPriority DmacPrioLed = 3;				// high speed SPI in master mode
+constexpr DmaPriority DmacPrioLed = 3;					// high speed SPI in master mode
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
@@ -213,7 +213,6 @@ constexpr Pin DiagPin = PortAPin(31);										// Diag/status LED pin
 constexpr Pin ActLedPin = PortAPin(30);										// Activity LED pin
 #endif
 
-
 constexpr bool DiagOnPolarity = false;
 constexpr bool ActOnPolarity = false;
 
@@ -232,6 +231,9 @@ constexpr SpiParameters SharedSpiParams =
 	.dmaPrioTx = DmacPrioSspiTx,
 	.dmaPrioRx = DmacPrioSspiRx,
 };
+
+// CAN buffer control
+constexpr Pin CanBufferDisablePin = PortBPin(31);				// DO NOT drive this pin low, may be jumpered to +3V3 on v0.1 boards
 
 // List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
 // The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
