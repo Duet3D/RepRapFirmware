@@ -13,7 +13,7 @@
             "MIMode": "gdb",
             "miDebuggerPath": "arm-none-eabi-gdb",
             "miDebuggerServerAddress": "localhost:3333",
-            "preLaunchTask": "Build Duet3_MB6HC",
+            "preLaunchTask": "Build Duet3_MB6HC - Debug",
             "setupCommands": [
                 {
                     "text": "-enable-pretty-printing",
@@ -57,7 +57,7 @@
             "MIMode": "gdb",
             "miDebuggerPath": "arm-none-eabi-gdb",
             "miDebuggerServerAddress": "localhost:3333",
-            "preLaunchTask": "Build Duet3_MB6XD",
+            "preLaunchTask": "Build Duet3_MB6XD - Debug",
             "setupCommands": [
                 {
                     "text": "-enable-pretty-printing",
@@ -101,7 +101,7 @@
             "MIMode": "gdb",
             "miDebuggerPath": "arm-none-eabi-gdb",
             "miDebuggerServerAddress": "localhost:3333",
-            "preLaunchTask": "Build Duet3Mini5plus",
+            "preLaunchTask": "Build Duet3Mini5plus - Debug",
             "setupCommands": [
                 {
                     "text": "-enable-pretty-printing",

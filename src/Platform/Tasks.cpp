@@ -178,7 +178,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array _ecv_null stk) noexcept
 
 #if !defined(DEBUG)		// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
 	// Check the integrity of the firmware by checking the firmware CRC
-	// If we have embedded files then the CRC is stored after those files, so we need to fetch the CRC address form the vector table
+	// If we have embedded files then the CRC is stored after those files, so we need to fetch the CRC address from the vector table
 	{
 		const char *_ecv_array firmwareStart = reinterpret_cast<const char *_ecv_array>(SCB->VTOR & 0xFFFFFF80u);
 		const char *_ecv_array firmwareCrcAddr = (const char *_ecv_array)exception_table

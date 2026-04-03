@@ -40,7 +40,7 @@ public:
 
 	unsigned int GetAxis() const noexcept { return axis; }
 
-#if HAS_STALL_DETECT && (SUPPORT_TMC2660 || SUPPORT_TMC51xx)
+#if HAS_STALL_DETECT && (SUPPORT_TMC2660 || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI)
 	static void SetDriversStalled(LocalDriversBitmap drivers) noexcept;
 	static void SetDriversNotStalled(LocalDriversBitmap drivers) noexcept;
 #endif
@@ -55,14 +55,14 @@ private:
 	EndstopOrZProbe *_ecv_from _ecv_null next;			// next endstop in linked list
 	uint8_t axis;										// which axis this endstop is on
 
-#if HAS_STALL_DETECT && (SUPPORT_TMC2660 || SUPPORT_TMC51xx)
+#if HAS_STALL_DETECT && (SUPPORT_TMC2660 || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI)
 	static LocalDriversBitmap stalledDrivers;				// used to track which drivers are reported as stalled, for stall detect endstops and stall detect Z probes
 #endif
 };
 
 #if HAS_STALL_DETECT
 
-# if SUPPORT_TMC2660 || SUPPORT_TMC51xx
+# if SUPPORT_TMC2660 || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
 
 // This is called by the TMC driver to tell us which drivers are stalled or not stalled
 inline void EndstopOrZProbe::SetDriversStalled(LocalDriversBitmap drivers) noexcept

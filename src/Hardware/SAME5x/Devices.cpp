@@ -94,8 +94,10 @@ static void SdhcInit() noexcept
 
 void DeviceInit() noexcept
 {
+#ifndef INDX
 	// Ensure the Ethernet PHY or WiFi module is held reset
 	SetPinMode(EspResetPin, OUTPUT_LOW);
+#endif
 
 #if HAS_HIGH_SPEED_SD
 	SdhcInit();

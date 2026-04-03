@@ -756,7 +756,7 @@ static bool sd_cm6_set_high_speed(uint8_t slot)
 	static __nocache uint8_t switch_status_array[SD_MMC_MEM_CNT][SD_SW_STATUS_BSIZE];
 	uint8_t * const switch_status = switch_status_array[slot];
 #else
-	uint8_t switch_status[SD_SW_STATUS_BSIZE];
+	uint8_t switch_status[SD_SW_STATUS_BSIZE] = {0};
 #endif
 
 	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];

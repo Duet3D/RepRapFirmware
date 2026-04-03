@@ -138,6 +138,8 @@ enum class BoardType : uint8_t
 	DuetM_10 = 1,
 #elif defined(PCCB_10)
 	PCCB_v10 = 1
+#elif defined(INDX)
+	Indx,
 #else
 # error Unknown board
 #endif

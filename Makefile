@@ -2,8 +2,36 @@
 # Builds firmware for various Duet boards
 
 # Cross-compiler toolchain (relative to project root)
-#CROSS_COMPILE ?= ../arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-
-CROSS_COMPILE ?= ../arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-
+ARM_GNU_TOOLCHAIN_VERSION ?= 15.2.rel1
+HOST_OS_RAW := $(shell uname -s)
+HOST_ARCH_RAW := $(shell uname -m)
+
+ifeq ($(HOST_OS_RAW),Linux)
+HOST_OS := linux
+else ifeq ($(HOST_OS_RAW),Darwin)
+HOST_OS := macos
+else
+HOST_OS := $(HOST_OS_RAW)
+endif
+
+ifeq ($(HOST_ARCH_RAW),aarch64)
+ARM_GNU_TOOLCHAIN_HOST_ARCH := aarch64
+else ifeq ($(HOST_ARCH_RAW),arm64)
+ARM_GNU_TOOLCHAIN_HOST_ARCH := aarch64
+else ifeq ($(HOST_ARCH_RAW),x86_64)
+ARM_GNU_TOOLCHAIN_HOST_ARCH := x86_64
+else ifeq ($(HOST_ARCH_RAW),amd64)
+ARM_GNU_TOOLCHAIN_HOST_ARCH := x86_64
+else
+ARM_GNU_TOOLCHAIN_HOST_ARCH := $(HOST_ARCH_RAW)
+endif
+
+CRC_APPENDER_DIR := $(abspath Tools/CrcAppender/$(HOST_OS)-$(ARM_GNU_TOOLCHAIN_HOST_ARCH))
+ifneq ($(wildcard $(CRC_APPENDER_DIR)/CrcAppender),)
+export PATH := $(CRC_APPENDER_DIR):$(PATH)
+endif
+
+CROSS_COMPILE ?= $(abspath ../arm-gnu-toolchain-$(ARM_GNU_TOOLCHAIN_VERSION)-$(ARM_GNU_TOOLCHAIN_HOST_ARCH)-arm-none-eabi/bin/arm-none-eabi-)
 export CROSS_COMPILE
 
 # Toolchain programs
@@ -16,9 +44,8 @@ OBJCOPY := $(CROSS_COMPILE)objcopy
 SIZE := $(CROSS_COMPILE)size
 export CC CXX AS AR LD OBJCOPY SIZE
 
-# Workspace root
-WORKSPACE := ..
-export WORKSPACE
+# External library root
+LIBRARIES_DIR ?= libraries
 
 # Quiet build support (Linux kernel style)
 # Use V=1 for verbose output
@@ -64,17 +91,20 @@ help:
 	$(Q)echo ""
 	$(Q)echo "Other targets:"
 	$(Q)echo "  all                 - Build all configurations"
+	$(Q)echo "  init-submodules     - Initialize/update pinned library submodules"
 	$(Q)echo "  clean               - Clean all build outputs"
 	$(Q)echo "  clean-all           - Clean all build outputs and libraries"
 	$(Q)echo "  clean-<config>      - Clean specific configuration"
 	$(Q)echo "  test-toolchain      - Verify toolchain is accessible"
 	$(Q)echo ""
 	$(Q)echo "Environment variables:"
+	$(Q)echo "  ARM_GNU_TOOLCHAIN_VERSION - Toolchain version (default: $(ARM_GNU_TOOLCHAIN_VERSION))"
 	$(Q)echo "  CROSS_COMPILE       - Toolchain prefix (default: $(CROSS_COMPILE))"
 	$(Q)echo "  V=1                 - Enable verbose build output"
 	$(Q)echo "  DEBUG=1             - Build with debug symbols (-g3 -Og)"
 	$(Q)echo ""
 	$(Q)echo "Examples:"
+	$(Q)echo "  make init-submodules                      # Prepare library submodules after clone"
 	$(Q)echo "  make Duet3_MB6HC                          # Build Duet 3 MB6HC firmware"
 	$(Q)echo "  make Duet3Mini5plus V=1                   # Build with verbose output"
 	$(Q)echo "  make Duet3_MB6HC DEBUG=1                  # Build with debug symbols"
@@ -98,102 +128,118 @@ test-toolchain:
 	$(Q)$(CROSS_COMPILE)gcc --version | head -n 1
 	$(Q)echo "Toolchain OK"
 
-# Build library dependencies
+SUBMODULE_PATHS := \
+	$(LIBRARIES_DIR)/CANlib \
+	$(LIBRARIES_DIR)/CoreN2G \
+	$(LIBRARIES_DIR)/FreeRTOS \
+	$(LIBRARIES_DIR)/RRFLibraries \
+	$(LIBRARIES_DIR)/WiFiSocketServerRTOS \
+	$(LIBRARIES_DIR)/LibTinyusb \
+	$(LIBRARIES_DIR)/LibMbedTls
+
+LIBRARY_ARTIFACTS := \
+	$(LIBRARIES_DIR)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS/libCoreN2G.a \
+	$(LIBRARIES_DIR)/CoreN2G/SAME5x_CAN_SDHC_USB_RTOS/libCoreN2G.a \
+	$(LIBRARIES_DIR)/CoreN2G/SAME5x_SDHC_USB_RTOS/libCoreN2G.a \
+	$(LIBRARIES_DIR)/CoreN2G/SAM4S_SDHC_USB_RTOS/libCoreN2G.a \
+	$(LIBRARIES_DIR)/RRFLibraries/SAME70_RTOS/libRRFLibraries.a \
+	$(LIBRARIES_DIR)/RRFLibraries/SAME51_RTOS/libRRFLibraries.a \
+	$(LIBRARIES_DIR)/RRFLibraries/SAM4S_RTOS/libRRFLibraries.a \
+	$(LIBRARIES_DIR)/FreeRTOS/SAME70/libFreeRTOS.a \
+	$(LIBRARIES_DIR)/FreeRTOS/SAME51/libFreeRTOS.a \
+	$(LIBRARIES_DIR)/FreeRTOS/SAM4S/libFreeRTOS.a \
+	$(LIBRARIES_DIR)/CANlib/SAME70_RTOS/libCANlib.a \
+	$(LIBRARIES_DIR)/CANlib/SAME51_RTOS/libCANlib.a \
+	$(LIBRARIES_DIR)/CANlib/SAM4S_RTOS/libCANlib.a \
+	$(LIBRARIES_DIR)/LibTinyusb/SAME70/libLibTinyusb.a \
+	$(LIBRARIES_DIR)/LibTinyusb/SAME5x/libLibTinyusb.a \
+	$(LIBRARIES_DIR)/LibMbedTls/SAME70/libLibMbedTls.a \
+	$(LIBRARIES_DIR)/LibMbedTls/SAME5x/libLibMbedTls.a
+
+# Initialize library submodules, including nested submodules such as LibTinyusb/src/tinyusb.
+# Keep this explicit so normal builds do not disturb local work inside the submodules.
+.PHONY: init-submodules
+init-submodules:
+	$(Q)echo "Initializing library submodules..."
+	$(Q)git submodule update --init --recursive -- $(SUBMODULE_PATHS)
+
+# Build library dependencies. Assumes submodules have already been initialized.
 .PHONY: build-libs
-build-libs:
+build-libs: $(LIBRARY_ARTIFACTS)
 	$(Q)echo "Building library dependencies..."
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/FreeRTOS
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CoreN2G
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/RRFLibraries
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibTinyusb
+	$(Q)echo "Library dependencies built successfully"
 
 # Common library build rules (to avoid duplicate recipes in board makefiles)
 # These are marked as .PHONY so Make always checks if they need rebuilding
-.PHONY: $(WORKSPACE)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS/libCoreN2G.a \
-        $(WORKSPACE)/CoreN2G/SAME5x_CAN_SDHC_USB_RTOS/libCoreN2G.a \
-        $(WORKSPACE)/CoreN2G/SAME5x_SDHC_USB_RTOS/libCoreN2G.a \
-        $(WORKSPACE)/CoreN2G/SAM4S_SDHC_USB_RTOS/libCoreN2G.a \
-        $(WORKSPACE)/RRFLibraries/SAME70_RTOS/libRRFLibraries.a \
-        $(WORKSPACE)/RRFLibraries/SAME51_RTOS/libRRFLibraries.a \
-        $(WORKSPACE)/RRFLibraries/SAM4S_RTOS/libRRFLibraries.a \
-        $(WORKSPACE)/FreeRTOS/SAME70/libFreeRTOS.a \
-        $(WORKSPACE)/FreeRTOS/SAME51/libFreeRTOS.a \
-        $(WORKSPACE)/FreeRTOS/SAM4S/libFreeRTOS.a \
-        $(WORKSPACE)/CANlib/SAME70_RTOS/libCANlib.a \
-        $(WORKSPACE)/CANlib/SAME51_RTOS/libCANlib.a \
-        $(WORKSPACE)/CANlib/SAM4S_RTOS/libCANlib.a \
-        $(WORKSPACE)/LibTinyusb/SAME70/libLibTinyusb.a \
-        $(WORKSPACE)/LibTinyusb/SAME5x/libLibTinyusb.a \
-        $(WORKSPACE)/LibMbedTls/SAME70/libLibMbedTls.a \
-        $(WORKSPACE)/LibMbedTls/SAME5x/libLibMbedTls.a
+.PHONY: $(LIBRARY_ARTIFACTS)
 
-$(WORKSPACE)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS/libCoreN2G.a:
+$(LIBRARIES_DIR)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS/libCoreN2G.a:
 	$(Q)echo "  BUILD   CoreN2G/SAME70_CAN_SDHC_USB_RTOS"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CoreN2G SAME70_CAN_SDHC_USB_RTOS
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/CoreN2G SAME70_CAN_SDHC_USB_RTOS
 
-$(WORKSPACE)/RRFLibraries/SAME70_RTOS/libRRFLibraries.a:
+$(LIBRARIES_DIR)/RRFLibraries/SAME70_RTOS/libRRFLibraries.a:
 	$(Q)echo "  BUILD   RRFLibraries/SAME70_RTOS"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/RRFLibraries SAME70_RTOS
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/RRFLibraries SAME70_RTOS
 
-$(WORKSPACE)/FreeRTOS/SAME70/libFreeRTOS.a:
+$(LIBRARIES_DIR)/FreeRTOS/SAME70/libFreeRTOS.a:
 	$(Q)echo "  BUILD   FreeRTOS/SAME70"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/FreeRTOS SAME70 FREERTOS_CONFIG_DIR="$(CURDIR)/src"
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/FreeRTOS SAME70 FREERTOS_CONFIG_DIR="$(CURDIR)/src"
 
-$(WORKSPACE)/CANlib/SAME70_RTOS/libCANlib.a:
+$(LIBRARIES_DIR)/CANlib/SAME70_RTOS/libCANlib.a:
 	$(Q)echo "  BUILD   CANlib/SAME70_RTOS"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CANlib SAME70_RTOS
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/CANlib SAME70_RTOS
 
-$(WORKSPACE)/LibTinyusb/SAME70/libLibTinyusb.a:
+$(LIBRARIES_DIR)/LibTinyusb/SAME70/libLibTinyusb.a:
 	$(Q)echo "  BUILD   LibTinyusb/SAME70"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibTinyusb SAME70
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/LibTinyusb SAME70
 
-$(WORKSPACE)/CoreN2G/SAME5x_CAN_SDHC_USB_RTOS/libCoreN2G.a:
+$(LIBRARIES_DIR)/CoreN2G/SAME5x_CAN_SDHC_USB_RTOS/libCoreN2G.a:
 	$(Q)echo "  BUILD   CoreN2G/SAME5x_CAN_SDHC_USB_RTOS"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CoreN2G SAME5x_CAN_SDHC_USB_RTOS
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/CoreN2G SAME5x_CAN_SDHC_USB_RTOS
 
-$(WORKSPACE)/RRFLibraries/SAME51_RTOS/libRRFLibraries.a:
+$(LIBRARIES_DIR)/RRFLibraries/SAME51_RTOS/libRRFLibraries.a:
 	$(Q)echo "  BUILD   RRFLibraries/SAME51_RTOS"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/RRFLibraries SAME51_RTOS
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/RRFLibraries SAME51_RTOS
 
-$(WORKSPACE)/FreeRTOS/SAME51/libFreeRTOS.a:
+$(LIBRARIES_DIR)/FreeRTOS/SAME51/libFreeRTOS.a:
 	$(Q)echo "  BUILD   FreeRTOS/SAME51"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/FreeRTOS SAME51 FREERTOS_CONFIG_DIR="$(CURDIR)/src"
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/FreeRTOS SAME51 FREERTOS_CONFIG_DIR="$(CURDIR)/src"
 
-$(WORKSPACE)/CANlib/SAME51_RTOS/libCANlib.a:
+$(LIBRARIES_DIR)/CANlib/SAME51_RTOS/libCANlib.a:
 	$(Q)echo "  BUILD   CANlib/SAME51_RTOS"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CANlib SAME51_RTOS
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/CANlib SAME51_RTOS
 
-$(WORKSPACE)/LibTinyusb/SAME5x/libLibTinyusb.a:
+$(LIBRARIES_DIR)/LibTinyusb/SAME5x/libLibTinyusb.a:
 	$(Q)echo "  BUILD   LibTinyusb/SAME5x"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibTinyusb SAME5x
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/LibTinyusb SAME5x
 
-$(WORKSPACE)/LibMbedTls/SAME70/libLibMbedTls.a:
+$(LIBRARIES_DIR)/LibMbedTls/SAME70/libLibMbedTls.a:
 	$(Q)echo "  BUILD   LibMbedTls/SAME70"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibMbedTls SAME70
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/LibMbedTls SAME70
 
-$(WORKSPACE)/LibMbedTls/SAME5x/libLibMbedTls.a:
+$(LIBRARIES_DIR)/LibMbedTls/SAME5x/libLibMbedTls.a:
 	$(Q)echo "  BUILD   LibMbedTls/SAME5x"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibMbedTls SAME5x
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/LibMbedTls SAME5x
 
-$(WORKSPACE)/CoreN2G/SAME5x_SDHC_USB_RTOS/libCoreN2G.a:
+$(LIBRARIES_DIR)/CoreN2G/SAME5x_SDHC_USB_RTOS/libCoreN2G.a:
 	$(Q)echo "  BUILD   CoreN2G/SAME5x_SDHC_USB_RTOS"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CoreN2G SAME5x_SDHC_USB_RTOS
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/CoreN2G SAME5x_SDHC_USB_RTOS
 
-$(WORKSPACE)/CoreN2G/SAM4S_SDHC_USB_RTOS/libCoreN2G.a:
+$(LIBRARIES_DIR)/CoreN2G/SAM4S_SDHC_USB_RTOS/libCoreN2G.a:
 	$(Q)echo "  BUILD   CoreN2G/SAM4S_SDHC_USB_RTOS"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CoreN2G SAM4S_SDHC_USB_RTOS
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/CoreN2G SAM4S_SDHC_USB_RTOS
 
-$(WORKSPACE)/RRFLibraries/SAM4S_RTOS/libRRFLibraries.a:
+$(LIBRARIES_DIR)/RRFLibraries/SAM4S_RTOS/libRRFLibraries.a:
 	$(Q)echo "  BUILD   RRFLibraries/SAM4S_RTOS"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/RRFLibraries SAM4S_RTOS
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/RRFLibraries SAM4S_RTOS
 
-$(WORKSPACE)/FreeRTOS/SAM4S/libFreeRTOS.a:
+$(LIBRARIES_DIR)/FreeRTOS/SAM4S/libFreeRTOS.a:
 	$(Q)echo "  BUILD   FreeRTOS/SAM4S"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/FreeRTOS SAM4S FREERTOS_CONFIG_DIR="$(CURDIR)/src"
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/FreeRTOS SAM4S FREERTOS_CONFIG_DIR="$(CURDIR)/src"
 
-$(WORKSPACE)/CANlib/SAM4S_RTOS/libCANlib.a:
+$(LIBRARIES_DIR)/CANlib/SAM4S_RTOS/libCANlib.a:
 	$(Q)echo "  BUILD   CANlib/SAM4S_RTOS"
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CANlib SAM4S_RTOS
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/CANlib SAM4S_RTOS
 
 # Include dependency makefiles
 -include Makefiles/Duet3_MB6HC.mk
@@ -219,10 +265,10 @@ clean:
 .PHONY: clean-all
 clean-all: clean
 	$(Q)echo "Cleaning library dependencies..."
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/FreeRTOS clean
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CoreN2G clean
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/RRFLibraries clean
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/CANlib clean
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibTinyusb clean
-	$(Q)$(MAKE) $(VERBOSE) -C $(WORKSPACE)/LibMbedTls clean
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/FreeRTOS clean
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/CoreN2G clean
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/RRFLibraries clean
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/CANlib clean
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/LibTinyusb clean
+	$(Q)$(MAKE) $(VERBOSE) -C $(LIBRARIES_DIR)/LibMbedTls clean
 	$(Q)echo "Clean all complete"

@@ -697,7 +697,6 @@ private:
 	size_t numActualDirectDrivers;
 #endif
 
-
 #if HAS_SMART_DRIVERS
 	size_t numSmartDrivers;											// the number of TMC drivers we have, the remaining are simple enable/step/dir drivers
 	LocalDriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers;

@@ -1,0 +1,28 @@
+[submodule "libraries/CANlib"]
+	path = libraries/CANlib
+	url = https://github.com/Duet3D/CANlib.git
+	branch = 3.7-ch
+[submodule "libraries/CoreN2G"]
+	path = libraries/CoreN2G
+	url = https://github.com/Duet3D/CoreN2G.git
+	branch = 3.7-ch
+[submodule "libraries/FreeRTOS"]
+	path = libraries/FreeRTOS
+	url = https://github.com/Duet3D/FreeRTOS.git
+	branch = 3.7-ch
+[submodule "libraries/RRFLibraries"]
+	path = libraries/RRFLibraries
+	url = https://github.com/Duet3D/RRFLibraries.git
+	branch = 3.7-ch
+[submodule "libraries/WiFiSocketServerRTOS"]
+	path = libraries/WiFiSocketServerRTOS
+	url = https://github.com/Duet3D/WiFiSocketServerRTOS.git
+	branch = main
+[submodule "libraries/LibTinyusb"]
+	path = libraries/LibTinyusb
+	url = https://github.com/Duet3D/LibTinyusb.git
+	branch = 3.7-ch
+[submodule "libraries/LibMbedTls"]
+	path = libraries/LibMbedTls
+	url = https://github.com/Duet3D/LibMbedTls.git
+	branch = master

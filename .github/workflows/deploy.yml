@@ -85,8 +85,15 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y libarchive-tools default-jre
-          curl -L -O "https://pkg.duet3d.com/eclipse-cpp-2025-09-R-linux-gtk-x86_64.tar.gz"
-          sudo bsdtar -x -f ./eclipse-cpp-2025-09-R-linux-gtk-x86_64.tar.gz -C /opt
+          ECLIPSE_RELEASE="2026-03"
+          case "$(dpkg --print-architecture)" in
+            amd64) ECLIPSE_HOST_ARCH="x86_64" ;;
+            arm64) ECLIPSE_HOST_ARCH="aarch64" ;;
+            *) echo "Unsupported architecture: $(dpkg --print-architecture)" >&2; exit 1 ;;
+          esac
+          ECLIPSE_ARCHIVE="eclipse-cpp-${ECLIPSE_RELEASE}-R-linux-gtk-${ECLIPSE_HOST_ARCH}.tar.gz"
+          curl -L -O "https://download.eclipse.org/technology/epp/downloads/release/${ECLIPSE_RELEASE}/R/${ECLIPSE_ARCHIVE}"
+          sudo bsdtar -x -f "./${ECLIPSE_ARCHIVE}" -C /opt
           echo "/opt/eclipse" >> $GITHUB_PATH
 
       - name: "Set up ARM GCC"
