@@ -243,10 +243,7 @@ namespace DataCollection
 
 		// Add timestamp
 		lastTransmissionTime = millis();
-		// AddDataToBuffer(lastTransmissionTime);
-		AddDataToBuffer(static_cast<uint32_t>(0));
-
-		const uint32_t now = StepTimer::GetTimerTicks();
+		AddDataToBuffer(lastTransmissionTime % 1000);
 
 		// Add X,Y,Z position to buffer
 		Move& move = reprap.GetMove();
@@ -255,19 +252,15 @@ namespace DataCollection
 		for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); axis++)
 		{
 			AddDataToBuffer((uint8_t)',');
-			AddDataToBuffer(coords[axis], 7, 2);
+			AddDataToBuffer(coords[axis], 7, 1);
 		}
 
 		// Add all extruder positions to buffer
-		static float last_e_positions[MaxExtruders] = {0};
-		for (size_t extruder = 0; extruder < reprap.GetGCodes().GetNumExtruders(); extruder++)
+		for (size_t ms = 0; ms < NumMovementSystems; ms++)
 		{
-			const size_t logicalExtruder = ExtruderToLogicalDrive(extruder);
-			const float microstep_pos = move.GetCurrentPosition(logicalExtruder, now);
-			const float pos = microstep_pos * move.GetMicrostepping(logicalExtruder) / move.DriveStepsPerMm(logicalExtruder);
+			const bool extruding = move.GetTotalExtrusionRate(ms) != 0;
 			AddDataToBuffer((uint8_t)',');
-			AddDataToBuffer(static_cast<uint32_t>(pos == last_e_positions[extruder] ? 0 : 1));
-			last_e_positions[extruder] = pos;
+			AddDataToBuffer(static_cast<uint32_t>(extruding ? 1 : 0));
 		}
 
 		// Add analog sensor
