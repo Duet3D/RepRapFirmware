@@ -2,14 +2,26 @@
 # Build RepRapFirmware headless using Eclipse CDT
 # Assumes 'eclipse' is on PATH and ArmGccPath is set or passed as first argument
 
-ECLIPSE_ARGS="--launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild"
+ECLIPSE_ARGS="--launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -no-indexer"
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 RRF_ROOT="$SCRIPT_DIR/.."
 LIBRARIES_ROOT="$RRF_ROOT/libraries"
-WORKSPACE="$RRF_ROOT/headless-workspace"
 
 ARM_GNU_TOOLCHAIN_VERSION="${ARM_GNU_TOOLCHAIN_VERSION:-15.2.rel1}"
+
+case "$(uname -s)" in
+    Linux)
+        HOST_OS="linux"
+        ;;
+    Darwin)
+        HOST_OS="macos"
+        ;;
+    *)
+        echo "Unsupported host OS: $(uname -s)" >&2
+        exit 1
+        ;;
+esac
 
 case "$(uname -m)" in
     aarch64|arm64)
@@ -26,8 +38,20 @@ esac
 
 DEFAULT_GCC_PATH="$RRF_ROOT/../arm-gnu-toolchain-${ARM_GNU_TOOLCHAIN_VERSION}-${ARM_GNU_TOOLCHAIN_HOST_ARCH}-arm-none-eabi/bin"
 ARM_GCC_PATH="${1:-${ArmGccPath:-$DEFAULT_GCC_PATH}}"
+CRC_APPENDER_DIR="$RRF_ROOT/Tools/CrcAppender/${HOST_OS}-${ARM_GNU_TOOLCHAIN_HOST_ARCH}"
 
 set -e
+
+if [ -x "$CRC_APPENDER_DIR/CrcAppender" ]; then
+    export PATH="$CRC_APPENDER_DIR:$PATH"
+fi
+
+if ! command -v CrcAppender >/dev/null 2>&1; then
+    echo "CrcAppender not found on PATH; expected bundled tool at $CRC_APPENDER_DIR/CrcAppender" >&2
+    exit 1
+fi
+
+WORKSPACE=$(mktemp -d "${TMPDIR:-/tmp}/rrf-headless-workspace.XXXXXX")
 
 trap 'echo "=== Cleaning up workspace ==="; rm -rf "$WORKSPACE"' EXIT
 
