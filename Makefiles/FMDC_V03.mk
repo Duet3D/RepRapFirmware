@@ -226,10 +226,9 @@ $(FMDC_V03_TARGET_ELF): $(FMDC_V03_OBJS) $(FMDC_V03_CANLIB_LIB) $(FMDC_V03_COREN
 $(FMDC_V03_TARGET_BIN): $(FMDC_V03_TARGET_ELF)
 	$(Q)echo "  OBJCOPY $@"
 	$(Q)$(OBJCOPY) -O binary $< $@
-	$(Q)if command -v CrcAppender >/dev/null 2>&1; then \
-		echo "  CRC     $@"; \
-		CrcAppender $@; \
-	fi
+	$(Q)command -v CrcAppender >/dev/null 2>&1 || { echo "CrcAppender not found on PATH" >&2; exit 1; }
+	$(Q)echo "  CRC     $@"
+	$(Q)CrcAppender $@
 
 # Generate UF2 file for USB bootloader
 $(FMDC_V03_TARGET_UF2): $(FMDC_V03_TARGET_BIN)

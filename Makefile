@@ -3,7 +3,16 @@
 
 # Cross-compiler toolchain (relative to project root)
 ARM_GNU_TOOLCHAIN_VERSION ?= 15.2.rel1
+HOST_OS_RAW := $(shell uname -s)
 HOST_ARCH_RAW := $(shell uname -m)
+
+ifeq ($(HOST_OS_RAW),Linux)
+HOST_OS := linux
+else ifeq ($(HOST_OS_RAW),Darwin)
+HOST_OS := macos
+else
+HOST_OS := $(HOST_OS_RAW)
+endif
 
 ifeq ($(HOST_ARCH_RAW),aarch64)
 ARM_GNU_TOOLCHAIN_HOST_ARCH := aarch64
@@ -15,6 +24,11 @@ else ifeq ($(HOST_ARCH_RAW),amd64)
 ARM_GNU_TOOLCHAIN_HOST_ARCH := x86_64
 else
 ARM_GNU_TOOLCHAIN_HOST_ARCH := $(HOST_ARCH_RAW)
+endif
+
+CRC_APPENDER_DIR := $(abspath Tools/CrcAppender/$(HOST_OS)-$(ARM_GNU_TOOLCHAIN_HOST_ARCH))
+ifneq ($(wildcard $(CRC_APPENDER_DIR)/CrcAppender),)
+export PATH := $(CRC_APPENDER_DIR):$(PATH)
 endif
 
 CROSS_COMPILE ?= $(abspath ../arm-gnu-toolchain-$(ARM_GNU_TOOLCHAIN_VERSION)-$(ARM_GNU_TOOLCHAIN_HOST_ARCH)-arm-none-eabi/bin/arm-none-eabi-)

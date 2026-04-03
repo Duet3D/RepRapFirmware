@@ -247,10 +247,9 @@ $(DUET3CAN0_TARGET_ELF): $(DUET3CAN0_OBJS) $(DUET3CAN0_CANLIB_LIB) $(DUET3CAN0_C
 $(DUET3CAN0_TARGET_BIN): $(DUET3CAN0_TARGET_ELF)
 	$(Q)echo "  OBJCOPY $@"
 	$(Q)$(OBJCOPY) -O binary $< $@
-	$(Q)if command -v CrcAppender >/dev/null 2>&1; then \
-		echo "  CRC     $@"; \
-		CrcAppender $@; \
-	fi
+	$(Q)command -v CrcAppender >/dev/null 2>&1 || { echo "CrcAppender not found on PATH" >&2; exit 1; }
+	$(Q)echo "  CRC     $@"
+	$(Q)CrcAppender $@
 
 # Compile C++ files
 $(DUET3CAN0_BUILD_DIR)/%.o: %.cpp

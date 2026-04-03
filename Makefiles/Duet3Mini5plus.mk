@@ -239,13 +239,9 @@ $(DUET3MINI_TARGET_ELF): $(DUET3MINI_OBJS) $(DUET3MINI_COREN2G_LIB) $(DUET3MINI_
 $(DUET3MINI_TARGET_BIN): $(DUET3MINI_TARGET_ELF)
 	$(Q)echo "  OBJCOPY $@"
 	$(Q)$(OBJCOPY) -O binary $< $@
-	@# Optionally run CrcAppender if available
-	@if command -v CrcAppender >/dev/null 2>&1; then \
-		echo "Appending CRC..."; \
-		CrcAppender $@; \
-	else \
-		echo "CrcAppender not found, skipping CRC append"; \
-	fi
+	$(Q)command -v CrcAppender >/dev/null 2>&1 || { echo "CrcAppender not found on PATH" >&2; exit 1; }
+	$(Q)echo "  CRC     $@"
+	$(Q)CrcAppender $@
 
 # Generate UF2 file for USB bootloader
 $(DUET3MINI_TARGET_UF2): $(DUET3MINI_TARGET_BIN)
