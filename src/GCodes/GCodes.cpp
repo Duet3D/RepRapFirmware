@@ -132,7 +132,7 @@ GCodes::GCodes(Platform& p) noexcept :
 #endif
 
 #ifdef SERIAL_USB2_DEVICE
-	usb2Input = new BufferedStreamGCodeInput(SERIAL_USB2_DEVICE, UsbMessage);
+	usb2Input = new BufferedStreamGCodeInput(SERIAL_USB2_DEVICE, Usb2Message);
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB2)] = new GCodeBuffer(GCodeChannel::USB2, usb2Input, fileInput, Usb2Message, Compatibility::Marlin);
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB2)] = nullptr;
