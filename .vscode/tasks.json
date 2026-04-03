@@ -2,30 +2,132 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build Duet3_MB6HC",
+            "label": "Build Duet3_MB6HC - Debug",
             "type": "shell",
-            "command": "make DEBUG=1 Duet3_MB6HC",
-            "problemMatcher": ["$gcc"],
+            "command": "make DEBUG=1 Duet3_MB6HC -j",
+            "problemMatcher": [
+                "$gcc"
+            ],
             "group": {
                 "kind": "build",
                 "isDefault": false
             }
         },
         {
-            "label": "Build Duet3_MB6XD",
+            "label": "Build Duet3_MB6HC - Release",
             "type": "shell",
-            "command": "make DEBUG=1 Duet3_MB6XD",
-            "problemMatcher": ["$gcc"],
+            "command": "make Duet3_MB6HC -j",
+            "problemMatcher": [
+                "$gcc"
+            ],
             "group": {
                 "kind": "build",
                 "isDefault": false
             }
         },
-                {
-            "label": "Build Duet3Mini5plus",
+        {
+            "label": "Build Duet3_MB6XD - Debug",
             "type": "shell",
-            "command": "make DEBUG=1 Duet3Mini5plus",
-            "problemMatcher": ["$gcc"],
+            "command": "make DEBUG=1 Duet3_MB6XD -j",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Build Duet3_MB6XD - Release",
+            "type": "shell",
+            "command": "make Duet3_MB6XD -j",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Build Duet3Mini5plus - Debug",
+            "type": "shell",
+            "command": "make DEBUG=1 Duet3Mini5plus -j",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Build Duet3Mini5plus - Release",
+            "type": "shell",
+            "command": "make Duet3Mini5plus -j",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Clean All",
+            "type": "shell",
+            "command": "make clean-all",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Clean Duet3_MB6HC",
+            "type": "shell",
+            "command": "make clean Duet3_MB6HC",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Clean Duet3_MB6XD",
+            "type": "shell",
+            "command": "make clean Duet3_MB6XD",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Clean Duet3Mini5plus",
+            "type": "shell",
+            "command": "make clean Duet3Mini5plus",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Init Submodules",
+            "type": "shell",
+            "command": "make init-submodules",
+            "problemMatcher": [
+                "$gcc"
+            ],
             "group": {
                 "kind": "build",
                 "isDefault": false

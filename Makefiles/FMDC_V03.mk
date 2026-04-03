@@ -10,15 +10,15 @@ FMDC_V03_TARGET_BIN := $(FMDC_V03_BUILD_DIR)/$(FMDC_V03_TARGET_NAME).bin
 FMDC_V03_TARGET_UF2 := $(FMDC_V03_BUILD_DIR)/$(FMDC_V03_TARGET_NAME).uf2
 FMDC_V03_TARGET_MAP := $(FMDC_V03_BUILD_DIR)/$(FMDC_V03_TARGET_NAME).map
 
-# Workspace root (relative paths from RepRapFirmware directory)
-WORKSPACE := ..
+# External library root
+LIBRARIES_DIR ?= libraries
 
 # Library dependencies
-FMDC_V03_FREERTOS_LIB := $(WORKSPACE)/FreeRTOS/SAME51/libFreeRTOS.a
-FMDC_V03_COREN2G_LIB := $(WORKSPACE)/CoreN2G/SAME5x_SDHC_USB_RTOS/libCoreN2G.a
-FMDC_V03_RRFLIBS_LIB := $(WORKSPACE)/RRFLibraries/SAME51_RTOS/libRRFLibraries.a
-FMDC_V03_CANLIB_LIB := $(WORKSPACE)/CANlib/SAME51_RTOS/libCANlib.a
-FMDC_V03_LIBTINYUSB_LIB := $(WORKSPACE)/LibTinyusb/SAME5x/libLibTinyusb.a
+FMDC_V03_FREERTOS_LIB := $(LIBRARIES_DIR)/FreeRTOS/SAME51/libFreeRTOS.a
+FMDC_V03_COREN2G_LIB := $(LIBRARIES_DIR)/CoreN2G/SAME5x_SDHC_USB_RTOS/libCoreN2G.a
+FMDC_V03_RRFLIBS_LIB := $(LIBRARIES_DIR)/RRFLibraries/SAME51_RTOS/libRRFLibraries.a
+FMDC_V03_CANLIB_LIB := $(LIBRARIES_DIR)/CANlib/SAME51_RTOS/libCANlib.a
+FMDC_V03_LIBTINYUSB_LIB := $(LIBRARIES_DIR)/LibTinyusb/SAME5x/libLibTinyusb.a
 
 # Source directories
 FMDC_V03_SRC_DIR := src
@@ -64,23 +64,23 @@ FMDC_V03_C_SRCS := $(FMDC_V03_LIBC_SRCS) $(FMDC_V03_OTHER_C_SRCS)
 
 # Include paths
 FMDC_V03_INCLUDES := \
-	-I$(WORKSPACE)/CoreN2G \
-	-I$(WORKSPACE)/CoreN2G/src \
-	-I$(WORKSPACE)/CoreN2G/src/SAME5x_C21 \
-	-I$(WORKSPACE)/CoreN2G/src/SAME5x_C21/SAME5x \
-	-I$(WORKSPACE)/CoreN2G/src/SAME5x_C21/SAME5x/hal/include \
-	-I$(WORKSPACE)/CoreN2G/src/SAME5x_C21/SAME5x/hal/utils/include \
-	-I$(WORKSPACE)/CoreN2G/src/SAME5x_C21/SAME5x/hri \
-	-I$(WORKSPACE)/CoreN2G/src/SAME5x_C21/SAME5x/Config \
-	-I$(WORKSPACE)/CoreN2G/src/atmel/SAME51_DFP/1.1.139/include \
-	-I$(WORKSPACE)/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include \
-	-I$(WORKSPACE)/FreeRTOS \
-	-I$(WORKSPACE)/FreeRTOS/src/include \
-	-I$(WORKSPACE)/FreeRTOS/src/portable/GCC/ARM_CM4F \
-	-I$(WORKSPACE)/RRFLibraries/src \
-	-I$(WORKSPACE)/LibTinyusb \
-	-I$(WORKSPACE)/CANlib/src \
-	-I$(WORKSPACE)/WiFiSocketServerRTOS/src/include \
+	-I$(LIBRARIES_DIR)/CoreN2G \
+	-I$(LIBRARIES_DIR)/CoreN2G/src \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAME5x_C21 \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAME5x_C21/SAME5x \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAME5x_C21/SAME5x/hal/include \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAME5x_C21/SAME5x/hal/utils/include \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAME5x_C21/SAME5x/hri \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAME5x_C21/SAME5x/Config \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/atmel/SAME51_DFP/1.1.139/include \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include \
+	-I$(LIBRARIES_DIR)/FreeRTOS \
+	-I$(LIBRARIES_DIR)/FreeRTOS/src/include \
+	-I$(LIBRARIES_DIR)/FreeRTOS/src/portable/GCC/ARM_CM4F \
+	-I$(LIBRARIES_DIR)/RRFLibraries/src \
+	-I$(LIBRARIES_DIR)/LibTinyusb \
+	-I$(LIBRARIES_DIR)/CANlib/src \
+	-I$(LIBRARIES_DIR)/WiFiSocketServerRTOS/src/include \
 	-I$(FMDC_V03_SRC_DIR) \
 	-I$(FMDC_V03_SRC_DIR)/Hardware/SAME5x \
 	-I$(FMDC_V03_SRC_DIR)/Networking \
@@ -152,11 +152,11 @@ FMDC_V03_CXXFLAGS := -c -std=gnu++17 \
 
 # Library search paths
 FMDC_V03_LIBPATHS := \
-	-L$(WORKSPACE)/LibTinyusb/SAME5x \
-	-L$(WORKSPACE)/CANlib/SAME51_RTOS \
-	-L$(WORKSPACE)/CoreN2G/SAME5x_SDHC_USB_RTOS \
-	-L$(WORKSPACE)/RRFLibraries/SAME51_RTOS \
-	-L$(WORKSPACE)/FreeRTOS/SAME51
+	-L$(LIBRARIES_DIR)/LibTinyusb/SAME5x \
+	-L$(LIBRARIES_DIR)/CANlib/SAME51_RTOS \
+	-L$(LIBRARIES_DIR)/CoreN2G/SAME5x_SDHC_USB_RTOS \
+	-L$(LIBRARIES_DIR)/RRFLibraries/SAME51_RTOS \
+	-L$(LIBRARIES_DIR)/FreeRTOS/SAME51
 
 # Linker flags (part 1 - before output)
 FMDC_V03_LDFLAGS1 := $(FMDC_V03_LIBPATHS) \

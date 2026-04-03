@@ -8,16 +8,16 @@ DUET3CAN0_TARGET_ELF := $(DUET3CAN0_BUILD_DIR)/$(DUET3CAN0_TARGET_NAME).elf
 DUET3CAN0_TARGET_BIN := $(DUET3CAN0_BUILD_DIR)/$(DUET3CAN0_TARGET_NAME).bin
 DUET3CAN0_TARGET_MAP := $(DUET3CAN0_BUILD_DIR)/$(DUET3CAN0_TARGET_NAME).map
 
-# Workspace root
-WORKSPACE := ..
+# External library root
+LIBRARIES_DIR ?= libraries
 
 # Library dependencies
-DUET3CAN0_FREERTOS_LIB := $(WORKSPACE)/FreeRTOS/SAME70/libFreeRTOS.a
-DUET3CAN0_COREN2G_LIB := $(WORKSPACE)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS/libCoreN2G.a
-DUET3CAN0_RRFLIBS_LIB := $(WORKSPACE)/RRFLibraries/SAME70_RTOS/libRRFLibraries.a
-DUET3CAN0_CANLIB_LIB := $(WORKSPACE)/CANlib/SAME70_RTOS/libCANlib.a
-DUET3CAN0_LIBTINYUSB_LIB := $(WORKSPACE)/LibTinyusb/SAME70/libLibTinyusb.a
-DUET3CAN0_MBEDTLS_LIB := $(WORKSPACE)/LibMbedTls/SAME70/libLibMbedTls.a
+DUET3CAN0_FREERTOS_LIB := $(LIBRARIES_DIR)/FreeRTOS/SAME70/libFreeRTOS.a
+DUET3CAN0_COREN2G_LIB := $(LIBRARIES_DIR)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS/libCoreN2G.a
+DUET3CAN0_RRFLIBS_LIB := $(LIBRARIES_DIR)/RRFLibraries/SAME70_RTOS/libRRFLibraries.a
+DUET3CAN0_CANLIB_LIB := $(LIBRARIES_DIR)/CANlib/SAME70_RTOS/libCANlib.a
+DUET3CAN0_LIBTINYUSB_LIB := $(LIBRARIES_DIR)/LibTinyusb/SAME70/libLibTinyusb.a
+DUET3CAN0_MBEDTLS_LIB := $(LIBRARIES_DIR)/LibMbedTls/SAME70/libLibMbedTls.a
 
 # Source directories
 DUET3CAN0_SRC_DIR := src
@@ -78,28 +78,28 @@ DUET3CAN0_C_SRCS := $(shell find $(DUET3CAN0_SRC_DIR) -name '*.c' \
 
 # Include paths
 DUET3CAN0_INCLUDES := \
-	-I$(WORKSPACE)/LibMbedTls/include \
-	-I$(WORKSPACE)/LibMbedTls/library \
-	-I$(WORKSPACE)/LibMbedTls/configs \
-	-I$(WORKSPACE)/LibTinyusb \
-	-I$(WORKSPACE)/CoreN2G \
-	-I$(WORKSPACE)/CoreN2G/src \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70 \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/asf \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/asf/sam/drivers \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/asf/common/utils \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/preprocessor \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/header_files \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/cmsis/same70/include \
-	-I$(WORKSPACE)/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/SAME70 \
-	-I$(WORKSPACE)/FreeRTOS \
-	-I$(WORKSPACE)/FreeRTOS/src/include \
-	-I$(WORKSPACE)/FreeRTOS/src/portable/GCC/ARM_CM7/r0p1 \
-	-I$(WORKSPACE)/RRFLibraries/src \
-	-I$(WORKSPACE)/CANlib/src \
-	-I$(WORKSPACE)/WiFiSocketServerRTOS/src/include \
+	-I$(LIBRARIES_DIR)/LibMbedTls/include \
+	-I$(LIBRARIES_DIR)/LibMbedTls/library \
+	-I$(LIBRARIES_DIR)/LibMbedTls/configs \
+	-I$(LIBRARIES_DIR)/LibTinyusb \
+	-I$(LIBRARIES_DIR)/CoreN2G \
+	-I$(LIBRARIES_DIR)/CoreN2G/src \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70 \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/asf \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/asf/sam/drivers \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/asf/common/utils \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/preprocessor \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/header_files \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/cmsis/same70/include \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/SAME70 \
+	-I$(LIBRARIES_DIR)/FreeRTOS \
+	-I$(LIBRARIES_DIR)/FreeRTOS/src/include \
+	-I$(LIBRARIES_DIR)/FreeRTOS/src/portable/GCC/ARM_CM7/r0p1 \
+	-I$(LIBRARIES_DIR)/RRFLibraries/src \
+	-I$(LIBRARIES_DIR)/CANlib/src \
+	-I$(LIBRARIES_DIR)/WiFiSocketServerRTOS/src/include \
 	-I$(DUET3CAN0_SRC_DIR) \
 	-I$(DUET3CAN0_SRC_DIR)/Hardware/SAME70 \
 	-I$(DUET3CAN0_SRC_DIR)/Networking \
@@ -199,12 +199,12 @@ DUET3CAN0_LDFLAGS2 := \
 
 # Library search paths
 DUET3CAN0_LDLIBS := \
-	-L$(WORKSPACE)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS \
-	-L$(WORKSPACE)/RRFLibraries/SAME70_RTOS \
-	-L$(WORKSPACE)/FreeRTOS/SAME70 \
-	-L$(WORKSPACE)/CANlib/SAME70_RTOS \
-	-L$(WORKSPACE)/LibTinyusb/SAME70 \
-	-L$(WORKSPACE)/LibMbedTls/SAME70 \
+	-L$(LIBRARIES_DIR)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS \
+	-L$(LIBRARIES_DIR)/RRFLibraries/SAME70_RTOS \
+	-L$(LIBRARIES_DIR)/FreeRTOS/SAME70 \
+	-L$(LIBRARIES_DIR)/CANlib/SAME70_RTOS \
+	-L$(LIBRARIES_DIR)/LibTinyusb/SAME70 \
+	-L$(LIBRARIES_DIR)/LibMbedTls/SAME70 \
 	-lLibTinyusb \
 	-lLibMbedTls \
 	-lCoreN2G \
