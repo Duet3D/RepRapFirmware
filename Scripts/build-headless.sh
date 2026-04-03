@@ -9,7 +9,22 @@ RRF_ROOT="$SCRIPT_DIR/.."
 PROJECTS_ROOT="$SCRIPT_DIR/../.."
 WORKSPACE="$PROJECTS_ROOT/headless-workspace"
 
-DEFAULT_GCC_PATH="$PROJECTS_ROOT/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin"
+ARM_GNU_TOOLCHAIN_VERSION="${ARM_GNU_TOOLCHAIN_VERSION:-15.2.rel1}"
+
+case "$(uname -m)" in
+    aarch64|arm64)
+        ARM_GNU_TOOLCHAIN_HOST_ARCH="aarch64"
+        ;;
+    x86_64|amd64)
+        ARM_GNU_TOOLCHAIN_HOST_ARCH="x86_64"
+        ;;
+    *)
+        echo "Unsupported host architecture: $(uname -m)" >&2
+        exit 1
+        ;;
+esac
+
+DEFAULT_GCC_PATH="$PROJECTS_ROOT/arm-gnu-toolchain-${ARM_GNU_TOOLCHAIN_VERSION}-${ARM_GNU_TOOLCHAIN_HOST_ARCH}-arm-none-eabi/bin"
 ARM_GCC_PATH="${1:-${ArmGccPath:-$DEFAULT_GCC_PATH}}"
 
 set -e

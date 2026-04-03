@@ -2,8 +2,23 @@
 # Builds firmware for various Duet boards
 
 # Cross-compiler toolchain (relative to project root)
-#CROSS_COMPILE ?= ../arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-
-CROSS_COMPILE ?= ../arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-
+ARM_GNU_TOOLCHAIN_VERSION ?= 15.2.rel1
+HOST_ARCH_RAW := $(shell uname -m)
+
+ifeq ($(HOST_ARCH_RAW),aarch64)
+ARM_GNU_TOOLCHAIN_HOST_ARCH := aarch64
+else ifeq ($(HOST_ARCH_RAW),arm64)
+ARM_GNU_TOOLCHAIN_HOST_ARCH := aarch64
+else ifeq ($(HOST_ARCH_RAW),x86_64)
+ARM_GNU_TOOLCHAIN_HOST_ARCH := x86_64
+else ifeq ($(HOST_ARCH_RAW),amd64)
+ARM_GNU_TOOLCHAIN_HOST_ARCH := x86_64
+else
+ARM_GNU_TOOLCHAIN_HOST_ARCH := $(HOST_ARCH_RAW)
+endif
+
+#CROSS_COMPILE ?= ../arm-gnu-toolchain-13.2.Rel1-$(ARM_GNU_TOOLCHAIN_HOST_ARCH)-arm-none-eabi/bin/arm-none-eabi-
+CROSS_COMPILE ?= ../arm-gnu-toolchain-$(ARM_GNU_TOOLCHAIN_VERSION)-$(ARM_GNU_TOOLCHAIN_HOST_ARCH)-arm-none-eabi/bin/arm-none-eabi-
 export CROSS_COMPILE
 
 # Toolchain programs
@@ -70,6 +85,7 @@ help:
 	$(Q)echo "  test-toolchain      - Verify toolchain is accessible"
 	$(Q)echo ""
 	$(Q)echo "Environment variables:"
+	$(Q)echo "  ARM_GNU_TOOLCHAIN_VERSION - Toolchain version (default: $(ARM_GNU_TOOLCHAIN_VERSION))"
 	$(Q)echo "  CROSS_COMPILE       - Toolchain prefix (default: $(CROSS_COMPILE))"
 	$(Q)echo "  V=1                 - Enable verbose build output"
 	$(Q)echo "  DEBUG=1             - Build with debug symbols (-g3 -Og)"
