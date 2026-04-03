@@ -174,7 +174,14 @@ GCodeResult GCodes::CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) 
 // Handle M598
 GCodeResult GCodes::SyncMovementSystems(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	return (DoSync(gb)) ? GCodeResult::ok : GCodeResult::notFinished;
+	if (!DoSync(gb))
+	{
+		return GCodeResult::notFinished;
+	}
+
+	GCodeResult result = GCodeResult::ok;
+	gb.LatestMachineState().RetrieveStateMachineResult(gb, reply, result);
+	return result;
 }
 
 // Handle M606

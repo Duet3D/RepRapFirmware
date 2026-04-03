@@ -160,6 +160,7 @@ void GCodeBuffer::Init() noexcept
 	overflowed = timerRunning = false;
 #if SUPPORT_ASYNC_MOVES
 	syncState = SyncState::running;
+	syncPointKey = 0;
 #endif
 }
 
@@ -1118,6 +1119,8 @@ void GCodeBuffer::ClosePrintFile() noexcept
 		}
 #endif
 	}
+
+	Init();
 }
 
 #if HAS_SBC_INTERFACE

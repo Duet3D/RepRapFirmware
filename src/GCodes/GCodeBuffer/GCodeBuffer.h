@@ -322,6 +322,7 @@ public:
 #if SUPPORT_ASYNC_MOVES
 	enum class SyncState { running, syncing, synced } ;
 	SyncState syncState = SyncState::running;
+	uint32_t syncPointKey = 0;
 #endif
 
 protected:

@@ -3365,11 +3365,14 @@ void GCodes::AbortPrint(GCodeBuffer& gb) noexcept
 		GCodeBuffer* otherGb = (gb.GetChannel() == GCodeChannel::File) ? _ecv_not_null(File2GCode()) : _ecv_not_null(FileGCode());
 		if (otherGb->IsDoingFile() && (!otherGb->IsDoingFileMacro() || otherGb->LatestMachineState().CanRestartMacro()))
 		{
-			(void)otherGb->AbortFile(true);		// stop processing commands from the other file reader too
+			(void)otherGb->AbortFile(true); // stop processing commands from the other file reader too
 		}
 #endif
 		StopPrint(nullptr, StopPrintReason::abort);
-		gb.Init();								// invalidate the file channel here as the other one may be still busy (possibly in a macro)
+		FileGCode()->Init(); // forcibly clear any executing command/sync state after the print has been stopped
+#if SUPPORT_ASYNC_MOVES
+		File2GCode()->Init();
+#endif
 	}
 }
 
@@ -5571,6 +5574,99 @@ bool GCodes::IsAxisFree(unsigned int axis) const noexcept
 	return true;
 }
 
+namespace
+{
+	constexpr uint32_t SyncPointHashOffset = 2166136261u;
+	constexpr uint32_t SyncPointHashPrime = 16777619u;
+
+	const char* GetSyncStateName(GCodeBuffer::SyncState state) noexcept
+	{
+		switch (state)
+		{
+		case GCodeBuffer::SyncState::running:
+			return "running";
+		case GCodeBuffer::SyncState::syncing:
+			return "syncing";
+		case GCodeBuffer::SyncState::synced:
+			return "synced";
+		}
+
+		return "unknown";
+	}
+
+	void LogSyncState(GCodes& gcodes,
+					  const char* tag,
+					  const GCodeBuffer& thisGb,
+					  const GCodeBuffer& otherGb,
+					  uint32_t thisSyncPointKey) noexcept
+	{
+		const GCodeMachineState& thisMs = thisGb.CurrentFileMachineState();
+		const GCodeMachineState& otherMs = otherGb.CurrentFileMachineState();
+		reprap.GetPlatform().MessageF(LoggedGenericMessage,
+									  "M598 %s this=%s own=%u active=%u execAll=%u sync=%s key=%08" PRIx32
+									  " line=%" PRIu32 " fpos=%" PRIu32 " loop=%" PRIi32
+									  " other=%s own=%u active=%u execAll=%u sync=%s key=%08" PRIx32 " line=%" PRIu32
+									  " fpos=%" PRIu32 " loop=%" PRIi32 "\n",
+									  tag,
+									  thisGb.GetChannel().ToString(),
+									  (unsigned int)thisGb.GetOwnQueueNumber(),
+									  (unsigned int)thisGb.GetActiveQueueNumber(),
+									  thisGb.ExecutingAll(),
+									  GetSyncStateName(thisGb.syncState),
+									  thisSyncPointKey,
+									  thisMs.lineNumber,
+									  (uint32_t)thisMs.fpos,
+									  thisMs.GetIterations(),
+									  otherGb.GetChannel().ToString(),
+									  (unsigned int)otherGb.GetOwnQueueNumber(),
+									  (unsigned int)otherGb.GetActiveQueueNumber(),
+									  otherGb.ExecutingAll(),
+									  GetSyncStateName(otherGb.syncState),
+									  otherGb.syncPointKey,
+									  otherMs.lineNumber,
+									  (uint32_t)otherMs.fpos,
+									  otherMs.GetIterations());
+	}
+
+	inline void AddToSyncPointHash(uint32_t& hash, uint32_t value) noexcept
+	{
+		hash ^= value;
+		hash *= SyncPointHashPrime;
+	}
+
+	bool AbortOnSyncPointMismatch(GCodes& gcodes, GCodeBuffer& gb, MovementSystemNumber ownQueue) noexcept
+	{
+		gb.LatestMachineState().SetError("different M598 sync points were reached by the two file readers");
+		gb.syncState = GCodeBuffer::SyncState::running;
+		gb.syncPointKey = 0;
+		gcodes.AbortPrint(gb);
+		return true;
+	}
+
+	uint32_t CalculateSyncPointKey(const GCodeBuffer& gb) noexcept
+	{
+		uint32_t hash = SyncPointHashOffset;
+
+		for (const GCodeMachineState* ms = &gb.CurrentFileMachineState(); ms != nullptr; ms = ms->GetPrevious())
+		{
+			AddToSyncPointHash(hash, static_cast<uint32_t>(ms->fpos));
+		}
+
+		for (const GCodeMachineState::BlockState* bs = &gb.CurrentFileMachineState().CurrentBlockState(); bs != nullptr;
+			 bs = bs->GetPrevious())
+		{
+			if (bs->GetType() == BlockType::loop)
+			{
+				AddToSyncPointHash(hash, static_cast<uint32_t>(bs->GetFilePosition()));
+				AddToSyncPointHash(hash, bs->GetIterations());
+			}
+		}
+
+		return hash;
+	}
+
+} // namespace
+
 // Synchronise motion systems and update user coordinates.
 // Return true if synced, false if we need to wait longer.
 bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
@@ -5580,8 +5676,19 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 		return LockAllMovementSystemsAndWaitForStandstill(thisGb);
 	}
 
+	// If the print is being cancelled (e.g. the DCS is still delivering a buffered M598 after a mismatch abort,
+	// but the other file reader is already idle), abandon any pending sync and succeed immediately so that this
+	// buffer can drain and become idle too.
+	if (IsCancellingPrint())
+	{
+		thisGb.syncState = GCodeBuffer::SyncState::running;
+		thisGb.syncPointKey = 0;
+		return true;
+	}
+
 	const MovementSystemNumber ownQueue = thisGb.GetOwnQueueNumber();
 	MovementState& ownMs = moveStates[ownQueue];
+	const uint32_t syncPointKey = CalculateSyncPointKey(thisGb);
 
 	if (!LockMovementSystemAndWaitForStandstill(thisGb, ownQueue))
 	{
@@ -5592,15 +5699,29 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 	switch (thisGb.syncState)
 	{
 	case GCodeBuffer::SyncState::running:
+		thisGb.syncPointKey = syncPointKey;
 		thisGb.syncState = GCodeBuffer::SyncState::syncing;				// tell other input channels that we are waiting for sync
-		//debugPrintf("Channel %u changed state to syncing, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+		LogSyncState(*this, "enter-syncing", thisGb, otherGb, thisGb.syncPointKey);
 		[[fallthrough]];
 	case GCodeBuffer::SyncState::syncing:
+		// if (!otherGb.OriginalMachineState().fileState.IsLive())
+		// {
+		// 	thisGb.syncState = GCodeBuffer::SyncState::running;
+		// 	synced = true;
+		// 	break;
+		// }
+
+		if ((otherGb.syncState == GCodeBuffer::SyncState::syncing ||
+			 otherGb.syncState == GCodeBuffer::SyncState::synced) &&
+			otherGb.syncPointKey != thisGb.syncPointKey)
+		{
+			LogSyncState(*this, "mismatch-while-syncing", thisGb, otherGb, thisGb.syncPointKey);
+			return AbortOnSyncPointMismatch(*this, thisGb, ownQueue);
+		}
+
 		if (otherGb.syncState == GCodeBuffer::SyncState::running)
 		{
-			// The other input channel has not caught up with this sync point yet, so wait for it.
-			// We don't infer that the other reader skipped the barrier from file position alone,
-			// because nested macros/conditionals can legitimately cause the readers to advance at different rates.
+			// The other input channel has not yet reached this same sync point, so wait for it.
 			break;
 		}
 
@@ -5609,7 +5730,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 
 		// Now that we no longer need to read axis coordinates from the other motion system, flag that we have finished syncing
 		thisGb.syncState = GCodeBuffer::SyncState::synced;
-		//debugPrintf("Channel %u changed state to synced, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+		LogSyncState(*this, "enter-synced", thisGb, otherGb, thisGb.syncPointKey);
 		[[fallthrough]];
 	case GCodeBuffer::SyncState::synced:
 		switch (otherGb.syncState)
@@ -5617,18 +5738,32 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 		case GCodeBuffer::SyncState::running:
 			// Other input channel has already left the barrier, so we can leave it too.
 			thisGb.syncState = GCodeBuffer::SyncState::running;
-			//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+			thisGb.syncPointKey = 0;
+			LogSyncState(*this, "leave-sync-other-running", thisGb, otherGb, thisGb.syncPointKey);
 			synced = true;
 			break;
 
 		case GCodeBuffer::SyncState::syncing:
+			if (otherGb.syncPointKey != thisGb.syncPointKey)
+			{
+				LogSyncState(*this, "mismatch-while-synced", thisGb, otherGb, thisGb.syncPointKey);
+				return AbortOnSyncPointMismatch(*this, thisGb, ownQueue);
+			}
+
 			// Other input channel hasn't noticed that we are fully synced yet
 			break;
 
 		case GCodeBuffer::SyncState::synced:
-			// Both input channels have reached the barrier, so we can continue immediately.
+			if (otherGb.syncPointKey != thisGb.syncPointKey)
+			{
+				LogSyncState(*this, "mismatch-both-synced", thisGb, otherGb, thisGb.syncPointKey);
+				return AbortOnSyncPointMismatch(*this, thisGb, ownQueue);
+			}
+
+			// Both input channels have reached the same barrier, so we can continue immediately.
 			thisGb.syncState = GCodeBuffer::SyncState::running;
-			//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+			thisGb.syncPointKey = 0;
+			LogSyncState(*this, "leave-sync-both-synced", thisGb, otherGb, thisGb.syncPointKey);
 			synced = true;
 			break;
 		}
