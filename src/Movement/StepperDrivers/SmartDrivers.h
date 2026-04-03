@@ -14,7 +14,7 @@
 #if SUPPORT_TMC22xx
 # include "TMC22xx.h"
 #endif
-#if SUPPORT_TMC51xx
+#if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
 # include "TMC51xx.h"
 #endif
 

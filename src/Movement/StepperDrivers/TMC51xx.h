@@ -10,7 +10,7 @@
 
 #include <RepRapFirmware.h>
 
-#if SUPPORT_TMC51xx
+#if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
 
 #include <Endstops/EndstopDefs.h>
 #include "DriverMode.h"

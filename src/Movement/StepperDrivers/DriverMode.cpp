@@ -15,7 +15,7 @@ static const char *_ecv_array const DriverModeStrings[] =
 	"random off-time",
 	"spreadCycle",
 	"stealthChop",
-#if SUPPORT_TMC51xx && (SUPPORT_CLOSED_LOOP || SUPPORT_PHASE_STEPPING)
+#if (SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI) && (SUPPORT_CLOSED_LOOP || SUPPORT_PHASE_STEPPING)
 	"direct",
 #endif
 	"unknown"
