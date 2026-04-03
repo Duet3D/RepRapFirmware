@@ -5580,7 +5580,10 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 		return LockAllMovementSystemsAndWaitForStandstill(thisGb);
 	}
 
-	if (!LockMovementSystemAndWaitForStandstill(thisGb, thisGb.GetOwnQueueNumber()))
+	const MovementSystemNumber ownQueue = thisGb.GetOwnQueueNumber();
+	MovementState& ownMs = moveStates[ownQueue];
+
+	if (!LockMovementSystemAndWaitForStandstill(thisGb, ownQueue))
 	{
 		return false;
 	}
@@ -5595,21 +5598,14 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 	case GCodeBuffer::SyncState::syncing:
 		if (otherGb.syncState == GCodeBuffer::SyncState::running)
 		{
-			// The other input channel has either not caught up with us, or it has skipped this sync point, or it is not running
-			if (otherGb.IsLaterThan(thisGb))
-			{
-				// Other input channel has skipped this sync point
-				GetMovementState(thisGb).UpdateCoordinatesFromLastKnownEndpoints();
-				thisGb.syncState = GCodeBuffer::SyncState::running;
-				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
-				synced = true;
-			}
-			// Else other input channel has not caught up with us yet, so wait for it
+			// The other input channel has not caught up with this sync point yet, so wait for it.
+			// We don't infer that the other reader skipped the barrier from file position alone,
+			// because nested macros/conditionals can legitimately cause the readers to advance at different rates.
 			break;
 		}
 
 		// If we get here then the other input channel is also syncing, so it's safe to use the machine axis coordinates of the axes it owns to update our user coordinates
-		GetMovementState(thisGb).UpdateCoordinatesFromLastKnownEndpoints();
+		ownMs.UpdateCoordinatesFromLastKnownEndpoints();
 
 		// Now that we no longer need to read axis coordinates from the other motion system, flag that we have finished syncing
 		thisGb.syncState = GCodeBuffer::SyncState::synced;
@@ -5619,13 +5615,10 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 		switch (otherGb.syncState)
 		{
 		case GCodeBuffer::SyncState::running:
-			// Other input channel has carried on. If we are the primary, we have finished syncing.
-			if (thisGb.LatestMachineState().Executing() || !otherGb.OriginalMachineState().fileState.IsLive() || otherGb.IsLaterThan(thisGb))
-			{
-				thisGb.syncState = GCodeBuffer::SyncState::running;
-				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
-				synced = true;
-			}
+			// Other input channel has already left the barrier, so we can leave it too.
+			thisGb.syncState = GCodeBuffer::SyncState::running;
+			//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+			synced = true;
 			break;
 
 		case GCodeBuffer::SyncState::syncing:
@@ -5633,23 +5626,10 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 			break;
 
 		case GCodeBuffer::SyncState::synced:
-			// We are fully synchronised now, so we can finish syncing
-			if (thisGb.LatestMachineState().Executing())
-			{
-				// We are the executing input stream, so we can carry on
-				thisGb.syncState = GCodeBuffer::SyncState::running;
-				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
-				synced = true;
-				break;
-			}
-
-			// We are not the primary, so wait for the other output channel to complete the current command
-			if (!otherGb.OriginalMachineState().fileState.IsLive() || otherGb.IsLaterThan(thisGb))
-			{
-				thisGb.syncState = GCodeBuffer::SyncState::running;
-				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
-				synced = true;
-			}
+			// Both input channels have reached the barrier, so we can continue immediately.
+			thisGb.syncState = GCodeBuffer::SyncState::running;
+			//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+			synced = true;
 			break;
 		}
 		break;
@@ -5658,7 +5638,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 	if (!synced)
 	{
 		// We must release the movement lock if syncing failed, so that if an input wants to pause the print it can get the lock
-		UnlockMovement(thisGb, thisGb.GetOwnQueueNumber());
+		UnlockMovement(thisGb, ownQueue);
 	}
 	return synced;
 }
