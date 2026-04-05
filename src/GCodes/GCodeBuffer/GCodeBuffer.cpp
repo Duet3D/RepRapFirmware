@@ -160,6 +160,7 @@ void GCodeBuffer::Init() noexcept
 	overflowed = timerRunning = false;
 #if SUPPORT_ASYNC_MOVES
 	syncState = SyncState::running;
+	syncPointId = 0;
 #endif
 }
 
@@ -438,6 +439,32 @@ bool GCodeBuffer::IsLaterThan(const GCodeBuffer& other) const noexcept
 	}
 
 	return oursIsLater;
+}
+
+// Compute a hash that uniquely identifies which sync point (M598) this reader is waiting at.
+// Incorporates: file position in the current file, macro stack depth, and iteration counts of enclosing while loops.
+uint32_t GCodeBuffer::ComputeSyncPointId() const noexcept
+{
+	// Start with the file position of the M598 command in whatever file is currently being read
+	uint32_t hash = PARSER_OPERATION(GetFilePosition());
+
+	// Mix in the stack depth to distinguish the same file position at different macro nesting levels
+	const unsigned int depth = GetStackDepth();
+	hash ^= depth * 0x9E3779B9u;			// golden ratio hash mixing
+
+	// Mix in the iteration counts of all enclosing while loops at each stack level
+	for (const GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+	{
+		for (const GCodeMachineState::BlockState *bs = &ms->CurrentBlockState(); bs != nullptr; bs = bs->GetPrevious())
+		{
+			if (bs->GetType() == BlockType::loop)
+			{
+				hash ^= bs->GetIterations() * 0x517CC1B7u + bs->GetFilePosition();		// mix in both iteration count and loop start position
+			}
+		}
+	}
+
+	return hash;
 }
 
 #endif

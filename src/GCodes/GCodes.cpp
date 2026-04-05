@@ -3361,15 +3361,19 @@ void GCodes::AbortPrint(GCodeBuffer& gb) noexcept
 	(void)gb.AbortFile(true);					// stop executing any files or macros that this GCodeBuffer is running
 	if (gb.IsFileChannel())						// if the current command came from a file being printed
 	{
-#if HAS_SBC_INTERFACE && SUPPORT_ASYNC_MOVES
+#if SUPPORT_ASYNC_MOVES
 		GCodeBuffer* otherGb = (gb.GetChannel() == GCodeChannel::File) ? _ecv_not_null(File2GCode()) : _ecv_not_null(FileGCode());
 		if (otherGb->IsDoingFile() && (!otherGb->IsDoingFileMacro() || otherGb->LatestMachineState().CanRestartMacro()))
 		{
+			AbortStateMachine(*otherGb);		// clean up state machine side effects for the other reader too
 			(void)otherGb->AbortFile(true);		// stop processing commands from the other file reader too
 		}
 #endif
 		StopPrint(nullptr, StopPrintReason::abort);
 		gb.Init();								// invalidate the file channel here as the other one may be still busy (possibly in a macro)
+#if SUPPORT_ASYNC_MOVES
+		otherGb->Init();						// also reset the other file reader to clear sync state and buffer state
+#endif
 	}
 }
 
@@ -4589,8 +4593,14 @@ void GCodes::StopPrint(GCodeBuffer *_ecv_null gbp, StopPrintReason reason) noexc
 		FileGCode()->ClosePrintFile();
 		UnlockAll(*FileGCode());
 # if SUPPORT_ASYNC_MOVES
+		FileGCode()->ExecuteAll();				// un-fork
+		FileGCode()->syncState = GCodeBuffer::SyncState::running;
+		FileGCode()->syncPointId = 0;
 		File2GCode()->ClosePrintFile();
 		UnlockAll(*File2GCode());
+		File2GCode()->ExecuteAll();				// un-fork File2 too, so stale M598 from SBC takes the fast path
+		File2GCode()->syncState = GCodeBuffer::SyncState::running;
+		File2GCode()->syncPointId = 0;
 # endif
 	}
 #endif
@@ -5592,16 +5602,37 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 	switch (thisGb.syncState)
 	{
 	case GCodeBuffer::SyncState::running:
+		thisGb.syncPointId = thisGb.ComputeSyncPointId();			// capture sync point identity (file position, stack depth, loop iterations)
 		thisGb.syncState = GCodeBuffer::SyncState::syncing;				// tell other input channels that we are waiting for sync
 		//debugPrintf("Channel %u changed state to syncing, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
 		[[fallthrough]];
 	case GCodeBuffer::SyncState::syncing:
 		if (otherGb.syncState == GCodeBuffer::SyncState::running)
 		{
+			// If the other reader is no longer doing a file, it will never reach a sync point - abort
+			if (!otherGb.IsDoingFile())
+			{
+				platform.MessageF(ErrorMessage, "Other file reader is no longer active while waiting at sync point, aborting print\n");
+				UnlockMovement(thisGb, ownQueue);
+				AbortPrint(thisGb);
+				return true;
+			}
 			// The other input channel has not caught up with this sync point yet, so wait for it.
 			// We don't infer that the other reader skipped the barrier from file position alone,
 			// because nested macros/conditionals can legitimately cause the readers to advance at different rates.
 			break;
+		}
+
+		// Both readers are syncing. Check that they reached the same sync point.
+		// The sync point ID incorporates the file position, macro stack depth, and while-loop iteration counts.
+		if (thisGb.syncPointId != otherGb.syncPointId)
+		{
+			// The two file readers reached different M598 barriers - abort the print
+			platform.MessageF(ErrorMessage, "File readers reached different sync points (IDs %" PRIu32 " and %" PRIu32 "), aborting print\n",
+								thisGb.syncPointId, otherGb.syncPointId);
+			UnlockMovement(thisGb, ownQueue);
+			AbortPrint(thisGb);
+			return true;		// return true so the caller does not loop; AbortPrint handles cleanup
 		}
 
 		// If we get here then the other input channel is also syncing, so it's safe to use the machine axis coordinates of the axes it owns to update our user coordinates
