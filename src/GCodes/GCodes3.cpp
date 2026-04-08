@@ -1037,55 +1037,56 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 // Handle G68
 GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+#if SUPPORT_ASYNC_MOVES
+	if (!gb.Executing())
+	{
+		return GCodeResult::ok;
+	}
+#endif
 	if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 	{
 		return GCodeResult::notFinished;
 	}
 
-#if SUPPORT_ASYNC_MOVES
-	if (gb.Executing())
-#endif
+	if (gb.CurrentFileMachineState().selectedPlane != 0)
 	{
-		if (gb.CurrentFileMachineState().selectedPlane != 0)
-		{
-			reply.copy("this command may only be used when the selected plane is XY");
-			return GCodeResult::error;
-		}
-
-		float angle, centreX, centreY;
-		gb.MustSee('R');
-		angle = gb.GetFValue();
-		gb.MustSee('A', 'X');
-		centreX = gb.GetFValue();
-		gb.MustSee('B', 'Y');
-		centreY = gb.GetFValue();
-
-		MovementState& ms = GetMovementState(gb);
-		ms.g68Centre[0] = centreX + GetWorkplaceOffset(gb, 0);
-		ms.g68Centre[1] = centreY + GetWorkplaceOffset(gb, 1);
-#if SUPPORT_ASYNC_MOVES
-		const float oldG68Angle = ms.g68Angle;
-#endif
-		if (gb.Seen('I'))
-		{
-			ms.g68Angle += angle;
-		}
-		else
-		{
-			ms.g68Angle = angle;
-		}
-#if SUPPORT_ASYNC_MOVES
-		if (ms.g68Angle != 0.0 && oldG68Angle == 0.0)
-		{
-			// We have just started doing coordinate rotation, so if we own axis letter X we need to own Y and vice versa
-			// Simplest is just to say we don't own either in the axis letters bitmap
-			ms.ReleaseAxisLetter('X');
-			ms.ReleaseAxisLetter('Y');
-		}
-#endif
-		UpdateCurrentUserPosition(gb);
-		reprap.MoveUpdated();
+		reply.copy("this command may only be used when the selected plane is XY");
+		return GCodeResult::error;
 	}
+
+	float angle, centreX, centreY;
+	gb.MustSee('R');
+	angle = gb.GetFValue();
+	gb.MustSee('A', 'X');
+	centreX = gb.GetFValue();
+	gb.MustSee('B', 'Y');
+	centreY = gb.GetFValue();
+
+	MovementState& ms = GetMovementState(gb);
+	ms.g68Centre[0] = centreX + GetWorkplaceOffset(gb, 0);
+	ms.g68Centre[1] = centreY + GetWorkplaceOffset(gb, 1);
+#if SUPPORT_ASYNC_MOVES
+	const float oldG68Angle = ms.g68Angle;
+#endif
+	if (gb.Seen('I'))
+	{
+		ms.g68Angle += angle;
+	}
+	else
+	{
+		ms.g68Angle = angle;
+	}
+#if SUPPORT_ASYNC_MOVES
+	if (ms.g68Angle != 0.0 && oldG68Angle == 0.0)
+	{
+		// We have just started doing coordinate rotation, so if we own axis letter X we need to own Y and vice versa
+		// Simplest is just to say we don't own either in the axis letters bitmap
+		ms.ReleaseAxisLetter('X');
+		ms.ReleaseAxisLetter('Y');
+	}
+#endif
+	UpdateCurrentUserPosition(gb);
+	reprap.MoveUpdated();
 	return GCodeResult::ok;
 }
 

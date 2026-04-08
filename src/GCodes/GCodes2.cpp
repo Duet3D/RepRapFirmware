@@ -292,11 +292,12 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						break;
 
 					case 2:
+						BREAK_IF_NOT_EXECUTING
 						result = GetSetWorkplaceCoordinates(gb, reply, false);
 						break;
 
 					case 20:
-						result = GetSetWorkplaceCoordinates(gb, reply, true);
+						BREAK_IF_NOT_EXECUTING
 						break;
 
 					default:
@@ -363,10 +364,17 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				const unsigned int newPlane = (unsigned int)code - 17;
 				if (newPlane != gb.LatestMachineState().selectedPlane)
 				{
-					if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
+#if SUPPORT_ASYNC_MOVES
+					if (executing)
 					{
-						return false;
+#endif
+						if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
+						{
+							return false;
+						}
+#if SUPPORT_ASYNC_MOVES
 					}
+#endif
 					gb.LatestMachineState().selectedPlane = newPlane;
 					reprap.InputsUpdated();
 				}
@@ -380,20 +388,20 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 28: // Home
+			BREAK_IF_NOT_EXECUTING
 			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 			{
 				return false;
 			}
-			BREAK_IF_NOT_EXECUTING
 			result = DoHome(gb, reply);
 			break;
 
 		case 29: // Grid-based bed probing
+			BREAK_IF_NOT_EXECUTING
 			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))			// do this first to make sure that a new grid isn't being defined
 			{
 				return false;
 			}
-			BREAK_IF_NOT_EXECUTING
 			{
 				int sparam;
 				if (gb.Seen('S'))
@@ -454,12 +462,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 30: // Z probe/manually set at a position and set that as point P
+			BREAK_IF_NOT_EXECUTING
 			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 			{
 				return false;
 			}
-
-			BREAK_IF_NOT_EXECUTING
 			if (reprap.GetMove().GetKinematics().AxesToHomeBeforeProbing().Intersects(~axesVirtuallyHomed))
 			{
 				reply.copy("Insufficient axes homed for bed probing");
@@ -477,11 +484,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 32: // Probe Z at multiple positions and generate the bed transform
+			BREAK_IF_NOT_EXECUTING
 			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 			{
 				return false;
 			}
-			BREAK_IF_NOT_EXECUTING
 
 #if SUPPORT_ASYNC_MOVES
 			AllocateAxes(gb, GetMovementState(gb), AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
@@ -496,11 +503,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 38: // Straight probe - move until either the probe is triggered or the commanded move ends
+			BREAK_IF_NOT_EXECUTING
 			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 			{
 				return false;
 			}
-			BREAK_IF_NOT_EXECUTING
 			result = StraightProbe(gb, reply);
 			break;
 
@@ -549,13 +556,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 69:	// Cancel coordinate rotation
+			BREAK_IF_NOT_EXECUTING
 			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 			{
 				return false;
 			}
-# if SUPPORT_ASYNC_MOVES
-			if (gb.Executing())
-# endif
 			{
 				MovementState& ms = GetMovementState(gb);
 				ms.g68Angle = ms.g68Centre[0] = ms.g68Centre[1] = 0.0;
