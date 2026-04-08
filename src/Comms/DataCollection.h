@@ -20,7 +20,7 @@ namespace DataCollection
 		size_t decimals;
 	};
 
-	constexpr uint32_t SendInterval = 10; // interval in ms between sending data
+	constexpr uint32_t SendInterval = 5; // interval in ms between sending data
 	constexpr size_t DefaultAuxChannel = 0;
 	constexpr AnalogSensorInfo AnalogSensors[] = {
 //			{.number=20, .decimals=0},
