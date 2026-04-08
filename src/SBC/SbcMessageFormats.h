@@ -36,6 +36,8 @@ constexpr size_t MaxSbcExpressionLength = 256;		// maximum length for incoming e
 constexpr uint32_t SpiTransferDelay = 25;			// default time to wait after a transfer before another one is started (in ms)
 constexpr uint32_t SpiFileOpenDelay = 5;			// same as above but when a file is open
 constexpr uint32_t SpiEventsRequired = 4;			// number of events required to happen in RRF before the delay is skipped
+constexpr uint32_t SpiBurstModeWindow = 50;			// duration of burst mode window in ms (re-armed on each urgent event)
+constexpr uint32_t SpiBurstModeDelay = 2;			// short delay between transfers during burst mode when no data was exchanged
 
 constexpr uint32_t SpiMaxRequestTime = 3000;		// maximum time to wait a blocking request (like macros or file requests, in ms)
 constexpr uint32_t SpiTransferTimeout = 500;		// maximum allowed delay between data exchanges during a full transfer (in ms)

@@ -705,7 +705,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			|| (code == 98 && gb.Seen('R'))
 			||  code == 112
 # if SUPPORT_ASYNC_MOVES
-			||  code == 121		// DSF only needs this to keep inputs[].active up-to-date for proper MMS sync
+			|| (code == 121 && numMotionSystemsUsed > 1)	// DSF only needs this to keep inputs[].active up-to-date for proper MMS sync
 # endif
 			|| (code >= 470 && code <= 472)
 			||  code == 503 || code == 505

@@ -412,8 +412,10 @@ void Platform::Init() noexcept
 
 	// Do any board-specific initialisation that needs to be done early and does not depend on the board revision
 
+#if HAS_SMART_DRIVERS
 	// Make sure the on-board drivers are disabled
 	SetPinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
+#endif
 
 	// Make sure any WiFi module is held in reset
 #if defined(DUET_NG)
