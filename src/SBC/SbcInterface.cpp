@@ -1407,8 +1407,11 @@ void SbcInterface::ExchangeData() noexcept
 
 void SbcInterface::InvalidateResources() noexcept
 {
-	rxPointer = txPointer = txEnd = 0;
-	sendBufferUpdate = true;
+	{
+		TaskCriticalSectionLocker locker;
+		rxPointer = txPointer = txEnd = 0;
+		sendBufferUpdate = true;
+	}
 
 	if (fileOperation != FileOperation::none)
 	{
@@ -1534,8 +1537,14 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 				const CodeHeader *codeHeader = reinterpret_cast<const CodeHeader*>(codeBuffer + readPointer);
 				readPointer += bufHeader->length;
 
-				RRF_ASSERT(bufHeader->length > 0);
-				RRF_ASSERT(readPointer <= SpiCodeBufferSize);
+				if (bufHeader->length == 0 || readPointer > SpiCodeBufferSize)
+				{
+					// Buffer corruption detected - reset the buffer and report
+					rxPointer = txPointer = txEnd = 0;
+					sendBufferUpdate = true;
+					reprap.GetPlatform().Message(ErrorMessage, "SBC code buffer corruption detected, buffer reset\n");
+					break;
+				}
 
 				if (bufHeader->isPending)
 				{
