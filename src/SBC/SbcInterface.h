@@ -75,7 +75,8 @@ private:
 	uint32_t numDisconnects, numTimeouts, numSbcTimeouts, lastTransferTime;
 
 	uint32_t maxDelayBetweenTransfers, maxFileOpenDelay, numMaxEvents;
-	bool skipNextDelay;
+	uint32_t burstModeWindow, burstModeDelay;					// configurable burst mode timing
+	uint32_t burstModeStartTime;								// millis() when burst mode was last (re)activated, 0 = inactive
 	std::atomic<bool> delaying;
 	volatile uint32_t numEvents;
 

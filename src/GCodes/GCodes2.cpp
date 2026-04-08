@@ -704,7 +704,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			||  code == 32 || (code >= 36 && code <= 39)
 			|| (code == 98 && gb.Seen('R'))
 			||  code == 112
-			||  code == 121
+# if SUPPORT_ASYNC_MOVES
+			|| (code == 121 && numMotionSystemsUsed > 1)	// DSF only needs this to keep inputs[].active up-to-date for proper MMS sync
+# endif
 			|| (code >= 470 && code <= 472)
 			||  code == 503 || code == 505
 			||  code == 540 || (code >= 550 && code <= 552) || (code >= 586 && code <= 589)
@@ -2205,6 +2207,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 121:
 				Pop(gb, true);
+#if HAS_SBC_INTERFACE && SUPPORT_ASYNC_MOVES
+				if (gb.IsBinary() && !gb.LatestMachineState().lastCodeFromSbc)
+				{
+					// When we get here M121 was retransmitted from DSF but the old stack level says the
+					// last code came from a text-based input. We must reset that here so that the SBC
+					// gets a response back first. The next code will reset lastCodeFromSbc anyway
+					gb.LatestMachineState().lastCodeFromSbc = true;
+				}
+#endif
 				break;
 
 			case 122:

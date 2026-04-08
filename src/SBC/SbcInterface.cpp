@@ -51,6 +51,7 @@ extern "C" [[noreturn]] void SBCTaskStart(void * pvParameters) noexcept
 
 SbcInterface::SbcInterface() noexcept : isConnected(false), numDisconnects(0), numTimeouts(0), numSbcTimeouts(0), lastTransferTime(0),
 	maxDelayBetweenTransfers(SpiTransferDelay), maxFileOpenDelay(SpiFileOpenDelay), numMaxEvents(SpiEventsRequired),
+	burstModeWindow(SpiBurstModeWindow), burstModeDelay(SpiBurstModeDelay), burstModeStartTime(0),
 	delaying(false), numEvents(0), reportPause(false), reportPauseWritten(false), printAborted(false),
 	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true),
 	fileMutex(), numOpenFiles(0), fileSemaphore(), fileOperation(FileOperation::none), fileOperationPending(false),
@@ -296,7 +297,7 @@ void SbcInterface::ExchangeData() noexcept
 				OutputBuffer *outBuf = reprap.GetModelResponse(nullptr, key.c_str(), flags.c_str());
 				if (outBuf != nullptr && outBuf->Length() > SbcTransferBufferSize - sizeof(PacketHeader) - sizeof(StringHeader))
 				{
-					if (!transfer.WriteObjectModel(nullptr))
+					if (transfer.WriteObjectModel(nullptr))
 					{
 						// Cannot store this object model response even if we wanted to
 						reprap.GetPlatform().MessageF(ErrorMessage, "Cannot store excessively long object model response, discarding request (total length %d, key %s, flags %s)", outBuf->Length(), key.c_str(), flags.c_str());
@@ -595,7 +596,7 @@ void SbcInterface::ExchangeData() noexcept
 					e.GetMessage(errorMessage.GetRef(), nullptr);
 					packetAcknowledged = transfer.WriteEvaluationError(channel, expression.c_str(), errorMessage.c_str());
 				}
-				skipNextDelay = true;
+				burstModeStartTime = millis();
 			}
 			else
 			{
@@ -614,7 +615,26 @@ void SbcInterface::ExchangeData() noexcept
 				MessageType type;
 				if (transfer.ReadMessage(type, buf))
 				{
-					// FIXME Push flag is not supported yet
+					// Check if this is a targeted reply to a single channel whose code is executing on the SBC
+					// (e.g. a response to M121 retransmitted by DSF). If so, mark the GB as finished.
+					if ((type & PushFlag) == 0)
+					{
+						const Bitmap<uint32_t> destBits((uint32_t)type & (uint32_t)DestinationsMask);
+						for (size_t channel = 0; channel < NumGCodeChannels; channel++)
+						{
+							if (destBits.IsOnlyBitSet(channel))
+							{
+								GCodeBuffer *const gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel(channel));
+								if (gb != nullptr && gb->IsExecutingOnSbc())
+								{
+									gb->SetFinished(true);
+								}
+								break;
+							}
+						}
+					}
+
+					// Output message to the target
 					reprap.GetPlatform().Message(type, buf);
 				}
 				else
@@ -892,6 +912,7 @@ void SbcInterface::ExchangeData() noexcept
 				e.GetMessage(expression.GetRef(), nullptr);
 				packetAcknowledged = transfer.WriteSetVariableError(channel, varName.c_str(), expression.c_str());
 			}
+			burstModeStartTime = millis();
 			break;
 		}
 
@@ -925,6 +946,7 @@ void SbcInterface::ExchangeData() noexcept
 			// Try to delete the variable again
 			WriteLockedPointer<VariableSet> vset = WriteLockedPointer<VariableSet>(nullptr, &gb->GetVariables());
 			vset.Ptr()->Delete(varName.c_str());
+			burstModeStartTime = millis();
 			break;
 		}
 
@@ -1099,16 +1121,31 @@ void SbcInterface::ExchangeData() noexcept
 	}
 
 	// Check if we can wait a short moment to reduce CPU load on the SBC
-	if (!skipNextDelay && numEvents < numMaxEvents && !fileOperationPending && fileOperation == FileOperation::none)
+	const bool inBurstMode = (burstModeStartTime != 0 && millis() - burstModeStartTime < burstModeWindow);
+	if (!inBurstMode && numEvents < numMaxEvents && !fileOperationPending && fileOperation == FileOperation::none)
 	{
+		// Normal mode: wait the full delay
 		delaying = true;
 		if (!TaskBase::TakeIndexed(NotifyIndices::SbcInterface, (numOpenFiles != 0) ? maxFileOpenDelay : maxDelayBetweenTransfers))
 		{
 			delaying = false;
 		}
 	}
+	else if (inBurstMode && numEvents < numMaxEvents && !fileOperationPending && fileOperation == FileOperation::none)
+	{
+		// Burst mode with no pending events: use a short delay to avoid busy-waiting
+		delaying = true;
+		if (!TaskBase::TakeIndexed(NotifyIndices::SbcInterface, burstModeDelay))
+		{
+			delaying = false;
+		}
+	}
+	// else: events pending or file operation in progress, proceed immediately
 	numEvents = 0;
-	skipNextDelay = false;
+	if (burstModeStartTime != 0 && millis() - burstModeStartTime >= burstModeWindow)
+	{
+		burstModeStartTime = 0;
+	}
 
 	// Send code replies and generic messages
 	if (!gcodeReply.IsEmpty())
@@ -1252,9 +1289,9 @@ void SbcInterface::ExchangeData() noexcept
 			MutexLocker gbLock(gb->mutex, SbcYieldTimeout);
 			if (gbLock.IsAcquired())
 			{
-				if (gb->GetChannel() != GCodeChannel::Daemon)
+				if (gb->GetChannel() != GCodeChannel::Daemon && (gb->IsMacroRequestPending() || gb->HasJustStartedMacro()))
 				{
-					skipNextDelay |= gb->IsMacroRequestPending() || gb->HasJustStartedMacro();
+					burstModeStartTime = millis();
 				}
 
 				// Handle file abort requests
@@ -1325,11 +1362,17 @@ void SbcInterface::ExchangeData() noexcept
 						// That means we need to prepend it again before the full code is sent over to the SBC
 						String<MaxGCodeStringLength> code;
 						code.printf("N%" PRIu32 " %s", gb->GetExplicitLineNumber(), gb->DataStart());
-						gb->SetFinished(transfer.WriteDoCode(channel, code.c_str(), code.strlen()));
+						if (transfer.WriteDoCode(channel, code.c_str(), code.strlen()))
+						{
+							gb->SentToSbc();
+						}
 					}
 					else
 					{
-						gb->SetFinished(transfer.WriteDoCode(channel, gb->DataStart(), gb->DataLength()));
+						if (transfer.WriteDoCode(channel, gb->DataStart(), gb->DataLength()))
+						{
+							gb->SentToSbc();
+						}
 					}
 				}
 			}
@@ -1435,6 +1478,11 @@ void SbcInterface::InvalidateResources() noexcept
 			break;
 		}
 
+		if (gb->IsExecutingOnSbc())
+		{
+			gb->SetFinished(true);
+		}
+
 		if (gb->IsWaitingForMacro())
 		{
 			gb->ResolveMacroRequest(true, false);
@@ -1502,9 +1550,22 @@ GCodeResult SbcInterface::HandleM576(GCodeBuffer& gb, const StringRef& reply) no
 		seen = true;
 	}
 
+	if (gb.Seen('B'))
+	{
+		burstModeWindow = gb.GetUIValue();
+		seen = true;
+	}
+
+	if (gb.Seen('D'))
+	{
+		burstModeDelay = gb.GetUIValue();
+		seen = true;
+	}
+
 	if (!seen)
 	{
-		reply.printf("Max delay between full SBC transfers %" PRIu32 "ms (%" PRIu32 "ms during file IO), max number of events before a delay is skipped: %" PRIu32, maxDelayBetweenTransfers, maxFileOpenDelay, numMaxEvents);
+		reply.printf("Max delay between full SBC transfers %" PRIu32 "ms (%" PRIu32 "ms during file IO), max events before skip: %" PRIu32 ", burst window: %" PRIu32 "ms, burst delay: %" PRIu32 "ms",
+			maxDelayBetweenTransfers, maxFileOpenDelay, numMaxEvents, burstModeWindow, burstModeDelay);
 	}
 	return GCodeResult::ok;
 }

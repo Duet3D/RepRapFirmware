@@ -412,8 +412,10 @@ void Platform::Init() noexcept
 
 	// Do any board-specific initialisation that needs to be done early and does not depend on the board revision
 
+#if HAS_SMART_DRIVERS
 	// Make sure the on-board drivers are disabled
 	SetPinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
+#endif
 
 	// Make sure any WiFi module is held in reset
 #if defined(DUET_NG)
@@ -2396,7 +2398,8 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 bool Platform::IsChanEnabled(size_t chan) const noexcept
 {
 #if NUM_ASYNC_CHANNELS != 0
-	return chan < FirstAuxChannel || (chan <= ARRAY_SIZE(auxDevices) && auxDevices[chan - FirstAuxChannel].IsEnabledForGCodeIo());
+	return chan < FirstAuxChannel ||
+		   (chan < NumSerialChannels && auxDevices[chan - FirstAuxChannel].IsEnabledForGCodeIo());
 #else
 	return false;
 #endif
@@ -2410,7 +2413,7 @@ bool Platform::IsChanRaw(size_t chan) const noexcept
 	}
 
 #if NUM_ASYNC_CHANNELS != 0
-	return chan > ARRAY_SIZE(auxDevices) || auxDevices[chan - FirstAuxChannel].IsRaw();
+	return chan >= NumSerialChannels || auxDevices[chan - FirstAuxChannel].IsRaw();
 #else
 	return true;
 #endif
