@@ -98,8 +98,8 @@ private:
 
 	void CheckStack(uint32_t calledFunctionStackUsage) const THROWS(GCodeException);
 
-	// The following must be declared 'noinline' because it allocates a large buffer on the stack and its caller is recursive
-	static void __attribute__((noinline)) StringConcat(ExpressionValue &val, ExpressionValue &val2) noexcept;
+	// The following must be declared 'noinline' because its caller is recursive
+	static void __attribute__((noinline)) Concat(ExpressionValue& val, ExpressionValue& val2) THROWS(GCodeException);
 
 	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException);
 	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException);

@@ -687,7 +687,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 					break;
 
 				case '^':
-					StringConcat(val, val2);
+					Concat(val, val2);
 					break;
 				}
 			}
@@ -695,15 +695,102 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 	} while (true);
 }
 
-// Concatenate val1 and val2 and assign the result to val1
-// This is written as a separate function because it needs a temporary string buffer, and its caller is recursive. Its declaration must be declared 'noinline'.
-/*static*/ void  ExpressionParser::StringConcat(ExpressionValue &val, ExpressionValue &val2) noexcept
+// Concatenate val1 and val2 and assign the result to val1.
+// When both operands are arrays, materialise a new heap array containing the elements of both arrays.
+// This is written as a separate function because its caller is recursive. Its declaration must be declared 'noinline'.
+/*static*/ void ExpressionParser::Concat(ExpressionValue& val, ExpressionValue& val2) THROWS(GCodeException)
 {
-    String<MaxStringExpressionLength> str;
-    val.AppendAsString(str.GetRef());
-    val2.AppendAsString(str.GetRef());
-    StringHandle sh(str.c_str());
-    val.SetStringHandle(sh);
+	const auto isArrayType = [](TypeCode type) noexcept -> bool
+	{ return type == TypeCode::HeapArray || type == TypeCode::ObjectModelArray; };
+
+	if (isArrayType(val.GetType()) && isArrayType(val2.GetType()))
+	{
+		const auto getArrayLength = [](const ExpressionValue& source) THROWS(GCodeException) -> size_t
+		{
+			switch (source.GetType())
+			{
+			case TypeCode::ObjectModelArray:
+			{
+				const ObjectModelArrayTableEntry* const entry =
+					_ecv_not_null(source.omVal->FindObjectModelArrayEntry(source.param & 0xFF));
+				ObjectExplorationContext context;
+				context.AddIndex(source.param >> 8);
+				ReadLocker locker(entry->lockPointer);
+				return entry->GetNumElements(source.omVal, context);
+			}
+
+			case TypeCode::HeapArray:
+			{
+				ReadLocker locker(Heap::heapLock);
+				return source.ahVal.GetNumElements();
+			}
+
+			default:
+				return 0;
+			}
+		};
+
+		const size_t len1 = getArrayLength(val);
+		const size_t len2 = getArrayLength(val2);
+		ArrayHandle ah;
+		{
+			WriteLocker locker(Heap::heapLock);
+			ah.Allocate(len1 + len2);
+		}
+
+		const auto appendArray = [&ah](const ExpressionValue& source, size_t length, size_t offset)
+									 THROWS(GCodeException)
+		{
+			switch (source.GetType())
+			{
+			case TypeCode::ObjectModelArray:
+			{
+				const ObjectModelArrayTableEntry* const entry =
+					_ecv_not_null(source.omVal->FindObjectModelArrayEntry(source.param & 0xFF));
+				ObjectExplorationContext context;
+				context.AddIndex(source.param >> 8);
+				ReadLocker arrayLock(entry->lockPointer);
+				const size_t count = min(length, entry->GetNumElements(source.omVal, context));
+				WriteLocker heapLock(Heap::heapLock);
+				for (size_t i = 0; i < count; ++i)
+				{
+					context.AddIndex(i);
+					ExpressionValue element(entry->GetElement(source.omVal, context));
+					ah.AssignElement(offset + i, element);
+					context.RemoveIndex();
+				}
+			}
+			break;
+
+			case TypeCode::HeapArray:
+			{
+				WriteLocker heapLock(Heap::heapLock);
+				const size_t count = min(length, source.ahVal.GetNumElements());
+				for (size_t i = 0; i < count; ++i)
+				{
+					ExpressionValue element;
+					(void)source.ahVal.GetElement(i, element);
+					ah.AssignElement(offset + i, element);
+				}
+			}
+			break;
+
+			default:
+				break;
+			}
+		};
+
+		appendArray(val, len1, 0);
+		appendArray(val2, len2, len1);
+		val.SetArrayHandle(ah);
+		return;
+	}
+
+	String<MaxStringExpressionLength> str;
+	val.AppendAsString(str.GetRef());
+	val2.AppendAsString(str.GetRef());
+	StringHandle sh(str.c_str());
+	val.SetStringHandle(sh);
 }
 
 bool ExpressionParser::ParseBoolean() THROWS(GCodeException)
