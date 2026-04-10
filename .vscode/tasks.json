@@ -38,6 +38,19 @@
                     "value": ""
                 }
             ]
+        },
+        {
+            "id": "duetHost",
+            "type": "promptString",
+            "description": "Duet host or IP",
+            "default": "duet3.local"
+        },
+        {
+            "id": "duetPassword",
+            "type": "promptString",
+            "description": "Duet HTTP password (leave empty if disabled)",
+            "password": true,
+            "default": ""
         }
     ],
     "tasks": [
@@ -185,5 +198,45 @@
                 "isDefault": false
             }
         },
+        {
+            "label": "Upload Selected Target (rr_upload)",
+            "type": "shell",
+            "command": "./Scripts/rr_upload_selected_target.sh",
+            "args": [
+                "${input:target}",
+                "${input:duetHost}",
+                "${input:duetPassword}"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Flash Firmware (M997)",
+            "type": "shell",
+            "command": "./Scripts/rr_send_gcode.sh",
+            "args": [
+                "${input:duetHost}",
+                "${input:duetPassword}",
+                "M997"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Build and Deploy to Target",
+            "type": "process",
+            "dependsOn": [
+                "Build Selected Target",
+                "Upload Selected Target (rr_upload)",
+                "Flash Firmware (M997)"
+            ],
+            "dependsOrder": "sequence"
+        }
     ]
 }
