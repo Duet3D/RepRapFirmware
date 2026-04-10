@@ -236,7 +236,8 @@
                 "Upload Selected Target (rr_upload)",
                 "Flash Firmware (M997)"
             ],
-            "dependsOrder": "sequence"
+            "dependsOrder": "sequence",
+            "problemMatcher": []
         }
     ]
 }
