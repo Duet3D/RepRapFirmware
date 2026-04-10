@@ -12,10 +12,11 @@
 #include "ExpressionParser.h"
 
 #include <GCodes/GCodes.h>
+#include <Networking/NetworkDefs.h>
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
 #include <Platform/Tasks.h>
-#include <Networking/NetworkDefs.h>
+#include <cstring>
 
 // Replace the default definition of THROW_INTERNAL_ERROR by one that gives line information
 #undef THROW_INTERNAL_ERROR
@@ -450,7 +451,11 @@ bool StringParser::CheckMetaCommand(const StringRef& reply) THROWS(GCodeExceptio
 	}
 	else
 	{
-		commandLetter = savedCommandLetter;		// restore this so that we can handle Fanuc-style GCode
+		// If ProcessConditionalGCode rewrote and decoded a command (e.g. via 'exec'), keep it.
+		if (commandLetter == 'E')
+		{
+			commandLetter = savedCommandLetter; // restore this so that we can handle Fanuc-style GCode
+		}
 	}
 
 	return b;
@@ -515,6 +520,17 @@ bool StringParser::ProcessConditionalGCode(const StringRef& reply, BlockType ski
 			{
 				ProcessEchoCommand(reply);
 				return true;
+			}
+			if (StringStartsWith(command, "exec"))
+			{
+			#if SUPPORT_ASYNC_MOVES
+				if (!gb.Executing())
+				{
+					return true;
+				}
+			#endif
+				ProcessExecCommand();
+				return ProcessConditionalGCode(reply, BlockType::plain, doingFile);
 			}
 			if (StringStartsWith(command, "skip"))
 			{
@@ -957,6 +973,43 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 		}
 	}
 #endif
+}
+
+void StringParser::ProcessExecCommand() THROWS(GCodeException)
+{
+	SkipWhiteSpace();
+	if (gb.buffer[readPointer] == 0)
+	{
+		throw ConstructParseException("expected expression after 'exec'");
+	}
+
+	ExpressionParser parser(
+		&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
+	const ExpressionValue val = parser.Parse();
+	readPointer = parser.GetEndptr() - gb.buffer;
+	SkipWhiteSpace();
+	if (gb.buffer[readPointer] != 0)
+	{
+		throw ConstructParseException("unexpected characters after expression");
+	}
+
+	String<MaxGCodeStringLength> cmd;
+	val.AppendAsString(cmd.GetRef());
+	const size_t cmdLen = strlen(cmd.c_str());
+	if (cmdLen == 0)
+	{
+		throw ConstructParseException("command string is empty");
+	}
+	if (cmdLen + 1 > gb.bufferLength)
+	{
+		throw GCodeException(&gb, (int)commandIndent + readPointer, "GCode command too long");
+	}
+
+	memcpy(gb.buffer, cmd.c_str(), cmdLen + 1);
+	gcodeLineEnd = cmdLen;
+	commandStart = 0;
+	seenExpression = (strchr(gb.buffer, '{') != nullptr);
+	DecodeCommand();
 }
 
 // Evaluate the condition that should follow 'if' or 'while'

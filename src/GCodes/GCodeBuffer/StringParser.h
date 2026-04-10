@@ -123,6 +123,7 @@ private:
 	void ProcessSetCommand() THROWS(GCodeException);
 	void ProcessAbortCommand(const StringRef& reply) noexcept;
 	void ProcessEchoCommand(const StringRef& reply) THROWS(GCodeException);
+	void ProcessExecCommand() THROWS(GCodeException);
 
 	bool EvaluateCondition() THROWS(GCodeException);
 
