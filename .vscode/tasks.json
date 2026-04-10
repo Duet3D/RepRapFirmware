@@ -230,7 +230,6 @@
         },
         {
             "label": "Build and Deploy to Target",
-            "type": "process",
             "dependsOn": [
                 "Build Selected Target",
                 "Upload Selected Target (rr_upload)",
