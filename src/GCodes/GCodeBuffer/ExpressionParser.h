@@ -98,16 +98,19 @@ private:
 
 	void CheckStack(uint32_t calledFunctionStackUsage) const THROWS(GCodeException);
 
-	// The following must be declared 'noinline' because its caller is recursive
-	static void __attribute__((noinline)) Concat(ExpressionValue& val, ExpressionValue& val2) THROWS(GCodeException);
-
 	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException);
 	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException);
+
+	// The following must be declared 'noinline' because they allocate a large buffer on the stack and their caller(s) may be recursive
+	void __attribute__((noinline)) Concat(ExpressionValue &val, ExpressionValue &val2) THROWS(GCodeException);
 	void __attribute__((noinline)) EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2, bool evaluate, bool isMax) const THROWS(GCodeException);
+	void __attribute__((noinline)) EvaluateTake(ExpressionValue& rslt, uint32_t arg, bool evaluate) const THROWS(GCodeException);
+	void __attribute__((noinline)) EvaluateDrop(ExpressionValue& rslt, uint32_t arg, bool evaluate) const THROWS(GCodeException);
 	void __attribute__((noinline)) ReadArrayFromFile(ExpressionValue& rslt, unsigned int offset, unsigned int length, char delimiter) const THROWS(GCodeException);
+	void __attribute__((noinline)) ApplyObjectModelArrayIndex(ExpressionValue& rslt, int indexCol, uint32_t indexValue, bool evaluate) THROWS(GCodeException);
+
 	void ReadArrayElementFromFile(ExpressionValue& rslt, LineReader& reader, char delimiter) const THROWS(GCodeException);
 	void GetNextOperand(ExpressionValue& operand, bool evaluate) THROWS(GCodeException);
-	void __attribute__((noinline)) ApplyObjectModelArrayIndex(ExpressionValue& rslt, int indexCol, uint32_t indexValue, bool evaluate) THROWS(GCodeException);
 
 	static bool TypeHasNoLiterals(TypeCode t) noexcept;
 
