@@ -10,6 +10,10 @@
 
 #if HAS_SBC_INTERFACE
 
+#if SUPPORTS_SBC_OVER_USB
+# include <Devices.h>
+#endif
+
 #include <GCodes/GCodeBuffer/ExpressionParser.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Heating/Heat.h>
@@ -50,10 +54,13 @@ extern "C" [[noreturn]] void SBCTaskStart(void * pvParameters) noexcept
 }
 
 SbcInterface::SbcInterface() noexcept : isConnected(false), numDisconnects(0), numTimeouts(0), numSbcTimeouts(0), lastTransferTime(0),
-	maxDelayBetweenTransfers(SpiTransferDelay), maxFileOpenDelay(SpiFileOpenDelay), numMaxEvents(SpiEventsRequired),
-	burstModeWindow(SpiBurstModeWindow), burstModeDelay(SpiBurstModeDelay), burstModeStartTime(0),
+	maxDelayBetweenTransfers(SbcTransferDelay), maxFileOpenDelay(SbcFileOpenDelay), numMaxEvents(SbcEventsRequired),
+	burstModeWindow(SbcBurstModeWindow), burstModeDelay(SbcBurstModeDelay), burstModeStartTime(0),
 	delaying(false), numEvents(0), reportPause(false), reportPauseWritten(false), printAborted(false),
 	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true),
+#if SUPPORTS_SBC_OVER_USB
+	pendingUsbDevice(nullptr), usbDeviceIndex(0),
+#endif
 	fileMutex(), numOpenFiles(0), fileSemaphore(), fileOperation(FileOperation::none), fileOperationPending(false),
 	gcodeReply(), gcodeReplyMutex()
 #ifdef TRACK_FILE_CODES
@@ -66,12 +73,49 @@ void SbcInterface::Init() noexcept
 {
 	fileMutex.Create("SBCFile");
 	gcodeReplyMutex.Create("SBCReply");
-	codeBuffer = (char *)new uint32_t[(SpiCodeBufferSize + 3)/4];
+	codeBuffer = (char *)new uint32_t[(SbcCodeBufferSize + 3)/4];
 	transfer.Init();
 	sbcTask = new Task<SBCTaskStackWords>();
 	sbcTask->Create(SBCTaskStart, "SBC", nullptr, TaskPriority::SbcPriority);
 	iapRamAvailable = (const char*)&_estack - Tasks::GetHeapTop();
 }
+
+#if SUPPORTS_SBC_OVER_USB
+
+// Blocking write that retries until all bytes are sent or timeout
+static bool ReliableUsbWrite(SerialCDC *dev, const uint8_t *data, size_t length, uint32_t timeoutMs) noexcept
+{
+	const uint32_t startTime = millis();
+	while (length > 0)
+	{
+		const size_t written = dev->write(data, length);
+		data += written;
+		length -= written;
+		if (length > 0)
+		{
+			if (millis() - startTime >= timeoutMs)
+			{
+				return false;
+			}
+			delay(1);
+		}
+	}
+	dev->flush();
+	return true;
+}
+
+// Send the USB SBC init response message reliably
+static void SendUsbInitMessage(SerialCDC *dev) noexcept
+{
+	char buf[128];
+	SafeSnprintf(buf, sizeof(buf),
+		"Switching to binary SBC mode\n"
+		"{\"protocol\":%u,\"rxBuffer\":%u,\"txBuffer\":%u}\n",
+		(unsigned)SbcProtocolVersion, (unsigned)SbcTransferBufferSize, (unsigned)SbcTransferBufferSize);
+	ReliableUsbWrite(dev, reinterpret_cast<const uint8_t *>(buf), strlen(buf), 2000);
+}
+
+#endif // SUPPORTS_SBC_OVER_USB
 
 [[noreturn]] void SbcInterface::TaskLoop() noexcept
 {
@@ -81,6 +125,26 @@ void SbcInterface::Init() noexcept
 	bool busy = false, transferComplete = false, hadTimeout = false, hadSbcTimeout = false, hadReset = false;
 	for (;;)
 	{
+#if SUPPORTS_SBC_OVER_USB
+		// Check for pending USB transport switch (requested by GCode system after M576.1)
+		if (pendingUsbDevice != nullptr)
+		{
+			SerialCDC *dev = pendingUsbDevice;
+			pendingUsbDevice = nullptr;
+
+			// Switch DataTransfer from SPI to USB
+			transfer.SwitchToUsb(dev, usbDeviceIndex);
+
+			// Send init message via standard CDC I/O (before direct mode)
+			SendUsbInitMessage(dev);
+			dev->WaitForTxEmpty(SbcTxDrainTimeout);
+
+			// Handover: host sends first packet to complete CDC stream's pending OUT transfer
+			dev->BeginDirectMode();
+			continue;		// restart the task loop
+		}
+#endif
+
 		// Try to exchange data with the SBC
 		transferComplete = hadTimeout = hadReset = false;
 		do
@@ -91,12 +155,21 @@ void SbcInterface::Init() noexcept
 			switch (state)
 			{
 			case TransferState::doingFullTransfer:
-				hadTimeout = !TaskBase::TakeIndexed(NotifyIndices::SbcInterface, isConnected ? SpiConnectionTimeout : TaskBase::TimeoutUnlimited);
-				hadSbcTimeout = hadTimeout && millis() - transferStartTime < SpiConnectionTimeout + SbcYieldTimeout;
+#if SUPPORTS_SBC_OVER_USB
+				// When USB SBC is supported but not connected over SPI, use a short timeout so we can poll for M576.1
+				if (!isConnected && transfer.GetTransportType() == SbcTransportType::spi)
+				{
+					hadTimeout = !TaskBase::TakeIndexed(NotifyIndices::SbcInterface, SbcConnectionTimeout);
+					hadSbcTimeout = false;
+					break;
+				}
+#endif
+				hadTimeout = !TaskBase::TakeIndexed(NotifyIndices::SbcInterface, isConnected ? SbcConnectionTimeout : TaskBase::TimeoutUnlimited);
+				hadSbcTimeout = hadTimeout && millis() - transferStartTime < SbcConnectionTimeout + SbcYieldTimeout;
 				break;
 			case TransferState::doingPartialTransfer:
-				hadTimeout = !TaskBase::TakeIndexed(NotifyIndices::SbcInterface, SpiTransferTimeout);
-				hadSbcTimeout = hadTimeout && millis() - transferStartTime < SpiTransferTimeout + SbcYieldTimeout;
+				hadTimeout = !TaskBase::TakeIndexed(NotifyIndices::SbcInterface, SbcTransferTimeout);
+				hadSbcTimeout = hadTimeout && millis() - transferStartTime < SbcTransferTimeout + SbcYieldTimeout;
 				break;
 			case TransferState::finishingTransfer:
 				busy = true;
@@ -125,11 +198,28 @@ void SbcInterface::Init() noexcept
 				{
 					numSbcTimeouts++;
 				}
-				reprap.GetPlatform().MessageF(NetworkInfoMessage, "Lost connection to SBC due to %s timeout\n", hadSbcTimeout ? "remote" : "local");
+#if SUPPORTS_SBC_OVER_USB
+				if (transfer.GetTransportType() == SbcTransportType::usb)
+				{
+					SerialCDC *dev = transfer.GetUsbDevice();
+					if (dev != nullptr && !dev->IsConnected())
+					{
+						reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to SBC (port closed)\n");
+					}
+					else
+					{
+						reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to SBC (timeout)\n");
+					}
+				}
+				else
+#endif
+				{
+					reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to SBC (timeout)\n");
+				}
 			}
 			else
 			{
-				reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to SBC due to connection reset\n");
+				reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to SBC (connection reset)\n");
 			}
 
 			// Invalidate local resources
@@ -139,6 +229,21 @@ void SbcInterface::Init() noexcept
 				// Let the main task invalidate resources before processing new data
 				TaskBase::TakeIndexed(NotifyIndices::SbcInterface, SbcYieldTimeout);
 			}
+
+#if SUPPORTS_SBC_OVER_USB
+			// On USB disconnect, exit direct mode and reinit the USB GCode device
+			if (transfer.GetTransportType() == SbcTransportType::usb)
+			{
+				if (SerialCDC *dev = transfer.GetUsbDevice())
+				{
+					dev->EndDirectMode();
+				}
+				reprap.GetPlatform().ReinitUsbDevice(usbDeviceIndex);
+				transfer.ResetConnection(true);
+
+				continue;		// restart the task loop
+			}
+#endif
 		}
 
 		// Deal with received data
@@ -147,7 +252,8 @@ void SbcInterface::Init() noexcept
 			if (!isConnected)
 			{
 				isConnected = true;
-				reprap.GetPlatform().Message(NetworkInfoMessage, "Connection to SBC established!\n");
+				reprap.GetPlatform().MessageF(NetworkInfoMessage, "Connection to SBC established over %s!\n",
+					transfer.GetTransportType() == SbcTransportType::usb ? "USB" : "SPI");
 			}
 
 			// Handle exchanged data and kick off the next transfer
@@ -156,7 +262,21 @@ void SbcInterface::Init() noexcept
 		}
 		else if (hadTimeout || hadReset)
 		{
-			// Reset the SPI connection if no data could be exchanged
+#if SUPPORTS_SBC_OVER_USB
+			// If USB transport failed, always exit direct mode and reset to SPI
+			if (transfer.GetTransportType() == SbcTransportType::usb)
+			{
+				if (SerialCDC *dev = transfer.GetUsbDevice())
+				{
+					dev->EndDirectMode();
+				}
+				reprap.GetPlatform().ReinitUsbDevice(usbDeviceIndex);
+				transfer.ResetConnection(true);
+
+				continue;
+			}
+#endif
+			// SPI: reset the connection if no data could be exchanged
 			transfer.ResetConnection(hadTimeout);
 		}
 	}
@@ -173,7 +293,7 @@ void SbcInterface::ExchangeData() noexcept
 		{
 			if (reprap.Debug(Module::SbcInterface))
 			{
-				debugPrintf("Error trying to read next SPI packet\n");
+				debugPrintf("Error trying to read next packet\n");
 			}
 			break;
 		}
@@ -248,7 +368,7 @@ void SbcInterface::ExchangeData() noexcept
 
 				// Make sure no existing codes are overwritten
 				uint16_t bufferedCodeSize = sizeof(BufferedCodeHeader) + packet->length;
-				if ((txEnd == 0 && bufferedCodeSize > max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer)) ||
+				if ((txEnd == 0 && bufferedCodeSize > max<uint16_t>(rxPointer, SbcCodeBufferSize - txPointer)) ||
 						(txEnd != 0 && bufferedCodeSize > rxPointer - txPointer))
 				{
 #if false
@@ -260,7 +380,7 @@ void SbcInterface::ExchangeData() noexcept
 				}
 
 				// Overlap if necessary
-				if (txPointer + bufferedCodeSize > SpiCodeBufferSize)
+				if (txPointer + bufferedCodeSize > SbcCodeBufferSize)
 				{
 					txEnd = txPointer;
 					txPointer = 0;
@@ -1169,7 +1289,7 @@ void SbcInterface::ExchangeData() noexcept
 		TaskCriticalSectionLocker locker;
 		if (!codeBufferAvailable || sendBufferUpdate)
 		{
-			const uint16_t bufferSpace = (txEnd == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
+			const uint16_t bufferSpace = (txEnd == 0) ? max<uint16_t>(rxPointer, SbcCodeBufferSize - txPointer) : rxPointer - txPointer;
 			sendBufferUpdate = !transfer.WriteCodeBufferUpdate(bufferSpace);
 		}
 	}
@@ -1438,6 +1558,15 @@ void SbcInterface::ExchangeData() noexcept
 				break;
 			}
 			case SbcRequest::StartIap:	// Start the IAP binary
+#if SUPPORTS_SBC_OVER_USB
+				// Cleanly shut down TinyUSB before IAP re-initializes the USB peripheral
+				// with its own bare-metal driver
+				if (transfer.GetTransportType() == SbcTransportType::usb)
+				{
+					serialUSB.end();
+					StopUsbTask();
+				}
+#endif
 				reprap.StartIap(nullptr);
 				break;
 			default:						// Other packet types are not supported while IAP is being written
@@ -1508,7 +1637,14 @@ void SbcInterface::InvalidateResources() noexcept
 void SbcInterface::Diagnostics(const StringRef& reply) noexcept
 {
 	reply.copy( "=== SBC interface ===");
-	transfer.Diagnostics(reply);
+	if (isConnected)
+	{
+		transfer.Diagnostics(reply);
+	}
+	else
+	{
+		reply.lcat("Not connected");
+	}
 	reply.lcatf("State: %d, disconnects: %" PRIu32 ", timeouts: %" PRIu32 " total, %" PRIu32 " by SBC, IAP RAM available 0x%05" PRIx32, (int)state, numDisconnects, numTimeouts, numSbcTimeouts, iapRamAvailable);
 	reply.lcatf("Buffer RX/TX: %d/%d-%d, open files: %u", (int)rxPointer, (int)txPointer, (int)txEnd, numOpenFiles);
 #ifdef TRACK_FILE_CODES
@@ -1518,14 +1654,40 @@ void SbcInterface::Diagnostics(const StringRef& reply) noexcept
 
 GCodeResult SbcInterface::HandleM576(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
+	if (gb.GetCommandFraction() == 1)
+	{
+#if SUPPORTS_SBC_OVER_USB
+		if (IsConnected())
+		{
+			reply.copy("SBC interface already connected");
+			return GCodeResult::error;
+		}
+		if (!gb.Seen('P'))
+		{
+			reply.copy("Protocol version parameter P required");
+			return GCodeResult::error;
+		}
+		const uint16_t protocolVersion = (uint16_t)gb.GetUIValue();
+		if (protocolVersion != SbcProtocolVersion)
+		{
+			reply.printf("Unsupported protocol version %u (expected %u)", protocolVersion, SbcProtocolVersion);
+			return GCodeResult::error;
+		}
+		return reprap.SwitchToUsbSbcMode(gb, reply);
+#else
+		reply.copy("USB SBC mode not supported on this board");
+		return GCodeResult::error;
+#endif
+	}
+
 	bool seen = false;
 
 	if (gb.Seen('S'))
 	{
 		uint32_t sParam = gb.GetUIValue();
-		if (sParam > SpiConnectionTimeout)
+		if (sParam > SbcConnectionTimeout)
 		{
-			reply.printf("SPI transfer delay must not exceed %" PRIu32 "ms", SpiConnectionTimeout);
+			reply.printf("SBC transfer delay must not exceed %" PRIu32 "ms", SbcConnectionTimeout);
 			return GCodeResult::error;
 		}
 		maxDelayBetweenTransfers = sParam;
@@ -1535,9 +1697,9 @@ GCodeResult SbcInterface::HandleM576(GCodeBuffer& gb, const StringRef& reply) no
 	if (gb.Seen('F'))
 	{
 		uint32_t fParam = gb.GetUIValue();
-		if (fParam > SpiConnectionTimeout)
+		if (fParam > SbcConnectionTimeout)
 		{
-			reply.printf("SPI transfer delay must not exceed %" PRIu32 "ms", SpiConnectionTimeout);
+			reply.printf("SBC transfer delay must not exceed %" PRIu32 "ms", SbcConnectionTimeout);
 			return GCodeResult::error;
 		}
 		maxFileOpenDelay = fParam;
@@ -1570,6 +1732,17 @@ GCodeResult SbcInterface::HandleM576(GCodeBuffer& gb, const StringRef& reply) no
 	return GCodeResult::ok;
 }
 
+#if SUPPORTS_SBC_OVER_USB
+
+void SbcInterface::RequestUsbSwitch(SerialCDC *dev, unsigned int usbDevIndex) noexcept
+{
+	pendingUsbDevice = dev;
+	usbDeviceIndex = usbDevIndex;
+	sbcTask->Give(NotifyIndices::SbcInterface);		// wake the SBC task directly, bypassing IsConnected() check in EventOccurred
+}
+
+#endif
+
 bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 {
 	if (gb.IsInvalidated() || gb.IsMacroFileClosed() || gb.IsMessageAcknowledged() ||
@@ -1596,7 +1769,7 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 				readPointer += bufHeader->length;
 
 				RRF_ASSERT(bufHeader->length > 0);
-				RRF_ASSERT(readPointer <= SpiCodeBufferSize);
+				RRF_ASSERT(readPointer <= SbcCodeBufferSize);
 
 				if (bufHeader->isPending)
 				{
@@ -1896,7 +2069,7 @@ bool SbcInterface::DoFileOperation(FileOperation f) noexcept
 		sbcTask->Give(NotifyIndices::SbcInterface);
 	}
 
-	const bool rslt = fileSemaphore.Take(SpiMaxRequestTime);
+	const bool rslt = fileSemaphore.Take(SbcMaxRequestTime);
 	if (!rslt)
 	{
 		fileOperation = FileOperation::none;
@@ -1993,7 +2166,7 @@ void SbcInterface::DefragmentBufferedCodes() noexcept
 	TaskCriticalSectionLocker locker;
 	if (rxPointer != txPointer || txEnd != 0)
 	{
-		const uint16_t bufferSpace = (txEnd == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
+		const uint16_t bufferSpace = (txEnd == 0) ? max<uint16_t>(rxPointer, SbcCodeBufferSize - txPointer) : rxPointer - txPointer;
 		if (bufferSpace > MaxGCodeBinaryLength)
 		{
 			// There is still enough space left for at least one more code, don't worry about fragmentation yet
@@ -2010,12 +2183,12 @@ void SbcInterface::DefragmentBufferedCodes() noexcept
 			// Ring buffer overlapped (rxPointer..txEnd, 0..txPointer)
 			if (!DefragmentCodeBlock(rxPointer, txEnd) &&
 				!DefragmentCodeBlock(0, txPointer) &&
-				SpiCodeBufferSize - (size_t)txEnd > MaxGCodeBinaryLength)
+				SbcCodeBufferSize - (size_t)txEnd > MaxGCodeBinaryLength)
 			{
 				size_t endBufferSize = txEnd - rxPointer;
-				memmoveu32(reinterpret_cast<uint32_t*>(codeBuffer + SpiCodeBufferSize - endBufferSize), reinterpret_cast<uint32_t*>(codeBuffer + rxPointer), endBufferSize / sizeof(uint32_t));
-				rxPointer = SpiCodeBufferSize - endBufferSize;
-				txEnd = SpiCodeBufferSize;
+				memmoveu32(reinterpret_cast<uint32_t*>(codeBuffer + SbcCodeBufferSize - endBufferSize), reinterpret_cast<uint32_t*>(codeBuffer + rxPointer), endBufferSize / sizeof(uint32_t));
+				rxPointer = SbcCodeBufferSize - endBufferSize;
+				txEnd = SbcCodeBufferSize;
 				sendBufferUpdate = true;
 			}
 		}

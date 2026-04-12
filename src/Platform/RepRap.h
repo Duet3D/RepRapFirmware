@@ -96,6 +96,9 @@ public:
 #if HAS_SBC_INTERFACE
  	bool UsingSbcInterface() const noexcept { return usingSbcInterface; }
  	SbcInterface& GetSbcInterface() const noexcept { return *sbcInterface; }
+# if SUPPORTS_SBC_OVER_USB
+	GCodeResult SwitchToUsbSbcMode(GCodeBuffer& gb, const StringRef& reply) noexcept;
+# endif
 #endif
 #if SUPPORT_CAN_EXPANSION
  	ExpansionManager& GetExpansion() const noexcept { return *expansion; }

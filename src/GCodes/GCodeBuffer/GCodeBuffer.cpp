@@ -1200,7 +1200,7 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 		// Wait for a response (but not forever)
 		isWaitingForMacro = true;
 		reprap.GetSbcInterface().EventOccurred(true);
-		if (!macroSemaphore.Take(SpiMaxRequestTime))
+		if (!macroSemaphore.Take(SbcMaxRequestTime))
 		{
 			isWaitingForMacro = false;
 			reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while waiting for macro file %s (channel %s)\n", filename, GetChannel().ToString());

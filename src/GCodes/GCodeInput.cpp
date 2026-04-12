@@ -244,6 +244,27 @@ bool BufferedStreamGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept
 	return StandardGCodeInput::FillBuffer(gb);
 }
 
+#if defined(SERIAL_USB_DEVICE)
+
+#include <Devices.h>
+
+UsbGCodeInput::UsbGCodeInput(SerialCDC &_ecv_from dev, MessageType mt) noexcept
+	: BufferedStreamGCodeInput(dev, mt), usbDevice(dev)
+{
+}
+
+void UsbGCodeInput::Spin() noexcept
+{
+	// If the host disconnected, discard any buffered partial data
+	if (!usbDevice.IsConnected() && BytesCached() != 0)
+	{
+		Reset();
+	}
+	BufferedStreamGCodeInput::Spin();
+}
+
+#endif
+
 // NetworkGCodeInput methods
 void NetworkGCodeInput::Put(char c) noexcept
 {

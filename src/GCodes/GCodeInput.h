@@ -100,11 +100,30 @@ public:
 	BufferedStreamGCodeInput(Stream &_ecv_from dev, MessageType mt) noexcept : RegularGCodeInput(mt), device(dev) { }
 
 	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
-	void Spin() noexcept;										// Read from the device into the buffer and check for urgent commands
+	virtual void Spin() noexcept;								// Read from the device into the buffer and check for urgent commands
 
 private:
 	Stream &_ecv_from device;
 };
+
+#if defined(SERIAL_USB_DEVICE)
+
+class SerialCDC;
+
+// Subclass of BufferedStreamGCodeInput for USB CDC devices
+// Automatically resets buffered data when the USB host disconnects
+class UsbGCodeInput : public BufferedStreamGCodeInput
+{
+public:
+	UsbGCodeInput(SerialCDC &_ecv_from dev, MessageType mt) noexcept;
+
+	void Spin() noexcept override;
+
+private:
+	SerialCDC &_ecv_from usbDevice;
+};
+
+#endif
 
 enum class GCodeInputReadResult : uint8_t { haveData, noData, error };
 

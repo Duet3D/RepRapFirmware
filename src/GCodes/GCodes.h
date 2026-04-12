@@ -614,9 +614,9 @@ private:
 	NetworkGCodeInput* telnetInput;										// ...
 #endif
 #if defined(SERIAL_USB_DEVICE) && (!SAME5x || CORE_USES_TINYUSB)
-	BufferedStreamGCodeInput* usbInput;									// USB input with out-of-band urgent command scanning
+	UsbGCodeInput* usbInput;											// USB input with out-of-band urgent command scanning and disconnect reset
 # if defined(SERIAL_USB2_DEVICE)
-	BufferedStreamGCodeInput* usb2Input;								// USB input with out-of-band urgent command scanning
+	UsbGCodeInput* usb2Input;											// USB input with out-of-band urgent command scanning and disconnect reset
 # endif
 #endif
 

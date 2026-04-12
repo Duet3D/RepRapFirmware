@@ -122,7 +122,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_USB_DEVICE);
 # else
 	// Old USB driver and tinyusb drivers are inefficient when read in single-character mode
-	usbInput = new BufferedStreamGCodeInput(SERIAL_USB_DEVICE, UsbMessage);
+	usbInput = new UsbGCodeInput(SERIAL_USB_DEVICE, UsbMessage);
 # endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)] = new GCodeBuffer(GCodeChannel::USB, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
 #elif HAS_SBC_INTERFACE
@@ -132,7 +132,7 @@ GCodes::GCodes(Platform& p) noexcept :
 #endif
 
 #ifdef SERIAL_USB2_DEVICE
-	usb2Input = new BufferedStreamGCodeInput(SERIAL_USB2_DEVICE, Usb2Message);
+	usb2Input = new UsbGCodeInput(SERIAL_USB2_DEVICE, Usb2Message);
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB2)] = new GCodeBuffer(GCodeChannel::USB2, usb2Input, fileInput, Usb2Message, Compatibility::Marlin);
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB2)] = nullptr;
