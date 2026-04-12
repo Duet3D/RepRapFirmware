@@ -259,8 +259,18 @@ namespace DataCollection
 		for (size_t ms = 0; ms < NumMovementSystems; ms++)
 		{
 			const bool extruding = move.GetTotalExtrusionRate(ms) != 0;
+			const int currentTool = reprap.GetGCodes().GetMovementState(ms).GetCurrentToolNumber();
+			const int toolToReport = extruding ? currentTool : -1;
 			AddDataToBuffer((uint8_t)',');
-			AddDataToBuffer(static_cast<uint32_t>(extruding ? 1 : 0));
+			if (toolToReport >= 0)
+			{
+				AddDataToBuffer(static_cast<uint32_t>(toolToReport));
+			}
+			else
+			{
+				AddDataToBuffer((uint8_t)'-');
+				AddDataToBuffer((uint8_t)'1');
+			}
 		}
 
 		// Add analog sensor
