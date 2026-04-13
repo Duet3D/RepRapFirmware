@@ -43,7 +43,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define HAS_CPU_TEMP_SENSOR		1
 
 #define SUPPORT_TMC51xx			1
-#define TMC51xx_USES_USART		1
+#define TMC_USES_USART			1
+#define SINGLE_DRIVER			0
 
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			0
@@ -97,7 +98,7 @@ constexpr size_t MaxSmartDrivers = 6;				// The maximum number of direct smart d
 constexpr size_t MaxCanDrivers = 30;
 constexpr size_t MaxCanBoards = 20;
 
-constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
+constexpr float MaxMotorCurrent = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 constexpr float Tmc5160SenseResistor = 0.050;
 
 constexpr size_t MaxPortsPerHeater = 3;
@@ -187,23 +188,22 @@ constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortBPin(05), PortDPin(10), P
 //constexpr Pin DIAG_PINS[NumDirectDrivers] =			{ PortDPin(29), PortCPin(17), PortDPin(13), PortCPin(02), PortDPin(31), PortCPin(10) };
 
 // Pin assignments etc. using USART1 in SPI mode
-constexpr Pin GlobalTmc51xxEnablePin = PortAPin(9);		// The pin that drives ENN of all TMC drivers
-constexpr Pin GlobalTmc51xxCSPin = PortDPin(17);		// The pin that drives CS of all TMC drivers
-Usart * const USART_TMC51xx = USART1;
-constexpr uint32_t  ID_TMC51xx_SPI = ID_USART1;
-constexpr IRQn TMC51xx_SPI_IRQn = USART1_IRQn;
-#define TMC51xx_SPI_Handler	USART1_Handler
+constexpr Pin GlobalTmcEnablePin = PortAPin(9);		// The pin that drives ENN of all TMC drivers
+constexpr Pin GlobalTmcCSPin = PortDPin(17);		// The pin that drives CS of all TMC drivers
+Usart * const USART_TMC = USART1;
+constexpr uint32_t  ID_TMC_SPI = ID_USART1;
+constexpr IRQn TMC_SPI_IRQn = USART1_IRQn;
 
 // These next two are #defines to avoid the need to #include DmacManager.h here
-#define TMC51xx_DmaTxPerid	((uint32_t)DmaTrigSource::usart1tx)
-#define TMC51xx_DmaRxPerid	((uint32_t)DmaTrigSource::usart1rx)
+#define TMC_DmaTxPerid	((uint32_t)DmaTrigSource::usart1tx)
+#define TMC_DmaRxPerid	((uint32_t)DmaTrigSource::usart1rx)
 
-constexpr Pin TMC51xxMosiPin = PortBPin(4);
-constexpr GpioPinFunction TMC51xxMosiPinPeriphMode = GpioPinFunction::D;
-constexpr Pin TMC51xxMisoPin = PortAPin(21);
-constexpr GpioPinFunction TMC51xxMisoPinPeriphMode = GpioPinFunction::A;
-constexpr Pin TMC51xxSclkPin = PortAPin(23);
-constexpr GpioPinFunction TMC51xxSclkPinPeriphMode = GpioPinFunction::A;
+constexpr Pin TMCMosiPin = PortBPin(4);
+constexpr GpioPinFunction TMCMosiPinPeriphMode = GpioPinFunction::D;
+constexpr Pin TMCMisoPin = PortAPin(21);
+constexpr GpioPinFunction TMCMisoPinPeriphMode = GpioPinFunction::A;
+constexpr Pin TMCSclkPin = PortAPin(23);
+constexpr GpioPinFunction TMCSclkPinPeriphMode = GpioPinFunction::A;
 
 constexpr uint32_t DefaultStandstillCurrentPercent = 71;
 

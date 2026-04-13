@@ -40,6 +40,7 @@
 #if LWIP_DNS && LWIP_SOCKET
 
 #include "lwip/err.h"
+#include "lwip/errno.h"
 #include "lwip/mem.h"
 #include "lwip/memp.h"
 #include "lwip/ip_addr.h"
@@ -61,13 +62,18 @@ struct gethostbyname_r_helper {
 int h_errno;
 #endif /* LWIP_DNS_API_DECLARE_H_ERRNO */
 
-/** define "hostent" variables storage: 0 if we use a static (but unprotected)
- * set of variables for lwip_gethostbyname, 1 if we use a local storage */
+/** LWIP_DNS_API_HOSTENT_STORAGE: if set to 0 (default), lwip_gethostbyname()
+ * returns the same global variable for all calls (in all threads).
+ * When set to 1, your port should provide a function
+ *      struct hostent* sys_thread_hostent( struct hostent* h);
+ * which have to do a copy of "h" and return a pointer ont the "per-thread"
+ * copy.
+ */
 #ifndef LWIP_DNS_API_HOSTENT_STORAGE
 #define LWIP_DNS_API_HOSTENT_STORAGE 0
 #endif
 
-/** define "hostent" variables storage */
+/* define "hostent" variables storage */
 #if LWIP_DNS_API_HOSTENT_STORAGE
 #define HOSTENT_STORAGE
 #else
@@ -128,8 +134,7 @@ lwip_gethostbyname(const char *name)
   if (s_hostent.h_addr_list != NULL) {
     u8_t idx;
     for (idx = 0; s_hostent.h_addr_list[idx]; idx++) {
-      LWIP_DEBUGF(DNS_DEBUG, ("hostent.h_addr_list[%i]   == %p\n", idx, s_hostent.h_addr_list[idx]));
-      LWIP_DEBUGF(DNS_DEBUG, ("hostent.h_addr_list[%i]-> == %s\n", idx, ipaddr_ntoa((ip_addr_t *)s_hostent.h_addr_list[idx])));
+      LWIP_DEBUGF(DNS_DEBUG, ("hostent.h_addr_list[%i]-> == %s\n", idx, ipaddr_ntoa(s_phostent_addr[idx])));
     }
   }
 #endif /* DNS_DEBUG */
@@ -306,7 +311,11 @@ lwip_getaddrinfo(const char *nodename, const char *servname,
     /* service name specified: convert to port number
      * @todo?: currently, only ASCII integers (port numbers) are supported (AI_NUMERICSERV)! */
     port_nr = atoi(servname);
-    if ((port_nr <= 0) || (port_nr > 0xffff)) {
+    if (port_nr == 0 && (servname[0] != '0')) {
+      /* atoi failed - service was not numeric */
+      return EAI_SERVICE;
+    }
+    if ((port_nr < 0) || (port_nr > 0xffff)) {
       return EAI_SERVICE;
     }
   }
@@ -374,7 +383,9 @@ lwip_getaddrinfo(const char *nodename, const char *servname,
     /* set up sockaddr */
     inet6_addr_from_ip6addr(&sa6->sin6_addr, ip_2_ip6(&addr));
     sa6->sin6_family = AF_INET6;
+#if LWIP_SOCKET_HAVE_SA_LEN
     sa6->sin6_len = sizeof(struct sockaddr_in6);
+#endif /* LWIP_SOCKET_HAVE_SA_LEN */
     sa6->sin6_port = lwip_htons((u16_t)port_nr);
     sa6->sin6_scope_id = ip6_addr_zone(ip_2_ip6(&addr));
     ai->ai_family = AF_INET6;
@@ -385,7 +396,9 @@ lwip_getaddrinfo(const char *nodename, const char *servname,
     /* set up sockaddr */
     inet_addr_from_ip4addr(&sa4->sin_addr, ip_2_ip4(&addr));
     sa4->sin_family = AF_INET;
+#if LWIP_SOCKET_HAVE_SA_LEN
     sa4->sin_len = sizeof(struct sockaddr_in);
+#endif /* LWIP_SOCKET_HAVE_SA_LEN */
     sa4->sin_port = lwip_htons((u16_t)port_nr);
     ai->ai_family = AF_INET;
 #endif /* LWIP_IPV4 */

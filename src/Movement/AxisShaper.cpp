@@ -36,7 +36,7 @@ constexpr ObjectModelArrayTableEntry AxisShaper::objectModelArrayTable[] =
 		OBJECT_MODEL_ARRAY_COUNT(self->numImpulses),
 		OBJECT_MODEL_ARRAY_VALUE((float)self->coefficients[context.GetLastIndex()], 3)
 	},
-	// 1. Durations
+	// 1. Delays
 	{
 		nullptr,					// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT(self->numImpulses),

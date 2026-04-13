@@ -373,7 +373,7 @@ static void lcp_init(ppp_pcb *pcb) {
 
     BZERO(wo, sizeof(*wo));
     wo->neg_mru = 1;
-    wo->mru = PPP_DEFMRU;
+    wo->mru = PPP_MRU;
     wo->neg_asyncmap = 1;
     wo->neg_magicnumber = 1;
     wo->neg_pcompression = 1;
@@ -462,11 +462,11 @@ void lcp_lowerup(ppp_pcb *pcb) {
      * but accept A/C and protocol compressed packets
      * if we are going to ask for A/C and protocol compression.
      */
-    if (ppp_send_config(pcb, PPP_MRU, 0xffffffff, 0, 0) < 0
-	|| ppp_recv_config(pcb, PPP_MRU, (pcb->settings.lax_recv? 0: 0xffffffff),
+    if (ppp_send_config(pcb, PPP_DEFMRU, 0xffffffff, 0, 0) < 0
+	|| ppp_recv_config(pcb, PPP_DEFMRU, (pcb->settings.lax_recv? 0: 0xffffffff),
 			   wo->neg_pcompression, wo->neg_accompression) < 0)
 	    return;
-    pcb->peer_mru = PPP_MRU;
+    pcb->peer_mru = PPP_DEFMRU;
 
     if (pcb->settings.listen_time != 0) {
 	f->flags |= DELAYED_UP;
@@ -594,22 +594,22 @@ static void lcp_rprotrej(fsm *f, u_char *inp, int len) {
 	if (protp->protocol == prot) {
 #if PPP_PROTOCOLNAME
 	    if (pname != NULL)
-		ppp_dbglog("Protocol-Reject for '%s' (0x%x) received", pname,
-		       prot);
+		ppp_dbglog(("Protocol-Reject for '%s' (0x%x) received", pname,
+		       prot));
 	    else
 #endif /* PPP_PROTOCOLNAME */
-		ppp_dbglog("Protocol-Reject for 0x%x received", prot);
+		ppp_dbglog(("Protocol-Reject for 0x%x received", prot));
 	    (*protp->protrej)(f->pcb);
 	    return;
 	}
 
 #if PPP_PROTOCOLNAME
     if (pname != NULL)
-	ppp_warn("Protocol-Reject for unsupported protocol '%s' (0x%x)", pname,
-	     prot);
+	ppp_warn(("Protocol-Reject for unsupported protocol '%s' (0x%x)", pname,
+	     prot));
     else
 #endif /* #if PPP_PROTOCOLNAME */
-	ppp_warn("Protocol-Reject for unsupported protocol 0x%x", prot);
+	ppp_warn(("Protocol-Reject for unsupported protocol 0x%x", prot));
 }
 
 
@@ -621,7 +621,7 @@ static void lcp_protrej(ppp_pcb *pcb) {
     /*
      * Can't reject LCP!
      */
-    ppp_error("Received Protocol-Reject for LCP!");
+    ppp_error(("Received Protocol-Reject for LCP!"));
     fsm_protreject(&pcb->lcp_fsm);
 }
 
@@ -757,7 +757,7 @@ static void lcp_resetci(fsm *f) {
 #endif /* HAVE_MULTILINK */
     if (pcb->settings.noendpoint)
 	ao->neg_endpoint = 0;
-    pcb->peer_mru = PPP_MRU;
+    pcb->peer_mru = PPP_DEFMRU;
 #if 0 /* UNUSED */
     auth_reset(pcb);
 #endif /* UNUSED */
@@ -931,7 +931,7 @@ static void lcp_addci(fsm *f, u_char *ucp, int *lenp) {
 
     if (ucp - start_ucp != *lenp) {
 	/* this should never happen, because peer_mtu should be 1500 */
-	ppp_error("Bug in lcp_addci: wrong length");
+	ppp_error(("Bug in lcp_addci: wrong length"));
     }
 }
 
@@ -1363,7 +1363,7 @@ static int lcp_nakci(fsm *f, u_char *p, int len, int treat_as_reject) {
 	     * well, that's just strange.  Nobody should do that.
 	     */
 	    if (cishort == PPP_EAP && cilen == CILEN_SHORT && go->neg_eap)
-		ppp_dbglog("Unexpected Conf-Nak for EAP");
+		ppp_dbglog(("Unexpected Conf-Nak for EAP"));
 
 	    /*
 	     * We don't recognize what they're suggesting.
@@ -1498,7 +1498,11 @@ static int lcp_nakci(fsm *f, u_char *p, int len, int treat_as_reject) {
 		goto bad;
 	    break;
 	case CI_AUTHTYPE:
-	    if (0
+		/* This is potentially dead code (#if !PPP_AUTH_SUPPORT)
+		 * Thus the double parentheses to mark the code explicitly
+		 * disabled when building with clang
+		 */
+	    if ((0
 #if CHAP_SUPPORT
                 || go->neg_chap || no.neg_chap
 #endif /* CHAP_SUPPORT */
@@ -1508,7 +1512,7 @@ static int lcp_nakci(fsm *f, u_char *p, int len, int treat_as_reject) {
 #if EAP_SUPPORT
 		|| go->neg_eap || no.neg_eap
 #endif /* EAP_SUPPORT */
-		)
+		))
 		goto bad;
 	    break;
 	case CI_MAGICNUMBER:
@@ -1560,7 +1564,7 @@ static int lcp_nakci(fsm *f, u_char *p, int len, int treat_as_reject) {
     if (f->state != PPP_FSM_OPENED) {
 	if (looped_back) {
 	    if (++try_.numloops >= pcb->settings.lcp_loopbackfail) {
-		ppp_notice("Serial line is looped back.");
+		ppp_notice(("Serial line is looped back."));
 		pcb->err_code = PPPERR_LOOPBACK;
 		lcp_close(f->pcb, "Loopback detected");
 	    }
@@ -1843,7 +1847,7 @@ static int lcp_reqci(fsm *f, u_char *inp, int *lenp, int reject_if_disagree) {
      * Process all his options.
      */
     next = inp;
-    nakp = pbuf_alloc(PBUF_RAW, (u16_t)(PPP_CTRL_PBUF_MAX_SIZE), PPP_CTRL_PBUF_TYPE);
+    nakp = pbuf_alloc(PBUF_RAW, (u16_t)(PPP_CTRL_PBUF_UNKNOWN_SIZE), PBUF_RAM);
     if(NULL == nakp)
         return 0;
     if(nakp->tot_len != nakp->len) {
@@ -1855,7 +1859,7 @@ static int lcp_reqci(fsm *f, u_char *inp, int *lenp, int reject_if_disagree) {
     rejp = inp;
     while (l) {
 	orc = CONFACK;			/* Assume success */
-	cip = p = next;			/* Remember begining of CI */
+	cip = p = next;			/* Remember beginning of CI */
 	if (l < 2 ||			/* Not enough data for CI header or */
 	    p[1] < 2 ||			/*  CI length too small or */
 	    p[1] > l) {			/*  CI length too big? */
@@ -1935,7 +1939,7 @@ static int lcp_reqci(fsm *f, u_char *inp, int *lenp, int reject_if_disagree) {
 		/*
 		 * Reject the option if we're not willing to authenticate.
 		 */
-		ppp_dbglog("No auth is possible");
+		ppp_dbglog(("No auth is possible"));
 		orc = CONFREJ;
 		break;
 	    }
@@ -2232,7 +2236,7 @@ static int lcp_reqci(fsm *f, u_char *inp, int *lenp, int reject_if_disagree) {
 
 endswitch:
 	if (orc == CONFACK &&		/* Good CI */
-	    rc != CONFACK)		/*  but prior CI wasnt? */
+	    rc != CONFACK)		/*  but prior CI wasn't? */
 	    continue;			/* Don't send this one */
 
 	if (orc == CONFNAK) {		/* Nak this CI? */
@@ -2309,12 +2313,12 @@ static void lcp_up(fsm *f) {
      * the interface MTU is set to the lowest of that, the
      * MTU we want to use, and our link MRU.
      */
-    mtu = ho->neg_mru? ho->mru: PPP_MRU;
-    mru = go->neg_mru? LWIP_MAX(wo->mru, go->mru): PPP_MRU;
+    mtu = ho->neg_mru? ho->mru: PPP_DEFMRU;
+    mru = go->neg_mru? LWIP_MAX(wo->mru, go->mru): PPP_DEFMRU;
 #ifdef HAVE_MULTILINK
     if (!(multilink && go->neg_mrru && ho->neg_mrru))
 #endif /* HAVE_MULTILINK */
-	netif_set_mtu(pcb, LWIP_MIN(LWIP_MIN(mtu, mru), ao->mru));
+	ppp_netif_set_mtu(pcb, LWIP_MIN(LWIP_MIN(mtu, mru), ao->mru));
     ppp_send_config(pcb, mtu,
 		    (ho->neg_asyncmap? ho->asyncmap: 0xffffffff),
 		    ho->neg_pcompression, ho->neg_accompression);
@@ -2344,11 +2348,11 @@ static void lcp_down(fsm *f) {
 
     link_down(pcb);
 
-    ppp_send_config(pcb, PPP_MRU, 0xffffffff, 0, 0);
-    ppp_recv_config(pcb, PPP_MRU,
+    ppp_send_config(pcb, PPP_DEFMRU, 0xffffffff, 0, 0);
+    ppp_recv_config(pcb, PPP_DEFMRU,
 		    (go->neg_asyncmap? go->asyncmap: 0xffffffff),
 		    go->neg_pcompression, go->neg_accompression);
-    pcb->peer_mru = PPP_MRU;
+    pcb->peer_mru = PPP_DEFMRU;
 }
 
 
@@ -2639,8 +2643,8 @@ static int lcp_printpkt(const u_char *p, int plen,
 static void LcpLinkFailure(fsm *f) {
     ppp_pcb *pcb = f->pcb;
     if (f->state == PPP_FSM_OPENED) {
-	ppp_info("No response to %d echo-requests", pcb->lcp_echos_pending);
-        ppp_notice("Serial link appears to be disconnected.");
+	ppp_info(("No response to %d echo-requests", pcb->lcp_echos_pending));
+        ppp_notice(("Serial link appears to be disconnected."));
 	pcb->err_code = PPPERR_PEERDEAD;
 	lcp_close(pcb, "Peer not responding");
     }
@@ -2661,7 +2665,7 @@ static void LcpEchoCheck(fsm *f) {
      * Start the timer for the next interval.
      */
     if (pcb->lcp_echo_timer_running)
-	ppp_warn("assertion lcp_echo_timer_running==0 failed");
+	ppp_warn(("assertion lcp_echo_timer_running==0 failed"));
     TIMEOUT (LcpEchoTimeout, f, pcb->settings.lcp_echo_interval);
     pcb->lcp_echo_timer_running = 1;
 }
@@ -2691,13 +2695,13 @@ static void lcp_received_echo_reply(fsm *f, int id, u_char *inp, int len) {
 
     /* Check the magic number - don't count replies from ourselves. */
     if (len < 4) {
-	ppp_dbglog("lcp: received short Echo-Reply, length %d", len);
+	ppp_dbglog(("lcp: received short Echo-Reply, length %d", len));
 	return;
     }
     GETLONG(magic_val, inp);
     if (go->neg_magicnumber
 	&& magic_val == go->magicnumber) {
-	ppp_warn("appear to have received our own echo-reply!");
+	ppp_warn(("appear to have received our own echo-reply!"));
 	return;
     }
 

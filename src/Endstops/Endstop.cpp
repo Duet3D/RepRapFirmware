@@ -8,7 +8,7 @@
 #include "Endstop.h"
 
 // Endstop base class
-#if SUPPORT_TMC2660 || SUPPORT_TMC51xx
+#if SUPPORT_TMC2660 || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
 LocalDriversBitmap EndstopOrZProbe::stalledDrivers;			// used to track which drivers are reported as stalled, for stall detect endstops and stall detect Z probes
 #endif
 

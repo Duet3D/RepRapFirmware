@@ -17,6 +17,7 @@ DUET3MB6XD_COREN2G_LIB := $(WORKSPACE)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS/libCoreN
 DUET3MB6XD_RRFLIBS_LIB := $(WORKSPACE)/RRFLibraries/SAME70_RTOS/libRRFLibraries.a
 DUET3MB6XD_CANLIB_LIB := $(WORKSPACE)/CANlib/SAME70_RTOS/libCANlib.a
 DUET3MB6XD_LIBTINYUSB_LIB := $(WORKSPACE)/LibTinyusb/SAME70/libLibTinyusb.a
+DUET3MB6XD_MBEDTLS_LIB := $(WORKSPACE)/LibMbedTls/SAME70/libLibMbedTls.a
 
 # Source directories
 DUET3MB6XD_SRC_DIR := src
@@ -38,7 +39,6 @@ DUET3MB6XD_CPP_SRCS := $(shell find $(DUET3MB6XD_SRC_DIR) -name '*.cpp' \
 	! -path '*/Networking/W5500Ethernet/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/netif/ppp/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/lwiperf/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/altcp_tls/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/sntp/*' \
 	! -path '*/Display/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/http/*' \
@@ -61,7 +61,6 @@ DUET3MB6XD_C_SRCS := $(shell find $(DUET3MB6XD_SRC_DIR) -name '*.c' \
 	! -path '*/Networking/W5500Ethernet/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/netif/ppp/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/lwiperf/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/altcp_tls/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/sntp/*' \
 	! -path '*/Display/*' \
 	! -path '*/Networking/LwipEthernet/Lwip/src/apps/http/*' \
@@ -79,6 +78,9 @@ DUET3MB6XD_C_SRCS := $(shell find $(DUET3MB6XD_SRC_DIR) -name '*.c' \
 
 # Include paths
 DUET3MB6XD_INCLUDES := \
+	-I$(WORKSPACE)/LibMbedTls/include \
+	-I$(WORKSPACE)/LibMbedTls/library \
+	-I$(WORKSPACE)/LibMbedTls/configs \
 	-I$(WORKSPACE)/LibTinyusb \
 	-I$(WORKSPACE)/CoreN2G \
 	-I$(WORKSPACE)/CoreN2G/src \
@@ -111,7 +113,7 @@ DUET3MB6XD_DEFINES := \
 	-D__SAME70Q20B__ \
 	-DRTOS \
 	-DDUET3_MB6XD \
-	-D_XOPEN_SOURCE
+	-DMBEDTLS_CONFIG_FILE='"config-same70.h"'
 
 # Compiler flags - C
 DUET3MB6XD_CFLAGS := -c -std=gnu99 \
@@ -168,11 +170,12 @@ DUET3MB6XD_CXXFLAGS := -c -std=gnu++17 \
 	-Wshadow \
 	-Wsign-promo \
 	$(DUET3MB6XD_INCLUDES) \
-	$(DUET3MB6XD_DEFINES)
+	$(DUET3MB6XD_DEFINES) \
+	-D_XOPEN_SOURCE
 
 # Linker flags - split into LDFLAGS1 (before -o) and LDFLAGS2 (after -o)
 DUET3MB6XD_LDFLAGS1 := --specs=nosys.specs \
-	-O2 \
+	-Os \
 	-Wl,--gc-sections \
 	-Wl,--fatal-warnings \
 	-Wl,--no-warn-rwx-segment \
@@ -200,7 +203,9 @@ DUET3MB6XD_LDLIBS := \
 	-L$(WORKSPACE)/FreeRTOS/SAME70 \
 	-L$(WORKSPACE)/CANlib/SAME70_RTOS \
 	-L$(WORKSPACE)/LibTinyusb/SAME70 \
+	-L$(WORKSPACE)/LibMbedTls/SAME70 \
 	-lLibTinyusb \
+	-lLibMbedTls \
 	-lCoreN2G \
 	-lRRFLibraries \
 	-lFreeRTOS \
@@ -232,7 +237,7 @@ Duet3_MB6XD: $(DUET3MB6XD_TARGET_BIN)
 	$(Q)$(SIZE) $(DUET3MB6XD_TARGET_ELF)
 
 # Link ELF file
-$(DUET3MB6XD_TARGET_ELF): $(DUET3MB6XD_OBJS) $(DUET3MB6XD_CANLIB_LIB) $(DUET3MB6XD_COREN2G_LIB) $(DUET3MB6XD_RRFLIBS_LIB) $(DUET3MB6XD_FREERTOS_LIB) $(DUET3MB6XD_LIBTINYUSB_LIB)
+$(DUET3MB6XD_TARGET_ELF): $(DUET3MB6XD_OBJS) $(DUET3MB6XD_CANLIB_LIB) $(DUET3MB6XD_COREN2G_LIB) $(DUET3MB6XD_RRFLIBS_LIB) $(DUET3MB6XD_FREERTOS_LIB) $(DUET3MB6XD_LIBTINYUSB_LIB) $(DUET3MB6XD_MBEDTLS_LIB)
 	$(Q)echo "  LD      $@"
 	$(Q)mkdir -p $(@D)
 	$(Q)$(LD) $(DUET3MB6XD_LDFLAGS1) -o $@ $(DUET3MB6XD_LDFLAGS2) -Wl,--start-group $(DUET3MB6XD_OBJS) $(DUET3MB6XD_LDLIBS) $(DUET3MB6XD_LDLIBS_POST)
@@ -282,5 +287,5 @@ clean-Duet3_MB6XD:
 
 # Library dependencies (rules defined in main Makefile to avoid duplicates)
 .PHONY: duet3mb6xd-libs
-duet3mb6xd-libs: $(DUET3MB6XD_FREERTOS_LIB) $(DUET3MB6XD_COREN2G_LIB) $(DUET3MB6XD_RRFLIBS_LIB) $(DUET3MB6XD_CANLIB_LIB) $(DUET3MB6XD_LIBTINYUSB_LIB)
+duet3mb6xd-libs: $(DUET3MB6XD_FREERTOS_LIB) $(DUET3MB6XD_COREN2G_LIB) $(DUET3MB6XD_RRFLIBS_LIB) $(DUET3MB6XD_CANLIB_LIB) $(DUET3MB6XD_LIBTINYUSB_LIB) $(DUET3MB6XD_MBEDTLS_LIB)
 	$(Q)echo "All required libraries built successfully"

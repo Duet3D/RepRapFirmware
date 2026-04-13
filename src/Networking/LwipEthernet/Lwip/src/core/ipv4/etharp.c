@@ -7,7 +7,7 @@
  * requests from other machines for our physical address.
  *
  * This implementation complies with RFC 826 (Ethernet ARP). It supports
- * Gratuitious ARP from RFC3220 (IP Mobility Support for IPv4) section 4.6
+ * Gratuitous ARP from RFC3220 (IP Mobility Support for IPv4) section 4.6
  * if an interface calls etharp_gratuitous(our_netif) upon address change.
  */
 
@@ -52,6 +52,7 @@
 #include "lwip/snmp.h"
 #include "lwip/dhcp.h"
 #include "lwip/autoip.h"
+#include "lwip/acd.h"
 #include "lwip/prot/iana.h"
 #include "netif/ethernet.h"
 
@@ -141,7 +142,7 @@ static err_t etharp_raw(struct netif *netif,
 /**
  * Free a complete queue of etharp entries
  *
- * @param q a qeueue of etharp_q_entry's to free
+ * @param q a queue of etharp_q_entry's to free
  */
 static void
 free_etharp_q(struct etharp_q_entry *q)
@@ -291,7 +292,7 @@ etharp_find_entry(const ip4_addr_t *ipaddr, u8_t flags, struct netif *netif)
       LWIP_ASSERT("state == ETHARP_STATE_PENDING || state >= ETHARP_STATE_STABLE",
                   state == ETHARP_STATE_PENDING || state >= ETHARP_STATE_STABLE);
       /* if given, does IP address match IP address in ARP entry? */
-      if (ipaddr && ip4_addr_cmp(ipaddr, &arp_table[i].ipaddr)
+      if (ipaddr && ip4_addr_eq(ipaddr, &arp_table[i].ipaddr)
 #if ETHARP_TABLE_MATCH_NETIF
           && ((netif == NULL) || (netif == arp_table[i].netif))
 #endif /* ETHARP_TABLE_MATCH_NETIF */
@@ -643,7 +644,7 @@ etharp_input(struct pbuf *p, struct netif *netif)
   struct etharp_hdr *hdr;
   /* these are aligned properly, whereas the ARP header fields might not be */
   ip4_addr_t sipaddr, dipaddr;
-  u8_t for_us;
+  u8_t for_us, from_us;
 
   LWIP_ASSERT_CORE_LOCKED();
 
@@ -666,12 +667,16 @@ etharp_input(struct pbuf *p, struct netif *netif)
   }
   ETHARP_STATS_INC(etharp.recv);
 
-#if LWIP_AUTOIP
-  /* We have to check if a host already has configured our random
-   * created link local address and continuously check if there is
-   * a host with this IP-address so we can detect collisions */
-  autoip_arp_reply(netif, hdr);
-#endif /* LWIP_AUTOIP */
+#if LWIP_ACD
+  /* We have to check if a host already has configured our ip address and
+   * continuously check if there is a host with this IP-address so we can
+   * detect collisions.
+   * acd_arp_reply ensures the detection of conflicts. It will handle possible
+   * defending or retreating and will make sure a new IP address is selected.
+   * etharp_input does not need to handle packets that originate "from_us".
+   */
+  acd_arp_reply(netif, hdr);
+#endif /* LWIP_ACD */
 
   /* Copy struct ip4_addr_wordaligned to aligned ip4_addr, to support compilers without
    * structure packing (not using structure copy which breaks strict-aliasing rules). */
@@ -681,9 +686,12 @@ etharp_input(struct pbuf *p, struct netif *netif)
   /* this interface is not configured? */
   if (ip4_addr_isany_val(*netif_ip4_addr(netif))) {
     for_us = 0;
+    from_us = 0;
   } else {
     /* ARP packet directed to us? */
-    for_us = (u8_t)ip4_addr_cmp(&dipaddr, netif_ip4_addr(netif));
+    for_us = (u8_t)ip4_addr_eq(&dipaddr, netif_ip4_addr(netif));
+    /* ARP packet from us? */
+    from_us = (u8_t)ip4_addr_eq(&sipaddr, netif_ip4_addr(netif));
   }
 
   /* ARP message directed to us?
@@ -704,7 +712,7 @@ etharp_input(struct pbuf *p, struct netif *netif)
 
       LWIP_DEBUGF (ETHARP_DEBUG | LWIP_DBG_TRACE, ("etharp_input: incoming ARP request\n"));
       /* ARP request for our address? */
-      if (for_us) {
+      if (for_us && !from_us) {
         /* send ARP response */
         etharp_raw(netif,
                    (struct eth_addr *)netif->hwaddr, &hdr->shwaddr,
@@ -724,13 +732,6 @@ etharp_input(struct pbuf *p, struct netif *netif)
     case PP_HTONS(ARP_REPLY):
       /* ARP reply. We already updated the ARP cache earlier. */
       LWIP_DEBUGF(ETHARP_DEBUG | LWIP_DBG_TRACE, ("etharp_input: incoming ARP reply\n"));
-#if (LWIP_DHCP && DHCP_DOES_ARP_CHECK)
-      /* DHCP wants to know about ARP replies from any host with an
-       * IP address also offered to us by the DHCP server. We do not
-       * want to take a duplicate IP address on a single network.
-       * @todo How should we handle redundant (fail-over) interfaces? */
-      dhcp_arp_reply(netif, &sipaddr);
-#endif /* (LWIP_DHCP && DHCP_DOES_ARP_CHECK) */
       break;
     default:
       LWIP_DEBUGF(ETHARP_DEBUG | LWIP_DBG_TRACE, ("etharp_input: ARP unknown opcode type %"S16_F"\n", lwip_htons(hdr->opcode)));
@@ -822,7 +823,7 @@ etharp_output(struct netif *netif, struct pbuf *q, const ip4_addr_t *ipaddr)
     netif_addr_idx_t i;
     /* outside local network? if so, this can neither be a global broadcast nor
        a subnet broadcast. */
-    if (!ip4_addr_netcmp(ipaddr, netif_ip4_addr(netif), netif_ip4_netmask(netif)) &&
+    if (!ip4_addr_net_eq(ipaddr, netif_ip4_addr(netif), netif_ip4_netmask(netif)) &&
         !ip4_addr_islinklocal(ipaddr)) {
 #if LWIP_AUTOIP
       struct ip_hdr *iphdr = LWIP_ALIGNMENT_CAST(struct ip_hdr *, q->payload);
@@ -862,7 +863,7 @@ etharp_output(struct netif *netif, struct pbuf *q, const ip4_addr_t *ipaddr)
 #if ETHARP_TABLE_MATCH_NETIF
             (arp_table[etharp_cached_entry].netif == netif) &&
 #endif
-            (ip4_addr_cmp(dst_addr, &arp_table[etharp_cached_entry].ipaddr))) {
+            (ip4_addr_eq(dst_addr, &arp_table[etharp_cached_entry].ipaddr))) {
           /* the per-pcb-cached entry is stable and the right one! */
           ETHARP_STATS_INC(etharp.cachehit);
           return etharp_output_to_arp_index(netif, q, etharp_cached_entry);
@@ -879,7 +880,7 @@ etharp_output(struct netif *netif, struct pbuf *q, const ip4_addr_t *ipaddr)
 #if ETHARP_TABLE_MATCH_NETIF
           (arp_table[i].netif == netif) &&
 #endif
-          (ip4_addr_cmp(dst_addr, &arp_table[i].ipaddr))) {
+          (ip4_addr_eq(dst_addr, &arp_table[i].ipaddr))) {
         /* found an existing, stable entry */
         ETHARP_SET_ADDRHINT(netif, i);
         return etharp_output_to_arp_index(netif, q, i);
@@ -983,6 +984,14 @@ etharp_query(struct netif *netif, const ip4_addr_t *ipaddr, struct pbuf *q)
       /* We don't re-send arp request in etharp_tmr, but we still queue packets,
          since this failure could be temporary, and the next packet calling
          etharp_query again could lead to sending the queued packets. */
+    } else {
+      /* ARP request successfully sent */
+      if ((arp_table[i].state == ETHARP_STATE_PENDING) && !is_new_entry) {
+        /* A new ARP request has been sent for a pending entry. Reset the ctime to
+           not let it expire too fast. */
+        LWIP_DEBUGF(ETHARP_DEBUG | LWIP_DBG_TRACE, ("etharp_query: reset ctime for entry %"S16_F"\n", (s16_t)i));
+        arp_table[i].ctime = 0;
+      }
     }
     if (q == NULL) {
       return result;
@@ -1006,7 +1015,7 @@ etharp_query(struct netif *netif, const ip4_addr_t *ipaddr, struct pbuf *q)
      * new PBUF_RAM. See the definition of PBUF_NEEDS_COPY for details. */
     p = q;
     while (p) {
-      LWIP_ASSERT("no packet queues allowed!", (p->len != p->tot_len) || (p->next == 0));
+      LWIP_ASSERT("no packet queues allowed!", (p->len != p->tot_len) || (p->next == NULL));
       if (PBUF_NEEDS_COPY(p)) {
         copy_needed = 1;
         break;
@@ -1030,7 +1039,7 @@ etharp_query(struct netif *netif, const ip4_addr_t *ipaddr, struct pbuf *q)
       new_entry = (struct etharp_q_entry *)memp_malloc(MEMP_ARP_QUEUE);
       if (new_entry != NULL) {
         unsigned int qlen = 0;
-        new_entry->next = 0;
+        new_entry->next = NULL;
         new_entry->p = p;
         if (arp_table[i].q != NULL) {
           /* queue was already existent, append the new entry to the end */
@@ -1200,5 +1209,43 @@ etharp_request(struct netif *netif, const ip4_addr_t *ipaddr)
   LWIP_DEBUGF(ETHARP_DEBUG | LWIP_DBG_TRACE, ("etharp_request: sending ARP request.\n"));
   return etharp_request_dst(netif, ipaddr, &ethbroadcast);
 }
+
+#if LWIP_ACD
+/**
+ * Send an ARP request packet probing for an ipaddr.
+ * Used to send probe messages for address conflict detection.
+ *
+ * @param netif the lwip network interface on which to send the request
+ * @param ipaddr the IP address to probe
+ * @return ERR_OK if the request has been sent
+ *         ERR_MEM if the ARP packet couldn't be allocated
+ *         any other err_t on failure
+ */
+err_t
+etharp_acd_probe(struct netif *netif, const ip4_addr_t *ipaddr)
+{
+  return etharp_raw(netif, (struct eth_addr *)netif->hwaddr, &ethbroadcast,
+                    (struct eth_addr *)netif->hwaddr, IP4_ADDR_ANY4, &ethzero,
+                    ipaddr, ARP_REQUEST);
+}
+
+/**
+ * Send an ARP request packet announcing an ipaddr.
+ * Used to send announce messages for address conflict detection.
+ *
+ * @param netif the lwip network interface on which to send the request
+ * @param ipaddr the IP address to announce
+ * @return ERR_OK if the request has been sent
+ *         ERR_MEM if the ARP packet couldn't be allocated
+ *         any other err_t on failure
+ */
+err_t
+etharp_acd_announce(struct netif *netif, const ip4_addr_t *ipaddr)
+{
+  return etharp_raw(netif, (struct eth_addr *)netif->hwaddr, &ethbroadcast,
+                    (struct eth_addr *)netif->hwaddr, ipaddr, &ethzero,
+                    ipaddr, ARP_REQUEST);
+}
+#endif /* LWIP_ACD */
 
 #endif /* LWIP_IPV4 && LWIP_ARP */

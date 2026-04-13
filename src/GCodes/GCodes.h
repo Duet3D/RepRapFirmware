@@ -376,6 +376,7 @@ private:
 	void DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps) noexcept;
 
 	void StartPrinting(bool fromStart) noexcept;								// Start printing the file already selected
+	void AbortStateMachine(GCodeBuffer& gb) noexcept;								// Clean up state machine side effects before aborting
 	void StopPrint(GCodeBuffer *_ecv_null gbp, StopPrintReason reason) noexcept;	// Stop the current print
 
 	bool DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;					// Get G Codes from a file and print them
@@ -600,7 +601,7 @@ private:
 # if ALLOW_ARBITRARY_PANELDUE_PORT
 	uint8_t serialChannelForPanelDueFlashing;
 # else
-	static constexpr uint8_t serialChannelForPanelDueFlashing = 1;
+	static constexpr uint8_t serialChannelForPanelDueFlashing = FirstAuxChannel;
 # endif
 	static bool emergencyStopCommanded;
 	static void CommandEmergencyStop(AsyncSerial *p) noexcept;
@@ -611,6 +612,12 @@ private:
 #if HAS_NETWORKING || HAS_SBC_INTERFACE
 	NetworkGCodeInput* httpInput;										// These cache incoming G-codes...
 	NetworkGCodeInput* telnetInput;										// ...
+#endif
+#if defined(SERIAL_USB_DEVICE) && (!SAME5x || CORE_USES_TINYUSB)
+	BufferedStreamGCodeInput* usbInput;									// USB input with out-of-band urgent command scanning
+# if defined(SERIAL_USB2_DEVICE)
+	BufferedStreamGCodeInput* usb2Input;								// USB input with out-of-band urgent command scanning
+# endif
 #endif
 
 	GCodeBuffer *_ecv_null gcodeSources[NumGCodeChannels];						// The various sources of gcodes

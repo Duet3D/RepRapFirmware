@@ -11,11 +11,17 @@
 NetworkInterface::NetworkInterface() noexcept
 	: state(NetworkState::disabled)
 {
+	static constexpr TcpPort DefaultTlsPortNumbers[NumSelectableProtocols] =
+	{
+		DefaultHttpsPort, DefaultFtpsPort, DefaultTelnetsPort, 0, 0
+	};
 	for (size_t i = 0; i < NumSelectableProtocols; ++i)
 	{
 		ipAddresses[i] = AcceptAnyIp;
 		portNumbers[i] = DefaultPortNumbers[i];
-		protocolEnabled[i] = (i == HttpProtocol);
+		tlsPortNumbers[i] = DefaultTlsPortNumbers[i];
+		protocolEnabled[i] = false;
+		tlsProtocolEnabled[i] = false;
 	}
 }
 
@@ -27,37 +33,61 @@ void NetworkInterface::SetState(NetworkState::RawType newState) noexcept
 
 GCodeResult NetworkInterface::EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
 {
-	if (secure > 0)
-	{
-		reply.copy("this firmware does not support TLS");
-	}
-	else
-	{
-		if (false
+	if (false
 #if SUPPORT_HTTP
-			|| protocol == HttpProtocol
+		|| protocol == HttpProtocol
 #endif
 #if SUPPORT_FTP
-		    || protocol == FtpProtocol
+	    || protocol == FtpProtocol
 #endif
 #if SUPPORT_TELNET
-			|| protocol == TelnetProtocol
+		|| protocol == TelnetProtocol
 #endif
 #if SUPPORT_MULTICAST_DISCOVERY
-			|| protocol == MulticastDiscoveryProtocol
+		|| protocol == MulticastDiscoveryProtocol
 #endif
 #if SUPPORT_MQTT
-			|| protocol == MqttProtocol
+		|| protocol == MqttProtocol
 #endif
-			)
+		)
+	{
+		if (secure > 0)
 		{
-			const TcpPort portToUse = (port < 0) ? DefaultPortNumbers[protocol] : (TcpPort)port;
+			if (!SupportsTls())
+			{
+				reply.copy("TLS not supported by this interface");
+				return GCodeResult::error;
+			}
+			// Enabling TLS variant: P parameter sets the secure port, plain port unchanged
+			const TcpPort newTlsPort = (port >= 0) ? (TcpPort)port : tlsPortNumbers[protocol];
+
+			MutexLocker lock(interfaceMutex);
+
+			if (GetState() == NetworkState::active && newTlsPort != tlsPortNumbers[protocol])
+			{
+				// Secure port changed — shut down so StartProtocol recreates the TLS listener
+				IfaceShutdownProtocol(protocol, false);
+				tlsProtocolEnabled[protocol] = false;
+			}
+			tlsPortNumbers[protocol] = newTlsPort;
+			if (!tlsProtocolEnabled[protocol])
+			{
+				tlsProtocolEnabled[protocol] = true;
+				if (GetState() == NetworkState::active)
+				{
+					IfaceStartProtocol(protocol);
+				}
+			}
+		}
+		else
+		{
+			const TcpPort portToUse = (port >= 0) ? (TcpPort)port : DefaultPortNumbers[protocol];
+
 			MutexLocker lock(interfaceMutex);
 
 			if (GetState() == NetworkState::active && (portToUse != portNumbers[protocol] || ip != ipAddresses[protocol]))
 			{
-				// We need to shut down and restart the protocol if it is active because the port number has changed.
-				// Note that clients will probably be unable to close their connections gracefully.
+				// Plain port changed — shut down and restart
 				IfaceShutdownProtocol(protocol, false);
 				protocolEnabled[protocol] = false;
 			}
@@ -68,17 +98,15 @@ GCodeResult NetworkInterface::EnableProtocol(NetworkProtocol protocol, int port,
 				protocolEnabled[protocol] = true;
 				if (GetState() == NetworkState::active)
 				{
-					// Only start listeners here, connection requests for clients are made in the main loop.
 					IfaceStartProtocol(protocol);
-					// mDNS announcement is done by the WiFi Server firmware
 				}
 			}
-			ReportOneProtocol(protocol, reply);
-			return GCodeResult::ok;
 		}
-
-		reply.copy("invalid protocol parameter");
+		ReportOneProtocol(protocol, reply);
+		return GCodeResult::ok;
 	}
+
+	reply.copy("invalid protocol parameter");
 	return GCodeResult::error;
 }
 
@@ -109,6 +137,7 @@ GCodeResult NetworkInterface::DisableProtocol(NetworkProtocol protocol, const St
 			IfaceShutdownProtocol(protocol, true);
 		}
 		protocolEnabled[protocol] = false;
+		tlsProtocolEnabled[protocol] = false;
 		ReportOneProtocol(protocol, reply);
 		return GCodeResult::ok;
 	}
@@ -135,9 +164,16 @@ GCodeResult NetworkInterface::ReportProtocols(const StringRef& reply) const noex
 
 void NetworkInterface::ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
 {
-	if (protocolEnabled[protocol])
+	if (protocolEnabled[protocol] || tlsProtocolEnabled[protocol])
 	{
-		reply.lcatf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
+		if (protocolEnabled[protocol])
+		{
+			reply.lcatf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
+		}
+		if (tlsProtocolEnabled[protocol])
+		{
+			reply.lcatf("%sS is enabled on port %u", ProtocolNames[protocol], tlsPortNumbers[protocol]);
+		}
 	}
 	else
 	{

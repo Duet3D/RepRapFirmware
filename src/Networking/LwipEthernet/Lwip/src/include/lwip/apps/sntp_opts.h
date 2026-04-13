@@ -67,6 +67,12 @@
 #define SNTP_GET_SERVERS_FROM_DHCP LWIP_DHCP_GET_NTP_SRV
 #endif
 
+/** Set this to 1 to implement the callback function called by dhcpv6 when
+ * NTP servers are received. */
+#if !defined SNTP_GET_SERVERS_FROM_DHCPV6 || defined __DOXYGEN__
+#define SNTP_GET_SERVERS_FROM_DHCPV6 LWIP_DHCP6_GET_NTP_SRV
+#endif
+
 /** Set this to 1 to support DNS names (or IP address strings) to set sntp servers
  * One server address/name can be defined as default if SNTP_SERVER_DNS == 1:
  * \#define SNTP_SERVER_ADDRESS "pool.ntp.org"
@@ -152,14 +158,14 @@
 
 /** SNTP receive timeout - in milliseconds
  * Also used as retry timeout - this shouldn't be too low.
- * Default is 15 seconds. Must not be beolw 15 seconds by specification (i.e. 15000)
+ * Default is 15 seconds. Must not be below 15 seconds by specification (i.e. 15000)
  */
 #if !defined SNTP_RECV_TIMEOUT || defined __DOXYGEN__
 #define SNTP_RECV_TIMEOUT           15000
 #endif
 
 /** SNTP update delay - in milliseconds
- * Default is 1 hour. Must not be beolw 60 seconds by specification (i.e. 60000)
+ * Default is 1 hour. Must not be below 60 seconds by specification (i.e. 60000)
  */
 #if !defined SNTP_UPDATE_DELAY || defined __DOXYGEN__
 #define SNTP_UPDATE_DELAY           3600000

@@ -26,9 +26,10 @@ public:
 	void SetNeedsPolling() noexcept { needsPolling = true; }
 	bool NeedsPolling() const noexcept;
 
+	bool UsingTls() const noexcept override { return false; }		// TLS is not yet supported on WiFi interface
 	void Poll() noexcept override;
 	void Close() noexcept override;
-	bool IsClosing() const noexcept { return (state == SocketState::closing); }
+	bool IsClosing() const noexcept override { return (state == SocketState::closing); }
 	void Terminate() noexcept override;
 	void TerminateAndDisable() noexcept override { Terminate(); }
 	bool ReadChar(char& c) noexcept override;

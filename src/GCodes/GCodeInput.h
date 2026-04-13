@@ -74,7 +74,7 @@ enum class GCodeInputState
 class RegularGCodeInput : public StandardGCodeInput
 {
 public:
-	RegularGCodeInput() noexcept;
+	explicit RegularGCodeInput(MessageType mt) noexcept;
 
 	void Reset() noexcept override;
 	size_t BytesCached() const noexcept override;				// How many bytes have been cached?
@@ -82,7 +82,9 @@ public:
 
 protected:
 	char ReadByte() noexcept override;
+	bool CheckForUrgentCommand(char c) noexcept SPEED_CRITICAL;	// Check a character for M112/M122/M108, return true if handled
 
+	MessageType mtype;
 	GCodeInputState state;
 	size_t writingPointer, readingPointer;
 	char buffer[GCodeInputBufferSize];
@@ -92,10 +94,11 @@ protected:
 class BufferedStreamGCodeInput : public RegularGCodeInput
 {
 public:
-	explicit BufferedStreamGCodeInput(Stream &_ecv_from dev) noexcept : RegularGCodeInput(), device(dev) { }
+	BufferedStreamGCodeInput(Stream &_ecv_from dev, MessageType mt) noexcept : RegularGCodeInput(mt), device(dev) { }
 
 	void Reset() noexcept override;
 	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
+	void Spin() noexcept;										// Read from the device into the buffer and check for urgent commands
 
 private:
 	Stream &_ecv_from device;
@@ -111,7 +114,7 @@ class FileGCodeInput : public RegularGCodeInput
 {
 public:
 
-	FileGCodeInput() noexcept : RegularGCodeInput() { }
+	FileGCodeInput() noexcept : RegularGCodeInput(GenericMessage) { }
 
 	void Reset() noexcept override;									// Clears the buffer. Should be called when the associated file is being closed
 	void Reset(const FileData &file) noexcept;						// Clears the buffer of a specific file. Should be called when it is closed or re-opened outside the reading context
@@ -129,13 +132,13 @@ private:
 class NetworkGCodeInput : public RegularGCodeInput
 {
 public:
-	NetworkGCodeInput() noexcept;
+	explicit NetworkGCodeInput(MessageType mt) noexcept;
 
 	bool FillBuffer(GCodeBuffer *gb) noexcept override;					// Fill a GCodeBuffer with the last available G-code
-	bool Put(MessageType mtype, const char *_ecv_array buf) noexcept;	// Append a null-terminated string to the buffer returning true if success
+	bool Put(const char *_ecv_array buf) noexcept;						// Append a null-terminated string to the buffer returning true if success
 
 private:
-	void Put(MessageType mtype, char c) noexcept;						// Append a single character. This does NOT lock the mutex!
+	void Put(char c) noexcept SPEED_CRITICAL;							// Append a single character. This does NOT lock the mutex!
 
 	Mutex bufMutex;
 };
