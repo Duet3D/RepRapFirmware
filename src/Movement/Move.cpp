@@ -1171,7 +1171,7 @@ void Move::SetMotorPosition(size_t drive, int32_t pos, bool clearBacklash) noexc
 
 	if (dm->IsPhaseStepEnabled())
 	{
-		GetCurrentMotion(drive, now, dm->phaseStepControl.mParams);
+		UpdateCurrentMotion(drive, now, dm->phaseStepControl.mParams);
 		IterateLocalDrivers(drive, [dm, &currentPhases](uint8_t driver) noexcept -> void {
 			currentPhases[driver] = dm->phaseStepControl.CalculateStepPhase((size_t)driver);
 			dm->phaseStepControl.SetPhaseOffset(driver, 0);
@@ -1195,7 +1195,7 @@ void Move::SetMotorPosition(size_t drive, int32_t pos, bool clearBacklash) noexc
 #if SUPPORT_PHASE_STEPPING
 	if (dm->IsPhaseStepEnabled())
 	{
-		GetCurrentMotion(drive, now, dm->phaseStepControl.mParams);
+		UpdateCurrentMotion(drive, now, dm->phaseStepControl.mParams);
 		IterateLocalDrivers(drive, [dm, &currentPhases](uint8_t driver) noexcept -> void {
 			uint16_t newPhase = dm->phaseStepControl.CalculateStepPhase((size_t)driver);
 
@@ -1400,10 +1400,12 @@ void Move::GetLiveMachineCoordinates(float coords[MaxAxes]) const noexcept
 	// Get the positions of each motor
 	int32_t currentMotorPositions[MaxAxes];
 	{
-		AtomicCriticalSectionLocker lock;											// to make sure we get a consistent set of coordinates
+		AtomicCriticalSectionLocker lock; // to make sure we get a consistent set of coordinates
+		const uint32_t now = StepTimer::GetTimerTicks();
 		for (size_t i = 0; i < numTotalAxes; ++i)
 		{
-			currentMotorPositions[i] = dms[i].currentMotorPosition - currentBacklashSteps[i];
+			const float position = dms[i].GetCurrentPosition(now);
+			currentMotorPositions[i] = std::lrint(position - currentBacklashSteps[i]);
 		}
 	}
 
@@ -2260,9 +2262,12 @@ PhaseStepParams Move::GetPhaseStepParams(size_t axisOrExtruder) const noexcept
 }
 
 // Get the motor position in the current move so far, also speed and acceleration. Units are full steps and step clocks.
-bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
+// segments might be updated
+bool Move::UpdateCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
 {
-	return dms[driver].GetCurrentMotion(when, phaseStepMultiplier[driver], mParams);
+	const bool ret = dms[driver].UpdateCurrentMotion(when, mParams);
+	mParams.Scale(phaseStepMultiplier[driver]);
+	return ret;
 }
 
 bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept
@@ -2282,7 +2287,7 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& re
 
 	bool interpolation;
 	unsigned int microsteps = GetMicrostepping(axisOrExtruder, interpolation);
-	GetCurrentMotion(axisOrExtruder, now, dm->phaseStepControl.mParams);								// Update position variable
+	UpdateCurrentMotion(axisOrExtruder, now, dm->phaseStepControl.mParams); // Update position variable
 
 	IterateLocalDrivers(axisOrExtruder, [this, dm, &ret, &mode, axisOrExtruder, microsteps](uint8_t driver) noexcept -> void {
 		// If we are going from step dir to phase step, we need to update the phase offset so the calculated phase matches MSCNT
@@ -2396,7 +2401,7 @@ void Move::PhaseStepControlLoop() noexcept
 	while (*dmp != nullptr)
 	{
 		DriveMovement * const dm = _ecv_not_null(*dmp);
-		GetCurrentMotion(dm->drive, now, dm->phaseStepControl.mParams);
+		UpdateCurrentMotion(dm->drive, now, dm->phaseStepControl.mParams);
 
 		if (dm->state != DMState::phaseStepping)
 		{

@@ -24,6 +24,13 @@ struct MotionParameters
 	float position = 0.0;
 	float speed = 0.0;
 	float acceleration = 0.0;
+
+	void Scale(float multiplier)
+	{
+		position *= multiplier;
+		speed *= multiplier;
+		acceleration *= multiplier;
+	}
 };
 
 enum class StepMode
