@@ -273,7 +273,7 @@ constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max 
 constexpr unsigned int NumLruBuffers = 2;				// Number of disk buffers to allocate if FF_LRU is enabled in ff_confg.h
 #endif
 
-constexpr size_t MaxLiteralArrayElements = 40;			// Maximum number of array elements we are allowed in a literal array
+constexpr size_t MaxLiteralArrayElements = 64; // Maximum number of array elements we are allowed in a literal array
 constexpr size_t MaxFileReadArrayElements = 40;			// Maximum number of array elements we are allowed to read in a read() function
 
 constexpr size_t FILE_BUFFER_SIZE = 128;
