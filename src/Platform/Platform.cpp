@@ -412,7 +412,7 @@ void Platform::Init() noexcept
 
 	// Do any board-specific initialisation that needs to be done early and does not depend on the board revision
 
-#ifndef DUET3_MB6XD
+#if HAS_SMART_DRIVERS
 	// Make sure the on-board drivers are disabled
 	SetPinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
 #endif
@@ -2214,6 +2214,22 @@ void Platform::AppendUsbReply(size_t usbNumber, const GCodeBuffer *_ecv_null gb,
 	usbDevices[usbNumber].AppendReply(usbNumber, GetChannelMode(usbNumber), gb, buffer, rawMessage);
 }
 
+void Platform::ShutdownUsbDevice(unsigned int index) noexcept
+{
+	if (index < NumUsbChannels)
+	{
+		usbDevices[index].Shutdown();
+	}
+}
+
+void Platform::ReinitUsbDevice(unsigned int index) noexcept
+{
+	if (index < NumUsbChannels)
+	{
+		usbDevices[index].Reinit();
+	}
+}
+
 // Aux port functions
 
 // Translation of M575 S parameter to AuxMode
@@ -3313,6 +3329,10 @@ void Platform::DebugMessage(const char *_ecv_array fmt, va_list vargs) noexcept
 {
 	MutexLocker lock(usbDevices[0].GetMutex());
 	SerialCDC *usbDev = usbDevices[0].GetDevice();
+	if (usbDev == nullptr)
+	{
+		return;
+	}
 	vuprintf([usbDev](char c) -> bool
 				{
 					if (c != 0)

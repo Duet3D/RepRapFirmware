@@ -122,7 +122,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_USB_DEVICE);
 # else
 	// Old USB driver and tinyusb drivers are inefficient when read in single-character mode
-	usbInput = new BufferedStreamGCodeInput(SERIAL_USB_DEVICE, UsbMessage);
+	usbInput = new UsbGCodeInput(SERIAL_USB_DEVICE, UsbMessage);
 # endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)] = new GCodeBuffer(GCodeChannel::USB, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
 #elif HAS_SBC_INTERFACE
@@ -132,7 +132,7 @@ GCodes::GCodes(Platform& p) noexcept :
 #endif
 
 #ifdef SERIAL_USB2_DEVICE
-	usb2Input = new BufferedStreamGCodeInput(SERIAL_USB2_DEVICE, Usb2Message);
+	usb2Input = new UsbGCodeInput(SERIAL_USB2_DEVICE, Usb2Message);
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB2)] = new GCodeBuffer(GCodeChannel::USB2, usb2Input, fileInput, Usb2Message, Compatibility::Marlin);
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB2)] = nullptr;
@@ -569,7 +569,7 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 
 	if ((gb.IsExecuting()
 #if HAS_SBC_INTERFACE
-		 && !gb.IsSendRequested()
+			|| gb.IsSendRequested() || gb.IsExecutingOnSbc()
 #endif
 		) || (gb.IsWaitingForTemperatures())							// this is needed to get reports sent when the GB is waiting for temperatures to be reached
 	   )
@@ -635,7 +635,11 @@ bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	}
 	else
 	{
-		const bool gotCommand = (gb.GetNormalInput() != nullptr) && gb.GetNormalInput()->FillBuffer(&gb);
+		const bool gotCommand =
+#if HAS_SBC_INTERFACE
+			!gb.IsExecutingOnSbc() &&
+#endif
+			(gb.GetNormalInput() != nullptr) && gb.GetNormalInput()->FillBuffer(&gb);
 		if (gotCommand)
 		{
 			gb.DecodeCommand();
@@ -1742,6 +1746,7 @@ void GCodes::Diagnostics(const StringRef& reply) noexcept
 			gb->Diagnostics(reply);
 		}
 	}
+
 }
 
 #if SUPPORT_ASYNC_MOVES
@@ -4229,7 +4234,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	case Compatibility::NanoDLP:				// nanoDLP is like Marlin except that G0 and G1 commands return "Z_move_comp<LF>" before "ok<LF>"
 	case Compatibility::Marlin:
 	default:
-		if (gb.IsLastCommand() && !gb.IsDoingFileMacro())
+		if (gb.IsLastCommand() && !gb.IsDoingFileMacro(true))
 		{
 			// Put "ok" at the end
 			const char *_ecv_array const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
