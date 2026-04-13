@@ -16,7 +16,7 @@
 class ExtruderShaper
 {
 public:
-	ExtruderShaper()
+	ExtruderShaper() noexcept
 		: k(0.0)
 	{ }
 
