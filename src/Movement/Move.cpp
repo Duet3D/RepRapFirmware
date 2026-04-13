@@ -300,7 +300,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "phaseStep",			OBJECT_MODEL_FUNC(self->GetStepMode(ExtruderToLogicalDrive(context.GetLastIndex())) == StepMode::phase),							ObjectModelEntryFlags::notPanelDue },
 #endif
 	{ "position",			OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetGCodes().GetCurrentMovementState(context).LiveMachineCoordinate(ExtruderToLogicalDrive(context.GetLastIndex())), 1)),	ObjectModelEntryFlags::liveNotPanelDue },
-	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetPressureAdvanceClocksForExtruder(context.GetLastIndex())/StepClockRate, 3),								ObjectModelEntryFlags::none },
+	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetPressureAdvanceClocksForExtruder(context.GetLastIndex()) * (1.0/(float)StepClockRate), 3),				ObjectModelEntryFlags::none },
 	{ "printingJerk",		OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetPrintingInstantDv(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),	ObjectModelEntryFlags::none },
 	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1), 								ObjectModelEntryFlags::liveNotPanelDue },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
