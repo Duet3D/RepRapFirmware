@@ -269,40 +269,34 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 #endif
 
 /**
- * @brief Get the current position relative to the start of this segment. Units are microsteps
- * and step clocks.
- * @param when step clock time at which to evaluate the motion. Because the function only reads the first segment this
- * should be the current time.
+ * @brief Get the current position relative to the start of this segment. Units are microsteps and step clocks.
+ * @param when step clock time at which to evaluate the motion. Because the function only reads the first segment this should be the current time.
  * @return position of the dm in microsteps
  */
 inline float DriveMovement::GetCurrentPosition(uint32_t when) const noexcept
 {
-	AtomicCriticalSectionLocker lock; // we don't want 'segments' changing while we do this
-	float position = 0;
+	AtomicCriticalSectionLocker lock;										// we don't want 'segments' changing while we do this
 
 	const MoveSegment* const seg = segments;
 	if (seg != nullptr)
 	{
 		int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
-		if (timeSinceStart < 0)
+		if (timeSinceStart >= 0)
 		{
-			goto idle; // segment isn't due to start yet
-		}
-		if ((uint32_t)timeSinceStart >= seg->GetDuration()) // if segment should have finished by now
-		{
-			// we can't get the next seg because that needs `NewSegment()` to be called which is none const
-			timeSinceStart = seg->GetDuration();
-		}
+			if ((uint32_t)timeSinceStart >= seg->GetDuration())				// if segment should have finished by now
+			{
+				// We can't get the next segment because that needs `NewSegment()` to be called
+				timeSinceStart = seg->GetDuration();
+			}
 
-		position = (float)((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart +
-										  (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
-		return position;
+			return (float)((u + 0.5 * seg->GetA() * timeSinceStart) * timeSinceStart
+							  + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards
+						  );
+		}
 	}
 
-idle:
 	// If we get here then no movement is taking place
-	position = (float)((motioncalc_t)currentMotorPosition + distanceCarriedForwards);
-	return position;
+	return (float)((motioncalc_t)currentMotorPosition + distanceCarriedForwards);
 }
 
 #if SUPPORT_PHASE_STEPPING
