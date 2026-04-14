@@ -45,7 +45,6 @@ struct PrepParams
 	uint32_t SteadyClocks() const noexcept { return steadyClocks; }
 #endif
 	motioncalc_t totalDistance;
-	motioncalc_t topSpeed;								// the top speed reached
 	bool useInputShaping;
 
 #if SUPPORT_S_CURVE
