@@ -1333,15 +1333,15 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	PrepParams params;
 
 #if SUPPORT_S_CURVE
-	params.initialAcceleration = params.peakAcceleration = msg.acceleration;
-	params.initialDeceleration = params.peakDeceleration = -msg.deceleration;	// the deceleration is passed as a positive number in theCAN  message
+	params.initialAcceleration = params.peakAcceleration = (motioncalc_t)msg.acceleration;
+	params.initialDeceleration = params.peakDeceleration = -(motioncalc_t)msg.deceleration;		// the deceleration is passed as a positive number in theCAN  message
 	params.phaseClocks[1] = msg.accelerationClocks;
 	params.phaseClocks[3] = msg.steadyClocks;
 	params.phaseClocks[5] = msg.decelClocks;
 	params.phaseClocks[0] = params.phaseClocks[2] = params.phaseClocks[4] = params.phaseClocks[6] = 0;
 #else
-	params.acceleration = msg.acceleration;
-	params.deceleration = -msg.deceleration;
+	params.acceleration = (motioncalc_t)msg.acceleration;
+	params.deceleration = -(motioncalc_t)msg.deceleration;
 	params.accelClocks = msg.accelerationClocks;
 	params.steadyClocks = msg.steadyClocks;
 	params.decelClocks = msg.decelClocks;
