@@ -45,7 +45,7 @@ struct PhaseStepParams
 	float Ka;
 };
 
-const char* TranslateStepMode(const StepMode mode);
+const char* TranslateStepMode(const StepMode mode) noexcept;
 
 class PhaseStep
 {
@@ -58,11 +58,11 @@ public:
 
 	// Methods called by the motion system
 	void InstanceControlLoop(size_t driver) noexcept;
-	void SetEnabled(bool enable) { enabled = enable; }
+	void SetEnabled(bool enable) noexcept { enabled = enable; }
 	bool IsEnabled() const noexcept { return enabled; }
 	void UpdatePhaseOffset(size_t driver) noexcept;
 	void SetPhaseOffset(size_t driver, uint16_t offset) noexcept;
-	uint16_t GetPhaseOffset(size_t driver);
+	uint16_t GetPhaseOffset(size_t driver) const noexcept;
 	float CalculateCurrentFraction() noexcept;
 
 	// Configuration methods

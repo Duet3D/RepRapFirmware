@@ -60,7 +60,7 @@ using std::numeric_limits;
 static uint16_t currentPhase[MaxSmartDrivers] = { 0 };
 static uint16_t phaseOffset[MaxSmartDrivers] = { 0 };			// The amount by which the phase should be offset for each driver
 
-const char* TranslateStepMode(const StepMode mode)
+const char* TranslateStepMode(const StepMode mode) noexcept
 {
 	switch (mode)
 	{
@@ -121,7 +121,7 @@ void PhaseStep::SetPhaseOffset(size_t driver, uint16_t offset) noexcept
 //	debugPrintf("Set phaseOffset[%u]=%u\n", driver, phaseOffset[driver]);
 }
 
-uint16_t PhaseStep::GetPhaseOffset(size_t driver)
+uint16_t PhaseStep::GetPhaseOffset(size_t driver) const noexcept
 {
 	return phaseOffset[driver];
 }

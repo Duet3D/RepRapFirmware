@@ -32,7 +32,6 @@ struct PrepParams
 	float accelDistance;
 	float decelStartDistance;
 	float totalDistance;
-	float topSpeed;									// the top speed reached
 	bool useInputShaping;
 
 	uint32_t TotalAccelClocks() const noexcept { return accelClocks; }
