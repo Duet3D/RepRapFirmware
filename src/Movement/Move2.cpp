@@ -1334,7 +1334,7 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 
 #if SUPPORT_S_CURVE
 	params.initialAcceleration = params.peakAcceleration = msg.acceleration;
-	params.initialDeceleration = params.peakDeceleration = -msg.deceleration;
+	params.initialDeceleration = params.peakDeceleration = -msg.deceleration;	// the deceleration is passed as a positive number in theCAN  message
 	params.phaseClocks[1] = msg.accelerationClocks;
 	params.phaseClocks[3] = msg.steadyClocks;
 	params.phaseClocks[5] = msg.decelClocks;
@@ -1360,19 +1360,24 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 
 	// Normalise the move to unit distance
 	params.totalDistance = (motioncalc_t)1.0;
-	const motioncalc_t accelDistanceExTopSpeed = -(motioncalc_t)0.5 * msg.acceleration * msquare((motioncalc_t)msg.accelerationClocks);
-	const motioncalc_t decelDistanceExTopSpeed = (motioncalc_t)0.5 * msg.deceleration * msquare((motioncalc_t)msg.decelClocks);
-	const motioncalc_t topSpeed = (params.totalDistance - (accelDistanceExTopSpeed + decelDistanceExTopSpeed))/clocksNeeded;
+	const motioncalc_t aTimesT = msg.acceleration * (motioncalc_t)msg.accelerationClocks;
+	const motioncalc_t accelDistanceExTopSpeed = -(motioncalc_t)0.5 * aTimesT * (motioncalc_t)msg.accelerationClocks;
+	const motioncalc_t dTimesT = msg.deceleration * (motioncalc_t)msg.decelClocks;
+	const motioncalc_t decelDistanceExTopSpeed = -(motioncalc_t)0.5 * dTimesT * (motioncalc_t)msg.decelClocks;
+	params.topSpeed = (params.totalDistance - (accelDistanceExTopSpeed + decelDistanceExTopSpeed))/clocksNeeded;
+	params.startSpeed = params.topSpeed - aTimesT;
+	params.endSpeed = params.topSpeed - dTimesT;
 
 #if SUPPORT_S_CURVE
-	params.distances[1] = accelDistanceExTopSpeed + topSpeed * msg.accelerationClocks;
-	params.distances[5] = decelDistanceExTopSpeed + topSpeed * msg.decelClocks;
+	params.speedsCalculated = false;
+	params.distances[1] = accelDistanceExTopSpeed + params.topSpeed * (motioncalc_t)msg.accelerationClocks;
+	params.distances[5] = decelDistanceExTopSpeed + params.topSpeed * (motioncalc_t)msg.decelClocks;
 	params.distances[3] = params.totalDistance - (params.distances[1] + params.distances[5]);
 	params.distances[0] = params.distances[2] = params.distances[4] = params.distances[6] = (motioncalc_t)0.0;
 	params.jerk = (motioncalc_t)0.0;
 #else
-	params.accelDistance = accelDistanceExTopSpeed + topSpeed * msg.accelerationClocks;
-	const motioncalc_t decelDistance = decelDistanceExTopSpeed + topSpeed * msg.decelClocks;
+	params.accelDistance = accelDistanceExTopSpeed + params.topSpeed * msg.accelerationClocks;
+	const motioncalc_t decelDistance = decelDistanceExTopSpeed + params.topSpeed * msg.decelClocks;
 	params.decelStartDistance = params.totalDistance - decelDistance;
 #endif
 

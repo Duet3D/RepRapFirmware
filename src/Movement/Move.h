@@ -313,7 +313,7 @@ public:
 	void SetInitialCalibrationDeviation(const Deviation& d) noexcept;
 	void SetLatestMeshDeviation(const Deviation& d) noexcept;
 
-	float PushBabyStepping(MovementSystemNumber msNumber, size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
+	float PushBabyStepping(MovementSystemNumber msNumber, size_t axis, float amount) noexcept;						// Try to push some babystepping through the lookahead queue
 
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);				// process M595
 	GCodeResult ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// process M572
@@ -323,7 +323,7 @@ public:
 	ExtruderShaper& GetExtruderShaperForExtruder(size_t extruder) noexcept;
 	const ExtruderShaper& GetExtruderShaperForExtruder(size_t extruder) const noexcept;
 	void ClearExtruderMovementPending(size_t extruder) noexcept;
-	float GetPressureAdvanceK1ClocksForLogicalDrive(size_t drive) const noexcept;
+	float GetPressureAdvanceK0ClocksForLogicalDrive(size_t drive) const noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
@@ -947,9 +947,9 @@ inline const ExtruderShaper& Move::GetExtruderShaperForExtruder(size_t extruder)
 	return dms[ExtruderToLogicalDrive(extruder)].extruderShaper;
 }
 
-inline float Move::GetPressureAdvanceK1ClocksForLogicalDrive(size_t drive) const noexcept
+inline float Move::GetPressureAdvanceK0ClocksForLogicalDrive(size_t drive) const noexcept
 {
-	return dms[drive].extruderShaper.GetK1Clocks();
+	return dms[drive].extruderShaper.GetK0Clocks();
 }
 
 // Schedule the next interrupt, returning true if we can't because it is already due

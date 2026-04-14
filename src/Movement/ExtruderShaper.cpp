@@ -20,8 +20,8 @@ constexpr ObjectModelTableEntry ExtruderShaper::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. InputShaper members
 	{ "d",				OBJECT_MODEL_FUNC(self->dk, 2), 						ObjectModelEntryFlags::none },
+	{ "k0",				OBJECT_MODEL_FUNC(self->k0 * StepClocksToSeconds, 3), 	ObjectModelEntryFlags::none },
 	{ "k1",				OBJECT_MODEL_FUNC(self->k1 * StepClocksToSeconds, 3), 	ObjectModelEntryFlags::none },
-	{ "k2",				OBJECT_MODEL_FUNC(self->k2 * StepClocksToSeconds, 3), 	ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t ExtruderShaper::objectModelTableDescriptor[] = { 1, 3 };
@@ -31,14 +31,38 @@ DEFINE_GET_OBJECT_MODEL_TABLE(ExtruderShaper)
 // Set the pressure advance parameters
 void ExtruderShaper::SetParameters(const PressureAdvanceParameters& params) noexcept
 {
-	k1 = params.k[0] * StepClockRate; k2 = params.k[1] * StepClockRate; dk = params.dk;
-	vk = dk/k1; d0 = dk * (1.0 - (k2/k1));
+	k0 = params.k[0] * StepClockRate;
+	k1 = params.k[1] * StepClockRate;
+	dk = params.dk;
+	vk = (motioncalc_t)(dk/k0);
+	d0 = (motioncalc_t)(dk * (1.0 - (k1/k0)));
 }
 
 // Get the pressure advance distance for a given extrusion speed
-float ExtruderShaper::GetPressureAdvanceDistance(float speed) const noexcept
+motioncalc_t ExtruderShaper::GetPressureAdvanceDistance(motioncalc_t speed) const noexcept
 {
-	return (speed <= vk) ? k1 * speed : d0 + k2 * speed;
+	return (speed <= vk) ? (motioncalc_t)k0 * speed : d0 + (motioncalc_t)k1 * speed;
+}
+
+// Get the average number of pressure advance clocks for a move segment that changes speed
+motioncalc_t ExtruderShaper::GetAverageAdvanceClocks(motioncalc_t lowSpeed, motioncalc_t highSpeed, motioncalc_t steps) const noexcept
+{
+	const motioncalc_t actualLowSpeed = lowSpeed * steps;
+	const motioncalc_t actualHighSpeed = highSpeed * steps;
+
+	// Optimisation for when the speed change doesn't cross the knee
+	if (actualHighSpeed <= vk)
+	{
+		return (motioncalc_t)k0;
+	}
+	if (actualLowSpeed >= vk)
+	{
+		return k1;
+	}
+
+	const motioncalc_t lowDistance = GetPressureAdvanceDistance(actualLowSpeed);
+	const motioncalc_t highDistance = GetPressureAdvanceDistance(actualHighSpeed);
+	return (highDistance - lowDistance)/(actualHighSpeed - actualLowSpeed);
 }
 
 // Append the pressure advance parameters to a string
@@ -46,11 +70,11 @@ void ExtruderShaper::AppendParameters(const StringRef& reply) const noexcept
 {
 	if (std::isinf(dk))
 	{
-		reply.catf("%.3f", (double)k1);
+		reply.catf("%.3f", (double)k0);
 	}
 	else
 	{
-		reply.catf("(%.3f,%.3f,%.2f)", (double)k1, (double)k2, (double)dk);
+		reply.catf("(%.3f,%.3f,%.2f)", (double)k0, (double)k1, (double)dk);
 	}
 }
 
