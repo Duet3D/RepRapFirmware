@@ -38,13 +38,13 @@ void ExtruderShaper::SetParameters(const PressureAdvanceParameters& params) noex
 	d0 = (motioncalc_t)(dk * (1.0 - (k1/k0)));
 }
 
-// Get the pressure advance distance for a given extrusion speed
+// Get the pressure advance distance for a given extrusion speed. This is not currently used.
 motioncalc_t ExtruderShaper::GetPressureAdvanceDistance(motioncalc_t speed) const noexcept
 {
 	return (speed <= vk) ? (motioncalc_t)k0 * speed : d0 + (motioncalc_t)k1 * speed;
 }
 
-// Get the average number of pressure advance clocks for a move segment that changes speed
+// Get the average number of pressure advance clocks for a move segment that changes speed. Must have lowSpeed <= highSpeed.
 motioncalc_t ExtruderShaper::GetAverageAdvanceClocks(motioncalc_t lowSpeed, motioncalc_t highSpeed, motioncalc_t steps) const noexcept
 {
 	const motioncalc_t actualLowSpeed = lowSpeed * steps;
@@ -60,8 +60,9 @@ motioncalc_t ExtruderShaper::GetAverageAdvanceClocks(motioncalc_t lowSpeed, moti
 		return k1;
 	}
 
-	const motioncalc_t lowDistance = GetPressureAdvanceDistance(actualLowSpeed);
-	const motioncalc_t highDistance = GetPressureAdvanceDistance(actualHighSpeed);
+	// actualLowSpeed is below the knee and actualHighSpeed is above it
+	const motioncalc_t lowDistance = (motioncalc_t)k0 * actualLowSpeed;
+	const motioncalc_t highDistance = d0 + (motioncalc_t)k1 *actualHighSpeed;
 	return (highDistance - lowDistance)/(actualHighSpeed - actualLowSpeed);
 }
 
