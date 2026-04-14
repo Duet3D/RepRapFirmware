@@ -1339,8 +1339,7 @@ GCodeResult Move::EutSetRemotePressureAdvanceV1(const CanMessageMultipleDrivesRe
 							}
 							else
 							{
-								const PressureAdvanceParameters params(msg.values[count]);
-								dms[driver].extruderShaper.SetParameters(params);
+								dms[driver].extruderShaper.SetParametersSimple(msg.values[count]);
 							}
 						}
 				   );
@@ -1366,8 +1365,7 @@ GCodeResult Move::EutSetRemotePressureAdvanceV2(const CanMessageMultipleDrivesRe
 							}
 							else
 							{
-								const PressureAdvanceParameters params(msg.values[count]);
-								dms[driver].extruderShaper.SetParameters(params);
+								dms[driver].extruderShaper.SetParameters(msg.values[count]);
 							}
 						}
 				   );

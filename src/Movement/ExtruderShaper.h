@@ -12,21 +12,24 @@
 #include <ObjectModel/ObjectModel.h>
 #include <limits>
 
-// This class implements MoveSegment generation for extruders with pressure advance.
-// It also tracks extrusion that has been commanded but not implemented because less than one full step has been accumulated.
-// Currently it only supports linear pressure advance.
+// This class holds pressure advance parameters for an extruder.
 class ExtruderShaper INHERIT_OBJECT_MODEL
 {
 public:
 	ExtruderShaper() noexcept
-		: k0(0.0), k1(0.0), dk(std::numeric_limits<float>::infinity()), vk(std::numeric_limits<float>::infinity())
-	{ }
+	{
+		SetParametersSimple(0.0);
+	}
 
-	// Temporary functions until we support more sophisticated pressure advance
-	float GetK0Clocks() const noexcept { return k0; }								// get pressure advance in step clocks
+	float GetK0Clocks() const noexcept { return (float)k0; }								// get pressure advance in step clocks
 	void SetParameters(const PressureAdvanceParameters& params) noexcept;
+	void SetParametersSimple(float f) noexcept;
 
-	bool IsActive() const noexcept { return k0 != 0.0; }
+#if SUPPORT_REMOTE_COMMANDS
+	void SetParameters(const ShortPressureAdvanceParameters& params) noexcept;
+#endif
+
+	bool IsActive() const noexcept { return k0 != (motioncalc_t)0.0; }
 	motioncalc_t GetPressureAdvanceDistance(motioncalc_t speed) const noexcept;
 	motioncalc_t GetAverageAdvanceClocks(motioncalc_t lowSpeed, motioncalc_t highSpeed, motioncalc_t steps) const noexcept
 		pre(highSpeed > lowSpeed);
@@ -38,9 +41,9 @@ protected:
 
 private:
 	// Specified parameters
-	float k0;								// the initial pressure advance constant in step clocks
-	float k1;								// the slope of pressure advance distance vs. speed above distance d
-	float dk;								// the pressure advance distance up to which k applies
+	motioncalc_t k0;						// the initial pressure advance constant in step clocks
+	motioncalc_t k1;						// the slope of pressure advance distance vs. speed above distance dk
+	motioncalc_t dk;						// the pressure advance distance up to which k0 applies
 
 	// Derived parameters
 	motioncalc_t vk;						// the speed up to which k1 applies, equal to dk/k1
