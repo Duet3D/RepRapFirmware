@@ -22,6 +22,8 @@ public:
 	}
 
 	float GetK0Clocks() const noexcept { return (float)k0; }								// get pressure advance in step clocks
+	float GetK0Seconds() const noexcept { return (float)k0 * StepClocksToSeconds; }
+
 	void SetParameters(const PressureAdvanceParameters& params) noexcept;
 	void SetParametersSimple(float f) noexcept;
 

@@ -237,8 +237,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 
 	if (gb.Seen('S'))
 	{
-		params.k[0] = gb.GetNonNegativeFValue();
-		params.k[1] = 0.0;
+		params.k[1] = params.k[0] = gb.GetNonNegativeFValue();
 		params.dk = std::numeric_limits<float>::infinity();
 		gotParameters = true;
 	}

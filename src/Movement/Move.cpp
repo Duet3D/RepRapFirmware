@@ -300,7 +300,8 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "phaseStep",			OBJECT_MODEL_FUNC(self->GetStepMode(ExtruderToLogicalDrive(context.GetLastIndex())) == StepMode::phase),							ObjectModelEntryFlags::notPanelDue },
 #endif
 	{ "position",			OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetGCodes().GetCurrentMovementState(context).LiveMachineCoordinate(ExtruderToLogicalDrive(context.GetLastIndex())), 1)),	ObjectModelEntryFlags::liveNotPanelDue },
-	{ "pressureAdvance",	OBJECT_MODEL_FUNC(&(self->GetExtruderShaperForExtruder(context.GetLastIndex()))),													ObjectModelEntryFlags::none },
+	{ "pressAdv",			OBJECT_MODEL_FUNC(&(self->GetExtruderShaperForExtruder(context.GetLastIndex()))),													ObjectModelEntryFlags::none },
+	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetExtruderShaperForExtruder(context.GetLastIndex()).GetK0Seconds(), 3),									ObjectModelEntryFlags::obsolete },
 	{ "printingJerk",		OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetPrintingInstantDv(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),	ObjectModelEntryFlags::none },
 	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1), 								ObjectModelEntryFlags::liveNotPanelDue },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
@@ -348,7 +349,7 @@ constexpr uint8_t Move::objectModelTableDescriptor[] =
 	16,																		// section 10: move.extruders[]
 #else
 	24 + SUPPORT_PHASE_STEPPING,											// section 9: move.axes[]
-	17 + SUPPORT_PHASE_STEPPING,											// section 10: move.extruders[]
+	18 + SUPPORT_PHASE_STEPPING,											// section 10: move.extruders[]
 #endif
 #if SUPPORT_NONLINEAR_EXTRUSION
 	3,																		// section 11: move.extruders[].nonlinear

@@ -34,8 +34,15 @@ void ExtruderShaper::SetParameters(const PressureAdvanceParameters& params) noex
 	k0 = (motioncalc_t)(params.k[0] * StepClockRate);
 	k1 = (motioncalc_t)(params.k[1] * StepClockRate);
 	dk = (motioncalc_t)params.dk;
-	vk = dk/k0;
-	d0 = dk * (1.0 - (k1/k0));
+	if (k0 == 0)
+	{
+		vk = dk = std::numeric_limits<motioncalc_t>::infinity();
+	}
+	else
+	{
+		vk = dk/k0;
+		d0 = dk * ((motioncalc_t)1.0 - (k1/k0));
+	}
 }
 
 // Set single-slope pressure advance
@@ -54,8 +61,16 @@ void ExtruderShaper::SetParameters(const ShortPressureAdvanceParameters& params)
 	k0 = (motioncalc_t)((float)params.k[0] * StepClockRate);
 	k1 = (motioncalc_t)((float)params.k[1] * StepClockRate);
 	dk = (motioncalc_t)params.dk;
-	vk = dk/k0;
-	d0 = dk * (1.0 - (k1/k0));
+	if (k0 == (motioncalc_t)0.0)
+	{
+		vk = dk = std::numeric_limits<motioncalc_t>::infinity();
+		d0 = (motioncalc_t)0.0;
+	}
+	else
+	{
+		vk = dk/k0;
+		d0 = dk * ((motioncalc_t)1.0 - (k1/k0));
+	}
 }
 
 #endif
@@ -93,11 +108,11 @@ void ExtruderShaper::AppendParameters(const StringRef& reply) const noexcept
 {
 	if (std::isinf(dk))
 	{
-		reply.catf("%.3f", (double)k0);
+		reply.catf("%.3f", (double)(k0 * StepClocksToSeconds));
 	}
 	else
 	{
-		reply.catf("(%.3f,%.3f,%.2f)", (double)k0, (double)k1, (double)dk);
+		reply.catf("(%.3f %.3f %.2f)", (double)(k0 * StepClocksToSeconds), (double)(k1 * StepClocksToSeconds), (double)dk);
 	}
 }
 
