@@ -321,9 +321,9 @@ public:
 	GCodeResult ConfigureNonlinearExtrusion(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// process M592
 
 	ExtruderShaper& GetExtruderShaperForExtruder(size_t extruder) noexcept;
+	const ExtruderShaper& GetExtruderShaperForExtruder(size_t extruder) const noexcept;
 	void ClearExtruderMovementPending(size_t extruder) noexcept;
-	float GetPressureAdvanceClocksForLogicalDrive(size_t drive) const noexcept;
-	float GetPressureAdvanceClocksForExtruder(size_t extruder) const noexcept;
+	float GetPressureAdvanceK1ClocksForLogicalDrive(size_t drive) const noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
@@ -339,7 +339,8 @@ public:
 	void StopDriversFromRemote(uint16_t whichDrives) noexcept;
 	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
 
-	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
+	GCodeResult EutSetRemotePressureAdvanceV1(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
+	GCodeResult EutSetRemotePressureAdvanceV2(const CanMessageMultipleDrivesRequest<ShortPressureAdvanceParameters>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutSetInputShaping(const CanMessageSetInputShapingV1& msg, size_t dataLength, const StringRef& reply) noexcept
 	{
 		return axisShaper.EutSetInputShaping(msg, dataLength, reply);
@@ -941,14 +942,14 @@ inline ExtruderShaper& Move::GetExtruderShaperForExtruder(size_t extruder) noexc
 	return dms[ExtruderToLogicalDrive(extruder)].extruderShaper;
 }
 
-inline float Move::GetPressureAdvanceClocksForLogicalDrive(size_t drive) const noexcept
+inline const ExtruderShaper& Move::GetExtruderShaperForExtruder(size_t extruder) const noexcept
 {
-	return dms[drive].extruderShaper.GetKclocks();
+	return dms[ExtruderToLogicalDrive(extruder)].extruderShaper;
 }
 
-inline float Move::GetPressureAdvanceClocksForExtruder(size_t extruder) const noexcept
+inline float Move::GetPressureAdvanceK1ClocksForLogicalDrive(size_t drive) const noexcept
 {
-	return (extruder < MaxExtruders) ? GetPressureAdvanceClocksForLogicalDrive(ExtruderToLogicalDrive(extruder)) : 0.0;
+	return dms[drive].extruderShaper.GetK1Clocks();
 }
 
 // Schedule the next interrupt, returning true if we can't because it is already due

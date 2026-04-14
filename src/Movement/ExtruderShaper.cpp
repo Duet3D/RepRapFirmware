@@ -7,6 +7,51 @@
 
 #include "ExtruderShaper.h"
 
-// No code here yet because all members are inlined
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(ExtruderShaper, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(ExtruderShaper, _condition, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry ExtruderShaper::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. InputShaper members
+	{ "d",				OBJECT_MODEL_FUNC(self->dk, 2), 						ObjectModelEntryFlags::none },
+	{ "k1",				OBJECT_MODEL_FUNC(self->k1 * StepClocksToSeconds, 3), 	ObjectModelEntryFlags::none },
+	{ "k2",				OBJECT_MODEL_FUNC(self->k2 * StepClocksToSeconds, 3), 	ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t ExtruderShaper::objectModelTableDescriptor[] = { 1, 3 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(ExtruderShaper)
+
+// Set the pressure advance parameters
+void ExtruderShaper::SetParameters(const PressureAdvanceParameters& params) noexcept
+{
+	k1 = params.k[0] * StepClockRate; k2 = params.k[1] * StepClockRate; dk = params.dk;
+	vk = dk/k1; d0 = dk * (1.0 - (k2/k1));
+}
+
+// Get the pressure advance distance for a given extrusion speed
+float ExtruderShaper::GetPressureAdvanceDistance(float speed) const noexcept
+{
+	return (speed <= vk) ? k1 * speed : d0 + k2 * speed;
+}
+
+// Append the pressure advance parameters to a string
+void ExtruderShaper::AppendParameters(const StringRef& reply) const noexcept
+{
+	if (std::isinf(dk))
+	{
+		reply.catf("%.3f", (double)k1);
+	}
+	else
+	{
+		reply.catf("(%.3f,%.3f,%.2f)", (double)k1, (double)k2, (double)dk);
+	}
+}
 
 // End

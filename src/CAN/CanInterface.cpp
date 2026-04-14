@@ -672,6 +672,9 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 
 template<class T> static GCodeResult SetRemoteDriverValues(const CanDriversData<T>& data, const StringRef& reply, CanMessageType mt) noexcept
 {
+	// This code sends only one message per CAN board, so sizeof<T> must be small enough so that the message fits in a single CAN packet
+	static_assert(CanMessageMultipleDrivesRequest<T>::MaxDrivesPerMessage() >= MaxLinearDriversPerCanSlave);
+
 	GCodeResult rslt = GCodeResult::ok;
 	size_t start = 0;
 	for (;;)
@@ -993,9 +996,9 @@ GCodeResult CanInterface::SetRemoteDriverStepsPerMmAndMicrostepping(const CanDri
 }
 
 // Set the pressure advance on remote drivers, returning true if successful
-GCodeResult CanInterface::SetRemotePressureAdvance(const CanDriversData<float>& data, const StringRef& reply) noexcept
+GCodeResult CanInterface::SetRemotePressureAdvance(const CanDriversData<ShortPressureAdvanceParameters>& data, const StringRef& reply) noexcept
 {
-	return SetRemoteDriverValues(data, reply, CanMessageType::setPressureAdvance);
+	return SetRemoteDriverValues(data, reply, CanMessageType::setPressureAdvanceV2);
 }
 
 // Handle M569 for a remote driver

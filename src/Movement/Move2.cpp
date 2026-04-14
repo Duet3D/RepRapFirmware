@@ -232,9 +232,31 @@ GCodeResult Move::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply
 // Process M572
 GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	PressureAdvanceParameters params;
+	bool gotParameters;
+
 	if (gb.Seen('S'))
 	{
-		const float advance = gb.GetNonNegativeFValue();
+		params.k[0] = gb.GetNonNegativeFValue();
+		params.k[1] = 0.0;
+		params.dk = std::numeric_limits<float>::infinity();
+		gotParameters = true;
+	}
+	else if (gb.Seen('K'))
+	{
+		size_t n = 2;
+		gb.GetFloatArray(params.k, n, false);
+		gb.MustSee('L');
+		params.dk = gb.GetNonNegativeFValue();
+		gotParameters = true;
+	}
+	else
+	{
+		gotParameters = false;
+	}
+
+	if (gotParameters)
+	{
 		if (!reprap.GetGCodes().LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
@@ -243,7 +265,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 		GCodeResult rslt = GCodeResult::ok;
 
 #if SUPPORT_CAN_EXPANSION
-		CanDriversData<float> canDriversToUpdate;
+		CanDriversData<ShortPressureAdvanceParameters> canDriversToUpdate;
 #endif
 		if (gb.Seen('D'))
 		{
@@ -259,12 +281,12 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 					rslt = GCodeResult::error;
 					break;
 				}
-				GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
+				GetExtruderShaperForExtruder(extruder).SetParameters(params);
 #if SUPPORT_CAN_EXPANSION
 				const DriverId did = GetExtruderDriver(extruder);
 				if (did.IsRemote())
 				{
-					canDriversToUpdate.AddEntry(did, advance);
+					canDriversToUpdate.AddEntry(did, ShortPressureAdvanceParameters(params));
 				}
 #endif
 			}
@@ -280,20 +302,20 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 			else
 			{
 #if SUPPORT_CAN_EXPANSION
-				ct->IterateExtruders([this, advance, &canDriversToUpdate](unsigned int extruder)
+				ct->IterateExtruders([this, &params, &canDriversToUpdate](unsigned int extruder)
 										{
-											GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
+											GetExtruderShaperForExtruder(extruder).SetParameters(params);
 											const DriverId did = GetExtruderDriver(extruder);
 											if (did.IsRemote())
 											{
-												canDriversToUpdate.AddEntry(did, advance);
+												canDriversToUpdate.AddEntry(did, ShortPressureAdvanceParameters(params));
 											}
 										}
 									);
 #else
-				ct->IterateExtruders([this, advance](unsigned int extruder)
+				ct->IterateExtruders([this, &params](unsigned int extruder)
 										{
-											GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
+											GetExtruderShaperForExtruder(extruder).SetParameters(params);
 										}
 									);
 #endif
@@ -309,11 +331,14 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 #endif
 	}
 
+	// Here if we were not given pressure advance parameters
 	reply.copy("Extruder pressure advance");
 	char c = ':';
 	for (size_t i = 0; i < reprap.GetGCodes().GetNumExtruders(); ++i)
 	{
-		reply.catf("%c %.3f", c, (double)GetExtruderShaperForExtruder(i).GetKseconds());
+		reply.cat(c);
+		reply.cat(' ');
+		GetExtruderShaperForExtruder(i).AppendParameters(reply);
 		c = ',';
 	}
 	return GCodeResult::ok;

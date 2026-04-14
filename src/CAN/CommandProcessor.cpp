@@ -530,9 +530,14 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetMove().EutProcessM915(buf->msg.generic, replyRef);
 				break;
 
-			case CanMessageType::setPressureAdvance:
+			case CanMessageType::setPressureAdvanceV1:
 				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
-				rslt = reprap.GetMove().EutSetRemotePressureAdvance(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
+				rslt = reprap.GetMove().EutSetRemotePressureAdvanceV1(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
+				break;
+
+			case CanMessageType::setPressureAdvanceV2:
+				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
+				rslt = reprap.GetMove().EutSetRemotePressureAdvanceV2(buf->msg.multipleDrivesRequestPressureAdvance, buf->dataLength, replyRef);
 				break;
 
 			case CanMessageType::setInputShapingV1:

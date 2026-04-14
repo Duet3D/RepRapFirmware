@@ -408,7 +408,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 				}
 				if (flags.xyMoving && nextMove.usePressureAdvance)
 				{
-					const float compensationClocks = move.GetPressureAdvanceClocksForLogicalDrive(drive);
+					const float compensationClocks = move.GetPressureAdvanceK1ClocksForLogicalDrive(drive);
 					if (compensationClocks > 0.0)
 					{
 						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
