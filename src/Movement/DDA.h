@@ -34,25 +34,31 @@ struct PrepParams
 	motioncalc_t initialDeceleration, peakDeceleration;	// the decelerations, always negative
     motioncalc_t distances[7];							// the distances of each phase
     motioncalc_t jerk;									// the magnitude of the rate of change of acceleration or deceleration, always positive; or zero if not using S-curve acceleration
-
-	uint32_t SteadyClocks() const noexcept { return phaseClocks[3]; }
 #else
 	uint32_t accelClocks, steadyClocks, decelClocks;
 	motioncalc_t acceleration;							// the acceleration to use, always positive
 	motioncalc_t deceleration;							// the deceleration to use, always negative
 	motioncalc_t accelDistance;
 	motioncalc_t decelStartDistance;
-	uint32_t SteadyClocks() const noexcept { return steadyClocks; }
 #endif
 	motioncalc_t totalDistance;
+	motioncalc_t startSpeed, topSpeed, endSpeed;		// the speeds reached
+#if SUPPORT_S_CURVE
+    mutable motioncalc_t phase1StartSpeed, phase1EndSpeed, phase5StartSpeed, phase5EndSpeed;
+	mutable bool speedsCalculated;						// true if the previous 4 speeds have been calculated and stored
+#endif
+
 	bool useInputShaping;
 
 #if SUPPORT_S_CURVE
+	uint32_t SteadyClocks() const noexcept { return phaseClocks[3]; }
 	uint32_t TotalAccelClocks() const noexcept { return phaseClocks[0] + phaseClocks[1] + phaseClocks[2]; }
 	uint32_t TotalDecelClocks() const noexcept { return phaseClocks[4] + phaseClocks[5] + phaseClocks[6]; }
 	motioncalc_t TotalAccelDistance() const noexcept { return distances[0] + distances[1] + distances[2]; }
 	motioncalc_t TotalDecelDistance() const noexcept { return distances[4] + distances[5] + distances[6]; }
+	void EnsureSpeedsSet() const noexcept;
 #else
+	uint32_t SteadyClocks() const noexcept { return steadyClocks; }
 	uint32_t TotalAccelClocks() const noexcept { return accelClocks; }
 	uint32_t TotalDecelClocks() const noexcept { return decelClocks; }
 	motioncalc_t TotalAccelDistance() const noexcept { return accelDistance; }

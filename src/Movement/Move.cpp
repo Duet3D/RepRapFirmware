@@ -300,7 +300,8 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "phaseStep",			OBJECT_MODEL_FUNC(self->GetStepMode(ExtruderToLogicalDrive(context.GetLastIndex())) == StepMode::phase),							ObjectModelEntryFlags::notPanelDue },
 #endif
 	{ "position",			OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetGCodes().GetCurrentMovementState(context).LiveMachineCoordinate(ExtruderToLogicalDrive(context.GetLastIndex())), 1)),	ObjectModelEntryFlags::liveNotPanelDue },
-	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetPressureAdvanceClocksForExtruder(context.GetLastIndex()) * (1.0/(float)StepClockRate), 3),				ObjectModelEntryFlags::none },
+	{ "pressAdv",			OBJECT_MODEL_FUNC(&(self->GetExtruderShaperForExtruder(context.GetLastIndex()))),													ObjectModelEntryFlags::none },
+	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetExtruderShaperForExtruder(context.GetLastIndex()).GetK0Seconds(), 3),									ObjectModelEntryFlags::obsolete },
 	{ "printingJerk",		OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetPrintingInstantDv(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),	ObjectModelEntryFlags::none },
 	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1), 								ObjectModelEntryFlags::liveNotPanelDue },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
@@ -348,7 +349,7 @@ constexpr uint8_t Move::objectModelTableDescriptor[] =
 	16,																		// section 10: move.extruders[]
 #else
 	24 + SUPPORT_PHASE_STEPPING,											// section 9: move.axes[]
-	17 + SUPPORT_PHASE_STEPPING,											// section 10: move.extruders[]
+	18 + SUPPORT_PHASE_STEPPING,											// section 10: move.extruders[]
 #endif
 #if SUPPORT_NONLINEAR_EXTRUSION
 	3,																		// section 11: move.extruders[].nonlinear
@@ -1320,7 +1321,7 @@ bool Move::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limi
 
 #if SUPPORT_REMOTE_COMMANDS
 
-GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
+GCodeResult Move::EutSetRemotePressureAdvanceV1(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
 {
 	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
 	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
@@ -1339,7 +1340,33 @@ GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequ
 							}
 							else
 							{
-								dms[driver].extruderShaper.SetKseconds(msg.values[count]);
+								dms[driver].extruderShaper.SetParametersSimple(msg.values[count]);
+							}
+						}
+				   );
+	return rslt;
+}
+
+GCodeResult Move::EutSetRemotePressureAdvanceV2(const CanMessageMultipleDrivesRequest<ShortPressureAdvanceParameters>& msg, size_t dataLength, const StringRef& reply) noexcept
+{
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	{
+		reply.copy("bad data length");
+		return GCodeResult::error;
+	}
+
+	GCodeResult rslt = GCodeResult::ok;
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) noexcept -> void
+						{
+							if (driver >= NumDirectDrivers)
+							{
+								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
+								rslt = GCodeResult::error;
+							}
+							else
+							{
+								dms[driver].extruderShaper.SetParameters(msg.values[count]);
 							}
 						}
 				   );
@@ -1919,12 +1946,13 @@ finished:
 // We never add a segment that starts earlier than the earliest existing segment (if any).
 void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags) noexcept
 {
+#if 0	//debug
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
 	{
 //		debugPrintf("AddLin: st=%" PRIu32 " steps=%.1f\n", startTime, (double)steps);
-		//dda.DebugPrint("addlin");
 //		params.DebugPrint();
 	}
+#endif
 
 	DriveMovement& dm = dms[logicalDrive];
 	MoveSegment *_ecv_null tail;
@@ -2003,7 +2031,22 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 	// Phases with zero duration will not get executed and may lead to infinities in the calculations. Avoid introducing them. Keep the total distance correct.
 	// When using input shaping we can save some FP multiplications by multiplying the acceleration or deceleration time by the pressure advance just once instead of once per impulse
 #if SUPPORT_S_CURVE
-	const motioncalc_t pressureAdvanceClocks = (moveFlags.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)dm.extruderShaper.GetKclocks() : (motioncalc_t)0.0;
+	motioncalc_t phase0PressureAdvanceClocks, phase1PressureAdvanceClocks, phase2PressureAdvanceClocks, phase4PressureAdvanceClocks, phase5PressureAdvanceClocks, phase6PressureAdvanceClocks;
+	if (moveFlags.isExtruder && !moveFlags.nonPrintingMove)
+	{
+		params.EnsureSpeedsSet();				// calculate the intermediate speeds
+
+		phase0PressureAdvanceClocks = (params.phaseClocks[0] == 0) ? (motioncalc_t)0.0 : dm.extruderShaper.GetAverageAdvanceClocks(params.startSpeed, params.phase1StartSpeed, steps);
+		phase1PressureAdvanceClocks = (params.phaseClocks[1] == 0) ? (motioncalc_t)0.0 : dm.extruderShaper.GetAverageAdvanceClocks(params.phase1StartSpeed, params.phase1EndSpeed, steps);
+		phase2PressureAdvanceClocks = (params.phaseClocks[2] == 0) ? (motioncalc_t)0.0 : dm.extruderShaper.GetAverageAdvanceClocks(params.phase1EndSpeed, params.topSpeed, steps);
+		phase4PressureAdvanceClocks = (params.phaseClocks[4] == 0) ? (motioncalc_t)0.0 : dm.extruderShaper.GetAverageAdvanceClocks(params.phase5StartSpeed, params.topSpeed, steps);
+		phase5PressureAdvanceClocks = (params.phaseClocks[5] == 0) ? (motioncalc_t)0.0 : dm.extruderShaper.GetAverageAdvanceClocks(params.phase5EndSpeed, params.phase5StartSpeed, steps);
+		phase6PressureAdvanceClocks = (params.phaseClocks[6] == 0) ? (motioncalc_t)0.0 : dm.extruderShaper.GetAverageAdvanceClocks(params.endSpeed, params.phase5EndSpeed, steps);
+	}
+	else
+	{
+		phase0PressureAdvanceClocks = phase1PressureAdvanceClocks = phase2PressureAdvanceClocks = phase4PressureAdvanceClocks = phase5PressureAdvanceClocks = phase6PressureAdvanceClocks = (motioncalc_t)0.0;
+	}
 #else
 	motioncalc_t accelDistance, accelPressureAdvance;
 	if (params.accelClocks == 0)
@@ -2014,7 +2057,9 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 	else
 	{
 		accelDistance = (params.decelClocks + params.steadyClocks == 0) ? totalDistance : (motioncalc_t)params.accelDistance;
-		accelPressureAdvance = (moveFlags.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)(params.accelClocks * dm.extruderShaper.GetKclocks()) : (motioncalc_t)0.0;
+		accelPressureAdvance = (moveFlags.isExtruder && !moveFlags.nonPrintingMove)
+								? (motioncalc_t)params.accelClocks * dm.extruderShaper.GetAverageAdvanceClocks(params.startSpeed, params.topSpeed, steps)
+								: (motioncalc_t)0.0;
 	}
 
 	motioncalc_t decelDistance, decelPressureAdvance;
@@ -2026,7 +2071,9 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 	else
 	{
 		decelDistance = totalDistance - ((params.steadyClocks == 0) ? accelDistance : (motioncalc_t)params.decelStartDistance);
-		decelPressureAdvance = (moveFlags.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)(params.decelClocks * dm.extruderShaper.GetKclocks()) : (motioncalc_t)0.0;
+		decelPressureAdvance = (moveFlags.isExtruder && !moveFlags.nonPrintingMove)
+								? (motioncalc_t)params.decelClocks * dm.extruderShaper.GetAverageAdvanceClocks(params.endSpeed, params.topSpeed, steps)
+								: (motioncalc_t)0.0;
 	}
 
 	const motioncalc_t steadyDistance = (params.steadyClocks == 0) ? (motioncalc_t)0.0 : totalDistance - accelDistance - decelDistance;
@@ -2045,15 +2092,15 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 		const motioncalc_t scaledJerk = params.jerk * stepsPerMm;
 		if (params.phaseClocks[0] != 0)
 		{
-			tail = AddSegment(tail, startTime, params.phaseClocks[0], params.distances[0] * stepsPerMm, params.initialAcceleration * stepsPerMm, scaledJerk, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, startTime, params.phaseClocks[0], params.distances[0] * stepsPerMm, params.initialAcceleration * stepsPerMm, scaledJerk, moveFlags, phase0PressureAdvanceClocks);
 		}
 		if (params.phaseClocks[1] != 0)
 		{
-			tail = AddSegment(tail, accelConstantStartTime, params.phaseClocks[1], params.distances[1] * stepsPerMm, params.peakAcceleration * stepsPerMm, (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, accelConstantStartTime, params.phaseClocks[1], params.distances[1] * stepsPerMm, params.peakAcceleration * stepsPerMm, (motioncalc_t)0.0, moveFlags, phase1PressureAdvanceClocks);
 		}
 		if (params.phaseClocks[2] != 0)
 		{
-			tail = AddSegment(tail, accelEndStartTime, params.phaseClocks[2], params.distances[2] * stepsPerMm, params.peakAcceleration * stepsPerMm, -scaledJerk, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, accelEndStartTime, params.phaseClocks[2], params.distances[2] * stepsPerMm, params.peakAcceleration * stepsPerMm, -scaledJerk, moveFlags, phase2PressureAdvanceClocks);
 		}
 		if (params.phaseClocks[3] != 0)
 		{
@@ -2061,15 +2108,15 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 		}
 		if (params.phaseClocks[4] != 0)
 		{
-			tail = AddSegment(tail, decelStartTime, params.phaseClocks[4], params.distances[4] * stepsPerMm, params.initialDeceleration * stepsPerMm, -scaledJerk, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, decelStartTime, params.phaseClocks[4], params.distances[4] * stepsPerMm, params.initialDeceleration * stepsPerMm, -scaledJerk, moveFlags, phase4PressureAdvanceClocks);
 		}
 		if (params.phaseClocks[5] != 0)
 		{
-			tail = AddSegment(tail, decelConstantStartTime, params.phaseClocks[5], params.distances[5] * stepsPerMm, params.peakDeceleration * stepsPerMm, (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, decelConstantStartTime, params.phaseClocks[5], params.distances[5] * stepsPerMm, params.peakDeceleration * stepsPerMm, (motioncalc_t)0.0, moveFlags, phase5PressureAdvanceClocks);
 		}
 		if (params.phaseClocks[6] != 0)
 		{
-			tail = AddSegment(tail, decelEndStartTime, params.phaseClocks[6], params.distances[6] * stepsPerMm, params.peakDeceleration * stepsPerMm, scaledJerk, moveFlags, pressureAdvanceClocks);
+			tail = AddSegment(tail, decelEndStartTime, params.phaseClocks[6], params.distances[6] * stepsPerMm, params.peakDeceleration * stepsPerMm, scaledJerk, moveFlags, phase6PressureAdvanceClocks);
 		}
 #else
 		if (params.accelClocks != 0)
@@ -2096,15 +2143,15 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 			const motioncalc_t scaledJerk = params.jerk * factor;
 			if (params.phaseClocks[0] != 0)
 			{
-				tail = AddSegment(tail, startTime + startDelay, params.phaseClocks[0], params.distances[0] * factor, params.initialAcceleration * factor, scaledJerk, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, startTime + startDelay, params.phaseClocks[0], params.distances[0] * factor, params.initialAcceleration * factor, scaledJerk, moveFlags, phase0PressureAdvanceClocks);
 			}
 			if (params.phaseClocks[1] != 0)
 			{
-				tail = AddSegment(tail, accelConstantStartTime + startDelay, params.phaseClocks[1], params.distances[1] * factor, params.peakAcceleration * factor, (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, accelConstantStartTime + startDelay, params.phaseClocks[1], params.distances[1] * factor, params.peakAcceleration * factor, (motioncalc_t)0.0, moveFlags, phase1PressureAdvanceClocks);
 			}
 			if (params.phaseClocks[2] != 0)
 			{
-				tail = AddSegment(tail, accelEndStartTime + startDelay, params.phaseClocks[2], params.distances[2] * factor, params.peakAcceleration * factor, -scaledJerk, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, accelEndStartTime + startDelay, params.phaseClocks[2], params.distances[2] * factor, params.peakAcceleration * factor, -scaledJerk, moveFlags, phase2PressureAdvanceClocks);
 			}
 			if (params.phaseClocks[3] != 0)
 			{
@@ -2112,15 +2159,15 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 			}
 			if (params.phaseClocks[4] != 0)
 			{
-				tail = AddSegment(tail, decelStartTime + startDelay, params.phaseClocks[4], params.distances[4] * factor, params.initialDeceleration * factor, -scaledJerk, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, decelStartTime + startDelay, params.phaseClocks[4], params.distances[4] * factor, params.initialDeceleration * factor, -scaledJerk, moveFlags, phase4PressureAdvanceClocks);
 			}
 			if (params.phaseClocks[5] != 0)
 			{
-				tail = AddSegment(tail, decelConstantStartTime + startDelay, params.phaseClocks[5], params.distances[5] * factor, params.peakDeceleration * factor, (motioncalc_t)0.0, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, decelConstantStartTime + startDelay, params.phaseClocks[5], params.distances[5] * factor, params.peakDeceleration * factor, (motioncalc_t)0.0, moveFlags, phase5PressureAdvanceClocks);
 			}
 			if (params.phaseClocks[6] != 0)
 			{
-				tail = AddSegment(tail, decelEndStartTime + startDelay, params.phaseClocks[6], params.distances[6] * factor, params.peakDeceleration * factor, scaledJerk, moveFlags, pressureAdvanceClocks);
+				tail = AddSegment(tail, decelEndStartTime + startDelay, params.phaseClocks[6], params.distances[6] * factor, params.peakDeceleration * factor, scaledJerk, moveFlags, phase6PressureAdvanceClocks);
 			}
 #else
 			if (params.accelClocks != 0)

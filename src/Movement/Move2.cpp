@@ -232,9 +232,30 @@ GCodeResult Move::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply
 // Process M572
 GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	PressureAdvanceParameters params;
+	bool gotParameters;
+
 	if (gb.Seen('S'))
 	{
-		const float advance = gb.GetNonNegativeFValue();
+		params.k[1] = params.k[0] = gb.GetNonNegativeFValue();
+		params.dk = std::numeric_limits<float>::infinity();
+		gotParameters = true;
+	}
+	else if (gb.Seen('K'))
+	{
+		size_t n = 2;
+		gb.GetFloatArray(params.k, n, false);
+		gb.MustSee('L');
+		params.dk = gb.GetNonNegativeFValue();
+		gotParameters = true;
+	}
+	else
+	{
+		gotParameters = false;
+	}
+
+	if (gotParameters)
+	{
 		if (!reprap.GetGCodes().LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
@@ -243,7 +264,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 		GCodeResult rslt = GCodeResult::ok;
 
 #if SUPPORT_CAN_EXPANSION
-		CanDriversData<float> canDriversToUpdate;
+		CanDriversData<ShortPressureAdvanceParameters> canDriversToUpdate;
 #endif
 		if (gb.Seen('D'))
 		{
@@ -259,12 +280,12 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 					rslt = GCodeResult::error;
 					break;
 				}
-				GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
+				GetExtruderShaperForExtruder(extruder).SetParameters(params);
 #if SUPPORT_CAN_EXPANSION
 				const DriverId did = GetExtruderDriver(extruder);
 				if (did.IsRemote())
 				{
-					canDriversToUpdate.AddEntry(did, advance);
+					canDriversToUpdate.AddEntry(did, ShortPressureAdvanceParameters(params));
 				}
 #endif
 			}
@@ -280,20 +301,20 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 			else
 			{
 #if SUPPORT_CAN_EXPANSION
-				ct->IterateExtruders([this, advance, &canDriversToUpdate](unsigned int extruder)
+				ct->IterateExtruders([this, &params, &canDriversToUpdate](unsigned int extruder)
 										{
-											GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
+											GetExtruderShaperForExtruder(extruder).SetParameters(params);
 											const DriverId did = GetExtruderDriver(extruder);
 											if (did.IsRemote())
 											{
-												canDriversToUpdate.AddEntry(did, advance);
+												canDriversToUpdate.AddEntry(did, ShortPressureAdvanceParameters(params));
 											}
 										}
 									);
 #else
-				ct->IterateExtruders([this, advance](unsigned int extruder)
+				ct->IterateExtruders([this, &params](unsigned int extruder)
 										{
-											GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
+											GetExtruderShaperForExtruder(extruder).SetParameters(params);
 										}
 									);
 #endif
@@ -309,11 +330,14 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 #endif
 	}
 
+	// Here if we were not given pressure advance parameters
 	reply.copy("Extruder pressure advance");
 	char c = ':';
 	for (size_t i = 0; i < reprap.GetGCodes().GetNumExtruders(); ++i)
 	{
-		reply.catf("%c %.3f", c, (double)GetExtruderShaperForExtruder(i).GetKseconds());
+		reply.cat(c);
+		reply.cat(' ');
+		GetExtruderShaperForExtruder(i).AppendParameters(reply);
 		c = ',';
 	}
 	return GCodeResult::ok;
@@ -1309,7 +1333,7 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 
 #if SUPPORT_S_CURVE
 	params.initialAcceleration = params.peakAcceleration = (motioncalc_t)msg.acceleration;
-	params.initialDeceleration = params.peakDeceleration = -(motioncalc_t)msg.deceleration;
+	params.initialDeceleration = params.peakDeceleration = -(motioncalc_t)msg.deceleration;		// the deceleration is passed as a positive number in theCAN  message
 	params.phaseClocks[1] = msg.accelerationClocks;
 	params.phaseClocks[3] = msg.steadyClocks;
 	params.phaseClocks[5] = msg.decelClocks;
@@ -1335,19 +1359,24 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 
 	// Normalise the move to unit distance
 	params.totalDistance = (motioncalc_t)1.0;
-	const motioncalc_t accelDistanceExTopSpeed = -(motioncalc_t)0.5 * (motioncalc_t)msg.acceleration * msquare((motioncalc_t)msg.accelerationClocks);
-	const motioncalc_t decelDistanceExTopSpeed = -(motioncalc_t)0.5 * (motioncalc_t)msg.deceleration * msquare((motioncalc_t)msg.decelClocks);
-	const motioncalc_t topSpeed = (params.totalDistance - (accelDistanceExTopSpeed + decelDistanceExTopSpeed))/clocksNeeded;
+	const motioncalc_t aTimesT = (motioncalc_t)msg.acceleration * (motioncalc_t)msg.accelerationClocks;
+	const motioncalc_t accelDistanceExTopSpeed = -(motioncalc_t)0.5 * aTimesT * (motioncalc_t)msg.accelerationClocks;
+	const motioncalc_t dTimesT = (motioncalc_t)msg.deceleration * (motioncalc_t)msg.decelClocks;
+	const motioncalc_t decelDistanceExTopSpeed = -(motioncalc_t)0.5 * dTimesT * (motioncalc_t)msg.decelClocks;
+	params.topSpeed = (params.totalDistance - (accelDistanceExTopSpeed + decelDistanceExTopSpeed))/clocksNeeded;
+	params.startSpeed = params.topSpeed - aTimesT;
+	params.endSpeed = params.topSpeed - dTimesT;
 
 #if SUPPORT_S_CURVE
-	params.distances[1] = accelDistanceExTopSpeed + topSpeed * (motioncalc_t)msg.accelerationClocks;
-	params.distances[5] = decelDistanceExTopSpeed + topSpeed * (motioncalc_t)msg.decelClocks;
+	params.speedsCalculated = false;
+	params.distances[1] = accelDistanceExTopSpeed + params.topSpeed * (motioncalc_t)msg.accelerationClocks;
+	params.distances[5] = decelDistanceExTopSpeed + params.topSpeed * (motioncalc_t)msg.decelClocks;
 	params.distances[3] = params.totalDistance - (params.distances[1] + params.distances[5]);
 	params.distances[0] = params.distances[2] = params.distances[4] = params.distances[6] = (motioncalc_t)0.0;
 	params.jerk = (motioncalc_t)0.0;
 #else
-	params.accelDistance = accelDistanceExTopSpeed + topSpeed * msg.accelerationClocks;
-	const motioncalc_t decelDistance = decelDistanceExTopSpeed + topSpeed * msg.decelClocks;
+	params.accelDistance = accelDistanceExTopSpeed + params.topSpeed * (motioncalc_t)msg.accelerationClocks;
+	const motioncalc_t decelDistance = decelDistanceExTopSpeed + params.topSpeed * (motioncalc_t)msg.decelClocks;
 	params.decelStartDistance = params.totalDistance - decelDistance;
 #endif
 

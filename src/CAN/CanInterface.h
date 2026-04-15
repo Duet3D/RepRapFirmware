@@ -78,7 +78,7 @@ namespace CanInterface
 	void SetRemoteDriversIdle(const CanDriversList& drivers, float idleCurrentFactor) noexcept;
 	GCodeResult SetRemoteStandstillCurrentPercent(const CanDriversData<float>& data, const StringRef& reply) noexcept;
 	GCodeResult SetRemoteDriverCurrents(const CanDriversData<float>& data, const StringRef& reply) noexcept;
-	GCodeResult SetRemotePressureAdvance(const CanDriversData<float>& data, const StringRef& reply) noexcept;
+	GCodeResult SetRemotePressureAdvance(const CanDriversData<ShortPressureAdvanceParameters>& data, const StringRef& reply) noexcept;
 	GCodeResult SetRemoteDriverStepsPerMmAndMicrostepping(const CanDriversData<StepsPerUnitAndMicrostepping>& data, const StringRef& reply) noexcept;
 	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) pre(driver.IsRemote());
 	GCodeResult GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) THROWS(GCodeException);
