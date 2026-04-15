@@ -232,31 +232,30 @@ GCodeResult Move::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply
 // Process M572
 GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	PressureAdvanceParameters params;
-	bool gotParameters;
-
 	if (gb.Seen('S'))
 	{
-		params.k[1] = params.k[0] = gb.GetNonNegativeFValue();
-		params.dk = std::numeric_limits<float>::infinity();
-		gotParameters = true;
-	}
-	else if (gb.Seen('K'))
-	{
+		PressureAdvanceParameters params;
 		size_t n = 2;
-		gb.GetFloatArray(params.k, n, false);
-		gb.MustSee('L');
-		params.dk = gb.GetNonNegativeFValue();
-		gotParameters = true;
-	}
-	else
-	{
-		gotParameters = false;
-	}
+		gb.GetFloatArray(params.k, n, false);						// we would call GetNonNegativeFloatArray here if it existed
+		if (params.k[0] < 0.0 || (n == 2 && params.k[1] < 0.0))
+		{
+			reply.copy("pressure advance values must be non-negative");
+			return GCodeResult::error;
+		}
 
-	if (gotParameters)
-	{
-		if (!reprap.GetGCodes().LockCurrentMovementSystemAndWaitForStandstill(gb))
+		if (n > 1)
+		{
+			gb.MustSee('L');
+			params.dk = gb.GetNonNegativeFValue();
+		}
+		else
+		{
+			params.k[1] = params.k[0];
+			params.dk = std::numeric_limits<float>::infinity();
+		}
+
+
+		if (!reprap.GetGCodes().LockCurrentMovementSystemAndWaitForStandstill(gb))		// don't apply the new PA to moves already queued
 		{
 			return GCodeResult::notFinished;
 		}
@@ -296,7 +295,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 			if (ct == nullptr)
 			{
 				reply.copy("No tool selected");
-				rslt = GCodeResult::error;
+				return GCodeResult::error;
 			}
 			else
 			{
