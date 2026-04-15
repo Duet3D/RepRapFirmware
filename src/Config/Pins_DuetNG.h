@@ -41,6 +41,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;	// IAP is loaded into the last 
 # define HAS_WIFI_NETWORKING	0
 # define HAS_W5500_NETWORKING	0
 # define HAS_SBC_INTERFACE		1
+# define SUPPORTS_SBC_OVER_SPI	1
+# define SUPPORTS_SBC_OVER_USB	0
 # define HAS_MASS_STORAGE		0
 #else
 # define HAS_WIFI_NETWORKING	1
