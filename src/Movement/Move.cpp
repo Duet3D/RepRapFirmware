@@ -346,7 +346,7 @@ constexpr uint8_t Move::objectModelTableDescriptor[] =
 	4,
 #ifdef DUET_NG	// Duet WiFi/Ethernet doesn't have settable standstill current and doesn't support phase stepping
 	23,																		// section 9: move.axes[]
-	16,																		// section 10: move.extruders[]
+	17,																		// section 10: move.extruders[]
 #else
 	24 + SUPPORT_PHASE_STEPPING,											// section 9: move.axes[]
 	18 + SUPPORT_PHASE_STEPPING,											// section 10: move.extruders[]
