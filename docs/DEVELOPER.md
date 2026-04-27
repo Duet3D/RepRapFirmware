@@ -108,6 +108,9 @@ cd RepRapFirmware
 > [!NOTE]
 > You can optionally initialise submodules now by appending `--recurse-submodules` to the `git clone` command, or you can do it later using `make init-submodules` as described in [Initialize Submodules](#initialize-submodules).
 
+> [!NOTE]
+> Before building, check out the RepRapFirmware branch you actually want to work on. You can either clone that branch directly with `git clone -b 3.7-docker https://github.com/Duet3D/RepRapFirmware.git` or switch after cloning with `git checkout 3.7-docker`. Do this before running `make init-submodules` so the submodules are aligned with the branch you intend to build.
+
 ---
 
 ## Open the Project in VS Code
@@ -142,6 +145,7 @@ VS Code will now:
 
 You will see a green **"Dev Container: C++"** badge in the bottom-left corner of VS Code when the container is ready.
 
+> [!NOTE]
 > All subsequent terminal sessions opened inside VS Code (`Terminal → New Terminal`) will run inside the container where the ARM GCC toolchain is available.
 
 ---
@@ -158,6 +162,7 @@ make init-submodules
 
 This clones all required library submodules at the correct pinned versions and builds their static library artifacts.
 
+> [!NOTE]
 > You only need to run this once after cloning. Run it again if you switch branches and the pinned submodule versions change.
 
 ### Automatically update submodules on branch switch
