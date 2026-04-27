@@ -16,8 +16,9 @@ This guide explains how to set up a development environment for RepRapFirmware f
 8. [Build the Firmware](#build-the-firmware)
 9. [Build Targets](#build-targets)
 10. [Debug vs Release Builds](#debug-vs-release-builds)
-11. [Git Tools: Git Graph and GitLens](#git-tools-git-graph-and-gitlens)
-12. [Troubleshooting](#troubleshooting)
+11. [Uploading and Deploying Firmware](#uploading-and-deploying-firmware)
+12. [Git Tools: Git Graph and GitLens](#git-tools-git-graph-and-gitlens)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -232,6 +233,78 @@ To see every compiler command as it runs:
 ```sh
 make V=1 Duet3_MB6HC
 ```
+
+---
+
+## Uploading and Deploying Firmware
+
+After building firmware, you can upload it to a Duet board and flash it without needing to remove the board or use a separate programming tool. The firmware is transferred over HTTP to the Duet's web interface, then the board flashes itself using the M997 G-code command.
+
+### Prerequisites
+
+- A Duet board running RRF firmware (any recent version) with network/WiFi connectivity.
+- The board must be accessible by hostname or IP address from your development machine.
+- If the board has an HTTP password set, you will need it.
+
+### Quick start: Build and Deploy
+
+The fastest way to build, upload, and flash firmware in one step:
+
+1. Press `Ctrl+Shift+B` (or `Cmd+Shift+B` on macOS) to open the task list.
+2. Select **Build and Deploy to Target**.
+3. When prompted:
+   - Choose the board (Duet3 MB6HC, Duet3 MB6XD, or Duet3 Mini 5+).
+   - Enter the Duet's hostname or IP address (default: `duet3.local`).
+   - Enter the HTTP password if one is set, or press Enter to skip.
+
+The task will build the firmware, upload it, send the M997 flash command, and wait for the board to restart.
+
+### Individual upload and deploy tasks
+
+You can also run the upload and flash steps separately:
+
+#### Upload Selected Target (rr_upload)
+
+Transfers the built firmware binary to the Duet board and prepares it for flashing:
+
+1. Press `Ctrl+Shift+B` and select **Upload Selected Target (rr_upload)**.
+2. Choose your board and enter the Duet's host/IP and optional password.
+
+This uploads the firmware file but does not flash it yet. Useful for:
+- Uploading without immediately flashing (to verify transfer succeeded).
+- Testing upload to different boards in sequence.
+
+#### Flash Firmware (M997)
+
+Sends the M997 G-code command to the Duet, which flashes the uploaded firmware and reboots:
+
+1. Press `Ctrl+Shift+B` and select **Flash Firmware (M997)**.
+2. Enter the Duet's host/IP and optional password.
+
+This is useful if you have already uploaded firmware and want to retry the flash without rebuilding and re-uploading.
+
+### Troubleshooting uploads
+
+**Upload fails with "connection refused" or "host not found"**
+
+Ensure the Duet's hostname or IP is reachable and correct. Test with:
+
+```sh
+ping duet3.local
+```
+
+Or use the IP address directly if DNS is not working.
+
+**Upload times out or is very slow**
+
+Check your network connection. Large firmware binaries (especially debug builds) can take several seconds to upload over WiFi.
+
+**Upload succeeds but M997 flash fails or board does not reboot**
+
+This usually means the board did not receive or accept the M997 command. Verify:
+- The HTTP password is correct if set.
+- The board is not already flashing or in a special state.
+- Try sending M997 manually via the web interface to confirm the board responds.
 
 ---
 

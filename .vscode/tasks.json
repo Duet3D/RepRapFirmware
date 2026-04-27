@@ -1,6 +1,71 @@
 {
     "version": "2.0.0",
+    "inputs": [
+        {
+            "id": "target",
+            "type": "pickString",
+            "description": "Board to build for",
+            "options": [
+                {
+                    "label": "Duet3 MB6HC",
+                    "value": "Duet3_MB6HC"
+                },
+                {
+                    "label": "Duet3 MB6XD",
+                    "value": "Duet3_MB6XD"
+                },
+                {
+                    "label": "Duet3 Mini 5+",
+                    "value": "Duet3Mini5plus"
+                },
+                {
+                    "label": "All",
+                    "value": "all"
+                }
+            ]
+        },
+        {
+            "id": "buildType",
+            "type": "pickString",
+            "description": "Build type",
+            "options": [
+                {
+                    "label": "Debug",
+                    "value": "DEBUG=1"
+                },
+                {
+                    "label": "Release",
+                    "value": ""
+                }
+            ]
+        },
+        {
+            "id": "duetHost",
+            "type": "promptString",
+            "description": "Duet host or IP",
+            "default": "duet3.local"
+        },
+        {
+            "id": "duetPassword",
+            "type": "promptString",
+            "description": "Duet HTTP password (leave empty if disabled)",
+            "password": true,
+            "default": ""
+        }
+    ],
     "tasks": [
+        {
+            "label": "Build Selected Target",
+            "type": "shell",
+            "command": "make ${input:buildType} ${input:target} -j",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
         {
             "label": "Build Duet3_MB6HC - Debug",
             "type": "shell",
@@ -133,5 +198,45 @@
                 "isDefault": false
             }
         },
+        {
+            "label": "Upload Selected Target (rr_upload)",
+            "type": "shell",
+            "command": "./Scripts/rr_upload_selected_target.sh",
+            "args": [
+                "${input:target}",
+                "${input:duetHost}",
+                "${input:duetPassword}"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Flash Firmware (M997)",
+            "type": "shell",
+            "command": "./Scripts/rr_send_gcode.sh",
+            "args": [
+                "${input:duetHost}",
+                "${input:duetPassword}",
+                "M997"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "Build and Deploy to Target",
+            "dependsOn": [
+                "Build Selected Target",
+                "Upload Selected Target (rr_upload)",
+                "Flash Firmware (M997)"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        }
     ]
 }
