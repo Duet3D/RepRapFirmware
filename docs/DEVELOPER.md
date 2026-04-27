@@ -17,8 +17,9 @@ This guide explains how to set up a development environment for RepRapFirmware f
 9. [Build Targets](#build-targets)
 10. [Debug vs Release Builds](#debug-vs-release-builds)
 11. [Uploading and Deploying Firmware](#uploading-and-deploying-firmware)
-12. [Git Tools: Git Graph and GitLens](#git-tools-git-graph-and-gitlens)
-13. [Troubleshooting](#troubleshooting)
+12. [Using Git inside the Dev Container](#using-git-inside-the-dev-container)
+13. [Git Tools: Git Graph and GitLens](#git-tools-git-graph-and-gitlens)
+14. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -309,6 +310,78 @@ This usually means the board did not receive or accept the M997 command. Verify:
 
 ---
 
+## Using Git inside the Dev Container
+
+When working inside the dev container, you have full access to Git commands in the terminal. Git is pre-installed in the container, and your repository is mounted inside it.
+
+### Basic git operations
+
+All standard Git commands work as you would expect:
+
+```sh
+git status                    # Check branch and uncommitted changes
+git log --oneline -10         # View recent commits
+git diff                      # See unstaged changes
+git add .                     # Stage all changes
+git commit -m "message"       # Commit staged changes
+git checkout -b feature/xyz   # Create and switch to a new branch
+git push                      # Push to remote
+git pull                      # Pull updates from remote
+```
+
+### Configuration inside the container
+
+Git configuration is typically shared between your host machine and the container through a mounted volume. However, if you need to set Git configuration specifically for this project, you can configure it at the repository level:
+
+```sh
+git config user.name "Your Name"
+git config user.email "your@email.com"
+```
+
+Omit the `--global` flag so the configuration applies only to this repository.
+
+### SSH keys and credentials
+
+When you open a terminal inside VS Code's dev container, Git automatically inherits SSH keys and Git credentials from your host machine (if they are configured). This means:
+- If you have an SSH key for GitHub, Git can authenticate automatically when pushing/pulling.
+- If you use Git credential storage on your host, those credentials are available in the container.
+- No need to manually set up or duplicate credentials inside the container.
+
+If Git cannot authenticate (e.g., SSH key not found), check:
+1. SSH keys are properly configured on your host: `ssh-add -l` to list loaded keys.
+2. You can reach GitHub: `ssh -T git@github.com` should respond with your username.
+3. The repository remote URL is correct: `git remote -v`.
+
+### Switching branches and submodules
+
+When you switch branches inside the dev container using `git checkout` or `git pull`, submodules are automatically updated if you have configured `git config --global submodule.recurse true` (as recommended in [Automatically update submodules on branch switch](#automatically-update-submodules-on-branch-switch)).
+
+After switching branches:
+1. Confirm submodule updates: `git submodule status` should show submodules at the new branch's committed hashes.
+2. If a submodule directory is new on the branch, run `make init-submodules` to build its artifacts.
+3. The next build will use the updated library code.
+
+### Committing from inside the container
+
+You can make commits from the terminal inside the container. This is useful for:
+- Quickly committing fixes discovered during debugging.
+- Scripting automated commits (e.g., after a successful build).
+- Collaborating with team members in real-time using shared editor tasks.
+
+Commits created inside the container have the same author information as commits on your host, so history remains consistent.
+
+### Working with remotes
+
+All Git remote operations (push, pull, fetch) work normally inside the container. If you have multiple remotes or forks, manage them the same way you would on your host:
+
+```sh
+git remote -v                          # List remotes
+git remote add fork https://...        # Add a new remote
+git push fork feature/my-changes       # Push to a different remote
+```
+
+---
+
 ## Git Tools: Git Graph and GitLens
 
 Two VS Code extensions make it much easier to work with branches, merges, and history across the RepRapFirmware repository and its submodules.
@@ -330,6 +403,9 @@ Git Graph displays a visual commit graph for any repository open in VS Code.
 - **Compare branches**: right-click any branch or commit in the graph and choose **Compare References…** to see a diff of changed files between two points in history.
 - **Merges**: right-click a branch and choose **Merge into current branch** to perform a merge with a visual preview of what will change.
 - **Submodules**: use the repository picker at the top of the Git Graph panel to switch between the main repository and any initialised submodule.
+
+> [!NOTE]
+> VS Code also has a built-in graph view in the `Source Control` panel, but Git Graph provides a more detailed and interactive experience.
 
 ### GitLens
 
