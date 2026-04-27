@@ -104,7 +104,8 @@ git clone https://github.com/Duet3D/RepRapFirmware.git
 cd RepRapFirmware
 ```
 
-> [!NOTE] You can optionally initialise submodules now by appending `--recurse-submodules` to the `git clone` command, or you can do it later using `make init-submodules` as described in [Initialize Submodules](#initialize-submodules).
+> [!NOTE]
+> You can optionally initialise submodules now by appending `--recurse-submodules` to the `git clone` command, or you can do it later using `make init-submodules` as described in [Initialize Submodules](#initialize-submodules).
 
 ---
 
