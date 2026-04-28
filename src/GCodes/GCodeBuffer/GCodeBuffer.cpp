@@ -820,6 +820,18 @@ bool GCodeBuffer::TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32
 	return false;
 }
 
+// Try to get an unsigned integer value, throw if outside limits
+bool GCodeBuffer::TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException)
+{
+	if (Seen(c))
+	{
+		val = GetLimitedUIValue(c, minValue, maxValuePlusOne);
+		seen = true;
+		return true;
+	}
+	return false;
+}
+
 // If the specified parameter character is found, fetch 'value' as a Boolean and set 'seen'. Otherwise leave val and seen alone.
 bool GCodeBuffer::TryGetBValue(char c, bool& val, bool& seen) THROWS(GCodeException)
 {

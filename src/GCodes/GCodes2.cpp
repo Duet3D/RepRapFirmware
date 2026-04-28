@@ -4599,8 +4599,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = CanInterface::ChangeAddressAndNormalTiming(gb, reply);
 				break;
 
-			case 953:	// set CAN-FD data rate
-				result = CanInterface::ChangeFastTiming(gb, reply);
+			case 953:	// enable CAN and set fast data rate
+				result = CanInterface::EnableCan(gb, reply);
 				break;
 #endif
 

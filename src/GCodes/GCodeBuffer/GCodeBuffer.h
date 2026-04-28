@@ -140,6 +140,7 @@ public:
 	bool TryGetLimitedIValue(char c, int32_t& val, bool& seen, int32_t minValue, int32_t maxValue) THROWS(GCodeException);
 	bool TryGetUIValue(char c, uint32_t& val, bool& seen) THROWS(GCodeException);
 	bool TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32_t maxValuePlusOne) THROWS(GCodeException);
+	bool TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException);
 	bool TryGetNonNegativeFValue(char c, float& val, bool& seen) THROWS(GCodeException);
 	bool TryGetPositiveFValue(char c, float& val, bool& seen) THROWS(GCodeException);
 	bool TryGetLimitedFValue(char c, float& val, bool& seen, float minValue, float maxValue) THROWS(GCodeException)

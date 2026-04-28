@@ -75,6 +75,7 @@ static_assert(MaxTimeSyncDelay >= 400 && MaxTimeSyncDelay <= 1000);			// check i
 
 constexpr uint32_t MinBitRate = 15;											// MCP2542 has a minimum bite rate of 14.4kbps
 constexpr uint32_t MaxBitRate = 5000;
+constexpr uint32_t DefaultBitRate = 1000;
 
 constexpr float MinSamplePoint = 0.5;
 constexpr float MaxSamplePoint = 0.95;
@@ -105,7 +106,9 @@ static CanAddress myAddress =
 						CanId::MasterAddress;
 #endif
 
-static uint8_t currentTimeSyncMarker = 0xFF;
+static uint8_t fastDataRate = 0;											// the fast data phase bit rate multiplier minus one. 0 means don't use BRS.
+static uint8_t dTseg1MinusOne = 0;											// the fast data rate sample point minus one
+static uint8_t currentTimeSyncMarker = 0xFF;								// the marker we use to track time sync message transmit events
 
 #if SUPPORT_REMOTE_COMMANDS
 static unsigned int messagesIgnored = 0;
@@ -576,7 +579,8 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 	for (;;)
 	{
 		CanMessageTimeSync * const msg = buf.SetupBroadcastMessage<CanMessageTimeSync>(CanInterface::GetCanAddress());
-		msg->fastDataRate = 0;												// we don't use bit rate switching yet
+		msg->fastDataRate = fastDataRate;
+		msg->tseg1Minus1 = dTseg1MinusOne;
 		msg->lastTimeSent = lastTimeSent;
 		msg->lastTimeAcknowledgeDelay = 0;									// assume we don't have the transmit delay available
 
@@ -1601,54 +1605,37 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	// Get the new timing details, if provided
 	CanTiming timing;
 	bool changeTiming = false;
-	if (gb.Seen('S'))
+	uint32_t speed;
+	if (gb.TryGetLimitedUIValue('S', speed, changeTiming, MinBitRate, MaxBitRate + 1))
 	{
-		uint32_t speed = gb.GetUIValue();
-		if (speed < MinBitRate || speed > MaxBitRate)
-		{
-			reply.copy("Data rate out of range");
-			return GCodeResult::error;
-		}
 		speed *= 1000;
 		timing.SetDefaults(speed);
 
-		if (gb.Seen('T'))
+		float f;
+		if (gb.TryGetLimitedFValue('T', f, changeTiming, MinSamplePoint, MaxSamplePoint))
 		{
-			const float samplePoint = gb.GetFValue();
-			if (samplePoint < MinSamplePoint || samplePoint > MaxSamplePoint)
-			{
-				reply.copy("Sample point out of range");
-				return GCodeResult::error;
-			}
-			timing.SetSamplePoint(samplePoint);
+			timing.SetNormalSamplePoint(f);
 		}
 
-		if (gb.Seen('J'))
+		if (gb.TryGetLimitedFValue('J', f, changeTiming, MinJumpWidth, MaxJumpWidth))
 		{
-			const float jumpWidth = gb.GetFValue();
-			if (jumpWidth < MinJumpWidth || jumpWidth > MaxJumpWidth)
-			{
-				reply.copy("Jump width out of range");
-				return GCodeResult::error;
-			}
-			timing.SetJumpWidth(jumpWidth);
+			timing.SetNormalJumpWidth(f);
 		}
-		changeTiming = true;
 	}
 
 	if (oldAddress == GetCanAddress())
 	{
 		if (changeTiming)
 		{
-			can0dev->SetLocalCanTiming(timing);
+			can0dev->ChangeLocalCanTiming(timing);
 		}
 		else
 		{
 			can0dev->GetLocalCanTiming(timing);
 			reply.printf("CAN bus speed %.1fkbps, sample point %.2f, jump width %.2f",
 							(double)((float)CanTiming::ClockFrequency/(1000 * timing.period)),
-							(double)((float)(timing.tseg1 + 1)/(float)timing.period),
-							(double)((float)timing.jumpWidth/(float)timing.period));
+							(double)((float)(timing.nTseg1 + 1)/(float)timing.period),
+							(double)((float)timing.nJumpWidth/(float)timing.period));
 		}
 		return GCodeResult::ok;
 	}
@@ -1676,9 +1663,94 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	return CanInterface::SendRequestAndGetStandardReply(buf.HandOver(), rid, reply, nullptr);
 }
 
-GCodeResult CanInterface::ChangeFastTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+// Enable CAN in master board mode and set the fast data rate
+GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	return GCodeResult::errorNotSupported;
+	bool seen = false;
+	GCodeResult ret = GCodeResult::ok;
+
+	// Get the arbitration bit rate
+	uint32_t speed = DefaultBitRate;
+	if (gb.TryGetLimitedUIValue('S', speed, seen, MinBitRate, MaxBitRate + 1))
+	{
+		if (speed != DefaultBitRate && speed != DefaultBitRate/2 && speed != DefaultBitRate/4)
+		{
+			reply.copy("Expansion boards only provide automatic support for bit rates 1000, 500 and 250 kbits/sec");
+			ret = GCodeResult::warning;
+		}
+	}
+
+	CanTiming timing;
+	timing.SetDefaults(speed * 1000);
+
+	float f;
+	if (gb.TryGetLimitedFValue('T', f, seen, MinSamplePoint, MaxSamplePoint))
+	{
+		timing.SetNormalSamplePoint(f);
+	}
+
+	if (gb.TryGetLimitedFValue('J', f, seen, MinJumpWidth, MaxJumpWidth))
+	{
+		timing.SetNormalJumpWidth(f);
+	}
+
+	uint32_t bitRateMultiplier;
+	if (gb.TryGetLimitedUIValue('R', bitRateMultiplier, seen, 9))
+	{
+		if (bitRateMultiplier == 0 || bitRateMultiplier == 5 || bitRateMultiplier == 7)
+		{
+			reply.lcatf("Bit rate multiplier must be 1, 2, 3, 4, 6 or 8");
+			return GCodeResult::error;
+		}
+		timing.EnableBrs(bitRateMultiplier);
+		if (gb.TryGetLimitedFValue('U', f, seen, MinSamplePoint, MaxSamplePoint))
+		{
+			timing.SetDataSamplePoint(f);
+		}
+		if (gb.TryGetLimitedFValue('K', f, seen, MinJumpWidth, MaxJumpWidth))
+		{
+			timing.SetDataJumpWidth(f);
+		}
+	}
+
+	if (seen)
+	{
+		{
+			AtomicCriticalSectionLocker lock;
+			fastDataRate = 0;															// disable BRS
+			dTseg1MinusOne = 0;
+		}
+		delay(50);																		// allow any existing transactions to complete
+		can0dev->ChangeLocalCanTiming(timing);
+		{
+			AtomicCriticalSectionLocker lock;
+			fastDataRate = bitRateMultiplier - 1;
+			dTseg1MinusOne = timing.dTseg1;
+		}
+	}
+	else
+	{
+		can0dev->GetLocalCanTiming(timing);
+		reply.printf("CAN arbitration speed %.1fkbps, sample point %.2f, jump width %.2f, ",
+						(double)((float)CanTiming::ClockFrequency/(1000 * timing.period)),
+						(double)((float)(timing.nTseg1 + 1)/(float)timing.period),
+						(double)((float)timing.nJumpWidth/(float)timing.period));
+		if (fastDataRate == 0)
+		{
+			reply.cat("bit rate switching disabled");
+		}
+		else
+		{
+			const uint32_t dataPeriod = timing.period/(fastDataRate + 1);
+			reply.catf("data speed %.1fkbps, sample point %.2f, jump width %.2f",
+						(double)((float)(CanTiming::ClockFrequency * (fastDataRate + 1))/(float)(1000 * dataPeriod)),
+						(double)((float)(timing.dTseg1 + 1)/(float)dataPeriod),
+						(double)((float)timing.dJumpWidth/(float)dataPeriod));
+		}
+	}
+
+	// TODO here we should enable CAN
+	return ret;
 }
 
 // Create a filament monitor but do not configure it
