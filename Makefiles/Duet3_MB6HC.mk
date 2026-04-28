@@ -113,7 +113,6 @@ DUET3MB6HC_DEFINES := \
 	-D__SAME70Q20B__ \
 	-DRTOS \
 	-DDUET3_MB6HC \
-	-D_XOPEN_SOURCE \
 	-DMBEDTLS_CONFIG_FILE='"config-same70.h"'
 
 # Compiler flags - C
@@ -172,6 +171,7 @@ DUET3MB6HC_CXXFLAGS := -c -std=gnu++17 \
 	-Wsign-promo \
 	$(DUET3MB6HC_INCLUDES) \
 	$(DUET3MB6HC_DEFINES) \
+	-D_XOPEN_SOURCE \
 	$(DEBUG_FLAGS)
 
 # Linker flags - split into LDFLAGS1 (before -o) and LDFLAGS2 (after -o)

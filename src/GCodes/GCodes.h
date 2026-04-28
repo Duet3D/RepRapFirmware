@@ -601,7 +601,7 @@ private:
 # if ALLOW_ARBITRARY_PANELDUE_PORT
 	uint8_t serialChannelForPanelDueFlashing;
 # else
-	static constexpr uint8_t serialChannelForPanelDueFlashing = 1;
+	static constexpr uint8_t serialChannelForPanelDueFlashing = FirstAuxChannel;
 # endif
 	static bool emergencyStopCommanded;
 	static void CommandEmergencyStop(AsyncSerial *p) noexcept;
@@ -614,9 +614,9 @@ private:
 	NetworkGCodeInput* telnetInput;										// ...
 #endif
 #if defined(SERIAL_USB_DEVICE) && (!SAME5x || CORE_USES_TINYUSB)
-	BufferedStreamGCodeInput* usbInput;									// USB input with out-of-band urgent command scanning
+	UsbGCodeInput* usbInput;											// USB input with out-of-band urgent command scanning and disconnect reset
 # if defined(SERIAL_USB2_DEVICE)
-	BufferedStreamGCodeInput* usb2Input;								// USB input with out-of-band urgent command scanning
+	UsbGCodeInput* usb2Input;											// USB input with out-of-band urgent command scanning and disconnect reset
 # endif
 #endif
 

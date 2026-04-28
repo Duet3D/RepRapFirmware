@@ -68,13 +68,12 @@ public:
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
 #endif
 
+	float GetCurrentPosition(uint32_t when) const noexcept;
 #if SUPPORT_PHASE_STEPPING
 	bool SetStepMode(StepMode mode) noexcept;
 	StepMode GetStepMode() const noexcept { return stepMode; }
 	bool IsPhaseStepEnabled() const noexcept { return stepMode == StepMode::phase; }
-	// Get the current position relative to the start of this move, speed and acceleration. Units are microsteps and step clocks.
-	// Return true if this drive is moving. Segments are advanced as necessary.
-	bool GetCurrentMotion(uint32_t when, float multiplier, MotionParameters& mParams) noexcept;
+	bool UpdateCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept;
 #endif
 
 	void ClearMovementPending() noexcept;
@@ -133,8 +132,8 @@ private:
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
 	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
 	motioncalc_t q, t0, p;								// the movement parameters of the current segment. Only set when not phase stepping
-#if SUPPORT_PHASE_STEPPING
 	motioncalc_t u;										// the initial speed of the current segment. Only set when phase stepping, or when 3rd order motion is supported.
+#if SUPPORT_PHASE_STEPPING
 	motioncalc_t phaseStepsTakenSinceMoveStart;			// how many steps we took in previous segments of the current isolated move
 #endif
 	MovementFlags segmentFlags;							// whether this segment checks endstops etc.
@@ -269,12 +268,49 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 
 #endif
 
+/**
+ * @brief Get the current position relative to the start of this segment. Units are microsteps and step clocks.
+ * @param when step clock time at which to evaluate the motion. Because the function only reads the first segment this should be the current time.
+ * @return position of the dm in microsteps
+ */
+inline float DriveMovement::GetCurrentPosition(uint32_t when) const noexcept
+{
+	AtomicCriticalSectionLocker lock;										// we don't want 'segments' changing while we do this
+
+	const MoveSegment* const seg = segments;
+	if (seg != nullptr)
+	{
+		int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
+		if (timeSinceStart >= 0)
+		{
+			if ((uint32_t)timeSinceStart >= seg->GetDuration())				// if segment should have finished by now
+			{
+				// We can't get the next segment because that needs `NewSegment()` to be called
+				timeSinceStart = seg->GetDuration();
+			}
+
+			return (float)((u + 0.5 * seg->GetA() * timeSinceStart) * timeSinceStart
+							  + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards
+						  );
+		}
+	}
+
+	// If we get here then no movement is taking place
+	return (float)((motioncalc_t)currentMotorPosition + distanceCarriedForwards);
+}
+
 #if SUPPORT_PHASE_STEPPING
 
-// Get the current position relative to the start of this segment, speed and acceleration. Units are microsteps and step clocks.
-// Return true if this drive is moving. Segments are advanced as necessary if we are in closed loop mode.
-// Inlined because it is only called from one place
-inline bool DriveMovement::GetCurrentMotion(uint32_t when, float multiplier, MotionParameters& mParams) noexcept
+/**
+ * @brief Get the current position relative to the start of this segment, speed and acceleration. Units are microsteps
+ * and step clocks.
+ * @param when step clock time at which to evaluate the motion.
+ * @param mParams [out] structure to receive the position, speed and acceleration
+ * @return true if this drive is moving
+ *
+ * @note Segments are advanced as necessary if we are phase stepping.
+ */
+inline bool DriveMovement::UpdateCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept
 {
 	bool hasMotion = false;
 	AtomicCriticalSectionLocker lock;									// we don't want 'segments' changing while we do this
@@ -336,20 +372,20 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, float multiplier, Mot
 										+ (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 #endif
 			currentMotorPosition = (int32_t)rawPosition;												// store the approximate position for OM updates
-			mParams.position = rawPosition * multiplier;
+			mParams.position = rawPosition;
 #if SUPPORT_S_CURVE
-			mParams.speed = (float)(u + (seg->GetA() + (motioncalc_t)0.5 * seg->GetJ() * timeSinceStart) * timeSinceStart) * multiplier;
-			mParams.acceleration = (float)(seg->GetA() + seg->GetJ() * timeSinceStart) * multiplier;
+			mParams.speed = (float)(u + (seg->GetA() + (motioncalc_t)0.5 * seg->GetJ() * timeSinceStart) * timeSinceStart);
+			mParams.acceleration = (float)(seg->GetA() + seg->GetJ() * timeSinceStart);
 #else
-			mParams.speed = (float)(u + seg->GetA() * timeSinceStart) * multiplier;
-			mParams.acceleration = (float)seg->GetA() * multiplier;
+			mParams.speed = (float)(u + seg->GetA() * timeSinceStart);
+			mParams.acceleration = (float)seg->GetA();
 #endif
 			return true;
 		}
 	}
 
 	// If we get here then no movement is taking place
-	mParams.position = (float)((motioncalc_t)currentMotorPosition + distanceCarriedForwards) * multiplier;
+	mParams.position = (float)((motioncalc_t)currentMotorPosition + distanceCarriedForwards);
 	mParams.speed = mParams.acceleration = 0.0;
 	return hasMotion;
 }

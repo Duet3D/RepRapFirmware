@@ -21,6 +21,7 @@
 #include "DataTransfer.h"
 
 class Platform;
+class SerialCDC;
 
 class GCodeBuffer;
 
@@ -44,6 +45,12 @@ public:
 
 	void EventOccurred(bool timeCritical = false) noexcept;						// Called when a new event has happened. It can optionally start off a new transfer immediately
 	GCodeResult HandleM576(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Set the SPI communication parameters
+
+#if SUPPORTS_SBC_OVER_USB
+	void RequestUsbSwitch(SerialCDC *dev, unsigned int usbDevIndex) noexcept;	// Request a switch to USB transport (called from main task)
+#endif
+
+	DataTransfer& GetDataTransfer() noexcept { return transfer; }
 
 	bool IsPrintAborted() noexcept;												// Check if the current print has been aborted
 	bool FillBuffer(GCodeBuffer &gb) noexcept;									// Try to fill up the G-code buffer with the next available G-code
@@ -75,7 +82,8 @@ private:
 	uint32_t numDisconnects, numTimeouts, numSbcTimeouts, lastTransferTime;
 
 	uint32_t maxDelayBetweenTransfers, maxFileOpenDelay, numMaxEvents;
-	bool skipNextDelay;
+	uint32_t burstModeWindow, burstModeDelay;					// configurable burst mode timing
+	uint32_t burstModeStartTime;								// millis() when burst mode was last (re)activated, 0 = inactive
 	std::atomic<bool> delaying;
 	volatile uint32_t numEvents;
 
@@ -89,6 +97,11 @@ private:
 	volatile bool sendBufferUpdate;
 
 	uint32_t iapRamAvailable;											// must be at least 32Kb otherwise the SPI IAP can't work
+
+#if SUPPORTS_SBC_OVER_USB
+	SerialCDC *pendingUsbDevice;										// set from main task, read from SBC task
+	unsigned int usbDeviceIndex;										// index of the USB device used for SBC mode (for reinit on disconnect)
+#endif
 
 	// File I/O
 	Mutex fileMutex;													// locked while a file operation is performed

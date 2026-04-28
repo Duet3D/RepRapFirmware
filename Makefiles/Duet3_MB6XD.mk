@@ -113,7 +113,6 @@ DUET3MB6XD_DEFINES := \
 	-D__SAME70Q20B__ \
 	-DRTOS \
 	-DDUET3_MB6XD \
-	-D_XOPEN_SOURCE \
 	-DMBEDTLS_CONFIG_FILE='"config-same70.h"'
 
 # Compiler flags - C
@@ -171,11 +170,12 @@ DUET3MB6XD_CXXFLAGS := -c -std=gnu++17 \
 	-Wshadow \
 	-Wsign-promo \
 	$(DUET3MB6XD_INCLUDES) \
-	$(DUET3MB6XD_DEFINES)
+	$(DUET3MB6XD_DEFINES) \
+	-D_XOPEN_SOURCE
 
 # Linker flags - split into LDFLAGS1 (before -o) and LDFLAGS2 (after -o)
 DUET3MB6XD_LDFLAGS1 := --specs=nosys.specs \
-	-O2 \
+	-Os \
 	-Wl,--gc-sections \
 	-Wl,--fatal-warnings \
 	-Wl,--no-warn-rwx-segment \

@@ -9,24 +9,47 @@
 #define SRC_MOVEMENT_EXTRUDERSHAPER_H_
 
 #include <RepRapFirmware.h>
+#include <ObjectModel/ObjectModel.h>
+#include <limits>
 
-// This class implements MoveSegment generation for extruders with pressure advance.
-// It also tracks extrusion that has been commanded but not implemented because less than one full step has been accumulated.
-// Currently it only supports linear pressure advance.
-class ExtruderShaper
+// This class holds pressure advance parameters for an extruder.
+class ExtruderShaper INHERIT_OBJECT_MODEL
 {
 public:
-	ExtruderShaper()
-		: k(0.0)
-	{ }
+	ExtruderShaper() noexcept
+	{
+		SetParametersSimple(0.0);
+	}
 
-	// Temporary functions until we support more sophisticated pressure advance
-	float GetKclocks() const noexcept { return k; }								// get pressure advance in step clocks
-	float GetKseconds() const noexcept { return k * (1.0/(float)StepClockRate); }
-	void SetKseconds(float val) noexcept { k = val * StepClockRate; }			// set pressure advance in seconds
+	float GetK0Clocks() const noexcept { return (float)k0; }								// get pressure advance in step clocks
+	float GetK0Seconds() const noexcept { return (float)k0 * StepClocksToSeconds; }
+
+	void SetParameters(const PressureAdvanceParameters& params) noexcept;
+	void SetParametersSimple(float f) noexcept;
+
+#if SUPPORT_REMOTE_COMMANDS
+	void SetParameters(const ShortPressureAdvanceParameters& params) noexcept;
+#endif
+
+	bool IsActive() const noexcept { return k0 != (motioncalc_t)0.0; }
+	motioncalc_t GetPressureAdvanceDistance(motioncalc_t speed) const noexcept;
+	motioncalc_t GetAverageAdvanceClocks(motioncalc_t lowSpeed, motioncalc_t highSpeed, motioncalc_t steps) const noexcept
+		pre(highSpeed > lowSpeed);
+
+	void AppendParameters(const StringRef& reply) const noexcept;
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
-	float k;								// the pressure advance constant in step clocks
+	// Specified parameters
+	motioncalc_t k0;						// the initial pressure advance constant in step clocks
+	motioncalc_t k1;						// the slope of pressure advance distance vs. speed above distance dk
+	motioncalc_t dk;						// the pressure advance distance up to which k0 applies
+
+	// Derived parameters
+	motioncalc_t vk;						// the speed up to which k1 applies, equal to dk/k1
+	motioncalc_t d0;						// the distance at which the k2 line intercepts the y-axis
 };
 
 #endif /* SRC_MOVEMENT_EXTRUDERSHAPER_H_ */

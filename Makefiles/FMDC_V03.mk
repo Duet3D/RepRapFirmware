@@ -92,8 +92,7 @@ MQTTC_PAL_DEFINE := Networking/MQTT/mqtt_pal.h
 FMDC_V03_DEFINES := \
 	-D__SAME51N19A__ \
 	-DRTOS \
-	-DFMDC_V03 \
-	-D_XOPEN_SOURCE
+	-DFMDC_V03
 
 # Compiler flags - C
 FMDC_V03_CFLAGS := -c -std=gnu99 \
@@ -148,7 +147,8 @@ FMDC_V03_CXXFLAGS := -c -std=gnu++17 \
 	-Wshadow \
 	-Woverloaded-virtual \
 	$(FMDC_V03_INCLUDES) \
-	$(FMDC_V03_DEFINES)
+	$(FMDC_V03_DEFINES) \
+	-D_XOPEN_SOURCE
 
 # Library search paths
 FMDC_V03_LIBPATHS := \

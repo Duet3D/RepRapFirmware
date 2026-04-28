@@ -193,7 +193,7 @@ void Network::Init() noexcept
 #  if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING
 	if (platform.IsDuetWiFi())
 	{
-		InitAllocationFromPbufPool();				// we have no wired Ethernet interface so we can use thr PBUF pool memory
+		InitAllocationFromPbufPool();				// we have no wired Ethernet interface so we can use the PBUF pool memory
 	}
 	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new LwipEthernetInterface(platform));
 #  elif HAS_WIFI_NETWORKING

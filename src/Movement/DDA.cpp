@@ -128,8 +128,8 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
 #if SUPPORT_S_CURVE
 	jerk = 0.0;							// this signals that we are not using S-curve acceleration
-	peakAcceleration = dda.maxAcceleration;
-	peakDeceleration = -dda.maxAcceleration;
+	peakAcceleration = initialAcceleration = dda.maxAcceleration;
+	peakDeceleration = initialDeceleration = -dda.maxAcceleration;
 	phaseClocks[0] = phaseClocks[2] = phaseClocks[4] = phaseClocks[6] = 0;
 	phaseClocks[1] = std::lrint((motioncalc_t)(dda.topSpeed - dda.startSpeed)/peakAcceleration);
 	phaseClocks[5] = std::lrint((motioncalc_t)(dda.endSpeed - dda.topSpeed)/peakDeceleration);
@@ -140,6 +140,7 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 	distances[3] = decelStartDistance - distances[1];
 	phaseClocks[3] = (distances[3] <= (motioncalc_t)0.0) ? 0 : std::lrint(distances[3]/(motioncalc_t)dda.topSpeed);
 	dda.clocksNeeded = phaseClocks[1] + phaseClocks[3] + phaseClocks[5];
+	speedsCalculated = false;
 #else
 	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
 	accelDistance = min<motioncalc_t>(dda.beforePrepare.accelDistance, decelStartDistance);
@@ -151,18 +152,37 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 	steadyClocks = (steadyDistance <= (motioncalc_t)0.0) ? 0 : std::lrint(steadyDistance/(motioncalc_t)dda.topSpeed);
 	dda.clocksNeeded = accelClocks + steadyClocks + decelClocks;
 #endif
+	startSpeed = dda.startSpeed;
+	topSpeed = dda.topSpeed;
+	endSpeed = dda.endSpeed;
 }
+
+#if SUPPORT_S_CURVE
+
+void PrepParams::EnsureSpeedsSet() const noexcept
+{
+	if (!speedsCalculated)
+	{
+		phase1StartSpeed = (phaseClocks[0] == 0) ? startSpeed : startSpeed + (initialAcceleration + (motioncalc_t)0.5 * jerk * (motioncalc_t)phaseClocks[0]) * (motioncalc_t)phaseClocks[0];
+		phase1EndSpeed = phase1StartSpeed + peakAcceleration * (motioncalc_t)phaseClocks[1];
+		phase5StartSpeed = (phaseClocks[4] == 0) ? topSpeed : topSpeed - (motioncalc_t)0.5 * jerk * msquare((motioncalc_t)phaseClocks[4]);
+		phase5EndSpeed = phase5StartSpeed + peakDeceleration * (motioncalc_t)phaseClocks[5];
+		speedsCalculated = true;
+	}
+}
+
+#endif
 
 void PrepParams::DebugPrint() const noexcept
 {
-	debugPrintf("pp: td=%.3g"
+	debugPrintf("pp: td=%.3g ss=%.4g ts=%.4g es=%.4g"
 #if SUPPORT_S_CURVE
 				" ad=[%.4g %.4g %.4g] sd=%.4g dd=[%.4g %.4g %.4g] a=[%.4g %.4g] d=[%.4g %.4g] ac=[%" PRIu32 " %" PRIu32 " %" PRIu32 "] sc=%" PRIu32 " dc=[%" PRIu32 " %" PRIu32 " %" PRIu32 "]"
 #else
 				" ad=%.4g dsd=%.4g a=%.4g d=%.4g ac=%" PRIu32 " sc=%" PRIu32 " dc=%" PRIu32
 #endif
 				"\n",
-					(double)totalDistance,
+					(double)totalDistance, (double)startSpeed, (double)topSpeed, (double)endSpeed,
 #if SUPPORT_S_CURVE
 					(double)distances[0], (double)distances[1], (double)distances[2],
 					(double)distances[3],
@@ -408,7 +428,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 				}
 				if (flags.xyMoving && nextMove.usePressureAdvance)
 				{
-					const float compensationClocks = move.GetPressureAdvanceClocksForLogicalDrive(drive);
+					const float compensationClocks = move.GetPressureAdvanceK0ClocksForLogicalDrive(drive);
 					if (compensationClocks > 0.0)
 					{
 						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration

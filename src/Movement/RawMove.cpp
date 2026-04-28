@@ -57,7 +57,7 @@ constexpr ObjectModelTableEntry MovementState::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. motionSystems[] members
-	{ "currentMove",			OBJECT_MODEL_FUNC(self, 1),																	ObjectModelEntryFlags::none },
+	{ "currentMove",			OBJECT_MODEL_FUNC(self, 1),																	ObjectModelEntryFlags::liveNotPanelDue },
 	{ "currentObject",			OBJECT_MODEL_FUNC_IF(reprap.GetPrintMonitor().IsPrinting(), (int32_t)self->currentObjectNumber),										ObjectModelEntryFlags::none },
 	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),									ObjectModelEntryFlags::live },
 	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->newToolNumber),											ObjectModelEntryFlags::none },

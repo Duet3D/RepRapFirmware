@@ -23,6 +23,7 @@ public:
 	virtual void Reset() noexcept = 0;							// Clean all the cached data from this input
 	virtual bool FillBuffer(GCodeBuffer *gb) noexcept = 0;		// Fill a GCodeBuffer with the last available G-code
 	virtual size_t BytesCached() const noexcept = 0;			// How many bytes have been cached?
+	virtual void SetWritingFile(bool wf) noexcept { (void)wf; }	// Suppress urgent command scanning while writing a file
 };
 
 // This class provides a standard implementation of FillBuffer that calls ReadByte() to supply individual characters
@@ -79,6 +80,7 @@ public:
 	void Reset() noexcept override;
 	size_t BytesCached() const noexcept override;				// How many bytes have been cached?
 	size_t BufferSpaceLeft() const noexcept;					// How much space do we have left?
+	void SetWritingFile(bool wf) noexcept override { writingFile = wf; }
 
 protected:
 	char ReadByte() noexcept override;
@@ -86,6 +88,7 @@ protected:
 
 	MessageType mtype;
 	GCodeInputState state;
+	bool writingFile;
 	size_t writingPointer, readingPointer;
 	char buffer[GCodeInputBufferSize];
 };
@@ -96,13 +99,31 @@ class BufferedStreamGCodeInput : public RegularGCodeInput
 public:
 	BufferedStreamGCodeInput(Stream &_ecv_from dev, MessageType mt) noexcept : RegularGCodeInput(mt), device(dev) { }
 
-	void Reset() noexcept override;
 	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
-	void Spin() noexcept;										// Read from the device into the buffer and check for urgent commands
+	virtual void Spin() noexcept;								// Read from the device into the buffer and check for urgent commands
 
 private:
 	Stream &_ecv_from device;
 };
+
+#if defined(SERIAL_USB_DEVICE)
+
+class SerialCDC;
+
+// Subclass of BufferedStreamGCodeInput for USB CDC devices
+// Automatically resets buffered data when the USB host disconnects
+class UsbGCodeInput : public BufferedStreamGCodeInput
+{
+public:
+	UsbGCodeInput(SerialCDC &_ecv_from dev, MessageType mt) noexcept;
+
+	void Spin() noexcept override;
+
+private:
+	SerialCDC &_ecv_from usbDevice;
+};
+
+#endif
 
 enum class GCodeInputReadResult : uint8_t { haveData, noData, error };
 

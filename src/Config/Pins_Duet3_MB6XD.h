@@ -23,6 +23,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 
 // Storage support
 #define HAS_SBC_INTERFACE		1
+#define SUPPORTS_SBC_OVER_SPI	1
+#define SUPPORTS_SBC_OVER_USB	CORE_USES_TINYUSB
 #define HAS_MASS_STORAGE		1
 #define HAS_HIGH_SPEED_SD		1
 
