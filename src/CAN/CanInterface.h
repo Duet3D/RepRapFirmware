@@ -32,6 +32,8 @@ namespace CanInterface
 	void Shutdown() noexcept;
 	inline CanAddress GetCurrentMasterAddress() noexcept { return CanId::MasterAddress; }		// currently fixed, but might change in future
 
+	void ReportCanTiming(const StringRef& reply) noexcept;
+
 #if SUPPORT_REMOTE_COMMANDS
 	bool InExpansionMode() noexcept;
 	bool InTestMode() noexcept;
@@ -41,6 +43,7 @@ namespace CanInterface
 	void RaiseEvent(EventType type, uint16_t param, uint8_t device, const char *_ecv_array format, va_list vargs) noexcept;
 	void MainBoardAcknowledgedAnnounce() noexcept;
 	void LogIgnoredMovementMessage() noexcept;
+	void CheckBrs(const CanMessageTimeSync& msg) noexcept;
 #endif
 
 	CanRequestId AllocateRequestId(CanAddress destination, CanMessageBuffer *buf) noexcept;

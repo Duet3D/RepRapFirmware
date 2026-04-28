@@ -1631,11 +1631,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 		}
 		else
 		{
-			can0dev->GetLocalCanTiming(timing);
-			reply.printf("CAN bus speed %.1fkbps, sample point %.2f, jump width %.2f",
-							(double)((float)CanTiming::ClockFrequency/(1000 * timing.period)),
-							(double)((float)(timing.nTseg1 + 1)/(float)timing.period),
-							(double)((float)timing.nJumpWidth/(float)timing.period));
+			ReportCanTiming(reply);
 		}
 		return GCodeResult::ok;
 	}
@@ -1643,6 +1639,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	CanMessageBufferHandle buf(AllocateBuffer(&gb));
 	const CanRequestId rid = CanInterface::AllocateRequestId((uint8_t)oldAddress, buf.Access());
 	auto msg = buf.Access()->SetupRequestMessage<CanMessageSetAddressAndNormalTiming>(rid, GetCanAddress(), (uint8_t)oldAddress);
+	buf.Access()->useBrs = false;							// this message is used to report on the fast data rate, so disable bit rate switching
 	msg->oldAddress = (uint8_t)oldAddress;
 
 	if (gb.Seen('A'))
@@ -1730,27 +1727,48 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 	}
 	else
 	{
-		can0dev->GetLocalCanTiming(timing);
-		reply.printf("CAN arbitration speed %.1fkbps, sample point %.2f, jump width %.2f, ",
-						(double)((float)CanTiming::ClockFrequency/(1000 * timing.period)),
-						(double)((float)(timing.nTseg1 + 1)/(float)timing.period),
-						(double)((float)timing.nJumpWidth/(float)timing.period));
-		if (fastDataRate == 0)
-		{
-			reply.cat("bit rate switching disabled");
-		}
-		else
-		{
-			const uint32_t dataPeriod = timing.period/(fastDataRate + 1);
-			reply.catf("data speed %.1fkbps, sample point %.2f, jump width %.2f",
-						(double)((float)(CanTiming::ClockFrequency * (fastDataRate + 1))/(float)(1000 * dataPeriod)),
-						(double)((float)(timing.dTseg1 + 1)/(float)dataPeriod),
-						(double)((float)timing.dJumpWidth/(float)dataPeriod));
-		}
+		ReportCanTiming(reply);
 	}
 
 	// TODO here we should enable CAN
 	return ret;
+}
+
+void CanInterface::ReportCanTiming(const StringRef& reply) noexcept
+{
+	CanTiming timing;
+	can0dev->GetLocalCanTiming(timing);
+	reply.printf("CAN arbitration speed %.1fkbps, sample point %.2f, jump width %.2f, ",
+					(double)((float)CanTiming::ClockFrequency/(float)(1000 * timing.period)),
+					(double)((float)(timing.nTseg1 + 1)/(float)timing.period),
+					(double)((float)timing.nJumpWidth/(float)timing.period));
+	if (fastDataRate == 0)
+	{
+		reply.cat("bit rate switching disabled");
+	}
+	else
+	{
+		const uint32_t dataPeriod = timing.period/(fastDataRate + 1);
+		reply.catf("data speed %.1fkbps, sample point %.2f, jump width %.2f",
+					(double)((float)CanTiming::ClockFrequency/(float)(1000 * dataPeriod)),
+					(double)((float)(timing.dTseg1 + 1)/(float)dataPeriod),
+					(double)((float)timing.dJumpWidth/(float)dataPeriod));
+	}
+}
+
+// Check that the BRS setting we are using matches the one n the time sync message and change it if necessary
+void CanInterface::CheckBrs(const CanMessageTimeSync& msg) noexcept
+{
+	if (msg.fastDataRate != fastDataRate || msg.tseg1Minus1 != dTseg1MinusOne)
+	{
+		CanTiming timing;
+		can0dev->GetLocalCanTiming(timing);
+		timing.EnableBrs(msg.fastDataRate + 1);
+		timing.SetDataSamplePointDirect(msg.tseg1Minus1);
+		can0dev->ChangeLocalCanTiming(timing);
+		fastDataRate = msg.fastDataRate;
+		dTseg1MinusOne = msg.tseg1Minus1;
+	}
 }
 
 // Create a filament monitor but do not configure it

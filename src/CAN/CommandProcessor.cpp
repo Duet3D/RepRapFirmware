@@ -319,7 +319,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 	if (buf->id.Src() != CanInterface::GetCanAddress())				// I don't think we should receive our own messages, but in case we do...
 	{
 		const CanMessageType id = buf->id.MsgType();
-		if (   buf->id.Dst() != CanId::BroadcastAddress				// ignore broadcast messages e.g. temperature reports
+		if (   buf->id.Dst() != CanId::BroadcastAddress				// don't flash the LED on broadcast messages e.g. temperature reports and time sync
 			&& id != CanMessageType::fansReport						// don't flash whenever we receive a regular status message
 			&& id != CanMessageType::heatersStatusReport
 			&& id != CanMessageType::boardStatusReportV0
@@ -345,6 +345,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			{
 			case CanMessageType::timeSync:
 				StepTimer::ProcessTimeSyncMessage(buf->msg.sync, buf->dataLength, buf->timeStamp);
+				CanInterface::CheckBrs(buf->msg.sync);
 				return;							// no reply needed
 
 			case CanMessageType::emergencyStop:
