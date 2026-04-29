@@ -1691,6 +1691,7 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 		timing.SetNormalJumpWidth(f);
 	}
 
+#if SUPPORT_BRS
 	uint32_t bitRateMultiplier;
 	if (gb.TryGetLimitedUIValue('R', bitRateMultiplier, seen, 9))
 	{
@@ -1709,6 +1710,7 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 			timing.SetDataJumpWidth(f);
 		}
 	}
+#endif
 
 	if (seen)
 	{
@@ -1719,11 +1721,13 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 		}
 		delay(50);																		// allow any existing transactions to complete
 		can0dev->ChangeLocalCanTiming(timing);
+#if SUPPORT_BRS
 		{
 			AtomicCriticalSectionLocker lock;
 			fastDataRate = bitRateMultiplier - 1;
 			dTseg1MinusOne = timing.dTseg1;
 		}
+#endif
 	}
 	else
 	{

@@ -39,6 +39,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define HAS_VREF_MONITOR		1
 
 #define SUPPORT_CAN_EXPANSION	1
+#define SUPPORT_BRS				1
 #define DUAL_CAN				1					// support the second CAN interface as simple CAN (not FD)
 #define SUPPORT_LED_STRIPS		1
 #define SUPPORT_DMA_DOTSTAR		1
