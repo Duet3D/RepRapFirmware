@@ -256,13 +256,9 @@ void MovementState::ChangeExtrusionFactor(unsigned int extruder, float multiplie
 // Note, this no longer applies inverse mesh bed compensation or axis skew compensation to the returned machine coordinates, so they are the compensated coordinates!
 float MovementState::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 {
-	if (forceLiveCoordinatesUpdate || millis() - latestLiveCoordinatesFetchedAt > MoveTiming::MachineCoordinateUpdateInterval)
-	{
-		reprap.GetMove().UpdateLiveMachineCoordinates(latestLiveCoordinates, currentTool);
-		forceLiveCoordinatesUpdate = false;
-		latestLiveCoordinatesFetchedAt = millis();
-	}
-	return latestLiveCoordinates[axisOrExtruder];
+	float coords[MaxAxesPlusExtruders];
+	reprap.GetMove().UpdateLiveMachineCoordinates(coords, currentTool);
+	return coords[axisOrExtruder];
 }
 
 void MovementState::Diagnostics(const StringRef& reply) const noexcept
