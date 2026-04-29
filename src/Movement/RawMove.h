@@ -117,7 +117,6 @@ public:
 	void ChangeSingleEndpointAfterHoming(size_t drive, int32_t ep) noexcept;
 	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;			// adjust the endpoints following delta calibration
 	float LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept;				// Get a single coordinate for reporting e.g.in the OM
-	void ForceLiveCoordinatesUpdate() noexcept { forceLiveCoordinatesUpdate = true; }		// Force the stored coordinates to be updated next time LiveMachineCoordinate is called
 	void UpdateOwnedDriveEndpointsFromMotors() noexcept;									// fetch lastKnownEndpoints from the motors for our owned drives and update the endpoints in our DDA ring
 	void UpdateOwnedDriveLastEndpoints(const int32_t endPoints[MaxAxes]) noexcept;			// update lastKnownEndpoints for our owned drives
 
@@ -248,9 +247,6 @@ public:
 
 private:
 	MovementSystemNumber msNumber;
-	mutable bool forceLiveCoordinatesUpdate = true;					// true if we want to force latestLiveCoordinates to be updated
-	mutable float latestLiveCoordinates[MaxAxesPlusExtruders];		// the most recent set of live coordinates that we fetched
-	mutable uint32_t latestLiveCoordinatesFetchedAt = 0;			// when we fetched the live coordinates
 
 	static int32_t lastKnownEndpoints[MaxAxesPlusExtruders];		// the last stored position of the logical drives
 	static int32_t endpointsAtSimulationStart[MaxAxesPlusExtruders];	// the endpoints when we started a simulation
