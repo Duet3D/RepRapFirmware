@@ -3181,7 +3181,11 @@ void Platform::Message(const GCodeBuffer *_ecv_null gb, MessageType type, Output
 	if ((type & HttpMessage) != 0)							{ ++numDestinations; }
 	if ((type & TelnetMessage) != 0)						{ ++numDestinations; }
 #if HAS_SBC_INTERFACE
-	if (reprap.UsingSbcInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)) { ++numDestinations; }
+	if (reprap.UsingSbcInterface() &&
+		((type & GenericMessage) == GenericMessage || (type & Usb2Message) != 0 || (type & BinaryCodeReplyFlag) != 0))
+	{
+		++numDestinations;
+	}
 #endif
 
 	if (numDestinations == 0)
@@ -3227,7 +3231,8 @@ void Platform::Message(const GCodeBuffer *_ecv_null gb, MessageType type, Output
 #endif
 
 #if HAS_SBC_INTERFACE
-		if (reprap.UsingSbcInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0))
+		if (reprap.UsingSbcInterface() && ((type & GenericMessage) == GenericMessage || (type & Usb2Message) != 0 ||
+										   (type & BinaryCodeReplyFlag) != 0))
 		{
 			reprap.GetSbcInterface().HandleGCodeReply(type, buffer);
 		}
@@ -3239,7 +3244,8 @@ void Platform::MessageV(const GCodeBuffer *_ecv_null gb, MessageType type, const
 {
 	String<FormatStringLength> formatString;
 #if HAS_SBC_INTERFACE
-	if (reprap.UsingSbcInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0))
+	if (reprap.UsingSbcInterface() &&
+		((type & GenericMessage) == GenericMessage || (type & Usb2Message) != 0 || (type & BinaryCodeReplyFlag) != 0))
 	{
 		formatString.vprintf(fmt, vargs);
 		reprap.GetSbcInterface().HandleGCodeReply(type, formatString.c_str());
@@ -3287,8 +3293,8 @@ void Platform::MessageF(const GCodeBuffer *_ecv_null gb, MessageType type, const
 void Platform::Message(MessageType type, const char *_ecv_array message) noexcept
 {
 #if HAS_SBC_INTERFACE
-	if (reprap.UsingSbcInterface() &&
-		((type & BinaryCodeReplyFlag) != 0 || (type & GenericMessage) == GenericMessage || (type & LogOff) != LogOff))
+	if (reprap.UsingSbcInterface() && ((type & BinaryCodeReplyFlag) != 0 || (type & GenericMessage) == GenericMessage ||
+									   (type & Usb2Message) != 0 || (type & LogOff) != LogOff))
 	{
 		reprap.GetSbcInterface().HandleGCodeReply(type, message);
 		if ((type & BinaryCodeReplyFlag) != 0)
