@@ -102,7 +102,7 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null 
 		case 'T':
 			if (gb->HasCommandNumber())
 			{
-				if (gb->GetCommandFraction() != 0)
+				if (gb->GetCommandFraction() >= 0)
 				{
 					reply.catf("%c%d.%d: ", gb->GetCommandLetter(), gb->GetCommandNumber(), gb->GetCommandFraction());
 
