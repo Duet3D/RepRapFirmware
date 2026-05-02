@@ -4276,7 +4276,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *_ecv_null reply) noexcep
 
 #if HAS_SBC_INTERFACE
 	// Deal with replies to the SBC
-	if (gb.IsBinary())
+	if (gb.LatestMachineState().lastCodeFromSbc)
 	{
 		platform.Message(gb.GetResponseMessageType(), reply);
 		return;
