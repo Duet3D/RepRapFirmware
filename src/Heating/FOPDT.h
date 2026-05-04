@@ -70,7 +70,6 @@ public:
 	float EstimateMaxTemperatureRise() const noexcept;
 
 	float GetExpectedHeatingRate(float temperatureRise, float fanPwm, float heaterPwm, float actualVoltage, float filamentPwm) const noexcept;
-	float CorrectPwmForVoltage(float requiredPwm, float actualVoltage) const noexcept;
 	float GetPwmCorrectionForFan(float temperatureRise, float oldFanPwm, float newFanPwm) const noexcept;
 	void CalcPidConstants(float targetTemperature) noexcept;
 

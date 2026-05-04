@@ -280,16 +280,6 @@ void FopDt::CalcPidConstants(float targetTemperature) noexcept
 	}
 }
 
-// Adjust the actual heater PWM for supply voltage
-float FopDt::CorrectPwmForVoltage(float requiredPwm, float actualVoltage) const noexcept
-{
-	if (requiredPwm < maxPwm && basicModel.standardVoltage >= 10.0 && actualVoltage >= 10.0)
-	{
-		requiredPwm *= fsquare(basicModel.standardVoltage/actualVoltage);
-	}
-	return min<float>(requiredPwm, maxPwm);
-}
-
 // Calculate the change in required heater PWM due to a change in fan PWM
 float FopDt::GetPwmCorrectionForFan(float temperatureRise, float oldFanPwm, float newFanPwm) const noexcept
 {
