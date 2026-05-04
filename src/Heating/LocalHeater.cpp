@@ -91,7 +91,7 @@ void LocalHeater::ResetHeater() noexcept
 	iAccumulator = 0.0;
 	badTemperatureCount = 0;
 	averagePWM = lastPwm = 0.0;
-	heatingFaultCount = 0;
+	heaterExcursionFaultCount = heaterPwmFaultCount = 0;
 	temperature = BadErrorTemperature;
 }
 
@@ -211,7 +211,7 @@ void LocalHeater::UpdateHeaterMode(float targetTemperature) noexcept
 			lastTemperatureValue = temperature;
 			lastTemperatureMillis = timeSetHeating = millis();
 		}
-		heatingFaultCount = 0;
+		heaterExcursionFaultCount = heaterPwmFaultCount = 0;
 		mode = newMode;
 	}
 }
@@ -322,6 +322,11 @@ void LocalHeater::Spin() noexcept
 
 			const float error = targetTemperature - temperature;
 
+#if HAS_VOLTAGE_MONITOR
+			const float currentVoltage = (GetFunction() == HeaterFunction::tool) ? reprap.GetPlatform().GetCurrentPowerVoltage() : 0.0;		// correct PWM for voltage if it is a tool heater
+#else
+			constexpr float currentVoltage = 0.0;
+#endif
 			// Do the heating checks
 			switch (mode)
 			{
@@ -329,7 +334,7 @@ void LocalHeater::Spin() noexcept
 				if (error <= TemperatureCloseEnough)
 				{
 					mode = HeaterMode::stable;
-					heatingFaultCount = 0;
+					heaterExcursionFaultCount = heaterPwmFaultCount = 0;
 				}
 				else
 				{
@@ -342,7 +347,7 @@ void LocalHeater::Spin() noexcept
 					}
 					else if (gotDerivative)												// this is a check in case we just had a temperature spike
 					{
-						const float expectedRate = GetExpectedHeatingRate();
+						const float expectedRate = GetExpectedHeatingRate(currentVoltage);
 						const float minSamplingInterval = 3.0/expectedRate;				// only check the temperature when we expect at least 3C rise since last time
 						const float actualInterval = (float)(now - lastTemperatureMillis) * MillisToSeconds;
 						if (actualInterval >= minSamplingInterval)
@@ -353,8 +358,8 @@ void LocalHeater::Spin() noexcept
 							// Bed heaters sometimes have much slower long term heating rates than their short term heating rates, so allow them a lower measured heating rate
 							if (actualTemperatureRise < expectedTemperatureRise * MinTemperatureRiseFactors[(unsigned int)GetFunction()])
 							{
-								++heatingFaultCount;
-								if ((float)(heatingFaultCount * HeatSampleIntervalMillis) > GetMaxHeatingFaultTime() * SecondsToMillis)
+								++heaterExcursionFaultCount;
+								if ((float)(heaterExcursionFaultCount * HeatSampleIntervalMillis) > GetMaxHeatingFaultTime() * SecondsToMillis)
 								{
 									RaiseHeaterFault(HeaterFaultType::temperatureRisingTooSlowly,
 														"expected %.2f" DEGREE_SYMBOL "C/sec measured %.2f" DEGREE_SYMBOL "C/sec",
@@ -365,9 +370,9 @@ void LocalHeater::Spin() noexcept
 							{
 								lastTemperatureValue = temperature;
 								lastTemperatureMillis = now;
-								if (heatingFaultCount != 0)
+								if (heaterExcursionFaultCount != 0)
 								{
-									--heatingFaultCount;
+									--heaterExcursionFaultCount;
 								}
 							}
 						}
@@ -383,17 +388,17 @@ void LocalHeater::Spin() noexcept
 					   )
 				   )
 				{
-					++heatingFaultCount;
-					if ((float)(heatingFaultCount * HeatSampleIntervalMillis) > GetMaxHeatingFaultTime() * SecondsToMillis)
+					++heaterExcursionFaultCount;
+					if ((float)(heaterExcursionFaultCount * HeatSampleIntervalMillis) > GetMaxHeatingFaultTime() * SecondsToMillis)
 					{
 						RaiseHeaterFault(HeaterFaultType::exceededAllowedExcursion,
 											"target %.1f" DEGREE_SYMBOL "C actual %.1f" DEGREE_SYMBOL "C",
 												(double)targetTemperature, (double)temperature);
 					}
 				}
-				else if (heatingFaultCount != 0)
+				else if (heaterExcursionFaultCount != 0)
 				{
-					--heatingFaultCount;
+					--heaterExcursionFaultCount;
 				}
 				break;
 
@@ -402,7 +407,7 @@ void LocalHeater::Spin() noexcept
 				{
 					// We have cooled to close to the target temperature, so we should now maintain that temperature
 					mode = HeaterMode::stable;
-					heatingFaultCount = 0;
+					heaterExcursionFaultCount = heaterPwmFaultCount = 0;
 				}
 				else
 				{
@@ -416,13 +421,13 @@ void LocalHeater::Spin() noexcept
 			}
 
 			// Calculate the PWM
-			if (mode >= HeaterMode::tuning0)
-			{
-				DoTuningStep();
-			}
-			else if (mode <= HeaterMode::suspended)
+			if (mode <= HeaterMode::suspended)
 			{
 				lastPwm = 0.0;
+			}
+			else if (mode >= HeaterMode::firstTuningMode)
+			{
+				DoTuningStep();
 			}
 			else
 			{
@@ -436,7 +441,7 @@ void LocalHeater::Spin() noexcept
 					// If the P and D terms together demand that the heater is full on or full off, disregard the I term
 					const float errorMinusDterm = error - (params.tD * derivative);
 					const float pPlusD = params.kP * errorMinusDterm;
-					const float expectedPwm = GetModel().EstimateRequiredPwm(temperature - NormalAmbientTemperature, lastFanPwm);
+					const float expectedPwm = GetModel().EstimateRequiredPwm(temperature - NormalAmbientTemperature, lastFanPwm, currentVoltage, 0.0);
 					if (pPlusD + expectedPwm > GetModel().GetMaxPwm())
 					{
 						lastPwm = GetModel().GetMaxPwm();
@@ -458,13 +463,24 @@ void LocalHeater::Spin() noexcept
 											0.0, GetModel().GetMaxPwm());
 						lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, GetModel().GetMaxPwm());
 					}
-#if HAS_VOLTAGE_MONITOR
-					// Scale the PID based on the current voltage vs. the calibration voltage
-					if (GetFunction() == HeaterFunction::tool)
+
+					if (mode == HeaterMode::stable)
 					{
-						lastPwm = GetModel().CorrectPwmForVoltage(lastPwm, reprap.GetPlatform().GetCurrentPowerVoltage());
+						if (lastPwm > expectedPwm * 1.2)
+						{
+							++heaterPwmFaultCount;
+							if (heaterPwmFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
+							{
+								RaiseHeaterFault(HeaterFaultType::pwmTooHigh,
+													"expected %.1f actual %.1f",
+														(double)expectedPwm, (double)lastPwm);
+							}
+						}
+						else if (heaterPwmFaultCount != 0)
+						{
+							--heaterPwmFaultCount;
+						}
 					}
-#endif
 				}
 				else
 				{
@@ -551,11 +567,11 @@ float LocalHeater::GetAveragePWM() const noexcept
 }
 
 // Get a conservative estimate of the expected heating rate at the current temperature and average PWM. The result may be negative.
-float LocalHeater::GetExpectedHeatingRate() const noexcept
+float LocalHeater::GetExpectedHeatingRate(float voltage) const noexcept
 {
 	const float temperatureRise = max<float>(temperature - LowAmbientTemperature, 0.0);
 	const float pwm = min<float>(GetAveragePWM(), lastPwm);
-	return GetModel().GetNetHeatingRate(temperatureRise, 1.0, pwm);
+	return GetModel().GetExpectedHeatingRate(temperatureRise, 1.0, pwm, voltage, 0.0);
 }
 
 // Auto tune this heater. The caller has already checked that no other heater is being tuned and has set up tuningTargetTemp, tuningPwm, tuningFans, tuningHysteresis and tuningFanPwm.
@@ -597,9 +613,9 @@ void LocalHeater::SetFanFeedForwardPwm(float pwm) noexcept
 {
 	if (mode == HeaterMode::stable)
 	{
-		const float pwmChange = pwm - lastFanPwm;
+		const float oldFanPwm = lastFanPwm;
 		lastFanPwm = pwm;
-		const float boost = GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, pwmChange) * FanFeedForwardMultiplier;
+		const float boost = GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, oldFanPwm, pwm) * FanFeedForwardMultiplier;
 		TaskCriticalSectionLocker lock;
 		iAccumulator += boost;
 	}
@@ -1023,9 +1039,9 @@ GCodeResult LocalHeater::ApplyFeedForward(const CanMessageHeaterFeedForwardV1& m
 		previousExtrusionPwmBoost = msg.extrusionPwmBoost;
 		if (msg.fanPwmFraction != lastFanPwm)
 		{
-			const float pwmChange = msg.fanPwmFraction - lastFanPwm;
+			const float oldFanPwm = lastFanPwm;
 			lastFanPwm = msg.fanPwmFraction;
-			pwmBoost += GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, pwmChange) * FanFeedForwardMultiplier;
+			pwmBoost += GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, oldFanPwm, msg.fanPwmFraction) * FanFeedForwardMultiplier;
 		}
 		TaskCriticalSectionLocker lock;
 		iAccumulator += pwmBoost;
