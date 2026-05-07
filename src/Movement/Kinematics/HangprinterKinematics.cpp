@@ -9,20 +9,20 @@
 
 #if SUPPORT_HANGPRINTER
 
+#include <array>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
 #include <Platform/RepRap.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <GCodes/GCodes.h>
 #include <Movement/Move.h>
 #include <CAN/CanInterface.h>
 #include <Math/Matrix.h>
 
 #include <General/Portability.h>
-
-constexpr float DefaultAnchors[5][3] = {{    0.0, -2000.0, -100.0},
-                                        { 2000.0,  1000.0, -100.0},
-                                        {-2000.0,  1000.0, -100.0},
-                                        {    0.0,     0.0, 3000.0},
-                                        {    0.0,     0.0,    0.0}};
-constexpr float DefaultPrintRadius = 1500.0;
+#include <General/String.h>
 
 
 // Object model table and functions
@@ -90,16 +90,25 @@ void HangprinterKinematics::Init() noexcept
 	constexpr uint32_t DefaultMotorGearTeeth[HANGPRINTER_MAX_ANCHORS] = {  20,  20,  20,  20,  20}; // HP4 default
 	constexpr uint32_t DefaultSpoolGearTeeth[HANGPRINTER_MAX_ANCHORS] = { 255, 255, 255, 255, 255}; // HP4 default
 	constexpr uint32_t DefaultFullStepsPerMotorRev[HANGPRINTER_MAX_ANCHORS] = { 25, 25, 25, 25, 25};
-	constexpr float DefaultMoverWeight_kg = 0.0F;          // Zero disables flex compensation feature.
+	constexpr float DefaultMoverWeight_kg = 0.0F;
 	constexpr float DefaultSpringKPerUnitLength = 20000.0F; // Garda 1.1 is somewhere in the range [20000, 100000]
-	constexpr float DefaultMinPlannedForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
-	constexpr float DefaultMaxPlannedForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 70.0F, 70.0F, 70.0F, 70.0F, 70.0F };
-	constexpr float DefaultGuyWireLengths[HANGPRINTER_MAX_ANCHORS] = { -1.0F }; // If one of these are negative they will be calculated in Recalc() instead
-	constexpr float DefaultTargetForce_Newton = 20.0F; // 20 chosen quite arbitrarily
+	constexpr float DefaultMinForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	constexpr float DefaultMaxForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 70.0F, 70.0F, 70.0F, 70.0F, 70.0F };
+	constexpr float DefaultGuyWireLengths[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	constexpr float DefaultTorqueConstants[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	constexpr float DefaultAnchors[HANGPRINTER_MAX_ANCHORS][3] =
+		{{    0.0, -2000.0, -100.0},
+		 { 2000.0,  1000.0, -100.0},
+		 {-2000.0,  1000.0, -100.0},
+		 {    0.0,     0.0, 3000.0},
+		 {    0.0,     0.0,    0.0},
+		 {    0.0,     0.0,    0.0},
+		 {    0.0,     0.0,    0.0},
+		 {    0.0,     0.0,    0.0}};
+	constexpr float DefaultPrintRadius = 1500.0;
 
 	ARRAY_INIT(anchors, DefaultAnchors);
-	anchorMode = HangprinterAnchorMode::LastOnTop;
+	anchorMode = HangprinterAnchorMode::None;
 	numAnchors = DefaultNumAnchors;
 	printRadius = DefaultPrintRadius;
 	spoolBuildupFactor = DefaultSpoolBuildupFactor;
@@ -111,10 +120,9 @@ void HangprinterKinematics::Init() noexcept
 	ARRAY_INIT(fullStepsPerMotorRev, DefaultFullStepsPerMotorRev);
 	moverWeight_kg = DefaultMoverWeight_kg;
 	springKPerUnitLength = DefaultSpringKPerUnitLength;
-	ARRAY_INIT(minPlannedForce_Newton, DefaultMinPlannedForce_Newton);
-	ARRAY_INIT(maxPlannedForce_Newton, DefaultMaxPlannedForce_Newton);
+	ARRAY_INIT(minForce_Newton, DefaultMinForce_Newton);
+	ARRAY_INIT(maxForce_Newton, DefaultMaxForce_Newton);
 	ARRAY_INIT(guyWireLengths, DefaultGuyWireLengths);
-	targetForce_Newton = DefaultTargetForce_Newton;
 	ARRAY_INIT(torqueConstants, DefaultTorqueConstants);
 
 	Recalc();
@@ -122,6 +130,10 @@ void HangprinterKinematics::Init() noexcept
 
 static inline float hyp3(float const a[3], float const b[3]) {
 	return fastSqrtf(fsquare(a[2] - b[2]) + fsquare(a[1] - b[1]) + fsquare(a[0] - b[0]));
+}
+
+static inline float norm(float const a[3]) {
+	return fastSqrtf(fsquare(a[2]) + fsquare(a[1]) + fsquare(a[0]));
 }
 
 // Recalculate the derived parameters
@@ -133,7 +145,7 @@ void HangprinterKinematics::Recalc() noexcept
 	// "line length" == ("line position" + "line length in origin")
 	for (size_t i = 0; i < numAnchors; ++i)
 	{
-		distancesOrigin[i] = fastSqrtf(fsquare(anchors[i][0]) + fsquare(anchors[i][1]) + fsquare(anchors[i][2]));
+		distancesOrigin[i] = norm(anchors[i]);
 	}
 
 	//// Line buildup compensation
@@ -152,47 +164,27 @@ void HangprinterKinematics::Recalc() noexcept
 			)
 			/ (2.0 * Pi * motorGearTeeth[i]);
 
-		k2[i] = -(float)(mechanicalAdvantage[i] * linesPerSpool[i]) * spoolBuildupFactor;
-		k0[i] = 2.0 * stepsPerUnitTimesRTmp[i] / k2[i];
+		const float stepsPerMmThisAxis = stepsPerUnitTimesRTmp[i] / spoolRadii[i];
+		stepsPerMmAtOrigin[i] = stepsPerMmThisAxis;
+
+		const float k2Val = -(float)(mechanicalAdvantage[i] * linesPerSpool[i]) * spoolBuildupFactor;
+		if (fabsf(k2Val) <= 1.0e-9F)
+		{
+			k2[i] = 0.0F;
+			k0[i] = 0.0F;
+			useConstantSpoolModel[i] = true;
+		}
+		else
+		{
+			k2[i] = k2Val;
+			k0[i] = 2.0 * stepsPerUnitTimesRTmp[i] / k2Val;
+			useConstantSpoolModel[i] = false;
+		}
+
 		spoolRadiiSq[i] = spoolRadii[i] * spoolRadii[i];
 
 		// Calculate the steps per unit that is correct at the origin
-		move.SetDriveStepsPerMm(i, stepsPerUnitTimesRTmp[i] / spoolRadii[i], 0);
-	}
-
-	//// Flex compensation
-	bool oneGuyWireNegative = false;
-	for (size_t i{0}; i < numAnchors; ++i) {
-		if (guyWireLengths[i] < 0.0F) {
-			oneGuyWireNegative = true;
-			break;
-		}
-	}
-
-	if (anchorMode == HangprinterAnchorMode::LastOnTop) {
-		// If no guy wire lengths are configured, assume a default configuration
-		// with all spools stationary located at the last anchor,
-		// and that the last anchor is a top anchor
-		if (oneGuyWireNegative) {
-			for (size_t i{0}; i < numAnchors - 1; ++i) {
-				guyWireLengths[i] = hyp3(anchors[i], anchors[numAnchors - 1]);
-			}
-			guyWireLengths[numAnchors - 1] = 0.0F;
-		}
-	} else {
-		// Assumes no guyWires in all other cases
-		for (size_t i{0}; i < numAnchors; ++i) {
-			guyWireLengths[i] = 0.0F;
-		}
-	}
-
-	for (size_t i{0}; i < numAnchors; ++i) {
-		springKsOrigin[i] = SpringK(distancesOrigin[i] * mechanicalAdvantage[i] + guyWireLengths[i]);
-	}
-	float constexpr origin[3] = { 0.0F, 0.0F, 0.0F };
-	StaticForces(origin, fOrigin);
-	for (size_t i{0}; i < numAnchors; ++i) {
-		relaxedSpringLengthsOrigin[i] = distancesOrigin[i] - fOrigin[i] / (springKsOrigin[i] * mechanicalAdvantage[i]);
+		move.SetDriveStepsPerMm(i, stepsPerMmThisAxis, 0);
 	}
 
 #if DUAL_CAN
@@ -202,19 +194,19 @@ void HangprinterKinematics::Recalc() noexcept
 #endif
 }
 
-// Return the name of the current kinematics
-const char *HangprinterKinematics::GetName(bool forStatusReport) const noexcept
+const char *_ecv_array HangprinterKinematics::GetName(bool forStatusReport) const noexcept
 {
-	return "Hangprinter";
+    return "Hangprinter";
 }
 
 // Set the parameters from a M665, M666 or M669 command
 // Return true if we changed any parameters that affect the geometry. Set 'error' true if there was an error, otherwise leave it alone.
 bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException) /*override*/
 {
-	bool seen = false;
+	bool requiresRehome = false;
 	if (mCode == 669)
 	{
+		bool seen = false;
 		const bool seenNonGeometry = TryConfigureSegmentation(gb);
 		if (gb.Seen('N'))
 		{
@@ -234,6 +226,7 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		if (seen)
 		{
 			Recalc();
+			requiresRehome = true;
 		}
 		else if (!seenNonGeometry && !gb.Seen('K'))
 		{
@@ -248,26 +241,129 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 	}
 	else if (mCode == 666)
 	{
+		bool seen = false;
+		bool anyParamSeen = false;
+		bool geometryChanged = false;
+		bool seenFlexParam = false;
 		// 0=None, 1=last-top, 2=all-top, 3-half-top, etc
 		uint32_t unsignedAnchorMode = (uint32_t)anchorMode;
-		gb.TryGetUIValue('A', unsignedAnchorMode, seen);
-		if (unsignedAnchorMode <= (uint32_t)HangprinterAnchorMode::AllOnTop) {
-			anchorMode = (HangprinterAnchorMode)unsignedAnchorMode;
+		if (gb.TryGetUIValue('A', unsignedAnchorMode, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+			if (unsignedAnchorMode <= (uint32_t)HangprinterAnchorMode::AllOnTop) {
+				anchorMode = (HangprinterAnchorMode)unsignedAnchorMode;
+			}
 		}
-		gb.TryGetFValue('Q', spoolBuildupFactor, seen);
-		gb.TryGetFloatArray('R', numAnchors, spoolRadii, seen);
-		gb.TryGetUIArray('U', numAnchors, mechanicalAdvantage, seen);
-		gb.TryGetUIArray('O', numAnchors, linesPerSpool, seen);
-		gb.TryGetUIArray('L', numAnchors, motorGearTeeth, seen);
-		gb.TryGetUIArray('H', numAnchors, spoolGearTeeth, seen);
-		gb.TryGetUIArray('J', numAnchors, fullStepsPerMotorRev, seen);
-		gb.TryGetFValue('W', moverWeight_kg, seen);
-		gb.TryGetFValue('S', springKPerUnitLength, seen);
-		gb.TryGetFloatArray('I', numAnchors, minPlannedForce_Newton, seen);
-		gb.TryGetFloatArray('X', numAnchors, maxPlannedForce_Newton, seen);
-		gb.TryGetFloatArray('Y', numAnchors, guyWireLengths, seen);
-		gb.TryGetFloatArray('C', numAnchors, torqueConstants, seen);
-		if (seen)
+		if (gb.TryGetFValue('Q', spoolBuildupFactor, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		if (gb.TryGetFloatArray('R', numAnchors, spoolRadii, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		if (gb.TryGetUIArray('U', numAnchors, mechanicalAdvantage, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		if (gb.TryGetUIArray('O', numAnchors, linesPerSpool, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		if (gb.TryGetUIArray('L', numAnchors, motorGearTeeth, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		if (gb.TryGetUIArray('H', numAnchors, spoolGearTeeth, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		if (gb.TryGetUIArray('J', numAnchors, fullStepsPerMotorRev, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		if (gb.TryGetFValue('W', moverWeight_kg, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		if (gb.TryGetFValue('S', springKPerUnitLength, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		if (gb.TryGetFloatArray('I', numAnchors, minForce_Newton, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		if (gb.TryGetFloatArray('X', numAnchors, maxForce_Newton, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		if (gb.TryGetFloatArray('Y', numAnchors, guyWireLengths, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		if (gb.TryGetFloatArray('C', numAnchors, torqueConstants, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		int32_t flexCommand = 0;
+		if (gb.TryGetIValue('F', flexCommand, seenFlexParam))
+		{
+			bool validFlex = true;
+			if (flexCommand == 0)
+			{
+				flexEnabled = false;
+			}
+			else if (flexCommand == 1)
+			{
+				flexEnabled = true;
+				flexAlgorithm = FlexAlgorithm::Qp;
+			}
+			else if (flexCommand == 2)
+			{
+				flexEnabled = true;
+				flexAlgorithm = FlexAlgorithm::Tikhonov;
+			}
+			else
+			{
+				reply.catf("Unknown flex algorithm: %d\n", (int)flexCommand);
+				error = true;
+				validFlex = false;
+			}
+			if (validFlex)
+			{
+				anyParamSeen = true;
+			}
+			else
+			{
+				seenFlexParam = false;
+			}
+		}
+		if (gb.TryGetBValue('B', ignoreGravity, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		if (gb.TryGetBValue('P', ignorePretension, seen))
+		{
+			anyParamSeen = true;
+			geometryChanged = true;
+		}
+		if (anyParamSeen)
 		{
 			Recalc();
 		}
@@ -313,16 +409,16 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			reply.lcatf("W%.2f\n", (double)moverWeight_kg);
 			reply.lcatf("S%.2f\n", (double)springKPerUnitLength);
 
-			reply.lcatf("I%.1f", (double)minPlannedForce_Newton[0]);
+			reply.lcatf("I%.1f", (double)minForce_Newton[0]);
 			for (size_t i = 1; i < numAnchors; ++i)
 			{
-				reply.catf(":%.1f", (double)minPlannedForce_Newton[i]);
+				reply.catf(":%.1f", (double)minForce_Newton[i]);
 			}
 
-			reply.lcatf("X%.1f", (double)maxPlannedForce_Newton[0]);
+			reply.lcatf("X%.1f", (double)maxForce_Newton[0]);
 			for (size_t i = 1; i < numAnchors; ++i)
 			{
-				reply.catf(":%.1f", (double)maxPlannedForce_Newton[i]);
+				reply.catf(":%.1f", (double)maxForce_Newton[i]);
 			}
 
 			reply.lcatf("Y%.1f", (double)guyWireLengths[0]);
@@ -330,55 +426,64 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			{
 				reply.catf(":%.1f", (double)guyWireLengths[i]);
 			}
-			reply.lcatf("T%.1f\n", (double)targetForce_Newton);
 
 			reply.lcatf("C%.4f", (double)torqueConstants[0]);
 			for (size_t i = 1; i < numAnchors; ++i)
 			{
 				reply.catf(":%.4f", (double)torqueConstants[i]);
 			}
-
+			const uint32_t flexValue = flexEnabled ? ((flexAlgorithm == FlexAlgorithm::Tikhonov) ? 2u : 1u) : 0u;
+			reply.lcatf("F%u B%u P%u", static_cast<unsigned int>(flexValue), ignoreGravity ? 1u : 0u, ignorePretension ? 1u : 0u);
 		}
+		requiresRehome = geometryChanged;
 	}
 	else
 	{
 		return Kinematics::Configure(mCode, gb, reply, error);
 	}
-	return seen;
+	return requiresRehome;
 }
 
 // Convert Cartesian coordinates to motor coordinates, returning true if successful
 MovementError HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[],
 													size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
-	float distances[numAnchors];
-	for (size_t i = 0; i < numAnchors; ++i) {
+	float distances[HANGPRINTER_MAX_ANCHORS];
+	for (size_t i = 0; i < numAnchors; ++i)
+	{
 		distances[i] = hyp3(machinePos, anchors[i]);
 	}
 
-	float springKs[numAnchors];
-	for (size_t i = 0; i < numAnchors; ++i) {
-		springKs[i] = SpringK(distances[i] * mechanicalAdvantage[i] + guyWireLengths[i]);
+	float linePos[HANGPRINTER_MAX_ANCHORS];
+	if (flexEnabled)
+	{
+		float flex[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+		FlexDistances(machinePos, distances, flex);
+		for (size_t i = 0; i < numAnchors; ++i)
+		{
+			linePos[i] = distances[i] - distancesOrigin[i] + flex[i];
+		}
 	}
-
-	float F[numAnchors] = { 0.0F }; // desired force in each direction
-	StaticForces(machinePos, F);
-
-	float relaxedSpringLengths[numAnchors];
-	for (size_t i{0}; i < numAnchors; ++i) {
-		relaxedSpringLengths[i] = distances[i] - F[i] / (springKs[i] * mechanicalAdvantage[i]);
-		// The second term there is the mover's movement in mm due to flex
-	}
-
-	float linePos[numAnchors];
-	for (size_t i = 0; i < numAnchors; ++i) {
-		linePos[i] = relaxedSpringLengths[i] - relaxedSpringLengthsOrigin[i];
+	else
+	{
+		for (size_t i = 0; i < numAnchors; ++i)
+		{
+			linePos[i] = distances[i] - distancesOrigin[i];
+		}
 	}
 
 	MovementError rslt = MovementError::ok;
 	for (size_t i = 0; i < numAnchors; ++i)
 	{
-		RoundToInt32(rslt, k0[i] * (fastSqrtf(spoolRadiiSq[i] + linePos[i] * k2[i]) - spoolRadii[i]), motorPos[i]);
+		if (useConstantSpoolModel[i])
+		{
+			RoundToInt32(rslt, linePos[i] * stepsPerMmAtOrigin[i], motorPos[i]);
+		}
+		else
+		{
+			// This logic should be called LinePosToMotorPos
+			RoundToInt32(rslt, k0[i] * (fastSqrtf(spoolRadiiSq[i] + linePos[i] * k2[i]) - spoolRadii[i]), motorPos[i]);
+		}
 	}
 
 	return MovementError::ok;
@@ -387,11 +492,26 @@ MovementError HangprinterKinematics::CartesianToMotorSteps(const float machinePo
 
 inline float HangprinterKinematics::MotorPosToLinePos(const int32_t motorPos, size_t axis) const noexcept
 {
+	if (useConstantSpoolModel[axis])
+	{
+		return (float)motorPos / stepsPerMmAtOrigin[axis];
+	}
 	return (fsquare(motorPos / k0[axis] + spoolRadii[axis]) - spoolRadiiSq[axis]) / k2[axis];
 }
 
 
-void HangprinterKinematics::flexDistances(float const machinePos[3], float const distances[HANGPRINTER_MAX_ANCHORS],
+void HangprinterKinematics::FlexDistances(float const machinePos[3],
+                                          float flex[HANGPRINTER_MAX_ANCHORS]) const noexcept {
+	float distances[HANGPRINTER_MAX_ANCHORS];
+	for (size_t i = 0; i < numAnchors; ++i)
+	{
+		distances[i] = hyp3(machinePos, anchors[i]);
+	}
+	FlexDistances(machinePos, distances, flex);
+}
+
+
+void HangprinterKinematics::FlexDistances(float const machinePos[3], float const distances[HANGPRINTER_MAX_ANCHORS],
                                           float flex[HANGPRINTER_MAX_ANCHORS]) const noexcept {
 	float springKs[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	for (size_t i = 0; i < numAnchors; ++i) {
@@ -401,46 +521,246 @@ void HangprinterKinematics::flexDistances(float const machinePos[3], float const
 	float F[HANGPRINTER_MAX_ANCHORS] = { 0.0F }; // desired force in each direction
 	StaticForces(machinePos, F);
 
-	float relaxedSpringLengths[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	for (size_t i = 0; i < numAnchors; ++i) {
-		relaxedSpringLengths[i] = distances[i]- F[i] / (springKs[i] * mechanicalAdvantage[i]);
-	};
-
-	float linePos[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
-	for (size_t i = 0; i < numAnchors; ++i) {
-		linePos[i] = relaxedSpringLengths[i] - relaxedSpringLengthsOrigin[i];
-	};
-
-	float distanceDifferences[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
-	for (size_t i = 0; i < numAnchors; ++i) {
-		distanceDifferences[i] = distances[i] - distancesOrigin[i];
-	};
-
-	for (size_t i = 0; i < numAnchors; ++i) {
-		flex[i] = linePos[i] - distanceDifferences[i];
+		flex[i] = -F[i] / (springKs[i] * mechanicalAdvantage[i]);
 	}
+}
+
+// Start of forward kinematics stuff
+float HangprinterKinematics::ResidualsAndDerivatives(
+                                     const float linePositions[HANGPRINTER_MAX_ANCHORS],
+                                     float const pos[3],
+                                     float residuals[HANGPRINTER_MAX_ANCHORS],
+                                     float jacobian[HANGPRINTER_MAX_ANCHORS][3],
+                                     float (*hessians)[3][3]) const noexcept {
+	float baseImpact[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	float impactPlus[HANGPRINTER_MAX_ANCHORS][3] = { 0.0F };
+	float impactMinus[HANGPRINTER_MAX_ANCHORS][3] = { 0.0F };
+	constexpr float impactStep = 1e-3F;
+
+	if (flexEnabled) {
+		FlexDistances(pos, baseImpact);
+		for (size_t axis = 0; axis < 3; ++axis) {
+			float shifted[3] = { pos[0], pos[1], pos[2] };
+			shifted[axis] += impactStep;
+			FlexDistances(shifted, impactPlus[axis]);
+			shifted[axis] = pos[axis];
+			shifted[axis] -= impactStep;
+			FlexDistances(shifted, impactMinus[axis]);
+		}
+	}
+
+	float cost = 0.0F;
+	for (size_t i = 0; i < numAnchors; ++i) {
+		float diff[3] = { pos[0] - anchors[i][0], pos[1] - anchors[i][1], pos[2] - anchors[i][2] };
+		float distance = norm(diff);
+		if (distance < 1e-6F) {
+			distance = 1e-6F;
+		}
+		const float invLen = 1.0F / distance;
+		const float invLen3 = invLen * invLen * invLen;
+
+		const float flex = baseImpact[i];
+		const float foundLinePos = distance - distancesOrigin[i] + flex;
+		residuals[i] = foundLinePos - linePositions[i];
+
+		if (hessians) {
+			float (&H)[3][3] = hessians[i];
+			for (size_t r = 0; r < 3; ++r) {
+				for (size_t c = 0; c < 3; ++c) {
+					const float id = (r == c) ? invLen : 0.0F;
+					H[r][c] = id - diff[r] * diff[c] * invLen3;
+				}
+			}
+		}
+
+		for (size_t axis = 0; axis < 3; ++axis) {
+			const float impactDeriv = (impactPlus[axis][i] - impactMinus[axis][i]) / (2.0F * impactStep);
+			jacobian[i][axis] = diff[axis] * invLen + impactDeriv;
+		}
+
+		cost += 0.5F * residuals[i] * residuals[i];
+	}
+	return cost;
+}
+
+static bool solveNormalSystem(const float JTJ[3][3], const float rhs[3], float delta[3]) {
+	FixedMatrix<float, 3, 4> system{};
+	for (size_t r = 0; r < 3; ++r) {
+		for (size_t c = 0; c < 3; ++c) {
+			system(r, c) = JTJ[r][c];
+		}
+		system(r, 3) = rhs[r];
+	}
+	if (!system.GaussJordan(3, 4)) {
+		return false;
+	}
+	delta[0] = system(0, 3);
+	delta[1] = system(1, 3);
+	delta[2] = system(2, 3);
+	return true;
+}
+
+void HangprinterKinematics::AccumulateJtJandGrad(
+       float const J[HANGPRINTER_MAX_ANCHORS][3],
+       float const residuals[HANGPRINTER_MAX_ANCHORS],
+       float JTJ[3][3], float grad[3]) const noexcept {
+	for (size_t i = 0; i < 3; ++i) {
+		grad[i] = 0.0F;
+		for (size_t j = 0; j < 3; ++j) {
+			JTJ[i][j] = 0.0F;
+		}
+	}
+
+	for (size_t i = 0; i < numAnchors; ++i) {
+		grad[0] += J[i][0] * residuals[i];
+		grad[1] += J[i][1] * residuals[i];
+		grad[2] += J[i][2] * residuals[i];
+
+		JTJ[0][0] += J[i][0] * J[i][0];
+		JTJ[0][1] += J[i][0] * J[i][1];
+		JTJ[0][2] += J[i][0] * J[i][2];
+		JTJ[1][0] += J[i][1] * J[i][0];
+		JTJ[1][1] += J[i][1] * J[i][1];
+		JTJ[1][2] += J[i][1] * J[i][2];
+		JTJ[2][0] += J[i][2] * J[i][0];
+		JTJ[2][1] += J[i][2] * J[i][1];
+		JTJ[2][2] += J[i][2] * J[i][2];
+	}
+}
+
+
+// A 3T (no rotations) version of Henry Mahnke & Ryan J. Caverly's
+// "Fast and Reliable Iterative Cable-Driven Parallel Robot Forward Kinematics: A Quadratic Approximation Approach"
+// https://doi.org/10.1007/978-3-031-94608-0_1
+// Extensive testing and comparisons to other methods done in
+// github.com/tobbelobb/hangprinter-forward-transform
+HangprinterKinematics::SolverResult HangprinterKinematics::SolveHybrid(
+                                      const float linePositions[HANGPRINTER_MAX_ANCHORS],
+                                      float initial[3],
+                                      float eta,
+                                      float tol,
+                                      size_t halleyIters,
+                                      size_t maxIters) const noexcept {
+	SolverResult result{};
+	result.pos[0] = initial[0];
+	result.pos[1] = initial[1];
+	result.pos[2] = initial[2];
+	size_t iter = 0;
+	for (; iter < halleyIters && iter < maxIters; ++iter) {
+		float residuals[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+		float J[HANGPRINTER_MAX_ANCHORS][3];
+		float H[HANGPRINTER_MAX_ANCHORS][3][3];
+		result.cost =
+		    ResidualsAndDerivatives(linePositions, result.pos, residuals, J, H);
+
+		float JTJ[3][3];
+		float grad[3];
+		AccumulateJtJandGrad(J, residuals, JTJ, grad);
+		JTJ[0][0] += eta;
+		JTJ[1][1] += eta;
+		JTJ[2][2] += eta;
+
+		float deltaLm[3] = { 0.0F };
+		float rhs1[3] = {-grad[0], -grad[1], -grad[2]};
+		if (!solveNormalSystem(JTJ, rhs1, deltaLm)) {
+			break;
+		}
+
+		float Hbar[HANGPRINTER_MAX_ANCHORS][3];
+		for (size_t i = 0; i < numAnchors; ++i) {
+			Hbar[i][0] = deltaLm[0] * H[i][0][0] + deltaLm[1] * H[i][1][0] + deltaLm[2] * H[i][2][0];
+			Hbar[i][1] = deltaLm[0] * H[i][0][1] + deltaLm[1] * H[i][1][1] + deltaLm[2] * H[i][2][1];
+			Hbar[i][2] = deltaLm[0] * H[i][0][2] + deltaLm[1] * H[i][1][2] + deltaLm[2] * H[i][2][2];
+		}
+
+		float Jbar[HANGPRINTER_MAX_ANCHORS][3];
+		for (size_t i = 0; i < numAnchors; ++i) {
+			Jbar[i][0] = J[i][0] + 0.5F * Hbar[i][0];
+			Jbar[i][1] = J[i][1] + 0.5F * Hbar[i][1];
+			Jbar[i][2] = J[i][2] + 0.5F * Hbar[i][2];
+		}
+
+		float JTJ2[3][3];
+		float grad2[3];
+		AccumulateJtJandGrad(Jbar, residuals, JTJ2, grad2);
+		JTJ2[0][0] += eta;
+		JTJ2[1][1] += eta;
+		JTJ2[2][2] += eta;
+
+		float delta[3] = { 0.0F };
+		float rhs2[3] = {-grad2[0], -grad2[1], -grad2[2]};
+		if (!solveNormalSystem(JTJ2, rhs2, delta)) {
+			break;
+		}
+
+		result.pos[0] = result.pos[0] + delta[0];
+		result.pos[1] = result.pos[1] + delta[1];
+		result.pos[2] = result.pos[2] + delta[2];
+		result.iterations = iter + 1;
+		if (norm(delta) < tol) {
+			result.converged = true;
+			break;
+		}
+	}
+
+	for (; iter < maxIters && !result.converged; ++iter) {
+		float residuals[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+		float J[HANGPRINTER_MAX_ANCHORS][3];
+		result.cost =
+		    ResidualsAndDerivatives(linePositions, result.pos, residuals, J, nullptr);
+
+		float JTJ[3][3];
+		float grad[3];
+		AccumulateJtJandGrad(J, residuals, JTJ, grad);
+		JTJ[0][0] += eta;
+		JTJ[1][1] += eta;
+		JTJ[2][2] += eta;
+
+		float delta[3] = { 0.0F };
+		float rhs3[3] = {-grad[0], -grad[1], -grad[2]};
+		if (!solveNormalSystem(JTJ, rhs3, delta)) {
+			break;
+		}
+
+		result.pos[0] = result.pos[0] + delta[0];
+		result.pos[1] = result.pos[1] + delta[1];
+		result.pos[2] = result.pos[2] + delta[2];
+		result.iterations = iter + 1;
+		if (norm(delta) < tol) {
+			result.converged = true;
+			break;
+		}
+	}
+
+	float residuals[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	float Jtmp[HANGPRINTER_MAX_ANCHORS][3];
+	result.cost =
+	    ResidualsAndDerivatives(linePositions, result.pos, residuals, Jtmp, nullptr);
+	return result;
 }
 
 // Convert motor coordinates to machine coordinates.
-// Assumes lines are tight and anchor location norms are followed
 void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
-	float distances[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	// Define the line positions the solver should try to find
+	float linePositions[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	for (size_t i = 0; i < numAnchors; ++i) {
-		distances[i] = MotorPosToLinePos(motorPos[i], i) + distancesOrigin[i];
+		linePositions[i] = MotorPosToLinePos(motorPos[i], i);
 	};
-	ForwardTransform(distances, machinePos);
 
-	// Now we have an approximate machinePos
-	// Let's correct for line flex
-	float flex[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
-	flexDistances(machinePos, distances, flex);
-	float adjustedDistances[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
-	for (size_t i = 0; i < numAnchors; ++i) {
-		adjustedDistances[i] = distances[i] - flex[i];
+	float guess[3] = { 0.0F };
+	SolverResult const res = SolveHybrid(linePositions, guess, 1e-3F, 1e-3F, 3, 30);
+	if (!res.converged || res.cost > 10.0F) {
+		return;
 	}
-	ForwardTransform(adjustedDistances, machinePos);
+	machinePos[0] = res.pos[0];
+	machinePos[1] = res.pos[1];
+	machinePos[2] = res.pos[2];
 }
+
+// End of forward kinematics stuff
+
 
 static bool isSameSide(float const v0[3], float const v1[3], float const v2[3], float const v3[3], float const p[3]){
 	float const h0[3] = {v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]};
@@ -571,6 +891,14 @@ float HangprinterKinematics::GetEndstopPosition(size_t drive, bool highEnd) noex
 	return Kinematics::GetEndstopPosition(drive, highEnd);
 }
 
+// Return the drivers that control an axis or anchor line
+LogicalDrivesBitmap HangprinterKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
+{
+	return (forHoming || axis >= numAnchors)
+			? LogicalDrivesBitmap::MakeFromBits(axis)
+				: LogicalDrivesBitmap::MakeLowestNBits(numAnchors);
+}
+
 // Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
 AxesBitmap HangprinterKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const noexcept
 {
@@ -612,7 +940,7 @@ bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const noexc
 	ok = f->Write(scratchString.c_str());
 	if (!ok) return false;
 
-	scratchString.printf("N%d", numAnchors);
+	scratchString.printf("N%zu", numAnchors);
 	for (size_t i = 0; i < numAnchors; ++i)
 	{
 		scratchString.catf("%c%.3f:%.3f:%.3f ", ANCHOR_CHARS[i], (double)anchors[i][X_AXIS], (double)anchors[i][Y_AXIS], (double)anchors[i][Z_AXIS]);
@@ -679,18 +1007,18 @@ bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const noexc
 	ok = f->Write(scratchString.c_str());
 	if (!ok) return false;
 
-	scratchString.printf(" I%.1f", (double)minPlannedForce_Newton[0]);
+	scratchString.printf(" I%.1f", (double)minForce_Newton[0]);
 	for (size_t i = 1; i < numAnchors; ++i)
 	{
-		scratchString.catf(":%.1f", (double)minPlannedForce_Newton[i]);
+		scratchString.catf(":%.1f", (double)minForce_Newton[i]);
 	}
 	ok = f->Write(scratchString.c_str());
 	if (!ok) return false;
 
-	scratchString.printf(" X%.1f", (double)maxPlannedForce_Newton[0]);
+	scratchString.printf(" X%.1f", (double)maxForce_Newton[0]);
 	for (size_t i = 1; i < numAnchors; ++i)
 	{
-		scratchString.catf(":%.1f", (double)maxPlannedForce_Newton[i]);
+		scratchString.catf(":%.1f", (double)maxForce_Newton[i]);
 	}
 	ok = f->Write(scratchString.c_str());
 	if (!ok) return false;
@@ -703,15 +1031,16 @@ bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const noexc
 	ok = f->Write(scratchString.c_str());
 	if (!ok) return false;
 
-	scratchString.printf(" T%.1f", (double)targetForce_Newton);
-	ok = f->Write(scratchString.c_str());
-	if (!ok) return false;
-
 	scratchString.printf(" C%.4f", (double)torqueConstants[0]);
 	for (size_t i = 1; i < numAnchors; ++i)
 	{
 		scratchString.catf(":%.4f", (double)torqueConstants[i]);
 	}
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	uint32_t flexValue = flexEnabled ? ((flexAlgorithm == FlexAlgorithm::Tikhonov) ? 2u : 1u) : 0u;
+	scratchString.printf(" F%u B%u P%u\n", static_cast<unsigned int>(flexValue), ignoreGravity ? 1u : 0u, ignorePretension ? 1u : 0u);
 	ok = f->Write(scratchString.c_str());
 
 	return ok;
@@ -724,231 +1053,6 @@ bool HangprinterKinematics::WriteResumeSettings(FileStore *f) const noexcept
 }
 
 #endif
-
-
-void HangprinterKinematics::ForwardTransform(float const distances[HANGPRINTER_MAX_ANCHORS], float machinePos[3]) const noexcept {
-	switch (anchorMode) {
-		case HangprinterAnchorMode::LastOnTop:
-			if (numAnchors == 4) {
-				ForwardTransformTetrahedron(distances, machinePos);
-				return;
-			} else if (numAnchors == 5) {
-				ForwardTransformQuadrilateralPyramid(distances, machinePos);
-				return;
-			}
-			// Intentional fall-through to next case if no forward transform
-			[[fallthrough]];
-		case HangprinterAnchorMode::None:
-		case HangprinterAnchorMode::AllOnTop:
-		default:
-			return;
-	}
-}
-
-/**
- * Hangprinter forward kinematics tetrahedron case (three low anchors, one high)
- * Basic idea is to subtract squared line lengths to get linear equations,
- * and then to solve with variable substitution.
- *
- * If we assume (enforce by rotations) that anchor location norms are followed
- * Ax=0 Dx=0 Dy=0
- * then
- * we get a fairly clean derivation by
- * subtracting d*d from a*a, b*b, and c*c:
- *
- *  a*a - d*d = k1        +  k2*y +  k3*z     <---- a line  (I)
- *  b*b - d*d = k4 + k5*x +  k6*y +  k7*z     <---- a plane (II)
- *  c*c - d*d = k8 + k9*x + k10*y + k11*z     <---- a plane (III)
- *
- * Use (I) to reduce (II) and (III) into lines. Eliminate y, keep z.
- *
- *  (II):  b*b - d*d = k12 + k13*x + k14*z
- *  <=>            x = k0b + k1b*z,           <---- a line  (IV)
- *
- *  (III): c*c - d*d = k15 + k16*x + k17*z
- *  <=>            x = k0c + k1c*z,           <---- a line  (V)
- *
- * where k1, k2, ..., k17, k0b, k0c, k1b, and k1c are known constants.
- *
- * These two straight lines are not parallel, so they will cross in exactly one point.
- * Find z by setting (IV) = (V)
- * Find x by inserting z into (V)
- * Find y by inserting z into (I)
- *
- * Warning: truncation errors will typically be in the order of a few tens of microns.
- */
-void HangprinterKinematics::ForwardTransformTetrahedron(float const distances[HANGPRINTER_MAX_ANCHORS], float machinePos[3]) const noexcept
-{
-	// Force the anchor location norms Ax=0, Dx=0, Dy=0
-	// through a series of rotations.
-	static constexpr size_t A_AXIS = 0;
-	static constexpr size_t B_AXIS = 1;
-	static constexpr size_t C_AXIS = 2;
-	static constexpr size_t D_AXIS = 3;
-	float const x_angle = atanf(anchors[D_AXIS][Y_AXIS]/anchors[D_AXIS][Z_AXIS]);
-	float const rxt[3][3] = {{1, 0, 0}, {0, cosf(x_angle), sinf(x_angle)}, {0, -sinf(x_angle), cosf(x_angle)}};
-	float anchors_tmp0[4][3] = { 0 };
-	for (size_t row{0}; row < 4; ++row) {
-		for (size_t col{0}; col < 3; ++col) {
-			anchors_tmp0[row][col] = rxt[0][col]*anchors[row][0] + rxt[1][col]*anchors[row][1] + rxt[2][col]*anchors[row][2];
-		}
-	}
-	float const y_angle = atanf(-anchors_tmp0[D_AXIS][X_AXIS]/anchors_tmp0[D_AXIS][Z_AXIS]);
-	float const ryt[3][3] = {{cosf(y_angle), 0, -sinf(y_angle)}, {0, 1, 0}, {sinf(y_angle), 0, cosf(y_angle)}};
-	float anchors_tmp1[4][3] = { 0 };
-	for (size_t row{0}; row < 4; ++row) {
-		for (size_t col{0}; col < 3; ++col) {
-			anchors_tmp1[row][col] = ryt[0][col]*anchors_tmp0[row][0] + ryt[1][col]*anchors_tmp0[row][1] + ryt[2][col]*anchors_tmp0[row][2];
-		}
-	}
-	float const z_angle = atanf(anchors_tmp1[A_AXIS][X_AXIS]/anchors_tmp1[A_AXIS][Y_AXIS]);
-	float const rzt[3][3] = {{cosf(z_angle), sinf(z_angle), 0}, {-sinf(z_angle), cosf(z_angle), 0}, {0, 0, 1}};
-	for (size_t row{0}; row < 4; ++row) {
-		for (size_t col{0}; col < 3; ++col) {
-			anchors_tmp0[row][col] = rzt[0][col]*anchors_tmp1[row][0] + rzt[1][col]*anchors_tmp1[row][1] + rzt[2][col]*anchors_tmp1[row][2];
-		}
-	}
-
-	const float Asq = fsquare(distancesOrigin[A_AXIS]);
-	const float Bsq = fsquare(distancesOrigin[B_AXIS]);
-	const float Csq = fsquare(distancesOrigin[C_AXIS]);
-	const float Dsq = fsquare(distancesOrigin[D_AXIS]);
-	const float aa = fsquare(distances[A_AXIS]);
-	const float dd = fsquare(distances[D_AXIS]);
-	const float k0b = (-fsquare(distances[B_AXIS]) + Bsq - Dsq + dd) / (2.0 * anchors_tmp0[B_AXIS][X_AXIS]) + (anchors_tmp0[B_AXIS][Y_AXIS] / (2.0 * anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[B_AXIS][X_AXIS])) * (Dsq - Asq + aa - dd);
-	const float k0c = (-fsquare(distances[C_AXIS]) + Csq - Dsq + dd) / (2.0 * anchors_tmp0[C_AXIS][X_AXIS]) + (anchors_tmp0[C_AXIS][Y_AXIS] / (2.0 * anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[C_AXIS][X_AXIS])) * (Dsq - Asq + aa - dd);
-	const float k1b = (anchors_tmp0[B_AXIS][Y_AXIS] * (anchors_tmp0[A_AXIS][Z_AXIS] - anchors_tmp0[D_AXIS][Z_AXIS])) / (anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[B_AXIS][X_AXIS]) + (anchors_tmp0[D_AXIS][Z_AXIS] - anchors_tmp0[B_AXIS][Z_AXIS]) / anchors_tmp0[B_AXIS][X_AXIS];
-	const float k1c = (anchors_tmp0[C_AXIS][Y_AXIS] * (anchors_tmp0[A_AXIS][Z_AXIS] - anchors_tmp0[D_AXIS][Z_AXIS])) / (anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[C_AXIS][X_AXIS]) + (anchors_tmp0[D_AXIS][Z_AXIS] - anchors_tmp0[C_AXIS][Z_AXIS]) / anchors_tmp0[C_AXIS][X_AXIS];
-
-	float machinePos_tmp0[3];
-	machinePos_tmp0[Z_AXIS] = (k0b - k0c) / (k1c - k1b);
-	machinePos_tmp0[X_AXIS] = k0c + k1c * machinePos_tmp0[Z_AXIS];
-	machinePos_tmp0[Y_AXIS] = (Asq - Dsq - aa + dd) / (2.0 * anchors_tmp0[A_AXIS][Y_AXIS]) + ((anchors_tmp0[D_AXIS][Z_AXIS] - anchors_tmp0[A_AXIS][Z_AXIS]) / anchors_tmp0[A_AXIS][Y_AXIS]) * machinePos_tmp0[Z_AXIS];
-
-	//// Rotate machinePos_tmp back to original coordinate system
-	float machinePos_tmp1[3];
-	for (size_t row{0}; row < 3; ++row) {
-		machinePos_tmp1[row] = rzt[row][0]*machinePos_tmp0[0] + rzt[row][1]*machinePos_tmp0[1] + rzt[row][2]*machinePos_tmp0[2];
-	}
-	for (size_t row{0}; row < 3; ++row) {
-		machinePos_tmp0[row] = ryt[row][0]*machinePos_tmp1[0] + ryt[row][1]*machinePos_tmp1[1] + ryt[row][2]*machinePos_tmp1[2];
-	}
-	for (size_t row{0}; row < 3; ++row) {
-		machinePos[row] = rxt[row][0]*machinePos_tmp0[0] + rxt[row][1]*machinePos_tmp0[1] + rxt[row][2]*machinePos_tmp0[2];
-	}
-}
-
-static inline bool det(FixedMatrix<float, 3, 4> M){
-  return M(0, 0) * (M(1, 1) * M(2, 2) - M(1, 2) * M(2, 1)) + M(0, 1) * (M(1, 2) * M(2, 0) - M(2, 2) * M(1, 0)) + M(0, 2) * (M(1, 0) * M(2, 1) - M(1, 1) * M(2, 0));
-}
-
-static inline bool singular_3x3(FixedMatrix<float, 3, 4> M){
-  float const threshold = 1e-1;
-  return fabsf(det(M)) < threshold;
-}
-
-
-/* A quadrilateral pyramid has five anchors: four low and one high.
- * Our input variable `distances` contain the distance (L2-norm, euclidian distance) from each corner
- * to some point that is encapsulated by the five anchors.
- * We want to determine the xyz-coordinates of that point.
- *
- * Since this gives us 5 known variables and 3 unknown, this is an overdetermined system,
- * and we're not guaranteed that the 5 known variables define one exact point in space.
- * The `distance` values have been calculated from motors' rotational positions, and they don't
- * know if lines are slack or over tight, and much less which lines are slack and which are not in that case.
- * The `distance` values will generally be slightly off, and define a region in which we might wiggle, instead of a point.
- *
- * We approach this by solving four linear systems and averaging over the result,
- * which corresponds to all lines being ca equally slack.
- *
- * To get the four linear systems, we start with five non-linear ones.
- * |A - p| = l_a
- * |B - p| = l_b
- * |C - p| = l_c
- * |D - p| = l_d
- * |I - p| = l_i,
- *
- * where p is our unknown (x, y, z), A is the xyz of our A-anchor, and I is the top anchor.
- *
- * Square both sides and move |A|² to the right hand side:
- *
- * -2*A*p  + |p|² = l_a² - |A|²
- *
- * Now subtract the last equation to get rid of |p|² (we expect the last equality to always hold, vertical lines are never slack).
- *
- * -2*A*p  - 2*I*p = l_a² - l_i² - (|A|² - |I|²)
- *
- * Divide by -2 and simplify to get four linear equations
- *
- * (A - I)*p  = -(l_a² - l_i² - (|A|² - |I|²))/2 = k_a
- * (B - I)*p  = -(l_b² - l_i² - (|B|² - |I|²))/2 = k_b
- * (C - I)*p  = -(l_c² - l_i² - (|C|² - |I|²))/2 = k_c
- * (D - I)*p  = -(l_d² - l_i² - (|D|² - |I|²))/2 = k_d
- *
- * Say A' = A - I, and we get
- *
- * A'x A'y A'z | p_x   k_a
- * B'x B'y B'z | p_y = k_b
- * C'x C'y C'z | p_z   k_c
- * D'x D'y D'z |       k_d
- *
- * This is a linear but still overdetermined system (4x3). Skip each row in turn to obtain four different 3x3 matrices, and four different solution vectors k.
- * Solve each by GaussJordan elminiation and average over the result.
- * Voila.
- */
-void HangprinterKinematics::ForwardTransformQuadrilateralPyramid(float const distances[HANGPRINTER_MAX_ANCHORS], float machinePos[3]) const noexcept {
-	float anch_prim[4][3]{{0.0}};
-	float distancesOriginSq[5]{0.0};
-	float distancesSq[5]{0.0};
-	float km[4]{0.0};
-	FixedMatrix<float, 3, 4> M[4];
-	float machinePos_tmp[3]{0.0};
-
-	for (size_t i{0}; i < 4; ++i) {
-		for (size_t j{0}; j < 3; ++j) {
-			anch_prim[i][j] = anchors[i][j] - anchors[4][j];
-		}
-	}
-
-	for (size_t i{0}; i < 5; ++i) {
-		distancesOriginSq[i] = fsquare(distancesOrigin[i]);
-		distancesSq[i] = fsquare(distances[i]);
-	}
-
-	for (size_t i{0}; i < 4; ++i) {
-		km[i] = ((distancesOriginSq[i] - distancesOriginSq[4]) - (distancesSq[i] - distancesSq[4])) / 2.0;
-	}
-
-	for (size_t matrix_num{0}; matrix_num < 4; matrix_num++){
-		for (size_t row{0}; row < 3; ++row) {
-			size_t r = (row + matrix_num) % 4;
-			for (size_t col{0}; col < 3; ++col) {
-				M[matrix_num](row, col) = anch_prim[r][col];
-			}
-			M[matrix_num](row, 3) = km[r];
-		}
-	}
-
-	// Solve the four systems
-	size_t used{0};
-	for (int ki = 0; ki < 4; ++ki) {
-		if (not singular_3x3(M[ki])) {
-			used++;
-			M[ki].GaussJordan(3, 4);
-			for (size_t i{0}; i < 3; ++i) {
-				machinePos_tmp[i] += M[ki](i, 3);
-			}
-		}
-	}
-	if (used != 0) {
-		for (size_t i{0}; i < 3; ++i) {
-			machinePos[i] = machinePos_tmp[i]/static_cast<float>(used);
-		}
-	}
-
-}
-
 
 // Print all the parameters for debugging
 void HangprinterKinematics::PrintParameters(const StringRef& reply) const noexcept
@@ -986,7 +1090,7 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3MotorCurren
 		}
 		else
 		{
-			reply.printf("Unexpected response length: %d", buf->dataLength);
+			reply.printf("Unexpected response length: %zu", buf->dataLength);
 		}
 	}
 	CanMessageBuffer::Free(buf);
@@ -1021,7 +1125,7 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 		}
 		else // we don't have space for a new one
 		{
-			reply.printf("Max CAN addresses we can reference is %d. Can't reference board %d.", numAnchors, driver.boardAddress);
+			reply.printf("Max CAN addresses we can reference is %zu. Can't reference board %d.", numAnchors, driver.boardAddress);
 			numSeenDrives = numAnchors;
 			return {};
 		}
@@ -1060,7 +1164,7 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 		}
 		else
 		{
-			reply.printf("Unexpected response length: %d", buf->dataLength);
+			reply.printf("Unexpected response length: %zu", buf->dataLength);
 		}
 	}
 	CanMessageBuffer::Free(buf);
@@ -1077,6 +1181,65 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 	}
 
 	return {};
+}
+#endif // DUAL_CAN
+
+#if DUAL_CAN
+namespace
+{
+static bool GetHardcodedDriverDirectionForwards(DriverId const driver, bool& forwards) noexcept
+{
+	if (!driver.IsRemote())
+	{
+		forwards = true;
+		return true;
+	}
+
+	// Old Hangprinter/ODrive hard-coded direction convention:
+	// boards 40,41 were treated as "forwards";
+	// boards 42,43 were treated as reversed.
+	switch (driver.boardAddress)
+	{
+	case 40:
+	case 41:
+		forwards = true;
+		return true;
+
+	case 42:
+	case 43:
+		forwards = false;
+		return true;
+
+	default:
+		// For newer/extra ODrive board addresses, preserve a harmless default.
+		// Callers still validate boardAddress range separately.
+		forwards = true;
+		return true;
+	}
+}
+
+bool TryGetDriverDirectionForwards(DriverId driver, bool& forwards) noexcept
+{
+	if (driver.IsLocal())
+	{
+		const Move& move = reprap.GetMove();
+		if (driver.localDriver < move.GetNumActualDirectDrivers())
+		{
+			forwards = move.GetDirectionValue(driver.localDriver);
+			return true;
+		}
+		return false;
+	}
+
+#if SUPPORT_CAN_EXPANSION && defined(RRF_HOST_BUILD) && RRF_HOST_BUILD
+	if (driver.IsRemote())
+	{
+		forwards = reprap.GetExpansion().GetDriverDirection(driver);
+		return true;
+  }
+#endif
+	return GetHardcodedDriverDirectionForwards(driver, forwards);
+}
 }
 #endif // DUAL_CAN
 
@@ -1104,8 +1267,8 @@ GCodeResult HangprinterKinematics::ReadODrive3AxisForce(DriverId const driver, c
 	if (motorCurrent.valid)
 	{
 		size_t const boardIndex = driver.boardAddress - 40;
-		if (boardIndex < 0 or boardIndex > 3) {
-			reply.catf("Board address not between 40 and 43: %d", driver.boardAddress);
+		if (boardIndex < 0 or boardIndex > 9) {
+			reply.catf("Board address not between 40 and 49: %d", driver.boardAddress);
 			return GCodeResult::error;
 		}
 		// This force calculation if very rough, assuming perfect data from ODrive,
@@ -1113,7 +1276,8 @@ GCodeResult HangprinterKinematics::ReadODrive3AxisForce(DriverId const driver, c
 		// the exact same line buildup on spool as we have at the origin,
 		// and no losses from any of the bearings or eyelets in the motion system.
 		float motorTorque_Nm = motorCurrent.value * torqueConstants_[boardIndex];
-		if (driver.boardAddress == 40 || driver.boardAddress == 41) // Driver direction is not stored on main board!! (will be in the future)
+		bool directionForwards = true;
+		if (TryGetDriverDirectionForwards(driver, directionForwards) && directionForwards)
 		{
 			motorTorque_Nm = -motorTorque_Nm;
 		}
@@ -1133,9 +1297,10 @@ GCodeResult HangprinterKinematics::ReadODrive3Encoder(DriverId const driver, GCo
 	if (estimate.valid)
 	{
 		float directionCorrectedEncoderValue = estimate.value;
-		if (driver.boardAddress == 42 || driver.boardAddress == 43) // Driver direction is not stored on main board!! (will be in the future)
+		bool directionForwards = true;
+		if (TryGetDriverDirectionForwards(driver, directionForwards) && !directionForwards)
 		{
-			directionCorrectedEncoderValue *= -1.0;
+			directionCorrectedEncoderValue *= -1.0F;
 		}
 		reply.catf("%.2f, ", (double)(directionCorrectedEncoderValue * 360.0));
 		return GCodeResult::ok;
@@ -1143,6 +1308,52 @@ GCodeResult HangprinterKinematics::ReadODrive3Encoder(DriverId const driver, GCo
 	return GCodeResult::error;
 }
 #endif // DUAL_CAN
+
+namespace {
+GCodeResult ComputeODrive3TorqueFromForceInternal(
+	DriverId const driver, float const force_Newton,
+	uint32_t const mechanicalAdvantage[], uint32_t const spoolGearTeeth[], uint32_t const motorGearTeeth[],
+	float const spoolRadii[], float& motorTorque_Nm, bool& positionMode, const StringRef& reply) noexcept
+{
+	constexpr float MIN_TORQUE_N = 0.001F;
+	positionMode = false;
+	motorTorque_Nm = 0.0F;
+	if (fabsf(force_Newton) < MIN_TORQUE_N)
+	{
+		positionMode = true;
+		return GCodeResult::ok;
+	}
+
+	const int boardIndex = (int)driver.boardAddress - 40;
+	if (boardIndex < 0 || boardIndex > 9)
+	{
+		reply.catf("Board address not between 40 and 49: %d", driver.boardAddress);
+		return GCodeResult::error;
+	}
+
+	float const lineTension_N = force_Newton / mechanicalAdvantage[boardIndex];
+	float const spoolTorque_Nm = lineTension_N * spoolRadii[boardIndex] * 0.001F;
+	float motorTorque = spoolTorque_Nm * motorGearTeeth[boardIndex] / spoolGearTeeth[boardIndex];
+	motorTorque = std::abs(motorTorque);
+	bool directionForwards = true;
+	if (TryGetDriverDirectionForwards(driver, directionForwards) && directionForwards)
+	{
+		motorTorque = -motorTorque;
+	}
+	motorTorque_Nm = motorTorque;
+	return GCodeResult::ok;
+}
+} // namespace
+
+GCodeResult HangprinterKinematics::ComputeODrive3TorqueFromForce(DriverId const driver, float force_Newton,
+																																	float& motorTorque_Nm, bool& positionMode,
+																																	const StringRef& reply) const noexcept
+{
+	return ComputeODrive3TorqueFromForceInternal(
+		driver, force_Newton,
+		mechanicalAdvantage, spoolGearTeeth, motorGearTeeth, spoolRadii,
+		motorTorque_Nm, positionMode, reply);
+}
 
 #if DUAL_CAN
 GCodeResult HangprinterKinematics::SetODrive3TorqueModeInner(DriverId const driver, float const torque_Nm, const StringRef& reply) noexcept
@@ -1228,38 +1439,31 @@ GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, f
 		return GCodeResult::ok;
 	}
 
-	GCodeResult res = GCodeResult::ok;
-	constexpr float MIN_TORQUE_N = 0.001;
-	if (fabsf(force_Newton) < MIN_TORQUE_N)
+	float motorTorque_Nm = 0.0F;
+	bool positionMode = false;
+	GCodeResult res = ComputeODrive3TorqueFromForceInternal(
+		driver, force_Newton,
+		mechanicalAdvantage_, spoolGearTeeth_, motorGearTeeth_, spoolRadii_,
+		motorTorque_Nm, positionMode, reply);
+	if (res != GCodeResult::ok)
+	{
+		return res;
+	}
+
+	if (positionMode)
 	{
 		res = SetODrive3PosMode(driver, reply);
 		if (res == GCodeResult::ok)
 		{
 			reply.cat("pos_mode, ");
 		}
+		return res;
 	}
-	else
-	{
-		size_t const boardIndex = driver.boardAddress - 40;
-		if (boardIndex < 0 or boardIndex > 3) {
-			reply.catf("Board address not between 40 and 43: %d", driver.boardAddress);
-			return GCodeResult::error;
-		}
 
-		float const lineTension_N = force_Newton / mechanicalAdvantage_[boardIndex];
-		float const spoolTorque_Nm = lineTension_N * spoolRadii_[boardIndex] * 0.001;
-		float motorTorque_Nm = spoolTorque_Nm * motorGearTeeth_[boardIndex] / spoolGearTeeth_[boardIndex];
-		// Set the right sign
-		motorTorque_Nm = std::abs(motorTorque_Nm);
-		if (driver.boardAddress == 40 || driver.boardAddress == 41) // Driver direction is not stored on main board!! (will be in the future)
-		{
-			motorTorque_Nm = -motorTorque_Nm;
-		}
-		res = SetODrive3TorqueModeInner(driver, motorTorque_Nm, reply);
-		if (res == GCodeResult::ok)
-		{
-			reply.catf("%.6f Nm, ", (double)motorTorque_Nm);
-		}
+	res = SetODrive3TorqueModeInner(driver, motorTorque_Nm, reply);
+	if (res == GCodeResult::ok)
+	{
+		reply.catf("%.6f Nm, ", (double)motorTorque_Nm);
 	}
 	return res;
 }
@@ -1272,243 +1476,513 @@ float HangprinterKinematics::SpringK(float const springLength) const noexcept {
 
 
 void HangprinterKinematics::StaticForces(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept {
-	switch (anchorMode) {
-		case HangprinterAnchorMode::LastOnTop:
-			if (numAnchors == 4) {
-				StaticForcesTetrahedron(machinePos, F);
-				return;
-			} else if (numAnchors == 5) {
-				StaticForcesQuadrilateralPyramid(machinePos, F);
-				return;
-			}
-			// Intentional fall-through to next case if no line flex compensation
-			[[fallthrough]];
-		case HangprinterAnchorMode::None:
-		case HangprinterAnchorMode::AllOnTop:
-		default:
-			for (size_t i = 0; i < HANGPRINTER_MAX_ANCHORS; ++i){
-				F[i] = 0.0;
-			}
+	StaticForcesConfig cfg;
+	cfg.ignoreGravity = ignoreGravity;
+	cfg.ignorePretension = ignorePretension;
+	cfg.massKg = moverWeight_kg;
+	cfg.lambda = 0.001f;
+	cfg.tol = 1e-3f;
+	cfg.stepDamp = 0.75f;
+	cfg.maxItersTarget = 100;
+	cfg.Tmax = const_cast<float *>(maxForce_Newton);
+	cfg.Tmin = const_cast<float *>(minForce_Newton);
+
+	StaticForcesResult result;
+	result.tensions = F;
+
+	if (flexAlgorithm == FlexAlgorithm::Tikhonov) {
+		StaticForcesTikhonov(machinePos, cfg, result);
+	} else {
+		StaticForcesQp(machinePos, cfg, result);
 	}
 }
 
-void HangprinterKinematics::StaticForcesQuadrilateralPyramid(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept {
-	// A QuadrilateralPyramid has 5 corners, there's one anchor in each.
-	// There are many 4's in this function because 4 motors (the lower ones, ABCD)
-	// are assumed to have unknown forces.
-	// The forces in the top anchor is assumed to be known and constant, except for gravity's
-	// effects who are also known.
-	if (moverWeight_kg < 0.0001) {
-		return;
+static inline void unit_or_zero(const float v[3], float ret[3]) {
+	const float n = norm(v);
+	if (n > 0.0F) {
+		const float inv = 1.0F / n;
+		ret[0] = v[0]*inv;
+		ret[1] = v[1]*inv;
+		ret[2] = v[2]*inv;
+	} else {
+		ret[0] = 0.0F;
+		ret[1] = 0.0F;
+		ret[2] = 0.0F;
 	}
-	// Space for four linear 3x3 systems, each with two solution columns,
-	FixedMatrix<float, 3, 5> M[4];
+}
 
-	float norm[5];
-	norm[4] = hyp3(anchors[4], machinePos);
-	for (int i = 0; i < 4; ++i) {
-		norm[i] = hyp3(anchors[i], machinePos);
-		for (int j = 0; j < 3; ++j) {
-			for (int k = 0; k < 4; ++k) {
-				// Fill 3x3 top left corner of system with
-				// unit vectors toward each ABCD anchor from mover
-				// If A is the column vector pointing towards A-anchor, we're building these
-				// four matrices:
-				// k=0: [BCD], A-direction skipped
-				// k=1: [ACD], B-direction skipped
-				// k=2: [ABD], C-direction skipped
-				// k=3: [ABC], D-direction skipped
-				if ( k != i) {
-					if ( i > k ) {
-						M[k](j, i - 1) = (anchors[i][j] - machinePos[j]) / norm[i];
-					} else {
-						M[k](j, i) = (anchors[i][j] - machinePos[j]) / norm[i];
-					}
+static inline void build_direction_matrix(const float mover[3], const float anchors[HANGPRINTER_MAX_ANCHORS][3], int N, float *A) {
+	for (int j = 0; j < N; ++j) {
+		float diff[3] = { 0.0 };
+		diff[0] = anchors[j][0] - mover[0];
+		diff[1] = anchors[j][1] - mover[1];
+		diff[2] = anchors[j][2] - mover[2];
+		float unit[3] = { 0.0 };
+		unit_or_zero(diff, unit);
+		A[0 * N + j] = unit[0];
+		A[1 * N + j] = unit[1];
+		A[2 * N + j] = unit[2];
+	}
+}
+
+static inline bool invert3x3(const float M[3][3], float Minv[3][3], float eps = 1e-9f) {
+	const float a = M[0][0], b = M[0][1], c = M[0][2];
+	const float d = M[1][0], e = M[1][1], f = M[1][2];
+	const float g = M[2][0], h = M[2][1], i = M[2][2];
+
+	const float A = (e * i - f * h);
+	const float B = -(d * i - f * g);
+	const float C = (d * h - e * g);
+	const float D = -(b * i - c * h);
+	const float E = (a * i - c * g);
+	const float F = -(a * h - b * g);
+	const float G = (b * f - c * e);
+	const float H = -(a * f - c * d);
+	const float I = (a * e - b * d);
+
+	const float det = a * A + b * B + c * C;
+	if (std::fabs(det) < eps) {
+		return false;
+	}
+	const float invdet = 1.0f / det;
+
+	Minv[0][0] = A * invdet;
+	Minv[0][1] = D * invdet;
+	Minv[0][2] = G * invdet;
+	Minv[1][0] = B * invdet;
+	Minv[1][1] = E * invdet;
+	Minv[1][2] = H * invdet;
+	Minv[2][0] = C * invdet;
+	Minv[2][1] = F * invdet;
+	Minv[2][2] = I * invdet;
+	return true;
+}
+
+static inline void solve_min_norm_T(const float *A, int N, const float Fext[3], float lambda, float *T) {
+	float S[3][3] = {{lambda, 0.0f, 0.0f}, {0.0f, lambda, 0.0f}, {0.0f, 0.0f, lambda}};
+	for (int j = 0; j < N; ++j) {
+		const float ax = A[0 * N + j], ay = A[1 * N + j], az = A[2 * N + j];
+		S[0][0] += ax * ax;
+		S[0][1] += ax * ay;
+		S[0][2] += ax * az;
+		S[1][0] += ay * ax;
+		S[1][1] += ay * ay;
+		S[1][2] += ay * az;
+		S[2][0] += az * ax;
+		S[2][1] += az * ay;
+		S[2][2] += az * az;
+	}
+
+	float Sinv[3][3] = { 0.0f };
+	if (!invert3x3(S, Sinv)) {
+		S[0][0] += 1e-6f;
+		S[1][1] += 1e-6f;
+		S[2][2] += 1e-6f;
+		invert3x3(S, Sinv);
+	}
+	const float y0 = Sinv[0][0] * Fext[0] + Sinv[0][1] * Fext[1] + Sinv[0][2] * Fext[2];
+	const float y1 = Sinv[1][0] * Fext[0] + Sinv[1][1] * Fext[1] + Sinv[1][2] * Fext[2];
+	const float y2 = Sinv[2][0] * Fext[0] + Sinv[2][1] * Fext[1] + Sinv[2][2] * Fext[2];
+
+	for (int j = 0; j < N; ++j) {
+		const float ax = A[0 * N + j], ay = A[1 * N + j], az = A[2 * N + j];
+		T[j] = ax * y0 + ay * y1 + az * y2;
+	}
+}
+
+static inline void build_null_projector(const float *A, int N, float lambda, float *P) {
+	float S[3][3] = {{lambda, 0.0f, 0.0f}, {0.0f, lambda, 0.0f}, {0.0f, 0.0f, lambda}};
+	for (int j = 0; j < N; ++j) {
+		const float ax = A[0 * N + j], ay = A[1 * N + j], az = A[2 * N + j];
+		S[0][0] += ax * ax;
+		S[0][1] += ax * ay;
+		S[0][2] += ax * az;
+		S[1][0] += ay * ax;
+		S[1][1] += ay * ay;
+		S[1][2] += ay * az;
+		S[2][0] += az * ax;
+		S[2][1] += az * ay;
+		S[2][2] += az * az;
+	}
+
+	float Sinv[3][3] = { 0.0f };
+	if (!invert3x3(S, Sinv)) {
+		S[0][0] += 1e-6f;
+		S[1][1] += 1e-6f;
+		S[2][2] += 1e-6f;
+		invert3x3(S, Sinv);
+	}
+
+	for (int r = 0; r < N; ++r) {
+		for (int c = 0; c < N; ++c) {
+			const float ax = A[0 * N + c], ay = A[1 * N + c], az = A[2 * N + c];
+			const float B0 = Sinv[0][0] * ax + Sinv[0][1] * ay + Sinv[0][2] * az;
+			const float B1 = Sinv[1][0] * ax + Sinv[1][1] * ay + Sinv[1][2] * az;
+			const float B2 = Sinv[2][0] * ax + Sinv[2][1] * ay + Sinv[2][2] * az;
+			const float arx = A[0 * N + r], ary = A[1 * N + r], arz = A[2 * N + r];
+			const float Mrc = arx * B0 + ary * B1 + arz * B2;
+			P[r * N + c] = (r == c ? 1.0f : 0.0f) - Mrc;
+		}
+	}
+}
+
+static inline void proj_nullspace(const float *P, int N, const float *v, float *out) {
+	for (int r = 0; r < N; ++r) {
+		float acc = 0.0f;
+		for (int c = 0; c < N; ++c) {
+			acc += P[r * N + c] * v[c];
+		}
+		out[r] = acc;
+	}
+}
+
+static inline void applyA(const float* A, int N, const float* T, float res[3])
+{
+	float fx = 0.0F;
+	float fy = 0.0F;
+	float fz = 0.0F;
+	for (int j = 0; j < N; ++j){
+		fx += A[0*N + j]*T[j];
+		fy += A[1*N + j]*T[j];
+		fz += A[2*N + j]*T[j];
+	}
+	res[0] = fx;
+	res[1] = fy;
+	res[2] = fz;
+}
+
+static inline bool chol_decompose(float *G, int k) {
+	const float eps = 1e-7;
+	for (int i = 0; i < k; ++i) {
+		for (int j = 0; j <= i; ++j) {
+			float s = G[i * k + j];
+			for (int p = 0; p < j; ++p) {
+				s -= G[i * k + p] * G[j * k + p];
+			}
+			if (i == j) {
+				if (s <= eps) {
+					s = eps;
+				}
+				G[i * k + j] = std::sqrt(s);
+			} else {
+				G[i * k + j] = s / G[j * k + j];
+			}
+		}
+		for (int j = i + 1; j < k; ++j) {
+			G[i * k + j] = 0.0;
+		}
+	}
+	return true;
+}
+
+static inline void chol_solve(const float *L, int k, const float *b, float *x) {
+	float y[HANGPRINTER_MAX_ANCHORS] = { 0.0 };
+	for (int i = 0; i < k; ++i) {
+		float s = b[i];
+		for (int p = 0; p < i; ++p) {
+			s -= L[i * k + p] * y[p];
+		}
+		y[i] = s / L[i * k + i];
+	}
+	std::fill_n(x, k, 0.0);
+	for (int i = k - 1; i >= 0; --i) {
+		float s = y[i];
+		for (int p = i + 1; p < k; ++p) {
+			s -= L[p * k + i] * x[p];
+		}
+		x[i] = s / L[i * k + i];
+	}
+}
+
+static inline void solve_box_ridge_ls(const float *A, int N, const float F[3], float lambda, const float *L, const float *U, int max_iters, float tol, float *T_out) {
+
+	float H[HANGPRINTER_MAX_ANCHORS * HANGPRINTER_MAX_ANCHORS] = { 0.0 };
+	float f[HANGPRINTER_MAX_ANCHORS] = { 0.0 };
+
+	for (int i = 0; i < N; ++i) {
+		const float aix = A[0 * N + i], aiy = A[1 * N + i], aiz = A[2 * N + i];
+		f[i] = aix * F[0] + aiy * F[1] + aiz * F[2];
+		for (int j = 0; j <= i; ++j) {
+			const float ajx = A[0 * N + j], ajy = A[1 * N + j], ajz = A[2 * N + j];
+			const float dot = aix * ajx + aiy * ajy + aiz * ajz;
+			const float v = dot + (i == j ? lambda : 0.0);
+			H[i * N + j] = v;
+			H[j * N + i] = v;
+		}
+	}
+
+	float Lfull[HANGPRINTER_MAX_ANCHORS * HANGPRINTER_MAX_ANCHORS];
+	std::size_t count = static_cast<std::size_t>(N) * N;
+	std::copy_n(H, count, Lfull);
+	chol_decompose(Lfull, N);
+	float t[HANGPRINTER_MAX_ANCHORS] = { 0.0 };
+	chol_solve(Lfull, N, f, t);
+	for (int i = 0; i < N; ++i) {
+		float li = L ? L[i] : 0.0;
+		float ui = U ? U[i] : std::numeric_limits<float>::infinity();
+		if (ui < li) {
+			ui = li;
+		}
+		t[i] = min(max(t[i], li), ui);
+	}
+
+	int free_idx[HANGPRINTER_MAX_ANCHORS];
+	int free_idx_count = 0;
+	float g[HANGPRINTER_MAX_ANCHORS];
+
+	auto projected_grad_norm = [&](const float *x) {
+		float s2 = 0.0;
+		for (int i = 0; i < N; ++i) {
+			float li = L ? L[i] : 0.0;
+			float ui = U ? U[i] : std::numeric_limits<float>::infinity();
+			if (ui < li) {
+				ui = li;
+			}
+			float gi = 0.0;
+			for (int j = 0; j < N; ++j) {
+				gi += H[i * N + j] * x[j];
+			}
+			gi -= f[i];
+			const bool atL = (x[i] <= li + 1e-5);
+			const bool atU = (x[i] >= ui - 1e-5);
+			float pgi = gi;
+			if (atL && gi > 0) {
+				pgi = 0.0;
+			}
+			if (atU && gi < 0) {
+				pgi = 0.0;
+			}
+			s2 += pgi * pgi;
+		}
+		return std::sqrt(s2);
+	};
+
+	for (int it = 0; it < max_iters; ++it) {
+		for (int i = 0; i < N; ++i) {
+			float gi = 0.0;
+			for (int j = 0; j < N; ++j) {
+				gi += H[i * N + j] * t[j];
+			}
+			g[i] = gi - f[i];
+		}
+		free_idx_count = 0;
+		for (int i = 0; i < N; ++i) {
+			float li = L ? L[i] : 0.0;
+			float ui = U ? U[i] : std::numeric_limits<float>::infinity();
+			if (ui < li) {
+				ui = li;
+			}
+			const bool atL = (t[i] <= li + 1e-5);
+			const bool atU = (t[i] >= ui - 1e-5);
+			const bool violateL = atL && (g[i] < -tol);
+			const bool violateU = atU && (g[i] > tol);
+			if ((!atL && !atU) || violateL || violateU) {
+				free_idx[free_idx_count++] = i;
+			}
+		}
+		if (projected_grad_norm(t) <= tol) {
+			break;
+		}
+		if (free_idx_count == 0) {
+			int best = 0;
+			float bestViol = 0.0;
+			for (int i = 0; i < N; ++i) {
+				float li = L ? L[i] : 0.0;
+				float ui = U ? U[i] : std::numeric_limits<float>::infinity();
+				if (ui < li) {
+					ui = li;
+				}
+				const bool atL = (t[i] <= li + 1e-5);
+				const bool atU = (t[i] >= ui - 1e-5);
+				float viol = 0.0;
+				if (atL) {
+					viol = max((float)0.0, -g[i]);
+				}
+				if (atU) {
+					viol = max(viol, g[i]);
+				}
+				if (viol > bestViol) {
+					bestViol = viol;
+					best = i;
+				}
+			}
+			free_idx[free_idx_count++] = best;
+		}
+		const int k = free_idx_count;
+		float Hff[HANGPRINTER_MAX_ANCHORS * HANGPRINTER_MAX_ANCHORS] = { 0.0 };
+		float gf[HANGPRINTER_MAX_ANCHORS] = { 0.0 };
+		float pf[HANGPRINTER_MAX_ANCHORS] = { 0.0 };
+
+		for (int p = 0; p < k; ++p) {
+			const int ip = free_idx[p];
+			gf[p] = g[ip];
+			for (int q = 0; q < k; ++q) {
+				const int iq = free_idx[q];
+				Hff[p * k + q] = H[ip * N + iq];
+			}
+		}
+		chol_decompose(Hff, k);
+		for (int i = 0; i < k; ++i) {
+			gf[i] = -gf[i];
+		}
+		chol_solve(Hff, k, gf, pf);
+		float alpha = 1.0;
+		for (int idx = 0; idx < k; ++idx) {
+			const int i = free_idx[idx];
+			const float pi = pf[idx];
+			if (std::abs(pi) < 1e-8) {
+				continue;
+			}
+			float li = L ? L[i] : 0.0;
+			float ui = U ? U[i] : std::numeric_limits<float>::infinity();
+			if (ui < li) {
+				ui = li;
+			}
+			if (pi > 0.0) {
+				const float amax = (ui - t[i]) / pi;
+				if (amax < alpha) {
+					alpha = max((float)0.0, amax);
+				}
+			} else {
+				const float amax = (li - t[i]) / pi;
+				if (amax < alpha) {
+					alpha = max((float)0.0, amax);
 				}
 			}
 		}
-	}
-	float const mg = moverWeight_kg * 9.81;
-
-	float top_mg = 0.0F;
-	float top_pre = 0.0F;
-
-	if (anchors[4][Z_AXIS] > machinePos[Z_AXIS]) {
-		// These force constants will go into the solution column that has to do with gravity
-		top_mg = mg / ((anchors[4][Z_AXIS] - machinePos[Z_AXIS]) / norm[4]);
-		top_pre = targetForce_Newton;
-	}
-
-	// Indices for the two solution columns
-	size_t const sol_mg = 3;
-	size_t const sol_pt = 4;
-	for (int i = 0; i < 3; ++i) {
-		float const top_dist = (anchors[4][i] - machinePos[i]) / norm[4];
-		for (int k = 0; k < 4; ++k) {
-			M[k](i, sol_mg) = -top_mg * top_dist;  // gravity solution column
-			M[k](i, sol_pt) = -top_pre * top_dist; // pretension solution column
+		for (int idx = 0; idx < k; ++idx) {
+			const int i = free_idx[idx];
+			t[i] += alpha * pf[idx];
 		}
-	}
-	for (int k = 0; k < 4; ++k) {
-		// Cancel out top anchor's Z-force with gravity.
-		M[k](Z_AXIS, sol_mg) += mg; // == 0
-	}
-
-	// Solve the four systems
-	for (int k = 0; k < 4; ++k) {
-		M[k].GaussJordan(3, 5);
-	}
-
-	// Weigh/scale the pre-tension solutions so all have equal max force.
-	float norm_ABCD[4];
-	for(size_t k{0}; k < 4; ++k) {
-		norm_ABCD[k] = fastSqrtf(M[k](0, sol_pt) * M[k](0, sol_pt) + M[k](1, sol_pt) * M[k](1, sol_pt) + M[k](2, sol_pt) * M[k](2, sol_pt));
-	}
-
-	// Arrays to hold our weighted combinations of the four (pairs of) solutions
-	float p[4] = { 0.0F, 0.0F, 0.0F, 0.0F };
-	float m[4] = { 0.0F, 0.0F, 0.0F, 0.0F };
-	for (size_t i{0}; i < 3; ++i) {
-		for (size_t j{0}; j < 4; ++j) {
-			float const pt_weight = targetForce_Newton / norm_ABCD[j];
-			// The gravity counter actions are scaled to exactly counter act gravity, and top-line forces neccesary to counter act gravity.
-			// So the resultant force of all four solutions is the same. Lets add a quarter of each solution to get back that resultant force.
-			float const mg_weight = 1.0/4.0;
-			// i can mean BCD, ACD, ABD, or ABC, depending on which matrix we're looking into
-			// Let's just translate that back into the solutions vectors
-			size_t const s = j <= i ? i + 1 : i;
-			p[s] += M[j](i, sol_pt)*pt_weight;
-			m[s] += M[j](i, sol_mg)*mg_weight;
+		for (int i = 0; i < N; ++i) {
+			float li = L ? L[i] : 0.0;
+			float ui = U ? U[i] : std::numeric_limits<float>::infinity();
+			if (ui < li) {
+				ui = li;
+			}
+			if (t[i] < li) {
+				t[i] = li;
+			}
+			if (t[i] > ui) {
+				t[i] = ui;
+			}
 		}
 	}
 
-	// The pre-tension solution can be scaled up or down however we want.
-	// Forces in those solution cancel each other out exactly, so any multiple of the solution is also a valid solution.
-	//
-	// (The gravity solution can't be scaled since it has to exactly counter act top-line forces that must exactly counter act gravity (mg))
-	//
-	// Use the scaling freedom of the pre-tension solution to assure that we have at least targetForce_Newton in the ABCD lines,
-	// and that no line (incl top-line) get more tension than the configured maxPlannedForce in that direction.
-	float  preFac = min(max(std::abs((targetForce_Newton - m[3]) / p[3]),
-	                             max(std::abs((targetForce_Newton - m[2]) / p[2]),
-	                                 max(std::abs((targetForce_Newton - m[1]) / p[1]), std::abs((targetForce_Newton - m[0]) / p[0])))),
-	                         min(std::abs((maxPlannedForce_Newton[4] - top_mg) / top_pre),
-	                             min(min(std::abs((maxPlannedForce_Newton[0] - m[0]) / p[0]), std::abs((maxPlannedForce_Newton[1] - m[1]) / p[1])),
-	                                 min(std::abs((maxPlannedForce_Newton[2] - m[2]) / p[2]), std::abs((maxPlannedForce_Newton[3] - m[3]) / p[3])))));
-
-	float tot[5] = { 0.0F, 0.0F, 0.0F, 0.0F, 0.0F };
-	tot[0] = m[0] + preFac * p[0];
-	tot[1] = m[1] + preFac * p[1];
-	tot[2] = m[2] + preFac * p[2];
-	tot[3] = m[3] + preFac * p[3];
-	tot[4] = top_mg + preFac * top_pre;
-
-	for (size_t i{0}; i < 5; ++i) {
-		// Negative, or very large forces can still have slipped through the preFac filter.
-		// Truncate away such forces and assign to the output variable.
-		// Voila.
-		// The min( ... ) shouldn't be needed here. Just better safe than sorry.
-		F[i] = min(max(tot[i], minPlannedForce_Newton[i]), maxPlannedForce_Newton[i]);
+	for (int i = 0; i < N; ++i) {
+		T_out[i] = t[i];
 	}
 }
 
+void HangprinterKinematics::StaticForcesTikhonov(
+	const float mover[3],
+	const StaticForcesConfig &cfg,
+	StaticForcesResult &out) const noexcept
+{
+	float *T = out.tensions;
+	float A[3 * HANGPRINTER_MAX_ANCHORS] = {0.0f};
+	build_direction_matrix(mover, anchors, numAnchors, A);
 
-void HangprinterKinematics::StaticForcesTetrahedron(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept {
-	static constexpr size_t A_AXIS = 0;
-	static constexpr size_t B_AXIS = 1;
-	static constexpr size_t C_AXIS = 2;
-	static constexpr size_t D_AXIS = 3;
-	static constexpr size_t FOUR_ANCH = 4;
-	static constexpr size_t CARTESIAN_AXES = 3;
+	out.requestedForce[0] = 0.0F;
+	out.requestedForce[1] = 0.0F;
+	out.requestedForce[2] = 0.0F;
+	for (size_t i = 0; i < numAnchors; ++i) {
+		T[i] = 0.0f;
+	}
 
-	if (moverWeight_kg > 0.0001) { // mover weight more than one gram
-		float norm[FOUR_ANCH]; // Unit vector directions toward each anchor from mover
-		FixedMatrix<float, CARTESIAN_AXES, FOUR_ANCH + 1> M;
-		for (size_t i = 0; i < FOUR_ANCH - 1; ++i) { // One anchor above mover
-			norm[i] = hyp3(anchors[i], machinePos);
-			for (size_t j = 0; j < CARTESIAN_AXES; ++j) {
-				M(j, i) = (anchors[i][j] - machinePos[j]) / norm[i];
+	if (!cfg.ignoreGravity) {
+		out.requestedForce[2] = cfg.massKg * cfg.g;
+		solve_min_norm_T(A, numAnchors, out.requestedForce, cfg.lambda, T);
+	}
+
+	if (!cfg.ignorePretension) {
+		float P[HANGPRINTER_MAX_ANCHORS * HANGPRINTER_MAX_ANCHORS] = {0.0f};
+		build_null_projector(A, numAnchors, cfg.lambda, P);
+		for (int it = 0; it < cfg.maxItersTarget; ++it) {
+			float gradient[HANGPRINTER_MAX_ANCHORS] = {0.0f};
+			for (size_t i = 0; i < numAnchors; ++i) {
+				float target_grad = 0.1f * (T[i] - (cfg.Tmin ? cfg.Tmin[i] : 0.0f));
+				if (cfg.Tmax && T[i] > cfg.Tmax[i]) {
+					target_grad += T[i] - cfg.Tmax[i];
+				}
+				if (cfg.Tmin && T[i] < cfg.Tmin[i]) {
+					target_grad += T[i] - cfg.Tmin[i];
+				}
+				gradient[i] = target_grad;
+			}
+			float d[HANGPRINTER_MAX_ANCHORS] = {0.0f};
+			proj_nullspace(P, numAnchors, gradient, d);
+			float dn = 0.0f;
+			for (size_t i = 0; i < numAnchors; ++i) {
+				dn += d[i] * d[i];
+			}
+			if (dn < cfg.tol * cfg.tol) {
+				break;
+			}
+			for (size_t i = 0; i < numAnchors; ++i) {
+				T[i] -= cfg.stepDamp * d[i];
 			}
 		}
-
-		float const mg = moverWeight_kg * 9.81; // Size of gravity force in Newtons
-		float D_mg = 0.0F;
-		float D_pre = 0.0F;
-
-		// The D-forces' z-component is always equal to mg + targetForce_Newton.
-		// The D-forces' z-component is always equal to mg +
-		// targetForce_Newton. This means ABC-motors combined pull
-		// downwards targetForce_Newton N. I don't know if that's always
-		// solvable. Still, my tests show that we get very reasonable
-		// flex compensation...
-
-		// Right hand side of the equation
-		// A + B + C + D + (0,0,-mg)' = 0
-		// <=> A + B + C = -D + (0,0,mg)'
-		//
-		// Mx = y,
-		//
-		// Where M is the matrix
-		//
-		//     ax bx cx
-		// M = ay by cy,
-		//     az bz cz
-		//
-		// and x is the sizes of the forces:
-		//
-		//     A
-		// x = B,
-		//     C
-		//
-		// and y is
-		//
-		//     -D*dx
-		// y = -D*dy     .
-		//     -D*dz + mg
-
-		float const normD = hyp3(anchors[D_AXIS], machinePos);
-		if (anchors[D_AXIS][Z_AXIS] > machinePos[Z_AXIS]) { // D anchor above machine
-			D_mg = mg / ((anchors[D_AXIS][2] - machinePos[2]) / normD);
-			D_pre = targetForce_Newton;
-		}
-
-		for (size_t i = 0; i < CARTESIAN_AXES; ++i) {
-			float const dist = (anchors[D_AXIS][i] - machinePos[i]) / normD;
-			M(i, FOUR_ANCH - 1) = -D_mg * dist;
-			M(i, FOUR_ANCH) = -D_pre * dist;
-		}
-		M(Z_AXIS, D_AXIS) += mg;
-
-		// Solve!
-		const bool ok = M.GaussJordan(CARTESIAN_AXES, 5);
-
-		if (ok) {
-			// Size of the undetermined forces
-			float const A_mg = M(0, 3);
-			float const B_mg = M(1, 3);
-			float const C_mg = M(2, 3);
-			float const A_pre = M(0, 4);
-			float const B_pre = M(1, 4);
-			float const C_pre = M(2, 4);
-
-			// Assure at least targetForce in the ABC lines (first argument to outer min()),
-			// and that no line get more than max planned force (second argument to outer min()).
-			float const preFac = min(max(std::abs((targetForce_Newton - C_mg) / C_pre),
-			                             max(std::abs((targetForce_Newton - B_mg) / B_pre), std::abs((targetForce_Newton - A_mg) / A_pre))),
-			                         min(min(std::abs((maxPlannedForce_Newton[A_AXIS] - A_mg) / A_pre), std::abs((maxPlannedForce_Newton[B_AXIS] - B_mg) / B_pre)),
-			                             min(std::abs((maxPlannedForce_Newton[C_AXIS] - C_mg) / C_pre), std::abs((maxPlannedForce_Newton[D_AXIS] - D_mg) / D_pre))));
-
-			float totalForces[FOUR_ANCH] = {
-				A_mg + preFac * A_pre,
-				B_mg + preFac * B_pre,
-				C_mg + preFac * C_pre,
-				D_mg + preFac * D_pre
-			};
-
-			for (size_t i = 0; i < FOUR_ANCH; ++i) {
-				F[i] = min(max(totalForces[i], minPlannedForce_Newton[i]), maxPlannedForce_Newton[i]);
+		for (size_t i = 0; i < numAnchors; ++i) {
+			if (T[i] < 0.0f) {
+				T[i] = 0.0f;
+			}
+			if (cfg.Tmax && T[i] > cfg.Tmax[i]) {
+				T[i] = cfg.Tmax[i];
 			}
 		}
+	}
+
+	applyA(A, numAnchors, T, out.achievedForce);
+	out.residual[0] = out.requestedForce[0] - out.achievedForce[0];
+	out.residual[1] = out.requestedForce[1] - out.achievedForce[1];
+	out.residual[2] = out.requestedForce[2] - out.achievedForce[2];
+
+	out.supportedGravityFrac = 0.0f;
+	if (!cfg.ignoreGravity && out.requestedForce[2] > 1e-9f) {
+		out.supportedGravityFrac = out.achievedForce[2] / out.requestedForce[2];
+	}
+}
+
+void HangprinterKinematics::StaticForcesQp(
+	const float mover[3],
+	const StaticForcesConfig &cfg,
+	StaticForcesResult &out) const noexcept
+{
+	float *T = out.tensions;
+	float A[3 * HANGPRINTER_MAX_ANCHORS] = {0.0f};
+	build_direction_matrix(mover, anchors, numAnchors, A);
+
+	out.requestedForce[0] = 0.0F;
+	out.requestedForce[1] = 0.0F;
+	out.requestedForce[2] = 0.0F;
+	if (!cfg.ignoreGravity) {
+		out.requestedForce[2] = cfg.massKg * cfg.g;
+	}
+
+	float L[HANGPRINTER_MAX_ANCHORS];
+	float U[HANGPRINTER_MAX_ANCHORS];
+	std::fill_n(L, numAnchors, 0.0);
+	std::fill_n(U, numAnchors, std::numeric_limits<float>::infinity());
+	for (size_t i = 0; i < numAnchors; ++i) {
+		const float li = cfg.ignorePretension ? 0.0 : (cfg.Tmin ? cfg.Tmin[i] : 0.0);
+		float ui = (cfg.Tmax ? cfg.Tmax[i] : std::numeric_limits<float>::infinity());
+		if (ui < li) {
+			ui = li;
+		}
+		L[i] = li;
+		U[i] = ui;
+	}
+
+	solve_box_ridge_ls(A, numAnchors, out.requestedForce, cfg.lambda, L, U, cfg.maxItersTarget, cfg.tol, T);
+
+	applyA(A, numAnchors, T, out.achievedForce);
+	out.residual[0] = out.requestedForce[0] - out.achievedForce[0];
+	out.residual[1] = out.requestedForce[1] - out.achievedForce[1];
+	out.residual[2] = out.requestedForce[2] - out.achievedForce[2];
+	out.supportedGravityFrac = 0.0f;
+	if (!cfg.ignoreGravity && out.requestedForce[2] > 1e-9f) {
+		out.supportedGravityFrac = out.achievedForce[2] / out.requestedForce[2];
 	}
 }
 
