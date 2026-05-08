@@ -47,6 +47,8 @@ void CommandProcessor::AppendBadMotionStats(const StringRef& reply) noexcept
 }
 
 // Handle a firmware update request
+// 'buf' holds the request
+// 'buf->useBrs' is true if the request used bit rate switching, in which case we use it for the response too
 static void HandleFirmwareBlockRequest(CanMessageBuffer *buf) noexcept
 pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 {
@@ -317,7 +319,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 	if (buf->id.Src() != CanInterface::GetCanAddress())				// I don't think we should receive our own messages, but in case we do...
 	{
 		const CanMessageType id = buf->id.MsgType();
-		if (   buf->id.Dst() != CanId::BroadcastAddress				// ignore broadcast messages e.g. temperature reports
+		if (   buf->id.Dst() != CanId::BroadcastAddress				// don't flash the LED on broadcast messages e.g. temperature reports and time sync
 			&& id != CanMessageType::fansReport						// don't flash whenever we receive a regular status message
 			&& id != CanMessageType::heatersStatusReport
 			&& id != CanMessageType::boardStatusReportV0
@@ -337,11 +339,13 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			GCodeResult rslt;
 			CanRequestId requestId;
 			uint8_t extra = 0;
+			const bool requestUsedBrs = buf->useBrs;
 
 			switch (id)
 			{
 			case CanMessageType::timeSync:
 				StepTimer::ProcessTimeSyncMessage(buf->msg.sync, buf->dataLength, buf->timeStamp);
+				CanInterface::CheckBrs(buf->msg.sync);
 				return;							// no reply needed
 
 			case CanMessageType::emergencyStop:
@@ -631,6 +635,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				// Re-use the message buffer to send a standard reply
 				const CanAddress srcAddress = buf->id.Src();
 				CanMessageStandardReply *msg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
+				buf->useBrs = requestUsedBrs;
 				msg->resultCode = (uint16_t)rslt;
 				msg->extra = extra;
 				const size_t totalLength = reply.strlen();
@@ -741,8 +746,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 					// Send a standard response before we switch
 					const CanAddress srcAddress = buf->id.Src();
 					const CanRequestId requestId = buf->msg.enterTestMode.requestId;
+					const bool requestUsedBrs = buf->useBrs;
 
 					CanMessageStandardReply * const msg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
+					buf->useBrs = requestUsedBrs;
 					msg->resultCode = (uint16_t)GCodeResult::ok;
 					msg->text[0] = 0;
 					buf->dataLength = msg->GetActualDataLength(0);

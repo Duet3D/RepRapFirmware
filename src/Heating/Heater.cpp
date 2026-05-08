@@ -113,10 +113,7 @@ Heater::HeaterParameters Heater::fanOffParams, Heater::fanOnParams;
 }
 
 Heater::Heater(unsigned int num) noexcept
-	: tuned(false), heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
-	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime), maxBadTemperatureCount(DefaultMaxBadTemperatureCount),
-	  function(HeaterFunction::tool),
-	  active(false), usingFeedForward(false), modelSetByUser(false), monitorsSetByUser(false)
+	: heaterNumber(num)
 {
 	Heater::ResetHeater();
 }

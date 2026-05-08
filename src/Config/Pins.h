@@ -147,6 +147,10 @@ constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 # define SUPPORT_CAN_EXPANSION	0
 #endif
 
+#ifndef SUPPORT_BRS
+# define SUPPORT_BRS			0
+#endif
+
 #ifndef DUAL_CAN
 # define DUAL_CAN				0
 #endif

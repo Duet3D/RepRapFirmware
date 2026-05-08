@@ -65,7 +65,7 @@ public:
 
 	// Methods called by the motion system
 	void InstanceControlLoop(size_t driver) noexcept;
-	void SetEnabled(bool enable) { enabled = enable; }
+	void SetEnabled(bool enable) noexcept { enabled = enable; }
 	bool IsEnabled() const noexcept { return enabled; }
 	void UpdatePhaseOffset(size_t driver) noexcept;
 	void SetPhaseOffset(size_t driver, uint16_t offset) noexcept;

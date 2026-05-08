@@ -67,31 +67,32 @@ protected:
 	void ApplyExtrusionFeedForward() noexcept override;
 
 private:
-	void SetHeater(float power) const noexcept;				// Power is a fraction in [0,1]
-	TemperatureError ReadTemperature() noexcept;			// Read and store the temperature of this heater
-	void DoTuningStep() noexcept;							// Called on each temperature sample when auto tuning
-	float GetExpectedHeatingRate() const noexcept;			// Get the minimum heating rate we expect
+	void SetHeater(float power) const noexcept;					// Power is a fraction in [0,1]
+	TemperatureError ReadTemperature() noexcept;				// Read and store the temperature of this heater
+	void DoTuningStep() noexcept;								// Called on each temperature sample when auto tuning
+	float GetExpectedHeatingRate(float voltage) const noexcept;	// Get the minimum heating rate we expect
 	void RaiseHeaterFault(HeaterFaultType type, const char *_ecv_array format, ...) noexcept;
 	void UpdateHeaterMode(float targetTemperature) noexcept;	// Determine and if necessary change the current heater mode
 
-	PwmPort ports[MaxPortsPerHeater];						// The port(s) that drive the heater
-	float temperature;										// The current temperature
-	float previousTemperatures[NumPreviousTemperatures]; 	// The temperatures of the previous NumDerivativeSamples measurements, used for calculating the derivative
-	size_t previousTemperatureIndex;						// Which slot in previousTemperature we fill in next
-	float iAccumulator;										// The integral LocalHeater component
-	float lastPwm;											// The last PWM value set for this heater
-	float averagePWM;										// The running average of the PWM, after scaling.
-	float lastTemperatureValue;								// the last temperature we recorded while heating up
-	float lastExtrusionTemperatureBoost;					// the value of the feedforward temperature boost in the previous PID controller iteration
-	uint32_t lastTemperatureMillis;							// when we recorded the last temperature
-	uint32_t timeSetHeating;								// When we turned on the heater
-	uint32_t lastSampleTime;								// Time when the temperature was last sampled by Spin()
+	PwmPort ports[MaxPortsPerHeater];							// The port(s) that drive the heater
+	float temperature;											// The current temperature
+	float previousTemperatures[NumPreviousTemperatures]; 		// The temperatures of the previous NumDerivativeSamples measurements, used for calculating the derivative
+	size_t previousTemperatureIndex;							// Which slot in previousTemperature we fill in next
+	float iAccumulator;											// The integral LocalHeater component
+	float lastPwm;												// The last PWM value set for this heater
+	float averagePWM;											// The running average of the PWM, after scaling.
+	float lastTemperatureValue;									// the last temperature we recorded while heating up
+	float lastExtrusionTemperatureBoost;						// the value of the feedforward temperature boost in the previous PID controller iteration
+	uint32_t lastTemperatureMillis;								// when we recorded the last temperature
+	uint32_t timeSetHeating;									// When we turned on the heater
+	uint32_t lastSampleTime;									// Time when the temperature was last sampled by Spin()
 
-	uint16_t heatingFaultCount;								// Count of questionable heating behaviours
+	uint16_t heaterExcursionFaultCount;							// Count of questionable heater temperature excursions
+	uint16_t heaterPwmFaultCount;								// Count of questionable PWM values
 
-	uint8_t previousTemperaturesGood;						// Bitmap indicating which previous temperature were good readings
-	HeaterMode mode;										// Current state of the heater
-	uint8_t badTemperatureCount;							// Count of sequential dud readings
+	uint8_t previousTemperaturesGood;							// Bitmap indicating which previous temperature were good readings
+	HeaterMode mode;											// Current state of the heater
+	uint8_t badTemperatureCount;								// Count of sequential dud readings
 
 	static_assert(sizeof(previousTemperaturesGood) * 8 >= NumPreviousTemperatures, "too few bits in previousTemperaturesGood");
 };
