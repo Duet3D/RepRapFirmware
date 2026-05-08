@@ -23,7 +23,13 @@ public:
 	// ...
 	// Fields for closed loop data collection
 	bool haveClosedLoopData = false;
-	float16_t averageCurrentFraction = 0.0, maxCurrentFraction = 0.0, rmsPositionError = 0.0, maxAbsPositionError = 0.0;
+	float16_t averageCurrentFraction = 0.0;
+	float16_t maxCurrentFraction = 0.0;
+	float16_t rmsPositionError = 0.0;
+	float16_t maxAbsPositionError = 0.0;
+	float16_t meanPositionError = 0.0;
+	float16_t lastPositionError = 0.0;
+	float16_t stdDevPositionError = 0.0;
 };
 
 #endif /* SRC_MOVEMENT_STEPPERDRIVERS_DRIVERDATA_H_ */

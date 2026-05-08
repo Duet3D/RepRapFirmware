@@ -26,11 +26,14 @@ constexpr ObjectModelTableEntry DriverData::objectModelTable[] =
 	{ "max",				OBJECT_MODEL_FUNC((float)self->maxCurrentFraction, 2), 		ObjectModelEntryFlags::liveNotPanelDue },
 
 	// 3. closedLoop.positionError members
+	{ "last",				OBJECT_MODEL_FUNC((float)self->lastPositionError, 2), 		ObjectModelEntryFlags::liveNotPanelDue },
 	{ "max",				OBJECT_MODEL_FUNC((float)self->maxAbsPositionError, 2), 	ObjectModelEntryFlags::liveNotPanelDue },
+	{ "mean",				OBJECT_MODEL_FUNC((float)self->meanPositionError, 2), 		ObjectModelEntryFlags::liveNotPanelDue },
 	{ "rms",				OBJECT_MODEL_FUNC((float)self->rmsPositionError, 2), 		ObjectModelEntryFlags::liveNotPanelDue },
+	{ "stdDev",				OBJECT_MODEL_FUNC((float)self->stdDevPositionError, 2), 	ObjectModelEntryFlags::liveNotPanelDue },
 };
 
-constexpr uint8_t DriverData::objectModelTableDescriptor[] = { 4, 2, 2, 2, 2 };
+constexpr uint8_t DriverData::objectModelTableDescriptor[] = { 4, 2, 2, 2, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(DriverData)
 
