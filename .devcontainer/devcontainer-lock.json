@@ -1,0 +1,9 @@
+{
+  "features": {
+    "ghcr.io/jungaretti/features/ripgrep": {
+      "version": "1.0.1",
+      "resolved": "ghcr.io/jungaretti/features/ripgrep@sha256:c0922b6f4a9184080c8435b6ef25983dee6c734733f0a749d852ad0d33de2253",
+      "integrity": "sha256:c0922b6f4a9184080c8435b6ef25983dee6c734733f0a749d852ad0d33de2253"
+    }
+  }
+}
