@@ -2170,7 +2170,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	// We need to check for moving unowned axes right at the start in case we need to fetch axis positions before processing the command
 	ParameterLettersBitmap axisLettersMentioned = gb.AllParameters() & allAxisLetters;
 	const bool meshCompensationInUse = (ms.raw.moveType == 0) && IsUsingMeshCompensation(ms, axisLettersMentioned);
-	if (ms.raw.moveType == 0 || !move.IsRawMotorMove(ms.raw.moveType))
+	if (ms.raw.moveType == 0)
 	{
 		if (meshCompensationInUse)
 		{
@@ -2184,6 +2184,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	}
 	else
 	{
+		// Homing/raw-motor moves: tool axis mapping is not applied, so allocate axes by literal letter
 		AllocateLogicalDrivesFromLetters(gb, ms, axisLettersMentioned);
 	}
 #endif

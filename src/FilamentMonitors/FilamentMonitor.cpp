@@ -195,12 +195,14 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 			}
 			else
 			{
+				sensor->Disable();					// detach the ISR (if any) before destroying the derived object
 				delete sensor;
 			}
 			return rslt2;
 		}
 		catch (...)
 		{
+			sensor->Disable();						// detach the ISR (if any) before destroying the derived object
 			delete sensor;
 			throw;
 		}
@@ -527,6 +529,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 		{
 			reply.lcatf("Filament monitor for extruder %u has been deleted due to configuration change", extruder);
 			warn = true;
+			filamentSensors[extruder]->Disable();		// detach the ISR before destroying the derived object
 			DeleteObject(filamentSensors[extruder]);
 		}
 	}
@@ -584,7 +587,12 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 
 	WriteLocker lock(filamentMonitorsLock);
 
-	DeleteObject(filamentSensors[p_driver]);					// delete any existing filament monitor
+	// Delete any existing filament monitor; Disable() must run before delete to detach the ISR while the derived vtable is still valid
+	if (filamentSensors[p_driver] != nullptr)
+	{
+		filamentSensors[p_driver]->Disable();
+		DeleteObject(filamentSensors[p_driver]);
+	}
 	FilamentMonitor *fm;
 
 	// Create the new one
@@ -640,6 +648,7 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 		return GCodeResult::warning;
 	}
 
+	fm->Disable();					// detach the ISR before destroying the derived object
 	delete fm;
 	return GCodeResult::ok;
 }
