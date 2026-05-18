@@ -334,10 +334,7 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-
-#if SUPPORT_OBJECT_MODEL
 	const char *_ecv_array GetStateText() const noexcept;
-#endif
 
 	FilePosition printFilePositionAtMacroStart;			// the saved file position when we started executing a macro
 	GCodeInput *_ecv_from normalInput;					// Our normal input stream, or nullptr if there isn't one

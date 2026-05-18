@@ -38,7 +38,6 @@
 
 #endif
 
-#if SUPPORT_OBJECT_MODEL
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
@@ -97,8 +96,6 @@ const char *_ecv_array GCodeBuffer::GetStateText() const noexcept
 	default:									return "reading";
 	}
 }
-
-#endif
 
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *_ecv_null fileIn, MessageType mt, Compatibility::RawType c) noexcept

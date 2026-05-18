@@ -24,8 +24,6 @@
 
 const char *_ecv_array const Kinematics::HomeAllFileName = "homeall.g";
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -48,8 +46,6 @@ constexpr ObjectModelTableEntry Kinematics::objectModelTable[] =
 constexpr uint8_t Kinematics::objectModelTableDescriptor[] = { 2, 1, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Kinematics)
-
-#endif
 
 // Constructor. Pass segsPerSecond <= 0.0 to get non-segmented kinematics.
 Kinematics::Kinematics(KinematicsType t, SegmentationType segType) noexcept

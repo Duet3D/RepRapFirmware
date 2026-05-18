@@ -15,7 +15,6 @@
 # include <CAN/CanMessageGenericConstructor.h>
 #endif
 
-#if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -35,8 +34,6 @@ constexpr ObjectModelTableEntry GpInputPort::objectModelTable[] =
 constexpr uint8_t GpInputPort::objectModelTableDescriptor[] = { 1, 1 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GpInputPort)
-
-#endif
 
 bool GpInputPort::GetState() const noexcept
 {

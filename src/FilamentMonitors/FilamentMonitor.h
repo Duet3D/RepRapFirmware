@@ -55,13 +55,11 @@ public:
 	// Send diagnostics info
 	static void AllDiagnostics(const StringRef& reply) noexcept;
 
-#if SUPPORT_OBJECT_MODEL
 	// Get the number of monitors to report in the OM
 	static size_t GetNumMonitorsToReport() noexcept;
 
 	// Get access to a filament monitor when we already have a read lock
 	static FilamentMonitor *_ecv_from _ecv_null GetMonitorAlreadyLocked(size_t extruder) noexcept { return filamentSensors[extruder]; }
-#endif
 
 #if SUPPORT_CAN_EXPANSION
 	static void UpdateRemoteFilamentStatus(CanAddress src, CanMessageFilamentMonitorsStatusV2& msg) noexcept;

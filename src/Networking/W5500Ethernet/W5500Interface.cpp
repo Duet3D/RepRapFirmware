@@ -42,8 +42,6 @@ W5500Interface::W5500Interface(Platform& p) noexcept
 	mdnsResponder = new MdnsResponder(mdnsSocket);
 }
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -65,8 +63,6 @@ constexpr ObjectModelTableEntry W5500Interface::objectModelTable[] =
 constexpr uint8_t W5500Interface::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(W5500Interface)
-
-#endif
 
 void W5500Interface::Init() noexcept
 {
