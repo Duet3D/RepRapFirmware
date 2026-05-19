@@ -19,8 +19,6 @@
 
 const float RotaryDeltaKinematics::NormalTowerAngles[DELTA_AXES] = { -150.0, -30.0, 90.0 };
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -38,8 +36,6 @@ constexpr ObjectModelTableEntry RotaryDeltaKinematics::objectModelTable[] =
 constexpr uint8_t RotaryDeltaKinematics::objectModelTableDescriptor[] = { 1, 1 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(RotaryDeltaKinematics, RoundBedKinematics)
-
-#endif
 
 // Constructor
 RotaryDeltaKinematics::RotaryDeltaKinematics() noexcept : RoundBedKinematics(KinematicsType::rotaryDelta, SegmentationType(true, true, true))

@@ -3168,7 +3168,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			// Support for M408 was withdrawn at version 3.7
 
-#if SUPPORT_OBJECT_MODEL
 			case 409: // Get object model values in JSON format
 				{
 					String<StringLength100> key;
@@ -3222,7 +3221,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
-#endif
 
 			case 425: // Backlash compensation
 				result = reprap.GetMove().ConfigureBacklashCompensation(gb, reply);

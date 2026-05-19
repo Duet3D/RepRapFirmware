@@ -18,8 +18,6 @@
 
 ReadWriteLock ExpansionManager::boardsLock;
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
@@ -108,8 +106,6 @@ constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ExpansionManager)
-
-#endif
 
 ExpansionBoardData::ExpansionBoardData() noexcept
 	: typeName(nullptr), neverUsedRam(0),
@@ -356,22 +352,47 @@ void ExpansionManager::ProcessDriveStatusReport(const CanMessageBuffer *buf) noe
 			DriverData& dd = board.driverData[driver];
 			if (msg.hasClosedLoopData)
 			{
-				dd.status.all = msg.closedLoopData[driver].status;
-				dd.averageCurrentFraction = msg.closedLoopData[driver].averageCurrentFraction;
-				dd.maxCurrentFraction = msg.closedLoopData[driver].maxCurrentFraction;
-				dd.rmsPositionError = msg.closedLoopData[driver].rmsPositionError;
-				dd.maxAbsPositionError = msg.closedLoopData[driver].maxAbsPositionError;
-				dd.haveClosedLoopData = true;
+				dd.StoreClosedLoopStatus(msg.closedLoopData[driver]);
 			}
 			else
 			{
-				dd.status.all = msg.openLoopData[driver].status;
+				dd.StoreOpenLoopStatus(msg.openLoopData[driver]);
 			}
 		}
 
 		// TODO
 		(void)msg;
 	}
+}
+
+void ExpansionManager::StoreDriverDirection(DriverId did, bool direction) noexcept
+{
+	ExpansionBoardData& board = boards[did.boardAddress];
+	if (board.HasDrivers())
+	{
+		board.driverData[did.localDriver].StoreDirection(direction);
+	}
+}
+
+void ExpansionManager::StoreDriverMode(DriverId did, uint32_t mode) noexcept
+{
+	ExpansionBoardData& board = boards[did.boardAddress];
+	if (board.HasDrivers())
+	{
+		board.driverData[did.localDriver].StoreMode(mode);
+	}
+}
+
+bool ExpansionManager::GetDriverDirection(DriverId did) const noexcept
+{
+	const ExpansionBoardData& board = boards[did.boardAddress];
+	return !board.HasDrivers() || board.driverData[did.localDriver].GetDirection();
+}
+
+DriverMode ExpansionManager::GetDriverMode(DriverId did) const noexcept
+{
+	const ExpansionBoardData& board = boards[did.boardAddress];
+	return (!board.HasDrivers()) ? DriverMode::unknown : board.driverData[did.localDriver].GetMode();
 }
 
 // Return a pointer to the expansion board, if it is present

@@ -7,8 +7,6 @@
 
 #include "ObjectModel.h"
 
-#if SUPPORT_OBJECT_MODEL
-
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <Platform/OutputMemory.h>
@@ -1703,8 +1701,6 @@ ExpressionValue ObjectModel::GetExpansionBoardDetailLength(const ExpressionValue
 	val.ExtractRequestedPart(rslt.GetRef(), false);
 	return ExpressionValue((int32_t)rslt.strlen(), false);
 }
-
-#endif
 
 #endif
 
