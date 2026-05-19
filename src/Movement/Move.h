@@ -694,7 +694,7 @@ private:
 #endif
 
 #if HAS_SMART_DRIVERS
-	size_t numSmartDrivers;											// the number of TMC drivers we have, the remaining are simple enable/step/dir drivers
+	size_t numSmartDrivers;									// the number of TMC drivers we have, any remaining drivers are simple enable/step/dir drivers
 	LocalDriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers;
 # if HAS_STALL_DETECT
 	LocalDriversBitmap logOnStallDrivers, eventOnStallDrivers;
@@ -703,7 +703,7 @@ private:
 #endif
 
 	StandardDriverStatus lastEventStatus[NumDirectDrivers];
-	bool directions[NumDirectDrivers];
+	bool directions[NumDirectDrivers];						// the configured driver directions (M569 S parameter): true = forwards (default), false = backwards
 	int8_t enableValues[NumDirectDrivers];
 
 #ifdef DUET3_MB6XD

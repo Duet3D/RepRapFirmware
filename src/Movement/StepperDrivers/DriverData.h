@@ -25,7 +25,7 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 public:
-	DriverData() noexcept { configuredDirection = 0; configuredMode = (uint16_t)DriverMode::spreadCycle; }
+	DriverData() noexcept { configuredDirection = 1; configuredMode = (uint16_t)DriverMode::spreadCycle; }
 
 	bool GetDirection() const noexcept { return configuredDirection; }
 	DriverMode GetMode() const noexcept { return (DriverMode)configuredMode; }
