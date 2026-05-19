@@ -1087,7 +1087,9 @@ void SbcInterface::ExchangeData() noexcept
 		case SbcRequest::FileDeleteResult:
 		{
 			bool success = transfer.ReadBoolean();
-			if (fileOperation == FileOperation::deleteFileOrDirectory || fileOperation == FileOperation::deleteFileOrDirectoryRecursively)
+			if (fileOperation == FileOperation::deleteFileOrDirectory
+				|| fileOperation == FileOperation::deleteFileOrDirectoryRecursively
+				|| fileOperation == FileOperation::secureDeleteFile)
 			{
 				fileSuccess = success;
 				fileOperation = FileOperation::none;
@@ -1308,6 +1310,9 @@ void SbcInterface::ExchangeData() noexcept
 			break;
 		case FileOperation::deleteFileOrDirectoryRecursively:
 			fileOperationPending = !transfer.WriteDeleteFileOrDirectory(filePath, true);
+			break;
+		case FileOperation::secureDeleteFile:
+			fileOperationPending = !transfer.WriteSecureDeleteFile(filePath);
 			break;
 
 		case FileOperation::openRead:
@@ -1889,6 +1894,28 @@ bool SbcInterface::DeleteFileOrDirectory(const char *fileOrDirectory, bool recur
 	if (!DoFileOperation(recursive ? FileOperation::deleteFileOrDirectoryRecursively : FileOperation::deleteFileOrDirectory))
 	{
 		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to delete %s\n", fileOrDirectory);
+		return false;
+	}
+
+	// Return the result
+	return fileSuccess;
+}
+
+bool SbcInterface::SecureDeleteFile(const char *filename) noexcept
+{
+	// Don't do anything if the SBC is not connected
+	if (!IsConnected())
+	{
+		return false;
+	}
+
+	// Set up the request content
+	MutexLocker locker(fileMutex);
+
+	filePath = filename;
+	if (!DoFileOperation(FileOperation::secureDeleteFile))
+	{
+		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to securely delete %s\n", filename);
 		return false;
 	}
 

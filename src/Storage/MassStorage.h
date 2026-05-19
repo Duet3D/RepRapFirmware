@@ -105,6 +105,7 @@ namespace MassStorage
 	size_t GetFileWriteBufferLength() noexcept;
 	void ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept;
 	bool Delete(const StringRef& filePath, ErrorMessageMode errorMessageMode, bool recursive = false) noexcept;
+	bool SecureDelete(const StringRef& filePath, ErrorMessageMode errorMessageMode) noexcept;	// Overwrite contents with zeros, then delete. For credential / secret cleanup
 #endif
 
 #if HAS_SBC_INTERFACE

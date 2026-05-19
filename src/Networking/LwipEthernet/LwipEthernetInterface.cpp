@@ -841,7 +841,9 @@ void LwipEthernetInterface::Diagnostics(const StringRef& reply) noexcept
 	}
 
 #if LWIP_STATS
-	if (reprap.Debug(Module::Network))
+	// lwIP is only initialised in Start(), which Activate() skips when the interface is disabled.
+	// Calling stats_display() before that deref's uninitialised memp tables and crashes
+	if (reprap.Debug(Module::Network) && GetState() != NetworkState::disabled)
 	{
 		// This prints LwIP diagnostics data to the USB port - blocking!
 		stats_display();
@@ -850,9 +852,39 @@ void LwipEthernetInterface::Diagnostics(const StringRef& reply) noexcept
 }
 
 // Enable or disable the network. For Ethernet the ssid parameter is not used.
-// tlsAllowed: if false (only honoured before the first Start()), allocate the smaller non-TLS LwIP heap.
-GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowedParam) noexcept
+// tlsParam: -1 = clear stored TLS material (/sys/server.{crt,key}) and come up plain
+//            0 = plain mode (no TLS heap allocation)
+//            1 = enable TLS (load /sys/server.{crt,key}, allocate TLS-sized LwIP heap)
+GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, int tlsParam) noexcept
 {
+#if LWIP_ALTCP_TLS
+	// Handle T-1 first: securely wipe and delete the SD-resident cert/key. Subsequent bring-up is plain.
+	// Only honoured while the interface is down, matching the documented rule
+	if (tlsParam < 0 && !activated)
+	{
+		bool wiped = false;
+		String<MaxFilenameLength> path;
+		path.copy(TlsCertFile);
+		if (MassStorage::SecureDelete(path.GetRef(), ErrorMessageMode::noMessage))
+		{
+			wiped = true;
+		}
+		path.copy(TlsKeyFile);
+		if (MassStorage::SecureDelete(path.GetRef(), ErrorMessageMode::noMessage))
+		{
+			wiped = true;
+		}
+		if (wiped)
+		{
+			platform.Message(NetworkInfoMessage, "TLS: stored cert/key wiped and deleted from /sys/\n");
+		}
+	}
+	const bool tlsAllowedParam = (tlsParam > 0);
+#else
+	(void)tlsParam;
+	const bool tlsAllowedParam = false;
+#endif
+
 	if (!activated)
 	{
 		if (mode == 0)

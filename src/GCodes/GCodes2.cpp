@@ -3585,8 +3585,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						seen = true;
 						const int mode = gb.GetIValue();
-						const bool tlsAllowed = gb.Seen('T') && (gb.GetIValue() != 0);	// T1 enabled TLS, default is TLS disabled
-						result = network.EnableInterface(interface, mode, ssid.GetRef(), reply, tlsAllowed);
+						// T1 = enable TLS; T-1 = clear stored TLS material and come up plain; T0 / absent = plain
+						int tlsParam = 0;
+						if (gb.Seen('T'))
+						{
+							const int t = gb.GetIValue();
+							tlsParam = (t < 0) ? -1 : (t > 0) ? 1 : 0;
+						}
+						result = network.EnableInterface(interface, mode, ssid.GetRef(), reply, tlsParam);
 					}
 
 					if (!seen)

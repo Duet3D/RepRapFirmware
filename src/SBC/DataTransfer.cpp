@@ -1873,6 +1873,28 @@ bool DataTransfer::WriteDeleteFileOrDirectory(const char *filename, bool recursi
 	return true;
 }
 
+bool DataTransfer::WriteSecureDeleteFile(const char *filename) noexcept
+{
+	// Check if it fits
+	size_t filenameLength = strlen(filename);
+	if (!CanWritePacket(sizeof(StringHeader) + filenameLength))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::SecureDeleteFile, sizeof(StringHeader) + filenameLength);
+
+	// Write header - payload format is identical to DeleteFileOrDirectory; only the opcode differs
+	StringHeader *header = WriteDataHeader<StringHeader>();
+	header->length = filenameLength;
+	header->padding = 0;
+
+	// Write filename
+	WriteData(filename, filenameLength);
+	return true;
+}
+
 bool DataTransfer::WriteOpenFile(const char *filename, bool forWriting, bool append, uint32_t preAllocSize) noexcept
 {
 	// Check if it fits

@@ -841,6 +841,77 @@ bool MassStorage::Delete(const StringRef& filePath, ErrorMessageMode errorMessag
 # endif
 }
 
+// Overwrite the file contents with zeros, flush to media, then delete
+// One zero-write pass is sufficient for SD/eMMC - wear-leveling makes multi-pass wipes meaningless on flash
+// Returns true if the delete succeeded; a failed overwrite is logged but does not block the delete
+bool MassStorage::SecureDelete(const StringRef& filePath, ErrorMessageMode errorMessageMode) noexcept
+{
+# if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		// Uses the new SecureDeleteFile request opcode (DSF performs zero-overwrite + fsync + unlink)
+		// Older DSF that doesn't know this opcode will not respond, and SbcInterface::SecureDeleteFile
+		// will time out and return false - that's the right signal for a security-sensitive operation
+		if (reprap.GetSbcInterface().SecureDeleteFile(filePath.c_str()))
+		{
+			return true;
+		}
+		if (errorMessageMode != ErrorMessageMode::noMessage)
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to securely delete %s\n", filePath.c_str());
+		}
+		return false;
+	}
+# endif
+
+# if HAS_MASS_STORAGE
+	if (!FileExists(filePath.c_str()))
+	{
+		// Nothing to wipe; let Delete handle the missing-file case per errorMessageMode
+		return Delete(filePath, errorMessageMode, false);
+	}
+
+	// OpenMode::append is intentional here. Despite the name, it is the only FileStore mode that opens
+	// an existing file read-write WITHOUT truncating it - and that is exactly what makes the wipe real:
+	// we seek to 0 and overwrite the file's own clusters in place. OpenMode::write would truncate first,
+	// so the zeros would land on freshly-allocated clusters and leave the original data on the old ones
+	// The FileExists() guard above means append's create-if-missing behaviour never triggers
+	FileStore * const f = OpenFile(filePath.c_str(), OpenMode::append, 0);
+	if (f != nullptr)
+	{
+		const FilePosition len = f->Length();
+		if (len != 0)
+		{
+			bool wipeOk = f->Seek(0);
+			if (wipeOk)
+			{
+				constexpr size_t ZeroChunk = 256;
+				static const uint8_t zeros[ZeroChunk] = { 0 };
+				FilePosition remaining = len;
+				while (wipeOk && remaining != 0)
+				{
+					const size_t toWrite = (remaining > ZeroChunk) ? ZeroChunk : (size_t)remaining;
+					wipeOk = f->Write(zeros, toWrite);
+					remaining -= toWrite;
+				}
+				if (wipeOk)
+				{
+					wipeOk = f->Flush();
+				}
+			}
+			if (!wipeOk && errorMessageMode != ErrorMessageMode::noMessage)
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "SecureDelete failed to overwrite %s\n", filePath.c_str());
+			}
+		}
+		f->Close();
+	}
+	return Delete(filePath, errorMessageMode, false);
+# else
+	return false;
+# endif
+}
+
 #endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES

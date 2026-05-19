@@ -360,7 +360,7 @@ GCodeResult Network::ReportProtocols(unsigned int interface, const StringRef& re
 #endif
 }
 
-GCodeResult Network::EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowed) noexcept
+GCodeResult Network::EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply, int tlsParam) noexcept
 {
 #if HAS_NETWORKING
 	if (interface < GetNumNetworkInterfaces())
@@ -385,7 +385,7 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 # endif
 #endif // HAS_RESPONDERS
 		}
-		return iface->EnableInterface(mode, ssid, reply, tlsAllowed);
+		return iface->EnableInterface(mode, ssid, reply, tlsParam);
 	}
 	reply.printf("Invalid network interface '%d'\n", interface);
 	return GCodeResult::error;
@@ -762,7 +762,16 @@ void Network::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 	switch (part)
 	{
 	case 0:
-		reply.printf("=== Network ===\nSlowest loop: %.2fms; fastest: %.2fms", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+		// fastLoop sentinel (UINT32_MAX) means Spin() hasn't iterated since the previous M122
+		// cleared it; printing the raw value yields a ~5.7M ms phantom rather than something useful
+		if (fastLoop == UINT32_MAX)
+		{
+			reply.printf("=== Network ===\nSlowest loop: n/a; fastest: n/a");
+		}
+		else
+		{
+			reply.printf("=== Network ===\nSlowest loop: %.2fms; fastest: %.2fms", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+		}
 		fastLoop = UINT32_MAX;
 		slowLoop = 0;
 

@@ -51,7 +51,7 @@ public:
 	void Spin() noexcept override;
 	void Diagnostics(const StringRef& reply) noexcept override;
 
-	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowedParam = true) noexcept override;			// enable or disable the network
+	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, int tlsParam = 1) noexcept override;			// enable or disable the network
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
 	int EnableState() const noexcept override;

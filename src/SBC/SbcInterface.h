@@ -64,6 +64,7 @@ public:
 
 	bool FileExists(const char *filename) noexcept;
 	bool DeleteFileOrDirectory(const char *fileOrDirectory, bool recursive = false) noexcept;
+	bool SecureDeleteFile(const char *filename) noexcept;	// zero-overwrite + fsync + unlink on the SBC; files only
 
 	FileHandle OpenFile(const char *filename, OpenMode mode, FilePosition& fileLength, uint32_t preAllocSize = 0) noexcept;
 	int ReadFile(FileHandle handle, char *buffer, size_t bufferLength) noexcept;
@@ -121,7 +122,8 @@ private:
 		write,
 		seek,
 		truncate,
-		close
+		close,
+		secureDeleteFile
 	} fileOperation;
 	std::atomic<bool> fileOperationPending;
 
