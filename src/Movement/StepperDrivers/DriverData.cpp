@@ -6,6 +6,7 @@
  */
 
 #include "DriverData.h"
+#include <CanMessageFormats.h>
 
 #define OBJECT_MODEL_FUNC(...)							OBJECT_MODEL_FUNC_BODY(DriverData, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition, ...)			OBJECT_MODEL_FUNC_IF_BODY(DriverData, _condition, __VA_ARGS__)
@@ -33,5 +34,20 @@ constexpr ObjectModelTableEntry DriverData::objectModelTable[] =
 constexpr uint8_t DriverData::objectModelTableDescriptor[] = { 4, 2, 2, 2, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(DriverData)
+
+void DriverData::StoreClosedLoopStatus(const ClosedLoopStatus& clStatus) noexcept
+{
+	status.all = clStatus.status;
+	averageCurrentFraction = clStatus.averageCurrentFraction;
+	maxCurrentFraction = clStatus.maxCurrentFraction;
+	rmsPositionError = clStatus.rmsPositionError;
+	maxAbsPositionError =clStatus.maxAbsPositionError;
+	haveClosedLoopData = true;
+}
+
+void DriverData::StoreOpenLoopStatus(const OpenLoopStatus& olStatus) noexcept
+{
+	status.all = olStatus.status;
+}
 
 // End
