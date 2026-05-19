@@ -365,6 +365,36 @@ void ExpansionManager::ProcessDriveStatusReport(const CanMessageBuffer *buf) noe
 	}
 }
 
+void ExpansionManager::StoreDriverDirection(DriverId did, bool direction) noexcept
+{
+	ExpansionBoardData& board = boards[did.boardAddress];
+	if (board.HasDrivers())
+	{
+		board.driverData[did.localDriver].StoreDirection(direction);
+	}
+}
+
+void ExpansionManager::StoreDriverMode(DriverId did, uint32_t mode) noexcept
+{
+	ExpansionBoardData& board = boards[did.boardAddress];
+	if (board.HasDrivers())
+	{
+		board.driverData[did.localDriver].StoreMode(mode);
+	}
+}
+
+bool ExpansionManager::GetDriverDirection(DriverId did) const noexcept
+{
+	const ExpansionBoardData& board = boards[did.boardAddress];
+	return !board.HasDrivers() || board.driverData[did.localDriver].GetDirection();
+}
+
+DriverMode ExpansionManager::GetDriverMode(DriverId did) const noexcept
+{
+	const ExpansionBoardData& board = boards[did.boardAddress];
+	return (!board.HasDrivers()) ? DriverMode::unknown : board.driverData[did.localDriver].GetMode();
+}
+
 // Return a pointer to the expansion board, if it is present
 const ExpansionBoardData *_ecv_null ExpansionManager::GetBoardDetails(uint8_t address) const noexcept
 {

@@ -6,6 +6,9 @@
  */
 
 #include "DriverData.h"
+
+#if SUPPORT_CAN_EXPANSION
+
 #include <CanMessageFormats.h>
 
 #define OBJECT_MODEL_FUNC(...)							OBJECT_MODEL_FUNC_BODY(DriverData, __VA_ARGS__)
@@ -16,6 +19,7 @@ constexpr ObjectModelTableEntry DriverData::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. DriverData members
 	{ "closedLoop",			OBJECT_MODEL_FUNC_IF(self->haveClosedLoopData, self, 1), 	ObjectModelEntryFlags::liveNotPanelDue },
+	{ "config",				OBJECT_MODEL_FUNC(self, 4), 								ObjectModelEntryFlags::none },
 	{ "status",				OBJECT_MODEL_FUNC(self->status.all), 						ObjectModelEntryFlags::liveNotPanelDue },
 
 	// 1. closedLoop members
@@ -29,9 +33,13 @@ constexpr ObjectModelTableEntry DriverData::objectModelTable[] =
 	// 3. closedLoop.positionError members
 	{ "max",				OBJECT_MODEL_FUNC((float)self->maxAbsPositionError, 2), 	ObjectModelEntryFlags::liveNotPanelDue },
 	{ "rms",				OBJECT_MODEL_FUNC((float)self->rmsPositionError, 2), 		ObjectModelEntryFlags::liveNotPanelDue },
+
+	// 4. config members
+	{ "direction",			OBJECT_MODEL_FUNC((int32_t)self->configuredDirection), 		ObjectModelEntryFlags::none },
+	{ "mode",				OBJECT_MODEL_FUNC((int32_t)self->configuredMode), 			ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t DriverData::objectModelTableDescriptor[] = { 4, 2, 2, 2, 2 };
+constexpr uint8_t DriverData::objectModelTableDescriptor[] = { 5, 3, 2, 2, 2, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(DriverData)
 
@@ -49,5 +57,7 @@ void DriverData::StoreOpenLoopStatus(const OpenLoopStatus& olStatus) noexcept
 {
 	status.all = olStatus.status;
 }
+
+#endif
 
 // End
