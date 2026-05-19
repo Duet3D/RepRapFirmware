@@ -31,9 +31,8 @@ jobs:
         with:
           host: pkg.duet3d.com
           port: 22
-          username: ${{ secrets.PKG_SSH_USER }}
-          password: ${{ secrets.PKG_SSH_PASS }}
-          privateKey: ${{ secrets.PKG_SSH_KEY }}
+          username: pkg
+          privateKey: ${{ secrets.PKG_DEPLOY_KEY }}
           localPath: ./assets
           remotePath: /var/rrf-pkg/unstable
 
@@ -44,9 +43,8 @@ jobs:
         with:
           host: pkg.duet3d.com
           port: 22
-          username: ${{ secrets.PKG_SSH_USER }}
-          password: ${{ secrets.PKG_SSH_PASS }}
-          privateKey: ${{ secrets.PKG_SSH_KEY }}
+          username: pkg
+          privateKey: ${{ secrets.PKG_DEPLOY_KEY }}
           localPath: ./assets
           remotePath: /var/rrf-pkg/unstable-3.4
 
@@ -57,9 +55,8 @@ jobs:
         with:
           host: pkg.duet3d.com
           port: 22
-          username: ${{ secrets.PKG_SSH_USER }}
-          password: ${{ secrets.PKG_SSH_PASS }}
-          privateKey: ${{ secrets.PKG_SSH_KEY }}
+          username: pkg
+          privateKey: ${{ secrets.PKG_DEPLOY_KEY }}
           localPath: ./assets
           remotePath: /var/rrf-pkg/unstable-3.5
 
@@ -70,9 +67,8 @@ jobs:
         with:
           host: pkg.duet3d.com
           port: 22
-          username: ${{ secrets.PKG_SSH_USER }}
-          password: ${{ secrets.PKG_SSH_PASS }}
-          privateKey: ${{ secrets.PKG_SSH_KEY }}
+          username: pkg
+          privateKey: ${{ secrets.PKG_DEPLOY_KEY }}
           localPath: ./assets
           remotePath: /var/rrf-pkg/unstable-3.6
 
