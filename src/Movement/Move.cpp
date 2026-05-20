@@ -904,7 +904,7 @@ bool Move::SetKinematics(KinematicsType k) noexcept
 // Return true if this is a raw motor move
 bool Move::IsRawMotorMove(uint8_t moveType) const noexcept
 {
-	return moveType == 2 || ((moveType == 1 || moveType == 3) && kinematics->GetHomingMode() != HomingMode::homeCartesianAxes);
+	return moveType == 2 || (moveType != 0 && kinematics->GetHomingMode() != HomingMode::homeCartesianAxes);
 }
 
 // Return true if the specified point is accessible to the Z probe
