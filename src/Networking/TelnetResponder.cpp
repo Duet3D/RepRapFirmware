@@ -31,6 +31,7 @@ bool TelnetResponder::Accept(Socket *_ecv_from s, NetworkProtocol protocol) noex
 			responderState = ResponderState::justConnected;
 			connectTime = millis();
 			haveCompleteLine = false;
+			isAuthenticated = false;
 			if (reprap.Debug(Module::Webserver))
 			{
 				debugPrintf("Telnet connection accepted\n");
@@ -135,14 +136,7 @@ bool TelnetResponder::Spin() noexcept
 			return true;
 		}
 
-		// Check whether we need a password to log in
-		if (reprap.NoPasswordSet())
-		{
-			// Don't send a login prompt if no password is set, so we don't mess up Pronterface
-			responderState = ResponderState::reading;
-			numSessions++;
-		}
-		else
+		// Always require authentication to prevent unauthenticated command execution
 		{
 			outBuf->copy(	"RepRapFirmware Telnet interface\r\n\r\n"
 							"Please enter your password:\r\n"
@@ -174,6 +168,7 @@ bool TelnetResponder::Spin() noexcept
 				clientPointer = 0;
 				if (reprap.CheckPassword(clientMessage))
 				{
+					isAuthenticated = true;
 					numSessions++;
 					outBuf->copy("Log in successful!\r\n");
 					Commit(ResponderState::reading);
@@ -289,7 +284,7 @@ void TelnetResponder::ProcessLine() noexcept
 			Commit();
 		}
 	}
-	else if (reprap.GetGCodes().GetTelnetInput()->BufferSpaceLeft() >= clientPointer + 1)
+	else if (isAuthenticated && reprap.GetGCodes().GetTelnetInput()->BufferSpaceLeft() >= clientPointer + 1)
 	{
 		// All other codes are stored for the GCodes class
 		NetworkGCodeInput * const telnetInput = reprap.GetGCodes().GetTelnetInput();
