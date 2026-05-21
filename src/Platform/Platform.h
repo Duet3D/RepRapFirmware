@@ -112,8 +112,9 @@ enum class BoardType : uint8_t
 	Auto = 0,						// this value is no longer used
 #if defined(DUET3MINI_V04)			// we use the same values for both v0.2 and v0.4
 	Duet3Mini_Unknown,
-	Duet3Mini_WiFi,
+	Duet3Mini_WiFi,					// Duet Mini WiFi with ESP8266 module
 	Duet3Mini_Ethernet,
+	Duet3Mini_WiFi_ESP32,			// Duet Mini WiFi with ESP32 module
 #elif defined(DUET3_MB6HC)
 	Duet3_6HC_v06_100 = 1,
 	Duet3_6HC_v101 = 2,
@@ -272,6 +273,11 @@ public:
 
 #if defined(DUET_NG) || defined(DUET3MINI)
 	bool IsDuetWiFi() const noexcept;
+	bool HasESP32() const noexcept;
+#endif
+
+#if HAS_WIFI_NETWORKING
+	const char *_ecv_array GetDefaultWiFiFirmwareName() const noexcept;
 #endif
 
 #ifdef DUET_NG
