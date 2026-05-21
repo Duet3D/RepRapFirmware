@@ -27,7 +27,8 @@
 #define IAP_CAN_LOADER_FILE		"Duet3_CANiap32_" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20038000;
 
-#define WIFI_FIRMWARE_FILE		"DuetWiFiServer.bin"
+#define WIFI_FIRMWARE_FILE_ESP8266		"DuetWiFiServer.bin"
+#define WIFI_FIRMWARE_FILE_ESP32		"DuetWiFiModule_32S3.bin"
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1

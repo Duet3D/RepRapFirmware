@@ -251,7 +251,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::liveNotPanelDue },
 #endif
 #if HAS_WIFI_NETWORKING
-	{ "wifiFirmwareFileName", OBJECT_MODEL_FUNC_NOSELF(WIFI_FIRMWARE_FILE),														ObjectModelEntryFlags::none },
+	{ "wifiFirmwareFileName", OBJECT_MODEL_FUNC(self->GetDefaultWiFiFirmwareName()),											ObjectModelEntryFlags::none },
 #endif
 #if HAS_CPU_TEMP_SENSOR
 	// 1. boards[0].mcuTemp members
@@ -3510,9 +3510,10 @@ void Platform::SetBoardType() noexcept
 #if defined(DUET3MINI_V04)
 	// Test whether this is a WiFi or an Ethernet board by testing for a pulldown resistor on Dir1
 	SetPinMode(DIRECTION_PINS[1], INPUT_PULLUP, false);
+	SetPinMode(DIRECTION_PINS[2], INPUT_PULLUP, false);
 	delayMicroseconds(20);									// give the pullup resistor time to work
-	board = (digitalRead(DIRECTION_PINS[1]))				// if SAME54P20A
-				? BoardType::Duet3Mini_WiFi
+	board = (digitalRead(DIRECTION_PINS[1]))
+				? ((digitalRead(DIRECTION_PINS[2])) ? BoardType::Duet3Mini_WiFi : BoardType::Duet3Mini_WiFi_ESP32)
 					: BoardType::Duet3Mini_Ethernet;
 #elif defined(DUET3_MB6HC)
 	board = GetMB6HCBoardType();
@@ -3582,8 +3583,9 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	{
 #if defined(DUET3MINI_V04)
 	case BoardType::Duet3Mini_Unknown:		return "Duet 3 " BOARD_SHORT_NAME " unknown variant";
-	case BoardType::Duet3Mini_WiFi:			return "Duet 3 " BOARD_SHORT_NAME " WiFi";
+	case BoardType::Duet3Mini_WiFi:			return "Duet 3 " BOARD_SHORT_NAME " WiFi 1.02 or earlier";
 	case BoardType::Duet3Mini_Ethernet:		return "Duet 3 " BOARD_SHORT_NAME " Ethernet";
+	case BoardType::Duet3Mini_WiFi_ESP32:	return "Duet 3 " BOARD_SHORT_NAME " WiFi 1.03 or later";
 #elif defined(DUET3_MB6HC)
 	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v1.0 or earlier";
 	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
@@ -3624,6 +3626,7 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 #if defined(DUET3MINI_V04)
 	case BoardType::Duet3Mini_Unknown:		return "duet5lcunknown";
 	case BoardType::Duet3Mini_WiFi:			return "duet5lcwifi";
+	case BoardType::Duet3Mini_WiFi_ESP32:	return "duet5lcwifi32";
 	case BoardType::Duet3Mini_Ethernet:		return "duet5lcethernet";
 #elif defined(DUET3_MB6HC)
 	case BoardType::Duet3_6HC_v06_100:		return "duet3mb6hc100";
@@ -3684,7 +3687,25 @@ const char *_ecv_array Platform::GetBoardShortName() const noexcept
 // Return true if this is a WiFi board, false if it has Ethernet
 bool Platform::IsDuetWiFi() const noexcept
 {
-	return board == BoardType::Duet3Mini_WiFi || board == BoardType::Duet3Mini_Unknown;
+	return board == BoardType::Duet3Mini_WiFi || board == BoardType::Duet3Mini_WiFi_ESP32 || board == BoardType::Duet3Mini_Unknown;
+}
+
+bool Platform::HasESP32() const noexcept
+{
+	return board == BoardType::Duet3Mini_WiFi_ESP32;
+}
+
+#endif
+
+#if HAS_WIFI_NETWORKING
+
+const char *_ecv_array Platform::GetDefaultWiFiFirmwareName() const noexcept
+{
+#ifdef DUET3MINI_V04
+	return (HasESP32()) ? WIFI_FIRMWARE_FILE_ESP32 : WIFI_FIRMWARE_FILE_ESP8266;
+#else
+	return WIFI_FIRMWARE_FILE;
+#endif
 }
 
 #endif
