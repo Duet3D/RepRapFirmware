@@ -183,5 +183,5 @@ The heat task can also be woken early when an urgent message needs to be sent, e
 ## 8. Where this connects to the rest of the system
 
 - Object Model — `heat`, `sensors`, `tools`, `fans` subtrees. See [OBJECT_MODEL.md](OBJECT_MODEL.md).
-- CAN — sensor / heater / fan messages live in [CANlib](../../src/CAN). Expansion-board side: see [Duet3Expansion's heating docs](../../../Duet3Expansion/docs/devel/ARCHITECTURE.md#heating-stack).
+- CAN — sensor / heater / fan messages live in [CANlib](../../src/CAN). Expansion-board side: see [Duet3Expansion's heating docs](https://github.com/Duet3D/Duet3Expansion/blob/3.7-docker/docs/devel/ARCHITECTURE.md#heating-stack).
 - The HEAT task can run uninterrupted by a paused or crashed MAIN task — this is essential for never letting a heater run away.

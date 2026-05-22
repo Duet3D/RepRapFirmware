@@ -1,6 +1,6 @@
 # Networking
 
-This document covers the on-firmware networking stack: physical interfaces, the responder model, and the legacy `rr_*` API. In **SBC mode** these subsystems are dormant — the SBC running [DuetSoftwareFramework](../../../DuetSoftwareFramework) provides the user-facing HTTP server. In **standalone mode** the firmware itself runs the network stack.
+This document covers the on-firmware networking stack: physical interfaces, the responder model, and the legacy `rr_*` API. In **SBC mode** these subsystems are dormant — the SBC running [DuetSoftwareFramework](https://github.com/Duet3D/DuetSoftwareFramework/tree/v3.7-andy) provides the user-facing HTTP server. In **standalone mode** the firmware itself runs the network stack.
 
 ## 1. Build-time interfaces
 
@@ -126,4 +126,4 @@ flowchart LR
 
 - **Replies** — `HttpResponder`, `TelnetResponder`, `FtpResponder` are message destinations in `MessageType` flags. See [GCODE_PROCESSING.md](GCODE_PROCESSING.md#replies-and-message-routing).
 - **Object Model** — `network` subtree describes interface state, IP addresses, MAC, configured protocols.
-- **In SBC mode** — the equivalent path lives in DSF; see [DuetSoftwareFramework's HTTP_API](../../../DuetSoftwareFramework/docs/devel/HTTP_API.md).
+- **In SBC mode** — the equivalent path lives in DSF; see [DuetSoftwareFramework's HTTP_API](https://github.com/Duet3D/DuetSoftwareFramework/blob/v3.7-andy/docs/devel/HTTP_API.md).

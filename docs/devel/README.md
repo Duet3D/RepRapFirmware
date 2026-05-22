@@ -20,6 +20,13 @@ Start with [ARCHITECTURE.md](ARCHITECTURE.md) — the system-level diagram and c
 | [NETWORKING.md](NETWORKING.md) | Network stacks (LWIP / W5500 / WiFi), responders (HTTP, FTP, Telnet, MQTT), the `rr_*` legacy API. |
 | [PLATFORM_AND_TASKS.md](PLATFORM_AND_TASKS.md) | The `Platform` HAL, task priorities, ADC pipeline, watchdogs, software reset, diagnostics. |
 | [BUILD_VARIANTS.md](BUILD_VARIANTS.md) | The `make` matrix, conditional compilation flags (`SUPPORT_CAN_EXPANSION`, `HAS_SBC_INTERFACE`, …), board configuration. |
+| [STANDALONE_VS_SBC.md](STANDALONE_VS_SBC.md) | Which parts of RRF are standalone-only, SBC-only, or shared across both with different back ends. |
+
+## Source module READMEs
+
+The documents above explain the firmware by subsystem. For the code-level view of each top-level source module, start with [../../src/README.md](../../src/README.md).
+
+Each first-party module directory under `src/` now has a local `README.md` that describes what it owns, how it works, and how it interfaces with DSF and Duet3Expansion.
 
 ## Companion repositories
 
@@ -29,3 +36,6 @@ RepRapFirmware does not run alone. Two sibling repositories complete the system:
 - **[DuetSoftwareFramework](https://github.com/Duet3D/DuetSoftwareFramework)** (DSF) — .NET services that run on a Linux SBC paired with the Duet over SPI. RRF is the SPI slave.
 
 For the cross-repo picture (how G-codes flow from a browser through DSF, RRF and out to a stepper driver on an expansion board), see the integration documentation under `DuetSoftwareFramework/docs/architecture/`.
+
+The DSF-keyed cross-repo component map is [DuetSoftwareFramework/docs/architecture/COMPONENT_INTERACTION_MATRIX.md](https://github.com/Duet3D/DuetSoftwareFramework/blob/v3.7-andy/docs/architecture/COMPONENT_INTERACTION_MATRIX.md).
+The standalone-vs-SBC execution and call-diagram reference is [DuetSoftwareFramework/docs/architecture/EXECUTION_CALL_DIAGRAMS.md](https://github.com/Duet3D/DuetSoftwareFramework/blob/v3.7-andy/docs/architecture/EXECUTION_CALL_DIAGRAMS.md).

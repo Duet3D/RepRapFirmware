@@ -1,6 +1,6 @@
 # CAN-FD Bus
 
-This document describes the CAN-FD bus that links a Duet 3 main board (running RRF) to its expansion / tool boards (running [Duet3Expansion](../../../Duet3Expansion)).
+This document describes the CAN-FD bus that links a Duet 3 main board (running RRF) to its expansion / tool boards (running [Duet3Expansion](https://github.com/Duet3D/Duet3Expansion/tree/3.7-docker)).
 
 The on-the-wire types described here are defined in the **CANlib** submodule and shared verbatim between RRF and Duet3Expansion. If you change a message struct you must rebuild *both* firmwares.
 
@@ -67,7 +67,7 @@ The on-the-wire types live in `CANlib/src/CanMessageFormats.h`. They split into 
 
 The expansion firmware needs to start each move at the same instant the master starts the local-drive portion of the same move. Because both sides count step clocks at 750 kHz, the only thing that has to be agreed is the *offset* between the two clocks.
 
-`CanMessageTimeSync` ([CANlib](../../src/CAN/CanInterface.cpp) calling site) is broadcast by the master every `CanClockIntervalMillis = 211` ms by a dedicated **`CAN_CLOCK`** task at the highest CAN priority. It carries the master's current step-clock value at the moment of transmission. The expansion board uses CAN's hardware timestamp on the received frame to compute the round-trip and thus its local offset to the master clock — see Duet3Expansion's [CAN_PROTOCOL.md](../../../Duet3Expansion/docs/devel/CAN_PROTOCOL.md).
+`CanMessageTimeSync` ([CANlib](../../src/CAN/CanInterface.cpp) calling site) is broadcast by the master every `CanClockIntervalMillis = 211` ms by a dedicated **`CAN_CLOCK`** task at the highest CAN priority. It carries the master's current step-clock value at the moment of transmission. The expansion board uses CAN's hardware timestamp on the received frame to compute the round-trip and thus its local offset to the master clock — see Duet3Expansion's [CAN_PROTOCOL.md](https://github.com/Duet3D/Duet3Expansion/blob/3.7-docker/docs/devel/CAN_PROTOCOL.md).
 
 The choice of 211 ms (a prime number) avoids accidental beating against any other periodic activity in the system.
 
@@ -189,5 +189,5 @@ Firmware update over CAN is handled by `CanMessageFirmwareUpdate*` requests / re
 ## 11. Where this connects to the rest of the system
 
 - The CAN-FD address space is also used by **DSF**: a remote `M409` for a CAN-attached board is forwarded by RRF, and the result is merged into the global Object Model that DSF replicates over SPI. See [SBC_INTERFACE.md](SBC_INTERFACE.md) and [OBJECT_MODEL.md](OBJECT_MODEL.md).
-- For the expansion-side view of every protocol described here (announce, time-sync, motion reception, input handles, streaming) see [Duet3Expansion's CAN docs](../../../Duet3Expansion/docs/devel/CAN_PROTOCOL.md).
+- For the expansion-side view of every protocol described here (announce, time-sync, motion reception, input handles, streaming) see [Duet3Expansion's CAN docs](https://github.com/Duet3D/Duet3Expansion/blob/3.7-docker/docs/devel/CAN_PROTOCOL.md).
 - `DUAL_CAN` boards (some hardware variants) support a second CAN bus for user / non-master traffic; see [`SendPlainMessageNoFree`](../../src/CAN/CanInterface.cpp).

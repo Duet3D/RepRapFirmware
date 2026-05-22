@@ -1,6 +1,6 @@
 # SBC Interface (SPI link to DSF)
 
-This document describes the **SPI** link between RepRapFirmware (slave) and a Single-Board Computer (master) running [DuetSoftwareFramework](../../../DuetSoftwareFramework). The whole link is implemented in [src/SBC/](../../src/SBC).
+This document describes the **SPI** link between RepRapFirmware (slave) and a Single-Board Computer (master) running [DuetSoftwareFramework](https://github.com/Duet3D/DuetSoftwareFramework/tree/v3.7-andy). The whole link is implemented in [src/SBC/](../../src/SBC).
 
 When this link is up, RRF deliberately disables most of its on-board network and storage code: HTTP / FTP / Telnet are not run by RRF, and the SD card on the Duet is not mounted. Their roles are taken over by DSF's *virtual* SD card and HTTP server.
 
@@ -202,6 +202,6 @@ When running without an SBC, RRF is byte-for-byte the same firmware — `HAS_SBC
 
 ## 12. Where this connects to the rest of the system
 
-- DSF's matching implementation: [`Link/Adapter/SPI.cs`](../../../DuetSoftwareFramework/src/DuetControlServer/Link/Adapter/SPI.cs), [`Link/Protocol/`](../../../DuetSoftwareFramework/src/DuetControlServer/Link/Protocol).
+- DSF's matching implementation: [`Link/Adapter/SPI.cs`](https://github.com/Duet3D/DuetSoftwareFramework/blob/v3.7-andy/src/DuetControlServer/Link/Adapter/SPI.cs), [`Link/Protocol/`](https://github.com/Duet3D/DuetSoftwareFramework/tree/v3.7-andy/src/DuetControlServer/Link/Protocol).
 - The protocol version `SbcProtocolVersion` must match between RRF and DSF. A bump on either side without the other is a hard incompatibility — DSF will exit with code `502`.
-- For the cross-process path of a single G-code that originates in a browser and ends as motor pulses on a CAN tool board, see the integration docs: [DuetSoftwareFramework/docs/architecture/GCODE_FLOW.md](../../../DuetSoftwareFramework/docs/architecture/GCODE_FLOW.md).
+- For the cross-process path of a single G-code that originates in a browser and ends as motor pulses on a CAN tool board, see the integration docs: [DuetSoftwareFramework/docs/architecture/GCODE_FLOW.md](https://github.com/Duet3D/DuetSoftwareFramework/blob/v3.7-andy/docs/architecture/GCODE_FLOW.md).

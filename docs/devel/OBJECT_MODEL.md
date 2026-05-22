@@ -167,7 +167,7 @@ classDiagram
     ObjectModel --> GlobalVariables : top-level "global"
 ```
 
-This is the same shape DSF replicates over SPI and DWC consumes. The full schema lives in [DuetSoftwareFramework/src/DuetAPI/ObjectModel/](../../../DuetSoftwareFramework/src/DuetAPI/ObjectModel) — the C# classes there mirror the JSON keys produced by the descriptor tables here.
+This is the same shape DSF replicates over SPI and DWC consumes. The full schema lives in [DuetSoftwareFramework/src/DuetAPI/ObjectModel/](https://github.com/Duet3D/DuetSoftwareFramework/tree/v3.7-andy/src/DuetAPI/ObjectModel) — the C# classes there mirror the JSON keys produced by the descriptor tables here.
 
 ## 7. JSON serialisation
 
@@ -285,7 +285,7 @@ You want to expose `Heater::burnInTimeRemaining` (a `float`) under `heat.heaters
 
 3. Bump the matching size in `objectModelTableDescriptor[]`. If `burnInTime…` lives in section 0 and section 0 used to have 12 entries, change it to 13.
 4. Wherever you change the value, call `reprap.HeatUpdated()` so DSF/DWC notice via the `seqs.heat` change.
-5. Mirror the field in DSF — add a property to the matching C# class in [DuetSoftwareFramework/src/DuetAPI/ObjectModel/Heat/](../../../DuetSoftwareFramework/src/DuetAPI/ObjectModel/Heat).
+5. Mirror the field in DSF — add a property to the matching C# class in [DuetSoftwareFramework/src/DuetAPI/ObjectModel/Heat/](https://github.com/Duet3D/DuetSoftwareFramework/tree/v3.7-andy/src/DuetAPI/ObjectModel/Heat).
 
 ### 13b. Adding a conditionally-present scalar
 
@@ -428,13 +428,13 @@ After you edit the table:
    - entries within a section that aren't alphabetical.
 2. Confirm `M409 K"<your.key>"` returns the value over the AUX UART or HTTP console.
 3. Confirm the corresponding `seqs` counter ticks when you mutate the value (it has to, otherwise DSF/DWC won't notice).
-4. Mirror the new field in [DuetSoftwareFramework/src/DuetAPI/ObjectModel/](../../../DuetSoftwareFramework/src/DuetAPI/ObjectModel) so DSF stays in sync.
+4. Mirror the new field in [DuetSoftwareFramework/src/DuetAPI/ObjectModel/](https://github.com/Duet3D/DuetSoftwareFramework/tree/v3.7-andy/src/DuetAPI/ObjectModel) so DSF stays in sync.
 5. If DWC needs to render it, add it to DWC's UI (separate repository).
 
 ## 14. Where this connects to the rest of the system
 
 - The same JSON shape is produced for `M409` (G-code), `rr_model` (legacy network API used by DWC in standalone), and the SBC link.
-- DSF mirrors the model in [`DuetControlServer.Model.ObjectModel`](../../../DuetSoftwareFramework/src/DuetControlServer/Model/ObjectModel.cs) and serves it via:
+- DSF mirrors the model in [`DuetControlServer.Model.ObjectModel`](https://github.com/Duet3D/DuetSoftwareFramework/blob/v3.7-andy/src/DuetControlServer/Model/ObjectModel.cs) and serves it via:
   - The IPC `Subscribe` mode (delta or patch).
   - The HTTP `/machine/model` endpoint.
 - DWC, PanelDue, and plugins all observe the same model; there is no schema duplication.

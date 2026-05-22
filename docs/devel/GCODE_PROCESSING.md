@@ -177,5 +177,5 @@ flowchart LR
 
 - The number of channels is one of the few firmware/SBC version contracts — when a new channel is added (e.g. `Aux2`, `File2`), DSF and RRF must agree, see `NumGCodeChannels` in [GCodeChannel.h](../../src/GCodes/GCodeChannel.h) and `CodeChannel` in DSF.
 - Codes received from the `SBC` channel are pre-parsed by DSF and sent in **binary** form to save MCU CPU; everything else lands as text.
-- Some codes (`M0`, `M1`, `M122`, `M409`, …) are short-circuited inside DSF and never reach RRF. See [`Codes/Handlers`](../../../DuetSoftwareFramework/src/DuetControlServer/Codes/Handlers) on the DSF side.
+- Some codes (`M0`, `M1`, `M122`, `M409`, …) are short-circuited inside DSF and never reach RRF. See [`Codes/Handlers`](https://github.com/Duet3D/DuetSoftwareFramework/tree/v3.7-andy/src/DuetControlServer/Codes/Handlers) on the DSF side.
 - Codes addressed to a CAN address (e.g. `M906 X1000 P40.0`) are forwarded to the relevant expansion board via [CanInterface](../../src/CAN/CanInterface.cpp) — see [CAN_BUS.md](CAN_BUS.md).

@@ -2,6 +2,8 @@
 
 How RepRapFirmware is sliced across boards, processors, and feature combinations. Setup-level prerequisites are in [../DEVELOPER.md](../DEVELOPER.md); this file documents *what* gets built.
 
+For code-level descriptions of the top-level firmware modules that these build variants compile in, see [../../src/README.md](../../src/README.md).
+
 ## 1. Make targets
 
 The top-level [`Makefile`](../../Makefile) has one target per supported board and one or more combined / variant targets:
@@ -39,7 +41,7 @@ Five external submodules ([Makefiles/](../../Makefiles)):
 |---|---|
 | `CoreN2G` | Microchip / Atmel HAL wrapper, board init, peripheral drivers, USB, HSMCI, NVIC dispatch. |
 | `RRFLibraries` | `String`, `Bitmap`, `RTOSIface`, `Heap`, `function_ref`, `NamedEnum`, etc. |
-| `CANlib` | On-the-wire CAN-FD message structs shared with [Duet3Expansion](../../../Duet3Expansion). |
+| `CANlib` | On-the-wire CAN-FD message structs shared with [Duet3Expansion](https://github.com/Duet3D/Duet3Expansion/tree/3.7-docker). |
 | `FreeRTOS` | The kernel + Duet3D's `task additions`. |
 | `LwipEthernet` | LwIP wrapper for SAME70 RMII (only built on relevant boards). |
 
@@ -98,10 +100,10 @@ A given RRF build commits to a few external interfaces:
 
 | Contract | Constant | Must match |
 |---|---|---|
-| SBC SPI protocol | `SbcProtocolVersion` (currently 7) | DSF's [`Defaults.cs`](../../../DuetSoftwareFramework/src/DuetAPI/Connection/Defaults.cs) |
+| SBC SPI protocol | `SbcProtocolVersion` (currently 7) | DSF's [`Defaults.cs`](https://github.com/Duet3D/DuetSoftwareFramework/blob/v3.7-andy/src/DuetAPI/Connection/Defaults.cs) |
 | SBC buffer size | `SbcTransferBufferSize` (8192) | DSF's `Consts.cs` |
-| CAN-FD message struct layouts | (CANlib commit) | [Duet3Expansion](../../../Duet3Expansion) build with same CANlib |
-| `M409` JSON keys | descriptor table entries | DSF [`DuetAPI/ObjectModel/`](../../../DuetSoftwareFramework/src/DuetAPI/ObjectModel) |
+| CAN-FD message struct layouts | (CANlib commit) | [Duet3Expansion](https://github.com/Duet3D/Duet3Expansion/tree/3.7-docker) build with same CANlib |
+| `M409` JSON keys | descriptor table entries | DSF [`DuetAPI/ObjectModel/`](https://github.com/Duet3D/DuetSoftwareFramework/tree/v3.7-andy/src/DuetAPI/ObjectModel) |
 | `rr_*` URL family | [HttpResponder](../../src/Networking/HttpResponder.cpp) | DWC, DWS proxy |
 | G/M/T-code numbers | [GCodes2.cpp](../../src/GCodes/GCodes2.cpp) | published wiki, slicer presets |
 
@@ -109,6 +111,6 @@ Bumping any of the first three without updating the matching repo will produce h
 
 ## 7. Where this connects to the rest of the system
 
-- See [Duet3Expansion's BUILD_VARIANTS](../../../Duet3Expansion/docs/devel/BUILD_VARIANTS.md) for the corresponding board matrix on the expansion side.
-- See [DSF Build Variants](../../../DuetSoftwareFramework/docs/devel/BUILD_VARIANTS.md) (and `pkg/`) for which `.deb` packages are produced from DSF.
-- The cross-repo version compatibility table is maintained in [DuetSoftwareFramework/docs/architecture/COMPATIBILITY.md](../../../DuetSoftwareFramework/docs/architecture/COMPATIBILITY.md).
+- See [Duet3Expansion's BUILD_VARIANTS](https://github.com/Duet3D/Duet3Expansion/blob/3.7-docker/docs/devel/BUILD_VARIANTS.md) for the corresponding board matrix on the expansion side.
+- See [DSF Build Variants](https://github.com/Duet3D/DuetSoftwareFramework/blob/v3.7-andy/docs/devel/BUILD_VARIANTS.md) (and `pkg/`) for which `.deb` packages are produced from DSF.
+- The cross-repo version compatibility table is maintained in [DuetSoftwareFramework/docs/architecture/COMPATIBILITY.md](https://github.com/Duet3D/DuetSoftwareFramework/blob/v3.7-andy/docs/architecture/COMPATIBILITY.md).

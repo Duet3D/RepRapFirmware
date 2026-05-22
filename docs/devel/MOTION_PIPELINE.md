@@ -159,4 +159,4 @@ This separation lets long planning passes (esp. with input-shaping enabled) run 
 - **Probing** (`G29`, `G30`) drives short DDAs and watches the active probe; bed-mesh data is stored in [src/Movement/BedProbing/Grid.cpp](../../src/Movement/BedProbing/Grid.cpp) and applied as a Z offset by `Move::AxisAndBedTransform`.
 - **Closed-loop drives** ([src/ClosedLoop/](../../src/ClosedLoop)) and **phase-stepping** drives ([src/Movement/PhaseStep.cpp](../../src/Movement/PhaseStep.cpp)) replace the open-loop step ISR with a current-mode loop fed by DriveMovement; the upstream pipeline is unchanged.
 - **Async moves** (`SUPPORT_ASYNC_MOVES`) use a second DDARing for the second motion system; collisions between systems are mediated by [`CollisionAvoider`](../../src/GCodes/CollisionAvoider.cpp).
-- For motion as it appears on an expansion board, see [Duet3Expansion's motion docs](../../../Duet3Expansion/docs/devel/MOTION.md).
+- For motion as it appears on an expansion board, see [Duet3Expansion's motion docs](https://github.com/Duet3D/Duet3Expansion/blob/3.7-docker/docs/devel/MOTION.md).

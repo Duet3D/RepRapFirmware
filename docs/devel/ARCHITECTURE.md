@@ -356,7 +356,7 @@ flowchart LR
     RRF --> LWIP[LwipEthernet<br/>only for LWIP boards]
 ```
 
-`CANlib` is shared verbatim with [Duet3Expansion](../../../Duet3Expansion) and contains the on-the-wire message structs. The two firmwares **must** be built from compatible CANlib versions.
+`CANlib` is shared verbatim with [Duet3Expansion](https://github.com/Duet3D/Duet3Expansion/tree/3.7-docker) and contains the on-the-wire message structs. The two firmwares **must** be built from compatible CANlib versions.
 
 ## 11. Where to go next
 
