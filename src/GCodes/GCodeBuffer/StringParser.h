@@ -101,7 +101,7 @@ private:
 	bool LineFinished() noexcept;											// Deal with receiving end-of-line and return true if we have a command
 	void InternalGetQuotedString(const StringRef& str) THROWS(GCodeException)
 		pre (readPointer >= 0; gb.buffer[readPointer] == '"'; str.IsEmpty());
-	void InternalGetPossiblyQuotedString(const StringRef& str) THROWS(GCodeException)
+	void InternalGetPossiblyQuotedString(const StringRef& str, bool stopStopAtSpace) THROWS(GCodeException)
 		pre (readPointer >= 0);
 	float ReadFloatValue() THROWS(GCodeException);
 	uint32_t ReadUIValue() THROWS(GCodeException);
