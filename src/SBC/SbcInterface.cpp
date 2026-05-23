@@ -1584,7 +1584,9 @@ void SbcInterface::ExchangeData() noexcept
 
 void SbcInterface::InvalidateResources() noexcept
 {
-	rxPointer = txPointer = txEnd = 0;
+	txEnd = 0;
+	txPointer = 0;
+	rxPointer = 0;
 	sendBufferUpdate = true;
 
 	if (fileOperation != FileOperation::none)
@@ -1813,12 +1815,14 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 							if (readPointer == txPointer && txEnd == 0)
 							{
 								// Buffer completely read, reset RX/TX pointers
-								rxPointer = txPointer = 0;
+								txPointer = 0;
+								rxPointer = 0;
 							}
 							else if (readPointer == txEnd)
 							{
 								// Read last code before overlapping, restart from the beginning
-								rxPointer = txEnd = 0;
+								txEnd = 0;
+								rxPointer = 0;
 							}
 							else
 							{
@@ -1838,7 +1842,8 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 					if (updateRxPointer)
 					{
 						// Skipped non-pending codes, restart from the beginning
-						rxPointer = txEnd = 0;
+						txEnd = 0;
+						rxPointer = 0;
 						sendBufferUpdate = true;
 					}
 
@@ -2300,14 +2305,16 @@ void SbcInterface::InvalidateBufferedCodes(GCodeChannel channel) noexcept
 				if (readPointer == txPointer && txEnd == 0)
 				{
 					// Buffer is empty again, reset the pointers
-					rxPointer = txPointer = 0;
+					txPointer = 0;
+					rxPointer = 0;
 					break;
 				}
 				else if (readPointer == txEnd)
 				{
 					// Invalidated last code before overlapping, continue from the beginning
 					readPointer = 0;
-					rxPointer = txEnd = 0;
+					txEnd = 0;
+					rxPointer = 0;
 				}
 				else
 				{

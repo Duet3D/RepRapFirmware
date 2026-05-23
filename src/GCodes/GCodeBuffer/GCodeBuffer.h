@@ -216,7 +216,7 @@ public:
 	void SetPrintFinished() noexcept;										// Mark the current print file as finished
 
 	bool RequestMacroFile(const char *_ecv_array filename, bool fromCode) noexcept;	// Request execution of a file macro
-	volatile bool IsWaitingForMacro() const noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
+	bool IsWaitingForMacro() const volatile noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
 	bool HasJustStartedMacro() const noexcept { return macroJustStarted; }	// Has this GB just started a new macro file?
 	bool IsMacroRequestPending() const noexcept { return !requestedMacroFile.IsEmpty(); }		// Indicates if a macro file is being requested
 	const char *_ecv_array GetRequestedMacroFile() const noexcept { return requestedMacroFile.c_str(); }	// Return requested macro file or nullptr if none
@@ -226,7 +226,7 @@ public:
 	bool IsMacroEmpty() const noexcept { return macroFileEmpty; }			// Return true if the opened macro file is actually empty
 
 	void MacroFileClosed() noexcept;										// Called to notify the SBC about the file being internally closed on success
-	volatile bool IsMacroFileClosed() const noexcept { return macroFileClosed; }	// Indicates if a file has been closed internally in RRF
+	bool IsMacroFileClosed() const volatile noexcept { return macroFileClosed; }	// Indicates if a file has been closed internally in RRF
 	void MacroFileClosedSent() noexcept { macroFileClosed = false; }		// Called when the SBC has been notified about the internally closed file
 
 	bool IsAbortRequested() const noexcept { return abortFile; }			// Is the cancellation of the current file requested?

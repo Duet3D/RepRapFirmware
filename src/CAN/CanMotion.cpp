@@ -79,7 +79,8 @@ void CanMotion::StartMovement() noexcept
 	// Free up any stop list items left over from the previous move
 	MutexLocker lock(stopListMutex);
 
-	revertAll = revertedAll = false;
+	revertedAll = false;
+	revertAll = false;
 	for (;;)
 	{
 		DriversStopList *_ecv_null p = stopList;

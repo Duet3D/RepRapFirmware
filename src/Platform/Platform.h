@@ -660,8 +660,8 @@ private:
 	volatile uint16_t currentVin, highestVin, lowestVin;
 	uint16_t lastVinUnderVoltageValue, lastVinOverVoltageValue;
 	uint16_t autoPauseReading, autoResumeReading;
-	uint32_t numVinUnderVoltageEvents, previousVinUnderVoltageEvents;
-	volatile uint32_t numVinOverVoltageEvents, previousVinOverVoltageEvents;
+	std::atomic<uint32_t> numVinUnderVoltageEvents, numVinOverVoltageEvents;
+	uint32_t previousVinUnderVoltageEvents, previousVinOverVoltageEvents;
 
 #ifdef DUET3_MB6HC
 	float powerMonitorVoltageRange;
@@ -687,7 +687,8 @@ private:
 	AnalogChannelNumber v12MonitorAdcChannel;
 	volatile uint16_t currentV12, highestV12, lowestV12;
 	uint16_t lastV12UnderVoltageValue;
-	uint32_t numV12UnderVoltageEvents, previousV12UnderVoltageEvents;
+	std::atomic<uint32_t> numV12UnderVoltageEvents;
+	uint32_t previousV12UnderVoltageEvents;
 #endif
 
 	// Event handling

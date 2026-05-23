@@ -31,7 +31,7 @@ namespace DuetExpansion
 	static bool additionalIoExpanderPresent = false;
 	static uint16_t additionalIoInputBits = 0;
 
-	static volatile uint32_t dueXnReadCount = 0;
+	static std::atomic<uint32_t> dueXnReadCount = 0;
 	static uint32_t dueXnReadCountResetMillis = 0;
 	static volatile bool taskWaiting = false;
 

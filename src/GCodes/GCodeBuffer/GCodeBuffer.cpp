@@ -138,7 +138,8 @@ void GCodeBuffer::Reset() noexcept
 #if HAS_SBC_INTERFACE
 	isBinaryBuffer = false;
 	requestedMacroFile.Clear();
-	isWaitingForMacro = macroFileClosed = false;
+	macroFileClosed = false;
+	isWaitingForMacro = false;
 	macroJustStarted = macroFileError = macroFileEmpty = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
 	machineState->lastCodeFromSbc = machineState->macroStartedByCode = false;
 #endif

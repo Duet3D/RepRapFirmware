@@ -652,7 +652,8 @@ void Platform::Init() noexcept
 	v12MonitorAdcChannel = PinToAdcChannel(PowerMonitorV12DetectPin);
 	SetPinMode(PowerMonitorV12DetectPin, AIN);
 	AnalogInEnableChannel(v12MonitorAdcChannel, true);
-	currentV12 = highestV12 = 0;
+	currentV12 = 0;
+	highestV12 = 0;
 	lowestV12 = 9999;
 	numV12UnderVoltageEvents = previousV12UnderVoltageEvents = 0;
 #endif
@@ -675,7 +676,8 @@ void Platform::ResetVoltageMonitors() noexcept
 	highestVin = currentVin;
 
 #if HAS_12V_MONITOR
-	lowestV12 = highestV12 = currentV12;
+	lowestV12 = currentV12;
+	highestV12 = currentV12;
 #endif
 
 	reprap.BoardsUpdated();
@@ -981,13 +983,13 @@ void Platform::Spin() noexcept
 			if (numVinOverVoltageEvents != previousVinOverVoltageEvents)
 			{
 				MessageF(WarningMessage, "VIN over-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastVinOverVoltageValue));
-				previousVinOverVoltageEvents = numVinOverVoltageEvents;
+				previousVinOverVoltageEvents = numVinOverVoltageEvents.load();
 				reported = true;
 			}
 			if (numVinUnderVoltageEvents != previousVinUnderVoltageEvents)
 			{
 				MessageF(WarningMessage, "VIN under-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastVinUnderVoltageValue));
-				previousVinUnderVoltageEvents = numVinUnderVoltageEvents;
+				previousVinUnderVoltageEvents = numVinUnderVoltageEvents.load();
 				reported = true;
 			}
 #endif
@@ -1388,21 +1390,20 @@ void Platform::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 			reprap.BoardsUpdated();
 # endif
 		}
-
 #endif
 
 #if HAS_VOLTAGE_MONITOR
 		// Show the supply voltage
 		reply.lcatf("Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 ", over voltage events: %" PRIu32 ", power good: %s",
 			(double)AdcReadingToPowerVoltage(lowestVin), (double)AdcReadingToPowerVoltage(currentVin), (double)AdcReadingToPowerVoltage(highestVin),
-					numVinUnderVoltageEvents, numVinOverVoltageEvents,
+					numVinUnderVoltageEvents.load(), numVinOverVoltageEvents.load(),
 					(HasDriverPower()) ? "yes" : "no");
 #endif
 
 #if HAS_12V_MONITOR
 		// Show the 12V rail voltage
 		reply.lcatf("12V rail voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32,
-			(double)AdcReadingToV12Voltage(lowestV12), (double)AdcReadingToV12Voltage(currentV12), (double)AdcReadingToV12Voltage(highestV12), numV12UnderVoltageEvents);
+			(double)AdcReadingToV12Voltage(lowestV12), (double)AdcReadingToV12Voltage(currentV12), (double)AdcReadingToV12Voltage(highestV12), numV12UnderVoltageEvents.load());
 #endif
 		ResetVoltageMonitors();
 		break;

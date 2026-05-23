@@ -86,7 +86,7 @@ private:
 	uint32_t burstModeWindow, burstModeDelay;					// configurable burst mode timing
 	uint32_t burstModeStartTime;								// millis() when burst mode was last (re)activated, 0 = inactive
 	std::atomic<bool> delaying;
-	volatile uint32_t numEvents;
+	std::atomic<uint32_t> numEvents;
 
 	GCodeFileInfo fileInfo;
 	FilePosition pauseFilePosition, pauseFilePosition2;

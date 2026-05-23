@@ -108,7 +108,7 @@ static xdmac_channel_config_t xdmac_tx_cfg, xdmac_rx_cfg;
 
 volatile bool dataReceived = false;		// warning: on the SAME5x this just means the transfer has started, not necessarily that it has ended!
 volatile bool transferReadyHigh = false;
-volatile unsigned int spiTxUnderruns = 0, spiRxOverruns = 0;
+std::atomic<unsigned int> spiTxUnderruns = 0, spiRxOverruns = 0;
 
 static void spi_dma_disable() noexcept
 {
@@ -585,7 +585,7 @@ void DataTransfer::Diagnostics(const StringRef& reply) noexcept
 		reply.lcat("Connected over SPI");
 		reply.lcatf("Transfer state: %d, failed transfers: %u, checksum errors: %u", (int)state, failedTransfers, checksumErrors);
 		reply.lcatf("RX/TX seq numbers: %d/%d", (int)rxHeader.sequenceNumber, (int)txHeader.sequenceNumber);
-		reply.lcatf("SPI underruns %u, overruns %u", spiTxUnderruns, spiRxOverruns);
+		reply.lcatf("SPI underruns %u, overruns %u", spiTxUnderruns.load(), spiRxOverruns.load());
 	}
 }
 

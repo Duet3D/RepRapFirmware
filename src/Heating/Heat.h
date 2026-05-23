@@ -184,7 +184,7 @@ private:
 
 	static ReadWriteLock heatersLock;
 
-	uint8_t volatile sensorCount;
+	std::atomic<uint8_t> sensorCount;
 	TemperatureSensor *_ecv_from _ecv_null volatile sensorsRoot;	// The sensor list
 
 	Heater *_ecv_from heaters[MaxHeaters];						// Each element is a local or remote heater

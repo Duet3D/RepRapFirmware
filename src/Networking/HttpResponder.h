@@ -133,7 +133,7 @@ private:
 	static unsigned int clientsServed;
 
 	// Responses from GCodes class
-	static volatile uint16_t seq;					// Sequence number for G-Code replies
+	static std::atomic<uint16_t> seq;				// Sequence number for G-Code replies
 	static volatile OutputStack gcodeReply;
 	static Mutex gcodeReplyMutex;
 };
