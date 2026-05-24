@@ -120,7 +120,7 @@ FMDC_V03_CFLAGS := -c -std=gnu99 \
 	$(DEBUG_FLAGS)
 
 # Compiler flags - C++
-FMDC_V03_CXXFLAGS := -c -std=gnu++17 \
+FMDC_V03_CXXFLAGS := -c -std=c++20 \
 	-Wall \
 	-mcpu=cortex-m4 \
 	-mthumb \
