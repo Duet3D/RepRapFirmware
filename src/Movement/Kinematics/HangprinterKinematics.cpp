@@ -241,85 +241,29 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 	}
 	else if (mCode == 666)
 	{
-		bool seen = false;
-		bool anyParamSeen = false;
-		bool geometryChanged = false;
+		bool geometryParamSeen = false;
 		bool seenFlexParam = false;
 		// 0=None, 1=last-top, 2=all-top, 3-half-top, etc
 		uint32_t unsignedAnchorMode = (uint32_t)anchorMode;
-		if (gb.TryGetUIValue('A', unsignedAnchorMode, seen))
+		if (gb.TryGetUIValue('A', unsignedAnchorMode, geometryParamSeen))
 		{
-			anyParamSeen = true;
-			geometryChanged = true;
 			if (unsignedAnchorMode <= (uint32_t)HangprinterAnchorMode::AllOnTop) {
 				anchorMode = (HangprinterAnchorMode)unsignedAnchorMode;
 			}
 		}
-		if (gb.TryGetFValue('Q', spoolBuildupFactor, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
-		if (gb.TryGetFloatArray('R', numAnchors, spoolRadii, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
-		if (gb.TryGetUIArray('U', numAnchors, mechanicalAdvantage, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
-		if (gb.TryGetUIArray('O', numAnchors, linesPerSpool, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
-		if (gb.TryGetUIArray('L', numAnchors, motorGearTeeth, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
-		if (gb.TryGetUIArray('H', numAnchors, spoolGearTeeth, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
-		if (gb.TryGetUIArray('J', numAnchors, fullStepsPerMotorRev, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
-		if (gb.TryGetFValue('W', moverWeight_kg, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
-		if (gb.TryGetFValue('S', springKPerUnitLength, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
-		if (gb.TryGetFloatArray('I', numAnchors, minForce_Newton, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
-		if (gb.TryGetFloatArray('X', numAnchors, maxForce_Newton, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
-		if (gb.TryGetFloatArray('Y', numAnchors, guyWireLengths, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
-		if (gb.TryGetFloatArray('C', numAnchors, torqueConstants, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
+		gb.TryGetFValue('Q', spoolBuildupFactor, geometryParamSeen);
+		gb.TryGetFloatArray('R', numAnchors, spoolRadii, geometryParamSeen);
+		gb.TryGetUIArray('U', numAnchors, mechanicalAdvantage, geometryParamSeen);
+		gb.TryGetUIArray('O', numAnchors, linesPerSpool, geometryParamSeen);
+		gb.TryGetUIArray('L', numAnchors, motorGearTeeth, geometryParamSeen);
+		gb.TryGetUIArray('H', numAnchors, spoolGearTeeth, geometryParamSeen);
+		gb.TryGetUIArray('J', numAnchors, fullStepsPerMotorRev, geometryParamSeen);
+		gb.TryGetFValue('W', moverWeight_kg, geometryParamSeen);
+		gb.TryGetFValue('S', springKPerUnitLength, geometryParamSeen);
+		gb.TryGetFloatArray('I', numAnchors, minForce_Newton, geometryParamSeen);
+		gb.TryGetFloatArray('X', numAnchors, maxForce_Newton, geometryParamSeen);
+		gb.TryGetFloatArray('Y', numAnchors, guyWireLengths, geometryParamSeen);
+		gb.TryGetFloatArray('C', numAnchors, torqueConstants, geometryParamSeen);
 		int32_t flexCommand = 0;
 		if (gb.TryGetIValue('F', flexCommand, seenFlexParam))
 		{
@@ -346,24 +290,16 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			}
 			if (validFlex)
 			{
-				anyParamSeen = true;
+				seenFlexParam = true;
 			}
 			else
 			{
 				seenFlexParam = false;
 			}
 		}
-		if (gb.TryGetBValue('B', ignoreGravity, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
-		if (gb.TryGetBValue('P', ignorePretension, seen))
-		{
-			anyParamSeen = true;
-			geometryChanged = true;
-		}
-		if (anyParamSeen)
+		gb.TryGetBValue('B', ignoreGravity, geometryParamSeen);
+		gb.TryGetBValue('P', ignorePretension, geometryParamSeen);
+		if (geometryParamSeen || seenFlexParam)
 		{
 			Recalc();
 		}
@@ -435,7 +371,7 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			const uint32_t flexValue = flexEnabled ? ((flexAlgorithm == FlexAlgorithm::Tikhonov) ? 2u : 1u) : 0u;
 			reply.lcatf("F%u B%u P%u", static_cast<unsigned int>(flexValue), ignoreGravity ? 1u : 0u, ignorePretension ? 1u : 0u);
 		}
-		requiresRehome = geometryChanged;
+		requiresRehome = geometryParamSeen;
 	}
 	else
 	{
@@ -1187,58 +1123,15 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 #if DUAL_CAN
 namespace
 {
-static bool GetHardcodedDriverDirectionForwards(DriverId const driver, bool& forwards) noexcept
-{
-	if (!driver.IsRemote())
-	{
-		forwards = true;
-		return true;
-	}
-
-	// Old Hangprinter/ODrive hard-coded direction convention:
-	// boards 40,41 were treated as "forwards";
-	// boards 42,43 were treated as reversed.
-	switch (driver.boardAddress)
-	{
-	case 40:
-	case 41:
-		forwards = true;
-		return true;
-
-	case 42:
-	case 43:
-		forwards = false;
-		return true;
-
-	default:
-		// For newer/extra ODrive board addresses, preserve a harmless default.
-		// Callers still validate boardAddress range separately.
-		forwards = true;
-		return true;
-	}
-}
-
 bool TryGetDriverDirectionForwards(DriverId driver, bool& forwards) noexcept
 {
-	if (driver.IsLocal())
+	const Move& move = reprap.GetMove();
+	if (driver.IsLocal() && driver.localDriver >= move.GetNumActualDirectDrivers())
 	{
-		const Move& move = reprap.GetMove();
-		if (driver.localDriver < move.GetNumActualDirectDrivers())
-		{
-			forwards = move.GetDirectionValue(driver.localDriver);
-			return true;
-		}
 		return false;
 	}
-
-#if SUPPORT_CAN_EXPANSION && defined(RRF_HOST_BUILD) && RRF_HOST_BUILD
-	if (driver.IsRemote())
-	{
-		forwards = reprap.GetExpansion().GetDriverDirection(driver);
-		return true;
-  }
-#endif
-	return GetHardcodedDriverDirectionForwards(driver, forwards);
+	forwards = move.GetDirectionValue(driver);
+	return true;
 }
 }
 #endif // DUAL_CAN
