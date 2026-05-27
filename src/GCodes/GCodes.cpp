@@ -1040,6 +1040,15 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 		return false;
 	}
 
+#if HAS_SBC_INTERFACE
+	// Collect each motion system's pause file offset so the SBC gets one notification carrying both
+	FilePosition pausePositions[NumMovementSystems];
+	for (size_t i = 0; i < NumMovementSystems; ++i)
+	{
+		pausePositions[i] = noFilePosition;
+	}
+#endif
+
 	for (MovementState& ms : moveStates)
 	{
 		ms.pausedInMacro = false;
@@ -1138,12 +1147,9 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 		ms.GetPauseRestorePoint().fanSpeed = ms.virtualFanSpeed;
 
 #if HAS_SBC_INTERFACE
-		if (reprap.UsingSbcInterface() && ms.GetNumber() == 0)
-		{
-			// Prepare notification for the SBC
-			// FIXME This should pass the file position of the first and second file, or noFilePosition if not applicable
-			reprap.GetSbcInterface().SetPauseReason(ms.GetPauseRestorePoint().filePos, noFilePosition, reason);
-		}
+		// Capture the per-MS pause offset before the noFilePosition normalization below so the SBC sees
+		// the real "unknown" marker (noFilePosition) rather than a fabricated zero
+		pausePositions[ms.GetNumber()] = ms.GetPauseRestorePoint().filePos;
 #endif
 
 		if (ms.GetPauseRestorePoint().filePos == noFilePosition)
@@ -1152,6 +1158,13 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 			ms.GetPauseRestorePoint().filePos = 0;
 		}
 	}
+
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		reprap.GetSbcInterface().SetPauseReason(pausePositions[0], (NumMovementSystems > 1) ? pausePositions[1] : noFilePosition, reason);
+	}
+#endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	if (!IsSimulating())
