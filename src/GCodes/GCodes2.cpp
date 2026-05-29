@@ -2918,10 +2918,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-			case 301: // Set/report hot end PID values
-				result = reprap.GetHeat().SetPidParameters(1, gb, reply);
-				break;
-
 			case 302: // Allow, deny or report cold extrudes and configure minimum extrusion/retraction temps
 				{
 					bool seen = false;
@@ -2969,10 +2965,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 303: // Run PID tuning
 				result = reprap.GetHeat().TuneHeater(gb, reply);
-				break;
-
-			case 304: // Set/report heated bed PID values
-				result = reprap.GetHeat().SetPidParameters(0, gb, reply);
 				break;
 
 			case 305: // Set/report specific heater parameters
