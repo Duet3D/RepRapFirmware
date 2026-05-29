@@ -749,8 +749,7 @@ void LwipEthernetInterface::Spin() noexcept
 	case NetworkState::obtainingIP:
 		if (ethernet_link_established())
 		{
-			// Check for incoming packets and pending timers
-			ethernet_task();
+			// Service pending lwIP timers
 			sys_check_timeouts();
 
 			// Have we obtained an IP address yet?
@@ -783,8 +782,7 @@ void LwipEthernetInterface::Spin() noexcept
 		// Check that the link is still up
 		if (ethernet_link_established())
 		{
-			// Check for incoming packets and pending timers
-			ethernet_task();
+			// Service pending lwIP timers
 			sys_check_timeouts();
 
 #if HAS_CLIENTS

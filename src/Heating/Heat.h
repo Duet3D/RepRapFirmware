@@ -124,6 +124,7 @@ public:
 	float GetHeaterTemperature(int heater) const noexcept;				// Get the current temperature of a heater
 	HeaterStatus GetStatus(int heater) const noexcept;					// Get the off/standby/active status
 	bool HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance, bool waitOnFault) const noexcept;
+	bool IsTuningHeater() const noexcept { return heaterBeingTuned != -1; }	// Is a heater being auto-tuned?
 
 	GCodeResult ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
