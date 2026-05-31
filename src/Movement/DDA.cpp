@@ -236,6 +236,12 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	// The call to CartesianToMotorSteps may adjust the invisible axis endpoints for architectures such as CoreXYU and delta with >3 towers, so set them up here.
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
+	const int32_t * const positionNow = prev->DriveCoordinates();
+	for (size_t axis = numVisibleAxes; axis < numTotalAxes; ++axis)
+	{
+		endPoint[axis] = positionNow[axis];
+	}
+
 	const Move& move = reprap.GetMove();
 
 	// 1. Compute the new endpoints and the movement vector
