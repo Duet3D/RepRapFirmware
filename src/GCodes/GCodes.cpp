@@ -1886,9 +1886,10 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSys
 }
 
 // Save (some of) the state of the machine for recovery in the future.
-bool GCodes::Push(GCodeBuffer& gb, bool withinSameFile) noexcept
+// If the passed filename is non-null then we are executing a new macro. If is is null then we are saving the state but staying in the same file.
+bool GCodes::Push(GCodeBuffer& gb, const char *_ecv_array _ecv_null fileName) noexcept
 {
-	const bool ok = gb.PushState(withinSameFile);
+	const bool ok = gb.PushState(fileName);
 	if (!ok)
 	{
 		platform.MessageF(ErrorMessage, "Push(): stack overflow on %s\n", gb.GetChannel().ToString());
@@ -3447,7 +3448,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char *_ecv_array fileName, bool 
 			return false;
 		}
 
-		if (!Push(gb, false))
+		if (!Push(gb, fileName))
 		{
 			gb.AbortFile(false);
 			return true;
@@ -3474,7 +3475,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char *_ecv_array fileName, bool 
 			return false;
 		}
 
-		if (!Push(gb, false))
+		if (!Push(gb, fileName))
 		{
 			f->Close();
 			return true;

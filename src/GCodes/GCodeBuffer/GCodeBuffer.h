@@ -191,7 +191,7 @@ public:
 	float ConvertSpeed(float speed, bool convertInches) const noexcept;
 	const char *_ecv_array GetDistanceUnits() const noexcept;
 	unsigned int GetStackDepth() const noexcept;
-	bool PushState(bool withinSameFile) noexcept;							// Push state returning true if successful (i.e. stack not overflowed)
+	bool PushState(const char *_ecv_array _ecv_null fileName) noexcept;		// Push state returning true if successful (i.e. stack not overflowed)
 	bool PopState(bool withinSameFile) noexcept;							// Pop state returning true if successful (i.e. no stack underrun)
 
 	void AbortFile(bool abortAll) noexcept;

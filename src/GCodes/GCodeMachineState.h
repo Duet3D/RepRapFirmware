@@ -209,7 +209,7 @@ public:
 	DECLARE_FREELIST_NEW_DELETE(GCodeMachineState)
 
 	GCodeMachineState() noexcept;
-	GCodeMachineState(GCodeMachineState& prev, bool withinSameFile) noexcept;	// this chains the new one to the previous one
+	GCodeMachineState(GCodeMachineState& prev, const char *_ecv_array _ecv_null fileName) noexcept;		// this chains the new one to the previous one
 #if SUPPORT_ASYNC_MOVES
 	GCodeMachineState(GCodeMachineState& copyFrom, GCodeMachineState *prev, unsigned int oldExecuteQueue, unsigned int newExecuteQueue) noexcept;
 #endif

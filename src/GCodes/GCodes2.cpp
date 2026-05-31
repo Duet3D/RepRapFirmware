@@ -2202,7 +2202,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 120:
-				Push(gb, true);
+				Push(gb, nullptr);
 				break;
 
 			case 121:

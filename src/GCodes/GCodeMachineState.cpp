@@ -37,7 +37,7 @@ GCodeMachineState::GCodeMachineState() noexcept
 }
 
 // Copy constructor. This chains the new one to the previous one.
-GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFile) noexcept
+GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, const char *_ecv_array _ecv_null fileName) noexcept
 	: feedRate(prev.feedRate),
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	  fileState(prev.fileState),
@@ -46,24 +46,24 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 	  fileId(prev.fileId),
 #endif
 	  lockedResources(prev.lockedResources),
-	  lineNumber((withinSameFile) ? prev.lineNumber : 0),
+	  lineNumber((fileName == nullptr) ? prev.lineNumber : 0),
 	  selectedPlane(prev.selectedPlane), drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
 	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501), runningM502(prev.runningM502),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(prev.runningSystemMacro), usingInches(prev.usingInches),
-	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(withinSameFile), firstCommandAfterRestart(prev.firstCommandAfterRestart), commandRepeated(false),
-	  inverseTimeMode(withinSameFile && prev.inverseTimeMode),
+	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(fileName == nullptr), firstCommandAfterRestart(prev.firstCommandAfterRestart), commandRepeated(false),
+	  inverseTimeMode(fileName == nullptr && prev.inverseTimeMode),
 #if HAS_SBC_INTERFACE
 	  lastCodeFromSbc(prev.lastCodeFromSbc), macroStartedByCode(prev.macroStartedByCode), fileFinished(prev.fileFinished),
 #endif
 	  compatibility(prev.compatibility),
 	  previous(&prev), currentBlockState(new BlockState(nullptr)),
-	  blockNesting((withinSameFile) ? prev.blockNesting : 0u),
+	  blockNesting((fileName == nullptr) ? prev.blockNesting : 0u),
 	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
 #if SUPPORT_ASYNC_MOVES
 	  , commandedQueueNumber(prev.commandedQueueNumber), ownQueueNumber(prev.ownQueueNumber), executeAllCommands(prev.executeAllCommands)
 #endif
 {
-	if (withinSameFile)
+	if (localPush)
 	{
 		// Copy the block states from the previous MachineState to the new one
 		const BlockState *src = prev.currentBlockState;

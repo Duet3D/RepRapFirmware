@@ -1036,7 +1036,7 @@ unsigned int GCodeBuffer::GetStackDepth() const noexcept
 }
 
 // Push state returning true if successful (i.e. stack not overflowed)
-bool GCodeBuffer::PushState(bool withinSameFile) noexcept
+bool GCodeBuffer::PushState(const char *_ecv_array _ecv_null fileName) noexcept
 {
 	// Check the current stack depth
 	if (GetStackDepth() >= MaxStackDepth)
@@ -1044,7 +1044,7 @@ bool GCodeBuffer::PushState(bool withinSameFile) noexcept
 		return false;
 	}
 
-	machineState = new GCodeMachineState(*machineState, withinSameFile);
+	machineState = new GCodeMachineState(*machineState, fileName);
 	reprap.InputsUpdated();
 	return true;
 }
