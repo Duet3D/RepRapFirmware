@@ -849,7 +849,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							const uint32_t rpm = gb.GetUIValue();
 							if (ms.currentTool != nullptr && ms.currentTool->GetSpindleNumber() == (int)slot)
 							{
-								ms.currentTool->SetSpindleRpm(rpm, true);
+								ms.currentTool->SetSpindleRpm(gb, rpm, true);
 							}
 							else
 							{

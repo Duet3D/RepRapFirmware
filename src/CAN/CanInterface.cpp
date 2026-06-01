@@ -447,7 +447,7 @@ CanMessageBuffer *CanInterface::AllocateBuffer(const GCodeBuffer *_ecv_null gb) 
 	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		throw GCodeException((gb == nullptr) ? -1 : gb->GetLineNumber(), -1, NoCanBufferMessage);
+		throw GCodeException(gb, -1, NoCanBufferMessage);
 	}
 	return _ecv_not_null(buf);
 }

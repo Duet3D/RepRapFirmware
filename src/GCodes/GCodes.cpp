@@ -3876,7 +3876,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 				settingOther = true;
 				if (!IsSimulating())
 				{
-					tool->SetSpindleRpm(gb.GetUIValue(), GetMovementState(gb).currentTool == tool.Ptr());
+					tool->SetSpindleRpm(gb, gb.GetUIValue(), GetMovementState(gb).currentTool == tool.Ptr());
 				}
 			}
 		}

@@ -82,6 +82,7 @@ public:
 	bool ContainsExpression() const noexcept;
 	void GetCompleteParameters(const StringRef& str) THROWS(GCodeException);		// Get all of the line following the command. Currently called only for the Q0 command.
 	int32_t GetLineNumber() const noexcept { return CurrentFileMachineState().lineNumber; }
+	const AutoStringHandle& GetFileName() const noexcept { return CurrentFileMachineState().fname; }
 	bool HadExplicitLineNumber() const noexcept { return hadExplicitLineNumber; }
 	uint32_t GetExplicitLineNumber() const noexcept { return receivedLineNumber; }
 	void SetExplicitLineNumber(uint32_t ln) noexcept;
