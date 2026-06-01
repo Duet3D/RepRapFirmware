@@ -14,6 +14,8 @@
 
 #include <Stream.h>
 
+class SerialCDC;
+
 const size_t GCodeInputBufferSize = 256;						// How many bytes can we cache per input source? Make this a power of 2 for efficiency
 
 // This base class provides incoming G-codes for the GCodeBuffer class
@@ -97,13 +99,13 @@ protected:
 class BufferedStreamGCodeInput : public RegularGCodeInput
 {
 public:
-	BufferedStreamGCodeInput(Stream &_ecv_from dev, MessageType mt) noexcept : RegularGCodeInput(mt), device(dev) { }
+	BufferedStreamGCodeInput(SerialCDC &_ecv_from dev, MessageType mt) noexcept : RegularGCodeInput(mt), device(dev) { }
 
 	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
 	void Spin() noexcept;										// Read from the device into the buffer and check for urgent commands
 
 private:
-	Stream &_ecv_from device;
+	SerialCDC &_ecv_from device;
 };
 
 enum class GCodeInputReadResult : uint8_t { haveData, noData, error };
