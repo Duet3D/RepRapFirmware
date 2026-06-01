@@ -148,7 +148,7 @@ MessageType GCodes::GetMessageBoxDevice(GCodeBuffer& gb) const noexcept
 
 void GCodes::DoManualProbe(GCodeBuffer& gb, const char *_ecv_array message, const char *_ecv_array title, const AxesBitmap axes) noexcept
 {
-	if (Push(gb, nullptr))												// stack the machine state including the file position and set the state to GCodeState::normal
+	if (Push(gb, true))													// stack the machine state including the file position and set the state to GCodeState::normal
 	{
 		const MessageType mt = GetMessageBoxDevice(gb);
 		const uint32_t seq = reprap.SendAlert(mt, message, title, 2, 0.0, axes);

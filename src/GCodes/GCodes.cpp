@@ -1887,9 +1887,9 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSys
 
 // Save (some of) the state of the machine for recovery in the future.
 // If the passed filename is non-null then we are executing a new macro. If is is null then we are saving the state but staying in the same file.
-bool GCodes::Push(GCodeBuffer& gb, const char *_ecv_array _ecv_null fileName) noexcept
+bool GCodes::Push(GCodeBuffer& gb, bool withinSameFile) noexcept
 {
-	const bool ok = gb.PushState(fileName);
+	const bool ok = gb.PushState(withinSameFile);
 	if (!ok)
 	{
 		platform.MessageF(ErrorMessage, "Push(): stack overflow on %s\n", gb.GetChannel().ToString());
@@ -3448,13 +3448,13 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char *_ecv_array fileName, bool 
 			return false;
 		}
 
-		if (!Push(gb, fileName))
+		if (!Push(gb, false))
 		{
 			gb.AbortFile(false);
 			return true;
 		}
 		gb.GetVariables().AssignFrom(initialVariables);
-		gb.StartNewFile();
+		gb.StartNewFile(fileName);
 		if (gb.IsMacroEmpty())
 		{
 			gb.SetFileFinished();
@@ -3475,14 +3475,14 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char *_ecv_array fileName, bool 
 			return false;
 		}
 
-		if (!Push(gb, fileName))
+		if (!Push(gb, false))
 		{
 			f->Close();
 			return true;
 		}
 		gb.GetVariables().AssignFrom(initialVariables);
 		gb.LatestMachineState().fileState.Set(f);
-		gb.StartNewFile();
+		gb.StartNewFile(fileName);
 		gb.GetFileInput()->Reset(gb.LatestMachineState().fileState);
 #else
 		if (reportMissing)
@@ -3728,12 +3728,10 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 #endif
 	}
 
-	FileGCode()->StartNewFile();
-
 	reprap.GetPrintMonitor().StartedPrint();
-	platform.MessageF(LogWarn,
-						(IsSimulating()) ? "Started simulating printing file %s\n" : "Started printing file %s\n",
-							reprap.GetPrintMonitor().GetPrintingFilename());
+	const char *_ecv_array _ecv_null const printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
+	FileGCode()->StartNewFile(printingFilename);
+	platform.MessageF(LogWarn, (IsSimulating()) ? "Started simulating printing file %s\n" : "Started printing file %s\n", printingFilename);
 	if (fromStart)
 	{
 		DoFileMacro(*FileGCode(), START_G, false, AsyncSystemMacroCode);		// get fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context

@@ -57,6 +57,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 #endif
 	{ "axesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->axesRelative),							ObjectModelEntryFlags::none },
 	{ "compatibility",		OBJECT_MODEL_FUNC(self->machineState->compatibility.ToString()),					ObjectModelEntryFlags::none },
+	{ "currentFile",		OBJECT_MODEL_FUNC(self->machineState->fname),										ObjectModelEntryFlags::liveNotPanelDue },
 	{ "distanceUnit",		OBJECT_MODEL_FUNC(self->GetDistanceUnits()),										ObjectModelEntryFlags::none },
 	{ "drivesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->drivesRelative),						ObjectModelEntryFlags::none },
 	{ "feedRate",			OBJECT_MODEL_FUNC(self->machineState->feedRate, 1),									ObjectModelEntryFlags::liveNotPanelDue },
@@ -77,7 +78,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "volumetric",			OBJECT_MODEL_FUNC((bool)self->machineState->volumetricExtrusion),					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 16 };
+constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 17 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GCodeBuffer)
 
@@ -335,8 +336,9 @@ void GCodeBuffer::PutAndDecode(const char *_ecv_array str) noexcept
 	stringParser.PutAndDecode(str);
 }
 
-void GCodeBuffer::StartNewFile() noexcept
+void GCodeBuffer::StartNewFile(const char *_ecv_array filename) noexcept
 {
+	machineState->fname.Assign(filename);
 #if HAS_SBC_INTERFACE
 	machineState->SetFileExecuting();
 #endif
@@ -1036,7 +1038,7 @@ unsigned int GCodeBuffer::GetStackDepth() const noexcept
 }
 
 // Push state returning true if successful (i.e. stack not overflowed)
-bool GCodeBuffer::PushState(const char *_ecv_array _ecv_null fileName) noexcept
+bool GCodeBuffer::PushState(bool withinSameFile) noexcept
 {
 	// Check the current stack depth
 	if (GetStackDepth() >= MaxStackDepth)
@@ -1044,7 +1046,7 @@ bool GCodeBuffer::PushState(const char *_ecv_array _ecv_null fileName) noexcept
 		return false;
 	}
 
-	machineState = new GCodeMachineState(*machineState, fileName);
+	machineState = new GCodeMachineState(*machineState, withinSameFile);
 	reprap.InputsUpdated();
 	return true;
 }
@@ -1120,6 +1122,7 @@ void GCodeBuffer::ClosePrintFile() noexcept
 				if (ms->fileId == printFileId)
 				{
 					ms->fileId = NoFileId;
+					ms->fname.Assign(nullptr);
 				}
 			}
 		}
@@ -1129,10 +1132,17 @@ void GCodeBuffer::ClosePrintFile() noexcept
 	{
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		FileData& fileBeingPrinted = OriginalMachineState().fileState;
-		GetFileInput()->Reset(fileBeingPrinted);
 		if (fileBeingPrinted.IsLive())
 		{
-			fileBeingPrinted.Close();
+			GetFileInput()->Reset(fileBeingPrinted);
+			for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+			{
+				if (ms->fileState == fileBeingPrinted)
+				{
+					ms->fileState.Close();
+					ms->fname.Assign(nullptr);
+				}
+			}
 		}
 #endif
 	}

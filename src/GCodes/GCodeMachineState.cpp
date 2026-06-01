@@ -37,7 +37,7 @@ GCodeMachineState::GCodeMachineState() noexcept
 }
 
 // Copy constructor. This chains the new one to the previous one.
-GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, const char *_ecv_array _ecv_null fileName) noexcept
+GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFile) noexcept
 	: feedRate(prev.feedRate),
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	  fileState(prev.fileState),
@@ -45,25 +45,28 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, const char *_ecv_a
 #if HAS_SBC_INTERFACE
 	  fileId(prev.fileId),
 #endif
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
+	  fname(prev.fname),
+#endif
 	  lockedResources(prev.lockedResources),
-	  lineNumber((fileName == nullptr) ? prev.lineNumber : 0),
+	  lineNumber((withinSameFile) ? prev.lineNumber : 0),
 	  selectedPlane(prev.selectedPlane), drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
 	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501), runningM502(prev.runningM502),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(prev.runningSystemMacro), usingInches(prev.usingInches),
-	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(fileName == nullptr), firstCommandAfterRestart(prev.firstCommandAfterRestart), commandRepeated(false),
-	  inverseTimeMode(fileName == nullptr && prev.inverseTimeMode),
+	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(withinSameFile), firstCommandAfterRestart(prev.firstCommandAfterRestart), commandRepeated(false),
+	  inverseTimeMode(withinSameFile && prev.inverseTimeMode),
 #if HAS_SBC_INTERFACE
 	  lastCodeFromSbc(prev.lastCodeFromSbc), macroStartedByCode(prev.macroStartedByCode), fileFinished(prev.fileFinished),
 #endif
 	  compatibility(prev.compatibility),
 	  previous(&prev), currentBlockState(new BlockState(nullptr)),
-	  blockNesting((fileName == nullptr) ? prev.blockNesting : 0u),
+	  blockNesting((withinSameFile) ? prev.blockNesting : 0u),
 	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
 #if SUPPORT_ASYNC_MOVES
 	  , commandedQueueNumber(prev.commandedQueueNumber), ownQueueNumber(prev.ownQueueNumber), executeAllCommands(prev.executeAllCommands)
 #endif
 {
-	if (localPush)
+	if (withinSameFile)
 	{
 		// Copy the block states from the previous MachineState to the new one
 		const BlockState *src = prev.currentBlockState;
@@ -98,6 +101,9 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& copyFrom, GCodeMachineSt
 #endif
 #if HAS_SBC_INTERFACE
 	  fileId(copyFrom.fileId),
+#endif
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
+	  fname(copyFrom.fname),
 #endif
 	  lockedResources(copyFrom.lockedResources),
 	  lineNumber(copyFrom.lineNumber),
@@ -233,6 +239,7 @@ void GCodeMachineState::CloseFile() noexcept
 				{
 					ms->fileId = NoFileId;
 					ms->fileFinished = false;
+					ms->fname.Assign(nullptr);
 				}
 			}
 		}
@@ -241,7 +248,18 @@ void GCodeMachineState::CloseFile() noexcept
 #endif
 	{
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-		fileState.Close();
+		if (fileState.IsLive())
+		{
+			const FileData currentFile(fileState);					// take a copy because we are about to close it
+			for (GCodeMachineState *ms = this; ms != nullptr; ms = ms->GetPrevious())
+			{
+				if (ms->fileState == currentFile)
+				{
+					ms->fileState.Close();
+					ms->fname.Assign(nullptr);
+				}
+			}
+		}
 #endif
 	}
 }

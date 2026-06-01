@@ -69,7 +69,7 @@ public:
 #endif
 	void PutAndDecode(const char *_ecv_array data, size_t len) noexcept;			// Add an entire G-Code, overwriting any existing content
 	void PutAndDecode(const char *_ecv_array str) noexcept;							// Add a null-terminated string, overwriting any existing content
-	void StartNewFile() noexcept;													// Called when we start a new file
+	void StartNewFile(const char *_ecv_array filename) noexcept;					// Called when we start a new file
 	bool FileEnded() noexcept;														// Called when we reach the end of the file we are reading from
 	void DecodeCommand() noexcept;													// Decode the command in the buffer when it is complete
 	bool HadOverflow() noexcept { return overflowed; }								// Indicates if the previous binary G-code was too long
@@ -191,7 +191,7 @@ public:
 	float ConvertSpeed(float speed, bool convertInches) const noexcept;
 	const char *_ecv_array GetDistanceUnits() const noexcept;
 	unsigned int GetStackDepth() const noexcept;
-	bool PushState(const char *_ecv_array _ecv_null fileName) noexcept;		// Push state returning true if successful (i.e. stack not overflowed)
+	bool PushState(bool withinSameFile) noexcept;							// Push state returning true if successful (i.e. stack not overflowed)
 	bool PopState(bool withinSameFile) noexcept;							// Pop state returning true if successful (i.e. no stack underrun)
 
 	void AbortFile(bool abortAll) noexcept;
