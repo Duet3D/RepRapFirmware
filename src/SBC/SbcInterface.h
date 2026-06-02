@@ -64,6 +64,7 @@ public:
 
 	bool FileExists(const char *filename) noexcept;
 	bool DeleteFileOrDirectory(const char *fileOrDirectory, bool recursive = false) noexcept;
+	bool SecureDeleteFile(const char *filename) noexcept;	// zero-overwrite + fsync + unlink on the SBC; files only
 
 	FileHandle OpenFile(const char *filename, OpenMode mode, FilePosition& fileLength, uint32_t preAllocSize = 0) noexcept;
 	int ReadFile(FileHandle handle, char *buffer, size_t bufferLength) noexcept;
@@ -85,7 +86,7 @@ private:
 	uint32_t burstModeWindow, burstModeDelay;					// configurable burst mode timing
 	uint32_t burstModeStartTime;								// millis() when burst mode was last (re)activated, 0 = inactive
 	std::atomic<bool> delaying;
-	volatile uint32_t numEvents;
+	std::atomic<uint32_t> numEvents;
 
 	GCodeFileInfo fileInfo;
 	FilePosition pauseFilePosition, pauseFilePosition2;
@@ -121,7 +122,8 @@ private:
 		write,
 		seek,
 		truncate,
-		close
+		close,
+		secureDeleteFile
 	} fileOperation;
 	std::atomic<bool> fileOperationPending;
 

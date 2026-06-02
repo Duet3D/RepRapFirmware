@@ -114,9 +114,12 @@ public:
 
 	// Drivers configuration
 	size_t GetNumActualDirectDrivers() const noexcept;
+
 	void SetDriversDirection(size_t axisOrExtruder, bool direction) noexcept;
-	void SetDirectionValue(size_t driver, bool dVal) noexcept;
-	bool GetDirectionValue(size_t driver) const noexcept;
+	void SetDirectionValue(size_t driver, bool dVal) noexcept;				// this is for local drivers only
+	bool GetDirectionValue(size_t driver) const noexcept;					// this version is for local drivers only
+	bool GetDirectionValue(DriverId did) const noexcept;					// this version is for local or remote drivers
+
 	void SetOneDriverAbsoluteDirection(size_t driver, bool dVal) noexcept;
 	void SetEnableValue(size_t driver, int8_t eVal) noexcept;
 	int8_t GetEnableValue(size_t driver) const noexcept;
@@ -691,7 +694,7 @@ private:
 #endif
 
 #if HAS_SMART_DRIVERS
-	size_t numSmartDrivers;											// the number of TMC drivers we have, the remaining are simple enable/step/dir drivers
+	size_t numSmartDrivers;									// the number of TMC drivers we have, any remaining drivers are simple enable/step/dir drivers
 	LocalDriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers;
 # if HAS_STALL_DETECT
 	LocalDriversBitmap logOnStallDrivers, eventOnStallDrivers;
@@ -700,7 +703,7 @@ private:
 #endif
 
 	StandardDriverStatus lastEventStatus[NumDirectDrivers];
-	bool directions[NumDirectDrivers];
+	bool directions[NumDirectDrivers];						// the configured driver directions (M569 S parameter): true = forwards (default), false = backwards
 	int8_t enableValues[NumDirectDrivers];
 
 #ifdef DUET3_MB6XD
@@ -854,20 +857,7 @@ inline void Move::AdjustNumDrivers(size_t numDriversNotAvailable) noexcept
 
 #endif
 
-inline void Move::SetDirectionValue(size_t drive, bool dVal) noexcept
-{
-#if SUPPORT_PHASE_STEPPING
-	// We must prevent the tmc task loop fetching the current position while we are changing the direction
-	if (directions[drive] != dVal)
-	{
-		TaskCriticalSectionLocker lock;
-		directions[drive] = dVal;
-	}
-#else
-	directions[drive] = dVal;
-#endif
-}
-
+// Get the direction setting for a local driver
 inline bool Move::GetDirectionValue(size_t drive) const noexcept
 {
 	return directions[drive];

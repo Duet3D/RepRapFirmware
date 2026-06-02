@@ -7,8 +7,6 @@
 
 #include "ObjectModel.h"
 
-#if SUPPORT_OBJECT_MODEL
-
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <Platform/OutputMemory.h>
@@ -475,7 +473,7 @@ void ObjectExplorationContext::AddIndex(int32_t index) THROWS(GCodeException)
 {
 	if (numIndicesCounted == MaxExpressionArrayIndices)
 	{
-		throw GCodeException(-1, -1, "Too many indices");
+		throw GCodeException(gb, column, "Too many indices");
 	}
 	indices[numIndicesCounted] = index;
 	++numIndicesCounted;
@@ -503,7 +501,7 @@ void ObjectExplorationContext::ProvideIndex(int32_t index) THROWS(GCodeException
 {
 	if (numIndicesProvided == MaxExpressionArrayIndices)
 	{
-		throw GCodeException(-1, -1, "Too many indices");
+		throw GCodeException(gb, column, "Too many indices");
 	}
 	indices[numIndicesProvided] = index;
 	++numIndicesProvided;
@@ -625,12 +623,12 @@ bool ObjectExplorationContext::ShouldReport(const ObjectModelEntryFlags f) const
 
 GCodeException ObjectExplorationContext::ConstructParseException(const char *_ecv_array msg) const noexcept
 {
-	return GCodeException(line, column, msg);
+	return GCodeException(gb, column, msg);
 }
 
 GCodeException ObjectExplorationContext::ConstructParseException(const char *_ecv_array msg, const char *_ecv_array sparam) const noexcept
 {
-	return GCodeException(line, column, msg, sparam);
+	return GCodeException(gb, column, msg, sparam);
 }
 
 // Call this before making a recursive call, or before calling a function that needs a lot of stack from a recursive function
@@ -646,7 +644,7 @@ void ObjectExplorationContext::CheckStack(uint32_t calledFunctionStackUsage) con
 	// The stack is in danger of overflowing. Throw an exception if we have enough stack to do so (ideally, this should always be the case)
 	if (stackLimit + StackUsage::Throw <= stackPtr)
 	{
-		throw GCodeException(line, column, "Expression nesting too deep");
+		throw GCodeException(gb, column, "Expression nesting too deep");
 	}
 
 	// Not enough stack left to throw an exception
@@ -1703,8 +1701,6 @@ ExpressionValue ObjectModel::GetExpansionBoardDetailLength(const ExpressionValue
 	val.ExtractRequestedPart(rslt.GetRef(), false);
 	return ExpressionValue((int32_t)rslt.strlen(), false);
 }
-
-#endif
 
 #endif
 

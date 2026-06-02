@@ -252,7 +252,8 @@ enum class FirmwareRequest : uint16_t
 	SeekFile = 22,							// Seek in a file
 	TruncateFile = 23,						// Truncate a file
 	CloseFile = 24,							// Close a file again
-	DeleteFileOrDirectoryRecursively = 25	// Delete a file or directory recursively
+	DeleteFileOrDirectoryRecursively = 25,	// Delete a file or directory recursively
+	SecureDeleteFile = 26					// Securely delete a file (zero-overwrite + fsync, then unlink). Files only - directories rejected by DSF
 };
 
 struct PrintPausedHeader

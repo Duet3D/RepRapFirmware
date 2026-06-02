@@ -69,7 +69,7 @@ public:
 #endif
 	void PutAndDecode(const char *_ecv_array data, size_t len) noexcept;			// Add an entire G-Code, overwriting any existing content
 	void PutAndDecode(const char *_ecv_array str) noexcept;							// Add a null-terminated string, overwriting any existing content
-	void StartNewFile() noexcept;													// Called when we start a new file
+	void StartNewFile(const char *_ecv_array filename) noexcept;					// Called when we start a new file
 	bool FileEnded() noexcept;														// Called when we reach the end of the file we are reading from
 	void DecodeCommand() noexcept;													// Decode the command in the buffer when it is complete
 	bool HadOverflow() noexcept { return overflowed; }								// Indicates if the previous binary G-code was too long
@@ -82,6 +82,7 @@ public:
 	bool ContainsExpression() const noexcept;
 	void GetCompleteParameters(const StringRef& str) THROWS(GCodeException);		// Get all of the line following the command. Currently called only for the Q0 command.
 	int32_t GetLineNumber() const noexcept { return CurrentFileMachineState().lineNumber; }
+	const AutoStringHandle& GetFileName() const noexcept { return CurrentFileMachineState().fname; }
 	bool HadExplicitLineNumber() const noexcept { return hadExplicitLineNumber; }
 	uint32_t GetExplicitLineNumber() const noexcept { return receivedLineNumber; }
 	void SetExplicitLineNumber(uint32_t ln) noexcept;
@@ -216,7 +217,7 @@ public:
 	void SetPrintFinished() noexcept;										// Mark the current print file as finished
 
 	bool RequestMacroFile(const char *_ecv_array filename, bool fromCode) noexcept;	// Request execution of a file macro
-	volatile bool IsWaitingForMacro() const noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
+	bool IsWaitingForMacro() const volatile noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
 	bool HasJustStartedMacro() const noexcept { return macroJustStarted; }	// Has this GB just started a new macro file?
 	bool IsMacroRequestPending() const noexcept { return !requestedMacroFile.IsEmpty(); }		// Indicates if a macro file is being requested
 	const char *_ecv_array GetRequestedMacroFile() const noexcept { return requestedMacroFile.c_str(); }	// Return requested macro file or nullptr if none
@@ -226,7 +227,7 @@ public:
 	bool IsMacroEmpty() const noexcept { return macroFileEmpty; }			// Return true if the opened macro file is actually empty
 
 	void MacroFileClosed() noexcept;										// Called to notify the SBC about the file being internally closed on success
-	volatile bool IsMacroFileClosed() const noexcept { return macroFileClosed; }	// Indicates if a file has been closed internally in RRF
+	bool IsMacroFileClosed() const volatile noexcept { return macroFileClosed; }	// Indicates if a file has been closed internally in RRF
 	void MacroFileClosedSent() noexcept { macroFileClosed = false; }		// Called when the SBC has been notified about the internally closed file
 
 	bool IsAbortRequested() const noexcept { return abortFile; }			// Is the cancellation of the current file requested?
@@ -334,10 +335,7 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-
-#if SUPPORT_OBJECT_MODEL
 	const char *_ecv_array GetStateText() const noexcept;
-#endif
 
 	FilePosition printFilePositionAtMacroStart;			// the saved file position when we started executing a macro
 	GCodeInput *_ecv_from normalInput;					// Our normal input stream, or nullptr if there isn't one

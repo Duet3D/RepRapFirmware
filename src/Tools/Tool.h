@@ -115,7 +115,7 @@ public:
 	void SetRetracted(bool b) noexcept { isRetracted = b; }
 	int8_t GetSpindleNumber() const noexcept { return spindleNumber; }
 	uint32_t GetSpindleRpm() const noexcept { return spindleRpm; }
-	void SetSpindleRpm(uint32_t rpm, bool isCurrentTool) THROWS(GCodeException);
+	void SetSpindleRpm(const GCodeBuffer& gb, uint32_t rpm, bool isCurrentTool) THROWS(GCodeException);
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteSettings(FileStore *f, const StringRef& buf) const noexcept;		// write the tool's settings to file

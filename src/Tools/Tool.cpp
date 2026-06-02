@@ -829,7 +829,7 @@ void Tool::SetToolHeaterActiveOrStandbyTemperature(size_t heaterNumber, float te
 	}
 }
 
-void Tool::SetSpindleRpm(uint32_t rpm, bool isCurrentTool) THROWS(GCodeException)
+void Tool::SetSpindleRpm(const GCodeBuffer& gb, uint32_t rpm, bool isCurrentTool) THROWS(GCodeException)
 {
 	if (spindleNumber > -1)
 	{
@@ -842,7 +842,7 @@ void Tool::SetSpindleRpm(uint32_t rpm, bool isCurrentTool) THROWS(GCodeException
 		}
 		else if (!spindle.IsValidRpm(rpm))
 		{
-			throw GCodeException(-1, -1, "Requested spindle RPM out of range");
+			throw GCodeException(&gb, -1, "Requested spindle RPM out of range");
 		}
 		else
 		{

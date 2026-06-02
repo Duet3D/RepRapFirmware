@@ -189,7 +189,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).raw.maxPrintingAcceleration), 1),	ObjectModelEntryFlags::obsolete },
 	{ "queue",					OBJECT_MODEL_FUNC_ARRAY(2),																		ObjectModelEntryFlags::none },
 #if SUPPORT_COORDINATE_ROTATION
-	{ "rotation",				OBJECT_MODEL_FUNC(self, 15),																	ObjectModelEntryFlags::notPanelDue | ObjectModelEntryFlags::obsolete },
+	{ "rotation",				OBJECT_MODEL_FUNC(self, 16),																	ObjectModelEntryFlags::notPanelDue | ObjectModelEntryFlags::obsolete },
 #endif
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).speedFactor, 2),	ObjectModelEntryFlags::none },
@@ -322,28 +322,35 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "interpolated",		OBJECT_MODEL_FUNC(self->GetMicrostepInterpolation(ExtruderToLogicalDrive(context.GetLastIndex()))),			ObjectModelEntryFlags::none },
 	{ "value",				OBJECT_MODEL_FUNC((int32_t)self->GetMicrostepping(ExtruderToLogicalDrive(context.GetLastIndex()))),			ObjectModelEntryFlags::none },
 
-	// 14. boards[0].drivers[]
+	// 14. boards[0].drivers[] members
+	{ "config",				OBJECT_MODEL_FUNC(self, 15),																				ObjectModelEntryFlags::none },
 	{ "status",				OBJECT_MODEL_FUNC(self->GetLocalDriverStatus(context.GetLastIndex()).all),									ObjectModelEntryFlags::liveNotPanelDue },
 
+	// 15. boards[0].drivers[].config members
+	{ "direction",			OBJECT_MODEL_FUNC((int32_t)self->directions[context.GetLastIndex()]), 										ObjectModelEntryFlags::none },
+#if HAS_SMART_DRIVERS
+	{ "mode",				OBJECT_MODEL_FUNC_NOSELF((int32_t)SmartDrivers::GetDriverMode(context.GetLastIndex())), 					ObjectModelEntryFlags::none },
+#endif
+
 #if SUPPORT_COORDINATE_ROTATION
-	// 15. move.rotation members
-	{ "angle",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimaryMovementState().g68Angle),						ObjectModelEntryFlags::none },
-	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(6),																				ObjectModelEntryFlags::none },
+	// 16. move.rotation members
+	{ "angle",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimaryMovementState().g68Angle),							ObjectModelEntryFlags::none },
+	{ "centre",				OBJECT_MODEL_FUNC_ARRAY(6),																					ObjectModelEntryFlags::none },
 #endif
 };
 
 constexpr uint8_t Move::objectModelTableDescriptor[] =
 {
-	15 + SUPPORT_COORDINATE_ROTATION,
-	18 + SUPPORT_COORDINATE_ROTATION + SUPPORT_KEEPOUT_ZONES + 2 * SUPPORT_S_CURVE,
-	2,
-	7 + SUPPORT_LASER,
-	3,
-	2,
-	2,
-	6 + (int)(HAS_MASS_STORAGE || HAS_SBC_INTERFACE),
-	2,
-	4,
+	16 + SUPPORT_COORDINATE_ROTATION,										// number of sections
+	18 + SUPPORT_COORDINATE_ROTATION + SUPPORT_KEEPOUT_ZONES + 2 * SUPPORT_S_CURVE,		// section 0
+	2,																		// section 1
+	7 + SUPPORT_LASER,														// section 2
+	3,																		// section 3
+	2,																		// section 4
+	2,																		// section 5
+	6 + (int)(HAS_MASS_STORAGE || HAS_SBC_INTERFACE),						// section 6
+	2,																		// section 7
+	4,																		// section 8
 #ifdef DUET_NG	// Duet WiFi/Ethernet doesn't have settable standstill current and doesn't support phase stepping
 	23,																		// section 9: move.axes[]
 	17,																		// section 10: move.extruders[]
@@ -358,9 +365,10 @@ constexpr uint8_t Move::objectModelTableDescriptor[] =
 #endif
 	2,																		// section 12: move.axes[].microstepping
 	2,																		// section 13: move.extruders[].microstepping
-	1,																		// section 5: boards.drivers
+	2,																		// section 14: boards.drivers[]
+	1 + HAS_SMART_DRIVERS,													// section 15: boards.drivers[].config
 #if SUPPORT_COORDINATE_ROTATION
-	2,
+	2,																		// section 16: move.rotation
 #endif
 };
 
@@ -939,7 +947,7 @@ bool Move::SetKinematics(KinematicsType k) noexcept
 // Return true if this is a raw motor move
 bool Move::IsRawMotorMove(uint8_t moveType) const noexcept
 {
-	return moveType == 2 || ((moveType == 1 || moveType == 3) && kinematics->GetHomingMode() != HomingMode::homeCartesianAxes);
+	return moveType == 2 || (moveType != 0 && kinematics->GetHomingMode() != HomingMode::homeCartesianAxes);
 }
 
 // Return true if the specified point is accessible to the Z probe

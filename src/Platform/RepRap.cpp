@@ -863,7 +863,15 @@ __attribute__((noinline)) void RepRap::GenerateDeferredDiagnostics(MessageType d
 
 void RepRap::Timing(const StringRef& reply) noexcept
 {
-	reply.lcatf("Slowest loop: %.2fms; fastest: %.2fms", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+	// See Network.cpp Diagnostics() - sentinel handling to avoid printing a ~5.7M ms phantom value
+	if (fastLoop == UINT32_MAX)
+	{
+		reply.lcat("Slowest loop: n/a; fastest: n/a");
+	}
+	else
+	{
+		reply.lcatf("Slowest loop: %.2fms; fastest: %.2fms", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+	}
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
 }
@@ -1951,7 +1959,8 @@ size_t RepRap::GetStatusIndex() const noexcept
 			  	  	)
 			: (gCodes->IsDoingToolChange())								? 10	// Changing tool
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement() ||
-			   gCodes->WaitingForAcknowledgement()) 					? 11	// Busy
+			   gCodes->WaitingForAcknowledgement() ||
+			   heat->IsTuningHeater())									? 11	// Busy
 			:															  12;	// Idle
 
 }

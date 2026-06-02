@@ -38,7 +38,6 @@
 
 #endif
 
-#if SUPPORT_OBJECT_MODEL
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
@@ -58,6 +57,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 #endif
 	{ "axesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->axesRelative),							ObjectModelEntryFlags::none },
 	{ "compatibility",		OBJECT_MODEL_FUNC(self->machineState->compatibility.ToString()),					ObjectModelEntryFlags::none },
+	{ "currentFile",		OBJECT_MODEL_FUNC(self->machineState->fname),										ObjectModelEntryFlags::liveNotPanelDue },
 	{ "distanceUnit",		OBJECT_MODEL_FUNC(self->GetDistanceUnits()),										ObjectModelEntryFlags::none },
 	{ "drivesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->drivesRelative),						ObjectModelEntryFlags::none },
 	{ "feedRate",			OBJECT_MODEL_FUNC(self->machineState->feedRate, 1),									ObjectModelEntryFlags::liveNotPanelDue },
@@ -78,7 +78,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "volumetric",			OBJECT_MODEL_FUNC((bool)self->machineState->volumetricExtrusion),					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 16 };
+constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 17 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GCodeBuffer)
 
@@ -97,8 +97,6 @@ const char *_ecv_array GCodeBuffer::GetStateText() const noexcept
 	default:									return "reading";
 	}
 }
-
-#endif
 
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *_ecv_null fileIn, MessageType mt, Compatibility::RawType c) noexcept
@@ -141,7 +139,8 @@ void GCodeBuffer::Reset() noexcept
 #if HAS_SBC_INTERFACE
 	isBinaryBuffer = false;
 	requestedMacroFile.Clear();
-	isWaitingForMacro = macroFileClosed = false;
+	macroFileClosed = false;
+	isWaitingForMacro = false;
 	macroJustStarted = macroFileError = macroFileEmpty = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
 	machineState->lastCodeFromSbc = machineState->macroStartedByCode = false;
 #endif
@@ -337,8 +336,9 @@ void GCodeBuffer::PutAndDecode(const char *_ecv_array str) noexcept
 	stringParser.PutAndDecode(str);
 }
 
-void GCodeBuffer::StartNewFile() noexcept
+void GCodeBuffer::StartNewFile(const char *_ecv_array filename) noexcept
 {
+	machineState->fname.Assign(filename);
 #if HAS_SBC_INTERFACE
 	machineState->SetFileExecuting();
 #endif
@@ -1122,6 +1122,7 @@ void GCodeBuffer::ClosePrintFile() noexcept
 				if (ms->fileId == printFileId)
 				{
 					ms->fileId = NoFileId;
+					ms->fname.Assign(nullptr);
 				}
 			}
 		}
@@ -1131,10 +1132,17 @@ void GCodeBuffer::ClosePrintFile() noexcept
 	{
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		FileData& fileBeingPrinted = OriginalMachineState().fileState;
-		GetFileInput()->Reset(fileBeingPrinted);
 		if (fileBeingPrinted.IsLive())
 		{
-			fileBeingPrinted.Close();
+			GetFileInput()->Reset(fileBeingPrinted);
+			for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+			{
+				if (ms->fileState == fileBeingPrinted)
+				{
+					ms->fileState.Close();
+					ms->fname.Assign(nullptr);
+				}
+			}
 		}
 #endif
 	}

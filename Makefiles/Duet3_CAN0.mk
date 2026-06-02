@@ -142,7 +142,7 @@ DUET3CAN0_CFLAGS := -c -std=gnu99 \
 	$(DEBUG_FLAGS)
 
 # Compiler flags - C++
-DUET3CAN0_CXXFLAGS := -c -std=gnu++17 \
+DUET3CAN0_CXXFLAGS := -c -std=c++20 \
 	-Wall \
 	-mcpu=cortex-m7 \
 	-mthumb \

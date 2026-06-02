@@ -44,7 +44,7 @@ namespace FirmwareUpdater
 			if (moduleMap.IsBitSet(WifiFirmwareModule))
 			{
 				String<MaxFilenameLength> location;
-				if (!MassStorage::CombineName(location.GetRef(), FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? WIFI_FIRMWARE_FILE : filenameRef.c_str())
+				if (!MassStorage::CombineName(location.GetRef(), FIRMWARE_DIRECTORY, filenameRef.IsEmpty() ? reprap.GetPlatform().GetDefaultWiFiFirmwareName() : filenameRef.c_str())
 						|| !MassStorage::FileExists(location.c_str()))
 				{
 					reply.printf("File %s not found", location.c_str());
@@ -106,7 +106,7 @@ namespace FirmwareUpdater
 				WifiFirmwareUploader *_ecv_null const uploader = reprap.GetNetwork().GetWifiUploader();
 				if (uploader != nullptr)
 				{
-					const char *_ecv_array binaryFilename = filenameRef.IsEmpty() ? WIFI_FIRMWARE_FILE : filenameRef.c_str();
+					const char *_ecv_array binaryFilename = filenameRef.IsEmpty() ? reprap.GetPlatform().GetDefaultWiFiFirmwareName() : filenameRef.c_str();
 					uploader->SendUpdateFile(binaryFilename, WifiFirmwareUploader::FirmwareAddress);
 				}
 			}

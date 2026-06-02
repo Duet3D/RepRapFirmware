@@ -20,6 +20,8 @@
 constexpr ObjectModelTableEntry LedStripBase::objectModelTable[] =
 {
 	// 0.
+	{ "colorOrder",		OBJECT_MODEL_FUNC((int32_t)self->colorOrder), 	ObjectModelEntryFlags::none },
+	{ "maxLeds",		OBJECT_MODEL_FUNC(self->maxLeds), 				ObjectModelEntryFlags::none },
 	{ "stopMovement",	OBJECT_MODEL_FUNC(self->MustStopMovement()), 	ObjectModelEntryFlags::none },
 	{ "type",			OBJECT_MODEL_FUNC(self->GetTypeText()),			ObjectModelEntryFlags::none },
 };
@@ -27,7 +29,7 @@ constexpr ObjectModelTableEntry LedStripBase::objectModelTable[] =
 constexpr uint8_t LedStripBase::objectModelTableDescriptor[] =
 {
 	1,							// number of sections
-	2							// number in section 0
+	4							// number in section 0
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(LedStripBase)

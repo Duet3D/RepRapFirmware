@@ -25,8 +25,6 @@ constexpr float DefaultAnchors[5][3] = {{    0.0, -2000.0, -100.0},
 constexpr float DefaultPrintRadius = 1500.0;
 
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -66,8 +64,6 @@ constexpr ObjectModelTableEntry HangprinterKinematics::objectModelTable[] =
 constexpr uint8_t HangprinterKinematics::objectModelTableDescriptor[] = { 1, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(HangprinterKinematics, RoundBedKinematics)
-
-#endif
 
 // Constructor
 HangprinterKinematics::HangprinterKinematics() noexcept

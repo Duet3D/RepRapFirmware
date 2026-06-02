@@ -11,7 +11,7 @@
 #include <cstdarg>
 
 /*static*/ OutputBuffer *_ecv_null volatile OutputBuffer::freeOutputBuffers = nullptr;		// Messages may also be sent by ISRs,
-/*static*/ volatile size_t OutputBuffer::usedOutputBuffers = 0;						// so make these volatile.
+/*static*/ std::atomic<size_t> OutputBuffer::usedOutputBuffers = 0;							// so make these atomic or volatile.
 /*static*/ volatile size_t OutputBuffer::maxUsedOutputBuffers = 0;
 
 //*************************************************************************************************
@@ -183,7 +183,7 @@ size_t OutputBuffer::cat(const char c) noexcept
 			hadOverflow = true;
 			return 0;
 		}
-		nextBuffer->references = references;
+		nextBuffer->references = references.load();
 		nextBuffer->copy(c);
 
 		// Link the new item to this list
@@ -227,7 +227,7 @@ size_t OutputBuffer::cat(const char *_ecv_array src, size_t len) noexcept
 				hadOverflow = true;
 				break;
 			}
-			nextBuffer->references = references;
+			nextBuffer->references = references.load();
 			last->next = nextBuffer;
 			OutputBuffer *item = this;
 			do
@@ -476,7 +476,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const noexcept
 
 /*static*/ void OutputBuffer::Diagnostics(const StringRef& reply) noexcept
 {
-	reply.lcatf("Used output buffers: %d of %d (%d max)", usedOutputBuffers, OUTPUT_BUFFER_COUNT, maxUsedOutputBuffers);
+	reply.lcatf("Used output buffers: %d of %d (%d max)", usedOutputBuffers.load(), OUTPUT_BUFFER_COUNT, maxUsedOutputBuffers);
 }
 
 //*************************************************************************************************
@@ -496,7 +496,7 @@ bool OutputStack::Push(OutputBuffer *_ecv_null buffer, MessageType type) volatil
 			}
 			items[count] = buffer;
 			types[count] = type;
-			count++;
+			const_cast<OutputStack*>(this)->count++;
 			return true;
 		}
 	}
@@ -521,7 +521,7 @@ OutputBuffer *OutputStack::Pop() volatile noexcept
 		items[i - 1] = items[i];
 		types[i - 1] = types[i];
 	}
-	count--;
+	const_cast<OutputStack*>(this)->count--;
 
 	return item;
 }
@@ -636,7 +636,7 @@ void OutputStack::Append(volatile OutputStack& stack) volatile noexcept
 		{
 			items[count] = stack.items[i];
 			types[count] = stack.types[i];
-			count++;
+			const_cast<OutputStack*>(this)->count++;
 		}
 		else
 		{

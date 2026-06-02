@@ -155,10 +155,6 @@ constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 # define DUAL_CAN				0
 #endif
 
-#ifndef SUPPORT_OBJECT_MODEL
-# define SUPPORT_OBJECT_MODEL	0
-#endif
-
 #define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI)
 #ifndef HAS_STALL_DETECT
 # define HAS_STALL_DETECT		(SUPPORT_TMC2660 || SUPPORT_TMC51xx)

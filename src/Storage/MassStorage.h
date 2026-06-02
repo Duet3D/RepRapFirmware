@@ -105,6 +105,7 @@ namespace MassStorage
 	size_t GetFileWriteBufferLength() noexcept;
 	void ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept;
 	bool Delete(const StringRef& filePath, ErrorMessageMode errorMessageMode, bool recursive = false) noexcept;
+	bool SecureDelete(const StringRef& filePath, ErrorMessageMode errorMessageMode) noexcept;	// Overwrite contents with zeros, then delete. For credential / secret cleanup
 #endif
 
 #if HAS_SBC_INTERFACE
@@ -166,9 +167,7 @@ namespace MassStorage
 	GCodeResult ConfigureSdCard(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Configure additional SD card slots
 # endif
 
-# if SUPPORT_OBJECT_MODEL
 	const ObjectModel *_ecv_from GetVolume(size_t vol) noexcept;
-# endif
 
 #endif
 

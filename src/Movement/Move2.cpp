@@ -907,6 +907,16 @@ int Move::GetMotorCurrent(size_t drive, int code) const noexcept
 	return lrintf(rslt);
 }
 
+// Get the direction setting for a local or remote driver
+inline bool Move::GetDirectionValue(DriverId did) const noexcept
+{
+	return
+#if SUPPORT_CAN_EXPANSION
+		(did.IsRemote()) ? reprap.GetExpansion().GetDriverDirection(did) :
+#endif
+			GetDirectionValue(did.localDriver);
+}
+
 // Set the motor idle current factor
 void Move::SetIdleCurrentFactor(float f) noexcept
 {
@@ -1063,6 +1073,7 @@ GCodeResult Move::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const Str
 	{
 		seen = true;
 		SetDirectionValue(drive, gb.GetIValue() != 0);
+		reprap.BoardsUpdated();
 	}
 	if (gb.Seen('R'))
 	{
@@ -1103,6 +1114,7 @@ GCodeResult Move::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const Str
 				reply.printf("Driver %u does not support mode '%s'", drive, TranslateDriverMode(val));
 				return GCodeResult::error;
 			}
+			reprap.BoardsUpdated();
 		}
 
 		if (gb.TryGetUIValue('C', val, seen))		// set chopper control register
@@ -1210,6 +1222,20 @@ GCodeResult Move::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const Str
 		ReportM569Parameters(drive, reply);
 	}
 	return GCodeResult::ok;
+}
+
+void Move::SetDirectionValue(size_t drive, bool dVal) noexcept
+{
+#if SUPPORT_PHASE_STEPPING
+	// We must prevent the TMC task loop fetching the current position while we are changing the direction
+	if (directions[drive] != dVal)
+	{
+		TaskCriticalSectionLocker lock;
+		directions[drive] = dVal;
+	}
+#else
+	directions[drive] = dVal;
+#endif
 }
 
 // Report the M569 parameters of a drive. Used both in main board mode and in expansion board mode.

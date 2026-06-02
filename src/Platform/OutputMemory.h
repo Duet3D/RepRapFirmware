@@ -10,6 +10,7 @@
 
 #include <RepRapFirmware.h>
 #include <Storage/FileData.h>
+#include <atomic>
 
 #if HAS_SBC_INTERFACE
 const size_t OUTPUT_STACK_DEPTH = 64;	// Number of OutputBuffer chains that can be pushed onto one stack instance
@@ -105,10 +106,10 @@ private:
 
 	bool isReferenced;
 	bool hadOverflow;
-	volatile size_t references;
+	std::atomic<size_t> references;
 
 	static OutputBuffer *_ecv_null volatile freeOutputBuffers;		// Messages may be sent by multiple tasks
-	static volatile size_t usedOutputBuffers;				// so make these volatile.
+	static std::atomic<size_t> usedOutputBuffers;					// so make these atomic.
 	static volatile size_t maxUsedOutputBuffers;
 };
 

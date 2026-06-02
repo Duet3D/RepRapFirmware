@@ -11,6 +11,8 @@
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
 
+#include <Devices.h>
+
 const size_t GCodeInputFileReadThreshold = 128;		// How many free bytes must be available before data is read from the file
 const size_t GCodeInputUSBReadThreshold = 128;		// How many free bytes must be available before we read more data from USB
 
@@ -206,6 +208,17 @@ bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 // Read from the device into our ring buffer and scan for urgent commands (M112/M108/M122)
 void BufferedStreamGCodeInput::Spin() noexcept
 {
+	if (!device.IsConnected())
+	{
+		// The USB host has disconnected. Drop any buffered data so that when the host reconnects, its first
+		// command starts cleanly instead of being appended to a leftover fragment
+		if (BytesCached() != 0)
+		{
+			Reset();
+		}
+		return;
+	}
+
 	if (device.available() != 0)
 	{
 		const size_t spaceLeft = BufferSpaceLeft();

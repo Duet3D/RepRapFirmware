@@ -108,7 +108,7 @@ static xdmac_channel_config_t xdmac_tx_cfg, xdmac_rx_cfg;
 
 volatile bool dataReceived = false;		// warning: on the SAME5x this just means the transfer has started, not necessarily that it has ended!
 volatile bool transferReadyHigh = false;
-volatile unsigned int spiTxUnderruns = 0, spiRxOverruns = 0;
+std::atomic<unsigned int> spiTxUnderruns = 0, spiRxOverruns = 0;
 
 static void spi_dma_disable() noexcept
 {
@@ -585,7 +585,7 @@ void DataTransfer::Diagnostics(const StringRef& reply) noexcept
 		reply.lcat("Connected over SPI");
 		reply.lcatf("Transfer state: %d, failed transfers: %u, checksum errors: %u", (int)state, failedTransfers, checksumErrors);
 		reply.lcatf("RX/TX seq numbers: %d/%d", (int)rxHeader.sequenceNumber, (int)txHeader.sequenceNumber);
-		reply.lcatf("SPI underruns %u, overruns %u", spiTxUnderruns, spiRxOverruns);
+		reply.lcatf("SPI underruns %u, overruns %u", spiTxUnderruns.load(), spiRxOverruns.load());
 	}
 }
 
@@ -1864,6 +1864,28 @@ bool DataTransfer::WriteDeleteFileOrDirectory(const char *filename, bool recursi
 	(void)WritePacketHeader(recursive ? FirmwareRequest::DeleteFileOrDirectoryRecursively : FirmwareRequest::DeleteFileOrDirectory, sizeof(StringHeader) + filenameLength);
 
 	// Write header
+	StringHeader *header = WriteDataHeader<StringHeader>();
+	header->length = filenameLength;
+	header->padding = 0;
+
+	// Write filename
+	WriteData(filename, filenameLength);
+	return true;
+}
+
+bool DataTransfer::WriteSecureDeleteFile(const char *filename) noexcept
+{
+	// Check if it fits
+	size_t filenameLength = strlen(filename);
+	if (!CanWritePacket(sizeof(StringHeader) + filenameLength))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::SecureDeleteFile, sizeof(StringHeader) + filenameLength);
+
+	// Write header - payload format is identical to DeleteFileOrDirectory; only the opcode differs
 	StringHeader *header = WriteDataHeader<StringHeader>();
 	header->length = filenameLength;
 	header->padding = 0;

@@ -70,7 +70,7 @@ private:
 	uint8_t badTemperatureCount;
 
 	volatile uint16_t lastPulseTime;
-	volatile uint8_t numPulses;
+	std::atomic<uint8_t> numPulses;
 	uint16_t pulses[41];			// 1 start bit + 40 data bits
 };
 

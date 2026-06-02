@@ -1087,7 +1087,9 @@ void SbcInterface::ExchangeData() noexcept
 		case SbcRequest::FileDeleteResult:
 		{
 			bool success = transfer.ReadBoolean();
-			if (fileOperation == FileOperation::deleteFileOrDirectory || fileOperation == FileOperation::deleteFileOrDirectoryRecursively)
+			if (fileOperation == FileOperation::deleteFileOrDirectory
+				|| fileOperation == FileOperation::deleteFileOrDirectoryRecursively
+				|| fileOperation == FileOperation::secureDeleteFile)
 			{
 				fileSuccess = success;
 				fileOperation = FileOperation::none;
@@ -1308,6 +1310,9 @@ void SbcInterface::ExchangeData() noexcept
 			break;
 		case FileOperation::deleteFileOrDirectoryRecursively:
 			fileOperationPending = !transfer.WriteDeleteFileOrDirectory(filePath, true);
+			break;
+		case FileOperation::secureDeleteFile:
+			fileOperationPending = !transfer.WriteSecureDeleteFile(filePath);
 			break;
 
 		case FileOperation::openRead:
@@ -1579,7 +1584,9 @@ void SbcInterface::ExchangeData() noexcept
 
 void SbcInterface::InvalidateResources() noexcept
 {
-	rxPointer = txPointer = txEnd = 0;
+	txEnd = 0;
+	txPointer = 0;
+	rxPointer = 0;
 	sendBufferUpdate = true;
 
 	if (fileOperation != FileOperation::none)
@@ -1808,12 +1815,14 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 							if (readPointer == txPointer && txEnd == 0)
 							{
 								// Buffer completely read, reset RX/TX pointers
-								rxPointer = txPointer = 0;
+								txPointer = 0;
+								rxPointer = 0;
 							}
 							else if (readPointer == txEnd)
 							{
 								// Read last code before overlapping, restart from the beginning
-								rxPointer = txEnd = 0;
+								txEnd = 0;
+								rxPointer = 0;
 							}
 							else
 							{
@@ -1833,7 +1842,8 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 					if (updateRxPointer)
 					{
 						// Skipped non-pending codes, restart from the beginning
-						rxPointer = txEnd = 0;
+						txEnd = 0;
+						rxPointer = 0;
 						sendBufferUpdate = true;
 					}
 
@@ -1889,6 +1899,28 @@ bool SbcInterface::DeleteFileOrDirectory(const char *fileOrDirectory, bool recur
 	if (!DoFileOperation(recursive ? FileOperation::deleteFileOrDirectoryRecursively : FileOperation::deleteFileOrDirectory))
 	{
 		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to delete %s\n", fileOrDirectory);
+		return false;
+	}
+
+	// Return the result
+	return fileSuccess;
+}
+
+bool SbcInterface::SecureDeleteFile(const char *filename) noexcept
+{
+	// Don't do anything if the SBC is not connected
+	if (!IsConnected())
+	{
+		return false;
+	}
+
+	// Set up the request content
+	MutexLocker locker(fileMutex);
+
+	filePath = filename;
+	if (!DoFileOperation(FileOperation::secureDeleteFile))
+	{
+		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to securely delete %s\n", filename);
 		return false;
 	}
 
@@ -2273,14 +2305,16 @@ void SbcInterface::InvalidateBufferedCodes(GCodeChannel channel) noexcept
 				if (readPointer == txPointer && txEnd == 0)
 				{
 					// Buffer is empty again, reset the pointers
-					rxPointer = txPointer = 0;
+					txPointer = 0;
+					rxPointer = 0;
 					break;
 				}
 				else if (readPointer == txEnd)
 				{
 					// Invalidated last code before overlapping, continue from the beginning
 					readPointer = 0;
-					rxPointer = txEnd = 0;
+					txEnd = 0;
+					rxPointer = 0;
 				}
 				else
 				{

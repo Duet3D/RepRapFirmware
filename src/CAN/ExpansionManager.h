@@ -77,6 +77,12 @@ public:
 
 	void EmergencyStop() noexcept;
 
+	void StoreDriverDirection(DriverId did, bool direction) noexcept pre(did.IsRemote());
+	void StoreDriverMode(DriverId did, uint32_t mode) noexcept pre(did.IsRemote());
+
+	bool GetDriverDirection(DriverId did) const noexcept;
+	DriverMode GetDriverMode(DriverId did) const noexcept;
+
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 

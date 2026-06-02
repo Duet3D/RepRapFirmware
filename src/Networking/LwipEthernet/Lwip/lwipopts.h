@@ -279,6 +279,15 @@ extern void *lwipRamHeap;
  * LWIP_DHCP==1: Enable DHCP module.
  */
 #define LWIP_DHCP               1
+
+/**
+ * LWIP_DHCP_DOES_ACD_CHECK==0: Bind the interface as soon as the DHCP ACK arrives.
+ * With ACD enabled, dhcp_bind() is deferred until a full RFC 5227 address conflict detection pass
+ * (probe + announce) completes, which adds several seconds of delay before the interface gets its
+ * IP address on every boot. The DHCP server already owns the lease pool, so conflict detection on
+ * a leased address buys us nothing here - skip it for faster network availability.
+ */
+#define LWIP_DHCP_DOES_ACD_CHECK    0
 #endif
 
 /* --------- IGMP options ---------- */

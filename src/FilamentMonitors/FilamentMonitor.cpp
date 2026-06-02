@@ -37,8 +37,6 @@ uint32_t FilamentMonitor::whenStatusLastSent = 0;
 size_t FilamentMonitor::firstDriveToSend = 0;
 #endif
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -69,8 +67,6 @@ size_t FilamentMonitor::GetNumMonitorsToReport() noexcept
 	}
 	return rslt;
 }
-
-#endif
 
 // Constructor
 FilamentMonitor::FilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept
@@ -195,12 +191,14 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 			}
 			else
 			{
+				sensor->Disable();					// detach the ISR (if any) before destroying the derived object
 				delete sensor;
 			}
 			return rslt2;
 		}
 		catch (...)
 		{
+			sensor->Disable();						// detach the ISR (if any) before destroying the derived object
 			delete sensor;
 			throw;
 		}
@@ -527,6 +525,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 		{
 			reply.lcatf("Filament monitor for extruder %u has been deleted due to configuration change", extruder);
 			warn = true;
+			filamentSensors[extruder]->Disable();		// detach the ISR before destroying the derived object
 			DeleteObject(filamentSensors[extruder]);
 		}
 	}
@@ -584,7 +583,12 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 
 	WriteLocker lock(filamentMonitorsLock);
 
-	DeleteObject(filamentSensors[p_driver]);					// delete any existing filament monitor
+	// Delete any existing filament monitor; Disable() must run before delete to detach the ISR while the derived vtable is still valid
+	if (filamentSensors[p_driver] != nullptr)
+	{
+		filamentSensors[p_driver]->Disable();
+		DeleteObject(filamentSensors[p_driver]);
+	}
 	FilamentMonitor *fm;
 
 	// Create the new one
@@ -640,6 +644,7 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 		return GCodeResult::warning;
 	}
 
+	fm->Disable();					// detach the ISR before destroying the derived object
 	delete fm;
 	return GCodeResult::ok;
 }

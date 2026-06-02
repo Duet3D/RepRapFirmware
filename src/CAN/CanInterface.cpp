@@ -447,7 +447,7 @@ CanMessageBuffer *CanInterface::AllocateBuffer(const GCodeBuffer *_ecv_null gb) 
 	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		throw GCodeException((gb == nullptr) ? -1 : gb->GetLineNumber(), -1, NoCanBufferMessage);
+		throw GCodeException(gb, -1, NoCanBufferMessage);
 	}
 	return _ecv_not_null(buf);
 }
@@ -1760,6 +1760,8 @@ void CanInterface::ReportCanTiming(const StringRef& reply) noexcept
 	}
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
 // Check that the BRS setting we are using matches the one n the time sync message and change it if necessary
 void CanInterface::CheckBrs(const CanMessageTimeSync& msg) noexcept
 {
@@ -1774,6 +1776,8 @@ void CanInterface::CheckBrs(const CanMessageTimeSync& msg) noexcept
 		dTseg1MinusOne = msg.tseg1Minus1;
 	}
 }
+
+#endif
 
 // Create a filament monitor but do not configure it
 GCodeResult CanInterface::CreateFilamentMonitor(DriverId driver, uint8_t type, const GCodeBuffer& gb, const StringRef &reply) noexcept

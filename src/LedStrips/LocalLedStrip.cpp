@@ -39,8 +39,8 @@ constexpr uint8_t LocalLedStrip::objectModelTableDescriptor[] = { 1, 1 + SUPPORT
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(LocalLedStrip, LedStripBase)
 
-LocalLedStrip::LocalLedStrip(LedStripType p_type, uint32_t p_freq, ColorOrder defaultColorOrder) noexcept
-	: LedStripBase(p_type), frequency(p_freq), colorOrder(defaultColorOrder)
+LocalLedStrip::LocalLedStrip(LedStripType p_type, uint32_t p_freq) noexcept
+	: LedStripBase(p_type), frequency(p_freq)
 {
 }
 

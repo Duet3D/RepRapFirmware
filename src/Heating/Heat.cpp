@@ -190,48 +190,6 @@ GCodeResult Heat::SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply
 	return GCodeResult::error;
 }
 
-// Process M301 or M304. 'heater' is the default heater number to use.
-GCodeResult Heat::SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
-{
-	if (gb.Seen('H'))
-	{
-		heater = gb.GetUIValue();
-	}
-
-	const auto h = FindHeater(heater);
-	if (h.IsNotNull())
-	{
-		const FopDt& model = h->GetModel();
-		M301PidParameters pp = model.GetM301PidParameters(false);
-		bool seen = false;
-		gb.TryGetFValue('P', pp.kP, seen);
-		gb.TryGetFValue('I', pp.kI, seen);
-		gb.TryGetFValue('D', pp.kD, seen);
-
-		if (seen)
-		{
-			h->SetM301PidParameters(pp);
-			reprap.HeatUpdated();
-		}
-		else if (!model.UsePid())
-		{
-			reply.printf("Heater %d is in bang-bang mode", heater);
-		}
-		else if (model.ArePidParametersOverridden())
-		{
-			reply.printf("Heater %d P:%.1f I:%.3f D:%.1f", heater, (double)pp.kP, (double)pp.kI, (double)pp.kD);
-		}
-		else
-		{
-			reply.printf("Heater %d uses model-derived PID parameters. Use M307 H%d to view them", heater, heater);
-		}
-		return GCodeResult::ok;
-	}
-
-	reply.printf("Heater %u not found", heater);
-	return GCodeResult::error;
-}
-
 // Is the heater enabled?
 bool Heat::IsHeaterEnabled(size_t heater) const noexcept
 {
@@ -976,7 +934,6 @@ bool Heat::WriteModelParameters(FileStore *f) const noexcept
 			{
 				String<StringLength256> scratchString;
 				model.AppendM307Command(h, scratchString.GetRef(), heaters[h]->GetFunction() == HeaterFunction::tool);
-				model.AppendM301Command(h, scratchString.GetRef());
 				ok = f->Write(scratchString.c_str());
 			}
 		}

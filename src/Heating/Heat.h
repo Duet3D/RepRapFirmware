@@ -88,7 +88,6 @@ public:
 	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Create a sensor or change the parameters for an existing sensor
-	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException); // Set the P/I/D parameters for a heater
 	GCodeResult HandleM143(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException);	// Configure heater protection (M143)
 
 	ReadLockedPointer<TemperatureSensor> FindSensor(int sn) const noexcept;	// Get a pointer to the temperature sensor entry
@@ -125,6 +124,7 @@ public:
 	float GetHeaterTemperature(int heater) const noexcept;				// Get the current temperature of a heater
 	HeaterStatus GetStatus(int heater) const noexcept;					// Get the off/standby/active status
 	bool HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance, bool waitOnFault) const noexcept;
+	bool IsTuningHeater() const noexcept { return heaterBeingTuned != -1; }	// Is a heater being auto-tuned?
 
 	GCodeResult ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
@@ -184,7 +184,7 @@ private:
 
 	static ReadWriteLock heatersLock;
 
-	uint8_t volatile sensorCount;
+	std::atomic<uint8_t> sensorCount;
 	TemperatureSensor *_ecv_from _ecv_null volatile sensorsRoot;	// The sensor list
 
 	Heater *_ecv_from heaters[MaxHeaters];						// Each element is a local or remote heater

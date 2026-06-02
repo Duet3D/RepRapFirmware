@@ -11,6 +11,7 @@
 
 #include <CAN/CanMessageGenericConstructor.h>
 #include <CanMessageGenericTables.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(RemoteLedStrip, __VA_ARGS__)
@@ -59,6 +60,21 @@ GCodeResult RemoteLedStrip::Configure(GCodeBuffer& gb, const StringRef& reply, c
 	{
 		// Save the pin name for the object model
 		pinNameString.Assign(pinName);
+
+		try
+		{
+			// See if the maximum strip length was provided (the default value is set up by the constructor), if so save is for the object model
+			bool dummy;
+			gb.TryGetUIValue('U', maxLeds, dummy);
+
+			// Save colour order for the object model if it was provided
+			uint32_t order;
+			if (gb.TryGetLimitedUIValue('K', order, dummy, (uint32_t)ColorOrder::count))
+			{
+				colorOrder = (ColorOrder)order;
+			}
+		}
+		catch (const GCodeException&) { }
 	}
 	return rslt;
 }

@@ -60,7 +60,7 @@ public:
 	void Start() noexcept;
 	void Stop() noexcept;
 
-	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowed = true) noexcept override;			// enable or disable the network
+	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, int tlsParam = 1) noexcept override;			// enable or disable the network
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
 	int EnableState() const noexcept override;
@@ -97,8 +97,8 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL
 
-	// TODO: implement TLS support for WiFi interface
-	bool LoadTlsCertificates(const StringRef& reply) noexcept override { return false; }
+	bool SupportsTls() const noexcept override { return supportsTls; }
+	bool LoadTlsCertificates(const StringRef& reply) noexcept override;
 
 	// Disable a network protocol that is enabled. If 'permanent' is true we will leave this protocol disables, otherwise we are about to re-enable it with different parameters.
 	void IfaceStartProtocol(NetworkProtocol protocol) noexcept override;
@@ -111,6 +111,11 @@ private:
 	void TerminateSockets() noexcept;
 	void TerminateSockets(TcpPort port, bool local = true) noexcept;
 	void StopListening(TcpPort port) noexcept;
+
+	GCodeResult TryEnableTls(const StringRef& reply) noexcept;		// probe networkEnableTls and trigger auto-import if SD has cert/key
+	bool ImportTlsFromSd(const StringRef& reply) noexcept;			// chunk /sys/server.{crt,key} to ESP, re-probe, then secure-delete the SD copies
+	bool SendPemFile(const char *_ecv_array filename, NetworkCommand cmd, const StringRef& reply) noexcept;
+	void HandlePendingTlsRequest() noexcept;						// consume any latched M552 T1 / T-1 once the ESP is ready to accept SPI commands
 
 #if HAS_CLIENTS
 	void ConnectProtocol(NetworkProtocol protocol) noexcept
@@ -133,7 +138,7 @@ private:
 		return SendCommand(cmd, socket, flags, 0, dataOut, dataOutLength, recvr.DmaPointer(), recvr.Size());
 	}
 
-	void SendListenCommand(TcpPort port, NetworkProtocol protocol, unsigned int maxConnections) noexcept;
+	void SendListenCommand(TcpPort port, NetworkProtocol protocol, unsigned int maxConnections, bool tls) noexcept;
 	void SendConnectCommand(TcpPort port, NetworkProtocol protocol, uint32_t ip) noexcept;
 	void GetNewStatus() noexcept;
 	void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept;
@@ -161,6 +166,8 @@ private:
 	size_t currentSocket;
 
 	TcpPort ftpDataPort;
+	// FTP data port listener is TLS-wrapped (tracks the control connection's PROT state)
+	bool ftpDataPortTls;
 	bool closeDataPort;
 
 	WiFiState requestedMode;
@@ -187,6 +194,16 @@ private:
 	uint8_t startupRetryCount;
 	int8_t rssi = 0;
 	bool usingDhcp = true;
+	// Latched M552 T1: consumed by HandlePendingTlsRequest once the ESP is responsive
+	bool tlsRequested = false;
+	// Latched M552 T-1: sends networkClearTls via HandlePendingTlsRequest once the ESP is responsive
+	bool tlsClearRequested = false;
+	// Set true by a successful networkEnableTls probe; cleared on interface disable
+	bool supportsTls = false;
+	// Sticky copy of M552 T1 across WiFi-module restarts (M997 reflash, brownout, ...). Cleared by
+	// M552 T0/T-1 or when probe returns ResponseUnknownCommand. Used to re-arm tlsRequested after a
+	// restart so the user does not have to re-issue M552 T1
+	bool tlsUserEnabled = false;
 
 	// For processing debug messages from the WiFi module
 	bool serialRunning;

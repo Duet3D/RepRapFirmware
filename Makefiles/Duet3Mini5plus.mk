@@ -135,7 +135,7 @@ DUET3MINI_CFLAGS := -c -std=gnu99 \
 	$(DEBUG_FLAGS)
 
 # Compiler flags - C++
-DUET3MINI_CXXFLAGS := -c -std=gnu++17 \
+DUET3MINI_CXXFLAGS := -c -std=c++20 \
 	-Wall \
 	-mcpu=cortex-m4 \
 	-mthumb \

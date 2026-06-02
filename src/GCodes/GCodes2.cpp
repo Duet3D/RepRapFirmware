@@ -849,7 +849,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							const uint32_t rpm = gb.GetUIValue();
 							if (ms.currentTool != nullptr && ms.currentTool->GetSpindleNumber() == (int)slot)
 							{
-								ms.currentTool->SetSpindleRpm(rpm, true);
+								ms.currentTool->SetSpindleRpm(gb, rpm, true);
 							}
 							else
 							{
@@ -2918,10 +2918,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-			case 301: // Set/report hot end PID values
-				result = reprap.GetHeat().SetPidParameters(1, gb, reply);
-				break;
-
 			case 302: // Allow, deny or report cold extrudes and configure minimum extrusion/retraction temps
 				{
 					bool seen = false;
@@ -2969,10 +2965,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 303: // Run PID tuning
 				result = reprap.GetHeat().TuneHeater(gb, reply);
-				break;
-
-			case 304: // Set/report heated bed PID values
-				result = reprap.GetHeat().SetPidParameters(0, gb, reply);
 				break;
 
 			case 305: // Set/report specific heater parameters
@@ -3168,7 +3160,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			// Support for M408 was withdrawn at version 3.7
 
-#if SUPPORT_OBJECT_MODEL
 			case 409: // Get object model values in JSON format
 				{
 					String<StringLength100> key;
@@ -3222,7 +3213,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
-#endif
 
 			case 425: // Backlash compensation
 				result = reprap.GetMove().ConfigureBacklashCompensation(gb, reply);
@@ -3585,8 +3575,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						seen = true;
 						const int mode = gb.GetIValue();
-						const bool tlsAllowed = gb.Seen('T') && (gb.GetIValue() != 0);	// T1 enabled TLS, default is TLS disabled
-						result = network.EnableInterface(interface, mode, ssid.GetRef(), reply, tlsAllowed);
+						// T1 = enable TLS; T-1 = clear stored TLS material and come up plain; T0 / absent = plain
+						int tlsParam = 0;
+						if (gb.Seen('T'))
+						{
+							const int t = gb.GetIValue();
+							tlsParam = (t < 0) ? -1 : (t > 0) ? 1 : 0;
+						}
+						result = network.EnableInterface(interface, mode, ssid.GetRef(), reply, tlsParam);
 					}
 
 					if (!seen)

@@ -280,9 +280,6 @@ void DDA::DebugPrint(const char *_ecv_array tag) const noexcept
 // Either way, return the amount of extrusion we didn't do in the extruder coordinates of nextMove
 MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) noexcept
 {
-	// 0. If there are more total axes than visible axes, then we must ignore any movement data in nextMove for the invisible axes.
-	// Likewise we must ignore any movement data in nextMove for unowned axes.
-	// The call to CartesianToMotorSteps may adjust the invisible axis endpoints for architectures such as CoreXYU and delta with >3 towers, so set them up here.
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
 	const Move& move = reprap.GetMove();
@@ -299,6 +296,13 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	// Deal with axis movement
 	if (doMotorMapping)
 	{
+		// If there are more total axes than visible axes, then we must ignore any movement data in nextMove for the invisible axes.
+		// The call to CartesianToMotorSteps may adjust the invisible axis endpoints for architectures such as CoreXYU and delta with >3 towers, so set them up here.
+		for (size_t axis = numVisibleAxes; axis < numTotalAxes; ++axis)
+		{
+			endPoint[axis] = prev->DriveCoordinates()[axis];
+		}
+
 		const MovementError err = move.CartesianToMotorSteps(nextMove.coords, endPoint, nextMove.isCoordinated);	// transform the axis coordinates to motor endpoints
 		if (err != MovementError::ok)
 		{

@@ -4,6 +4,8 @@
 #define FILESTORE_H
 
 #include <Core.h>
+#include <atomic>
+
 #if HAS_MASS_STORAGE
 # include "Libraries/Fatfs/ff.h"
 #endif
@@ -97,7 +99,7 @@ private:
 	void Init() noexcept;
 	bool Store(const char *_ecv_array s, size_t len, size_t *bytesWritten) noexcept;	// Write data to the non-volatile storage
 
-	volatile unsigned int openCount;
+	std::atomic<unsigned int> openCount;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	FileWriteBuffer *writeBuffer;
