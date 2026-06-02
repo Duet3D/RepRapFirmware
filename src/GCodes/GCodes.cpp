@@ -5183,7 +5183,9 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 				{
 					MutexLocker lock(reprap.GetObjectModelReportMutex());
 					if (OutputBuffer::GetFreeBuffers() < MinimumBuffersForObjectModel) { break; }
-					statusBuf = reprap.GetModelResponse(&gb, "", "d99fi");				// may throw
+					// In the following, pass nullptr instead of &gb so that no line number is included with the JSON response.
+					// DuetScreen relies on this so that it knows the response was generated automatically.
+					statusBuf = reprap.GetModelResponse(nullptr, "", "d99fi");									// may throw
 				}
 				if (statusBuf != nullptr)
 				{
