@@ -70,6 +70,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;
 #define SUPPORT_POLAR			0					// leave out polar kinematics to save flash space
 #define SUPPORT_SCARA			0					// leave out SCARA kinematics to save flash space
 #define SUPPORT_FIVEBARSCARA	0					// leave out 5-bar SCARA kinematics to save flash space
+#define SUPPORT_ROBOT5AXIS	0					// leave out robot kinematics to save flash space
 
 // The physical capabilities of the machine
 

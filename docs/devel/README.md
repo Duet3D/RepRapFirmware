@@ -13,6 +13,7 @@ Start with [ARCHITECTURE.md](ARCHITECTURE.md) — the system-level diagram and c
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Top-level firmware architecture, the `RepRap` container, the `Spin()` cooperative loop, FreeRTOS tasks, build-time variants. |
 | [GCODE_PROCESSING.md](GCODE_PROCESSING.md) | G/M/T-code lifecycle: input channels, the `GCodeBuffer`, parser, state machine, command dispatch tables (`GCodes2.cpp` … `GCodes7.cpp`). |
 | [MOTION_PIPELINE.md](MOTION_PIPELINE.md) | Move planning: `RawMove` → `DDA` → `MoveSegment` → `DriveMovement` → step ISR. Look-ahead, jerk, input shaping, `StepTimer`. |
+| [KINEMATICS.md](KINEMATICS.md) | Kinematics architecture and conversion contracts, including generalized `K13` (`robot5axis`) mixed rotary/linear chain implementation and M669 configuration. |
 | [HEATING.md](HEATING.md) | Heater / sensor / fan / tool architecture. PID, autotune, virtual heaters, remote sensors over CAN. |
 | [OBJECT_MODEL.md](OBJECT_MODEL.md) | The reflected machine state — definition macros, JSON serialisation, sequence numbers, M409 query, replication to DSF. |
 | [CAN_BUS.md](CAN_BUS.md) | CAN-FD bus to expansion / tool boards: addressing, time sync, motion fragments, generic command messages, `ExpansionManager`. |
