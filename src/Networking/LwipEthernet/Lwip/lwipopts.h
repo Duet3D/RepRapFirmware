@@ -146,12 +146,12 @@
 # ifdef MBEDTLS_CONFIG_FILE
 #define MEM_SIZE_WITH_TLS               49152   // 48KiB - LwIP shares its heap with MbedTls
 # endif
-#define MEM_SIZE_WITHOUT_TLS            16384
+#define MEM_SIZE_WITHOUT_TLS            20480
 #else
 # ifdef MBEDTLS_CONFIG_FILE
 #define MEM_SIZE_WITH_TLS               43008   // 42KiB - LwIP shares its heap with MbedTls
 # endif
-#define MEM_SIZE_WITHOUT_TLS            14848
+#define MEM_SIZE_WITHOUT_TLS            16384
 #endif
 
 // MEM_SIZE is set at runtime via lwipHeapSize (see LwipEthernetInterface.cpp).
