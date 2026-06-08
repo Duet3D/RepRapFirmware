@@ -8,6 +8,7 @@
 |---|---|
 | [Move.cpp](Move.cpp), [Move2.cpp](Move2.cpp), [Move3.cpp](Move3.cpp) | Top-level motion control and queue management. |
 | [DDA.cpp](DDA.cpp), [DDARing.cpp](DDARing.cpp) | Digital differential analyzer objects and queue structures. |
+| [DDA_3rdOrder.cpp](DDA_3rdOrder.cpp), [MovementProfile.cpp](MovementProfile.cpp) | S-curve (3rd-order, jerk-limited) planning and per-move phase generation. |
 | [DriveMovement.cpp](DriveMovement.cpp), [MoveSegment.cpp](MoveSegment.cpp) | Per-drive and per-segment execution details. |
 | [StepTimer.cpp](StepTimer.cpp) | Step-timing and ISR-facing timing support. |
 | [Kinematics/](Kinematics) | Machine-type-specific kinematics implementations. |
@@ -38,6 +39,7 @@ The short version:
 - `DriveMovement` is executable per-drive state derived from DDA segments.
 - `StepTimer` provides absolute-time callback scheduling at step-clock resolution.
 - `AxisShaper` and `ExtruderShaper` modify motion/extrusion dynamics to reduce ringing and pressure lag.
+- `MovementProfile` holds the optional S-curve (3rd-order, jerk-limited) plan, which can span several queued moves.
 
 For Duet 3 systems it also owns the split between local and remote execution. The move planner produces a single coherent machine motion, then separates the local-driver portion from the pieces that must be sent over CAN to expansion boards.
 
@@ -210,6 +212,8 @@ State machine:
 - `empty`: free slot.
 - `planned` (plus `created` on S-curve builds): queue-resident, still mutable by look-ahead.
 - `committed`: frozen into executable segment/remote representation.
+
+For S-curve moves the speed profile is not owned by the individual DDA but by a `MovementProfile` that may span several queued moves; see [S-Curve (3rd-Order) Motion Planning](#s-curve-3rd-order-motion-planning).
 
 Key responsibilities:
 
@@ -400,6 +404,96 @@ Axis shaping and pressure advance together:
 - Axis shaping changes the acceleration timeline.
 - Pressure advance uses that changed timeline to compute extrusion pre-compensation.
 - Net effect: ringing reduction and pressure compensation remain consistent rather than fighting each other.
+
+## S-Curve (3rd-Order) Motion Planning
+
+Primary files: [MovementProfile.cpp](MovementProfile.cpp), [MovementProfile.h](MovementProfile.h), [DDA_3rdOrder.cpp](DDA_3rdOrder.cpp)
+
+By default RRF uses trapezoidal (2nd-order) motion: each move is an accel / steady / decel profile in which acceleration changes instantaneously at the phase boundaries. S-curve planning replaces this with **3rd-order, jerk-limited** motion, where `jerk` is the rate of change of acceleration. Acceleration is ramped up and down smoothly rather than switched on and off, which reduces the high-frequency content that excites mechanical resonance and reduces stress on the drive train.
+
+### When S-Curve Is Active
+
+S-curve is gated at both compile time and run time:
+
+- **Compile time**: `SUPPORT_S_CURVE` (enabled by default on the Duet 3 MB6HC). It cannot be built without `SUPPORT_PHASE_STEPPING` — the two are coupled by a hard `#error` in [Pins.h](../Config/Pins.h).
+- **Run time**: enabled only when an acceleration time has been configured (`M201 T<seconds>`, stored as `accelerationTime`) **and** every local driver is in phase-stepping mode (`StepMode::phase`). `Move::UpdateSCurveFlagAndJerk` re-evaluates this and sets the `usingSCurve` flag; if the requirement isn't met it falls back to trapezoidal motion and reports a warning.
+
+The per-axis jerk is *derived*, not configured directly:
+
+$$
+\text{jerk}_{axis} = \frac{\text{acceleration}_{axis}}{\text{accelerationTime}}
+$$
+
+So `accelerationTime` is the time taken to ramp from zero to full acceleration; a longer time means lower jerk and smoother (but slower-responding) motion.
+
+S-curve is **not** transmitted over CAN. Remote drivers still receive trapezoidal payloads with equivalent averaged accel/decel terms (see [CAN Motion](#can-motion-what-is-sent-to-remote-boards)), which is why a mixed local/remote machine can run S-curve locally while remote slices stay 2nd-order.
+
+### The 7-Phase Profile
+
+`MovementProfile` describes one jerk-limited profile as up to seven phases. The end acceleration is always zero, and currently the end speed is always zero too (a full profile ramps a sequence of moves up from rest and back down to rest).
+
+| Phase | `distances[]` | Meaning |
+|---|---|---|
+| 0 | `distances[0]` | Acceleration increasing (positive jerk) up to peak acceleration. |
+| 1 | `distances[1]` | Constant peak acceleration (only if the acceleration limit is reached). |
+| 2 | `distances[2]` | Acceleration decreasing back to zero — passes through and beyond top speed. |
+| 3 | `distances[3]` | Constant top speed (steady phase). |
+| 4 | `distances[4]` | Deceleration increasing (negative jerk) up to peak deceleration. |
+| 5 | `distances[5]` | Constant peak deceleration (only if the deceleration limit is reached). |
+| 6 | `distances[6]` | Deceleration decreasing back to zero. |
+
+```mermaid
+flowchart LR
+	P0[0 accel up] --> P1[1 peak accel]
+	P1 --> P2[2 accel down]
+	P2 --> P3[3 steady speed]
+	P3 --> P4[4 decel up]
+	P4 --> P5[5 peak decel]
+	P5 --> P6[6 decel down]
+```
+
+Not every profile uses all seven phases. The planner degrades gracefully depending on which limits bind:
+
+- **7 phases**: top speed, max acceleration and max deceleration are all reached.
+- **5 phases**: phases 1 and/or 5 (constant accel/decel) or phase 3 (steady speed) drop out when the corresponding limit is not reached.
+- **3 phases**: short moves that reach neither the requested speed nor the acceleration limit — accel-up, accel-down (through the peak), decel-down.
+
+`MovementProfile::CalculateSimpleSCurvePlan` / `CalculateSimpleFivePhasePlan` handle the common symmetric case (start speed, end speed and start acceleration all zero, with peak deceleration equal to minus peak acceleration). `CalculateGeneralSCurvePlan` handles the general case with non-zero start speed/acceleration. Phase durations come from solving the cubic/quadratic/quartic equations relating distance, speed, acceleration and jerk (`SmallestNonNegativeCubicSolution`, `SmallestNonNegativeQuadraticSolution`, and a quartic solver).
+
+To avoid rounding errors from extremely short phases, the planner enforces a `MinimumPhaseDuration` (about 0.5 ms). If a phase would be shorter than this it reduces the top speed to lengthen it, recomputing the profile (often dropping from a 7-phase to a 5-phase plan).
+
+### Planning Across Multiple Moves
+
+This is the key structural difference from trapezoidal lookahead. Trapezoidal look-ahead (`DDA::DoLookahead`) adjusts the *junction speeds* between individually-profiled moves. S-curve planning instead builds **one `MovementProfile` that can span several queued moves** — a single jerk-limited ramp can accelerate across the start of one move and decelerate across the end of another.
+
+The active plan is held on the `DDARing` (`plannedProfile`) and persists across moves. `DDARing::PrepareMoves` re-uses it where possible:
+
+- `DDA::IsSCurveMove` selects S-curve handling for a move.
+- `DDARing::NeedNewPlan` decides whether the existing plan is still valid, or whether a new one must be built — for example a new plan is needed when there is no plan yet, or when the plan covered all queued moves and more moves have since been added (unless we have already passed the point of no return, such as the reducing-deceleration phase).
+- `DDA::PlanMoves(firstUnpreparedMove, plannedProfile, stopping)` builds (or rebuilds) the multi-move profile.
+
+The profile tracks `numberOfMovesCovered`, `reachesRequestedSpeed` and `usesAllMoves` so that re-planning can be skipped when nothing relevant has changed.
+
+```mermaid
+flowchart TB
+	A[PrepareMoves: next provisional move] --> B{IsSCurveMove?}
+	B -- no --> P[Trapezoidal Prepare]
+	B -- yes --> C{NeedNewPlan?}
+	C -- yes --> D[PlanMoves builds plannedProfile across moves]
+	C -- no --> E[Reuse existing plannedProfile]
+	D --> F[DDA::Prepare slices this move's phases]
+	E --> F
+	F --> G[Emit MoveSegments with jerk term]
+```
+
+### From Plan To Segments
+
+`DDA::Prepare` consumes the part of `plannedProfile` belonging to this DDA and converts each phase's distance into a duration in step clocks, filling `PrepParams`:
+
+- `phaseClocks[7]`: step-clock duration of each phase (`TotalAccelClocks` = phases 0–2, `SteadyClocks` = phase 3, `TotalDecelClocks` = phases 4–6).
+- `initialAcceleration` / `peakAcceleration`, `initialDeceleration` / `peakDeceleration`, and `jerk`.
+
+Because a single profile can span several moves, one DDA may carry only some of the seven phases; `Prepare` records the last phase number it consumed and leaves the remainder for following moves. The resulting `MoveSegment` objects carry an extra jerk coefficient `j` (only present when `SUPPORT_S_CURVE` is built), so the per-step position function integrated in the ISR is a cubic in time rather than the quadratic used for trapezoidal motion. Pressure advance (`ExtruderShaper`) averages its advance term across each phase, including the S-curve sub-phases, so extrusion compensation tracks the jerk-limited acceleration timeline.
 
 ## Component Interaction Deep Dive
 
