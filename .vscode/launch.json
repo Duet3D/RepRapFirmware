@@ -55,6 +55,14 @@
                     "text": "-enable-pretty-printing",
                     "ignoreFailures": true
                 }
+            ],
+            "postRemoteConnectCommands": [
+                {
+                    "text": "monitor reset"
+                },
+                {
+                    "text": "monitor halt"
+                }
             ]
         },
         {
@@ -105,6 +113,14 @@
                     "text": "-enable-pretty-printing",
                     "ignoreFailures": true
                 }
+            ],
+            "postRemoteConnectCommands": [
+                {
+                    "text": "monitor reset"
+                },
+                {
+                    "text": "monitor halt"
+                }
             ]
         },        
         {
@@ -154,6 +170,14 @@
                 {
                     "text": "-enable-pretty-printing",
                     "ignoreFailures": true
+                }
+            ],
+            "postRemoteConnectCommands": [
+                {
+                    "text": "monitor reset"
+                },
+                {
+                    "text": "monitor halt"
                 }
             ]
         },
