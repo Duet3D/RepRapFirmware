@@ -467,7 +467,7 @@ void LocalHeater::Spin() noexcept
 					if (mode == HeaterMode::stable && GetFunction() != HeaterFunction::chamber)
 					{
 						const float limitedAccumulator = min<float>(iAccumulator, GetModel().GetMaxPwm());
-						if (limitedAccumulator > expectedPwm * PwmFaultLevel)
+						if (limitedAccumulator > expectedPwm * GetPwmFaultLevel())
 						{
 							++heaterPwmFaultCount;
 							if (heaterPwmFaultCount * HeatSampleIntervalMillis > GetMaxPwmFaultTime() * SecondsToMillis)

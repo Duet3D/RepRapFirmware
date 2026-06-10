@@ -21,11 +21,11 @@ class HeaterMonitor;
 
 class LocalHeater : public Heater
 {
-	static const size_t NumPreviousTemperatures = 4;		// How many samples we average the temperature derivative over
+	static const size_t NumPreviousTemperatures = 4;						// How many samples we average the temperature derivative over
 
 public:
 	explicit LocalHeater(unsigned int heaterNum) noexcept;
-	~LocalHeater() noexcept override;
+	~LocalHeater() override;
 
 	GCodeResult ConfigurePortAndSensor(const char *_ecv_array portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) override;
 	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept override;
