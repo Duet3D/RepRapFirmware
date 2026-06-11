@@ -19,32 +19,56 @@ jobs:
     env:
       ARM_TOOLCHAIN: arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi
     steps:
+      # Build the branch matching this workflow run (github.ref_name) in each dependency repo,
+      # falling back to the repo's tracked branch when that branch doesn't exist there.
+      - name: "Resolve branch refs"
+        id: refs
+        env:
+          REF: ${{ github.ref_name }}
+        run: |
+          resolve() {
+            if git ls-remote --exit-code --heads "https://github.com/Duet3D/$1.git" "$REF" >/dev/null 2>&1; then
+              echo "$1: $REF"
+              echo "$1=$REF" >> "$GITHUB_OUTPUT"
+            else
+              echo "$1: $REF not found, using $2"
+              echo "$1=$2" >> "$GITHUB_OUTPUT"
+            fi
+          }
+          resolve CANlib 3.7-dev
+          resolve CoreN2G 3.7-dev
+          resolve FreeRTOS 3.7-dev
+          resolve LibTinyusb 3.7-dev
+          resolve LibMbedTls master
+          resolve RRFLibraries 3.7-dev
+          resolve WiFiSocketServerRTOS master
+
       - name: "Check out CANlib"
         uses: actions/checkout@v6
         with:
           repository: "Duet3D/CANlib"
-          ref: "3.7-dev"
+          ref: ${{ steps.refs.outputs.CANlib }}
           path: "./CANlib"
 
       - name: "Check out CoreN2G"
         uses: actions/checkout@v6
         with:
           repository: "Duet3D/CoreN2G"
-          ref: "3.7-dev"
+          ref: ${{ steps.refs.outputs.CoreN2G }}
           path: "./CoreN2G"
 
       - name: "Check out FreeRTOS"
         uses: actions/checkout@v6
         with:
           repository: "Duet3D/FreeRTOS"
-          ref: "3.7-dev"
+          ref: ${{ steps.refs.outputs.FreeRTOS }}
           path: "./FreeRTOS"
 
       - name: "Check out LibTinyusb"
         uses: actions/checkout@v6
         with:
           repository: "Duet3D/LibTinyusb"
-          ref: "3.7-dev"
+          ref: ${{ steps.refs.outputs.LibTinyusb }}
           path: "./LibTinyusb"
           submodules: "recursive"
 
@@ -52,7 +76,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: "Duet3D/LibMbedTls"
-          ref: "master"
+          ref: ${{ steps.refs.outputs.LibMbedTls }}
           path: "./LibMbedTls"
 
       - name: "Check out RepRapFirmware"
@@ -66,14 +90,14 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: "Duet3D/RRFLibraries"
-          ref: "3.7-dev"
+          ref: ${{ steps.refs.outputs.RRFLibraries }}
           path: "./RRFLibraries"
 
       - name: "Check out WiFiSocketServerRTOS"
         uses: actions/checkout@v6
         with:
           repository: "Duet3D/WiFiSocketServerRTOS"
-          ref: "master"
+          ref: ${{ steps.refs.outputs.WiFiSocketServerRTOS }}
           path: "./WiFiSocketServerRTOS"
 
       - name: "Prepare CrcAppender"
