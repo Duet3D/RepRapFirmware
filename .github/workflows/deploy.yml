@@ -1,4 +1,4 @@
-name: Build and and deploy firmware to dev
+name: Build and deploy firmware
 
 on:
   workflow_dispatch:
@@ -7,41 +7,41 @@ on:
         description: "Version"
         required: true
         type: string
+      upload_to_dev_feed:
+        description: "Upload binaries to the dev package feed"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      ARM_TOOLCHAIN: arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi
     steps:
       - name: "Check out CANlib"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/CANlib"
           ref: "3.7-dev"
           path: "./CANlib"
 
       - name: "Check out CoreN2G"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/CoreN2G"
           ref: "3.7-dev"
           path: "./CoreN2G"
 
-      - name: "Check out Duet3Expansion"
-        uses: actions/checkout@v5
-        with:
-          repository: "Duet3D/Duet3Expansion"
-          ref: "3.7-dev"
-          path: "./Duet3Expansion"
-
       - name: "Check out FreeRTOS"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/FreeRTOS"
           ref: "3.7-dev"
           path: "./FreeRTOS"
 
       - name: "Check out LibTinyusb"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/LibTinyusb"
           ref: "3.7-dev"
@@ -49,35 +49,28 @@ jobs:
           submodules: "recursive"
 
       - name: "Check out LibMbedTls"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/LibMbedTls"
           ref: "master"
           path: "./LibMbedTls"
 
-      - name: "Check out Qfplib-M0-full"
-        uses: actions/checkout@v5
-        with:
-          repository: "Duet3D/Qfplib-M0-full"
-          ref: "3.7-dev"
-          path: "./Qfplib-M0-full"
-
       - name: "Check out RepRapFirmware"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/RepRapFirmware"
-          ref: "3.7-dev"
+          ref: ${{ github.ref_name }}
           path: "./RepRapFirmware"
 
       - name: "Check out RRFLibraries"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/RRFLibraries"
           ref: "3.7-dev"
           path: "./RRFLibraries"
 
       - name: "Check out WiFiSocketServerRTOS"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/WiFiSocketServerRTOS"
           ref: "master"
@@ -95,59 +88,65 @@ jobs:
         run: |
           sed -i "s/# define MAIN_VERSION.\+/# define MAIN_VERSION \"${{ inputs.version }}\"/g" ./RepRapFirmware/src/Version.h
 
-      - name: "Set up Eclipse-CDT"
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y libarchive-tools default-jre
-          curl -L -O "https://pkg.duet3d.com/eclipse-cpp-2025-09-R-linux-gtk-x86_64.tar.gz"
-          sudo bsdtar -x -f ./eclipse-cpp-2025-09-R-linux-gtk-x86_64.tar.gz -C /opt
-          echo "/opt/eclipse" >> $GITHUB_PATH
-
       - name: "Set up ARM GCC"
         run: |
-          curl -L -o ./arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi.tar.xz "https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/binrel/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi.tar.xz"
-          bsdtar -x -f ./arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi.tar.xz
+          curl -L -o "./$ARM_TOOLCHAIN.tar.xz" "https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/binrel/$ARM_TOOLCHAIN.tar.xz"
+          tar -xf "./$ARM_TOOLCHAIN.tar.xz"
 
-      - name: "Build RepRapFirmware"
+      - name: "Build firmware"
+        working-directory: ./RepRapFirmware
+        env:
+          CROSS_COMPILE: ${{ github.workspace }}/${{ env.ARM_TOOLCHAIN }}/bin/arm-none-eabi-
         run: |
-          ./RepRapFirmware/Scripts/build-headless.sh $GITHUB_WORKSPACE/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin
+          make -j"$(nproc)" Duet3_MB6HC
+          make -j"$(nproc)" Duet3_MB6XD
+          make -j"$(nproc)" Duet3Mini5plus
 
       - name: "Arrange files"
         run: |
-          mv ./RepRapFirmware/*/*.bin ./
-          mv ./RepRapFirmware/*/*.uf2 ./
-          mv ./RepRapFirmware/*/*.map ./
-          rm ./Duet3Firmware_Mini5plus.bin
+          mkdir -p upload/maps
+          cp ./RepRapFirmware/*/Duet3Firmware_*.bin ./RepRapFirmware/*/Duet3Firmware_*.uf2 ./upload/
+          rm -f ./upload/Duet3Firmware_Mini5plus.bin
+          cp ./RepRapFirmware/*/Duet3Firmware_*.map ./upload/maps/
 
       - name: "Attach binaries"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: binaries
           path: |
-            ./*.bin
-            ./*.uf2
+            ./upload/*.bin
+            ./upload/*.uf2
 
       - name: "Attach symbols"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: symbols
           path: |
-            ./*.map
+            ./upload/maps/*.map
 
-      - name: "Prepare files for upload"
-        run: |
-          rm Duet2CombinedFirmware.bin
-          mkdir files
-          mv ./*.bin ./files/
-          mv ./*.uf2 ./files/
-
-      - name: "Upload files to dev feed"
+      - name: "Upload files to testing directory"
         uses: Creepios/sftp-action@v1.0.5
         with:
           host: pkg.duet3d.com
           port: 22
           username: pkg
           privateKey: ${{ secrets.PKG_DEPLOY_KEY }}
-          localPath: ./files
-          remotePath: /var/rrf-pkg/dev
+          localPath: ./upload
+          remotePath: /var/www/reprapfirmware/testing/${{ github.ref_name }}
 
+      - name: "Prepare files for dev feed"
+        if: ${{ inputs.upload_to_dev_feed }}
+        run: |
+          mkdir feed
+          cp ./upload/*.bin ./upload/*.uf2 ./feed/
+
+      - name: "Upload files to dev feed"
+        if: ${{ inputs.upload_to_dev_feed }}
+        uses: Creepios/sftp-action@v1.0.5
+        with:
+          host: pkg.duet3d.com
+          port: 22
+          username: pkg
+          privateKey: ${{ secrets.PKG_DEPLOY_KEY }}
+          localPath: ./feed
+          remotePath: /var/rrf-pkg/dev
