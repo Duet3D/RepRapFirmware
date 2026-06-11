@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version (leave empty to keep Version.h unchanged)"
+        description: "Version (optional)"
         required: false
         type: string
       upload_to_dev_feed:
-        description: "Upload binaries to the dev package feed"
+        description: "Upload binaries to dev pkg feed"
         required: false
         type: boolean
         default: false
@@ -144,18 +144,14 @@ jobs:
         env:
           CROSS_COMPILE: ${{ github.workspace }}/${{ env.ARM_TOOLCHAIN }}/bin/arm-none-eabi-
         run: |
-          make -j"$(nproc)" Duet3_MB6HC
-          make -j"$(nproc)" Duet3_MB6XD
-          make -j"$(nproc)" Duet3Mini5plus
+          make -j"$(nproc)" all
 
       - name: "Build expansion firmware"
         working-directory: ./Duet3Expansion
         env:
           CROSS_COMPILE: ${{ github.workspace }}/${{ env.ARM_TOOLCHAIN }}/bin/arm-none-eabi-
         run: |
-          for config in EXP3HC EXP1XD EXP1HCL TOOL1LC SAMMYC21 SZP M23CL F3PTB TOOL1RR TOOLINDX; do
-            make -j"$(nproc)" "$config"
-          done
+          make -j"$(nproc)" all
 
       - name: "Arrange files"
         run: |

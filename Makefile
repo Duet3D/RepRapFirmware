@@ -45,7 +45,7 @@ export DEBUG_FLAGS
 .DEFAULT_GOAL := help
 
 # Available build configurations
-CONFIGS := Duet3_MB6HC Duet3_MB6XD Duet3_CAN0 Duet3Mini5plus Duet3_MB6HC_no_SD FMDC_V03
+CONFIGS := Duet3_MB6HC Duet3_MB6XD Duet3_CAN0 Duet3Mini5plus Duet3_MB6HC_no_SD
 
 # Print available targets
 .PHONY: help
@@ -59,7 +59,6 @@ help:
 	$(Q)echo "  Duet3_MB6XD         - Duet 3 MB6XD expansion (SAME70)"
 	$(Q)echo "  Duet3_CAN0          - Duet 3 CAN expansion (SAME70)"
 	$(Q)echo "  Duet3Mini5plus      - Duet 3 Mini 5+ (SAME51)"
-	$(Q)echo "  FMDC_V03            - FMDC version 0.3"
 	$(Q)echo "  Duet3_MB6HC_no_SD   - Duet 3 MB6HC without SD card support"
 	$(Q)echo ""
 	$(Q)echo "Other targets:"
@@ -82,8 +81,9 @@ help:
 	$(Q)echo ""
 
 # Build all configurations
+# Excluded from 'all' (still buildable as explicit targets): Duet3_MB6HC_no_SD (duplicate MB6HC binary name), Duet3_CAN0
 .PHONY: all
-all: $(CONFIGS)
+all: $(filter-out Duet3_MB6HC_no_SD Duet3_CAN0,$(CONFIGS))
 
 # Verify toolchain
 .PHONY: test-toolchain
@@ -200,7 +200,6 @@ $(WORKSPACE)/CANlib/SAM4S_RTOS/libCANlib.a:
 -include Makefiles/Duet3_MB6XD.mk
 -include Makefiles/Duet3_CAN0.mk
 -include Makefiles/Duet3Mini5plus.mk
--include Makefiles/FMDC_V03.mk
 -include Makefiles/Duet3_MB6HC_no_SD.mk
 
 # Generic clean target
