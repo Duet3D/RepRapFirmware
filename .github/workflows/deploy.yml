@@ -41,7 +41,7 @@ jobs:
           resolve LibTinyusb 3.7-dev
           resolve LibMbedTls master
           resolve RRFLibraries 3.7-dev
-          resolve WiFiSocketServerRTOS master
+          resolve WiFiSocketServerRTOS tls_support
 
       - name: "Check out CANlib"
         uses: actions/checkout@v6
