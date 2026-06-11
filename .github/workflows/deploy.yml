@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version"
-        required: true
+        description: "Version (leave empty to keep Version.h unchanged)"
+        required: false
         type: string
       upload_to_dev_feed:
         description: "Upload binaries to the dev package feed"
@@ -85,8 +85,14 @@ jobs:
           sudo mv ./CrcAppender-linux-x64 /usr/bin/CrcAppender
 
       - name: "Adjust versions"
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          sed -i "s/# define MAIN_VERSION.\+/# define MAIN_VERSION \"${{ inputs.version }}\"/g" ./RepRapFirmware/src/Version.h
+          if [ -n "$(echo "$VERSION" | tr -d '[:space:]')" ]; then
+            sed -i "s/# define MAIN_VERSION.\+/# define MAIN_VERSION \"$VERSION\"/g" ./RepRapFirmware/src/Version.h
+          else
+            echo "No version supplied, leaving Version.h unchanged"
+          fi
 
       - name: "Set up ARM GCC"
         run: |
