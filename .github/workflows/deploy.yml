@@ -37,9 +37,11 @@ jobs:
           }
           resolve CANlib 3.7-dev
           resolve CoreN2G 3.7-dev
+          resolve Duet3Expansion 3.7-dev
           resolve FreeRTOS 3.7-dev
           resolve LibTinyusb 3.7-dev
           resolve LibMbedTls master
+          resolve Qfplib-M0-full 3.7-dev
           resolve RRFLibraries 3.7-dev
           resolve WiFiSocketServerRTOS tls_support
 
@@ -100,6 +102,20 @@ jobs:
           ref: ${{ steps.refs.outputs.WiFiSocketServerRTOS }}
           path: "./WiFiSocketServerRTOS"
 
+      - name: "Check out Qfplib-M0-full"
+        uses: actions/checkout@v6
+        with:
+          repository: "Duet3D/Qfplib-M0-full"
+          ref: ${{ steps.refs.outputs['Qfplib-M0-full'] }}
+          path: "./Qfplib-M0-full"
+
+      - name: "Check out Duet3Expansion"
+        uses: actions/checkout@v6
+        with:
+          repository: "Duet3D/Duet3Expansion"
+          ref: ${{ steps.refs.outputs.Duet3Expansion }}
+          path: "./Duet3Expansion"
+
       - name: "Prepare CrcAppender"
         env:
           GH_TOKEN: ${{ github.token }}
@@ -132,12 +148,21 @@ jobs:
           make -j"$(nproc)" Duet3_MB6XD
           make -j"$(nproc)" Duet3Mini5plus
 
+      - name: "Build expansion firmware"
+        working-directory: ./Duet3Expansion
+        env:
+          CROSS_COMPILE: ${{ github.workspace }}/${{ env.ARM_TOOLCHAIN }}/bin/arm-none-eabi-
+        run: |
+          for config in EXP3HC EXP1XD EXP1HCL TOOL1LC SAMMYC21 SZP M23CL F3PTB TOOL1RR TOOLINDX; do
+            make -j"$(nproc)" "$config"
+          done
+
       - name: "Arrange files"
         run: |
           mkdir -p upload/maps
-          cp ./RepRapFirmware/*/Duet3Firmware_*.bin ./RepRapFirmware/*/Duet3Firmware_*.uf2 ./upload/
+          cp ./RepRapFirmware/*/Duet3Firmware_*.bin ./RepRapFirmware/*/Duet3Firmware_*.uf2 ./Duet3Expansion/*/Duet3Firmware_*.bin ./upload/
           rm -f ./upload/Duet3Firmware_Mini5plus.bin
-          cp ./RepRapFirmware/*/Duet3Firmware_*.map ./upload/maps/
+          cp ./RepRapFirmware/*/Duet3Firmware_*.map ./Duet3Expansion/*/Duet3Firmware_*.map ./upload/maps/
 
       - name: "Attach binaries"
         uses: actions/upload-artifact@v7
