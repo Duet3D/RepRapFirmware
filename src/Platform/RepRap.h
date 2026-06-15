@@ -151,7 +151,7 @@ public:
 
 	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
 
-	void SaveConfigError(c_string filename, unsigned int lineNumber, c_string errorMessage) noexcept;
+	void SaveConfigError(AutoStringHandle& filename, unsigned int lineNumber, c_string errorMessage) noexcept;
 
 	void BoardsUpdated() noexcept { ++boardsSeq; }
 	void DirectoriesUpdated() noexcept { ++directoriesSeq; }
