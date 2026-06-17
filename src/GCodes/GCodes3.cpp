@@ -1375,11 +1375,8 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 	}
 	else
 	{
-		// It's a serious event that causes the print to pause by default, so send an alert
-		if ((mt & LogLevelMask) != 0)
-		{
-			platform.MessageF((MessageType)(mt & (LogLevelMask | ErrorMessageFlag | WarningMessageFlag)), "%s\n", eventText.c_str());	// log the event
-		}
+		// It's a serious event that causes the print to pause by default, so send an alert, also log the message and include it in the DWC console
+		platform.MessageF((MessageType)(HttpMessage | (mt & (LogLevelMask | ErrorMessageFlag | WarningMessageFlag))), "%s\n", eventText.c_str());	// log the event
 		const bool isPrinting = IsReallyPrinting();
 		reprap.SendSimpleAlert(GenericMessage, eventText.c_str(), (isPrinting) ? "Printing paused" : "Event notification");
 		if (IsReallyPrinting())

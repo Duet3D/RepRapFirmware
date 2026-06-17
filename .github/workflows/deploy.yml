@@ -1,87 +1,120 @@
-name: Build and and deploy firmware to dev
+name: Build and deploy firmware
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version"
-        required: true
+        description: "Version (optional)"
+        required: false
         type: string
+      upload_to_dev_feed:
+        description: "Upload binaries to dev pkg feed"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      ARM_TOOLCHAIN: arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi
     steps:
+      # Build the branch matching this workflow run (github.ref_name) in each dependency repo,
+      # falling back to the repo's tracked branch when that branch doesn't exist there.
+      - name: "Resolve branch refs"
+        id: refs
+        env:
+          REF: ${{ github.ref_name }}
+        run: |
+          resolve() {
+            if git ls-remote --exit-code --heads "https://github.com/Duet3D/$1.git" "$REF" >/dev/null 2>&1; then
+              echo "$1: $REF"
+              echo "$1=$REF" >> "$GITHUB_OUTPUT"
+            else
+              echo "$1: $REF not found, using $2"
+              echo "$1=$2" >> "$GITHUB_OUTPUT"
+            fi
+          }
+          resolve CANlib 3.7-dev
+          resolve CoreN2G 3.7-dev
+          resolve Duet3Expansion 3.7-dev
+          resolve FreeRTOS 3.7-dev
+          resolve LibTinyusb 3.7-dev
+          resolve LibMbedTls master
+          resolve Qfplib-M0-full 3.7-dev
+          resolve RRFLibraries 3.7-dev
+          resolve WiFiSocketServerRTOS tls_support
+
       - name: "Check out CANlib"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/CANlib"
-          ref: "3.7-dev"
+          ref: ${{ steps.refs.outputs.CANlib }}
           path: "./CANlib"
 
       - name: "Check out CoreN2G"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/CoreN2G"
-          ref: "3.7-dev"
+          ref: ${{ steps.refs.outputs.CoreN2G }}
           path: "./CoreN2G"
 
-      - name: "Check out Duet3Expansion"
-        uses: actions/checkout@v5
-        with:
-          repository: "Duet3D/Duet3Expansion"
-          ref: "3.7-dev"
-          path: "./Duet3Expansion"
-
       - name: "Check out FreeRTOS"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/FreeRTOS"
-          ref: "3.7-dev"
+          ref: ${{ steps.refs.outputs.FreeRTOS }}
           path: "./FreeRTOS"
 
       - name: "Check out LibTinyusb"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/LibTinyusb"
-          ref: "3.7-dev"
+          ref: ${{ steps.refs.outputs.LibTinyusb }}
           path: "./LibTinyusb"
           submodules: "recursive"
 
       - name: "Check out LibMbedTls"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/LibMbedTls"
-          ref: "master"
+          ref: ${{ steps.refs.outputs.LibMbedTls }}
           path: "./LibMbedTls"
 
-      - name: "Check out Qfplib-M0-full"
-        uses: actions/checkout@v5
-        with:
-          repository: "Duet3D/Qfplib-M0-full"
-          ref: "3.7-dev"
-          path: "./Qfplib-M0-full"
-
       - name: "Check out RepRapFirmware"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/RepRapFirmware"
-          ref: "3.7-dev"
+          ref: ${{ github.ref_name }}
           path: "./RepRapFirmware"
 
       - name: "Check out RRFLibraries"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/RRFLibraries"
-          ref: "3.7-dev"
+          ref: ${{ steps.refs.outputs.RRFLibraries }}
           path: "./RRFLibraries"
 
       - name: "Check out WiFiSocketServerRTOS"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: "Duet3D/WiFiSocketServerRTOS"
-          ref: "master"
+          ref: ${{ steps.refs.outputs.WiFiSocketServerRTOS }}
           path: "./WiFiSocketServerRTOS"
+
+      - name: "Check out Qfplib-M0-full"
+        uses: actions/checkout@v6
+        with:
+          repository: "Duet3D/Qfplib-M0-full"
+          ref: ${{ steps.refs.outputs['Qfplib-M0-full'] }}
+          path: "./Qfplib-M0-full"
+
+      - name: "Check out Duet3Expansion"
+        uses: actions/checkout@v6
+        with:
+          repository: "Duet3D/Duet3Expansion"
+          ref: ${{ steps.refs.outputs.Duet3Expansion }}
+          path: "./Duet3Expansion"
 
       - name: "Prepare CrcAppender"
         env:
@@ -92,69 +125,79 @@ jobs:
           sudo mv ./CrcAppender-linux-x64 /usr/bin/CrcAppender
 
       - name: "Adjust versions"
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          sed -i "s/# define MAIN_VERSION.\+/# define MAIN_VERSION \"${{ inputs.version }}\"/g" ./RepRapFirmware/src/Version.h
-
-      - name: "Set up Eclipse-CDT"
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y libarchive-tools default-jre
-          ECLIPSE_RELEASE="2026-03"
-          case "$(dpkg --print-architecture)" in
-            amd64) ECLIPSE_HOST_ARCH="x86_64" ;;
-            arm64) ECLIPSE_HOST_ARCH="aarch64" ;;
-            *) echo "Unsupported architecture: $(dpkg --print-architecture)" >&2; exit 1 ;;
-          esac
-          ECLIPSE_ARCHIVE="eclipse-cpp-${ECLIPSE_RELEASE}-R-linux-gtk-${ECLIPSE_HOST_ARCH}.tar.gz"
-          curl -L -O "https://download.eclipse.org/technology/epp/downloads/release/${ECLIPSE_RELEASE}/R/${ECLIPSE_ARCHIVE}"
-          sudo bsdtar -x -f "./${ECLIPSE_ARCHIVE}" -C /opt
-          echo "/opt/eclipse" >> $GITHUB_PATH
+          if [ -n "$(echo "$VERSION" | tr -d '[:space:]')" ]; then
+            sed -i "s/# define MAIN_VERSION.\+/# define MAIN_VERSION \"$VERSION\"/g" ./RepRapFirmware/src/Version.h
+          else
+            echo "No version supplied, leaving Version.h unchanged"
+          fi
 
       - name: "Set up ARM GCC"
         run: |
-          curl -L -o ./arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi.tar.xz "https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/binrel/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi.tar.xz"
-          bsdtar -x -f ./arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi.tar.xz
+          curl -L -o "./$ARM_TOOLCHAIN.tar.xz" "https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/binrel/$ARM_TOOLCHAIN.tar.xz"
+          tar -xf "./$ARM_TOOLCHAIN.tar.xz"
 
-      - name: "Build RepRapFirmware"
+      - name: "Build firmware"
+        working-directory: ./RepRapFirmware
+        env:
+          CROSS_COMPILE: ${{ github.workspace }}/${{ env.ARM_TOOLCHAIN }}/bin/arm-none-eabi-
         run: |
-          ./RepRapFirmware/Scripts/build-headless.sh $GITHUB_WORKSPACE/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin
+          make -j"$(nproc)" all
+
+      - name: "Build expansion firmware"
+        working-directory: ./Duet3Expansion
+        env:
+          CROSS_COMPILE: ${{ github.workspace }}/${{ env.ARM_TOOLCHAIN }}/bin/arm-none-eabi-
+        run: |
+          make -j"$(nproc)" all
 
       - name: "Arrange files"
         run: |
-          mv ./RepRapFirmware/*/*.bin ./
-          mv ./RepRapFirmware/*/*.uf2 ./
-          mv ./RepRapFirmware/*/*.map ./
-          rm ./Duet3Firmware_Mini5plus.bin
+          mkdir -p upload/maps
+          cp ./RepRapFirmware/*/Duet3Firmware_*.bin ./RepRapFirmware/*/Duet3Firmware_*.uf2 ./Duet3Expansion/*/Duet3Firmware_*.bin ./upload/
+          rm -f ./upload/Duet3Firmware_Mini5plus.bin
+          cp ./RepRapFirmware/*/Duet3Firmware_*.map ./Duet3Expansion/*/Duet3Firmware_*.map ./upload/maps/
 
       - name: "Attach binaries"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: binaries
           path: |
-            ./*.bin
-            ./*.uf2
+            ./upload/*.bin
+            ./upload/*.uf2
 
       - name: "Attach symbols"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: symbols
           path: |
-            ./*.map
+            ./upload/maps/*.map
 
-      - name: "Prepare files for upload"
-        run: |
-          rm Duet2CombinedFirmware.bin
-          mkdir files
-          mv ./*.bin ./files/
-          mv ./*.uf2 ./files/
-
-      - name: "Upload files to dev feed"
+      - name: "Upload files to testing directory"
         uses: Creepios/sftp-action@v1.0.5
         with:
           host: pkg.duet3d.com
           port: 22
           username: pkg
           privateKey: ${{ secrets.PKG_DEPLOY_KEY }}
-          localPath: ./files
-          remotePath: /var/rrf-pkg/dev
+          localPath: ./upload
+          remotePath: /var/www/reprapfirmware/testing/${{ github.ref_name }}
 
+      - name: "Prepare files for dev feed"
+        if: ${{ inputs.upload_to_dev_feed }}
+        run: |
+          mkdir feed
+          cp ./upload/*.bin ./upload/*.uf2 ./feed/
+
+      - name: "Upload files to dev feed"
+        if: ${{ inputs.upload_to_dev_feed }}
+        uses: Creepios/sftp-action@v1.0.5
+        with:
+          host: pkg.duet3d.com
+          port: 22
+          username: pkg
+          privateKey: ${{ secrets.PKG_DEPLOY_KEY }}
+          localPath: ./feed
+          remotePath: /var/rrf-pkg/dev

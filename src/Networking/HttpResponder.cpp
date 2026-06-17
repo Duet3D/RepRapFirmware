@@ -922,9 +922,10 @@ void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWeb
 				{
 					nameOfFileToSend = OLD_INDEX_PAGE_FILE;			// the index file wasn't found, so try the old one
 				}
-				else if (strchr(nameOfFileToSend, '.') == nullptr)	// if we were asked to return a file without a '.' in the name, return the index page
+				else if (strchr(nameOfFileToSend, '.') == nullptr	// a file without a '.' in the name is a client-side route, ...
+						 || StringStartsWith(nameOfFileToSend, "Explorer/"))	// ... as is the Explorer editor (e.g. Explorer/edit/sys/config.g), which carries the target filename
 				{
-					nameOfFileToSend = INDEX_PAGE_FILE;
+					nameOfFileToSend = INDEX_PAGE_FILE;				// serve the index page so DWC's router can take over
 				}
 				else
 				{

@@ -686,6 +686,16 @@ void Heater::SetFunction(HeaterFunction func) noexcept
 	}
 }
 
+float Heater::GetMaxPwmFaultTime() const noexcept
+{
+	return max<float>(DefaultToolHeaterPwmFaultTime, 5 * model.GetDeadTime());
+}
+
+float Heater::GetPwmFaultLevel() const noexcept
+{
+	return DefaultToolHeaterPwmFaultLevel;
+}
+
 #if SUPPORT_REMOTE_COMMANDS
 
 GCodeResult Heater::SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept

@@ -80,7 +80,7 @@ extern DeviceVectors exception_table;
 constexpr unsigned int IdleTaskStackWords = 50;				// currently we don't use the idle task for anything, so this can be quite small
 static Task<IdleTaskStackWords> idleTask;
 
-extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize) noexcept
+extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, configSTACK_DEPTH_TYPE *pulIdleTaskStackSize) noexcept
 {
 	*ppxIdleTaskTCBBuffer = (xSTATIC_TCB *_ecv_from)idleTask.GetTaskMemory();
 	*ppxIdleTaskStackBuffer = (uint32_t*)idleTask.GetStackBase();

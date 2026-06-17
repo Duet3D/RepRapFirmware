@@ -464,10 +464,13 @@ void LocalHeater::Spin() noexcept
 						lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, GetModel().GetMaxPwm());
 					}
 
-					if (mode == HeaterMode::stable && GetFunction() != HeaterFunction::chamber)
+					// The following safety check is no good for bed heaters that have a large thermal reservoir loosely coupled to the heater,
+					// because the required PWM is higher than the expected value from tuning until the reservoir has heated up.
+					// So we apply it to tool heaters only.
+					if (mode == HeaterMode::stable && GetFunction() == HeaterFunction::tool)
 					{
 						const float limitedAccumulator = min<float>(iAccumulator, GetModel().GetMaxPwm());
-						if (limitedAccumulator > expectedPwm * PwmFaultLevel)
+						if (limitedAccumulator > expectedPwm * GetPwmFaultLevel())
 						{
 							++heaterPwmFaultCount;
 							if (heaterPwmFaultCount * HeatSampleIntervalMillis > GetMaxPwmFaultTime() * SecondsToMillis)

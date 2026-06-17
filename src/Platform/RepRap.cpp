@@ -2381,12 +2381,12 @@ void RepRap::SendSimpleAlert(MessageType mt, c_string msg, c_string title) noexc
 }
 
 // Save the first error message generated while running config.g
-void RepRap::SaveConfigError(c_string filename, unsigned int lineNumber, c_string errorMessage) noexcept
+void RepRap::SaveConfigError(AutoStringHandle&  filename, unsigned int lineNumber, c_string errorMessage) noexcept
 {
 	if (configErrorMessage.IsNull())
 	{
 		configErrorLine = lineNumber;
-		configErrorFilename.Assign(filename);
+		configErrorFilename = filename;
 		configErrorMessage.Assign(errorMessage);
 		StateUpdated();
 	}

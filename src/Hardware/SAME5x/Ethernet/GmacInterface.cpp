@@ -20,6 +20,8 @@ extern "C" {
 #include "lwip/pbuf.h"
 #include "lwip/stats.h"
 #include "lwip/snmp.h"
+#include "lwip/tcp.h"
+#include "lwip/priv/tcp_priv.h"
 #include "netif/etharp.h"
 }
 
@@ -64,8 +66,8 @@ static unsigned int txBufferTooShortCount = 0;
 /* ISRs using FreeRTOS *FromISR APIs must have priorities below or equal to */
 /* configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY. */
 
-/** The GMAC interrupts to enable */
-#define GMAC_INT_GROUP (GMAC_ISR_RCOMP | GMAC_ISR_ROVR)
+/** The GMAC interrupts to enable. TCOMP wakes the task to refill the TX ring as the GMAC drains it. */
+#define GMAC_INT_GROUP (GMAC_ISR_RCOMP | GMAC_ISR_ROVR | GMAC_ISR_TCOMP)
 
 /** The GMAC TX errors to handle */
 #define GMAC_TX_ERRORS (GMAC_TSR_TFC | GMAC_TSR_HRESP | GMAC_TSR_UND)
@@ -135,13 +137,13 @@ uint32_t lwip_rx_rate = 0;
 #endif
 
 // GMAC interrupt handler
-// At present, we only use receive interrupts
+// Reading the interrupt status register clears the latched RX-complete, RX-overrun and TX-complete bits.
 extern "C" void GMAC_Handler() noexcept
 {
 	/* Get interrupt status. */
 	const uint32_t ul_isr = gmac_get_interrupt_status(GMAC);
 
-	/* RX interrupts. */
+	/* Wake the task for any RX event or for a freed TX descriptor. */
 	if (ul_isr & GMAC_INT_GROUP)
 	{
 		ethernetTask.GiveFromISR(NotifyIndices::EthernetHardware);
@@ -320,71 +322,87 @@ static err_t gmac_low_level_output(netif *p_netif, struct pbuf *p) noexcept
 {
 	gmac_device *const ps_gmac_dev = static_cast<gmac_device *>(p_netif->state);
 
-	while (true)
+	// Handle GMAC underrun or AHB errors
+	if (gmac_get_tx_status(GMAC) & GMAC_TX_ERRORS)
 	{
-		// Handle GMAC underrun or AHB errors
-		if (gmac_get_tx_status(GMAC) & GMAC_TX_ERRORS)
+		++txErrorCount;
+		LWIP_DEBUGF(NETIF_DEBUG, ("gmac_low_level_output: GMAC ERROR, reinit TX...\n"));
+
+		gmac_enable_transmit(GMAC, false);
+
+		LINK_STATS_INC(link.err);
+		LINK_STATS_INC(link.drop);
+
+		/* Reinit TX descriptors. */
+		gmac_tx_init(ps_gmac_dev);			// this also clears the Tx errors
+
+		gmac_enable_transmit(GMAC, true);
+	}
+
+	volatile gmac_tx_descriptor_t& txDescriptor = ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx];
+	Cache::InvalidateAfterDMAReceive(&txDescriptor, sizeof(gmac_tx_descriptor_t));
+	if ((txDescriptor.status.val & GMAC_TXD_USED) == 0)
+	{
+		// The next descriptor is still owned by the GMAC, i.e. the TX ring is full. Return ERR_MEM rather than
+		// waiting for a free slot: this runs under the LwIP lock, so blocking here also stalls RX and ACK processing
+		// and freezes the whole stack. LwIP keeps the data on the pcb's unsent list; the TX-complete interrupt wakes
+		// gmac_task, which calls gmac_flush_tx() to re-run tcp_output() and refill the ring as the GMAC drains it.
+		++txBufferNotFreeCount;
+		return ERR_MEM;
+	}
+
+	// Copy pbuf chain into TX buffer
+	uint8_t *buffer = reinterpret_cast<uint8_t*>(txDescriptor.addr);
+	size_t totalLength = 0;
+	for (const pbuf *q = p; q != nullptr; q = q->next)
+	{
+		totalLength += q->len;
+		if (totalLength > GMAC_TX_UNITSIZE)
 		{
-			++txErrorCount;
-			LWIP_DEBUGF(NETIF_DEBUG, ("gmac_low_level_output: GMAC ERROR, reinit TX...\n"));
-
-			gmac_enable_transmit(GMAC, false);
-
-			LINK_STATS_INC(link.err);
-			LINK_STATS_INC(link.drop);
-
-			/* Reinit TX descriptors. */
-			gmac_tx_init(ps_gmac_dev);			// this also clears the Tx errors
-
-			gmac_enable_transmit(GMAC, true);
+			++txBufferTooShortCount;
+			return ERR_BUF;
 		}
+		memcpy(buffer, q->payload, q->len);
+		buffer += q->len;
+	}
+	Cache::FlushBeforeDMASend(reinterpret_cast<const uint8_t*>(txDescriptor.addr), totalLength);
 
-		volatile gmac_tx_descriptor_t& txDescriptor = ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx];
-		Cache::InvalidateAfterDMAReceive(&txDescriptor, sizeof(gmac_tx_descriptor_t));
-		if ((txDescriptor.status.val & GMAC_TXD_USED) != 0)
-		{
-			// Copy pbuf chain into TX buffer
-			uint8_t *buffer = reinterpret_cast<uint8_t*>(txDescriptor.addr);
-			size_t totalLength = 0;
-			for (const pbuf *q = p; q != nullptr; q = q->next)
-			{
-				totalLength += q->len;
-				if (totalLength > GMAC_TX_UNITSIZE)
-				{
-					++txBufferTooShortCount;
-					return ERR_BUF;
-				}
-				memcpy(buffer, q->payload, q->len);
-				buffer += q->len;
-			}
-			Cache::FlushBeforeDMASend(reinterpret_cast<const uint8_t*>(txDescriptor.addr), totalLength);
+	// Set length and mark the buffer to be sent by GMAC
+	uint32_t txStat = totalLength | GMAC_TXD_LAST;
+	if (ps_gmac_dev->us_tx_idx == GMAC_TX_BUFFERS - 1)
+	{
+		txStat |= GMAC_TXD_WRAP;
+	}
+	txDescriptor.status.val = txStat;
+	Cache::FlushBeforeDMASend(&txDescriptor, sizeof(gmac_tx_descriptor_t));
+	LWIP_DEBUGF(NETIF_DEBUG,
+			("gmac_low_level_output: DMA buffer sent, size=%d [idx=%u]\n",
+			p->tot_len, (unsigned int)ps_gmac_dev->us_tx_idx));
+	ps_gmac_dev->us_tx_idx = (ps_gmac_dev->us_tx_idx + 1) % GMAC_TX_BUFFERS;
 
-			// Set length and mark the buffer to be sent by GMAC
-			uint32_t txStat = totalLength | GMAC_TXD_LAST;
-			if (ps_gmac_dev->us_tx_idx == GMAC_TX_BUFFERS - 1)
-			{
-				txStat |= GMAC_TXD_WRAP;
-			}
-			txDescriptor.status.val = txStat;
-			Cache::FlushBeforeDMASend(&txDescriptor, sizeof(gmac_tx_descriptor_t));
-			LWIP_DEBUGF(NETIF_DEBUG,
-					("gmac_low_level_output: DMA buffer sent, size=%d [idx=%u]\n",
-					p->tot_len, (unsigned int)ps_gmac_dev->us_tx_idx));
-			ps_gmac_dev->us_tx_idx = (ps_gmac_dev->us_tx_idx + 1) % GMAC_TX_BUFFERS;
-
-			/* Now start to transmission. */
-			gmac_start_transmission(GMAC);
+	/* Now start to transmission. */
+	gmac_start_transmission(GMAC);
 
 #if LWIP_STATS
-			lwip_tx_count += p->tot_len;
+	lwip_tx_count += p->tot_len;
 #endif
-			LINK_STATS_INC(link.xmit);
+	LINK_STATS_INC(link.xmit);
 
-			return ERR_OK;
-		}
+	return ERR_OK;
+}
 
-		++txBufferNotFreeCount;
-		delay(2);	//TODO use an interrupt instead
+// Re-run tcp_output() for every active connection. gmac_low_level_output() returns ERR_MEM and leaves data on the
+// unsent list when the TX ring is full; this hands that data back to the GMAC once descriptors free up. Called from
+// gmac_task on a TX-complete (or RX) wake, so the ring refills at line rate instead of only when an ACK arrives.
+// Must be called with lwipMutex held.
+static void gmac_flush_tx() noexcept
+{
+	struct tcp_pcb *pcb = tcp_active_pcbs;
+	while (pcb != nullptr)
+	{
+		struct tcp_pcb *const next = pcb->next;		// tcp_output() must not outlive the pcb, so capture next first
+		tcp_output(pcb);
+		pcb = next;
 	}
 }
 
@@ -497,13 +515,14 @@ extern "C" [[noreturn]] void gmac_task(void *pvParameters) noexcept
 
 	while (1)
 	{
-		// Process the incoming packets
+		// Process the incoming packets and refill the TX ring with any data that was deferred while it was full
 		{
 			MutexLocker lock(lwipMutex);
 			while (ethernetif_input(p_netif)) { }
+			gmac_flush_tx();
 		}
 
-		// Wait for the RX notification from the ISR
+		// Wait for the next notification from the ISR (RX packet, RX overrun or freed TX descriptor)
 		TaskBase::TakeIndexed(NotifyIndices::EthernetHardware, (ps_gmac_dev->rxPbufsFullyPopulated) ? 1000 : 20);
 	}
 }
