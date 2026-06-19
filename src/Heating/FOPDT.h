@@ -72,6 +72,8 @@ public:
 	float GetExpectedHeatingRate(float temperatureRise, float fanPwm, float heaterPwm, float actualVoltage, float filamentPwm) const noexcept;
 	float GetPwmCorrectionForFan(float temperatureRise, float oldFanPwm, float newFanPwm) const noexcept;
 	void CalcPidConstants(float targetTemperature) noexcept;
+	float CalculateBasicCoolingRate(float temperatureRise, float coolingRate) const noexcept;				// Calculate the basic cooling rate from measurements
+	float CalculateFanCoolingRate(float temperatureRise, float coolingRate, float fanPwm) const noexcept;	// Calculate the fan cooling rate from measurements
 
 	void AppendM307Command(unsigned int heaterNumber, const StringRef& str, bool includeVoltage) const noexcept;
 	void AppendModelParameters(unsigned int heaterNumber, const StringRef& str, bool includeVoltage) const noexcept;
@@ -127,6 +129,18 @@ inline float FopDt::GetPwmCorrectionForFan(float temperatureRise, float oldFanPw
 inline float FopDt::EstimateMaxTemperatureRise() const noexcept
 {
 	return basicModel.EstimateMaxTemperatureRise();
+}
+
+// Calculate the basic cooling rate from measurements
+inline float FopDt::CalculateBasicCoolingRate(float temperatureRise, float coolingRate) const noexcept
+{
+	return basicModel.CalculateBasicCoolingRate(temperatureRise, coolingRate);
+}
+
+// Calculate the fan cooling rate from measurements
+inline float FopDt::CalculateFanCoolingRate(float temperatureRise, float coolingRate, float fanPwm) const noexcept
+{
+	return basicModel.CalculateFanCoolingRate(temperatureRise, coolingRate, fanPwm);
 }
 
 #endif /* SRC_HEATING_FOPDT_H_ */
