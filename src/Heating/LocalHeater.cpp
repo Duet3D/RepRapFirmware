@@ -479,7 +479,7 @@ void LocalHeater::Spin() noexcept
 					// The following safety check is no good for bed heaters that have a large thermal reservoir loosely coupled to the heater,
 					// because the required PWM is higher than the expected value from tuning until the reservoir has heated up.
 					// So we apply it to tool heaters only.
-#if 0	// this check has been disabled except on TOOLINDX
+#if CHECK_HEATER_PWM
 					if (mode == HeaterMode::stable && GetFunction() == HeaterFunction::tool)
 					{
 						const float limitedAccumulator = min<float>(iAccumulator, GetModel().GetMaxPwm());
