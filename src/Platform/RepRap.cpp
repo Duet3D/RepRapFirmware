@@ -712,28 +712,6 @@ bool RepRap::RunStartupFile(c_string filename, bool isMainConfigFile) noexcept
 	return rslt;
 }
 
-void RepRap::Exit() noexcept
-{
-#if HAS_HIGH_SPEED_SD && !SAME5x		// SAME5x MCI driver is RTOS-aware so it doesn't need this
-	hsmci_set_idle_func(nullptr);
-#endif
-	active = false;
-	heat->Exit();
-	move->Exit();
-	gCodes->Exit();
-#if SUPPORT_IOBITS
-	portControl->Exit();
-#endif
-#if SUPPORT_DIRECT_LCD
- 	display->Exit();
-#endif
-	network->Exit();
-	platform->Exit();
-#if SUPPORT_ACCELEROMETERS
-	Accelerometers::Exit();
-#endif
-}
-
 void RepRap::Spin() noexcept
 {
 	if (!active)

@@ -50,7 +50,6 @@ public:
 	void EmergencyStop() noexcept;
  	void Init() noexcept;
 	void Spin() noexcept;
-	void Exit() noexcept;
 
 	void Diagnostics(MessageType mtype, const StringRef& reply) noexcept;
 	unsigned int GetNumberOfDiagnosticParts() const noexcept;
