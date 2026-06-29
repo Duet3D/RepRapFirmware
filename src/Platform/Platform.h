@@ -309,6 +309,7 @@ public:
 	void AppendUsbReply(size_t usbNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept;
 	void ShutdownUsbDevice(unsigned int index) noexcept;
 	void ReinitUsbDevice(unsigned int index) noexcept;
+	void DisconnectUsb() noexcept;							// Disconnect the USB device from the host, ending all CDC interfaces
 	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, bool rawMessage) noexcept;
 	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, const char *_ecv_array msg, bool rawMessage) noexcept;
 

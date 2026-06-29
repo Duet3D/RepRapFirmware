@@ -2167,7 +2167,7 @@ void RepRap::PrepareToLoadIap() noexcept
 	if (!usingSbcInterface || sbcInterface->GetDataTransfer().GetTransportType() != SbcTransportType::usb)
 #endif
 	{
-		serialUSB.end();
+		platform->DisconnectUsb();
 		StopUsbTask();
 	}
 

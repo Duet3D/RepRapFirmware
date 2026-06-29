@@ -4694,6 +4694,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 
 				reprap.EmergencyStop();			// this disables heaters and drives - Duet WiFi pre-production boards need drives disabled here
+				platform.DisconnectUsb();
 				{
 					SoftwareResetReason reason = SoftwareResetReason::user;
 					if (gb.Seen('P'))

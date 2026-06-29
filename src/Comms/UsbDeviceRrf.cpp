@@ -32,6 +32,15 @@ void UsbDeviceRrf::Shutdown() noexcept
 	output.ReleaseAll();
 }
 
+void UsbDeviceRrf::End() noexcept
+{
+	MutexLocker lock(mutex);			// wait for any in-progress Flush() to complete
+	if (originalDevice != nullptr)
+	{
+		originalDevice->end();
+	}
+}
+
 void UsbDeviceRrf::Reinit() noexcept
 {
 	if (originalDevice != nullptr)

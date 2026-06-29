@@ -48,6 +48,7 @@ public:
 
 #if SUPPORTS_SBC_OVER_USB
 	void RequestUsbSwitch(SerialCDC *dev, unsigned int usbDevIndex) noexcept;	// Request a switch to USB transport (called from main task)
+	void Suspend() noexcept;													// Freeze the SBC task so it can't re-attach USB during a teardown
 #endif
 
 	DataTransfer& GetDataTransfer() noexcept { return transfer; }
