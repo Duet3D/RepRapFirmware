@@ -713,30 +713,6 @@ void Platform::SendPanelDueMessage(size_t chan, const char *_ecv_array msg) noex
 #endif
 }
 
-void Platform::Exit() noexcept
-{
-	StopLogging();
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	MassStorage::CloseAllFiles();
-#endif
-
-	// Stop processing data. Don't try to send a message because it will probably never get there.
-	active = false;
-
-	// Close down USB and serial ports and release output buffers
-	for (UsbDeviceRrf& dev : usbDevices)
-	{
-		dev.Shutdown();
-	}
-
-#if NUM_ASYNC_CHANNELS != 0
-	for (AuxDevice& dev : auxDevices)
-	{
-		dev.Disable();
-	}
-#endif
-}
-
 #if HAS_NETWORKING
 
 void Platform::SetIPAddress(IPAddress ip) noexcept

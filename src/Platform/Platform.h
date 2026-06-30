@@ -238,7 +238,6 @@ public:
 	void Init() noexcept;									// Set the machine up after a restart.  If called subsequently this should set the machine up as if
 															// it has just been restarted; it can do this by executing an actual restart if you like, but beware the loop of death...
 	void Spin() noexcept;									// This gets called in the main loop and should do any housekeeping needed
-	void Exit() noexcept;									// Shut down tidily. Calling Init after calling this should reset to the beginning
 
 	void Diagnostics(unsigned int part, const StringRef& reply) noexcept;
 	static constexpr unsigned int NumPlatformDiagnosticParts = 7;
