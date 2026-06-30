@@ -573,6 +573,81 @@ bool ethernetif_input(struct netif *netif) noexcept
 	return true;
 }
 
+#if !SUPPORT_MULTICAST_DISCOVERY
+
+// Hardware multicast hash filter, driven by LwIP's IGMP layer. Without multicast discovery the MAC must not run in
+// receive-all-multicast mode, so we program the GMAC hash registers as groups are joined and left. LwIP calls this for
+// the all-systems group (so we hear IGMP queries), for 224.0.0.251 (mDNS) and so on; were it never called the MAC would
+// drop those frames and e.g. the mDNS responder would never see incoming queries
+static uint8_t multicastHashRefCounts[64] = { 0 };		// reference count per hash bucket; several groups can map to one bucket
+
+// Reduce a 48-bit MAC address to the GMAC's 6-bit hash index: each index bit is the XOR of every sixth address bit,
+// see the Hash Addressing section of the SAM datasheet
+static uint8_t GmacMulticastHashIndex(const uint8_t macAddress[6]) noexcept
+{
+	unsigned int index = 0;
+	for (unsigned int bit = 0; bit < 6; ++bit)
+	{
+		unsigned int value = 0;
+		for (unsigned int i = bit; i < 48; i += 6)
+		{
+			value ^= (macAddress[i >> 3] >> (i & 7)) & 1u;
+		}
+		index |= value << bit;
+	}
+	return (uint8_t)index;
+}
+
+static err_t gmac_igmp_mac_filter(struct netif *netif, const ip4_addr_t *group, enum netif_mac_filter_action action) noexcept
+{
+	LWIP_UNUSED_ARG(netif);
+
+	// IPv4 multicast maps to MAC 01:00:5E:xx:xx:xx using the low 23 bits of the group address, see RFC 1112
+	const uint8_t *const groupBytes = reinterpret_cast<const uint8_t*>(&group->addr);	// the address is held in network byte order
+	const uint8_t macAddress[6] = { 0x01, 0x00, 0x5E, (uint8_t)(groupBytes[1] & 0x7F), groupBytes[2], groupBytes[3] };
+	const uint8_t index = GmacMulticastHashIndex(macAddress);
+
+	if (action == NETIF_ADD_MAC_FILTER)
+	{
+		++multicastHashRefCounts[index];
+	}
+	else if (multicastHashRefCounts[index] != 0)
+	{
+		--multicastHashRefCounts[index];
+	}
+
+	// Rebuild both hash registers from the reference counts so the hardware always matches exactly the joined groups
+	uint32_t hashBottom = 0, hashTop = 0;
+	for (unsigned int i = 0; i < 64; ++i)
+	{
+		if (multicastHashRefCounts[i] != 0)
+		{
+			if (i < 32)
+			{
+				hashBottom |= (uint32_t)1 << i;
+			}
+			else
+			{
+				hashTop |= (uint32_t)1 << (i - 32);
+			}
+		}
+	}
+
+	GMAC->HRB.reg = hashBottom;
+	GMAC->HRT.reg = hashTop;
+	if (hashBottom != 0 || hashTop != 0)
+	{
+		GMAC->NCFGR.reg |= GMAC_NCFGR_MTIHEN;
+	}
+	else
+	{
+		GMAC->NCFGR.reg &= ~GMAC_NCFGR_MTIHEN;
+	}
+	return ERR_OK;
+}
+
+#endif
+
 /**
  * \brief Should be called at the beginning of the program to set up the
  * network interface. It calls the function gmac_low_level_init() to do the
@@ -614,6 +689,9 @@ err_t ethernetif_init(struct netif *netif) noexcept
 	 * is available...) */
 	netif->output = etharp_output;
 	netif->linkoutput = gmac_low_level_output;
+#if !SUPPORT_MULTICAST_DISCOVERY
+	netif->igmp_mac_filter = gmac_igmp_mac_filter;		// program the hardware multicast hash filter as groups are joined/left
+#endif
 
 	/* Initialize the hardware */
 	gmac_low_level_init(netif);
@@ -745,11 +823,12 @@ void ethernetif_hardware_init() noexcept
 	/* Enable the copy of data into the buffers ignore broadcasts, and not copy FCS. */
 	gmac_enable_copy_all(GMAC, false);
 	gmac_disable_broadcast(GMAC, false);
-	GMAC->NCR.reg |= GMAC_NCFGR_RXCOEN;			// check IP, UDP and TCP checksums so that we don't need to do it in lwip
+	GMAC->NCFGR.reg |= GMAC_NCFGR_RXCOEN;		// check IP, UDP and TCP checksums so that we don't need to do it in lwip
 
 #if SUPPORT_MULTICAST_DISCOVERY
-	// Without this code, we don't receive any multicast packets
-	GMAC->NCR.reg |= GMAC_NCFGR_MTIHEN;			// enable multicast hash reception
+	// The multicast discovery responder needs every multicast frame, so put the MAC into receive-all-multicast mode.
+	// With multicast discovery disabled the hash filter is instead programmed per joined group, see gmac_igmp_mac_filter
+	GMAC->NCFGR.reg |= GMAC_NCFGR_MTIHEN;		// enable multicast hash reception
 	GMAC->HRB.reg = 0xFFFFFFFF;					// enable reception of all multicast frames
 	GMAC->HRT.reg = 0xFFFFFFFF;
 #endif
