@@ -47,7 +47,7 @@ public:
 	Heater(const Heater &_ecv_from) = delete;
 
 	// Configuration methods
-	virtual GCodeResult ConfigurePortAndSensor(const char *_ecv_array portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) = 0;
+	virtual GCodeResult ConfigurePortAndSensor(const char *_ecv_array portName, PwmFrequency freq, unsigned int sn, int ambientSn, const StringRef& reply) = 0;
 	virtual GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) = 0;
 	virtual GCodeResult ReportDetails(const StringRef& reply) const noexcept = 0;
 
@@ -134,7 +134,9 @@ protected:
 	virtual void ApplyExtrusionFeedForward() noexcept = 0;
 
 	int GetSensorNumber() const noexcept { return sensorNumber; }
+	int GetAmbientSensorNumber() const noexcept { return ambientSensorNumber; }
 	void SetSensorNumber(int sn) noexcept;
+	void SetAmbientSensorNumber(int sn) noexcept { ambientSensorNumber = sn; }
 	float GetMaxTemperatureExcursion() const noexcept { return maxTempExcursion; }
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
 	float GetPwmFaultLevel() const noexcept;
@@ -212,6 +214,7 @@ private:
 
 	unsigned int heaterNumber;
 	int sensorNumber = -1;												// the sensor number used by this heater
+	int ambientSensorNumber = -1;										// the ambient sensor number used by this heater, if any
 	float activeTemperature = 0.0;										// the required active temperature
 	float standbyTemperature = 0.0;										// the required standby temperature
 	float maxTempExcursion = DefaultMaxTempExcursion;					// the maximum temperature excursion permitted while maintaining the setpoint

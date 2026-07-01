@@ -561,6 +561,12 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROW
 		gb.MustSee('T');
 		const unsigned int sensorNumber = gb.GetUIValue();
 
+		int32_t ambientSensorNumber = -1;
+		{
+			bool dummy;
+			(void)gb.TryGetIValue('B', ambientSensorNumber, dummy);
+		}
+
 		WriteLocker lock(heatersLock);
 		DeleteObject(heaters[heater]);
 
@@ -571,7 +577,7 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROW
 #else
 		Heater * const newHeater = new LocalHeater(heater);
 #endif
-		const GCodeResult rslt = newHeater->ConfigurePortAndSensor(pinName.c_str(), freq, sensorNumber, reply);
+		const GCodeResult rslt = newHeater->ConfigurePortAndSensor(pinName.c_str(), freq, sensorNumber, ambientSensorNumber, reply);
 		if (Succeeded(rslt))
 		{
 			heaters[heater] = newHeater;
@@ -584,7 +590,7 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROW
 		return rslt;
 	}
 
-	if (gb.Seen('T'))
+	if (gb.Seen('T') || gb.Seen('B'))
 	{
 		reply.copy("Can't change sensor number of existing heater");
 		return GCodeResult::error;
@@ -1408,6 +1414,9 @@ GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef&
 			return GCodeResult::error;
 		}
 
+		int16_t ambientSensorNumber = -1;
+		(void)parser.GetIntParam('B', ambientSensorNumber);
+
 		WriteLocker lock(heatersLock);
 
 		Heater *oldHeater = nullptr;
@@ -1415,7 +1424,7 @@ GCodeResult Heat::ConfigureHeater(const CanMessageGeneric& msg, const StringRef&
 		delete oldHeater;
 
 		Heater *newHeater = new LocalHeater(heater);
-		const GCodeResult rslt = newHeater->ConfigurePortAndSensor(pinName.c_str(), freq, sensorNumber, reply);
+		const GCodeResult rslt = newHeater->ConfigurePortAndSensor(pinName.c_str(), freq, sensorNumber, ambientSensorNumber, reply);
 		if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
 		{
 			heaters[heater] = newHeater;

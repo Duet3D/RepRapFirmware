@@ -201,7 +201,7 @@ void RemoteHeater::ResetHeater() noexcept
 	previousExtrusionTemperatureBoost = 0.0;
 }
 
-GCodeResult RemoteHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply)
+GCodeResult RemoteHeater::ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, int ambientSn, const StringRef& reply)
 {
 	SetSensorNumber(sn);
 	CanMessageGenericConstructor cons(M950HeaterParams);
@@ -209,6 +209,7 @@ GCodeResult RemoteHeater::ConfigurePortAndSensor(const char *portName, PwmFreque
 	cons.AddUParam('Q', freq);
 	cons.AddUParam('T', sn);
 	cons.AddStringParam('C', portName);
+	cons.AddIParam('B', ambientSn);
 	return cons.SendAndGetResponse(CanMessageType::m950Heater, boardAddress, reply);
 }
 

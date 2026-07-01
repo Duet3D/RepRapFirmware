@@ -375,7 +375,8 @@ Sercom * const SbcSpiSercom = SERCOM0;
 constexpr Pin SbcSSPin = PortAPin(6);
 
 constexpr Pin SbcTfrReadyPin = PortAPin(3);
-constexpr Pin SbcSpiSercomPins[] = { PortAPin(4), PortAPin(5), PortAPin(6), PortAPin(7) };
+constexpr Pin SbcSpiMisoPin = PortAPin(7);
+constexpr Pin SbcSpiSercomPins[] = { PortAPin(4), PortAPin(5), PortAPin(6), SbcSpiMisoPin };
 constexpr GpioPinFunction SbcSpiSercomPinsMode = GpioPinFunction::D;
 constexpr IRQn SbcSpiSercomIRQn = SERCOM0_1_IRQn;			// this is the transfer complete interrupt, the only one we use
 
