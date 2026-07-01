@@ -285,18 +285,27 @@ check_host(struct netif *netif, struct mdns_rr_info *rr, u8_t *reverse_v6_reply)
   res = mdns_build_host_domain(&mydomain, NETIF_TO_HOST(netif));
   /* Handle requests for our hostname */
   if (res == ERR_OK && mdns_domain_eq(&rr->domain, &mydomain)) {
-    /* TODO return NSEC if unsupported protocol requested */
+    int host_address_reply = 0;
 #if LWIP_IPV4
     if (!ip4_addr_isany_val(*netif_ip4_addr(netif))
         && (rr->type == DNS_RRTYPE_A || rr->type == DNS_RRTYPE_ANY)) {
       replies |= REPLY_HOST_A;
+      host_address_reply = 1;
     }
 #endif
 #if LWIP_IPV6
     if (rr->type == DNS_RRTYPE_AAAA || rr->type == DNS_RRTYPE_ANY) {
       replies |= REPLY_HOST_AAAA;
+      host_address_reply = 1;
     }
 #endif
+    /* We own this name but hold no record of the requested type (e.g. an AAAA
+       query while IPv6 is disabled). Answer with an NSEC record listing the types
+       we do have so the querier learns the type is absent immediately instead of
+       waiting for its query to time out, see RFC 6762 section 6.1 */
+    if (!host_address_reply) {
+      replies |= REPLY_HOST_NSEC;
+    }
   }
 
   return replies;
@@ -1072,6 +1081,7 @@ mdns_parse_pkt_questions(struct netif *netif, struct mdns_packet *pkt,
 
   while (pkt->questions_left) {
     struct mdns_question q;
+    int host_check;
 
     res = mdns_read_question(pkt, &q);
     if (res != ERR_OK) {
@@ -1088,7 +1098,11 @@ mdns_parse_pkt_questions(struct netif *netif, struct mdns_packet *pkt,
       reply->unicast_reply_requested = 1;
     }
 
-    reply->host_replies |= check_host(netif, &q.info, &reply->host_reverse_v6_replies);
+    host_check = check_host(netif, &q.info, &reply->host_reverse_v6_replies);
+    if (host_check & REPLY_HOST_NSEC) {
+      reply->host_nsec_query_type = q.info.type;
+    }
+    reply->host_replies |= host_check;
 
     for (i = 0; i < MDNS_MAX_SERVICES; i++) {
       service = mdns->services[i];

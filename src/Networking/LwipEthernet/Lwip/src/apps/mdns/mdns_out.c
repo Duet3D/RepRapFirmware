@@ -377,6 +377,61 @@ mdns_add_hostv6_ptr_answer(struct mdns_outpacket *reply, struct mdns_outmsg *msg
 }
 #endif
 
+/** Write a negative-response NSEC RR for our hostname to outpacket */
+static err_t
+mdns_add_nsec_answer(struct mdns_outpacket *reply, struct mdns_outmsg *msg,
+                     struct netif *netif)
+{
+  err_t res;
+  u32_t ttl = MDNS_TTL_120;
+  struct mdns_domain host;
+  u8_t rdata[MDNS_DOMAIN_MAXLEN + 6];
+  u16_t rdlength;
+
+  mdns_build_host_domain(&host, netif_mdns_data(netif));
+  /* When answering to a legacy querier, we need to repeat the question and
+   * limit the ttl to the short legacy ttl */
+  if (msg->legacy_query) {
+    /* Repeating the question only needs to be done for the question asked
+     * (max one question), not for the additional records. */
+    if (reply->questions < 1) {
+      LWIP_DEBUGF(MDNS_DEBUG, ("MDNS: Add question for legacy query\n"));
+      /* Echo the type the querier actually asked for, not NSEC - a legacy reply
+         is matched to its query by the question, and the NSEC is the answer to it */
+      res = mdns_add_question(reply, &host, msg->host_nsec_query_type, DNS_RRCLASS_IN, 0);
+      if (res != ERR_OK) {
+        return res;
+      }
+      reply->questions = 1;
+    }
+    /* ttl of legacy answer may not be greater then 10 seconds */
+    ttl = MDNS_TTL_10;
+  }
+
+  /* RDATA is the next owner name - our own host name, written uncompressed for
+     widest querier compatibility - followed by the type bitmap. The bitmap lists
+     exactly the host record types we own, which asserts that every other type
+     (e.g. AAAA when IPv6 is disabled) does not exist, see RFC 6762 section 6.1
+     and the bitmap encoding in RFC 4034 section 4.1.2 */
+  MEMCPY(rdata, host.name, host.length);
+  rdlength = host.length;
+  rdata[rdlength++] = 0x00;       /* bitmap window block 0 (types 0-255) */
+#if LWIP_IPV6
+  rdata[rdlength++] = 0x04;       /* bitmap length: covers types up to 31 */
+  rdata[rdlength++] = 0x40;       /* type 1: A */
+  rdata[rdlength++] = 0x00;
+  rdata[rdlength++] = 0x00;
+  rdata[rdlength++] = 0x08;       /* type 28: AAAA */
+#else
+  rdata[rdlength++] = 0x01;       /* bitmap length: covers types up to 7 */
+  rdata[rdlength++] = 0x40;       /* type 1: A */
+#endif
+
+  LWIP_DEBUGF(MDNS_DEBUG, ("MDNS: Responding with NSEC record\n"));
+  return mdns_add_answer(reply, &host, DNS_RRTYPE_NSEC, DNS_RRCLASS_IN,
+                         msg->cache_flush, ttl, rdata, rdlength, NULL);
+}
+
 /** Write an all-services -> servicetype PTR RR to outpacket */
 static err_t
 mdns_add_servicetype_ptr_answer(struct mdns_outpacket *reply, struct mdns_outmsg *msg,
@@ -642,6 +697,14 @@ mdns_create_outpacket(struct netif *netif, struct mdns_outmsg *msg,
     }
   }
 #endif
+
+  if (msg->host_replies & REPLY_HOST_NSEC) {
+    res = mdns_add_nsec_answer(outpkt, msg, netif);
+    if (res != ERR_OK) {
+      return res;
+    }
+    answers++;
+  }
 
   /* Write answers to service questions */
   for (i = 0; i < MDNS_MAX_SERVICES; i++) {
