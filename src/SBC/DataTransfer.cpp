@@ -416,6 +416,10 @@ __nocache SpiTransferHeader DataTransfer::rxHeader;
 __nocache SpiTransferHeader DataTransfer::txHeader;
 __nocache uint32_t DataTransfer::rxResponse;
 __nocache uint32_t DataTransfer::txResponse;
+# if SUPPORTS_SBC_OVER_USB
+__nocache UsbTransferHeader DataTransfer::usbRxHeader;
+__nocache UsbTransferHeader DataTransfer::usbTxHeader;
+# endif
 #endif
 
 DataTransfer::DataTransfer() noexcept : state(InternalTransferState::ExchangingData), lastTransferNumber(0), failedTransfers(0), checksumErrors(0),
@@ -1172,7 +1176,11 @@ void DataTransfer::ResetConnection(bool fullReset) noexcept
 		transportType = SbcTransportType::spi;
 		ReinitSpi();
 # else
-		// USB-only board: just reset and wait for a new M576.1
+		// USB-only board: just reset and wait for a new M576.1.
+		// A failed transfer may have already read a legitimate new header before the body
+		// exchange failed, so usbRxHeader can still claim packets that rxBuffer never received
+		usbRxHeader.numPackets = 0;
+		usbRxHeader.dataLength = 0;
 		return;
 # endif
 	}
