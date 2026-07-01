@@ -99,7 +99,7 @@ void LocalHeater::ResetHeater() noexcept
 }
 
 // Configure the heater port and the sensor number
-GCodeResult LocalHeater::ConfigurePortAndSensor(const char *_ecv_array portName, PwmFrequency freq, unsigned int sn, const StringRef& reply)
+GCodeResult LocalHeater::ConfigurePortAndSensor(const char *_ecv_array portName, PwmFrequency freq, unsigned int sn, int ambientSn, const StringRef& reply)
 {
 	if constexpr (MaxPortsPerHeater == 1)
 	{
@@ -127,7 +127,9 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *_ecv_array portName,
 	{
 		port.SetFrequency(freq);
 	}
+
 	SetSensorNumber(sn);
+	SetAmbientSensorNumber(ambientSn);
 	if (reprap.GetHeat().FindSensor(sn).IsNull())
 	{
 		reply.printf("Sensor number %u has not been defined", sn);
@@ -168,6 +170,14 @@ GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const noexcept
 	{
 		reply.cat(", no sensor");
 	}
+	if (GetAmbientSensorNumber() >= 0)
+	{
+		reply.catf(", ambient sensor %d", GetAmbientSensorNumber());
+	}
+	else
+	{
+		reply.cat(", no ambient sensor");
+	}
 	return GCodeResult::ok;
 }
 
@@ -176,6 +186,19 @@ TemperatureError LocalHeater::ReadTemperature() noexcept
 {
 	TemperatureError err(TemperatureError::unknownError);
 	temperature = reprap.GetHeat().GetSensorTemperature(GetSensorNumber(), err);		// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
+	if (GetAmbientSensorNumber() >= 0)
+	{
+		TemperatureError err2(TemperatureError::unknownError);
+		ambientTemperature = reprap.GetHeat().GetSensorTemperature(GetAmbientSensorNumber(), err2);		// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
+		if (err2 != TemperatureError::ok)
+		{
+			ambientTemperature = NormalAmbientTemperature;
+		}
+	}
+	else
+	{
+		ambientTemperature = NormalAmbientTemperature;
+	}
 	return err;
 }
 
@@ -453,7 +476,7 @@ void LocalHeater::Spin() noexcept
 					// If the P and D terms together demand that the heater is full on or full off, disregard the I term
 					const float errorMinusDterm = error - (params.tD * derivative);
 					const float pPlusD = params.kP * errorMinusDterm;
-					const float expectedPwm = GetModel().EstimateRequiredPwm(temperature - NormalAmbientTemperature, lastFanPwm, currentVoltage, 0.0);
+					const float expectedPwm = GetModel().EstimateRequiredPwm(temperature - ambientTemperature, lastFanPwm, currentVoltage, 0.0);
 					if (pPlusD + expectedPwm > GetModel().GetMaxPwm())
 					{
 						lastPwm = GetModel().GetMaxPwm();
@@ -633,7 +656,7 @@ void LocalHeater::SetFanFeedForwardPwm(float pwm) noexcept
 	{
 		const float oldFanPwm = lastFanPwm;
 		lastFanPwm = pwm;
-		const float boost = GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, oldFanPwm, pwm) * FanFeedForwardMultiplier;
+		const float boost = GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - ambientTemperature, oldFanPwm, pwm) * FanFeedForwardMultiplier;
 		TaskCriticalSectionLocker lock;
 		iAccumulator += boost;
 	}
@@ -1059,7 +1082,7 @@ GCodeResult LocalHeater::ApplyFeedForward(const CanMessageHeaterFeedForwardV1& m
 		{
 			const float oldFanPwm = lastFanPwm;
 			lastFanPwm = msg.fanPwmFraction;
-			pwmBoost += GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, oldFanPwm, msg.fanPwmFraction) * FanFeedForwardMultiplier;
+			pwmBoost += GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - ambientTemperature, oldFanPwm, msg.fanPwmFraction) * FanFeedForwardMultiplier;
 		}
 		TaskCriticalSectionLocker lock;
 		iAccumulator += pwmBoost;
