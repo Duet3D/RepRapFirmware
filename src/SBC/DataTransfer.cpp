@@ -481,6 +481,7 @@ void DataTransfer::Init() noexcept
 		SetPinFunction(p, SbcSpiSercomPinsMode);
 	}
 
+	SetDriveStrength(SbcSpiMisoPin, 3);
 	Serial::EnableSercomClock(SbcSpiSercomNumber);
 	spi_dma_disable();
 
@@ -497,6 +498,7 @@ void DataTransfer::Init() noexcept
 	SetPinFunction(APIN_SBC_SPI_MISO, SBCPinPeriphMode);
 	SetPinFunction(APIN_SBC_SPI_SCK, SBCPinPeriphMode);
 	SetPinFunction(APIN_SBC_SPI_SS0, SBCPinPeriphMode);
+	SetDriveStrength(APIN_SBC_SPI_MISO, 3);
 
 	spi_enable_clock(SBC_SPI);
 	spi_disable(SBC_SPI);
