@@ -650,6 +650,7 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 	rp.originalFeedRate = dda->GetOriginalFeedRate();
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
+	rp.gCommandNumber = dda->GetGCommandNumber();
 
 	// Free the DDAs for the moves we are going to skip
 	do
@@ -718,6 +719,7 @@ bool DDARing::LowPowerOrStallPause(MovementState& ms) noexcept
 	rp.originalFeedRate = dda->GetOriginalFeedRate();
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
+	rp.gCommandNumber = dda->GetGCommandNumber();
 	rp.proportionDone = dda->GetProportionDone();		// store how much of the complete multi-segment move's extrusion has been done
 	rp.initialUserC0 = dda->GetInitialUserC0();
 	rp.initialUserC1 = dda->GetInitialUserC1();

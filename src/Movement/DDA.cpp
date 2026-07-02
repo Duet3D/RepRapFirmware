@@ -467,6 +467,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	// 3. Store some values
 	tool = nextMove.movementTool;
 	filePos = nextMove.filePos;
+	gCommandNumber = nextMove.gCommandNumber;
 	virtualExtruderPosition = nextMove.moveStartVirtualExtruderPosition;
 	proportionDone = nextMove.proportionDone;
 	initialUserC0 = nextMove.initialUserC0;

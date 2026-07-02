@@ -39,6 +39,7 @@ public:
 	char GetCommandLetter() const noexcept { return commandLetter; }
 	bool HasCommandNumber() const noexcept { return hasCommandNumber; }
 	int GetCommandNumber() const noexcept { return commandNumber; }
+	void SetModalGCommand(int num) noexcept;
 	int8_t GetCommandFraction() const noexcept { return commandFraction; }
 	bool IsLastCommand() const noexcept;
 	bool ContainsExpression() const noexcept { return seenExpression; }

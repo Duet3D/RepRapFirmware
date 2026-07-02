@@ -1066,6 +1066,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 			// We were not able to skip any moves, however we can skip the move that is waiting
 			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.raw.moveStartVirtualExtruderPosition;
 			ms.GetPauseRestorePoint().filePos = ms.raw.filePos;
+			ms.GetPauseRestorePoint().gCommandNumber = ms.raw.gCommandNumber;
 			ms.GetPauseRestorePoint().originalFeedRate = ms.raw.originalFeedRate;
 			ms.GetPauseRestorePoint().proportionDone = ms.GetProportionDone();
 			ms.GetPauseRestorePoint().initialUserC0 = ms.raw.initialUserC0;
@@ -1089,6 +1090,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 			// TODO: when using RTOS there is a possible race condition in the following,
 			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
 			ms.GetPauseRestorePoint().filePos = fgb.GetPrintingFilePosition(true);
+			ms.GetPauseRestorePoint().gCommandNumber = ms.raw.gCommandNumber;
 			while (fgb.LatestMachineState().doingFileMacro)													// must call this after GetFilePosition because this changes IsDoingFileMacro
 			{
 				ms.pausedInMacro = true;
@@ -1123,6 +1125,8 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 				if (fdata.IsLive())
 				{
 					fgb.RestartFrom(ms.GetPauseRestorePoint().filePos);			// TODO we ought to restore the line number too, but currently we don't save it
+					// restore the modal G0/G1/G2/G3 context in case the file uses implied command letters
+					fgb.SetModalGCommand(ms.GetPauseRestorePoint().gCommandNumber);
 					UnlockAll(fgb);												// release any locks it had
 				}
 			}
@@ -1283,6 +1287,7 @@ bool GCodes::DoEmergencyPause() noexcept
 			ms.GetPauseRestorePoint().originalFeedRate = ms.raw.originalFeedRate;
 			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.raw.moveStartVirtualExtruderPosition;
 			ms.GetPauseRestorePoint().filePos = ms.raw.filePos;
+			ms.GetPauseRestorePoint().gCommandNumber = ms.raw.gCommandNumber;
 			ms.GetPauseRestorePoint().proportionDone = ms.GetProportionDone();
 			ms.GetPauseRestorePoint().initialUserC0 = ms.raw.initialUserC0;
 			ms.GetPauseRestorePoint().initialUserC1 = ms.raw.initialUserC1;
@@ -1298,6 +1303,7 @@ bool GCodes::DoEmergencyPause() noexcept
 			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.latestVirtualExtruderPosition;
 
 			ms.GetPauseRestorePoint().filePos = FileGCode()->GetPrintingFilePosition(true);	//TODO separate restore point per channel
+			ms.GetPauseRestorePoint().gCommandNumber = ms.raw.gCommandNumber;
 			ms.GetPauseRestorePoint().proportionDone = 0.0;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
@@ -1637,6 +1643,10 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 			buf.catf("M23 \"%s\"\n", printingFilename);
 		}
 		buf.catf("M26 S%" PRIu32, pauseRestorePoint.filePos);
+		if (pauseRestorePoint.gCommandNumber >= 0)
+		{
+			buf.catf(" C%d", (int)pauseRestorePoint.gCommandNumber);		// modal G0/G1/G2/G3 command to restore, omitted if unknown
+		}
 		if (pauseRestorePoint.proportionDone > 0.0)
 		{
 			buf.catf(" P%.3f %c%.3f %c%.3f",
@@ -1854,13 +1864,19 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSys
 
 	gb.MotionStopped();									// must do this after we have finished waiting, so that we don't stop waiting when executing G4
 
-	// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
-	//TODO we only need to do most of this if we did a special move
-	ms.UpdateOwnedDriveEndpointsFromMotors();			// need to do this is the move was stopped prematurely e.g. due to an endstop switch or a Z probe
-	move.MotorStepsToCartesian(MovementState::GetLastKnownEndpoints(), numVisibleAxes, numTotalAxes, ms.raw.coords);
-	move.UpdateStartCoordinates(ms.GetNumber(), ms.raw.coords);
-	move.InverseAxisAndBedTransform(ms.raw.coords, ms.currentTool);
-	UpdateUserPositionFromMachinePosition(gb, ms);
+	// Re-read the position from the motors only if the last move could have stopped short of its commanded target
+	// (endstop/probe/stall/raw move). After an ordinary move the commanded coordinates are exact, so reading them
+	// back would replace them with motor-step-rounded values and, in CNC mode, make a following G2/G3 fail the tight
+	// arc radius check.
+	if (ms.positionMayBeInaccurate)
+	{
+		ms.positionMayBeInaccurate = false;
+		ms.UpdateOwnedDriveEndpointsFromMotors();			// need to do this if the move was stopped prematurely e.g. due to an endstop switch or a Z probe
+		move.MotorStepsToCartesian(MovementState::GetLastKnownEndpoints(), numVisibleAxes, numTotalAxes, ms.raw.coords);
+		move.UpdateStartCoordinates(ms.GetNumber(), ms.raw.coords);
+		move.InverseAxisAndBedTransform(ms.raw.coords, ms.currentTool);
+		UpdateUserPositionFromMachinePosition(gb, ms);
+	}
 
 #if SUPPORT_ASYNC_MOVES
 	collisionChecker.ResetPositions(ms.raw.coords, ms.GetAxesAndExtrudersOwned());
@@ -3133,6 +3149,7 @@ void GCodes::FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept
 {
 	ms.raw.canPauseAfter = !ms.raw.checkEndstops && !ms.doingArcMove;		// pausing during an arc move isn't safe because the arc centre get recomputed incorrectly when we resume
 	ms.raw.filePos = gb.GetJobFilePosition();
+	ms.raw.gCommandNumber = (int8_t)gb.GetCommandNumber();			// gb is at a G0/G1/G2/G3 command here, so remember it for the modal context
 	gb.MotionCommanded();
 
 	if (ms.IsCurrentObjectCancelled())
@@ -3375,6 +3392,10 @@ void GCodes::NewSegmentableMoveAvailable(MovementState& ms) noexcept
 // This version is for when totalSegments has already be set up.
 void GCodes::NewMoveAvailable(MovementState& ms) noexcept
 {
+	if (ms.raw.checkEndstops || ms.raw.moveType != 0)
+	{
+		ms.positionMayBeInaccurate = true;		// this move can stop short of its commanded target, so re-read the position at the next standstill
+	}
 	const unsigned int sl = ms.totalSegments;
 	__DMB();									// make sure that the move details have been written first
 	ms.segmentsLeft = sl;						// set the number of segments to indicate that a move is available to be taken
@@ -3684,6 +3705,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 			ms.fileOffsetToSkipTo = 0;
 # endif
 			ms.restartMoveFractionDone = 0.0;
+			ms.restartGCommandNumber = -1;
 			ms.latestVirtualExtruderPosition = ms.raw.moveStartVirtualExtruderPosition = 0.0;
 		}
 

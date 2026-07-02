@@ -19,6 +19,7 @@ public:
 	float virtualExtruderPosition;			// The virtual extruder position at the start of this move
 	float proportionDone;					// How much of this move we have already done (zero unless we interrupted a move)
 	FilePosition filePos;					// The file position that this move was read from
+	int8_t gCommandNumber;					// Which of G0/G1/G2/G3 generated the move at filePos (0-3), or -1 if unknown; used to restore the modal command context on resume
 	float initialUserC0, initialUserC1;		// If we paused during an arc move and proportionDone is nonzero, the X and Y user coordinates at the start of the move
 	int toolNumber;							// The tool number that was active
 	float fanSpeed;							// the last fan speed that was set by M106 with no P parameter

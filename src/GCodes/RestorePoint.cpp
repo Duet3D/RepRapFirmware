@@ -39,6 +39,7 @@ constexpr ObjectModelTableEntry RestorePoint::objectModelTable[] =
 	{ "extruderPos",		OBJECT_MODEL_FUNC(self->virtualExtruderPosition, 1),	 							ObjectModelEntryFlags::none },
 	{ "fanPwm", 			OBJECT_MODEL_FUNC(self->fanSpeed, 2), 												ObjectModelEntryFlags::none },
 	{ "feedRate", 			OBJECT_MODEL_FUNC(self->originalFeedRate, 1), 										ObjectModelEntryFlags::none },
+	{ "gCommandNumber",		OBJECT_MODEL_FUNC((int32_t)self->gCommandNumber),									ObjectModelEntryFlags::none },
 #if SUPPORT_IOBITS
 	{ "ioBits",				OBJECT_MODEL_FUNC_IF(reprap.GetGCodes().GetMachineType() != MachineType::laser,
 													(int32_t)self->laserPwmOrIoBits.ioBits),					ObjectModelEntryFlags::none },
@@ -50,7 +51,7 @@ constexpr ObjectModelTableEntry RestorePoint::objectModelTable[] =
 	{ "toolNumber",			OBJECT_MODEL_FUNC((int32_t)self->toolNumber),										ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t RestorePoint::objectModelTableDescriptor[] = { 1, 5 + SUPPORT_LASER + SUPPORT_IOBITS };
+constexpr uint8_t RestorePoint::objectModelTableDescriptor[] = { 1, 6 + SUPPORT_LASER + SUPPORT_IOBITS };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RestorePoint)
 
@@ -69,6 +70,7 @@ void RestorePoint::Init() noexcept
 	originalFeedRate = DefaultFeedRate;
 	virtualExtruderPosition = 0.0;
 	filePos = noFilePosition;
+	gCommandNumber = -1;
 	proportionDone = 0.0;
 	initialUserC0 = initialUserC1 = 0.0;
 	toolNumber = -1;

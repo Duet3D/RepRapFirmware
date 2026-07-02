@@ -1087,6 +1087,24 @@ void StringParser::DecodeCommand() noexcept
 	gb.bufferState = GCodeBufferState::ready;
 }
 
+// Restore the modal G0/G1/G2/G3 motion command after a pause/resume file rewind. A negative value means the modal
+// command is unknown (e.g. the pause was triggered by an M-code that broke the chain) and clears it, so that an
+// implied-command-letter line won't reuse a stale command.
+void StringParser::SetModalGCommand(int num) noexcept
+{
+	if (num < 0)
+	{
+		hasCommandNumber = false;
+		commandNumber = -1;
+	}
+	else
+	{
+		commandLetter = 'G';
+		commandNumber = num;
+		hasCommandNumber = true;
+	}
+}
+
 // Find where the end of the command is. We assume that a G or M not inside quotes or { } and not preceded by ' is the start of a new command.
 // This isn't true if the command has an unquoted string argument, but we deal with that later.
 void StringParser::FindParameters() noexcept

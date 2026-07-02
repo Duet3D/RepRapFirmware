@@ -733,6 +733,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				const MovementSystemNumber msNumber = (moveStates[0].GetPauseRestorePoint().filePos > earliestFileOffset) ? 1
 														: (moveStates[1].GetPauseRestorePoint().filePos > earliestFileOffset) ? 0
 															: pausedMovementSystemNumber;
+				// restore the modal G0/G1/G2/G3 context in case the file uses implied command letters
+				FileGCode()->SetModalGCommand(moveStates[msNumber].GetPauseRestorePoint().gCommandNumber);
 				FileGCode()->SetActiveQueueNumber(msNumber);
 			}
 #else

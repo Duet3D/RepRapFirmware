@@ -299,6 +299,7 @@ public:
 	bool IsCancelWaitRequested() noexcept;
 
 	void RestartFrom(FilePosition pos) noexcept;
+	void SetModalGCommand(int num) noexcept;
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileGCodeInput *_ecv_null GetFileInput() const noexcept { return fileInput; }

@@ -1401,6 +1401,17 @@ void GCodeBuffer::RestartFrom(FilePosition pos) noexcept
 	Init();											// clear the next move
 }
 
+// Binary (SBC) commands arrive already fully resolved, so there is no modal state to restore for them
+void GCodeBuffer::SetModalGCommand(int num) noexcept
+{
+#if HAS_SBC_INTERFACE
+	if (!isBinaryBuffer)
+#endif
+	{
+		stringParser.SetModalGCommand(num);
+	}
+}
+
 const char *_ecv_array GCodeBuffer::DataStart() const noexcept
 {
 	return PARSER_OPERATION(DataStart());
