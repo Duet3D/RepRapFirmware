@@ -246,6 +246,14 @@ public:
 	ResourceBitmap lockedResources;
 	uint32_t lineNumber;
 	uint32_t msgBoxSeq;							// the sequence number of the message box that needs to be acknowledged, if waitingForAcknowledgement is true
+
+	// Identity of the command that invoked this macro frame. Saved when the frame is pushed and reinstated when it is popped,
+	// so that error messages emitted by a state machine after running a helper macro (e.g. deployprobe.g/retractprobe.g) are attributed to the
+	// invoking command such as G29 or G30 rather than to the last command the macro ran
+	char savedCommandLetter = 'Q';
+	int savedCommandNumber = -1;
+	int8_t savedCommandFraction = -1;
+	bool savedHasCommandNumber = false;
 	uint32_t
 		selectedPlane : 2,
 		drivesRelative : 1,

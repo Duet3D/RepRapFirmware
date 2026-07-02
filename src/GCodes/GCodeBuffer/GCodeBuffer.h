@@ -338,6 +338,9 @@ protected:
 private:
 	const char *_ecv_array GetStateText() const noexcept;
 
+	void SaveInvokingCommand() noexcept;								// remember the current command when pushing a macro frame
+	void RestoreInvokingCommand(const GCodeMachineState& ms) noexcept;	// reinstate it as the reported command when a macro frame is popped
+
 	FilePosition printFilePositionAtMacroStart;			// the saved file position when we started executing a macro
 	GCodeInput *_ecv_from normalInput;					// Our normal input stream, or nullptr if there isn't one
 
@@ -355,6 +358,15 @@ private:
 
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 	ExpressionValue m291Result;							// the value entered or choice selected in response to a M291 command
+
+	// When a macro returns, the command that invoked it is restored here so that error messages emitted by the resumed state machine (e.g. probing)
+	// are attributed to the invoking command such as G29/G30 rather than to the macro's last command. Applies to both parsers because the command
+	// getters below return these values while restoredCommandValid is set. Cleared as soon as the next command is parsed
+	char restoredCommandLetter;
+	int restoredCommandNumber;
+	int8_t restoredCommandFraction;
+	bool restoredHasCommandNumber;
+	bool restoredCommandValid = false;
 
 	uint32_t receivedLineNumber;						// The line number received explicitly in the N field of the GCode command line
 	uint32_t whenTimerStarted;							// When we started waiting
