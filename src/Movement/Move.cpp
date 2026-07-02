@@ -186,19 +186,19 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "limitAxes",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().LimitAxes()),										ObjectModelEntryFlags::none },
 	{ "motionSystems",			OBJECT_MODEL_FUNC_ARRAY(5),																		ObjectModelEntryFlags::liveNotPanelDue },
 	{ "noMovesBeforeHoming",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().NoMovesBeforeHoming()),								ObjectModelEntryFlags::none },
-	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).raw.maxPrintingAcceleration), 1),	ObjectModelEntryFlags::obsolete },
+	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).raw.maxPrintingAcceleration), 1),	ObjectModelEntryFlags::verbose },
 	{ "queue",					OBJECT_MODEL_FUNC_ARRAY(2),																		ObjectModelEntryFlags::none },
 #if SUPPORT_COORDINATE_ROTATION
-	{ "rotation",				OBJECT_MODEL_FUNC(self, 16),																	ObjectModelEntryFlags::notPanelDue | ObjectModelEntryFlags::obsolete },
+	{ "rotation",				OBJECT_MODEL_FUNC(self, 16),																	ObjectModelEntryFlags::notPanelDue | ObjectModelEntryFlags::verbose },
 #endif
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).speedFactor, 2),	ObjectModelEntryFlags::none },
-	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).raw.maxTravelAcceleration), 1),		ObjectModelEntryFlags::obsolete },
+	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).raw.maxTravelAcceleration), 1),		ObjectModelEntryFlags::verbose },
 #if SUPPORT_S_CURVE
 	{ "usingSCurve",			OBJECT_MODEL_FUNC(self->usingSCurve),															ObjectModelEntryFlags::none },
 #endif
-	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).latestVirtualExtruderPosition, 5),		ObjectModelEntryFlags::liveNotPanelDue | ObjectModelEntryFlags::obsolete },
-	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetCurrentMovementState(context).currentCoordinateSystem),		ObjectModelEntryFlags::obsolete },
+	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).latestVirtualExtruderPosition, 5),		ObjectModelEntryFlags::liveNotPanelDue | ObjectModelEntryFlags::verbose },
+	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetCurrentMovementState(context).currentCoordinateSystem),		ObjectModelEntryFlags::verbose },
 
 	// 1. Move.Idle members
 	{ "factor",					OBJECT_MODEL_FUNC(self->GetIdleCurrentFactor(), 1),												ObjectModelEntryFlags::none },

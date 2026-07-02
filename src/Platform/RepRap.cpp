@@ -356,12 +356,12 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "macroRestarted",			OBJECT_MODEL_FUNC(self->gCodes->GetMacroRestarted()),					ObjectModelEntryFlags::none },
 	{ "messageBox",				OBJECT_MODEL_FUNC_IF_NOSELF(MessageBox::HaveCurrent(), MessageBox::GetCurrent(), 0), ObjectModelEntryFlags::important },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
-	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none | ObjectModelEntryFlags::obsolete },
+	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none | ObjectModelEntryFlags::verbose },
 #if HAS_VOLTAGE_MONITOR
 	{ "powerFailScript",		OBJECT_MODEL_FUNC(self->gCodes->GetPowerFailScript()),					ObjectModelEntryFlags::none },
 #endif
-	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).previousToolNumber),	ObjectModelEntryFlags::none | ObjectModelEntryFlags::obsolete },
-	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(7),												ObjectModelEntryFlags::obsolete },
+	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).previousToolNumber),	ObjectModelEntryFlags::none | ObjectModelEntryFlags::verbose },
+	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(7),												ObjectModelEntryFlags::verbose },
 	{ "startupError",			OBJECT_MODEL_FUNC_IF(!self->configErrorMessage.IsNull(), self, 6),		ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
 	{ "thisActive",
