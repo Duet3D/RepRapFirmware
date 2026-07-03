@@ -755,8 +755,7 @@ void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMa
 		Endstop * const es = axisEndstops[handleMajor];
 		if (es != nullptr)
 		{
-			//TODO use the 'when' parameter
-			es->HandleRemoteInputChange(src, handleMinor, state);
+			es->HandleRemoteInputChange(src, handleMinor, when, state);
 		}
 	}
 }
@@ -770,8 +769,7 @@ void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMaj
 		ZProbe * const zp = zProbes[handleMajor];
 		if (zp != nullptr)
 		{
-			//TODO use the 'when' parameter
-			zp->HandleRemoteInputChange(src, handleMinor, state, reading);
+			zp->HandleRemoteInputChange(src, handleMinor, when, state, reading);
 		}
 	}
 }
@@ -784,8 +782,7 @@ void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_
 		ZProbe * const zp = zProbes[handleMajor];
 		if (zp != nullptr)
 		{
-			//TODO use the 'when' parameter
-			zp->UpdateRemoteReading(src, handleMinor, reading);
+			zp->UpdateRemoteReading(src, handleMinor, when, reading);
 		}
 	}
 }
@@ -798,14 +795,13 @@ void EndstopsManager::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalD
 	{
 		if (es != nullptr)
 		{
-			//TODO use the 'when' parameter
-			es->HandleStalledRemoteDrivers(boardAddress, driversReportedStalled);
+			es->HandleStalledRemoteDrivers(boardAddress, driversReportedStalled, when);
 		}
 	}
 
 	if (extrudersEndstop != nullptr)
 	{
-		extrudersEndstop->HandleStalledRemoteDrivers(boardAddress, driversReportedStalled);
+		extrudersEndstop->HandleStalledRemoteDrivers(boardAddress, driversReportedStalled, when);
 	}
 }
 
