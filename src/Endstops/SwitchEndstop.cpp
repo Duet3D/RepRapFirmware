@@ -141,6 +141,8 @@ void SwitchEndstop::PrimeAxis(const Kinematics &_ecv_from kin, const AxisDrivers
 	portsLeftToTrigger = PortsBitmap::MakeLowestNBits(numPortsUsed);
 
 #if SUPPORT_CAN_EXPANSION
+	haveTriggerTime = false;
+
 	// For each remote switch, check that the expansion board knows about it, and make sure we have an up-to-date state
 	for (size_t i = 0; i < numPortsUsed; ++i)
 	{
@@ -171,7 +173,11 @@ EndstopHitDetails SwitchEndstop::CheckTriggered() noexcept
 				rslt.axis = GetAxis();
 				if (stopAll)
 				{
-					rslt.SetAction(EndstopHitAction::stopAll);
+					rslt.SetAction(EndstopHitAction::stopAll
+#if SUPPORT_CAN_EXPANSION
+									, whenTriggered, haveTriggerTime
+#endif
+								  );
 					if (GetAtHighEnd())
 					{
 						rslt.setAxisHigh = true;
@@ -183,7 +189,11 @@ EndstopHitDetails SwitchEndstop::CheckTriggered() noexcept
 				}
 				else if (numPortsLeftToTrigger == 1)
 				{
-					rslt.SetAction(EndstopHitAction::stopAxis);
+					rslt.SetAction(EndstopHitAction::stopAxis
+#if SUPPORT_CAN_EXPANSION
+									, whenTriggered, haveTriggerTime
+#endif
+								  );
 					if (GetAtHighEnd())
 					{
 						rslt.setAxisHigh = true;
@@ -195,7 +205,11 @@ EndstopHitDetails SwitchEndstop::CheckTriggered() noexcept
 				}
 				else
 				{
-					rslt.SetAction(EndstopHitAction::stopDriver);
+					rslt.SetAction(EndstopHitAction::stopDriver
+#if SUPPORT_CAN_EXPANSION
+									, whenTriggered, haveTriggerTime
+#endif
+								  );
 					rslt.internalUse = i;			// remember which port it is, for the call to Acknowledge
 					rslt.driver = reprap.GetMove().GetAxisDriversConfig(GetAxis()).driverNumbers[i];
 				}
@@ -220,6 +234,9 @@ bool SwitchEndstop::Acknowledge(EndstopHitDetails what) noexcept
 	case EndstopHitAction::stopDriver:
 		portsLeftToTrigger.ClearBit(what.internalUse);
 		--numPortsLeftToTrigger;
+#if SUPPORT_CAN_EXPANSION
+		haveTriggerTime = false;
+#endif
 		return false;
 
 	default:
@@ -261,10 +278,15 @@ void SwitchEndstop::AppendDetails(const StringRef& str) noexcept
 #if SUPPORT_CAN_EXPANSION
 
 // Process a remote endstop input change that relates to this endstop
-void SwitchEndstop::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state) noexcept
+void SwitchEndstop::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, uint16_t when, bool state) noexcept
 {
 	if (handleMinor < numPortsUsed && boardNumbers[handleMinor] == src)
 	{
+		if (state && portsLeftToTrigger.IsBitSet(handleMinor))
+		{
+			whenTriggered = when;
+			haveTriggerTime = true;
+		}
 		states[handleMinor] = state;
 	}
 }
