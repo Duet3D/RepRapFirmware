@@ -442,6 +442,9 @@ DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 RepRap::RepRap() noexcept
 	: boardsSeq(0), directoriesSeq(0), fansSeq(0), heatSeq(0), inputsSeq(0), jobSeq(0), ledStripsSeq(0), moveSeq(0), globalSeq(0),
 	  networkSeq(0), scannerSeq(0), sensorsSeq(0), spindlesSeq(0), stateSeq(0), toolsSeq(0), volumesSeq(0),
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	  fileInfoResponseInUse(false), fileInfoResponseParsed(false),
+#endif
 	  lastWarningMillis(0),
 	  ticksInSpinState(0), heatTaskIdleTicks(0),
 	  beepFrequency(0), beepDuration(0), beepTimer(0),
@@ -2323,8 +2326,7 @@ GCodeResult RepRap::GetFileInfoResponse(const GCodeBuffer *_ecv_null gb, c_strin
 {
 	const bool specificFile = (filename != nullptr && filename[0] != 0);
 	GCodeFileInfo info;
-	GlobalVariables vars;												// if we asked for a specific file then this is the variable set that we fill in for customiNFO
-	const GlobalVariables *p_vars;										// this will be a pointer to whatever GlobalVariables instance holds the customInfo
+	const GlobalVariables *p_vars = nullptr;							// this will be a pointer to whatever GlobalVariables instance holds the customInfo
 	if (specificFile)
 	{
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -2334,12 +2336,30 @@ GCodeResult RepRap::GetFileInfoResponse(const GCodeBuffer *_ecv_null gb, c_strin
 		{
 			info.isValid = false;
 		}
-		else if (MassStorage::GetFileInfo(filePath.c_str(), info, quitEarly, &vars) == GCodeResult::notFinished)
+		else
 		{
-			// This may take a few runs...
-			return GCodeResult::notFinished;
+			if (!fileInfoResponseInUse || !fileInfoResponsePath.EqualsIgnoreCase(filePath.c_str()))
+			{
+				fileInfoResponsePath.copy(filePath.c_str());
+				fileInfoResponseInfo.Init();
+				fileInfoResponseCustomInfo.GetForWriting()->Clear();
+				fileInfoResponseInUse = true;
+				fileInfoResponseParsed = false;
+			}
+
+			if (!fileInfoResponseParsed)
+			{
+				if (MassStorage::GetFileInfo(filePath.c_str(), fileInfoResponseInfo, quitEarly, &fileInfoResponseCustomInfo) == GCodeResult::notFinished)
+				{
+					// This may take a few runs...
+					return GCodeResult::notFinished;
+				}
+				fileInfoResponseParsed = true;
+			}
+
+			info = fileInfoResponseInfo;
+			p_vars = &fileInfoResponseCustomInfo;
 		}
-		p_vars = &vars;
 #else
 		return GCodeResult::warning;
 #endif
@@ -2419,10 +2439,24 @@ GCodeResult RepRap::GetFileInfoResponse(const GCodeBuffer *_ecv_null gb, c_strin
 		response->catf("],\"generatedBy\":\"%.s\",\"customInfo\":", info.generatedBy.c_str());
 		p_vars->ReportAllAsJson(response);
 		response->cat("}\n");
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+		if (specificFile)
+		{
+			fileInfoResponseInUse = false;
+			fileInfoResponseParsed = false;
+		}
+#endif
 		return GCodeResult::ok;
 	}
 
 	response->catf("\"err\":1,\"fileName\":\"%.s\"}", ((specificFile) ? filename : printMonitor->GetPrintingFilename()));
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	if (specificFile)
+	{
+		fileInfoResponseInUse = false;
+		fileInfoResponseParsed = false;
+	}
+#endif
 	return GCodeResult::warning;
 }
 
