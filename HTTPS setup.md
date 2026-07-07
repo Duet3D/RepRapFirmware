@@ -52,15 +52,17 @@ openssl req -new -x509 \
 
 ### Windows
 
-**Option A - OpenSSL via winget (recommended)**
+**Option A - OpenSSL via winget**
 
 Install OpenSSL:
 
 ```powershell
-winget install ShiningLight.OpenSSL
+winget install -e --id ShiningLight.OpenSSL.Light
 ```
 
 Then open a new PowerShell/Command Prompt window and run the same commands as Linux above.
+
+> If winget reports "No package found matching input criteria", the package ID has changed - run `winget search openssl` and use the current Shining Light Productions ID, or fall back to Option B.
 
 **Option B - OpenSSL bundled with Git for Windows**
 
