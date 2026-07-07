@@ -102,6 +102,7 @@ public:
 	BufferedStreamGCodeInput(SerialCDC &_ecv_from dev, MessageType mt) noexcept : RegularGCodeInput(mt), device(dev) { }
 
 	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
+	size_t BytesCached() const noexcept override;				// How many bytes are ready for FillBuffer, hiding a trailing partly-matched urgent command
 	virtual void Spin() noexcept;								// Read from the device into the buffer and check for urgent commands
 
 private:

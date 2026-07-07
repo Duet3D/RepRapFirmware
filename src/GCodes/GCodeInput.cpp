@@ -205,6 +205,34 @@ bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 
 // BufferedStreamGCodeInput methods
 
+// How many bytes are ready to be passed to the GCodeBuffer. Any trailing characters that might still be
+// completing an urgent command are held back, and how many that is follows directly from the scanner state
+size_t BufferedStreamGCodeInput::BytesCached() const noexcept
+{
+	const size_t cached = RegularGCodeInput::BytesCached();
+	if (writingFile)
+	{
+		return cached;					// raw file data is never an urgent command, so none of it is held back
+	}
+
+	// The scanner state encodes how far a potential M112/M122/M108 has been matched, which is exactly how many
+	// trailing characters must stay hidden until we know whether they form an urgent command
+	size_t held;
+	switch (state)
+	{
+		case GCodeInputState::doingMCode:		held = 1; break;
+		case GCodeInputState::doingMCode1:		held = 2; break;
+		case GCodeInputState::doingMCode10:
+		case GCodeInputState::doingMCode11:
+		case GCodeInputState::doingMCode12:		held = 3; break;
+		case GCodeInputState::doingMCode108:
+		case GCodeInputState::doingMCode112:
+		case GCodeInputState::doingMCode122:	held = 4; break;
+		default:								held = 0; break;
+	}
+	return (cached > held) ? cached - held : 0;
+}
+
 // Read from the device into our ring buffer and scan for urgent commands (M112/M108/M122)
 void BufferedStreamGCodeInput::Spin() noexcept
 {
@@ -212,7 +240,7 @@ void BufferedStreamGCodeInput::Spin() noexcept
 	{
 		// The USB host has disconnected. Drop any buffered data so that when the host reconnects, its first
 		// command starts cleanly instead of being appended to a leftover fragment
-		if (BytesCached() != 0)
+		if (RegularGCodeInput::BytesCached() != 0)
 		{
 			Reset();
 		}
