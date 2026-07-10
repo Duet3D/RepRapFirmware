@@ -3348,6 +3348,7 @@ void GCodes::NewMoveAvailable(MovementState& ms) noexcept
 // Cancel any macro or print in progress
 void GCodes::AbortPrint(GCodeBuffer& gb) noexcept
 {
+	PauseSequenceAborted(gb);					// if we are aborting a pause sequence before it committed, settle the pause first
 	(void)gb.AbortFile(true);					// stop executing any files or macros that this GCodeBuffer is running
 	if (gb.IsFileChannel())						// if the current command came from a file being printed
 	{
@@ -3360,6 +3361,29 @@ void GCodes::AbortPrint(GCodeBuffer& gb) noexcept
 #endif
 		StopPrint(nullptr, StopPrintReason::abort);
 		gb.Init();								// invalidate the file channel here as the other one may be still busy (possibly in a macro)
+	}
+}
+
+// When a pause sequence (pause.g / filament-change.g) is aborted, the stack frame that would have advanced pauseState from
+// pausing to paused is discarded with the rest of the aborted frames, leaving the machine stuck reporting "pausing" forever.
+// If this GCodeBuffer still holds such a frame while pauseState is pausing, commit the pause now so it settles to paused (resumable)
+// instead of hanging. The file-channel path in AbortPrint runs StopPrint afterwards, which resets to notPaused as before
+void GCodes::PauseSequenceAborted(GCodeBuffer& gb) noexcept
+{
+	if (pauseState != PauseState::pausing)
+	{
+		return;
+	}
+
+	for (const GCodeMachineState *_ecv_null ms = &gb.LatestMachineState(); ms != nullptr; ms = ms->GetPrevious())
+	{
+		const GCodeState state = ms->GetState();
+		if (state == GCodeState::pausing2 || state == GCodeState::eventPausing2 || state == GCodeState::filamentChangePause2)
+		{
+			pauseState = PauseState::paused;
+			reprap.StateUpdated();
+			return;
+		}
 	}
 }
 

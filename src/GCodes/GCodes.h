@@ -111,6 +111,7 @@ public:
 	bool QueueFileToPrint(const char *_ecv_array fileName, const StringRef& reply) noexcept;	// Open a file of G Codes to run
 #endif
 	void AbortPrint(GCodeBuffer& gb) noexcept;									// Cancel any print in progress
+	void PauseSequenceAborted(GCodeBuffer& gb) noexcept;						// Settle pauseState to paused if a pause sequence is aborted before it commits
 	void HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept;		// Write where we are into a string
 	bool DoingFileMacro() const noexcept;										// Is a macro file being processed by any input channel?
 	bool GetMacroRestarted() const noexcept;									// Return true if the macro being executed by fileGCode was restarted
