@@ -836,6 +836,7 @@ void SbcInterface::ExchangeData() noexcept
 				if (locker.IsAcquired())
 				{
 					// Note that we do not call StopPrint here or set any other variables; DSF already does that
+					reprap.GetGCodes().PauseSequenceAborted(*gb);	// don't get stuck in "pausing" if this abort tears down the pause sequence
 					gb->AbortFile(true);
 					gb->FileAbortSent();	// don't notify the SBC
 					InvalidateBufferedCodes(channel);
