@@ -46,6 +46,7 @@ public:
 	enum class TuningPhase : uint8_t
 	{
 		checking_temperature_is_stable,
+		calibrating_heater,
 		heating_up,
 		settling,
 		measuring,

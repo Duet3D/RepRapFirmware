@@ -58,12 +58,13 @@ private:
 	{
 		notTuning = 0,
 		stabilising,
+		calibrating,
 		heatingUp,
 		idleCycles,
 		cycling
 	};
 
-	GCodeResult SendTuningCommand(const StringRef& reply, bool on) noexcept;
+	GCodeResult SendTuningCommand(const StringRef& reply, bool on, bool calibrate) noexcept;
 	void StopTuning() noexcept;
 	void UpdateFeedForward() noexcept;
 

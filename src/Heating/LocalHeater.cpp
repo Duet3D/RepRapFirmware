@@ -727,8 +727,8 @@ void LocalHeater::DoTuningStep() noexcept
 		{
 			timeSetHeating = now;
 			lastPwm = tuningPwm;										// turn on heater at specified power
-			mode = HeaterMode::tuning1_heating_up;
-			tuningPhase = TuningPhase::heating_up;
+			mode = HeaterMode::tuning0a_calibrating_heater;
+			tuningPhase = TuningPhase::calibrating_heater;
 			ReportTuningUpdate();
 			return;
 		}
@@ -741,6 +741,12 @@ void LocalHeater::DoTuningStep() noexcept
 
 		reprap.GetPlatform().Message(GenericMessage, "Auto tune cancelled because starting temperature is not stable\n");
 		break;
+
+	case HeaterMode::tuning0a_calibrating_heater:
+		// Currently we only perform heater calibration on certain expansion boards e.g. INDX
+		mode = HeaterMode::tuning1_heating_up;
+		tuningPhase = TuningPhase::heating_up;
+		return;
 
 	case HeaterMode::tuning1_heating_up:								// Heating up
 #if SUPPORT_REMOTE_COMMANDS
@@ -1055,16 +1061,19 @@ GCodeResult LocalHeater::TuningCommand(const CanMessageHeaterTuningCommand& msg,
 		}
 
 		// We could do some more checks here but the main board should have done all the checks needed already
-		ExpansionMode::tuningHighTemp = msg.highTemp;
-		ExpansionMode::tuningLowTemp = msg.lowTemp;
-		tuningPwm = msg.pwm;
-		ExpansionMode::tuningPeakTempDrop = msg.peakTempDrop;
-		timeSetHeating = millis();
-		ExpansionMode::tuningCycleComplete = false;
-		ExpansionMode::cyclesDone = 0;
-		mode = HeaterMode::tuning1_heating_up;
+		if (!msg.calibrate)							// we don't do any heater calibration on main boards so just return completed if asked to calibrate
+		{
+			ExpansionMode::tuningHighTemp = msg.highTemp;
+			ExpansionMode::tuningLowTemp = msg.lowTemp;
+			tuningPwm = msg.pwm;
+			ExpansionMode::tuningPeakTempDrop = msg.peakTempDrop;
+			timeSetHeating = millis();
+			ExpansionMode::tuningCycleComplete = false;
+			ExpansionMode::cyclesDone = 0;
+			mode = HeaterMode::tuning1_heating_up;
+		}
 	}
-	else
+	else if (!msg.calibrate)						// we don't do any heater calibration on main boards so just return completed if asked to calibrate
 	{
 		SwitchOff();
 	}
