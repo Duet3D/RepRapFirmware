@@ -965,7 +965,7 @@ GCodeResult Heat::ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, cons
 // Process M303
 GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// To tune a heater, a heater number and/or a tool number musty be given
+	// To tune a heater, a heater number and/or a tool number must be given
 	FansBitmap fans;
 	int heaterNumber = 0;											// initialised only to suppress gcc warning
 	const bool seenHeater = gb.Seen('H');

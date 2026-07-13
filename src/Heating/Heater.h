@@ -42,6 +42,20 @@ NamedEnum(HeaterStatus, uint8_t, off, standby, active, fault, tuning, offline);
 class Heater INHERIT_OBJECT_MODEL
 {
 public:
+	// Enumeration to describe the heater tuning phases
+	enum class TuningPhase : uint8_t
+	{
+		checking_temperature_is_stable,
+		heating_up,
+		settling,
+		measuring,
+#if TUNE_WITH_HALF_FAN
+		measuring_with_50pc_fan,
+#endif
+		measuring_with_fan_on,
+		numPhases
+	};
+
 	explicit Heater(unsigned int num) noexcept;
 	virtual ~Heater() noexcept override;
 	Heater(const Heater &_ecv_from) = delete;
@@ -198,7 +212,7 @@ protected:
 	static uint32_t afterPeakTime;									// the time at which we recorded afterPeakTemp
 	static float lastCoolingRate;
 	static FansBitmap tuningFans;
-	static unsigned int tuningPhase;
+	static TuningPhase tuningPhase;
 	static uint8_t idleCyclesDone;
 	static bool tuningQuietMode;
 
@@ -210,8 +224,6 @@ protected:
 	float maxHeatingFaultTime = DefaultMaxHeatingFaultTime;				// how long a heater fault is permitted to persist before a heater fault is raised
 
 private:
-	static const char *_ecv_array const TuningPhaseText[];
-
 	unsigned int heaterNumber;
 	int sensorNumber = -1;												// the sensor number used by this heater
 	int ambientSensorNumber = -1;										// the ambient sensor number used by this heater, if any
