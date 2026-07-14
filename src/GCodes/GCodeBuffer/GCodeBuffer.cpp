@@ -163,6 +163,12 @@ void GCodeBuffer::Init() noexcept
 #endif
 }
 
+// Throw away any line that we have only partly received. Binary codes are always received in one piece, so only the string parser can hold one
+void GCodeBuffer::DiscardPartialLine() noexcept
+{
+	stringParser.DiscardPartialLine();
+}
+
 void GCodeBuffer::StartTimer() noexcept
 {
 	whenTimerStarted = millis();

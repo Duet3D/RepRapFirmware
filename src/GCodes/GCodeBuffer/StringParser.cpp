@@ -47,6 +47,16 @@ void StringParser::Init() noexcept
 	}
 }
 
+// Throw away any line that we have only partly received. This is called when the input source drops its buffered data,
+// because otherwise the remains of the truncated line would be spliced onto the start of the next one
+void StringParser::DiscardPartialLine() noexcept
+{
+	if (gb.bufferState != GCodeBufferState::parseNotStarted && gb.bufferState != GCodeBufferState::ready)
+	{
+		Init();
+	}
+}
+
 inline void StringParser::AddToChecksum(char c) noexcept
 {
 	// As computing the CRC takes several cycles, we only do it if we had a line number

@@ -60,6 +60,7 @@ public:
 	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *_ecv_null fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
 	void Reset() noexcept;															// Reset it to its state after start-up
 	void Init() noexcept;															// Set it up to parse another G-code
+	void DiscardPartialLine() noexcept;												// Throw away any line that we have only partly received
 	void Disable() noexcept;														// Disable input from the associated port
 	void Enable(uint32_t commsProperties) noexcept;									// Enable input and set the CRC or checksum requirements
 	void Diagnostics(const StringRef& reply) noexcept;								// Write some debug info

@@ -103,7 +103,7 @@ public:
 
 	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
 	size_t BytesCached() const noexcept override;				// How many bytes are ready for FillBuffer, hiding a trailing partly-matched urgent command
-	void Spin() noexcept;										// Read from the device into the buffer and check for urgent commands
+	void Spin(GCodeBuffer& gb) noexcept;						// Read from the device into the buffer and check for urgent commands
 
 private:
 	SerialCDC &_ecv_from device;

@@ -437,7 +437,7 @@ void GCodes::Spin() noexcept
 
 #if defined(SERIAL_MAIN_DEVICE) && (!SAME5x || CORE_USES_TINYUSB)
 	// Read from USB into the input buffer and check for out-of-band urgent commands (M112/M122/M108)
-	usbInput->Spin();
+	usbInput->Spin(*UsbGCode());
 #endif
 
 	CheckTriggers();
