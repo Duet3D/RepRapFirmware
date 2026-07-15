@@ -120,7 +120,7 @@ class UsbGCodeInput : public BufferedStreamGCodeInput
 public:
 	UsbGCodeInput(SerialCDC &_ecv_from dev, MessageType mt) noexcept;
 
-	void Spin() noexcept override;
+	void Spin(GCodeBuffer& gb) noexcept override;
 
 private:
 	SerialCDC &_ecv_from usbDevice;

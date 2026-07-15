@@ -305,14 +305,14 @@ UsbGCodeInput::UsbGCodeInput(SerialCDC &_ecv_from dev, MessageType mt) noexcept
 {
 }
 
-void UsbGCodeInput::Spin() noexcept
+void UsbGCodeInput::Spin(GCodeBuffer& gb) noexcept
 {
 	// If the host disconnected, discard any buffered partial data
 	if (!usbDevice.IsConnected() && BytesCached() != 0)
 	{
 		Reset();
 	}
-	BufferedStreamGCodeInput::Spin();
+	BufferedStreamGCodeInput::Spin(gb);
 }
 
 #endif
