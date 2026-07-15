@@ -233,17 +233,25 @@ size_t BufferedStreamGCodeInput::BytesCached() const noexcept
 	return (cached > held) ? cached - held : 0;
 }
 
-// Read from the device into our ring buffer and scan for urgent commands (M112/M108/M122)
-void BufferedStreamGCodeInput::Spin() noexcept
+// Read from the device into our ring buffer and scan for urgent commands (M112/M108/M122).
+// Whenever we drop buffered data we must also drop any partly-received line in the GCodeBuffer, because the two together
+// form one stream: dropping only our half would splice the remains of a truncated line onto the start of the next one
+void BufferedStreamGCodeInput::Spin(GCodeBuffer& gb) noexcept
 {
 	if (!device.IsConnected())
 	{
-		// The USB host has disconnected. Drop any buffered data so that when the host reconnects, its first
-		// command starts cleanly instead of being appended to a leftover fragment
+		// The USB host has closed the port. Discard anything we have buffered as well as anything the USB driver has
+		// received since, because it keeps filling its receive FIFO regardless of the DTR state. This way the first
+		// command after the host reconnects starts cleanly instead of being appended to a leftover fragment
+		while (device.available() != 0)
+		{
+			(void)device.read();
+		}
 		if (RegularGCodeInput::BytesCached() != 0)
 		{
 			Reset();
 		}
+		gb.DiscardPartialLine();
 		return;
 	}
 
@@ -259,7 +267,10 @@ void BufferedStreamGCodeInput::Spin() noexcept
 				const size_t pos = writingPointer;
 				if (CheckForUrgentCommand(buffer[pos]))
 				{
-					// Urgent command handled and buffer was reset (writingPointer is now 0).
+					// Urgent command handled and buffer was reset (writingPointer is now 0). The GCodeBuffer may already
+					// hold the start of the same line (e.g. the line number in "N12 M122"), so throw that away too
+					gb.DiscardPartialLine();
+
 					// Copy any remaining bytes after the trigger into the buffer so that
 					// following commands (e.g. M999 after M112) can still be processed
 					const size_t remaining = endPointer - pos - 1;
