@@ -1032,7 +1032,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 				{
 					debugPrintf("Received header instead of data response retry\n");
 				}
-				ExchangeResponse(TransferResponse::BadHeaderChecksum);
+				ExchangeResponse(SpiTransferResponse::BadHeaderChecksum);
 				state = InternalTransferState::ExchangingHeaderResponse;
 			}
 			else
