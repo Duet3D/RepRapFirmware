@@ -31,11 +31,14 @@ class AsyncSerial;
 class AuxDevice
 {
 public:
+	enum class SerialParity : uint8_t { none = 0, even, odd };
+
 	AuxDevice() noexcept;
 
 	void Init(AsyncSerial *p_uart, uint32_t p_baudRate) noexcept;
 	bool IsEnabledForGCodeIo() const noexcept { return mode == AuxMode::raw || mode == AuxMode::panelDue; }
 	void SetMode(AuxMode p_mode) noexcept;
+	void SetSerialParity(SerialParity p_parity) noexcept { serialParity = p_parity; }	// applied on next SetMode; affects device/Modbus mode only
 	void SetBaudRate(uint32_t p_baudRate) noexcept { baudRate = p_baudRate; }			// must call SetMode after calling this to actually change the baud rate
 	void Disable() noexcept;
 	AuxMode GetMode() const noexcept { return mode; }
@@ -90,6 +93,8 @@ private:
 	uint32_t seq;							// sequence number for output in PanelDue mode
 	uint32_t baudRate;
 	AuxMode mode = AuxMode::disabled;		// whether disabled, raw, PanelDue mode or Modbus RTU mode
+
+	SerialParity serialParity = SerialParity::none;		// device/Modbus serial parity: none=8N1, even=8E1, odd=8O1
 
 #if SUPPORT_MODBUS_RTU
 	IoPort txNotRx;							// port used to switch the RS485 port between transmit and receive
