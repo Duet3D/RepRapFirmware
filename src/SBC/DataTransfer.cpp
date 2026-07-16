@@ -1024,6 +1024,17 @@ TransferState DataTransfer::DoTransfer() noexcept
 				// Retry succeeded
 				ExchangeHeader();
 			}
+			else if ((rxResponse & 0xFF) == SbcFormatCode)
+			{
+				// The SBC restarted the full transfer and sent a new header instead of a data response.
+				// Most of that header was lost, so report a bad header checksum to make the SBC send it again
+				if (reprap.Debug(Module::SbcInterface))
+				{
+					debugPrintf("Received header instead of data response retry\n");
+				}
+				ExchangeResponse(TransferResponse::BadHeaderChecksum);
+				state = InternalTransferState::ExchangingHeaderResponse;
+			}
 			else
 			{
 				// Retry failed, reset the connection
