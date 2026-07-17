@@ -21,6 +21,9 @@
 
 NamedEnum(BoardState, uint8_t, unknown, flashing, flashFailed, resetting, running, timedOut);
 
+constexpr uint16_t DefaultConnectionTimeoutSeconds = 10;	// how long after time sync is lost before an expansion board switches its heaters off, configurable via M959
+constexpr uint16_t MinConnectionTimeoutSeconds = 3;
+
 struct ExpansionBoardData
 {
 	ExpansionBoardData() noexcept;
@@ -37,6 +40,7 @@ struct ExpansionBoardData
 	DriverData *_ecv_array _ecv_null driverData;				// an array numDrivers long of objects, or nullptr if numDrivers is zero
 	uint16_t accelerometerRuns;
 	uint16_t closedLoopRuns;
+	uint16_t connectionTimeoutSeconds;
 	uint16_t hasMcuTemp : 1,
 			 hasVin : 1,
 			 hasV12 : 1,
@@ -66,6 +70,8 @@ public:
 	GCodeResult ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
+	GCodeResult ConfigureConnectionTimeout(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M959
+
 	void UpdateFinished(CanAddress address) noexcept;
 	void UpdateFailed(CanAddress address) noexcept;
 	void AddAccelerometerRun(CanAddress address, unsigned int numDataPoints) noexcept;
@@ -87,8 +93,6 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
-	static constexpr uint32_t StatusMessageTimeoutMillis = 5000;	// if we don't receive a board status message for this long we presume that communication has been lost
-
 	const ExpansionBoardData& FindIndexedBoard(unsigned int index) const noexcept;
 	void UpdateBoardState(CanAddress address, BoardState newState) noexcept;
 

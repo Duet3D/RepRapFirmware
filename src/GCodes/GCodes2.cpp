@@ -4629,6 +4629,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = RaiseEvent(gb, reply);
 				break;
 
+#if SUPPORT_CAN_EXPANSION
+			case 959:	// configure expansion board connection timeout
+				result = reprap.GetExpansion().ConfigureConnectionTimeout(gb, reply);
+				break;
+#endif
+
 #if SUPPORT_PHASE_STEPPING
 			case 970:	// configure step mode (phase stepping)
 				result = ConfigureStepMode(gb, reply);
