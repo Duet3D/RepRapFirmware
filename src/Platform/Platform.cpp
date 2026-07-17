@@ -2307,9 +2307,9 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			// the pre-existing behaviour (no parity, 8N1) rather than keeping a previous setting.
 			switch (gb.Seen('F') ? gb.GetLimitedUIValue('F', 3) : 0)
 			{
-			case 1:		dev.SetSerialParity(AuxDevice::SerialParity::even); break;
-			case 2:		dev.SetSerialParity(AuxDevice::SerialParity::odd); break;
-			default:	dev.SetSerialParity(AuxDevice::SerialParity::none); break;
+			case 1:		dev.SetSerialMode(UartMode::Mode8E1); break;
+			case 2:		dev.SetSerialMode(UartMode::Mode8O1); break;
+			default:	dev.SetSerialMode(UartMode::Mode8N1); break;
 			}
 # endif
 		}

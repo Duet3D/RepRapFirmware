@@ -42,10 +42,7 @@ void AuxDevice::SetMode(AuxMode p_mode) noexcept
 #if SUPPORT_MODBUS_RTU
 			uart->SetOnTxEndedCallback((p_mode == AuxMode::device) ? GlobalTxEndedCallback : nullptr, CallbackParameter(this));
 #endif
-			AsyncSerial::UARTModes config = AsyncSerial::Mode_8N1;
-			if (serialParity == SerialParity::even) { config = AsyncSerial::Mode_8E1; }
-			else if (serialParity == SerialParity::odd) { config = AsyncSerial::Mode_8O1; }
-			uart->begin(baudRate, config);
+			uart->begin(baudRate, serialMode);
 			mode = p_mode;
 		}
 	}
