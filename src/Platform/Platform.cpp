@@ -2303,6 +2303,14 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 				}
 			}
 #  endif
+			// Serial parity for device/Modbus mode. Always applied so that omitting F restores
+			// the pre-existing behaviour (no parity, 8N1) rather than keeping a previous setting.
+			switch (gb.Seen('F') ? gb.GetLimitedUIValue('F', 3) : 0)
+			{
+			case 1:		dev.SetSerialParity(AuxDevice::SerialParity::even); break;
+			case 2:		dev.SetSerialParity(AuxDevice::SerialParity::odd); break;
+			default:	dev.SetSerialParity(AuxDevice::SerialParity::none); break;
+			}
 # endif
 		}
 
