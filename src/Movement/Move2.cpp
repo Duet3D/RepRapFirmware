@@ -908,7 +908,7 @@ int Move::GetMotorCurrent(size_t drive, int code) const noexcept
 }
 
 // Get the direction setting for a local or remote driver
-inline bool Move::GetDirectionValue(DriverId did) const noexcept
+bool Move::GetDirectionValue(DriverId did) const noexcept
 {
 	return
 #if SUPPORT_CAN_EXPANSION
