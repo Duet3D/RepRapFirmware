@@ -270,8 +270,9 @@ void GCodeMachineState::WaitForAcknowledgement(uint32_t seq) noexcept
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	if (fileState.IsLive())
 	{
-		// Stop reading from the current file
-		CloseFile();
+		// Stop reading from the current file by closing only our own reference to it. Don't call CloseFile here because that
+		// closes the file in the stack frames below too, which would prevent the invoking file from resuming after acknowledgement
+		fileState.Close();
 	}
 #endif
 	waitingForAcknowledgement = true;
