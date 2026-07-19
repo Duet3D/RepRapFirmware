@@ -1101,6 +1101,10 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 #endif
 		}
 
+		// The user position may no longer match where the machine actually stops if a queued or read-ahead move was discarded above,
+		// so make sure it is re-read from the motors at the next standstill before the pause macro can run
+		ms.positionMayBeInaccurate = true;
+
 		// Replace the paused machine coordinates by user coordinates, which we updated earlier if they were returned by Move::PausePrint
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
@@ -1311,6 +1315,8 @@ bool GCodes::DoEmergencyPause() noexcept
 #endif
 		}
 
+		// The aborted move may have been stopped partway through, so make sure the position is re-read from the motors at the next standstill
+		ms.positionMayBeInaccurate = true;
 
 #if HAS_SBC_INTERFACE
 		if (reprap.UsingSbcInterface() && ms.GetNumber() == 0)
