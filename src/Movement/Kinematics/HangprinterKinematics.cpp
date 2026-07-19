@@ -1120,7 +1120,6 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 }
 #endif // DUAL_CAN
 
-#if DUAL_CAN
 namespace
 {
 bool TryGetDriverDirectionForwards(DriverId driver, bool& forwards) noexcept
@@ -1134,7 +1133,6 @@ bool TryGetDriverDirectionForwards(DriverId driver, bool& forwards) noexcept
 	return true;
 }
 }
-#endif // DUAL_CAN
 
 #if DUAL_CAN
 GCodeResult HangprinterKinematics::ReadODrive3AxisForce(DriverId const driver, const StringRef& reply, float setTorqueConstants[], uint32_t setMechanicalAdvantage[], uint32_t setSpoolGearTeeth[], uint32_t setMotorGearTeeth[], float setSpoolRadii[]) THROWS(GCodeException)

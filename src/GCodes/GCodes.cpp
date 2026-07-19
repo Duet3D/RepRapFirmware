@@ -2330,8 +2330,8 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	const auto abandonMove = [this, &ms, &initialUserPosition]() noexcept
 	{
 		memcpyf(ms.currentUserPosition, initialUserPosition, numVisibleAxes);
-		memcpyf(ms.coords, ms.initialCoords, numVisibleAxes);
-		ms.latestVirtualExtruderPosition = ms.moveStartVirtualExtruderPosition;
+		memcpyf(ms.raw.coords, ms.initialCoords, numVisibleAxes);
+		ms.latestVirtualExtruderPosition = ms.raw.moveStartVirtualExtruderPosition;
 	};
 
 	AxesBitmap axesMentioned;
@@ -3034,7 +3034,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 	if (reprap.GetMove().GetKinematics().LimitPosition(ms.raw.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, true, limitAxes) != LimitPositionResult::ok)
 	{
 		memcpyf(ms.currentUserPosition, initialUserPosition, numVisibleAxes);
-		memcpyf(ms.coords, ms.initialCoords, numVisibleAxes);
+		memcpyf(ms.raw.coords, ms.initialCoords, numVisibleAxes);
 		gb.ThrowGCodeException(TargetUnreachableText);							// abandon the move
 	}
 
@@ -3059,7 +3059,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 	if (keepoutZone.DoesArcIntrude(ms.initialCoords, ms.raw.coords, ms.arcCurrentAngle, finalTheta, ms.arcCentre, ms.arcRadius, axis0Mapping, axis1Mapping, clockwise, wholeCircle))
 	{
 		memcpyf(ms.currentUserPosition, initialUserPosition, numVisibleAxes);
-		memcpyf(ms.coords, ms.initialCoords, numVisibleAxes);
+		memcpyf(ms.raw.coords, ms.initialCoords, numVisibleAxes);
 		gb.ThrowGCodeException("arc move would enter keepout zone");
 	}
 #endif
