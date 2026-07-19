@@ -4702,6 +4702,7 @@ void GCodes::StopPrint(GCodeBuffer *_ecv_null gbp, StopPrintReason reason) noexc
 
 	for (MovementState& ms : moveStates)
 	{
+		ms.positionMayBeInaccurate = true;		// the discarded move (if any) may have already updated the user position, so re-read it at the next standstill
 		ms.segmentsLeft = 0;
 		ms.codeQueue->Clear();
 #if SUPPORT_LASER
