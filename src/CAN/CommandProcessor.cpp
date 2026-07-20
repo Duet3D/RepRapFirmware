@@ -222,7 +222,7 @@ static void HandleInputStateChangedV2(const CanMessageInputChangedV2& msg, CanAd
 			break;
 
 		case RemoteInputHandle::typeZprobe:
-			p.GetEndstops().HandleRemoteZProbeChange(src, handle.parts.major, handle.parts.minor, msg.GetWhen(i), msg.GetEntryReading(i), state);
+			p.GetEndstops().HandleRemoteZProbeChange(src, handle.parts.major, handle.parts.minor, msg.GetWhen(i), state, msg.GetEntryReading(i));
 			endstopStatesChanged = true;
 			break;
 
