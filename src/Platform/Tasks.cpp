@@ -248,7 +248,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array _ecv_null stk) noexcept
 	// We could also trap unaligned memory access, if we change the gcc options to not generate code that uses unaligned memory access.
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
 
-#if !SAME5x
+#if SAME70 || SAM4E || SAM4S
 	// When doing a software reset, we disable the NRST input (User reset) to prevent the negative-going pulse that gets generated on it being held
 	// in the capacitor and changing the reset reason from Software to User. So enable it again here. We hope that the reset signal will have gone away by now.
 # ifndef RSTC_MR_KEY_PASSWD
