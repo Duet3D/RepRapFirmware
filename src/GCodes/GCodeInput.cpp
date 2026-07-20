@@ -220,15 +220,25 @@ size_t BufferedStreamGCodeInput::BytesCached() const noexcept
 	size_t held;
 	switch (state)
 	{
-		case GCodeInputState::doingMCode:		held = 1; break;
-		case GCodeInputState::doingMCode1:		held = 2; break;
-		case GCodeInputState::doingMCode10:
-		case GCodeInputState::doingMCode11:
-		case GCodeInputState::doingMCode12:		held = 3; break;
-		case GCodeInputState::doingMCode108:
-		case GCodeInputState::doingMCode112:
-		case GCodeInputState::doingMCode122:	held = 4; break;
-		default:								held = 0; break;
+	case GCodeInputState::doingMCode:
+		held = 1;
+		break;
+	case GCodeInputState::doingMCode1:
+		held = 2;
+		break;
+	case GCodeInputState::doingMCode10:
+	case GCodeInputState::doingMCode11:
+	case GCodeInputState::doingMCode12:
+		held = 3;
+		break;
+	case GCodeInputState::doingMCode108:
+	case GCodeInputState::doingMCode112:
+	case GCodeInputState::doingMCode122:
+		held = 4;
+		break;
+	default:
+		held = 0;
+		break;
 	}
 	return (cached > held) ? cached - held : 0;
 }
