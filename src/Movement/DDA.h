@@ -45,7 +45,7 @@ struct PrepParams
 	motioncalc_t startSpeed, topSpeed, endSpeed;		// the speeds reached
 #if SUPPORT_S_CURVE
     mutable motioncalc_t phase1StartSpeed, phase1EndSpeed, phase5StartSpeed, phase5EndSpeed;
-	mutable bool speedsCalculated;						// true if the previous 4 speeds have been calculated and stored
+	mutable bool speedsCalculated = false;				// true if the previous 4 speeds have been calculated and stored
 #endif
 
 	bool useInputShaping;
