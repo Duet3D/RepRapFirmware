@@ -204,6 +204,10 @@ void EndstopsManager::EnableAxisEndstops(AxesBitmap axes, const float speeds[Max
 			activeEndstops = nullptr;
 			ThrowGCodeException("no endstop configured for axis %u", axis);
 		}
+		if (reprap.GetGCodes().IsSimulating())
+		{
+			continue;															// simulated moves never trigger endstops, and priming a stall endstop would validate driver settings that M569 didn't apply while simulating
+		}
 		try
 		{
 			es->PrimeAxis(kin, reprap.GetMove().GetAxisDriversConfig(axis), speeds[axis]);
@@ -225,16 +229,20 @@ void EndstopsManager::EnableAxisEndstops(AxesBitmap axes, const float speeds[Max
 // Enable extruder endstops. This adds to any existing axis endstops, so if you want to enable axis endstops too then you must call EnableAxisEndstops before calling this.
 void EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders, const float speeds[MaxExtruders], bool& reduceAcceleration) THROWS(GCodeException)
 {
+	reduceAcceleration = false;
 	if (extruders.IsNonEmpty())
 	{
 #if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
-		if (extrudersEndstop == nullptr)
+		if (!reprap.GetGCodes().IsSimulating())
 		{
-			extrudersEndstop = new StallDetectionEndstop;
+			if (extrudersEndstop == nullptr)
+			{
+				extrudersEndstop = new StallDetectionEndstop;
+			}
+			extrudersEndstop->PrimeExtruders(extruders, speeds);
+			reduceAcceleration = extrudersEndstop->ShouldReduceAcceleration();
+			AddToActive(*extrudersEndstop);
 		}
-		extrudersEndstop->PrimeExtruders(extruders, speeds);
-		reduceAcceleration = extrudersEndstop->ShouldReduceAcceleration();
-		AddToActive(*extrudersEndstop);
 #else
 		ThrowGCodeException("extruder endstops not supported by this system");
 #endif
