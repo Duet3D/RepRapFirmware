@@ -226,16 +226,23 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 	// If we are simulating, simulate completion of the current move
 	if (simulationMode >= SimulationMode::normal)
 	{
-		// Simulate completion of one move
 		if (cdda->IsCommitted())
 		{
-			simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
-			++completedMoves;
-			if (cdda->Free())
+			// Retiring the current move unconditionally would keep the ring nearly empty, so moves would be committed with hardly any lookahead behind them and the simulated time would come out too high
+			if (!CanAddMove() || waitingForRingToEmpty || shouldStartMove || cdda->IsIsolatedMove())
 			{
-				++numLookaheadUnderruns;
+				simulationTime += (float)cdda->GetClocksNeeded() * (1.0 / StepClockRate);
+				++completedMoves;
+				if (cdda->Free())
+				{
+					++numLookaheadUnderruns;
+				}
+				getPointer = cdda = cdda->GetNext();
 			}
-			getPointer = cdda = cdda->GetNext();
+			else
+			{
+				return 1;											// wait for more moves to be added, MoveAvailable() wakes us up earlier
+			}
 		}
 	}
 	else
@@ -308,6 +315,7 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 	if (   shouldStartMove											// if the Move code told us that we should start a move in any case...
 		|| waitingForRingToEmpty									// ...or GCodes is waiting for all moves to finish...
 		|| cdda->IsIsolatedMove()									// ...or checking endstops or another isolated move, so we can't schedule the following move
+		|| (simulationMode >= SimulationMode::normal && !CanAddMove())	// ...or we are simulating with a full ring, so waiting cannot gain any more lookahead
 	   )
 	{
 		const uint32_t ret = PrepareMoves(cdda, prepareAdvanceTime, 0, simulationMode);

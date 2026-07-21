@@ -52,6 +52,10 @@
 
 constexpr const char *_ecv_array TargetUnreachableText = "target position outside machine limits";		// message used for both G0/1 and G2/3 moves
 
+#if HAS_SBC_INTERFACE
+constexpr unsigned int MaxSbcFileCodesPerSpin = 8;		// maximum number of buffered SBC codes to fetch and execute per Spin call
+#endif
+
 #if NUM_ASYNC_CHANNELS != 0
 // Support for emergency stop from PanelDue
 bool GCodes::emergencyStopCommanded = false;
@@ -736,6 +740,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		else
 		{
+			// Make sure we read from regular inputs as well when waiting for message acknowledgments while executing (binary) macros
 			if (gb.LatestMachineState().waitingForAcknowledgement && gb.GetNormalInput() != nullptr)
 			{
 				if (gb.GetNormalInput()->FillBuffer(&gb))
@@ -744,7 +749,30 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					return true;
 				}
 			}
-			return reprap.GetSbcInterface().FillBuffer(gb);
+
+			// Executing fetched codes immediately and amortising the main loop iteration cost over several codes speeds up simulated prints considerably.
+			// In regular prints unfinished move codes end the batch early, so the DDA ring keeps its usual fill level
+			bool didWork = false;
+			for (size_t codesDone = 0; codesDone < MaxSbcFileCodesPerSpin; codesDone++)
+			{
+				// Read the next buffered code from the SBC interface
+				if (!reprap.GetSbcInterface().FillBuffer(gb))
+				{
+					break;
+				}
+				didWork = true;
+
+				// Run the code and stop if we cannot do any more
+				reply.Clear();
+				const bool finished = ActOnCode(gb, reply);
+				gb.SetFinished(finished);
+				if (!finished || gb.GetState() != GCodeState::normal ||
+					(gb.IsFileChannel() && (pauseState != PauseState::notPaused || deferredPauseCommandPending != nullptr)))
+				{
+					break;
+				}
+			}
+			return didWork;
 		}
 	}
 	else

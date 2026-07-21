@@ -1774,7 +1774,7 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 
 	bool gotCommand = false;
 	{
-		//TODO can we take the lock inside the loop body instead, if we re-read readPointer and writePointer after taking it?
+		// The whole walk must be atomic: readPointer is a cursor into variable-length records, so a concurrent defragment would invalidate it
 		TaskCriticalSectionLocker locker;
 		if (rxPointer != txPointer || txEnd != 0)
 		{
