@@ -569,6 +569,12 @@ float DDARing::GetCurrentMoveDuration() const noexcept
 	return (cdda != nullptr) ? (float)cdda->GetClocksNeeded() * StepClocksToSeconds : 0.0;;
 }
 
+FilePosition DDARing::GetCurrentMoveFilePosition() const noexcept
+{
+	const DDA *_ecv_null const cdda = GetCurrentDDA();
+	return (cdda != nullptr) ? cdda->GetFilePosition() : noFilePosition;
+}
+
 // Pause the print as soon as we can.
 // If we are able to skip any moves, return true and update ms.pauseRestorePoint to the first move we skipped.
 // If we can't skip any moves, update just the coordinates and laser PWM in ms.pauseRestorePoint and return false.

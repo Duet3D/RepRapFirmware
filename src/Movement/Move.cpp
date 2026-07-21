@@ -210,6 +210,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "distance",				OBJECT_MODEL_FUNC(self->GetCurrentMoveDistance(0), 2),											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "duration",				OBJECT_MODEL_FUNC(self->GetCurrentMoveDuration(0), 2),											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "extrusionRate",			OBJECT_MODEL_FUNC(self->GetTotalExtrusionRate(0), 2),											ObjectModelEntryFlags::liveNotPanelDue },
+	{ "filePosition",			OBJECT_MODEL_FUNC_IF(self->GetCurrentMoveFilePosition(0) != noFilePosition, self->GetCurrentMoveFilePosition(0)),		ObjectModelEntryFlags::liveNotPanelDue },
 # if SUPPORT_LASER
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetGCodes().GetMachineType() == MachineType::laser,
 															reprap.GetPlatform().GetLaserPwm(), 2),								ObjectModelEntryFlags::liveNotPanelDue },
@@ -344,7 +345,7 @@ constexpr uint8_t Move::objectModelTableDescriptor[] =
 	16 + SUPPORT_COORDINATE_ROTATION,										// number of sections
 	18 + SUPPORT_COORDINATE_ROTATION + SUPPORT_KEEPOUT_ZONES + 2 * SUPPORT_S_CURVE,		// section 0
 	2,																		// section 1
-	7 + SUPPORT_LASER,														// section 2
+	8 + SUPPORT_LASER,														// section 2
 	3,																		// section 3
 	2,																		// section 4
 	2,																		// section 5
