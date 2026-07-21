@@ -1515,10 +1515,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				// Setting the Z height with G30
 				ms.raw.coords[Z_AXIS] -= g30zHeightError;
-				ToolOffsetInverseTransform(ms);
 				ms.SetNewPositionOfOwnedAxes();
 				move.SetZeroHeightError(ms.raw.coords, zp.Ptr());
 			}
+			ToolOffsetInverseTransform(ms);							// the moves to the probe point and back up to the dive height didn't update the user coordinates
 			gb.AdvanceState();
 			if (zp->GetProbeType() != ZProbeType::blTouch)			// if it's a BLTouch then we have already retracted it
 			{
