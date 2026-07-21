@@ -1184,37 +1184,57 @@ void DDA::Prepare(DDARing& ring,
 	// 'prepareAdvanceTime' includes lead time for CAN-connected drivers to receive and queue their movement commands before the deadline.
 	// If this move doesn't touch any CAN-connected driver, that lead time is wasted latency (causes M400/G4 stalls under fast host-driven pipelines like OpenPnP);
 	// we still need enough of a margin to avoid the Move task modifying a segment list that the step ISR is already executing, so fall back to
-	// MoveTiming::AbsoluteMinimumPreparedTime, the same value already trusted elsewhere in this function for that exact purpose
+	// MoveTiming::AbsoluteMinimumPreparedTime, the same value already trusted elsewhere in this function for that exact purpose.
+	// A move that chains directly onto this one (see the 'start this move directly after the previous one' case below) inherits whatever margin
+	// we gave this move, so if this move is short and a CAN-connected move is queued close behind it in the ring, that move could end up with
+	// less than the CAN lead time it needs. So before shortening our own margin, check the ring for a CAN-connected move that's due within
+	// the window we would otherwise be cutting (prepareAdvanceTime - AbsoluteMinimumPreparedTime) and keep the full margin if one is found.
 #if SUPPORT_CAN_EXPANSION
-	bool involvesRemoteDriver = false;
+	auto touchesRemoteDriver = [&move](const DDA& dda) noexcept -> bool
 	{
 		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
-		for (size_t drive = 0; drive < numTotalAxes && !involvesRemoteDriver; ++drive)
+		for (size_t drive = 0; drive < numTotalAxes; ++drive)
 		{
-			if (directionVector[drive] != 0.0)
+			if (dda.directionVector[drive] != 0.0)
 			{
 				const AxisDriversConfig& config = move.GetAxisDriversConfig(drive);
 				for (size_t i = 0; i < config.numDrivers; ++i)
 				{
 					if (config.driverNumbers[i].IsRemote())
 					{
-						involvesRemoteDriver = true;
-						break;
+						return true;
 					}
 				}
 			}
 		}
-		if (!involvesRemoteDriver)
+		const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
+		for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 		{
-			const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
-			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+			if (dda.directionVector[ExtruderToLogicalDrive(extruder)] != 0.0 && move.GetExtruderDriver(extruder).IsRemote())
 			{
-				if (directionVector[ExtruderToLogicalDrive(extruder)] != 0.0 && move.GetExtruderDriver(extruder).IsRemote())
-				{
-					involvesRemoteDriver = true;
-					break;
-				}
+				return true;
 			}
+		}
+		return false;
+	};
+
+	bool involvesRemoteDriver = touchesRemoteDriver(*this);
+	if (!involvesRemoteDriver)
+	{
+		// Walk forward through the moves currently queued behind this one. Anything beyond the window we are about to cut
+		// (prepareAdvanceTime - AbsoluteMinimumPreparedTime) will get its own fresh margin decision when it's prepared, so we
+		// only need to worry about moves that could inherit a start time within that window via direct chaining.
+		uint32_t clocksScanned = 0;
+		const uint32_t dangerWindow = prepareAdvanceTime - MoveTiming::AbsoluteMinimumPreparedTime;
+		for (const DDA *dda = GetNext(); dda != this && dda->GetState() != DDA::empty && clocksScanned < dangerWindow; dda = dda->GetNext())
+		{
+			if (touchesRemoteDriver(*dda))
+			{
+				involvesRemoteDriver = true;
+				break;
+			}
+			// Underestimate this move's duration (ignore acceleration/deceleration ramps) so that we err on the side of not reducing the margin
+			clocksScanned += (dda->topSpeed > 0.0) ? (uint32_t)(dda->totalDistance / dda->topSpeed) : 0;
 		}
 	}
 	const uint32_t localPrepareAdvanceTime = (involvesRemoteDriver) ? prepareAdvanceTime : min<uint32_t>(prepareAdvanceTime, MoveTiming::AbsoluteMinimumPreparedTime);
