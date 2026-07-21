@@ -1180,6 +1180,48 @@ void DDA::Prepare(DDARing& ring,
 	// Avoid setting the move start time in the past or with very little time before it starts, because this can lead to us trying to modify a segment that is already executing
 	Move& move = reprap.GetMove();
 	const uint32_t now = StepTimer::GetMovementTimerTicks();
+
+	// 'prepareAdvanceTime' includes lead time for CAN-connected drivers to receive and queue their movement commands before the deadline.
+	// If this move doesn't touch any CAN-connected driver, that lead time is wasted latency (causes M400/G4 stalls under fast host-driven pipelines like OpenPnP);
+	// we still need enough of a margin to avoid the Move task modifying a segment list that the step ISR is already executing, so fall back to
+	// MoveTiming::AbsoluteMinimumPreparedTime, the same value already trusted elsewhere in this function for that exact purpose
+#if SUPPORT_CAN_EXPANSION
+	bool involvesRemoteDriver = false;
+	{
+		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
+		for (size_t drive = 0; drive < numTotalAxes && !involvesRemoteDriver; ++drive)
+		{
+			if (directionVector[drive] != 0.0)
+			{
+				const AxisDriversConfig& config = move.GetAxisDriversConfig(drive);
+				for (size_t i = 0; i < config.numDrivers; ++i)
+				{
+					if (config.driverNumbers[i].IsRemote())
+					{
+						involvesRemoteDriver = true;
+						break;
+					}
+				}
+			}
+		}
+		if (!involvesRemoteDriver)
+		{
+			const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
+			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+			{
+				if (directionVector[ExtruderToLogicalDrive(extruder)] != 0.0 && move.GetExtruderDriver(extruder).IsRemote())
+				{
+					involvesRemoteDriver = true;
+					break;
+				}
+			}
+		}
+	}
+	const uint32_t localPrepareAdvanceTime = (involvesRemoteDriver) ? prepareAdvanceTime : min<uint32_t>(prepareAdvanceTime, MoveTiming::AbsoluteMinimumPreparedTime);
+#else
+	const uint32_t localPrepareAdvanceTime = prepareAdvanceTime;
+#endif
+
 	if (prev->GetState() == committed)
 	{
 		uint32_t prevEndTime = prev->afterPrepare.moveStartTime + prev->clocksNeeded;
@@ -1194,7 +1236,7 @@ void DDA::Prepare(DDARing& ring,
 		}
 		else if (startSpeed == 0.0)
 		{
-			afterPrepare.moveStartTime = now + prepareAdvanceTime;
+			afterPrepare.moveStartTime = now + localPrepareAdvanceTime;
 		}
 		else
 		{
@@ -1204,7 +1246,7 @@ void DDA::Prepare(DDARing& ring,
 	}
 	else
 	{
-		afterPrepare.moveStartTime = now + prepareAdvanceTime;
+		afterPrepare.moveStartTime = now + localPrepareAdvanceTime;
 	}
 
 	if (simMode < SimulationMode::normal)
