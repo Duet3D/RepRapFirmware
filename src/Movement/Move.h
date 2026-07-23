@@ -421,6 +421,7 @@ public:
 	float GetDecelerationMmPerSecSquared(size_t msNumber) const noexcept { return rings[msNumber].GetDecelerationMmPerSecSquared(); }		// Get the (peak) deceleration for reporting in the object model
 	float GetCurrentMoveDistance(size_t msNumber) const noexcept { return rings[msNumber].GetCurrentMoveDistance(); }
 	float GetCurrentMoveDuration(size_t msNumber) const noexcept { return rings[msNumber].GetCurrentMoveDuration(); }
+	FilePosition GetCurrentMoveFilePosition(size_t msNumber) const noexcept { return rings[msNumber].GetCurrentMoveFilePosition(); }		// Get the file position of the move being executed, or noFilePosition if there is none
 	float GetTotalExtrusionRate(size_t msNumber) const noexcept { return rings[msNumber].GetTotalExtrusionRate(); }
 
 	void UpdateLiveMachineCoordinates(float coords[MaxAxes], const Tool *_ecv_null tool) const noexcept;		// Force an update of the live machine coordinates
