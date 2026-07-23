@@ -563,12 +563,12 @@ private:
 	void PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint32_t now) noexcept SPEED_CRITICAL;
 	void SimulateSteppingDrivers(Platform& p) noexcept;								// For debugging use
 	bool ScheduleNextStepInterrupt() noexcept SPEED_CRITICAL;						// Schedule the next interrupt, returning true if we can't because it is already due
-	bool StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept;		// stop movement of a drive and recalculate the endpoint
+	bool StopAxisOrExtruder(bool executingMove, size_t logicalDrive, uint32_t when) noexcept;		// stop movement of a drive and recalculate the endpoint
 #if SUPPORT_REMOTE_COMMANDS
 	void StopDriveFromRemote(size_t drive) noexcept;
 	int32_t GetLastMoveStepsTaken(size_t drive) const noexcept;						// get the number of steps taken by the last move, if it was an isolated move
 #endif
-	bool StopAllDrivers(bool executingMove) noexcept;								// cancel the current isolated move
+	bool StopAllDrivers(bool executingMove, uint32_t when) noexcept;				// cancel the current isolated move
 	void InsertDM(DriveMovement *dm) noexcept;										// insert a DM into the active list, keeping it in step time order
 	void SetDirection(size_t axisOrExtruder, bool direction) noexcept;				// set the direction of a driver, observing timing requirements
 

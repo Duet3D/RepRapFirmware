@@ -173,11 +173,7 @@ EndstopHitDetails SwitchEndstop::CheckTriggered() noexcept
 				rslt.axis = GetAxis();
 				if (stopAll)
 				{
-					rslt.SetAction(EndstopHitAction::stopAll
-#if SUPPORT_CAN_EXPANSION
-									, whenTriggered, haveTriggerTime
-#endif
-								  );
+					rslt.SetAction(EndstopHitAction::stopAll, whenTriggered, haveTriggerTime);
 					if (GetAtHighEnd())
 					{
 						rslt.setAxisHigh = true;
@@ -189,11 +185,7 @@ EndstopHitDetails SwitchEndstop::CheckTriggered() noexcept
 				}
 				else if (numPortsLeftToTrigger == 1)
 				{
-					rslt.SetAction(EndstopHitAction::stopAxis
-#if SUPPORT_CAN_EXPANSION
-									, whenTriggered, haveTriggerTime
-#endif
-								  );
+					rslt.SetAction(EndstopHitAction::stopAxis, whenTriggered, haveTriggerTime);
 					if (GetAtHighEnd())
 					{
 						rslt.setAxisHigh = true;
@@ -205,11 +197,7 @@ EndstopHitDetails SwitchEndstop::CheckTriggered() noexcept
 				}
 				else
 				{
-					rslt.SetAction(EndstopHitAction::stopDriver
-#if SUPPORT_CAN_EXPANSION
-									, whenTriggered, haveTriggerTime
-#endif
-								  );
+					rslt.SetAction(EndstopHitAction::stopDriver, whenTriggered, haveTriggerTime);
 					rslt.internalUse = i;			// remember which port it is, for the call to Acknowledge
 					rslt.driver = reprap.GetMove().GetAxisDriversConfig(GetAxis()).driverNumbers[i];
 				}
@@ -278,7 +266,7 @@ void SwitchEndstop::AppendDetails(const StringRef& str) noexcept
 #if SUPPORT_CAN_EXPANSION
 
 // Process a remote endstop input change that relates to this endstop
-void SwitchEndstop::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, uint16_t when, bool state) noexcept
+void SwitchEndstop::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, uint32_t when, bool state) noexcept
 {
 	if (handleMinor < numPortsUsed && boardNumbers[handleMinor] == src)
 	{

@@ -755,7 +755,7 @@ size_t EndstopsManager::GetNumProbesToReport() const noexcept
 #if SUPPORT_CAN_EXPANSION
 
 // Handle signalling of a remote switch change, when the handle indicates that it is being used as an endstop.
-void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint16_t when, bool state) noexcept
+void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t when, bool state) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(axisEndstops))
 	{
@@ -769,7 +769,7 @@ void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMa
 }
 
 // Handle signalling of a remote switch change, when the handle indicates that it is being used as a Z probe.
-void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint16_t when, bool state, int32_t reading) noexcept
+void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t when, bool state, int32_t reading) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
@@ -782,7 +782,7 @@ void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMaj
 	}
 }
 
-void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint16_t when, int32_t reading) noexcept
+void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t when, int32_t reading) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
@@ -795,7 +795,7 @@ void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_
 	}
 }
 
-void EndstopsManager::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled, uint16_t when) noexcept
+void EndstopsManager::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled, uint32_t when) noexcept
 {
 	ReadLocker lock(endstopsLock);						// make sure endstops are not changed or deleted while we operate on them
 

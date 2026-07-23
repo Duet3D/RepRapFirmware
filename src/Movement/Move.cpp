@@ -2640,7 +2640,7 @@ void Move::CheckEndstops(bool executingMove) noexcept
 		{
 		case EndstopHitAction::stopAll:
 #if SUPPORT_CAN_EXPANSION
-			if (StopAllDrivers(executingMove)) { wakeAsyncSender = true; }
+			if (StopAllDrivers(executingMove, hitDetails.whenTriggered)) { wakeAsyncSender = true; }
 #else
 			StopAllDrivers(executingMove);
 #endif
@@ -2666,7 +2666,7 @@ void Move::CheckEndstops(bool executingMove) noexcept
 		case EndstopHitAction::stopAxis:
 			// We must stop the drive before we mess with its coordinates
 #if SUPPORT_CAN_EXPANSION
-			if (StopAxisOrExtruder(executingMove, hitDetails.axis)) { wakeAsyncSender = true; }
+			if (StopAxisOrExtruder(executingMove, hitDetails.axis, hitDetails.whenTriggered)) { wakeAsyncSender = true; }
 #else
 			StopAxisOrExtruder(executingMove, hitDetails.axis);
 #endif
@@ -2687,7 +2687,7 @@ void Move::CheckEndstops(bool executingMove) noexcept
 					DriveMovement& dm = dms[hitDetails.axis];
 					if (dm.state >= DMState::firstMotionState)
 					{
-						if (CanMotion::StopDriverWhenExecuting(hitDetails.driver, dm.GetNetStepsTakenThisMove()))
+						if (CanMotion::StopDriverWhenExecuting(hitDetails.driver, dm.GetNetStepsTakenThisMove(hitDetails.whenTriggered)))
 						{
 							wakeAsyncSender = true;
 						}
@@ -2969,22 +2969,22 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 
 // This is called when we abort a move because we have hit an endstop.
 // It stops all drives and adjusts the end points of the current move to account for how far through the move we got.
-bool Move::StopAllDrivers(bool executingMove) noexcept
+bool Move::StopAllDrivers(bool executingMove, uint32_t when) noexcept
 {
 	bool wakeAsyncSender = false;
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 	{
-		if (StopAxisOrExtruder(executingMove, drive)) { wakeAsyncSender = true; }
+		if (StopAxisOrExtruder(executingMove, drive, when)) { wakeAsyncSender = true; }
 	}
 	return wakeAsyncSender;
 }
 
 // Stop a drive and re-calculate the end position. Return true if any remote drivers were scheduled to be stopped.
-bool Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
+bool Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive, uint32_t when) noexcept
 {
 	DriveMovement& dm = dms[logicalDrive];
 	int32_t netStepsTaken;
-	const bool wasMoving = dm.StopLogicalDrive(netStepsTaken);
+	const bool wasMoving = dm.StopLogicalDrive(netStepsTaken, when);
 	bool wakeAsyncSender = false;
 #if SUPPORT_CAN_EXPANSION
 	if (wasMoving)

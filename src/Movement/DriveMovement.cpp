@@ -760,7 +760,7 @@ void DriveMovement::TakeStepsAndCalcStepTimeRarely(uint32_t clocksNow) noexcept
 
 // If the logical drive is moving, stop it and update the position.
 // Return true if the drive was moving.
-bool DriveMovement::StopLogicalDrive(int32_t& netStepsTaken) noexcept
+bool DriveMovement::StopLogicalDrive(int32_t& netStepsTaken, uint32_t when) noexcept
 {
 	AtomicCriticalSectionLocker lock;
 
@@ -768,7 +768,7 @@ bool DriveMovement::StopLogicalDrive(int32_t& netStepsTaken) noexcept
 	{
 		state = DMState::idle;
 		reprap.GetMove().DeactivateDM(this);
-		netStepsTaken = GetNetStepsTakenThisMove();
+		netStepsTaken = GetNetStepsTakenThisMove(when);
 		MoveSegment *seg = nullptr;
 		std::swap(seg, const_cast<MoveSegment*&>(segments));
 		MoveSegment::ReleaseAll(seg);
@@ -806,7 +806,7 @@ void DriveMovement::CheckSegment(unsigned int line, MoveSegment *seg) noexcept
 void DriveMovement::StopDriverFromRemote() noexcept
 {
 	int32_t dummy;
-	(void)StopLogicalDrive(dummy);
+	(void)StopLogicalDrive(dummy, StepTimer::GetMovementTimerTicks());
 }
 
 #endif
@@ -830,14 +830,16 @@ bool DriveMovement::SetStepMode(StepMode mode) noexcept
 	return true;
 }
 
-motioncalc_t DriveMovement::GetPhaseStepsTakenThisSegment() const noexcept
+// Return the number of steps taken since the start of this segment. This works when doing normal stepping or phase stepping.
+// It works for CAN-connected drives only if we are generating and retiring segments for them, which we do for moves that have endstops of probes enabled.
+motioncalc_t DriveMovement::GetStepsTakenThisSegment(uint32_t when) const noexcept
 {
 	const MoveSegment *const seg = segments;
 	if (seg == nullptr)
 	{
 		return 0;
 	}
-	int32_t timeSinceStart = (int32_t)(StepTimer::GetMovementTimerTicks() - seg->GetStartTime());
+	int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
 	if (timeSinceStart < 0)
 	{
 		return 0;
