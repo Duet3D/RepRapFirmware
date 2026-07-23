@@ -216,14 +216,7 @@ inline int32_t DriveMovement::GetNetStepsTakenThisSegment() const noexcept
 // Only valid for isolated moves. Caller must disable interrupts before calling this.
 inline int32_t DriveMovement::GetNetStepsTakenThisMove(uint32_t when) const noexcept
 {
-#if SUPPORT_PHASE_STEPPING
-	if (phaseStepControl.IsEnabled())
-	{
-		return (int32_t)(GetStepsTakenThisSegment(StepTimer::ConvertLocalToMovementTime(when)) + phaseStepsTakenSinceMoveStart);
-	}
-#endif
-	//TODO use 'when'
-	return currentMotorPosition - positionAtMoveStart;
+	return (int32_t)GetCurrentPosition(when) - positionAtMoveStart;
 }
 
 // Return true if this is an extruder executing a printing move
@@ -294,6 +287,9 @@ inline float DriveMovement::GetCurrentPosition(uint32_t when) const noexcept
 							  + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards
 						  );
 		}
+
+		// If we get here then we have been asked for the position before the current segment started
+		return (float)((motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 	}
 
 	// If we get here then no movement is taking place
