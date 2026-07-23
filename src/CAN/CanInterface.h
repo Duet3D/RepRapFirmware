@@ -57,6 +57,7 @@ namespace CanInterface
 	void CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS(GCodeException);
 
 	uint16_t GetTimeStampCounter() noexcept;
+	uint32_t Convert16bitReceivedTimeStampTo32bits(uint16_t ts) noexcept;
 
 #if DUAL_CAN
 	uint32_t SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout = UsualSendTimeout) noexcept;

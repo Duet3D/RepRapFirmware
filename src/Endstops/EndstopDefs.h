@@ -28,39 +28,27 @@ enum class EndstopHitAction : uint8_t
 struct EndstopHitDetails
 {
 	EndstopHitDetails() noexcept
-		: action((uint32_t)EndstopHitAction::none), internalUse(0), axis(NO_AXIS), setAxisLow(false), setAxisHigh(false), isZProbe(false)
-#if SUPPORT_CAN_EXPANSION
-			, haveTriggerTime(false)
-#endif
+		: action((uint32_t)EndstopHitAction::none), internalUse(0), axis(NO_AXIS), setAxisLow(false), setAxisHigh(false), isZProbe(false), haveTriggerTime(false)
 	{
 	}
 
-	void SetAction(EndstopHitAction a
-#if SUPPORT_CAN_EXPANSION
-		, uint16_t p_whenTriggered, bool p_haveTriggerTime
-#endif
-		) noexcept
+	void SetAction(EndstopHitAction a, uint16_t p_whenTriggered, bool p_haveTriggerTime) noexcept
 	{
 		action = (uint32_t)a;
-#if SUPPORT_CAN_EXPANSION
 		whenTriggered = p_whenTriggered; haveTriggerTime = p_haveTriggerTime;
-#endif
 	}
 
 	EndstopHitAction GetAction() const noexcept { return (EndstopHitAction)action; }
 
+	uint32_t whenTriggered;			// step timer value when the endstop or probe was triggered
 	uint16_t action : 2,			// an EndstopHitAction
 			 internalUse : 4,		// used to pass the port index between CheckTriggered() and Acknowledge()
 			 axis : 6,				// which axis to stop if the action is stopAxis, and which axis to set the position of if setAxisLow or SetAxisHigh is true
 			 setAxisLow : 1,		// whether or not to set the axis position to its min
 			 setAxisHigh : 1,		// whether or not to set the axis position to its max
-			 isZProbe : 1;			// whether this is a Z probe
+			 isZProbe : 1,			// whether this is a Z probe
+			 haveTriggerTime : 1;	// set if whenTriggered is valid
 	DriverId driver;
-
-#if SUPPORT_CAN_EXPANSION
-	bool haveTriggerTime;
-	uint16_t whenTriggered;
-#endif
 
 	static_assert(MaxAxes <= 64);				// because we have allocated 6 bits to hold the axis number
 };

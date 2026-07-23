@@ -474,6 +474,17 @@ uint16_t CanInterface::GetTimeStampPeriod() noexcept
 
 #endif
 
+// Convert a 16-bit timestamp in a received message to 32-bits.
+// We expect the time stamp to be up to a few milliseconds old. If that's not the case, ignore the timestamp n the message and return the current master time.
+uint32_t CanInterface::Convert16bitReceivedTimeStampTo32bits(uint16_t ts) noexcept
+{
+	const uint32_t now = StepTimer::GetTimerTicks();
+	const uint16_t delay = (uint16_t)now - ts;
+	return (delay < MillisToStepClocks(10))					// if the time stamp is less than 10ms old
+		? now - (uint32_t)delay
+			: now;											// time stamp negative or unreliable to ignore it
+}
+
 // Send a message on the CAN FD channel and record any errors
 static void SendCanMessage(CanDevice::TxBufferNumber whichBuffer, uint32_t timeout, CanMessageBuffer *buffer) noexcept
 {

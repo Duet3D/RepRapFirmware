@@ -242,7 +242,7 @@ GCodeResult RemoteZProbe::CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& 
 }
 
 // Callback function for digital Z probes
-void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, uint16_t when, bool newState, int32_t reading) noexcept
+void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, uint32_t when, bool newState, int32_t reading) noexcept
 {
 	if (src == boardAddress)
 	{
@@ -260,7 +260,7 @@ void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, 
 }
 
 // Process a remote reading that relates to this Z probe
-void RemoteZProbe::UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint16_t when, int32_t reading) noexcept
+void RemoteZProbe::UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint32_t when, int32_t reading) noexcept
 {
 	if (src == boardAddress)
 	{

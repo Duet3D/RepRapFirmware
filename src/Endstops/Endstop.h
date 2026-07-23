@@ -52,7 +52,7 @@ protected:
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	uint16_t whenTriggered;
+	uint32_t whenTriggered;
 	bool haveTriggerTime = false;
 #endif
 
@@ -110,7 +110,7 @@ public:
 
 #if SUPPORT_CAN_EXPANSION
 	// Process a remote endstop input change that relates to this endstop
-	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, uint16_t when, bool state) noexcept { }
+	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, uint32_t when, bool state) noexcept { }
 	virtual void DeleteRemoteStallEndstops() noexcept { }		// overridden in class StallEndtop
 #endif
 

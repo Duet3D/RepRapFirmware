@@ -346,11 +346,7 @@ EndstopHitDetails ZProbe::CheckTriggered() noexcept
 	EndstopHitDetails rslt;			// initialised by default constructor
 	if (b)
 	{
-		rslt.SetAction(EndstopHitAction::stopAll
-#if SUPPORT_CAN_EXPANSION
-						, whenTriggered, haveTriggerTime
-#endif
-					  );
+		rslt.SetAction(EndstopHitAction::stopAll, whenTriggered, haveTriggerTime);
 		rslt.isZProbe = true;
 	}
 	return rslt;
