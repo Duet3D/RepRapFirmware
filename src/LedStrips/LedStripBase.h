@@ -8,10 +8,11 @@
 #ifndef SRC_LEDSTRIPS_LEDSTRIPBASE_H_
 #define SRC_LEDSTRIPS_LEDSTRIPBASE_H_
 
-#include <ObjectModel/ObjectModel.h>
+#include <RepRapFirmware.h>
 
 #if SUPPORT_LED_STRIPS
 
+#include <ObjectModel/ObjectModel.h>
 #include <Hardware/IoPorts.h>
 #include <General/NamedEnum.h>
 
@@ -65,8 +66,8 @@ protected:
 	static constexpr ColorOrder DefaultNeoPixelColorOrder = ColorOrder::GRB;
 	static constexpr ColorOrder DefaultDotStarColorOrder = ColorOrder::BGR;
 
-	ColorOrder colorOrder;												// which order we need to send the data in
 	uint32_t maxLeds = DefaultMaxLedsPerStrip;
+	ColorOrder colorOrder;												// which order we need to send the data in
 	LedStripType type;
 };
 

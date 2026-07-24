@@ -242,12 +242,17 @@ GCodeResult RemoteZProbe::CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& 
 }
 
 // Callback function for digital Z probes
-void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState, int32_t reading) noexcept
+void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, uint32_t when, bool newState, int32_t reading) noexcept
 {
 	if (src == boardAddress)
 	{
 		if (type == ZProbeType::scanningAnalog && useTouchMode)
 		{
+			if (newState)
+			{
+				whenTriggered = when;
+				haveTriggerTime = true;
+			}
 			touchTriggered = newState;
 		}
 		lastValue = reading;
@@ -255,10 +260,21 @@ void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, 
 }
 
 // Process a remote reading that relates to this Z probe
-void RemoteZProbe::UpdateRemoteReading(CanAddress src, uint8_t handleMinor, int32_t reading) noexcept
+void RemoteZProbe::UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint32_t when, int32_t reading) noexcept
 {
 	if (src == boardAddress)
 	{
+		bool triggered = (reading > targetAdcValue);
+		if (misc.parts.probingAway) { triggered = !triggered; }
+		if (triggered)
+		{
+			whenTriggered = when;
+			haveTriggerTime = true;
+		}
+		else
+		{
+			haveTriggerTime = false;
+		}
 		lastValue = reading;
 	}
 }

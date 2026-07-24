@@ -95,7 +95,7 @@ float Heater::afterPeakTemp;							// temperature after max from which we start 
 uint32_t Heater::afterPeakTime;							// the time at which we recorded afterPeakTemp
 float Heater::lastCoolingRate;
 FansBitmap Heater::tuningFans;
-unsigned int Heater::tuningPhase;
+Heater::TuningPhase Heater::tuningPhase(TuningPhase::checking_temperature_is_stable);
 uint8_t Heater::idleCyclesDone;
 bool Heater::tuningQuietMode;
 
@@ -327,9 +327,10 @@ GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansB
 	return rslt;
 }
 
-const char *_ecv_array const Heater::TuningPhaseText[] =
+constexpr const char *_ecv_array TuningPhaseText[] =
 {
 	"checking temperature is stable",
+	"calibrating heater",
 	"heating up",
 	"settling",
 	"measuring",
@@ -339,14 +340,14 @@ const char *_ecv_array const Heater::TuningPhaseText[] =
 	"measuring with fan on"
 };
 
+static_assert(ARRAY_SIZE(TuningPhaseText) == (size_t)Heater::TuningPhase::numPhases);
+
 // Get the auto tune status or last result
 void Heater::GetAutoTuneStatus(const StringRef& reply) const noexcept
 {
 	if (GetStatus() == HeaterStatus::tuning)
 	{
-		// Phases are: 1 = stabilising, 2 = heating, 3 = settling, 4 = cycling with fan off, 5 = cycling with fan on
-		const unsigned int numPhases = (tuningFans.IsEmpty()) ? 4 : ARRAY_SIZE(TuningPhaseText);
-		reply.printf("Heater %u is being tuned, phase %u of %u, %s", GetHeaterNumber(), tuningPhase + 1, numPhases, TuningPhaseText[tuningPhase]);
+		reply.printf("Heater %u is being tuned, phase %u of %u, %s", GetHeaterNumber(), (unsigned int)tuningPhase + 1, (unsigned int)TuningPhase::numPhases, TuningPhaseText[(unsigned int)tuningPhase]);
 	}
 	else if (tuned)
 	{
@@ -361,9 +362,9 @@ void Heater::GetAutoTuneStatus(const StringRef& reply) const noexcept
 // Tell the user what's happening, called after the tuning phase has been updated
 void Heater::ReportTuningUpdate() noexcept
 {
-	if (tuningPhase < ARRAY_SIZE(TuningPhaseText))
+	if (tuningPhase < TuningPhase::numPhases)
 	{
-		reprap.GetPlatform().MessageF(GenericMessage, "Auto tune starting phase %u, %s\n", tuningPhase, TuningPhaseText[tuningPhase]);
+		reprap.GetPlatform().MessageF(GenericMessage, "Auto tune starting phase %u, %s\n", (unsigned int)tuningPhase, TuningPhaseText[(unsigned int)tuningPhase]);
 	}
 }
 
@@ -410,14 +411,14 @@ void Heater::SetAndReportModelAfterTuning(bool usingFans) noexcept
 	const float deadTime = (usingFans) ? (fanOffParams.deadTime + fanOnParams.deadTime) * 0.5 : fanOffParams.deadTime;
 	const float coolingRateExponent = model.GetCoolingRateExponent();					// we don't attempt to tune this
 	const float averageTemperatureRiseCooling = tuningTargetTemp - TuningPeakTempDrop - 0.5 * tuningHysteresis - tuningStartTemp.GetMean();
-	const float basicCoolingRate = fanOffParams.coolingRate/powf(averageTemperatureRiseCooling * 0.01, coolingRateExponent);
+	const float basicCoolingRate = model.CalculateBasicCoolingRate(averageTemperatureRiseCooling, fanOffParams.coolingRate);
 	float fanOnCoolingRate = 0.0;
 	if (usingFans)
 	{
 		// Sometimes the print cooling fan makes no difference to the cooling rate. The SetModel call will fail if the rate with fan on is lower than the rate with fan off.
 		if (fanOnParams.coolingRate > fanOffParams.coolingRate)
 		{
-			fanOnCoolingRate = ((fanOnParams.coolingRate - fanOffParams.coolingRate) * 100.0)/(averageTemperatureRiseCooling * tuningFanPwm);
+			fanOnCoolingRate = model.CalculateFanCoolingRate(averageTemperatureRiseCooling,  fanOnParams.coolingRate - fanOffParams.coolingRate, tuningFanPwm);
 		}
 		else
 		{
@@ -605,7 +606,7 @@ HeaterStatus Heater::GetStatus() const noexcept
 	return (mode == HeaterMode::fault) ? HeaterStatus::fault
 			: (mode == HeaterMode::offline) ? HeaterStatus::offline
 				: (mode == HeaterMode::off) ? HeaterStatus::off
-					: (mode >= HeaterMode::tuning0) ? HeaterStatus::tuning
+					: (mode >= HeaterMode::tuning0_settling) ? HeaterStatus::tuning
 						: (active) ? HeaterStatus::active
 							: HeaterStatus::standby;
 }

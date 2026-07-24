@@ -1,5 +1,5 @@
 /*
- * UsbDevice.h
+ * UsbDeviceRrf.h
  *
  *  Created on: 13 Mar 2026
  *      Author: Christian
@@ -24,6 +24,7 @@ public:
 
 	void Init(SerialCDC *p_device, Pin vBusPin, const char *mutexName) noexcept;
 	void Shutdown() noexcept;
+	void End() noexcept;														// End the underlying CDC interface (host-visible disconnect on the last interface)
 	void Reinit() noexcept;														// Restore USB GCode processing after SBC connection loss
 	bool Flush() noexcept;
 	void Reset(Pin vBusPin) noexcept;

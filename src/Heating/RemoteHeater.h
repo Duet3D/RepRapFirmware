@@ -18,7 +18,7 @@ public:
 	RemoteHeater(unsigned int num, CanAddress board) noexcept;
 	~RemoteHeater() noexcept;
 
-	GCodeResult ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) override;
+	GCodeResult ConfigurePortAndSensor(const char *portName, PwmFrequency freq, unsigned int sn, int ambientSn, const StringRef& reply) override;
 	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) override;
 	GCodeResult ReportDetails(const StringRef& reply) const noexcept override;
 
@@ -58,12 +58,13 @@ private:
 	{
 		notTuning = 0,
 		stabilising,
+		calibrating,
 		heatingUp,
 		idleCycles,
 		cycling
 	};
 
-	GCodeResult SendTuningCommand(const StringRef& reply, bool on) noexcept;
+	GCodeResult SendTuningCommand(const StringRef& reply, bool on, bool calibrate) noexcept;
 	void StopTuning() noexcept;
 	void UpdateFeedForward() noexcept;
 

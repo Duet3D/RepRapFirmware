@@ -162,6 +162,12 @@ void GCodeBuffer::Init() noexcept
 #endif
 }
 
+// Throw away any line that we have only partly received. Binary codes are always received in one piece, so only the string parser can hold one
+void GCodeBuffer::DiscardPartialLine() noexcept
+{
+	stringParser.DiscardPartialLine();
+}
+
 void GCodeBuffer::StartTimer() noexcept
 {
 	whenTimerStarted = millis();
@@ -293,6 +299,7 @@ bool GCodeBuffer::Put(char c) noexcept
 // Decode the command in the buffer when it is complete
 void GCodeBuffer::DecodeCommand() noexcept
 {
+	restoredCommandValid = false;
 	PARSER_OPERATION(DecodeCommand());
 }
 
@@ -308,6 +315,7 @@ bool GCodeBuffer::CheckMetaCommand(const StringRef& reply) THROWS(GCodeException
 // CAUTION! This may be called with the task scheduler suspended, so don't do anything that might block or take more than a few microseconds to execute
 void GCodeBuffer::PutBinary(const uint32_t *data, size_t len) noexcept
 {
+	restoredCommandValid = false;
 	machineState->lastCodeFromSbc = true;
 	isBinaryBuffer = true;
 	macroJustStarted = false;
@@ -319,6 +327,7 @@ void GCodeBuffer::PutBinary(const uint32_t *data, size_t len) noexcept
 // Add an entire G-Code, overwriting any existing content
 void GCodeBuffer::PutAndDecode(const char *_ecv_array str, size_t len) noexcept
 {
+	restoredCommandValid = false;
 #if HAS_SBC_INTERFACE
 	machineState->lastCodeFromSbc = false;
 	isBinaryBuffer = false;
@@ -329,6 +338,7 @@ void GCodeBuffer::PutAndDecode(const char *_ecv_array str, size_t len) noexcept
 // Add a null-terminated string, overwriting any existing content
 void GCodeBuffer::PutAndDecode(const char *_ecv_array str) noexcept
 {
+	restoredCommandValid = false;
 #if HAS_SBC_INTERFACE
 	machineState->lastCodeFromSbc = false;
 	isBinaryBuffer = false;
@@ -354,17 +364,17 @@ bool GCodeBuffer::FileEnded() noexcept
 
 char GCodeBuffer::GetCommandLetter() const noexcept
 {
-	return PARSER_OPERATION(GetCommandLetter());
+	return (restoredCommandValid) ? restoredCommandLetter : PARSER_OPERATION(GetCommandLetter());
 }
 
 bool GCodeBuffer::HasCommandNumber() const noexcept
 {
-	return PARSER_OPERATION(HasCommandNumber());
+	return (restoredCommandValid) ? restoredHasCommandNumber : PARSER_OPERATION(HasCommandNumber());
 }
 
 int GCodeBuffer::GetCommandNumber() const noexcept
 {
-	return PARSER_OPERATION(GetCommandNumber());
+	return (restoredCommandValid) ? restoredCommandNumber : PARSER_OPERATION(GetCommandNumber());
 }
 
 void GCodeBuffer::GetCompleteParameters(const StringRef& str) THROWS(GCodeException)
@@ -374,7 +384,7 @@ void GCodeBuffer::GetCompleteParameters(const StringRef& str) THROWS(GCodeExcept
 
 int8_t GCodeBuffer::GetCommandFraction() const noexcept
 {
-	return PARSER_OPERATION(GetCommandFraction());
+	return (restoredCommandValid) ? restoredCommandFraction : PARSER_OPERATION(GetCommandFraction());
 }
 
 #if SUPPORT_ASYNC_MOVES
@@ -1047,8 +1057,33 @@ bool GCodeBuffer::PushState(bool withinSameFile) noexcept
 	}
 
 	machineState = new GCodeMachineState(*machineState, withinSameFile);
+	if (!withinSameFile)
+	{
+		SaveInvokingCommand();
+	}
 	reprap.InputsUpdated();
 	return true;
+}
+
+// Remember in the newly-pushed macro frame which command invoked it, so that RestoreInvokingCommand can reinstate it when the frame is popped.
+// Use our own getters so that a still-active restored command (from an enclosing macro) is carried through nested macros
+void GCodeBuffer::SaveInvokingCommand() noexcept
+{
+	machineState->savedCommandLetter = GetCommandLetter();
+	machineState->savedCommandNumber = GetCommandNumber();
+	machineState->savedCommandFraction = GetCommandFraction();
+	machineState->savedHasCommandNumber = HasCommandNumber();
+}
+
+// Reinstate the command that invoked a macro frame after that frame has been popped. The command getters return these values until the next
+// command is parsed, which covers both parsers since the binary parser otherwise reports the macro's last command from the code header
+void GCodeBuffer::RestoreInvokingCommand(const GCodeMachineState& ms) noexcept
+{
+	restoredCommandLetter = ms.savedCommandLetter;
+	restoredCommandNumber = ms.savedCommandNumber;
+	restoredCommandFraction = ms.savedCommandFraction;
+	restoredHasCommandNumber = ms.savedHasCommandNumber;
+	restoredCommandValid = true;
 }
 
 // Pop state returning true if successful (i.e. no stack underrun)
@@ -1066,6 +1101,10 @@ bool GCodeBuffer::PopState(bool withinSameFile) noexcept
 		}
 
 		poppedFileState = !ms->localPush;
+		if (poppedFileState)
+		{
+			RestoreInvokingCommand(*ms);
+		}
 		machineState = ms->Pop();						// get the previous state and copy down any error message
 		delete ms;
 	} while (!withinSameFile && !poppedFileState);
@@ -1399,6 +1438,17 @@ void GCodeBuffer::RestartFrom(FilePosition pos) noexcept
 	}
 #endif
 	Init();											// clear the next move
+}
+
+// Binary (SBC) commands arrive already fully resolved, so there is no modal state to restore for them
+void GCodeBuffer::SetModalGCommand(int num) noexcept
+{
+#if HAS_SBC_INTERFACE
+	if (!isBinaryBuffer)
+#endif
+	{
+		stringParser.SetModalGCommand(num);
+	}
 }
 
 const char *_ecv_array GCodeBuffer::DataStart() const noexcept

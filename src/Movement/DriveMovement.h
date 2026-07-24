@@ -12,6 +12,7 @@
 #include <Platform/Tasks.h>
 #include "MoveSegment.h"
 #include "ExtruderShaper.h"
+#include "StepTimer.h"
 
 #if SUPPORT_PHASE_STEPPING
 #include <Movement/PhaseStep.h>
@@ -53,12 +54,12 @@ public:
 	bool CalcNextStepTime(uint32_t now) noexcept SPEED_CRITICAL;
 
 	void DebugPrint() const noexcept;
-	bool StopLogicalDrive(int32_t& netStepsTaken) noexcept;					// if the driver is moving, stop it, update the position and pass back the net steps taken
+	bool StopLogicalDrive(int32_t& netStepsTaken, uint32_t when) noexcept;	// if the driver is moving, stop it, update the position and pass back the net steps taken
 #if SUPPORT_REMOTE_COMMANDS
 	void StopDriverFromRemote() noexcept;
 #endif
 	int32_t GetNetStepsTakenThisSegment() const noexcept;				// return the number of steps taken in the current segment
-	int32_t GetNetStepsTakenThisMove() const noexcept;					// return the number of steps taken in the current move, only valid for isolated moves
+	int32_t GetNetStepsTakenThisMove(uint32_t when) const noexcept;		// return the number of steps taken in the current move, only valid for isolated moves
 	void SetMotorPosition(int32_t pos) noexcept;
 	bool MotionPending() const noexcept { return segments != nullptr; }
 	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
@@ -97,9 +98,8 @@ private:
 	void RetireSegment(MoveSegment *oldSegment) noexcept;							// retire the current segment but keep it available temporarily for debugging
 	bool LogStepError(uint8_t type, float info, const MoveSegment *seg) noexcept;	// record a step error
 
-#if SUPPORT_PHASE_STEPPING
-	motioncalc_t GetPhaseStepsTakenThisSegment() const noexcept;
-#endif
+	motioncalc_t GetStepsTakenThisSegment(uint32_t when) const noexcept;
+
 #if SUPPORT_S_CURVE
 	void UpdateSpeedAndAccelerationChange(motioncalc_t newSpeed, motioncalc_t speedChange, motioncalc_t newAcc, motioncalc_t accChange) noexcept;
 	void MovementStopped() noexcept;
@@ -206,7 +206,7 @@ inline int32_t DriveMovement::GetNetStepsTakenThisSegment() const noexcept
 #if SUPPORT_PHASE_STEPPING
 	if (phaseStepControl.IsEnabled())
 	{
-		return std::lrint(GetPhaseStepsTakenThisSegment());
+		return std::lrint(GetStepsTakenThisSegment(StepTimer::GetMovementTimerTicks()));
 	}
 #endif
 	return currentMotorPosition - positionAtSegmentStart;
@@ -214,15 +214,9 @@ inline int32_t DriveMovement::GetNetStepsTakenThisSegment() const noexcept
 
 // Return the number of net steps already taken for the current move in the forwards direction. Used for moves that are stopped by endstops or a Z probe.
 // Only valid for isolated moves. Caller must disable interrupts before calling this.
-inline int32_t DriveMovement::GetNetStepsTakenThisMove() const noexcept
+inline int32_t DriveMovement::GetNetStepsTakenThisMove(uint32_t when) const noexcept
 {
-#if SUPPORT_PHASE_STEPPING
-	if (phaseStepControl.IsEnabled())
-	{
-		return (int32_t)(GetPhaseStepsTakenThisSegment() + phaseStepsTakenSinceMoveStart);
-	}
-#endif
-	return currentMotorPosition - positionAtMoveStart;
+	return (int32_t)GetCurrentPosition(when) - positionAtMoveStart;
 }
 
 // Return true if this is an extruder executing a printing move
@@ -293,6 +287,9 @@ inline float DriveMovement::GetCurrentPosition(uint32_t when) const noexcept
 							  + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards
 						  );
 		}
+
+		// If we get here then we have been asked for the position before the current segment started
+		return (float)((motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 	}
 
 	// If we get here then no movement is taking place

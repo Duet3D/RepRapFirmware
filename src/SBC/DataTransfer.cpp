@@ -416,6 +416,10 @@ __nocache SpiTransferHeader DataTransfer::rxHeader;
 __nocache SpiTransferHeader DataTransfer::txHeader;
 __nocache uint32_t DataTransfer::rxResponse;
 __nocache uint32_t DataTransfer::txResponse;
+# if SUPPORTS_SBC_OVER_USB
+__nocache UsbTransferHeader DataTransfer::usbRxHeader;
+__nocache UsbTransferHeader DataTransfer::usbTxHeader;
+# endif
 #endif
 
 DataTransfer::DataTransfer() noexcept : state(InternalTransferState::ExchangingData), lastTransferNumber(0), failedTransfers(0), checksumErrors(0),
@@ -481,6 +485,7 @@ void DataTransfer::Init() noexcept
 		SetPinFunction(p, SbcSpiSercomPinsMode);
 	}
 
+	SetDriveStrength(SbcSpiMisoPin, 3);
 	Serial::EnableSercomClock(SbcSpiSercomNumber);
 	spi_dma_disable();
 
@@ -497,6 +502,7 @@ void DataTransfer::Init() noexcept
 	SetPinFunction(APIN_SBC_SPI_MISO, SBCPinPeriphMode);
 	SetPinFunction(APIN_SBC_SPI_SCK, SBCPinPeriphMode);
 	SetPinFunction(APIN_SBC_SPI_SS0, SBCPinPeriphMode);
+	SetDriveStrength(APIN_SBC_SPI_MISO, 3);
 
 	spi_enable_clock(SBC_SPI);
 	spi_disable(SBC_SPI);
@@ -1018,6 +1024,17 @@ TransferState DataTransfer::DoTransfer() noexcept
 				// Retry succeeded
 				ExchangeHeader();
 			}
+			else if ((rxResponse & 0xFF) == SbcFormatCode)
+			{
+				// The SBC restarted the full transfer and sent a new header instead of a data response.
+				// Most of that header was lost, so report a bad header checksum to make the SBC send it again
+				if (reprap.Debug(Module::SbcInterface))
+				{
+					debugPrintf("Received header instead of data response retry\n");
+				}
+				ExchangeResponse(SpiTransferResponse::BadHeaderChecksum);
+				state = InternalTransferState::ExchangingHeaderResponse;
+			}
 			else
 			{
 				// Retry failed, reset the connection
@@ -1170,7 +1187,11 @@ void DataTransfer::ResetConnection(bool fullReset) noexcept
 		transportType = SbcTransportType::spi;
 		ReinitSpi();
 # else
-		// USB-only board: just reset and wait for a new M576.1
+		// USB-only board: just reset and wait for a new M576.1.
+		// A failed transfer may have already read a legitimate new header before the body
+		// exchange failed, so usbRxHeader can still claim packets that rxBuffer never received
+		usbRxHeader.numPackets = 0;
+		usbRxHeader.dataLength = 0;
 		return;
 # endif
 	}

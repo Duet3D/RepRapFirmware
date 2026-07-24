@@ -625,7 +625,7 @@ void FtpResponder::ProcessLine() noexcept
 			}
 			Commit(ResponderState::reading);
 		}
-		// enter passive mode mode
+		// enter passive mode
 		else if (StringEqualsIgnoreCase(clientMessage, "PASV"))
 		{
 			// reset error conditions
@@ -759,7 +759,7 @@ void FtpResponder::ProcessLine() noexcept
 		break;
 
 	case ResponderState::pasvPortOpened:
-		// enter passive mode mode
+		// enter passive mode
 		if (StringEqualsIgnoreCase(clientMessage, "PASV"))
 		{
 			outBuf->copy("503 Only one concurrent data connection is supported.\r\n");
@@ -885,7 +885,7 @@ void FtpResponder::ProcessLine() noexcept
 
 	case ResponderState::uploading:
 	case ResponderState::sendingPasvData:
-		// enter passive mode mode
+		// enter passive mode
 		if (StringEqualsIgnoreCase(clientMessage, "PASV"))
 		{
 			outBuf->copy("503 Only one concurrent data connection is supported.\r\n");

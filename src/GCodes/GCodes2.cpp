@@ -1235,6 +1235,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								}
 							}
 							StartPrinting(fromStart);
+							if (!fromStart)
+							{
+								// restore the modal G0/G1/G2/G3 context in case the file uses implied command letters
+								FileGCode()->SetModalGCommand(moveStates[0].restartGCommandNumber);
+							}
 						}
 					}
 #endif
@@ -1325,6 +1330,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					const char c1 = (selectedPlane == 0) ? 'Y' : 'Z';
 					ms.restartInitialUserC0 = (gb.Seen(c0)) ? gb.GetFValue() : 0.0;
 					ms.restartInitialUserC1 = (gb.Seen(c1)) ? gb.GetFValue() : 0.0;
+					ms.restartGCommandNumber = (gb.Seen('C')) ? (int8_t)gb.GetIValue() : -1;
 				}
 				break;
 #endif
@@ -4623,6 +4629,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = RaiseEvent(gb, reply);
 				break;
 
+#if SUPPORT_CAN_EXPANSION
+			case 959:	// configure expansion board connection timeout
+				result = reprap.GetExpansion().ConfigureConnectionTimeout(gb, reply);
+				break;
+#endif
+
 #if SUPPORT_PHASE_STEPPING
 			case 970:	// configure step mode (phase stepping)
 				result = ConfigureStepMode(gb, reply);
@@ -4694,6 +4706,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 
 				reprap.EmergencyStop();			// this disables heaters and drives - Duet WiFi pre-production boards need drives disabled here
+				platform.DisconnectUsb();
 				{
 					SoftwareResetReason reason = SoftwareResetReason::user;
 					if (gb.Seen('P'))

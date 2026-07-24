@@ -167,6 +167,10 @@ void ZProbe::PrepareForUse(const bool probingAway) noexcept
 
 	// We can't read temperature sensors from within the step ISR so calculate the actual trigger height now
 	actualTriggerHeight = -offsets[Z_AXIS] + GetTriggerHeightCompensation();
+
+#if SUPPORT_CAN_EXPANSION
+	haveTriggerTime = false;
+#endif
 }
 
 // Return the amount by which the trigger height is increased by temperature compensation
@@ -342,7 +346,7 @@ EndstopHitDetails ZProbe::CheckTriggered() noexcept
 	EndstopHitDetails rslt;			// initialised by default constructor
 	if (b)
 	{
-		rslt.SetAction(EndstopHitAction::stopAll);
+		rslt.SetAction(EndstopHitAction::stopAll, whenTriggered, haveTriggerTime);
 		rslt.isZProbe = true;
 	}
 	return rslt;
@@ -352,6 +356,9 @@ EndstopHitDetails ZProbe::CheckTriggered() noexcept
 // Return true if we have finished with this endstop or probe in this move.
 bool ZProbe::Acknowledge(EndstopHitDetails what) noexcept
 {
+#if SUPPORT_CAN_EXPANSION
+	haveTriggerTime = false;
+#endif
 	return what.GetAction() == EndstopHitAction::stopAll;
 }
 

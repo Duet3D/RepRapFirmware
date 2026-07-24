@@ -474,6 +474,17 @@ uint16_t CanInterface::GetTimeStampPeriod() noexcept
 
 #endif
 
+// Convert a 16-bit timestamp in a received message to 32-bits.
+// We expect the time stamp to be up to a few milliseconds old. If that's not the case, ignore the timestamp n the message and return the current master time.
+uint32_t CanInterface::Convert16bitReceivedTimeStampTo32bits(uint16_t ts) noexcept
+{
+	const uint32_t now = StepTimer::GetTimerTicks();
+	const uint16_t delay = (uint16_t)now - ts;
+	return (delay < MillisToStepClocks(10))					// if the time stamp is less than 10ms old
+		? now - (uint32_t)delay
+			: now;											// time stamp negative or unreliable to ignore it
+}
+
 // Send a message on the CAN FD channel and record any errors
 static void SendCanMessage(CanDevice::TxBufferNumber whichBuffer, uint32_t timeout, CanMessageBuffer *buffer) noexcept
 {
@@ -1077,9 +1088,36 @@ GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb
 			Kinematics &_ecv_from kin = reprap.GetMove().GetKinematics();
 			if (kin.GetKinematicsType() == KinematicsType::hangprinter)
 			{
+				gb.MustSee('P');
+				size_t drivesCount = reprap.GetGCodes().GetVisibleAxes();
+				DriverId driverIds[drivesCount];
+				gb.GetDriverIdArray(driverIds, drivesCount);
+
 				gb.MustSee('T');
-				const float torque = gb.GetFValue();
-				return ((HangprinterKinematics&)kin).SetODrive3TorqueMode(driver, torque, reply);
+				float forces[drivesCount];
+				size_t forceCount = drivesCount;
+				gb.GetFloatArray(forces, forceCount, true);
+				if (forceCount != drivesCount)
+				{
+					reply.copy("M569.4 requires one T value per P");
+					return GCodeResult::error;
+				}
+
+				size_t driverIndex = drivesCount;
+				for (size_t i = 0; i < drivesCount; ++i)
+				{
+					if (driverIds[i] == driver)
+					{
+						driverIndex = i;
+						break;
+					}
+				}
+				if (driverIndex == drivesCount)
+				{
+					reply.copy("M569.4 driver not found in P list");
+					return GCodeResult::error;
+				}
+				return ((HangprinterKinematics&)kin).SetODrive3TorqueMode(driver, forces[driverIndex], reply);
 			}
 		}
 #endif

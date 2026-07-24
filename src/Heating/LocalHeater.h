@@ -17,6 +17,8 @@
 #include "TemperatureError.h"
 #include <Hardware/IoPorts.h>
 
+#define CHECK_HEATER_PWM		(0)			// this check has been disabled except on TOOLINDX
+
 class HeaterMonitor;
 
 class LocalHeater : public Heater
@@ -27,7 +29,7 @@ public:
 	explicit LocalHeater(unsigned int heaterNum) noexcept;
 	~LocalHeater() override;
 
-	GCodeResult ConfigurePortAndSensor(const char *_ecv_array portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) override;
+	GCodeResult ConfigurePortAndSensor(const char *_ecv_array portName, PwmFrequency freq, unsigned int sn, int ambientSn, const StringRef& reply) override;
 	GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept override;
 	GCodeResult ReportDetails(const StringRef& reply) const noexcept override;
 
@@ -76,6 +78,7 @@ private:
 
 	PwmPort ports[MaxPortsPerHeater];							// The port(s) that drive the heater
 	float temperature;											// The current temperature
+	float ambientTemperature;									// the temperature of the ambient sensor
 	float previousTemperatures[NumPreviousTemperatures]; 		// The temperatures of the previous NumDerivativeSamples measurements, used for calculating the derivative
 	size_t previousTemperatureIndex;							// Which slot in previousTemperature we fill in next
 	float iAccumulator;											// The integral LocalHeater component
@@ -88,7 +91,9 @@ private:
 	uint32_t lastSampleTime;									// Time when the temperature was last sampled by Spin()
 
 	uint16_t heaterExcursionFaultCount;							// Count of questionable heater temperature excursions
+#if CHECK_HEATER_PWM
 	uint16_t heaterPwmFaultCount;								// Count of questionable PWM values
+#endif
 
 	uint8_t previousTemperaturesGood;							// Bitmap indicating which previous temperature were good readings
 	HeaterMode mode;											// Current state of the heater

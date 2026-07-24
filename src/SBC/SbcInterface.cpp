@@ -836,6 +836,7 @@ void SbcInterface::ExchangeData() noexcept
 				if (locker.IsAcquired())
 				{
 					// Note that we do not call StopPrint here or set any other variables; DSF already does that
+					reprap.GetGCodes().PauseSequenceAborted(*gb);	// don't get stuck in "pausing" if this abort tears down the pause sequence
 					gb->AbortFile(true);
 					gb->FileAbortSent();	// don't notify the SBC
 					InvalidateBufferedCodes(channel);
@@ -1564,11 +1565,11 @@ void SbcInterface::ExchangeData() noexcept
 			}
 			case SbcRequest::StartIap:	// Start the IAP binary
 #if SUPPORTS_SBC_OVER_USB
-				// Cleanly shut down TinyUSB before IAP re-initializes the USB peripheral
-				// with its own bare-metal driver
+				// Cleanly disconnect USB before IAP brings up its own bare-metal stack. All IAP chunks
+				// have arrived by now, so the link is no longer needed and the host gets a clean detach
 				if (transfer.GetTransportType() == SbcTransportType::usb)
 				{
-					serialUSB.end();
+					reprap.GetPlatform().DisconnectUsb();
 					StopUsbTask();
 				}
 #endif
@@ -1748,6 +1749,17 @@ void SbcInterface::RequestUsbSwitch(SerialCDC *dev, unsigned int usbDevIndex) no
 	sbcTask->Give(NotifyIndices::SbcInterface);		// wake the SBC task directly, bypassing IsConnected() check in EventOccurred
 }
 
+// Freeze the SBC task so a deliberate USB teardown isn't undone by its connection-loss recovery,
+// which would EndDirectMode and ReinitUsbDevice and so re-attach the device. No-op when the SBC
+// task itself is the caller, as it cannot suspend itself
+void SbcInterface::Suspend() noexcept
+{
+	if (sbcTask != nullptr && TaskBase::GetCallerTaskHandle() != sbcTask)
+	{
+		sbcTask->Suspend();
+	}
+}
+
 #endif
 
 bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
@@ -1762,7 +1774,7 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 
 	bool gotCommand = false;
 	{
-		//TODO can we take the lock inside the loop body instead, if we re-read readPointer and writePointer after taking it?
+		// The whole walk must be atomic: readPointer is a cursor into variable-length records, so a concurrent defragment would invalidate it
 		TaskCriticalSectionLocker locker;
 		if (rxPointer != txPointer || txEnd != 0)
 		{

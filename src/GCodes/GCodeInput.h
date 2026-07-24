@@ -102,7 +102,8 @@ public:
 	BufferedStreamGCodeInput(SerialCDC &_ecv_from dev, MessageType mt) noexcept : RegularGCodeInput(mt), device(dev) { }
 
 	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
-	virtual void Spin() noexcept;								// Read from the device into the buffer and check for urgent commands
+	size_t BytesCached() const noexcept override;				// How many bytes are ready for FillBuffer, hiding a trailing partly-matched urgent command
+	virtual void Spin(GCodeBuffer& gb) noexcept;				// Read from the device into the buffer and check for urgent commands
 
 private:
 	SerialCDC &_ecv_from device;
@@ -119,7 +120,7 @@ class UsbGCodeInput : public BufferedStreamGCodeInput
 public:
 	UsbGCodeInput(SerialCDC &_ecv_from dev, MessageType mt) noexcept;
 
-	void Spin() noexcept override;
+	void Spin(GCodeBuffer& gb) noexcept override;
 
 private:
 	SerialCDC &_ecv_from usbDevice;

@@ -204,6 +204,10 @@ void EndstopsManager::EnableAxisEndstops(AxesBitmap axes, const float speeds[Max
 			activeEndstops = nullptr;
 			ThrowGCodeException("no endstop configured for axis %u", axis);
 		}
+		if (reprap.GetGCodes().IsSimulating())
+		{
+			continue;															// simulated moves never trigger endstops, and priming a stall endstop would validate driver settings that M569 didn't apply while simulating
+		}
 		try
 		{
 			es->PrimeAxis(kin, reprap.GetMove().GetAxisDriversConfig(axis), speeds[axis]);
@@ -225,16 +229,20 @@ void EndstopsManager::EnableAxisEndstops(AxesBitmap axes, const float speeds[Max
 // Enable extruder endstops. This adds to any existing axis endstops, so if you want to enable axis endstops too then you must call EnableAxisEndstops before calling this.
 void EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders, const float speeds[MaxExtruders], bool& reduceAcceleration) THROWS(GCodeException)
 {
+	reduceAcceleration = false;
 	if (extruders.IsNonEmpty())
 	{
 #if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
-		if (extrudersEndstop == nullptr)
+		if (!reprap.GetGCodes().IsSimulating())
 		{
-			extrudersEndstop = new StallDetectionEndstop;
+			if (extrudersEndstop == nullptr)
+			{
+				extrudersEndstop = new StallDetectionEndstop;
+			}
+			extrudersEndstop->PrimeExtruders(extruders, speeds);
+			reduceAcceleration = extrudersEndstop->ShouldReduceAcceleration();
+			AddToActive(*extrudersEndstop);
 		}
-		extrudersEndstop->PrimeExtruders(extruders, speeds);
-		reduceAcceleration = extrudersEndstop->ShouldReduceAcceleration();
-		AddToActive(*extrudersEndstop);
 #else
 		ThrowGCodeException("extruder endstops not supported by this system");
 #endif
@@ -747,7 +755,7 @@ size_t EndstopsManager::GetNumProbesToReport() const noexcept
 #if SUPPORT_CAN_EXPANSION
 
 // Handle signalling of a remote switch change, when the handle indicates that it is being used as an endstop.
-void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint16_t when, bool state) noexcept
+void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t when, bool state) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(axisEndstops))
 	{
@@ -755,14 +763,13 @@ void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMa
 		Endstop * const es = axisEndstops[handleMajor];
 		if (es != nullptr)
 		{
-			//TODO use the 'when' parameter
-			es->HandleRemoteInputChange(src, handleMinor, state);
+			es->HandleRemoteInputChange(src, handleMinor, when, state);
 		}
 	}
 }
 
 // Handle signalling of a remote switch change, when the handle indicates that it is being used as a Z probe.
-void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint16_t when, bool state, int32_t reading) noexcept
+void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t when, bool state, int32_t reading) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
@@ -770,13 +777,12 @@ void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMaj
 		ZProbe * const zp = zProbes[handleMajor];
 		if (zp != nullptr)
 		{
-			//TODO use the 'when' parameter
-			zp->HandleRemoteInputChange(src, handleMinor, state, reading);
+			zp->HandleRemoteInputChange(src, handleMinor, when, state, reading);
 		}
 	}
 }
 
-void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint16_t when, int32_t reading) noexcept
+void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t when, int32_t reading) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
@@ -784,13 +790,12 @@ void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_
 		ZProbe * const zp = zProbes[handleMajor];
 		if (zp != nullptr)
 		{
-			//TODO use the 'when' parameter
-			zp->UpdateRemoteReading(src, handleMinor, reading);
+			zp->UpdateRemoteReading(src, handleMinor, when, reading);
 		}
 	}
 }
 
-void EndstopsManager::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled, uint16_t when) noexcept
+void EndstopsManager::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled, uint32_t when) noexcept
 {
 	ReadLocker lock(endstopsLock);						// make sure endstops are not changed or deleted while we operate on them
 
@@ -798,14 +803,13 @@ void EndstopsManager::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalD
 	{
 		if (es != nullptr)
 		{
-			//TODO use the 'when' parameter
-			es->HandleStalledRemoteDrivers(boardAddress, driversReportedStalled);
+			es->HandleStalledRemoteDrivers(boardAddress, driversReportedStalled, when);
 		}
 	}
 
 	if (extrudersEndstop != nullptr)
 	{
-		extrudersEndstop->HandleStalledRemoteDrivers(boardAddress, driversReportedStalled);
+		extrudersEndstop->HandleStalledRemoteDrivers(boardAddress, driversReportedStalled, when);
 	}
 }
 

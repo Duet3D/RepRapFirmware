@@ -128,6 +128,7 @@ void MovementState::SetDefaults(size_t firstDriveToZero) noexcept
 	laserPixelData.Clear();
 #endif
 	raw.filePos = noFilePosition;
+	raw.gCommandNumber = -1;
 	raw.movementTool = nullptr;
 	moveFractionToSkip = 0.0;
 #if 0	// we don't use this yet
@@ -182,6 +183,7 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 	msNumber = p_msNumber;
 	ClearMove();
 	raw.filePos = noFilePosition;
+	raw.gCommandNumber = -1;
 	codeQueue->Clear();
 	currentCoordinateSystem = 0;
 
@@ -190,6 +192,7 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 #endif
 
 	pausedInMacro = false;
+	positionMayBeInaccurate = false;
 
 #if SUPPORT_ASYNC_MOVES
 	raw.axesAndExtrudersOwned.Clear();
@@ -287,6 +290,9 @@ void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes
 	rp.originalFeedRate = p_feedRate;
 	rp.virtualExtruderPosition = latestVirtualExtruderPosition;
 	rp.filePos = p_filePos;
+	// Restore points saved this way (synchronous pauses via M226/M600/M601, tool changes, G60, simulation) are triggered
+	// by a command that has already overwritten the modal motion command, so mark it unknown rather than saving a stale value
+	rp.gCommandNumber = -1;
 	rp.toolNumber = GetCurrentToolNumber();
 	rp.fanSpeed = virtualFanSpeed;
 

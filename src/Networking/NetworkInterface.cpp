@@ -74,7 +74,7 @@ GCodeResult NetworkInterface::EnableProtocol(NetworkProtocol protocol, int port,
 
 			if (GetState() == NetworkState::active && newTlsPort != tlsPortNumbers[protocol])
 			{
-				// Secure port changed — shut down so StartProtocol recreates the TLS listener
+				// Secure port changed - shut down so StartProtocol recreates the TLS listener
 				IfaceShutdownProtocol(protocol, false);
 				tlsProtocolEnabled[protocol] = false;
 			}
@@ -96,7 +96,7 @@ GCodeResult NetworkInterface::EnableProtocol(NetworkProtocol protocol, int port,
 
 			if (GetState() == NetworkState::active && (portToUse != portNumbers[protocol] || ip != ipAddresses[protocol]))
 			{
-				// Plain port changed — shut down and restart
+				// Plain port changed - shut down and restart
 				IfaceShutdownProtocol(protocol, false);
 				protocolEnabled[protocol] = false;
 			}

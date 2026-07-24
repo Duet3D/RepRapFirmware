@@ -65,7 +65,7 @@ extern struct netif gs_net_if;
 extern "C" { void *lwipRamHeap = nullptr; }
 
 #if LWIP_ALTCP_TLS_MBEDTLS
-// mbedTLS allocator wrappers — routes mbedtls_calloc/free through the lwIP heap.
+// mbedTLS allocator wrappers - routes mbedtls_calloc/free through the lwIP heap.
 // Declared in LibMbedTls/configs/config-rrf.h with size_t parameters to avoid
 // mem_size_t type differences between SAME54 (u16_t) and SAME70 (u32_t).
 extern "C" void *mbedtls_lwip_calloc(size_t count, size_t size)

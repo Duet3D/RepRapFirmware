@@ -45,7 +45,7 @@ struct PrepParams
 	motioncalc_t startSpeed, topSpeed, endSpeed;		// the speeds reached
 #if SUPPORT_S_CURVE
     mutable motioncalc_t phase1StartSpeed, phase1EndSpeed, phase5StartSpeed, phase5EndSpeed;
-	mutable bool speedsCalculated;						// true if the previous 4 speeds have been calculated and stored
+	mutable bool speedsCalculated = false;				// true if the previous 4 speeds have been calculated and stored
 #endif
 
 	bool useInputShaping;
@@ -143,6 +143,7 @@ public:
 	void GetEndCoordinates(float returnedCoords[MaxAxes]) noexcept;					// Calculate the machine axis coordinates (after bed and skew correction) at the end of this move
 
 	FilePosition GetFilePosition() const noexcept { return filePos; }
+	int8_t GetGCommandNumber() const noexcept { return gCommandNumber; }
 	float GetRequestedSpeedMmPerClock() const noexcept { return requestedSpeed; }
 	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(requestedSpeed); }
 	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(topSpeed); }
@@ -300,6 +301,7 @@ private:
 	const Tool *_ecv_null tool;						// which tool (if any) is active
 
     FilePosition filePos;							// The position in the SD card file after this move was read, or zero if not read from SD card
+	int8_t gCommandNumber;							// Which of G0/G1/G2/G3 generated this move (0-3), or -1 if not a modal motion command; used to restore the modal context on resume
 
 	int32_t endPoint[MaxAxesPlusExtruders];  		// Machine coordinates of the endpoint
 	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta

@@ -91,12 +91,15 @@ void LocalHeater::ResetHeater() noexcept
 	iAccumulator = 0.0;
 	badTemperatureCount = 0;
 	averagePWM = lastPwm = 0.0;
-	heaterExcursionFaultCount = heaterPwmFaultCount = 0;
+	heaterExcursionFaultCount = 0;
+#if CHECK_HEATER_PWM
+	heaterPwmFaultCount = 0;
+#endif
 	temperature = BadErrorTemperature;
 }
 
 // Configure the heater port and the sensor number
-GCodeResult LocalHeater::ConfigurePortAndSensor(const char *_ecv_array portName, PwmFrequency freq, unsigned int sn, const StringRef& reply)
+GCodeResult LocalHeater::ConfigurePortAndSensor(const char *_ecv_array portName, PwmFrequency freq, unsigned int sn, int ambientSn, const StringRef& reply)
 {
 	if constexpr (MaxPortsPerHeater == 1)
 	{
@@ -124,7 +127,9 @@ GCodeResult LocalHeater::ConfigurePortAndSensor(const char *_ecv_array portName,
 	{
 		port.SetFrequency(freq);
 	}
+
 	SetSensorNumber(sn);
+	SetAmbientSensorNumber(ambientSn);
 	if (reprap.GetHeat().FindSensor(sn).IsNull())
 	{
 		reply.printf("Sensor number %u has not been defined", sn);
@@ -165,6 +170,14 @@ GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const noexcept
 	{
 		reply.cat(", no sensor");
 	}
+	if (GetAmbientSensorNumber() >= 0)
+	{
+		reply.catf(", ambient sensor %d", GetAmbientSensorNumber());
+	}
+	else
+	{
+		reply.cat(", no ambient sensor");
+	}
 	return GCodeResult::ok;
 }
 
@@ -173,6 +186,19 @@ TemperatureError LocalHeater::ReadTemperature() noexcept
 {
 	TemperatureError err(TemperatureError::unknownError);
 	temperature = reprap.GetHeat().GetSensorTemperature(GetSensorNumber(), err);		// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
+	if (GetAmbientSensorNumber() >= 0)
+	{
+		TemperatureError err2(TemperatureError::unknownError);
+		ambientTemperature = reprap.GetHeat().GetSensorTemperature(GetAmbientSensorNumber(), err2);		// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
+		if (err2 != TemperatureError::ok)
+		{
+			ambientTemperature = NormalAmbientTemperature;
+		}
+	}
+	else
+	{
+		ambientTemperature = NormalAmbientTemperature;
+	}
 	return err;
 }
 
@@ -211,7 +237,10 @@ void LocalHeater::UpdateHeaterMode(float targetTemperature) noexcept
 			lastTemperatureValue = temperature;
 			lastTemperatureMillis = timeSetHeating = millis();
 		}
-		heaterExcursionFaultCount = heaterPwmFaultCount = 0;
+		heaterExcursionFaultCount = 0;
+#if CHECK_HEATER_PWM
+		heaterPwmFaultCount = 0;
+#endif
 		mode = newMode;
 	}
 }
@@ -334,7 +363,10 @@ void LocalHeater::Spin() noexcept
 				if (error <= TemperatureCloseEnough)
 				{
 					mode = HeaterMode::stable;
-					heaterExcursionFaultCount = heaterPwmFaultCount = 0;
+					heaterExcursionFaultCount = 0;
+#if CHECK_HEATER_PWM
+					heaterPwmFaultCount = 0;
+#endif
 				}
 				else
 				{
@@ -407,7 +439,10 @@ void LocalHeater::Spin() noexcept
 				{
 					// We have cooled to close to the target temperature, so we should now maintain that temperature
 					mode = HeaterMode::stable;
-					heaterExcursionFaultCount = heaterPwmFaultCount = 0;
+					heaterExcursionFaultCount = 0;
+#if CHECK_HEATER_PWM
+					heaterPwmFaultCount = 0;
+#endif
 				}
 				else
 				{
@@ -441,7 +476,7 @@ void LocalHeater::Spin() noexcept
 					// If the P and D terms together demand that the heater is full on or full off, disregard the I term
 					const float errorMinusDterm = error - (params.tD * derivative);
 					const float pPlusD = params.kP * errorMinusDterm;
-					const float expectedPwm = GetModel().EstimateRequiredPwm(temperature - NormalAmbientTemperature, lastFanPwm, currentVoltage, 0.0);
+					const float expectedPwm = GetModel().EstimateRequiredPwm(temperature - ambientTemperature, lastFanPwm, currentVoltage, 0.0);
 					if (pPlusD + expectedPwm > GetModel().GetMaxPwm())
 					{
 						lastPwm = GetModel().GetMaxPwm();
@@ -467,6 +502,7 @@ void LocalHeater::Spin() noexcept
 					// The following safety check is no good for bed heaters that have a large thermal reservoir loosely coupled to the heater,
 					// because the required PWM is higher than the expected value from tuning until the reservoir has heated up.
 					// So we apply it to tool heaters only.
+#if CHECK_HEATER_PWM
 					if (mode == HeaterMode::stable && GetFunction() == HeaterFunction::tool)
 					{
 						const float limitedAccumulator = min<float>(iAccumulator, GetModel().GetMaxPwm());
@@ -485,6 +521,7 @@ void LocalHeater::Spin() noexcept
 							--heaterPwmFaultCount;
 						}
 					}
+#endif
 				}
 				else
 				{
@@ -599,14 +636,14 @@ GCodeResult LocalHeater::StartAutoTune(const StringRef& reply, bool seenA, float
 		ClearCounters();
 		timeSetHeating = millis();
 		lastPwm = tuningPwm;										// turn on heater at specified power
-		tuningPhase = 1;
-		mode = HeaterMode::tuning1;
+		tuningPhase = TuningPhase::heating_up;
+		mode = HeaterMode::tuning1_heating_up;
 		ReportTuningUpdate();
 	}
 	else
 	{
-		tuningPhase = 0;
-		mode = HeaterMode::tuning0;
+		tuningPhase = TuningPhase::checking_temperature_is_stable;
+		mode = HeaterMode::tuning0_settling;
 	}
 
 	return GCodeResult::ok;
@@ -619,7 +656,7 @@ void LocalHeater::SetFanFeedForwardPwm(float pwm) noexcept
 	{
 		const float oldFanPwm = lastFanPwm;
 		lastFanPwm = pwm;
-		const float boost = GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, oldFanPwm, pwm) * FanFeedForwardMultiplier;
+		const float boost = GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - ambientTemperature, oldFanPwm, pwm) * FanFeedForwardMultiplier;
 		TaskCriticalSectionLocker lock;
 		iAccumulator += boost;
 	}
@@ -679,7 +716,7 @@ void LocalHeater::DoTuningStep() noexcept
 	const uint32_t now = millis();
 	switch (mode)
 	{
-	case HeaterMode::tuning0:		// Waiting for initial temperature to settle after any thermostatic fans have turned on
+	case HeaterMode::tuning0_settling:		// Waiting for initial temperature to settle after any thermostatic fans have turned on
 		if (tuningStartTemp.GetNumSamples() < 5000/HeatSampleIntervalMillis)
 		{
 			tuningStartTemp.Add(temperature);							// take another reading until we have samples temperatures for 5 seconds
@@ -690,9 +727,8 @@ void LocalHeater::DoTuningStep() noexcept
 		{
 			timeSetHeating = now;
 			lastPwm = tuningPwm;										// turn on heater at specified power
-			mode = HeaterMode::tuning1;
-
-			tuningPhase = 1;
+			mode = HeaterMode::tuning0a_calibrating_heater;
+			tuningPhase = TuningPhase::calibrating_heater;
 			ReportTuningUpdate();
 			return;
 		}
@@ -706,18 +742,24 @@ void LocalHeater::DoTuningStep() noexcept
 		reprap.GetPlatform().Message(GenericMessage, "Auto tune cancelled because starting temperature is not stable\n");
 		break;
 
-	case HeaterMode::tuning1:		// Heating up
+	case HeaterMode::tuning0a_calibrating_heater:
+		// Currently we only perform heater calibration on certain expansion boards e.g. INDX
+		mode = HeaterMode::tuning1_heating_up;
+		tuningPhase = TuningPhase::heating_up;
+		return;
+
+	case HeaterMode::tuning1_heating_up:								// Heating up
 #if SUPPORT_REMOTE_COMMANDS
 		if (CanInterface::InExpansionMode())
 		{
-			if (temperature >= ExpansionMode::tuningHighTemp)							// if reached target
+			if (temperature >= ExpansionMode::tuningHighTemp)			// if reached target
 			{
 				// Move on to next phase
 				lastPwm = 0.0;
 				SetHeater(0.0);
 				peakTemp = afterPeakTemp = temperature;
 				lastOffTime = peakTime = afterPeakTime = now;
-				mode = HeaterMode::tuning2;
+				mode = HeaterMode::tuning2_heater_off;
 			}
 			else
 			{
@@ -753,13 +795,13 @@ void LocalHeater::DoTuningStep() noexcept
 			lastOffTime = peakTime = afterPeakTime = now;
 			tuningVoltage.Clear();
 			idleCyclesDone = 0;
-			mode = HeaterMode::tuning2;
-			tuningPhase = 2;
+			mode = HeaterMode::tuning2_heater_off;
+			tuningPhase = TuningPhase::settling;
 			ReportTuningUpdate();
 		}
 		return;
 
-	case HeaterMode::tuning2:		// Heater is off, record the peak temperature and time
+	case HeaterMode::tuning2_heater_off:		// Heater is off, record the peak temperature and time
 #if SUPPORT_REMOTE_COMMANDS
 		if (CanInterface::InExpansionMode())
 		{
@@ -781,7 +823,7 @@ void LocalHeater::DoTuningStep() noexcept
 				lastOnTime = peakTime = afterPeakTime = now;
 				peakTemp = afterPeakTemp = temperature;
 				lastPwm = tuningPwm;						// turn on heater at specified power
-				mode = HeaterMode::tuning3;
+				mode = HeaterMode::tuning3_heater_on;
 			}
 			else if (afterPeakTime == peakTime && ExpansionMode::tuningHighTemp - temperature >= ExpansionMode::tuningPeakTempDrop)
 			{
@@ -809,12 +851,12 @@ void LocalHeater::DoTuningStep() noexcept
 			coolingRateAcc.Add(currentCoolingRate);
 
 			// Decide whether to finish this phase
-			if (tuningPhase == 2)				// if we are doing idle cycles
+			if (tuningPhase == TuningPhase::settling)				// if we are doing idle cycles
 			{
 				// To allow for heat reservoirs, we do idle cycles until the cooling rate decreases by no more than a certain amount in a single cycle
 				if (idleCyclesDone == TuningHeaterMaxIdleCycles || (idleCyclesDone >= TuningHeaterMinIdleCycles && currentCoolingRate >= lastCoolingRate * HeaterSettledCoolingTimeRatio))
 				{
-					tuningPhase = 3;
+					tuningPhase = TuningPhase::measuring;
 					ReportTuningUpdate();
 				}
 				else
@@ -837,7 +879,7 @@ void LocalHeater::DoTuningStep() noexcept
 						reprap.GetPlatform().Message(WarningMessage, "heater behaviour was not consistent during tuning\n");
 					}
 
-					if (tuningPhase == 3)
+					if (tuningPhase == TuningPhase::measuring)
 					{
 						CalculateModel(fanOffParams);
 						if (tuningFans.IsEmpty())
@@ -847,11 +889,12 @@ void LocalHeater::DoTuningStep() noexcept
 						}
 						else
 						{
-							tuningPhase = 4;
 							ClearCounters();
 #if TUNE_WITH_HALF_FAN
+							tuningPhase = TuningPhase::measuring_with_50pc_fan;
 							reprap.GetFansManager().SetFansValue(tuningFans, tuningFanPwm * 0.5);	// turn fans on at half PWM
 #else
+							tuningPhase = TuningPhase::measuring_with_fan_on;
 							reprap.GetFansManager().SetFansValue(tuningFans, tuningFanPwm);		// turn fans on at full PWM
 #endif
 							ReportTuningUpdate();
@@ -879,7 +922,7 @@ void LocalHeater::DoTuningStep() noexcept
 			lastOnTime = peakTime = afterPeakTime = now;
 			peakTemp = afterPeakTemp = temperature;
 			lastPwm = tuningPwm;						// turn on heater at specified power
-			mode = HeaterMode::tuning3;
+			mode = HeaterMode::tuning3_heater_on;
 		}
 		else if (afterPeakTime == peakTime && tuningTargetTemp - temperature >= TuningPeakTempDrop)
 		{
@@ -888,7 +931,7 @@ void LocalHeater::DoTuningStep() noexcept
 		}
 		return;
 
-	case HeaterMode::tuning3:	// Heater is turned on, record the lowest temperature and time
+	case HeaterMode::tuning3_heater_on:	// Heater is turned on, record the lowest temperature and time
 #if SUPPORT_REMOTE_COMMANDS
 		if (CanInterface::InExpansionMode())
 		{
@@ -911,7 +954,7 @@ void LocalHeater::DoTuningStep() noexcept
 				lastOffTime = peakTime = afterPeakTime = now;
 				peakTemp = afterPeakTemp = temperature;
 				lastPwm = 0.0;										// turn heater off
-				mode = HeaterMode::tuning2;
+				mode = HeaterMode::tuning2_heater_off;
 				++ExpansionMode::cyclesDone;
 				ExpansionMode::tuningCycleComplete = true;
 			}
@@ -940,7 +983,7 @@ void LocalHeater::DoTuningStep() noexcept
 			lastOffTime = peakTime = afterPeakTime = now;
 			peakTemp = afterPeakTemp = temperature;
 			lastPwm = 0.0;								// turn heater off
-			mode = HeaterMode::tuning2;
+			mode = HeaterMode::tuning2_heater_off;
 		}
 		else if (afterPeakTime == peakTime && temperature - tuningTargetTemp >= TuningPeakTempDrop - tuningHysteresis)
 		{
@@ -1018,16 +1061,19 @@ GCodeResult LocalHeater::TuningCommand(const CanMessageHeaterTuningCommand& msg,
 		}
 
 		// We could do some more checks here but the main board should have done all the checks needed already
-		ExpansionMode::tuningHighTemp = msg.highTemp;
-		ExpansionMode::tuningLowTemp = msg.lowTemp;
-		tuningPwm = msg.pwm;
-		ExpansionMode::tuningPeakTempDrop = msg.peakTempDrop;
-		timeSetHeating = millis();
-		ExpansionMode::tuningCycleComplete = false;
-		ExpansionMode::cyclesDone = 0;
-		mode = HeaterMode::tuning1;
+		if (!msg.calibrate)							// we don't do any heater calibration on main boards so just return completed if asked to calibrate
+		{
+			ExpansionMode::tuningHighTemp = msg.highTemp;
+			ExpansionMode::tuningLowTemp = msg.lowTemp;
+			tuningPwm = msg.pwm;
+			ExpansionMode::tuningPeakTempDrop = msg.peakTempDrop;
+			timeSetHeating = millis();
+			ExpansionMode::tuningCycleComplete = false;
+			ExpansionMode::cyclesDone = 0;
+			mode = HeaterMode::tuning1_heating_up;
+		}
 	}
-	else
+	else if (!msg.calibrate)						// we don't do any heater calibration on main boards so just return completed if asked to calibrate
 	{
 		SwitchOff();
 	}
@@ -1045,7 +1091,7 @@ GCodeResult LocalHeater::ApplyFeedForward(const CanMessageHeaterFeedForwardV1& m
 		{
 			const float oldFanPwm = lastFanPwm;
 			lastFanPwm = msg.fanPwmFraction;
-			pwmBoost += GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, oldFanPwm, msg.fanPwmFraction) * FanFeedForwardMultiplier;
+			pwmBoost += GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - ambientTemperature, oldFanPwm, msg.fanPwmFraction) * FanFeedForwardMultiplier;
 		}
 		TaskCriticalSectionLocker lock;
 		iAccumulator += pwmBoost;

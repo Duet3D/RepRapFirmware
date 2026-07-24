@@ -145,8 +145,15 @@ private:
 	// USB transport members
 	SerialCDC *usbDevice;
 	unsigned int usbDeviceIndex;
-	UsbTransferHeader usbRxHeader;
-	UsbTransferHeader usbTxHeader;
+# if SAME70
+	// The zero-copy USB path DMAs directly to/from these, so on the write-back-cache SAME70 they must be
+	// in non-cached memory for the same reason as the SPI headers above, which forces them to be static
+	static __nocache UsbTransferHeader usbRxHeader;
+	static __nocache UsbTransferHeader usbTxHeader;
+# else
+	alignas(16) UsbTransferHeader usbRxHeader;
+	alignas(16) UsbTransferHeader usbTxHeader;
+# endif
 
 	TransferState DoTransferUsb() noexcept;
 #endif

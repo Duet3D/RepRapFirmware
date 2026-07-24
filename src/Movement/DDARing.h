@@ -54,6 +54,7 @@ public:
 	float GetTotalExtrusionRate() const noexcept;
 	float GetCurrentMoveDistance() const noexcept;
 	float GetCurrentMoveDuration() const noexcept;
+	FilePosition GetCurrentMoveFilePosition() const noexcept;							// Get the file position of the move being executed, or noFilePosition if there is none
 
 	void GetCurrentMachinePosition(float m[MaxAxes]) const noexcept;					// Get the position at the end of the last queued move in untransformed coords
 	void GetLastEndpoints(LogicalDrivesBitmap logicalDrives, int32_t returnedEndpoints[MaxAxesPlusExtruders]) const noexcept;

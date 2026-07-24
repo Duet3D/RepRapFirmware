@@ -1,5 +1,5 @@
 /*
- * UsbDevice.cpp
+ * UsbDeviceRrf.cpp
  *
  *  Created on: 13 Mar 2026
  *      Author: Christian
@@ -30,6 +30,15 @@ void UsbDeviceRrf::Shutdown() noexcept
 	MutexLocker lock(mutex);			// wait for any in-progress Flush() to complete
 	device = nullptr;					// prevent any further message output, but keep SerialCDC running for SBC use
 	output.ReleaseAll();
+}
+
+void UsbDeviceRrf::End() noexcept
+{
+	MutexLocker lock(mutex);			// wait for any in-progress Flush() to complete
+	if (originalDevice != nullptr)
+	{
+		originalDevice->end();
+	}
 }
 
 void UsbDeviceRrf::Reinit() noexcept
