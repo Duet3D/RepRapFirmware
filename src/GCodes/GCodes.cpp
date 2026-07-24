@@ -2635,8 +2635,16 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			{
 			case LimitPositionResult::adjusted:
 			case LimitPositionResult::adjustedAndIntermediateUnreachable:
-				abandonMove();
-				gb.ThrowGCodeException(TargetUnreachableText);
+				if (!gb.LatestMachineState().axesRelative)
+				{
+					abandonMove();
+					gb.ThrowGCodeException(TargetUnreachableText);				// absolute moves to unreachable positions are errors
+				}
+				ToolOffsetInverseTransform(ms);									// make sure the limits are reflected in the user position
+				if (lp == LimitPositionResult::adjusted)
+				{
+					break;														// we can reach the intermediate positions, so nothing more to do
+				}
 				[[fallthrough]];
 
 			case LimitPositionResult::intermediateUnreachable:
