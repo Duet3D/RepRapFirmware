@@ -6,6 +6,7 @@
  */
 
 #include "Endstop.h"
+#include <Movement/StepTimer.h>
 
 // Endstop base class
 #if SUPPORT_TMC2660 || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
@@ -37,6 +38,12 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Endstop)
 Endstop::Endstop(uint8_t p_axis, EndStopPosition pos) noexcept
 	: EndstopOrZProbe(p_axis), atHighEnd(pos == EndStopPosition::highEndStop)
 {
+}
+
+void EndstopHitDetails::SetAction(EndstopHitAction a, uint32_t p_whenTriggered, bool p_haveTriggerTime) noexcept
+{
+	action = (uint32_t)a;
+	whenTriggered = (p_haveTriggerTime) ? p_whenTriggered : StepTimer::GetTimerTicks();
 }
 
 // End

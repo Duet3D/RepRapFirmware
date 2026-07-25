@@ -274,7 +274,7 @@ inline float DriveMovement::GetCurrentPosition(uint32_t when) const noexcept
 	const MoveSegment* const seg = segments;
 	if (seg != nullptr)
 	{
-		int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
+		int32_t timeSinceStart = (int32_t)(StepTimer::ConvertLocalToMovementTime(when) - seg->GetStartTime());
 		if (timeSinceStart >= 0)
 		{
 			if ((uint32_t)timeSinceStart >= seg->GetDuration())				// if segment should have finished by now
@@ -282,7 +282,10 @@ inline float DriveMovement::GetCurrentPosition(uint32_t when) const noexcept
 				// We can't get the next segment because that needs `NewSegment()` to be called
 				timeSinceStart = seg->GetDuration();
 			}
-
+#if 1
+			debugPrintf("tss %ld dur=%lu movement %.2f pss %ld dcf %.2f cmp %ld\n",
+				timeSinceStart, seg->GetDuration(), (double)(u + 0.5 * seg->GetA() * timeSinceStart) * timeSinceStart, positionAtSegmentStart, (double)distanceCarriedForwards, currentMotorPosition);
+#endif
 			return (float)((u + 0.5 * seg->GetA() * timeSinceStart) * timeSinceStart
 							  + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards
 						  );

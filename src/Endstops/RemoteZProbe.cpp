@@ -246,13 +246,13 @@ void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, 
 {
 	if (src == boardAddress)
 	{
+		if (newState)
+		{
+			whenTriggered = when;
+			haveTriggerTime = true;
+		}
 		if (type == ZProbeType::scanningAnalog && useTouchMode)
 		{
-			if (newState)
-			{
-				whenTriggered = when;
-				haveTriggerTime = true;
-			}
 			touchTriggered = newState;
 		}
 		lastValue = reading;
