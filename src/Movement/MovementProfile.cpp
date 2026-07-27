@@ -7,7 +7,7 @@
 
 #include "MovementProfile.h"
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 
 #include <Platform/RepRap.h>
 #include "MoveDebugFlags.h"

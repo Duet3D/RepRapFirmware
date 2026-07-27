@@ -165,7 +165,7 @@ enum class DiagnosticTestType : unsigned int
 	TimeCRC32 = 107,				// time how long it takes to calculate CRC32
 	TimeGetTimerTicks = 108,		// time now long it takes to read the step clock
 	UndervoltageEvent = 109,		// pretend an undervoltage condition has occurred
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	TimeCubicSolver = 110,
 	TimeQuarticSolver = 111,
 #endif

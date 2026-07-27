@@ -480,7 +480,7 @@ uint32_t CanInterface::Convert16bitReceivedTimeStampTo32bits(uint16_t ts) noexce
 {
 	const uint32_t now = StepTimer::GetTimerTicks();
 	const uint16_t delay = (uint16_t)now - ts;
-#if 1
+#if 0	//DEBUG
 	debugPrintf("Delay=%u\n", delay);
 #endif
 	return (delay < MillisToStepClocks(10))					// if the time stamp is less than 10ms old

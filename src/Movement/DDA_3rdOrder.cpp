@@ -9,7 +9,7 @@
 
 #include "DDA.h"
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 
 #include "DDARing.h"
 #include "MovementProfile.h"

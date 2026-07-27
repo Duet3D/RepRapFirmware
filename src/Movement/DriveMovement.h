@@ -100,7 +100,7 @@ private:
 
 	motioncalc_t GetStepsTakenThisSegment(uint32_t when) const noexcept;
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	void UpdateSpeedAndAccelerationChange(motioncalc_t newSpeed, motioncalc_t speedChange, motioncalc_t newAcc, motioncalc_t accChange) noexcept;
 	void MovementStopped() noexcept;
 	void PrintRetiredSegment() const noexcept;
@@ -158,7 +158,7 @@ private:
 	std::atomic<int32_t> movementAccumulator;			// the accumulated movement in microsteps since GetAccumulatedMovement was last called. Only used for extruders.
 	uint32_t extruderPrintingSince;						// the millis ticks when this extruder started doing printing moves
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	motioncalc_t finalSpeed, finalAcc;					// the final speed and acceleration of the current segment
 	motioncalc_t peakDeltaV, peakDeltaA;				// For debugging: the maximum instantaneous speed change and acceleration change recorded
 #endif
@@ -288,7 +288,7 @@ inline float DriveMovement::GetCurrentPosition(uint32_t when) const noexcept
 				// We can't get the next segment because that needs `NewSegment()` to be called
 				timeSinceStart = seg->GetDuration();
 			}
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 			const motioncalc_t movement = (u + ((motioncalc_t)0.5 * seg->GetA() + OneSixth * seg->GetJ() * timeSinceStart) * timeSinceStart) * timeSinceStart;
 #else
 			const motioncalc_t movement = (u + (motioncalc_t)0.5 * seg->GetA() * timeSinceStart) * timeSinceStart;
@@ -377,7 +377,7 @@ inline bool DriveMovement::UpdateCurrentMotion(uint32_t when, MotionParameters& 
 				timeSinceStart = seg->GetDuration();
 			}
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 			const float rawPosition = (float)((u + ((motioncalc_t)0.5 * seg->GetA() + OneSixth * seg->GetJ() * timeSinceStart) * timeSinceStart) * timeSinceStart
 										+ (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 #else
@@ -386,7 +386,7 @@ inline bool DriveMovement::UpdateCurrentMotion(uint32_t when, MotionParameters& 
 #endif
 			currentMotorPosition = (int32_t)rawPosition;												// store the approximate position for OM updates
 			mParams.position = rawPosition;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 			mParams.speed = (float)(u + (seg->GetA() + (motioncalc_t)0.5 * seg->GetJ() * timeSinceStart) * timeSinceStart);
 			mParams.acceleration = (float)(seg->GetA() + seg->GetJ() * timeSinceStart);
 #else

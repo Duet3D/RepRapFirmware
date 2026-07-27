@@ -1808,7 +1808,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 									(double)((float)(tim3 * (1'000'000/iterations))/SystemCoreClock), (ok3) ? "ok" : "ERROR");
 			}
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 			// Time and check floating point cube root
 			{
 				unsigned int numBad = 0, numBetter = 0, numWorse = 0, numEqual = 0, numSameError = 0;
@@ -1911,7 +1911,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		}
 		break;
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	case (unsigned int)DiagnosticTestType::TimeCubicSolver:		// Show the cubic solver calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
 			constexpr uint32_t iterations = 100;				// use a value that divides into one million

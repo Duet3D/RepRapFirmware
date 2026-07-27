@@ -272,12 +272,12 @@ constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 #define SUPPORT_PHASE_STEPPING	0
 #endif
 
-#ifdef SUPPORT_S_CURVE
-# if SUPPORT_S_CURVE && !SUPPORT_PHASE_STEPPING
+#ifdef SUPPORT_3RD_ORDER
+# if SUPPORT_3RD_ORDER && !SUPPORT_PHASE_STEPPING
 #  error Cannot support S Curve acceleration without phase stepping
 # endif
 #else
-# define SUPPORT_S_CURVE		0
+# define SUPPORT_3RD_ORDER		0
 #endif
 
 #ifndef SUPPORT_PROBE_POINTS_FILE

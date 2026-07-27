@@ -139,7 +139,7 @@ CanMessageBuffer *_ecv_null CanMotion::GetBuffer(const PrepParams& params, Drive
 			move->decelClocks = buf->next->msg.moveLinearShaped.decelClocks;
 		}
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		if (params.jerk != (motioncalc_t)0.0)
 		{
 			// We don't support 3rd order motion on expansion boards yet, so the best we can do is compute an average acceleration and scale it to unit distance
@@ -305,7 +305,7 @@ CanMessageBuffer *_ecv_null CanMotion::GetUrgentMessage() noexcept
 					revertMsg->whichDrives = driversToRevert;
 					revertMsg->clocksAllowed = MillisToStepClocks(BasicDriverPositionRevertMillis);
 					urgentMessageBuffer.dataLength = revertMsg->GetActualDataLength(numDriversReverted);
-					//debugPrintf("Reverting drivers %u by %" PRIi32 " on board %u\n", driversToRevert,revertMsg->finalStepCounts[0], sl->boardAddress);
+					//debugPrintf("Reverting drivers %u to %" PRIi32 " on board %u\n", driversToRevert, revertMsg->finalStepCounts[0], sl->boardAddress);
 					return &urgentMessageBuffer;
 				}
 			}

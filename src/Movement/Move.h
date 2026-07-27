@@ -165,7 +165,7 @@ public:
 	float Acceleration(size_t axisOrExtruder, bool reduced) const noexcept;
 	const float *_ecv_array Accelerations(bool reduced) const noexcept { return (reduced) ? reducedAccelerations : normalAccelerations; }
 	void SetAcceleration(size_t axisOrExtruder, float value, bool reduced) noexcept;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	const float *_ecv_array Jerks() const noexcept { return jerks; }
 	void SetAccelerationTime(float value) noexcept;
 	float AccelerationTime() const noexcept { return accelerationTime; }
@@ -540,7 +540,7 @@ private:
 #endif
 
 	MoveSegment *AddSegment(MoveSegment *list, uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a,
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	 	 	 	 	 	 	 motioncalc_t j, MovementFlags moveFlags, motioncalc_t pressureAdvanceClocks
 #else
 							 	 	 	 	 MovementFlags moveFlags, motioncalc_t pressureAdvanceClocksTimesDuration
@@ -582,7 +582,7 @@ private:
 	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func); }
 #endif
 
-#if SUPPORT_S_CURVE && SUPPORT_CAN_EXPANSION
+#if SUPPORT_3RD_ORDER && SUPPORT_CAN_EXPANSION
 	bool AxisHasLocalDriver(size_t axis) const noexcept;
 	bool ExtruderHasLocalDriver(size_t extruder) const noexcept;
 #endif
@@ -736,7 +736,7 @@ private:
 	float printingInstantDvs[MaxAxesPlusExtruders];			// current max jerk in mm per step clock (changed by M205 and M206)
 	float maxInstantDvs[MaxAxesPlusExtruders];				// max instant velocity change in mm per step clock (changed by M206 only)
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	float accelerationTime;									// time taken to each max acceleration in step clocks, single value used for all axes.
 	float jerks[MaxAxesPlusExtruders];						// max rate of change of acceleration, calculated from accelerationTime and normalAccelerations. Only used if accelerationTime > 0.0.
 	bool usingSCurve = false;
@@ -999,7 +999,7 @@ inline void Move::InvertCurrentMotorSteps(size_t driver) noexcept
 
 #endif
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 
 // Set the acceleration time
 inline void Move::SetAccelerationTime(float value) noexcept

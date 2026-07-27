@@ -590,7 +590,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	if (seen || seenExtrude)
 	{
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		move.UpdateSCurveFlagAndJerk();
 #endif
 		reprap.MoveUpdated();
@@ -940,7 +940,7 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 
 	if (seen)
 	{
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		move.UpdateSCurveFlagAndJerk();
 #endif
 		reprap.MoveUpdated();
