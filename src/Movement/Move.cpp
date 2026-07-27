@@ -3009,6 +3009,17 @@ bool Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive, uint32_t 
 	(void)wasMoving;
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+	if (wakeAsyncSender)
+	{
+		// We stopped one or more remote drivers, which will be reverted.
+		// For now we don't revert local drivers, instead we assume that all drivers for an axis are either all local or all remote.
+		// So adjust the current motor position for this logical drive to be the position that we will revert the remote drivers to.
+		// Otherwise we will pick up the wrong machine position when setting position after homing or probing.
+		// Ideally we would revert local drivers too, then we would execute this code unconditionally.
+		dm.currentMotorPosition = dm.positionAtMoveStart + netStepsTaken;
+	}
+#endif
 	return wakeAsyncSender;
 }
 

@@ -218,10 +218,12 @@ inline int32_t DriveMovement::GetNetStepsTakenThisMove(uint32_t when) const noex
 {
 	const float pos = GetCurrentPosition(when);
 	const int32_t ipos = lrintf(pos);
-#if 1
-	debugPrintf("pos %.2f ipos %ld cmp %ld\n", (double)pos, ipos, currentMotorPosition);
+#if 0	//DEBUG
+	const int32_t overshoot = (int32_t)(currentMotorPosition - ipos);
+	const uint32_t delay = StepTimer::GetTimerTicks() - when;
+	debugPrintf("ipos %ld cmp %ld delay %lu overshoot %ld speed %ld\n",
+					ipos, currentMotorPosition, delay, overshoot, (overshoot * (int32_t)StepClockRate)/(int32_t)delay);
 #endif
-//	return currentMotorPosition - positionAtMoveStart;
 	return ipos - positionAtMoveStart;
 }
 
@@ -276,7 +278,6 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 inline float DriveMovement::GetCurrentPosition(uint32_t when) const noexcept
 {
 	AtomicCriticalSectionLocker lock;										// we don't want 'segments' changing while we do this
-
 	const MoveSegment* const seg = segments;
 	if (seg != nullptr)
 	{
@@ -293,21 +294,12 @@ inline float DriveMovement::GetCurrentPosition(uint32_t when) const noexcept
 #else
 			const motioncalc_t movement = (u + (motioncalc_t)0.5 * seg->GetA() * timeSinceStart) * timeSinceStart;
 #endif
-			const motioncalc_t revisedMotorPosition = movement + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards;
-#if 0	//DEBUG
-			if (seg->GetFlags().checkEndstops)
-			{
-				debugPrintf("tss %ld dur=%lu movement %.2f pss %ld dcf %.2f cmp %ld rmp %.2f\n",
-					timeSinceStart, seg->GetDuration(), (double)movement, positionAtSegmentStart, (double)distanceCarriedForwards, currentMotorPosition, (double)revisedMotorPosition);
-			}
-#endif
-			return (float)revisedMotorPosition;
+			return (float)(movement + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 		}
 
 		// If we get here then we have been asked for the position before the current segment started
 		return (float)((motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 	}
-
 	// If we get here then no movement is taking place
 	return (float)((motioncalc_t)currentMotorPosition + distanceCarriedForwards);
 }
