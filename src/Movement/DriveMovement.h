@@ -216,7 +216,13 @@ inline int32_t DriveMovement::GetNetStepsTakenThisSegment() const noexcept
 // Only valid for isolated moves. Caller must disable interrupts before calling this.
 inline int32_t DriveMovement::GetNetStepsTakenThisMove(uint32_t when) const noexcept
 {
-	return (int32_t)GetCurrentPosition(when) - positionAtMoveStart;
+	const float pos = GetCurrentPosition(when);
+	const int32_t ipos = lrintf(pos);
+#if 1
+	debugPrintf("pos %.2f ipos %ld cmp %ld\n", (double)pos, ipos, currentMotorPosition);
+#endif
+//	return currentMotorPosition - positionAtMoveStart;
+	return ipos - positionAtMoveStart;
 }
 
 // Return true if this is an extruder executing a printing move
@@ -282,13 +288,20 @@ inline float DriveMovement::GetCurrentPosition(uint32_t when) const noexcept
 				// We can't get the next segment because that needs `NewSegment()` to be called
 				timeSinceStart = seg->GetDuration();
 			}
-#if 1
-			debugPrintf("tss %ld dur=%lu movement %.2f pss %ld dcf %.2f cmp %ld\n",
-				timeSinceStart, seg->GetDuration(), (double)(u + 0.5 * seg->GetA() * timeSinceStart) * timeSinceStart, positionAtSegmentStart, (double)distanceCarriedForwards, currentMotorPosition);
+#if SUPPORT_S_CURVE
+			const motioncalc_t movement = (u + ((motioncalc_t)0.5 * seg->GetA() + OneSixth * seg->GetJ() * timeSinceStart) * timeSinceStart) * timeSinceStart;
+#else
+			const motioncalc_t movement = (u + (motioncalc_t)0.5 * seg->GetA() * timeSinceStart) * timeSinceStart;
 #endif
-			return (float)((u + 0.5 * seg->GetA() * timeSinceStart) * timeSinceStart
-							  + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards
-						  );
+			const motioncalc_t revisedMotorPosition = movement + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards;
+#if 0	//DEBUG
+			if (seg->GetFlags().checkEndstops)
+			{
+				debugPrintf("tss %ld dur=%lu movement %.2f pss %ld dcf %.2f cmp %ld rmp %.2f\n",
+					timeSinceStart, seg->GetDuration(), (double)movement, positionAtSegmentStart, (double)distanceCarriedForwards, currentMotorPosition, (double)revisedMotorPosition);
+			}
+#endif
+			return (float)revisedMotorPosition;
 		}
 
 		// If we get here then we have been asked for the position before the current segment started
