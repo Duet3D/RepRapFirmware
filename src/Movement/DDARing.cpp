@@ -183,6 +183,7 @@ MovementError DDARing::AddStandardMove(const RawMove &nextMove, bool doMotorMapp
 	const MovementError err = addPointer->InitStandardMove(*this, nextMove, doMotorMapping);
 	if (err == MovementError::ok)
 	{
+		addPointer->SetState(DDA::planned);
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
 	}
@@ -194,6 +195,7 @@ bool DDARing::AddSpecialMove(float feedRate, const float coords[MaxDriversPerAxi
 {
 	if (addPointer->InitLeadscrewMove(*this, feedRate, coords))
 	{
+		addPointer->SetState(DDA::planned);
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
 		return true;
@@ -208,6 +210,7 @@ bool DDARing::AddAsyncMove(const AsyncMove& nextMove) noexcept
 {
 	if (addPointer->InitAsyncMove(*this, nextMove))
 	{
+		addPointer->SetState(DDA::planned);
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
 		return true;

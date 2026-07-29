@@ -672,7 +672,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 #endif
 
 		rslt = RecalculateMove(ring);
-		SetState(planned);
+		// Caller must set the state to 'planned' if rslt == MovementError::ok
 	}
 	return rslt;
 }
@@ -741,9 +741,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
 	startSpeed = endSpeed = 0.0;
 
-	RecalculateMove(ring);
-	SetState(planned);
-	return true;
+	return RecalculateMove(ring) == MovementError::ok;
 }
 
 # if SUPPORT_ASYNC_MOVES
@@ -797,9 +795,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 	// Currently we normalise the vector sum of all motor movements to unit length.
 	totalDistance = Normalise(directionVector);
 
-	RecalculateMove(ring);
-	SetState(planned);
-	return true;
+	return RecalculateMove(ring) == MovementError::ok;
 }
 
 #endif
