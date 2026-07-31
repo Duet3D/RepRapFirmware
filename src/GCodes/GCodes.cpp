@@ -204,7 +204,7 @@ void GCodes::Init() noexcept
 	m501SeenInConfigFile = false;
 	doingToolChange = false;
 	active = true;
-	limitAxes = noMovesBeforeHoming = true;
+	limitAxes = limitAxesRelative = noMovesBeforeHoming = true;
 	SetAllAxesNotHomed();
 
 	laserMaxPower = DefaultMaxLaserPower;
@@ -2635,10 +2635,10 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			{
 			case LimitPositionResult::adjusted:
 			case LimitPositionResult::adjustedAndIntermediateUnreachable:
-				if (!gb.LatestMachineState().axesRelative)
+				if (!gb.LatestMachineState().axesRelative || !limitAxesRelative)
 				{
 					abandonMove();
-					gb.ThrowGCodeException(TargetUnreachableText);				// absolute moves to unreachable positions are errors
+					gb.ThrowGCodeException(TargetUnreachableText);				// unreachable moves are errors unless relative moves are being clamped
 				}
 				ToolOffsetInverseTransform(ms);									// make sure the limits are reflected in the user position
 				if (lp == LimitPositionResult::adjusted)

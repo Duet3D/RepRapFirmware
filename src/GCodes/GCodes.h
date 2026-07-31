@@ -687,6 +687,7 @@ private:
 	ParameterLettersBitmap allAxisLetters;		// Which axis letters are in use
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
 	bool limitAxes;								// Don't think outside the box
+	bool limitAxesRelative;						// Clamp relative moves to the axis limits instead of throwing an error
 	bool noMovesBeforeHoming;					// Don't allow movement prior to homing the associates axes
 
 	AxesBitmap toBeHomed;						// Bitmap of axes still to be homed

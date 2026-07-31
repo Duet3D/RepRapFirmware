@@ -3768,13 +3768,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						seen = true;
 						noMovesBeforeHoming = (gb.GetIValue() > 0);
 					}
+					if (gb.Seen('R'))
+					{
+						seen = true;
+						limitAxesRelative = (gb.GetIValue() > 0);
+					}
 					if (seen)
 					{
 						reprap.MoveUpdated();
 					}
 					else
 					{
-						reply.printf("Movement outside the bed is %spermitted, movement before homing is %spermitted", (limitAxes) ? "not " : "", (noMovesBeforeHoming) ? "not " : "");
+						reply.printf("Movement outside the bed is %spermitted, movement before homing is %spermitted, relative moves are %sclamped to the axis limits", (limitAxes) ? "not " : "", (noMovesBeforeHoming) ? "not " : "", (limitAxesRelative) ? "" : "not ");
 					}
 				}
 				break;
