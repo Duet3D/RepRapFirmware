@@ -116,7 +116,7 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 			}
 		}
 
-		reprap.InputsUpdated();
+		reprap.SensorsUpdated();
 		return rslt;
 	}
 	else
