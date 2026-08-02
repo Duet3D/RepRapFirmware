@@ -345,7 +345,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 		if (receivedPositionReport)
 		{
 			// We have a completed a position report
-			lastKnownPosition = sensorValue & TypeMagnetAngleMask;
+			lastKnownPosition = val & TypeMagnetAngleMask;
 			const uint16_t angleChange = (val - sensorValue) & TypeMagnetAngleMask;			// angle change in range 0..1023
 			const int32_t movement = (angleChange <= 512) ? (int32_t)angleChange : (int32_t)angleChange - 1024;
 			movementMeasuredSinceLastSync += (float)movement/1024;

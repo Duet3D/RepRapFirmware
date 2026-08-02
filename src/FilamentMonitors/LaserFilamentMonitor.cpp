@@ -308,7 +308,7 @@ void LaserFilamentMonitor::HandleIncomingData() noexcept
 			const int32_t movement = (positionChange <= positionRange/2u) ? (int32_t)positionChange : (int32_t)positionChange - (int32_t)positionRange;
 			movementMeasuredSinceLastSync += (float)movement * (((val & TypeLaserLargeDataRangeBitMask) != 0) ? 0.01 : 0.02);
 			sensorValue = val;
-			lastKnownPosition = val & positionRange;
+			lastKnownPosition = val & (positionRange - 1u);
 			lastMeasurementTime = millis();
 
 			if (haveStartBitData)	// if we have a synchronised  value for the amount of extrusion commanded
