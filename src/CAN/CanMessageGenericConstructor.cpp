@@ -189,16 +189,21 @@ unsigned int CanMessageGenericConstructor::FindInsertPoint(char c, ParamDescript
 		{
 			// This parameter is present, so skip it
 			const size_t size = d->ItemSize();
-			if (size != 0)
-			{
-				pos += size;
-			}
-			else
+			if (size == 0)
 			{
 				// The only item with size 0 is string, so skip up to and including the null terminator
 				do
 				{
 				} while (msg.data[pos++] != 0);
+			}
+			else if ((d->type & ParamDescriptor::ParamType::isArray) != 0)
+			{
+				const uint8_t numElems = msg.data[pos++];
+				pos += numElems * size;
+			}
+			else
+			{
+				pos += size;
 			}
 		}
 		paramBit <<= 1;
