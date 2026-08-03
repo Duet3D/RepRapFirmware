@@ -27,6 +27,7 @@ protected:
 #endif
 	FilamentSensorStatus Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) noexcept override;
 	FilamentSensorStatus Clear() noexcept override;
+	bool GetLocalFilamentPresent(bool& present) const noexcept override;
 
 private:
 	static constexpr float DefaultMmPerRev = 25.1;
@@ -57,6 +58,8 @@ private:
 	static constexpr uint16_t TypeMagnetV3InfoTypeAgc = 0x0300;
 
 	static constexpr uint16_t TypeMagnetAngleMask = 0x03FF;			// we use a 10-bit sensor angle
+
+	static constexpr uint16_t MotionDetectionMinCounts = 4;			// angle change that counts as movement, about 0.1mm of filament at the default sensitivity
 
 	void Init() noexcept;
 	void Reset() noexcept;

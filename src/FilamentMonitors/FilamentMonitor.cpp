@@ -43,17 +43,19 @@ size_t FilamentMonitor::firstDriveToSend = 0;
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY_NONLEAF(FilamentMonitor, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY_NONLEAF(FilamentMonitor, _condition, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry FilamentMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	{ "enableMode",			OBJECT_MODEL_FUNC((int32_t)self->GetEnableMode()),		ObjectModelEntryFlags::none },
 	{ "enabled",			OBJECT_MODEL_FUNC(self->GetEnableMode() != 0),		 	ObjectModelEntryFlags::obsolete },
+	{ "filamentPresent",	OBJECT_MODEL_FUNC_IF(self->FilamentPresenceKnown(), self->IsFilamentPresent()),	ObjectModelEntryFlags::live },
 	{ "status",				OBJECT_MODEL_FUNC(self->GetStatusText()),				ObjectModelEntryFlags::live },
 	{ "type",				OBJECT_MODEL_FUNC(self->GetTypeText()), 				ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t FilamentMonitor::objectModelTableDescriptor[] = { 1, 4 };
+constexpr uint8_t FilamentMonitor::objectModelTableDescriptor[] = { 1, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(FilamentMonitor)
 
@@ -71,8 +73,12 @@ size_t FilamentMonitor::GetNumMonitorsToReport() noexcept
 // Constructor
 FilamentMonitor::FilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept
 	: driveNumber(drv), type(monitorType), driverId(did), enableMode(0), lastStatus(FilamentSensorStatus::noDataReceived)
+#if SUPPORT_REMOTE_COMMANDS
+	  , lastReportedLiveBits(0)
+#endif
 #if SUPPORT_CAN_EXPANSION
-	  , lastRemoteStatus(FilamentSensorStatus::noDataReceived), hasRemote(false)
+	  , whenRemoteLiveBitsReceived(0), lastRemoteStatus(FilamentSensorStatus::noDataReceived), hasRemote(false)
+	  , remotePresenceValid(false), remotePresence(false), remoteMotion(false)
 #endif
 {
 }
@@ -140,6 +146,52 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 {
 	return extruderNumber < reprap.GetGCodes().GetNumExtruders()
 		&& reprap.GetMove().GetExtruderDriver(extruderNumber) == driverId;
+}
+
+// Return true if we know whether filament is present in this monitor
+bool FilamentMonitor::FilamentPresenceKnown() const noexcept
+{
+#if SUPPORT_CAN_EXPANSION
+	if (hasRemote)
+	{
+		return remotePresenceValid && millis() - whenRemoteLiveBitsReceived < RemoteLiveBitsTimeout;
+	}
+#endif
+	bool dummy;
+	return GetLocalFilamentPresent(dummy);
+}
+
+// Return true if filament is present, only meaningful if FilamentPresenceKnown returns true
+bool FilamentMonitor::IsFilamentPresent() const noexcept
+{
+#if SUPPORT_CAN_EXPANSION
+	if (hasRemote)
+	{
+		return remotePresence && remotePresenceValid && millis() - whenRemoteLiveBitsReceived < RemoteLiveBitsTimeout;
+	}
+#endif
+	bool present = false;
+	return GetLocalFilamentPresent(present) && present;
+}
+
+// Return true if filament movement was detected within the last FilamentMonitorMotionLatchTime
+bool FilamentMonitor::IsMotionDetected() const noexcept
+{
+#if SUPPORT_CAN_EXPANSION
+	if (hasRemote)
+	{
+		return remoteMotion && millis() - whenRemoteLiveBitsReceived < RemoteLiveBitsTimeout;
+	}
+#endif
+	return IsLocalMotionDetected();
+}
+
+// Get the switch or motion state of a filament monitor for a virtual GpIn port
+/*static*/ bool FilamentMonitor::GetVirtualInputState(size_t extruder, bool motionNotSwitch) noexcept
+{
+	ReadLocker lock(filamentMonitorsLock);
+	const FilamentMonitor *_ecv_from _ecv_null const fm = (extruder < MaxExtruders) ? filamentSensors[extruder] : nullptr;
+	return (fm != nullptr) && (motionNotSwitch ? fm->IsMotionDetected() : fm->IsFilamentPresent());
 }
 
 // Static initialisation
@@ -369,10 +421,16 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 								auto& slot = msg->data[slotIndex];
 								slot.status = fst.ToBaseType();
 								fs.GetLiveData(slot);
-								if (fst != fs.lastStatus)
+								bool present = false;
+								slot.filamentPresentValid = fs.GetLocalFilamentPresent(present);
+								slot.filamentPresent = slot.filamentPresentValid && present;
+								slot.motionDetected = fs.IsLocalMotionDetected();
+								const uint8_t liveBits = (uint8_t)((slot.filamentPresentValid << 2) | (slot.filamentPresent << 1) | slot.motionDetected);
+								if (fst != fs.lastStatus || liveBits != fs.lastReportedLiveBits)
 								{
 									forceSend = true;
 									fs.lastStatus = fst;
+									fs.lastReportedLiveBits = liveBits;
 								}
 								else if (slot.hasLiveData)
 								{
@@ -464,6 +522,10 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 						debugPrintf("Remote extruder %u status change from %s to %s\n", LogicalDriveToExtruder(fs.driveNumber), fs.lastRemoteStatus.ToString(), newStatus.ToString());
 					}
 					fs.lastRemoteStatus = newStatus;
+					fs.remotePresenceValid = slot.filamentPresentValid;
+					fs.remotePresence = slot.filamentPresent;
+					fs.remoteMotion = slot.motionDetected;
+					fs.whenRemoteLiveBitsReceived = millis();
 					fs.UpdateLiveData(slot);
 					break;
 				}

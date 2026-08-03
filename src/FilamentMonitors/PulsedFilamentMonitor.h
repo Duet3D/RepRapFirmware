@@ -25,6 +25,7 @@ protected:
 #endif
 	FilamentSensorStatus Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) noexcept override;
 	FilamentSensorStatus Clear() noexcept override;
+	bool IsLocalMotionDetected() const noexcept override { return samplesReceived != 0 && millis() - lastMeasurementTime < FilamentMonitorMotionLatchTime; }
 
 #if SUPPORT_CAN_EXPANSION
 	void UpdateLiveData(const FilamentMonitorDataV2& data) noexcept override;
