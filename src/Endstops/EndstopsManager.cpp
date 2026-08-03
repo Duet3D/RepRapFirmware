@@ -10,6 +10,7 @@
 #include "Endstop.h"
 #include "SwitchEndstop.h"
 #include "StallDetectionEndstop.h"
+#include "GpInPortEndstop.h"
 #include "ZProbeEndstop.h"
 
 #include "ZProbe.h"
@@ -102,11 +103,16 @@ EndstopsManager::EndstopsManager() noexcept
 #if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 		  extrudersEndstop(nullptr),
 #endif
+		  extruderInputEndstop(nullptr),
 		  isHomingMove(false)
 {
 	for (Endstop *_ecv_from _ecv_null & es : axisEndstops)
 	{
 		es = nullptr;
+	}
+	for (uint8_t& gpinNumber : extruderGpinNumbers)
+	{
+		gpinNumber = NoGpinPort;
 	}
 	for (ZProbe *_ecv_from _ecv_null & zp : zProbes)
 	{
@@ -230,22 +236,48 @@ void EndstopsManager::EnableAxisEndstops(AxesBitmap axes, const float speeds[Max
 void EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders, const float speeds[MaxExtruders], bool& reduceAcceleration) THROWS(GCodeException)
 {
 	reduceAcceleration = false;
-	if (extruders.IsNonEmpty())
+	if (extruders.IsNonEmpty() && !reprap.GetGCodes().IsSimulating())
 	{
-#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
-		if (!reprap.GetGCodes().IsSimulating())
+		ExtrudersBitmap inputExtruders, stallExtruders;
+		extruders.Iterate([this, &inputExtruders, &stallExtruders](unsigned int extruder, unsigned int) noexcept
+							{
+								if (extruderGpinNumbers[extruder] != NoGpinPort)
+								{
+									inputExtruders.SetBit(extruder);
+								}
+								else
+								{
+									stallExtruders.SetBit(extruder);
+								}
+							});
+		if (inputExtruders.IsNonEmpty())
 		{
+			if (extruderInputEndstop == nullptr)
+			{
+				extruderInputEndstop = new GpInPortEndstop;
+			}
+			extruderInputEndstop->PrimeInputs();
+			// The move stops when the input reaches the state matching the direction of movement, so a positive move stops on filament present and a negative one on filament absent
+			inputExtruders.Iterate([this, speeds](unsigned int extruder, unsigned int) noexcept
+									{
+										extruderInputEndstop->AddInput(extruderGpinNumbers[extruder], speeds[extruder] > 0.0);
+									});
+			AddToActive(*extruderInputEndstop);
+		}
+		if (stallExtruders.IsNonEmpty())
+		{
+#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 			if (extrudersEndstop == nullptr)
 			{
 				extrudersEndstop = new StallDetectionEndstop;
 			}
-			extrudersEndstop->PrimeExtruders(extruders, speeds);
+			extrudersEndstop->PrimeExtruders(stallExtruders, speeds);
 			reduceAcceleration = extrudersEndstop->ShouldReduceAcceleration();
 			AddToActive(*extrudersEndstop);
-		}
 #else
-		ThrowGCodeException("extruder endstops not supported by this system");
+			ThrowGCodeException("extruder endstops not supported by this system");
 #endif
+		}
 	}
 }
 
@@ -344,6 +376,68 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 		}
 	}
 
+	// Check for configuring or reporting an extruder filament endstop
+	if (gb.Seen('E'))
+	{
+		if (axesSeen != 0)
+		{
+			reply.copy("Cannot configure axis and extruder endstops in the same command");
+			return GCodeResult::error;
+		}
+		const uint32_t extruder = gb.GetLimitedUIValue('E', reprap.GetGCodes().GetNumExtruders());
+		if (!gb.Seen('P'))
+		{
+			if (extruderGpinNumbers[extruder] == NoGpinPort)
+			{
+				reply.printf("Extruder %" PRIu32 " endstop uses motor stall detection", extruder);
+			}
+			else
+			{
+				reply.printf("Extruder %" PRIu32 " endstop uses input pin %u", extruder, extruderGpinNumbers[extruder]);
+			}
+			return GCodeResult::ok;
+		}
+
+		if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+		activeEndstops = nullptr;
+
+		uint32_t gpinNumber = NoGpinPort;
+		try
+		{
+			gpinNumber = gb.GetLimitedUIValue('P', MaxGpInPorts);
+		}
+		catch (GCodeException&)
+		{
+			// P"nil" reverts to stall detection
+			bool isNil = false;
+			try
+			{
+				String<StringLength20> pinName;
+				bool seen = false;
+				isNil = gb.TryGetQuotedString('P', pinName.GetRef(), seen) && StringEqualsIgnoreCase(pinName.c_str(), "nil");
+			}
+			catch (GCodeException&)
+			{
+				// not a string either, so fall through to rethrow the original error
+			}
+			if (!isNil)
+			{
+				throw;
+			}
+		}
+
+		if (gpinNumber != NoGpinPort && reprap.GetPlatform().GetGpInPort(gpinNumber).IsUnused())
+		{
+			reply.printf("Input pin %" PRIu32 " is not configured", gpinNumber);
+			return GCodeResult::error;
+		}
+		extruderGpinNumbers[extruder] = (uint8_t)gpinNumber;
+		return GCodeResult::ok;
+	}
+
 	if (axesSeen == 0)
 	{
 		// Report current configuration
@@ -369,6 +463,13 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 				reply.Clear();
 				axisEndstops[axis]->AppendDetails(reply);
 				outbuf->cat(reply.c_str());
+			}
+		}
+		for (size_t extruder = 0; extruder < reprap.GetGCodes().GetNumExtruders(); ++extruder)
+		{
+			if (extruderGpinNumbers[extruder] != NoGpinPort)
+			{
+				outbuf->catf("\nE%u: input pin %u", extruder, extruderGpinNumbers[extruder]);
 			}
 		}
 		return GCodeResult::ok;

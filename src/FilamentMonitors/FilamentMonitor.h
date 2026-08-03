@@ -61,7 +61,7 @@ public:
 	// Get access to a filament monitor when we already have a read lock
 	static FilamentMonitor *_ecv_from _ecv_null GetMonitorAlreadyLocked(size_t extruder) noexcept { return filamentSensors[extruder]; }
 
-	// Get the switch or motion state of a filament monitor for a virtual GpIn port. Takes a read lock on filamentMonitorsLock
+	// Get the switch or motion state of a filament monitor for a virtual GpIn port. Lock-free, safe to call from the step ISR
 	static bool GetVirtualInputState(size_t extruder, bool motionNotSwitch) noexcept;
 
 	// Return true if we know whether filament is present in this monitor
@@ -186,6 +186,10 @@ private:
 #endif
 
 	static FilamentMonitor *_ecv_from _ecv_null filamentSensors[NumFilamentMonitors];
+
+	static constexpr uint8_t LiveInputPresent = 0x01;					// bit set in liveInputStates when filament is known to be present
+	static constexpr uint8_t LiveInputMotion = 0x02;					// bit set in liveInputStates when filament movement was recently detected
+	static volatile uint8_t liveInputStates[MaxExtruders];				// per-extruder input state snapshot updated by Spin so that it can be read from the step ISR
 
 #if SUPPORT_REMOTE_COMMANDS
 	static constexpr uint32_t StatusUpdateInterval = 2000;				// how often we send status reports when there isn't a change

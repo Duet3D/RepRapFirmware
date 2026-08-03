@@ -31,6 +31,7 @@
 // Static data
 ReadWriteLock FilamentMonitor::filamentMonitorsLock;
 FilamentMonitor *_ecv_from _ecv_null FilamentMonitor::filamentSensors[NumFilamentMonitors] = { 0 };
+volatile uint8_t FilamentMonitor::liveInputStates[MaxExtruders] = { 0 };
 
 #if SUPPORT_REMOTE_COMMANDS
 uint32_t FilamentMonitor::whenStatusLastSent = 0;
@@ -186,12 +187,10 @@ bool FilamentMonitor::IsMotionDetected() const noexcept
 	return IsLocalMotionDetected();
 }
 
-// Get the switch or motion state of a filament monitor for a virtual GpIn port
+// Get the switch or motion state of a filament monitor for a virtual GpIn port. Reads the snapshot updated by Spin, so it is safe to call from the step ISR
 /*static*/ bool FilamentMonitor::GetVirtualInputState(size_t extruder, bool motionNotSwitch) noexcept
 {
-	ReadLocker lock(filamentMonitorsLock);
-	const FilamentMonitor *_ecv_from _ecv_null const fm = (extruder < MaxExtruders) ? filamentSensors[extruder] : nullptr;
-	return (fm != nullptr) && (motionNotSwitch ? fm->IsMotionDetected() : fm->IsFilamentPresent());
+	return (extruder < MaxExtruders) && (liveInputStates[extruder] & (motionNotSwitch ? LiveInputMotion : LiveInputPresent)) != 0;
 }
 
 // Static initialisation
@@ -454,6 +453,10 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 					fst = fs.lastRemoteStatus;
 				}
 #endif
+				if (drv < MaxExtruders)
+				{
+					liveInputStates[drv] = (fs.IsFilamentPresent() ? LiveInputPresent : 0) | (fs.IsMotionDetected() ? LiveInputMotion : 0);
+				}
 				if (   fst != fs.lastStatus
 #if SUPPORT_REMOTE_COMMANDS
 					&& !CanInterface::InExpansionMode()
@@ -470,6 +473,10 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 						Event::AddEvent(EventType::filament_error, (uint16_t)fst.ToBaseType(), fs.driverId.GetBoardAddress(), extruder, "");
 					}
 				}
+			}
+			else if (drv < MaxExtruders)
+			{
+				liveInputStates[drv] = 0;
 			}
 		}
 	}

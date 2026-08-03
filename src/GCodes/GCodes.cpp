@@ -2157,10 +2157,11 @@ bool GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(G
 			// Enable extruder endstops for the extruders moving
 			// First calculate the extruder speeds so that stall detection endstops can be validated.
 			// We checked before calling this that no axes are moving.
+			// Divide by the absolute total extrusion so that each speed is signed with the direction of that extruder's movement
 			float speeds[MaxExtruders];
 			for (size_t i = 0; i < GetNumExtruders(); ++i)
 			{
-				speeds[i] = ms.raw.coords[ExtruderToLogicalDrive(i)] * ms.raw.feedRate / cookedTotalExtrusion;
+				speeds[i] = ms.raw.coords[ExtruderToLogicalDrive(i)] * ms.raw.feedRate / fabsf(cookedTotalExtrusion);
 			}
 			bool reduceAcceleration;
 			platform.GetEndstops().EnableExtruderEndstops(extrudersMoving, speeds, reduceAcceleration);			// this will throw if the endstops can't be enabled
