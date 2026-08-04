@@ -35,11 +35,7 @@ constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[
 #ifdef DUET3_ATE
 	{ "agc",				OBJECT_MODEL_FUNC((int32_t)self->agc),																	ObjectModelEntryFlags::live },
 #endif
-	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(
-#if SUPPORT_CAN_EXPANSION
-													self->IsLocal() &&
-#endif
-													self->dataReceived && self->HaveCalibrationData(), self, 1), 					ObjectModelEntryFlags::liveNotPanelDue },
+	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->HaveCalibrationData(), self, 1), 											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 #ifdef DUET3_ATE
 	{ "mag",				OBJECT_MODEL_FUNC((int32_t)self->magnitude),															ObjectModelEntryFlags::live },
@@ -110,7 +106,13 @@ void RotatingMagnetFilamentMonitor::Reset() noexcept
 
 bool RotatingMagnetFilamentMonitor::HaveCalibrationData() const noexcept
 {
-	return magneticMonitorState != MagneticMonitorState::calibrating && totalExtrusionCommanded > 10.0;
+#if SUPPORT_CAN_EXPANSION
+	if (!IsLocal())
+	{
+		return hasLiveData && totalExtrusionCommanded > 10.0 && avgPercentage > 0;	// we divide by the average when reconstructing the measured sensitivity
+	}
+#endif
+	return dataReceived && magneticMonitorState != MagneticMonitorState::calibrating && totalExtrusionCommanded > 10.0;
 }
 
 float RotatingMagnetFilamentMonitor::MeasuredSensitivity() const noexcept
@@ -671,6 +673,22 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 		}
 	}
 	return rslt;
+}
+
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+
+// Update the live data of a remote monitor. The measured calibration data isn't sent over CAN, so reconstruct it from the percentages and the configured sensitivity
+void RotatingMagnetFilamentMonitor::UpdateLiveData(const FilamentMonitorDataV2& data) noexcept
+{
+	Duet3DFilamentMonitor::UpdateLiveData(data);
+	if (hasLiveData)
+	{
+		totalMovementMeasured = totalExtrusionCommanded * (float)avgPercentage/(100 * mmPerRev);
+		minMovementRatio = (float)minPercentage/(100 * mmPerRev);
+		maxMovementRatio = (float)maxPercentage/(100 * mmPerRev);
+	}
 }
 
 #endif

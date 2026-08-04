@@ -35,11 +35,7 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 #ifdef DUET3_ATE
 	{ "brightness",			OBJECT_MODEL_FUNC((int32_t)self->brightness),															ObjectModelEntryFlags::live },
 #endif
-	{ "calibrated",			OBJECT_MODEL_FUNC_IF(
-#if SUPPORT_CAN_EXPANSION
-													self->IsLocal() &&
-#endif
-													self->dataReceived && self->HaveCalibrationData(), self, 1),					ObjectModelEntryFlags::liveNotPanelDue },
+	{ "calibrated",			OBJECT_MODEL_FUNC_IF(self->HaveCalibrationData(), self, 1),												ObjectModelEntryFlags::liveNotPanelDue },
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 #ifdef DUET3_ATE
 	{ "shutter",			OBJECT_MODEL_FUNC((int32_t)self->shutter),																ObjectModelEntryFlags::live },
@@ -108,7 +104,13 @@ void LaserFilamentMonitor::Reset() noexcept
 
 bool LaserFilamentMonitor::HaveCalibrationData() const noexcept
 {
-	return laserMonitorState != LaserMonitorState::calibrating && totalExtrusionCommanded > 10.0;
+#if SUPPORT_CAN_EXPANSION
+	if (!IsLocal())
+	{
+		return hasLiveData && totalExtrusionCommanded > 10.0;
+	}
+#endif
+	return dataReceived && laserMonitorState != LaserMonitorState::calibrating && totalExtrusionCommanded > 10.0;
 }
 
 float LaserFilamentMonitor::MeasuredSensitivity() const noexcept
@@ -616,6 +618,22 @@ GCodeResult LaserFilamentMonitor::Configure(const CanMessageGenericParser& parse
 		}
 	}
 	return rslt;
+}
+
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+
+// Update the live data of a remote monitor. The measured calibration data isn't sent over CAN, so reconstruct it from the percentages
+void LaserFilamentMonitor::UpdateLiveData(const FilamentMonitorDataV2& data) noexcept
+{
+	Duet3DFilamentMonitor::UpdateLiveData(data);
+	if (hasLiveData)
+	{
+		totalMovementMeasured = totalExtrusionCommanded * (float)avgPercentage * 0.01;
+		minMovementRatio = (float)minPercentage * 0.01;
+		maxMovementRatio = (float)maxPercentage * 0.01;
+	}
 }
 
 #endif

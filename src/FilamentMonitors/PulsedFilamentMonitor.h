@@ -78,6 +78,9 @@ private:
 	uint8_t samplesReceived;
 	bool comparisonStarted;
 	bool calibrationStarted;
+#if SUPPORT_CAN_EXPANSION
+	bool hasLiveData = false;								// whether the calibration data of a remote monitor has been reconstructed
+#endif
 };
 
 #endif /* SRC_FILAMENTSENSORS_PULSEDFILAMENTMONITOR_H_ */

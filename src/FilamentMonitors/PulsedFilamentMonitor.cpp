@@ -32,11 +32,7 @@ constexpr ObjectModelTableEntry PulsedFilamentMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. PulsedFilamentMonitor members
-	{ "calibrated", 	OBJECT_MODEL_FUNC_IF(
-#if SUPPORT_CAN_EXPANSION
-												self->IsLocal() &&
-#endif
-												self->DataReceived() && self->HaveCalibrationData(), self, 1), 					ObjectModelEntryFlags::liveNotPanelDue },
+	{ "calibrated", 	OBJECT_MODEL_FUNC_IF(self->HaveCalibrationData(), self, 1), 											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "configured", 	OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 	{ "position",		OBJECT_MODEL_FUNC((int32_t)(self->sensorValue & 0x0FFF)), 												ObjectModelEntryFlags::liveNotPanelDue },
 
@@ -90,7 +86,13 @@ bool PulsedFilamentMonitor::DataReceived() const noexcept
 
 bool PulsedFilamentMonitor::HaveCalibrationData() const noexcept
 {
-	return calibrationStarted && fabsf(totalMovementMeasured) > 1.0 && totalExtrusionCommanded > 20.0;
+#if SUPPORT_CAN_EXPANSION
+	if (!IsLocal())
+	{
+		return hasLiveData;
+	}
+#endif
+	return DataReceived() && calibrationStarted && fabsf(totalMovementMeasured) > 1.0 && totalExtrusionCommanded > 20.0;
 }
 
 float PulsedFilamentMonitor::MeasuredSensitivity() const noexcept
@@ -397,16 +399,33 @@ void PulsedFilamentMonitor::GetLiveData(FilamentMonitorDataV2& data) const noexc
 {
 	data.ClearReservedFields();
 	data.position = sensorValue & 0x0FFF;
-	data.hasLiveData = false;
+	data.hasLiveData = HaveCalibrationData();
+	if (data.hasLiveData)
+	{
+		data.calibrationLength = (uint32_t)lrintf(totalExtrusionCommanded);
+		data.avgPercentage = ConvertToPercent(totalMovementMeasured * mmPerPulse/totalExtrusionCommanded);
+		data.minPercentage = ConvertToPercent(minMovementRatio);
+		data.maxPercentage = ConvertToPercent(maxMovementRatio);
+		data.lastPercentage = 0;								// we don't keep the ratio of the last measurement
+	}
 }
 
 #endif
 
 #if SUPPORT_CAN_EXPANSION
 
+// Update the live data of a remote monitor. The measured calibration data isn't sent over CAN, so reconstruct it from the percentages and the configured sensitivity
 void PulsedFilamentMonitor::UpdateLiveData(const FilamentMonitorDataV2& data) noexcept
 {
 	sensorValue = data.position;
+	hasLiveData = data.hasLiveData && data.avgPercentage > 0;			// we divide by the average when reconstructing the measured sensitivity
+	if (hasLiveData)
+	{
+		totalExtrusionCommanded = (float)data.calibrationLength;
+		totalMovementMeasured = totalExtrusionCommanded * (float)data.avgPercentage/(100 * mmPerPulse);
+		minMovementRatio = (float)data.minPercentage * 0.01;
+		maxMovementRatio = (float)data.maxPercentage * 0.01;
+	}
 }
 
 #endif
