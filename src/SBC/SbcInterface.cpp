@@ -1133,6 +1133,22 @@ void SbcInterface::ExchangeData() noexcept
 			break;
 		}
 
+		// Result of a directory listing request
+		case SbcRequest::FileListResult:
+		{
+			bool endOfList;
+			const size_t bytesRead = transfer.ReadFileList(fileReadBuffer, fileBufferLength, endOfList);
+			if (fileOperation == FileOperation::getFileList)
+			{
+				fileSuccess = true;
+				fileBufferLength = bytesRead;
+				fileListEndOfList = endOfList;
+				fileOperation = FileOperation::none;
+				fileSemaphore.Give();
+			}
+			break;
+		}
+
 		// Result of a file write request
 		case SbcRequest::FileWriteResult:
 		{
@@ -1314,6 +1330,10 @@ void SbcInterface::ExchangeData() noexcept
 			break;
 		case FileOperation::secureDeleteFile:
 			fileOperationPending = !transfer.WriteSecureDeleteFile(filePath);
+			break;
+
+		case FileOperation::getFileList:
+			fileOperationPending = !transfer.WriteGetFileList(filePath, fileOffset, fileBufferLength);
 			break;
 
 		case FileOperation::openRead:
@@ -1938,6 +1958,36 @@ bool SbcInterface::SecureDeleteFile(const char *filename) noexcept
 
 	// Return the result
 	return fileSuccess;
+}
+
+// Read part of a directory listing into the given buffer, returning the number of bytes read.
+// endOfList is set when the returned data includes the final entry of the directory
+size_t SbcInterface::GetFileList(const char *directory, uint32_t startIndex, char *buffer, size_t bufferLength, bool& endOfList) noexcept
+{
+	// Don't do anything if the SBC is not connected
+	if (!IsConnected())
+	{
+		endOfList = true;
+		return 0;
+	}
+
+	// Set up the request content
+	MutexLocker locker(fileMutex);
+
+	filePath = directory;
+	fileOffset = startIndex;
+	fileReadBuffer = buffer;
+	fileBufferLength = bufferLength;
+	if (!DoFileOperation(FileOperation::getFileList))
+	{
+		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to list %s\n", directory);
+		endOfList = true;
+		return 0;
+	}
+
+	// Return the result
+	endOfList = fileListEndOfList;
+	return fileSuccess ? fileBufferLength : 0;
 }
 
 FileHandle SbcInterface::OpenFile(const char *filename, OpenMode mode, FilePosition& fileLength, uint32_t preAllocSize) noexcept

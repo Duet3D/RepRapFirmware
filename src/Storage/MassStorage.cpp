@@ -160,8 +160,11 @@ static DIR findDir;
 
 #endif	// HAS_MASS_STORAGE
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 static Mutex dirMutex;
+#endif
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 static FileInfoParser infoParser;
 #endif
 
@@ -371,7 +374,7 @@ void MassStorage::Init() noexcept
 {
 	fsMutex.Create("FileSystem");
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	dirMutex.Create("DirSearch");
 #endif
 
@@ -914,7 +917,60 @@ bool MassStorage::SecureDelete(const StringRef& filePath, ErrorMessageMode error
 
 #endif
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
+
+#if HAS_SBC_INTERFACE
+
+// In SBC mode directory listings are fetched from DSF in chunks, because sending one request per entry would mean
+// one SPI round trip per entry. Only one search can be active at a time, which dirMutex already guarantees
+constexpr size_t SbcFileListBufferSize = 1024;
+
+alignas(4) static char sbcListBuffer[SbcFileListBufferSize];
+static String<MaxFilenameLength> sbcListDirectory;
+static size_t sbcListBytes, sbcListPos;
+static uint32_t sbcListNextIndex;
+static bool sbcListEnd;
+
+// Return the next entry of the listing being read, fetching another chunk if the current one is exhausted. Call with dirMutex owned
+static bool GetNextSbcListEntry(FileInfo& file_info) noexcept
+{
+	if (sbcListPos == sbcListBytes)
+	{
+		if (sbcListEnd)
+		{
+			return false;
+		}
+		sbcListBytes = reprap.GetSbcInterface().GetFileList(sbcListDirectory.c_str(), sbcListNextIndex, sbcListBuffer, SbcFileListBufferSize, sbcListEnd);
+		sbcListPos = 0;
+		if (sbcListBytes == 0)
+		{
+			return false;
+		}
+	}
+
+	// Give up if the remaining data is too short to hold another entry, which means DSF sent us something we don't understand
+	const size_t nameOffset = sbcListPos + sizeof(FileListEntry);
+	if (nameOffset > sbcListBytes)
+	{
+		return false;
+	}
+
+	const FileListEntry *const entry = reinterpret_cast<const FileListEntry*>(sbcListBuffer + sbcListPos);
+	if (nameOffset + entry->nameLength > sbcListBytes)
+	{
+		return false;
+	}
+
+	file_info.isDirectory = entry->isDirectory;
+	file_info.size = entry->size;
+	file_info.lastModified = (time_t)entry->lastModified;
+	file_info.fileName.copy(sbcListBuffer + nameOffset, entry->nameLength);
+	sbcListPos = nameOffset + ((entry->nameLength + 3) & ~3);
+	sbcListNextIndex++;
+	return true;
+}
+
+#endif
 
 // Open a directory to read a file list. Returns true if it contains any files, false otherwise.
 // If this returns true then the file system mutex is owned. The caller must subsequently release the mutex either
@@ -934,6 +990,23 @@ bool MassStorage::FindFirst(const char *_ecv_array directory, FileInfo &file_inf
 	{
 		return false;
 	}
+
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		sbcListDirectory.copy(loc.c_str());
+		sbcListNextIndex = 0;
+		sbcListBytes = sbcListPos = 0;
+		sbcListEnd = false;
+		if (GetNextSbcListEntry(file_info))
+		{
+			return true;
+		}
+
+		dirMutex.Release();
+		return false;
+	}
+#endif
 
 #if HAS_MASS_STORAGE
 	if (f_opendir(&findDir, loc.c_str()) == FR_OK)
@@ -974,6 +1047,19 @@ bool MassStorage::FindNext(FileInfo &file_info) noexcept
 		return false;		// error, we don't hold the mutex
 	}
 
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		if (GetNextSbcListEntry(file_info))
+		{
+			return true;
+		}
+
+		dirMutex.Release();
+		return false;
+	}
+#endif
+
 #if HAS_MASS_STORAGE
 	FILINFO entry;
 
@@ -993,7 +1079,6 @@ bool MassStorage::FindNext(FileInfo &file_info) noexcept
 		return true;
 	}
 #endif
-	// TODO implement SBC interface for this
 
 	dirMutex.Release();
 	return false;

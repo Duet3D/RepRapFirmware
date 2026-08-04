@@ -10,7 +10,7 @@
 
 #include "MenuItem.h"
 
-#if SUPPORT_DIRECT_LCD && HAS_MASS_STORAGE
+#if SUPPORT_DIRECT_LCD && (HAS_MASS_STORAGE || HAS_SBC_INTERFACE)
 
 class FilesMenuItem final : public MenuItem
 {

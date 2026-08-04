@@ -113,14 +113,17 @@ namespace MassStorage
 	void InvalidateAllFiles() noexcept;
 #endif
 
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
+	bool FindFirst(const char *_ecv_array directory, FileInfo &file_info) noexcept;
+	bool FindNext(FileInfo &file_info) noexcept;
+	void AbandonFindNext() noexcept;
+#endif
+
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	bool DirectoryExists(const StringRef& path) noexcept;									// Warning: if 'path' has a trailing '/' or '\\' character, it will be removed!
 	bool DirectoryExists(const char *_ecv_array path) noexcept;
 	unsigned int GetNumFreeFiles() noexcept;
 	bool IsDriveMounted(size_t drive) noexcept;
-	bool FindFirst(const char *_ecv_array directory, FileInfo &file_info) noexcept;
-	bool FindNext(FileInfo &file_info) noexcept;
-	void AbandonFindNext() noexcept;
 	GCodeResult GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& info, bool quitEarly, GlobalVariables *_ecv_null customVars) noexcept;
 	GCodeResult Mount(size_t card, const StringRef& reply, bool reportSuccess) noexcept;
 	GCodeResult Unmount(size_t card, const StringRef& reply) noexcept;
