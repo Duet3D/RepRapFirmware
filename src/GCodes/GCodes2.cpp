@@ -2006,17 +2006,28 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						uint32_t toolNumbers[MaxTools];
 						size_t toolCount = MaxTools;
 						gb.GetUnsignedArray(toolNumbers, toolCount, false);
+
 						if (toolCount == 0)
 						{
-							gb.ThrowGCodeException("expected one or more tool numbers");
-						}
-
-						for (size_t i = 0; i < toolCount; i++)
-						{
-							ReadLockedPointer<Tool> tool = Tool::GetLockedTool((int)toolNumbers[i]);
-							if (!ToolHeatersAtSetTemperatures(tool.Ptr(), true, tolerance, gb.IsFileChannel()))
+							// If no tool numbers are given, wait for all tools
+							ReadLocker lock(Tool::toolListLock);
+							for (const Tool *_ecv_null tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
 							{
-								return false;
+								if (!ToolHeatersAtSetTemperatures(tool, true, tolerance, gb.IsFileChannel()))
+								{
+									return false;
+								}
+							}
+						}
+						else
+						{
+							for (size_t i = 0; i < toolCount; i++)
+							{
+								ReadLockedPointer<Tool> tool = Tool::GetLockedTool((int)toolNumbers[i]);
+								if (!ToolHeatersAtSetTemperatures(tool.Ptr(), true, tolerance, gb.IsFileChannel()))
+								{
+									return false;
+								}
 							}
 						}
 						seen = true;
