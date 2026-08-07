@@ -32,9 +32,7 @@ constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. RotatingMagnetFilamentMonitor members
-#ifdef DUET3_ATE
-	{ "agc",				OBJECT_MODEL_FUNC((int32_t)self->agc),																	ObjectModelEntryFlags::live },
-#endif
+	{ "agc",				OBJECT_MODEL_FUNC_IF(self->haveAgc, (int32_t)self->agc),												ObjectModelEntryFlags::live },
 	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->HaveCalibrationData(), self, 1), 											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 #ifdef DUET3_ATE
@@ -61,7 +59,7 @@ constexpr uint8_t RotatingMagnetFilamentMonitor::objectModelTableDescriptor[] =
 #ifdef DUET3_ATE
 	4,
 #else
-	2,
+	3,
 #endif
 	4,
 	5
@@ -89,6 +87,7 @@ void RotatingMagnetFilamentMonitor::Init() noexcept
 	version = 1;
 	magnitude = 0;
 	agc = 0;
+	haveAgc = false;
 	backwards = false;
 	sensorError = false;
 	InitReceiveBuffer();
@@ -326,6 +325,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 
 					case TypeMagnetV3InfoTypeAgc:
 						agc = val & 0x00FF;
+						haveAgc = true;
 						break;
 
 					default:
@@ -683,11 +683,30 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 void RotatingMagnetFilamentMonitor::UpdateLiveData(const FilamentMonitorDataV2& data) noexcept
 {
 	Duet3DFilamentMonitor::UpdateLiveData(data);
+	if (data.extraDataValid)
+	{
+		agc = data.extraData;
+		haveAgc = true;
+	}
 	if (hasLiveData)
 	{
 		totalMovementMeasured = totalExtrusionCommanded * (float)avgPercentage/(100 * mmPerRev);
 		minMovementRatio = (float)minPercentage/(100 * mmPerRev);
 		maxMovementRatio = (float)maxPercentage/(100 * mmPerRev);
+	}
+}
+
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+
+void RotatingMagnetFilamentMonitor::GetLiveData(FilamentMonitorDataV2& data) const noexcept
+{
+	Duet3DFilamentMonitor::GetLiveData(data);
+	if (haveAgc)
+	{
+		data.extraDataValid = 1;
+		data.extraData = agc;
 	}
 }
 

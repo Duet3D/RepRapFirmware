@@ -28,6 +28,9 @@ protected:
 #if SUPPORT_CAN_EXPANSION
 	void UpdateLiveData(const FilamentMonitorDataV2& data) noexcept override;
 #endif
+#if SUPPORT_REMOTE_COMMANDS
+	void GetLiveData(FilamentMonitorDataV2& data) const noexcept override;
+#endif
 
 	void Diagnostics(const StringRef& reply) noexcept override;
 	const char *_ecv_array GetTypeText() const noexcept override { return "laser"; }
@@ -109,6 +112,7 @@ private:
 	uint8_t imageQuality;									// image quality returned by version 2 prototype sensor
 	uint8_t shutter;										// shutter value returned by sensor
 	uint8_t brightness;										// brightness returned by sensor
+	bool haveShutter;										// true if we received a shutter value, locally or over CAN
 	uint8_t lastErrorCode;									// the last error code received
 	bool sensorError;										// true if received an error report (cleared by a position report)
 

@@ -86,6 +86,7 @@ void LaserFilamentMonitor::Init() noexcept
 	parityErrorCount = framingErrorCount = overrunErrorCount = polarityErrorCount = overdueCount = 0;
 	lastMeasurementTime = 0;
 	imageQuality = shutter = brightness = lastErrorCode = 0;
+	haveShutter = false;
 	version = 1;
 	backwards = false;
 	sensorError = false;
@@ -272,6 +273,7 @@ void LaserFilamentMonitor::HandleIncomingData() noexcept
 				case TypeLaserMessageTypeQuality:
 					brightness = val & 0x00FF;
 					shutter = (val >> 8) & 0x1F;
+					haveShutter = true;
 					break;
 
 				case TypeLaserMessageTypeInfo:
@@ -291,6 +293,7 @@ void LaserFilamentMonitor::HandleIncomingData() noexcept
 
 					case TypeLaserInfoTypeShutter:
 						shutter = val & 0x00FF;
+						haveShutter = true;
 						break;
 					}
 					break;
@@ -628,11 +631,30 @@ GCodeResult LaserFilamentMonitor::Configure(const CanMessageGenericParser& parse
 void LaserFilamentMonitor::UpdateLiveData(const FilamentMonitorDataV2& data) noexcept
 {
 	Duet3DFilamentMonitor::UpdateLiveData(data);
+	if (data.extraDataValid)
+	{
+		shutter = data.extraData;
+		haveShutter = true;
+	}
 	if (hasLiveData)
 	{
 		totalMovementMeasured = totalExtrusionCommanded * (float)avgPercentage * 0.01;
 		minMovementRatio = (float)minPercentage * 0.01;
 		maxMovementRatio = (float)maxPercentage * 0.01;
+	}
+}
+
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+
+void LaserFilamentMonitor::GetLiveData(FilamentMonitorDataV2& data) const noexcept
+{
+	Duet3DFilamentMonitor::GetLiveData(data);
+	if (haveShutter)
+	{
+		data.extraDataValid = 1;
+		data.extraData = shutter;
 	}
 }
 

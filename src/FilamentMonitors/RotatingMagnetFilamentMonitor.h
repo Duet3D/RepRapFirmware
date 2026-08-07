@@ -31,6 +31,9 @@ protected:
 #if SUPPORT_CAN_EXPANSION
 	void UpdateLiveData(const FilamentMonitorDataV2& data) noexcept override;
 #endif
+#if SUPPORT_REMOTE_COMMANDS
+	void GetLiveData(FilamentMonitorDataV2& data) const noexcept override;
+#endif
 
 private:
 	static constexpr float DefaultMmPerRev = 25.1;
@@ -97,6 +100,7 @@ private:
 	uint8_t lastErrorCode;									// the last error code received
 	uint8_t magnitude;										// the last magnitude received (sensor firmware V3)
 	uint8_t agc;											// the last agc received (sensor firmware V3)
+	bool haveAgc;											// true if we received an agc value, locally or over CAN
 	bool sensorError;										// true if received an error report (cleared by a position report)
 
 	bool wasPrintingAtStartBit;
