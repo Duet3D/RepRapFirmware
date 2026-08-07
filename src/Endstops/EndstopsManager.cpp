@@ -404,37 +404,13 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 		}
 		activeEndstops = nullptr;
 
-		uint32_t gpinNumber = NoGpinPort;
-		try
+		const int32_t gpinNumber = gb.GetLimitedIValue('P', -1, MaxGpInPorts - 1);		// P-1 reverts to stall detection
+		if (gpinNumber >= 0 && reprap.GetPlatform().GetGpInPort((size_t)gpinNumber).IsUnused())
 		{
-			gpinNumber = gb.GetLimitedUIValue('P', MaxGpInPorts);
-		}
-		catch (GCodeException&)
-		{
-			// P"nil" reverts to stall detection
-			bool isNil = false;
-			try
-			{
-				String<StringLength20> pinName;
-				bool seen = false;
-				isNil = gb.TryGetQuotedString('P', pinName.GetRef(), seen) && StringEqualsIgnoreCase(pinName.c_str(), "nil");
-			}
-			catch (GCodeException&)
-			{
-				// not a string either, so fall through to rethrow the original error
-			}
-			if (!isNil)
-			{
-				throw;
-			}
-		}
-
-		if (gpinNumber != NoGpinPort && reprap.GetPlatform().GetGpInPort(gpinNumber).IsUnused())
-		{
-			reply.printf("Input pin %" PRIu32 " is not configured", gpinNumber);
+			reply.printf("Input pin %" PRIi32 " is not configured", gpinNumber);
 			return GCodeResult::error;
 		}
-		extruderGpinNumbers[extruder] = (uint8_t)gpinNumber;
+		extruderGpinNumbers[extruder] = (gpinNumber < 0) ? NoGpinPort : (uint8_t)gpinNumber;
 		return GCodeResult::ok;
 	}
 

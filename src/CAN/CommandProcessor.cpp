@@ -187,6 +187,7 @@ static void HandleInputStateChangedV1(const CanMessageInputChangedV1& msg, CanAd
 
 		case RemoteInputHandle::typeGpIn:
 			p.HandleRemoteGpInChange(src, handle.parts.major, handle.parts.minor, state);
+			endstopStatesChanged = true;					// the port may be bound to an extruder endstop, see the E parameter of M574
 			break;
 
 		case RemoteInputHandle::typeStallEndstop:
@@ -228,6 +229,7 @@ static void HandleInputStateChangedV2(const CanMessageInputChangedV2& msg, CanAd
 
 		case RemoteInputHandle::typeGpIn:
 			p.HandleRemoteGpInChange(src, handle.parts.major, handle.parts.minor, state);
+			endstopStatesChanged = true;					// the port may be bound to an extruder endstop, see the E parameter of M574
 			break;
 
 		case RemoteInputHandle::typeStallEndstop:

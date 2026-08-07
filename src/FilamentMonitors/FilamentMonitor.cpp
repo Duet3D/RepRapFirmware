@@ -362,6 +362,9 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 	Bitmap<uint32_t> driversReported;
 	bool forceSend = false, haveLiveData = false;
 #endif
+#if SUPPORT_CAN_EXPANSION
+	bool inputStateChanged = false;
+#endif
 
 	{
 		ReadLocker lock(filamentMonitorsLock);
@@ -455,7 +458,14 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 #endif
 				if (drv < MaxExtruders)
 				{
-					liveInputStates[drv] = (fs.IsFilamentPresent() ? LiveInputPresent : 0) | (fs.IsMotionDetected() ? LiveInputMotion : 0);
+					const uint8_t newState = (fs.IsFilamentPresent() ? LiveInputPresent : 0) | (fs.IsMotionDetected() ? LiveInputMotion : 0);
+					if (newState != liveInputStates[drv])
+					{
+						liveInputStates[drv] = newState;
+#if SUPPORT_CAN_EXPANSION
+						inputStateChanged = true;
+#endif
+					}
 				}
 				if (   fst != fs.lastStatus
 #if SUPPORT_REMOTE_COMMANDS
@@ -474,12 +484,23 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 					}
 				}
 			}
-			else if (drv < MaxExtruders)
+			else if (drv < MaxExtruders && liveInputStates[drv] != 0)
 			{
 				liveInputStates[drv] = 0;
+#if SUPPORT_CAN_EXPANSION
+				inputStateChanged = true;
+#endif
 			}
 		}
 	}
+
+#if SUPPORT_CAN_EXPANSION
+	if (inputStateChanged)
+	{
+		// A G1 H1 E move executed entirely by remote drivers has no local step interrupts to poll the endstops, so trigger a check here
+		reprap.GetMove().OnEndstopOrZProbeStatesChanged();
+	}
+#endif
 
 #if SUPPORT_REMOTE_COMMANDS
 	if (CanInterface::InExpansionMode())
