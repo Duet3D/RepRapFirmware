@@ -72,14 +72,14 @@ void RemoteHeater::Spin() noexcept
 				break;
 
 			default:
-				reprap.GetPlatform().Message(ErrorMessage, "Failed to start heater tuning\n");
+				reprap.GetPlatform().Message(ErrorMessage, "failed to start heater tuning\n");
 				tuningState = TuningState::notTuning;
 				break;
 			}
 		}
 		else if (now - tuningBeginTime >= 20000)						// allow up to 20 seconds for starting temperature to settle
 		{
-			reprap.GetPlatform().Message(GenericMessage, "Auto tune cancelled because starting temperature is not stable\n");
+			reprap.GetPlatform().Message(GenericMessage, "auto tune cancelled because starting temperature is not stable\n");
 			StopTuning();
 		}
 		break;
@@ -98,8 +98,9 @@ void RemoteHeater::Spin() noexcept
 			case GCodeResult::notFinished:
 				break;
 
+			case GCodeResult::error:
 			default:
-				reprap.GetPlatform().Message(ErrorMessage, "Failed calibrate heater\n");
+				reprap.GetPlatform().MessageF(ErrorMessage, "failed to calibrate heater: %s\n", reply.c_str());
 				tuningState = TuningState::notTuning;
 				break;
 			}
@@ -114,7 +115,7 @@ void RemoteHeater::Spin() noexcept
 			const float extraTimeAllowed = (isBedOrChamberHeater) ? 120.0 : 30.0;
 			if (heatingTime > (uint32_t)((GetModel().GetDeadTime() + extraTimeAllowed) * SecondsToMillis) && (lastTemperature - tuningStartTemp.GetMean()) < 3.0)
 			{
-				reprap.GetPlatform().Message(GenericMessage, "Auto tune cancelled because temperature is not increasing\n");
+				reprap.GetPlatform().Message(GenericMessage, "auto tune cancelled because temperature is not increasing\n");
 				StopTuning();
 				break;
 			}
@@ -122,7 +123,7 @@ void RemoteHeater::Spin() noexcept
 			const uint32_t timeoutMinutes = (isBedOrChamberHeater) ? BedOrChamberTuningTargetTemperatureTimeout : ToolHeaterTuningTargetTemperatureTimeout;
 			if (heatingTime >= timeoutMinutes * 60 * (uint32_t)SecondsToMillis)
 			{
-				reprap.GetPlatform().Message(GenericMessage, "Auto tune cancelled because target temperature was not reached\n");
+				reprap.GetPlatform().Message(GenericMessage, "auto tune cancelled because target temperature was not reached\n");
 				StopTuning();
 				break;
 			}
