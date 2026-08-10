@@ -894,7 +894,7 @@ void ExpressionParser::EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2
 	if (v1.GetType() == TypeCode::Float)
 	{
 		v1.fVal = ((isMax) ? max<float> : min<float>)(v1.fVal, v2.fVal);
-		v1.param = max(v2.param, v2.param);
+		v1.param = max(v1.param, v2.param);
 	}
 	else
 	{
