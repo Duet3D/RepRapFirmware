@@ -74,6 +74,8 @@ public:
 	void SetDeployedByUser(bool b) noexcept { isDeployedByUser = b; }
 	void SetLastStoppedHeight(float h) noexcept;
 
+	bool IsLoadCell() const noexcept { return type == ZProbeType::loadCell; }				// load cell probes report a force and need a scale to convert the reading
+
 #if SUPPORT_SCANNING_PROBES
 	// Scanning Z probe support
 	bool IsScanning() const noexcept { return type == ZProbeType::scanningAnalog; }			// this is currently the only type of scanning probe we support
@@ -123,6 +125,7 @@ protected:
 	float tolerance;					// maximum difference between probe heights when doing >1 taps
 	float actualTriggerHeight;			// the actual trigger height of the probe, taking account of the temperature coefficient
 	float lastStopHeight;				// the height at which the last G30 probe move stopped
+	float gramsPerCount;				// load cell scale, zero if the probe is not a force-sensing one. Carries the sign, because the reading may fall under load.
 
 #if SUPPORT_SCANNING_PROBES
 	// Scanning support

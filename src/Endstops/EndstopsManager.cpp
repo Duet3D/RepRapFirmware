@@ -771,11 +771,16 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 				}
 				else
 #endif
-					if (   probeNumber != 0
-						&& (   probeType == (unsigned int)ZProbeType::analog || probeType == (unsigned int)ZProbeType::alternateAnalog
-							|| probeType == (unsigned int)ZProbeType::dumbModulated || probeType == (unsigned int)ZProbeType::digital
-						   )
-					   )
+					if (probeType == (unsigned int)ZProbeType::loadCell)
+				{
+					reply.copy("Z probe type 12 is only supported on expansion boards");
+					return GCodeResult::error;
+				}
+				else if (   probeNumber != 0
+						 && (   probeType == (unsigned int)ZProbeType::analog || probeType == (unsigned int)ZProbeType::alternateAnalog
+							 || probeType == (unsigned int)ZProbeType::dumbModulated || probeType == (unsigned int)ZProbeType::digital
+							)
+						)
 				{
 					reply.copy("Types 1,2,3 and 5 are available for Z probe 0 only");
 					return GCodeResult::error;
@@ -796,6 +801,10 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 			{
 				Move::CreateLaserTask();					// scanning probes use the Laser task to take readings
 			}
+		}
+		else
+		{
+			delete newProbe;							// the destructor releases any ports and remote handles that Create acquired
 		}
 		return rslt;
 	}

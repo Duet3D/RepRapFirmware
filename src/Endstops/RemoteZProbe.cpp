@@ -56,7 +56,7 @@ GCodeResult RemoteZProbe::AppendPinNames(const StringRef& str) noexcept
 // Get the raw reading. Not used with scanning Z probes except for reporting in the object model.
 int32_t RemoteZProbe::GetRawReading() const noexcept
 {
-	return (type == ZProbeType::scanningAnalog || type == ZProbeType::analog) ? lastValue
+	return (type == ZProbeType::scanningAnalog || type == ZProbeType::analog || type == ZProbeType::loadCell) ? lastValue
 			: (lastValue != 0) ? 1000						// if it's not a scanning probe then it must be digital because we don't yet support analog probes on expansion boards
 				: 0;										// for digital probes the reading sent over CAN (stored in lastValue) is 0xFFFFFFFF (in 3.6.x), 0x7FFFFFF (3.7.x), or zero.
 }
@@ -77,7 +77,7 @@ bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 	}
 	else
 	{
-		if (isProbing && (type == ZProbeType::scanningAnalog || type == ZProbeType::analog))
+		if (isProbing && (type == ZProbeType::scanningAnalog || type == ZProbeType::analog || type == ZProbeType::loadCell))
 		{
 			rslt = CanInterface::ChangeHandleThreshold(boardAddress, handle, targetAdcValue, nullptr, reply.GetRef());
 		}
@@ -97,9 +97,9 @@ bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 // Create a remote Z probe
 GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& reply) noexcept
 {
-	if (type != ZProbeType::analog && type != ZProbeType::unfilteredDigital && type != ZProbeType::blTouch && type != ZProbeType::scanningAnalog)
+	if (type != ZProbeType::analog && type != ZProbeType::unfilteredDigital && type != ZProbeType::blTouch && type != ZProbeType::scanningAnalog && type != ZProbeType::loadCell)
 	{
-		reply.copy("only Z probe types 1, 8, 9 and 11 are supported on expansion boards");
+		reply.copy("only Z probe types 1, 8, 9, 11 and 12 are supported on expansion boards");
 		return GCodeResult::error;
 	}
 
@@ -112,7 +112,7 @@ GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& rep
 	RemoteInputHandle h;
 	h.Set(RemoteInputHandle::typeZprobe, number, 0);
 	bool state = false;
-	const uint16_t threshold = (type == ZProbeType::analog || type == ZProbeType::scanningAnalog) ? DefaultZProbeADValue : 0;		// nonzero threshold makes it an analog handle
+	const uint16_t threshold = (type == ZProbeType::analog || type == ZProbeType::scanningAnalog || type == ZProbeType::loadCell) ? DefaultZProbeADValue : 0;		// nonzero threshold makes it an analog handle
 	const GCodeResult rc = CanInterface::CreateHandle(boardAddress, h, pinNames.c_str(), threshold, ActiveProbeReportInterval, &state, reply);
 	if (rc < GCodeResult::error)								// don't set the handle unless it is valid, or we will get an error when this probe is deleted
 	{
@@ -137,9 +137,9 @@ GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, boo
 	{
 		seen = true;
 		const uint32_t newType = gb.GetUIValue();
-		if (newType != (uint32_t)ZProbeType::unfilteredDigital && newType != (uint32_t)ZProbeType::blTouch && newType != (uint32_t)ZProbeType::scanningAnalog && newType != (uint32_t)ZProbeType::analog)
+		if (newType != (uint32_t)ZProbeType::unfilteredDigital && newType != (uint32_t)ZProbeType::blTouch && newType != (uint32_t)ZProbeType::scanningAnalog && newType != (uint32_t)ZProbeType::analog && newType != (uint32_t)ZProbeType::loadCell)
 		{
-			reply.copy("only Z probe types 1, 8, 9 and 11 are supported on expansion boards");
+			reply.copy("only Z probe types 1, 8, 9, 11 and 12 are supported on expansion boards");
 			return GCodeResult::error;
 		}
 
@@ -159,7 +159,7 @@ GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, boo
 GCodeResult RemoteZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) /*override*/ THROWS(GCodeException)
 {
 	GCodeResult rslt = ZProbe::HandleG31(gb, reply);
-	if ((type == ZProbeType::analog || type == ZProbeType::scanningAnalog) && gb.Seen('P') && (rslt == GCodeResult::ok || rslt <= GCodeResult::warning))
+	if ((type == ZProbeType::analog || type == ZProbeType::scanningAnalog || type == ZProbeType::loadCell) && gb.Seen('P') && (rslt == GCodeResult::ok || rslt <= GCodeResult::warning))
 	{
 		const GCodeResult rslt2 = CanInterface::ChangeHandleThreshold(boardAddress, handle, targetAdcValue, nullptr, reply);
 		if (rslt2 > rslt) { rslt = rslt2; }

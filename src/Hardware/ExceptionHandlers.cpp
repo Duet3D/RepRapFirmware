@@ -119,7 +119,7 @@ void HardFault_Handler() noexcept
 
 #if USE_MPU
 
-extern "C" [[noreturn]] void memManageDispatcher(const uint32_t *_ecv_array pulFaultStackAddress) noexcept
+extern "C" [[noreturn]] __attribute__((externally_visible)) void memManageDispatcher(const uint32_t *_ecv_array pulFaultStackAddress) noexcept
 {
 	SoftwareReset(SoftwareResetReason::memFault, pulFaultStackAddress);
 }

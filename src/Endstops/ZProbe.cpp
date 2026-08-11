@@ -86,6 +86,8 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "disablesHeaters",			OBJECT_MODEL_FUNC((bool)self->misc.parts.turnHeatersOff), 									ObjectModelEntryFlags::none },
 	{ "diveHeight",					OBJECT_MODEL_FUNC(self->diveHeights[0], 1), 												ObjectModelEntryFlags::obsolete },
 	{ "diveHeights",				OBJECT_MODEL_FUNC_ARRAY(4), 																ObjectModelEntryFlags::none },
+	{ "force",						OBJECT_MODEL_FUNC_IF(self->IsLoadCell() && self->gramsPerCount != 0.0, (float)self->GetReading() * self->gramsPerCount, 1),	ObjectModelEntryFlags::live },
+	{ "gramsPerCount",				OBJECT_MODEL_FUNC_IF(self->IsLoadCell() && self->gramsPerCount != 0.0, self->gramsPerCount, 5), 							ObjectModelEntryFlags::none },
 #if SUPPORT_SCANNING_PROBES
 	{ "isCalibrated",				OBJECT_MODEL_FUNC_IF(self->IsScanning(), self->isCalibrated), 								ObjectModelEntryFlags::none },
 #endif
@@ -122,7 +124,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 
 constexpr uint8_t ZProbe::objectModelTableDescriptor[] =
 { 	1 + SUPPORT_SCANNING_PROBES,
-	17 + 4 * SUPPORT_SCANNING_PROBES,
+	19 + 4 * SUPPORT_SCANNING_PROBES,
 #if SUPPORT_SCANNING_PROBES
 	4
 #endif
@@ -154,6 +156,7 @@ void ZProbe::SetDefaults() noexcept
 	travelSpeed = ConvertSpeedFromMmPerSec(DefaultZProbeTravelSpeed);
 	recoveryTime = 0.0;
 	tolerance = DefaultZProbeTolerance;
+	gramsPerCount = 0.0;
 	misc.parts.maxTaps = DefaultZProbeTaps;
 	misc.parts.turnHeatersOff = misc.parts.saveToConfigOverride = misc.parts.probingAway = false;
 	type = ZProbeType::none;
@@ -533,6 +536,29 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& see
 		seen = true;
 	}
 
+	if (gb.Seen('V'))										// load cell scale in grams per count
+	{
+		if (!IsLoadCell())
+		{
+			reply.copy("V parameter is only valid for load cell Z probes");
+			return GCodeResult::error;
+		}
+		const float newScale = gb.GetFValue();
+		if (newScale == 0.0)
+		{
+			reply.copy("load cell scale must not be zero");
+			return GCodeResult::error;
+		}
+		gramsPerCount = newScale;
+		seen = true;
+	}
+
+	if (IsLoadCell() && gramsPerCount == 0.0)
+	{
+		reply.copy("load cell Z probes need the V parameter to set the scale in grams per count");
+		return GCodeResult::error;
+	}
+
 	if (seen)
 	{
 		reprap.SensorsUpdated();
@@ -554,6 +580,10 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& see
 					(double)recoveryTime,
 					(misc.parts.turnHeatersOff) ? "suspended" : "normal",
 						misc.parts.maxTaps, (double)tolerance);
+	if (gramsPerCount != 0.0)
+	{
+		reply.catf(", %.4g grams/count", (double)gramsPerCount);
+	}
 	return rslt;
 }
 
