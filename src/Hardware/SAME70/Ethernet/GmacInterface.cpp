@@ -64,11 +64,7 @@ extern "C" {
 
 extern Mutex lwipMutex;
 
-#if defined(LWIP_DEBUG)
-constexpr size_t EthernetTaskStackWords = 1000;
-#else
-constexpr size_t EthernetTaskStackWords = 1200;		// interestingly we need more stack RAM without LWIP_DEBUG
-#endif
+constexpr size_t EthernetTaskStackWords = 1200;
 
 static Task<EthernetTaskStackWords> ethernetTask;
 
