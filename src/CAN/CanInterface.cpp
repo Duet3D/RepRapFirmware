@@ -1515,6 +1515,31 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 	return rslt;
 }
 
+// Tare an analog handle, returning the baseline that the board latched. Only the board knows the raw reading, so it has to come back in the reply
+GCodeResult CanInterface::TareHandle(CanAddress boardAddress, RemoteInputHandle h, int32_t& baseline, const StringRef &reply) noexcept
+{
+	if (!h.IsValid())
+	{
+		reply.copy("Invalid remote handle");
+		return GCodeResult::error;
+	}
+
+	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
+	if (buf == nullptr)
+	{
+		return GCodeResult::noCanBuffer;
+	}
+
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
+	auto msg = buf->SetupRequestMessage<CanMessageTareInputMonitor>(rid, GetCanAddress(), boardAddress);
+	msg->handle = h;
+	return SendRequestAndGetCustomReply(buf, rid, reply, nullptr, CanMessageType::tareInputMonitorReply,
+											[&baseline](const CanMessageBuffer *bufp) noexcept -> void
+												{
+													baseline = bufp->msg.tareInputMonitorReply.baseline;
+												});
+}
+
 // Process M655 (send request to custom expansion board)
 GCodeResult CanInterface::ProcessM655(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
