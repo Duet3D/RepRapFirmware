@@ -19,10 +19,11 @@ class RemoteZProbe final : public ZProbe
 public:
 	DECLARE_FREELIST_NEW_DELETE(RemoteZProbe)
 
-	RemoteZProbe(unsigned int num, CanAddress bn, ZProbeType p_type) noexcept : ZProbe(num, p_type), boardAddress(bn), lastValue(0) { }
+	RemoteZProbe(unsigned int num, CanAddress bn, ZProbeType p_type) noexcept : ZProbe(num, p_type), boardAddress(bn), lastValue(0), currentState(false) { }
 	~RemoteZProbe() noexcept override;
 
 	int32_t GetRawReading() const noexcept override;
+	bool Stopped() const noexcept override;
 	bool SetProbing(bool isProbing) noexcept override;
 	GCodeResult AppendPinNames(const StringRef& str) noexcept override;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) override;
@@ -53,6 +54,7 @@ private:
 	CanAddress boardAddress;
 	RemoteInputHandle handle;
 	int32_t lastValue;							// the most recent value received from a scanning analog Z probe
+	bool currentState;							// the state most recently reported by the board, used instead of a value comparison for load cells
 
 	static constexpr uint32_t ActiveProbeReportInterval = 2;
 	static constexpr uint32_t InactiveProbeReportInterval = 25;

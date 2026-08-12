@@ -63,6 +63,7 @@ public:
 	bool GetTurnHeatersOff() const noexcept { return misc.parts.turnHeatersOff; }
 	bool GetSaveToConfigOverride() const noexcept { return misc.parts.saveToConfigOverride; }
 	int32_t GetTargetAdcValue() const noexcept { return targetAdcValue; }
+	int32_t GetThresholdCounts() const noexcept;
 	unsigned int GetMaxTaps() const noexcept { return misc.parts.maxTaps; }
 	int32_t GetReading() const noexcept;
 	int32_t GetSecondaryValues(int32_t& v1) const noexcept;
@@ -126,6 +127,8 @@ protected:
 	float actualTriggerHeight;			// the actual trigger height of the probe, taking account of the temperature coefficient
 	float lastStopHeight;				// the height at which the last G30 probe move stopped
 	float gramsPerCount;				// load cell scale, zero if the probe is not a force-sensing one. Carries the sign, because the reading may fall under load.
+	float preloadLimits[2];				// safe window for the load cell preload in grams, active when the first value is below the second
+	int32_t tareBaseline;				// the reading that the load cell tare latched, in raw counts
 
 #if SUPPORT_SCANNING_PROBES
 	// Scanning support

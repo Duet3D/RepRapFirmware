@@ -61,6 +61,12 @@ int32_t RemoteZProbe::GetRawReading() const noexcept
 				: 0;										// for digital probes the reading sent over CAN (stored in lastValue) is 0xFFFFFFFF (in 3.6.x), 0x7FFFFFF (3.7.x), or zero.
 }
 
+// For load cell probes the threshold is in grams and the reading in raw counts, so use the state reported by the board instead of comparing them
+bool RemoteZProbe::Stopped() const noexcept
+{
+	return (type == ZProbeType::loadCell) ? currentState : ZProbe::Stopped();
+}
+
 bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 {
 	String<StringLength100> reply;
@@ -77,9 +83,33 @@ bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 	}
 	else
 	{
-		if (isProbing && (type == ZProbeType::scanningAnalog || type == ZProbeType::analog || type == ZProbeType::loadCell))
+		if (isProbing && type == ZProbeType::loadCell)
 		{
-			rslt = CanInterface::ChangeHandleThreshold(boardAddress, handle, targetAdcValue, nullptr, reply.GetRef());
+			rslt = CanInterface::TareHandle(boardAddress, handle, tareBaseline, reply.GetRef());
+			if (rslt == GCodeResult::ok)
+			{
+				// The driver pins the reading to exactly zero when the cell or its reference channel is dead or the signal is at the ADC rail,
+				// and a healthy cell never reads exactly zero through the noise
+				if (tareBaseline == 0)
+				{
+					reply.copy("load cell is not responding or out of range");
+					rslt = GCodeResult::error;
+				}
+				else if (preloadLimits[0] < preloadLimits[1])
+				{
+					const float preload = (float)tareBaseline * gramsPerCount;
+					if (preload < preloadLimits[0] || preload > preloadLimits[1])
+					{
+						reply.printf("load cell preload %.0fg is outside the safe window", (double)preload);
+						rslt = GCodeResult::error;
+					}
+				}
+				reprap.SensorsUpdated();
+			}
+		}
+		if (rslt == GCodeResult::ok && isProbing && (type == ZProbeType::scanningAnalog || type == ZProbeType::analog || type == ZProbeType::loadCell))
+		{
+			rslt = CanInterface::ChangeHandleThreshold(boardAddress, handle, GetThresholdCounts(), &currentState, reply.GetRef());
 		}
 		if (rslt == GCodeResult::ok)
 		{
@@ -125,6 +155,16 @@ GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& rep
 		else
 		{
 			lastValue = (state) ? 1 : 0;						// set the initial state if it's a digital Z probe
+			currentState = state;
+		}
+		if (type == ZProbeType::loadCell)
+		{
+			// Tare now so that the reported force starts from a defined zero; the baseline is latched again before every probing move
+			const GCodeResult rc2 = CanInterface::TareHandle(boardAddress, handle, tareBaseline, reply);
+			if (rc2 != GCodeResult::ok)
+			{
+				return rc2;
+			}
 		}
 	}
 	return rc;
@@ -152,8 +192,14 @@ GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, boo
 		type = (ZProbeType)newType;
 	}
 
-	// No other configuration items affect remote probes differently from others, so just call the base class function
-	return ZProbe::Configure(gb, reply, seen);
+	// All other configuration items are handled by the base class function
+	const GCodeResult rslt = ZProbe::Configure(gb, reply, seen);
+	if (rslt == GCodeResult::ok && type == ZProbeType::loadCell && gb.Seen('V'))
+	{
+		// The scale converts the grams threshold to counts, so a new scale invalidates the count threshold held by the board
+		return CanInterface::ChangeHandleThreshold(boardAddress, handle, GetThresholdCounts(), &currentState, reply);
+	}
+	return rslt;
 }
 
 GCodeResult RemoteZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) /*override*/ THROWS(GCodeException)
@@ -161,7 +207,7 @@ GCodeResult RemoteZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) /*o
 	GCodeResult rslt = ZProbe::HandleG31(gb, reply);
 	if ((type == ZProbeType::analog || type == ZProbeType::scanningAnalog || type == ZProbeType::loadCell) && gb.Seen('P') && (rslt == GCodeResult::ok || rslt <= GCodeResult::warning))
 	{
-		const GCodeResult rslt2 = CanInterface::ChangeHandleThreshold(boardAddress, handle, targetAdcValue, nullptr, reply);
+		const GCodeResult rslt2 = CanInterface::ChangeHandleThreshold(boardAddress, handle, GetThresholdCounts(), &currentState, reply);
 		if (rslt2 > rslt) { rslt = rslt2; }
 	}
 	return rslt;
@@ -246,6 +292,7 @@ void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, 
 {
 	if (src == boardAddress)
 	{
+		currentState = newState;
 		if (newState)
 		{
 			whenTriggered = when;
@@ -264,16 +311,22 @@ void RemoteZProbe::UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint
 {
 	if (src == boardAddress)
 	{
-		bool triggered = (reading > targetAdcValue);
-		if (misc.parts.probingAway) { triggered = !triggered; }
-		if (triggered)
+		if (type != ZProbeType::loadCell)				// the board compares load cell readings itself and reports state changes via HandleRemoteInputChange
 		{
-			whenTriggered = when;
-			haveTriggerTime = true;
-		}
-		else
-		{
-			haveTriggerTime = false;
+			bool triggered = (reading > targetAdcValue);
+			if (misc.parts.probingAway)
+			{
+				triggered = !triggered;
+			}
+			if (triggered)
+			{
+				whenTriggered = when;
+				haveTriggerTime = true;
+			}
+			else
+			{
+				haveTriggerTime = false;
+			}
 		}
 		lastValue = reading;
 	}
