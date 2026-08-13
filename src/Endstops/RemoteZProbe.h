@@ -54,6 +54,8 @@ protected:
 	bool IsRemote() const noexcept override { return true; }
 
 private:
+	GCodeResult DoTare(uint8_t mode, const StringRef& reply) noexcept;
+
 	CanAddress boardAddress;
 	RemoteInputHandle handle;
 	int32_t lastValue;							// the most recent value received from a scanning analog Z probe

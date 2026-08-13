@@ -65,8 +65,14 @@ constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(ARRAY_SIZE(ZProbe::diveHeights)),
 		OBJECT_MODEL_ARRAY_VALUE(self->diveHeights[context.GetLastIndex()], 1)
 	},
+	// 5. Preload window
+	{
+		nullptr,
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(ARRAY_SIZE(ZProbe::preloadLimits)),
+		OBJECT_MODEL_ARRAY_VALUE(self->preloadLimits[context.GetLastIndex()], 1)
+	},
 #if SUPPORT_SCANNING_PROBES
-	// 5. Scanning probe coefficients
+	// 6. Scanning probe coefficients
 	{
 		nullptr,
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(ARRAY_SIZE(ZProbe::scanCoefficients)),
@@ -86,36 +92,40 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "disablesHeaters",			OBJECT_MODEL_FUNC((bool)self->misc.parts.turnHeatersOff), 									ObjectModelEntryFlags::none },
 	{ "diveHeight",					OBJECT_MODEL_FUNC(self->diveHeights[0], 1), 												ObjectModelEntryFlags::obsolete },
 	{ "diveHeights",				OBJECT_MODEL_FUNC_ARRAY(4), 																ObjectModelEntryFlags::none },
-	{ "force",						OBJECT_MODEL_FUNC_IF(self->IsLoadCell() && self->gramsPerCount != 0.0, (float)(self->GetReading() - self->tareBaseline) * self->gramsPerCount, 1),	ObjectModelEntryFlags::live },
-	{ "gramsPerCount",				OBJECT_MODEL_FUNC_IF(self->IsLoadCell() && self->gramsPerCount != 0.0, self->gramsPerCount, 5), 							ObjectModelEntryFlags::none },
 #if SUPPORT_SCANNING_PROBES
 	{ "isCalibrated",				OBJECT_MODEL_FUNC_IF(self->IsScanning(), self->isCalibrated), 								ObjectModelEntryFlags::none },
 #endif
 	{ "lastStopHeight",				OBJECT_MODEL_FUNC(self->lastStopHeight, 3), 												ObjectModelEntryFlags::none },
+	{ "loadCell",					OBJECT_MODEL_FUNC_IF(self->IsLoadCell() && self->gramsPerCount != 0.0, self, 1),			ObjectModelEntryFlags::none },
 	{ "maxProbeCount",				OBJECT_MODEL_FUNC((int32_t)self->misc.parts.maxTaps), 										ObjectModelEntryFlags::none },
 #if SUPPORT_SCANNING_PROBES
 	{ "measuredHeight",				OBJECT_MODEL_FUNC_IF(self->IsScanning() && self->isCalibrated, self->GetLatestHeight()),	ObjectModelEntryFlags::live },
 #endif
 	{ "offsets",					OBJECT_MODEL_FUNC_ARRAY(0), 																ObjectModelEntryFlags::none },
-	{ "preload",					OBJECT_MODEL_FUNC_IF(self->IsLoadCell() && self->gramsPerCount != 0.0, (float)self->tareBaseline * self->gramsPerCount, 1),	ObjectModelEntryFlags::none },
 	{ "recoveryTime",				OBJECT_MODEL_FUNC(self->recoveryTime, 1), 													ObjectModelEntryFlags::none },
 #if SUPPORT_SCANNING_PROBES
-	{ "scanCoefficients",			OBJECT_MODEL_FUNC_ARRAY_IF(self->IsScanning(), 5), 											ObjectModelEntryFlags::none },
+	{ "scanCoefficients",			OBJECT_MODEL_FUNC_ARRAY_IF(self->IsScanning(), 6), 											ObjectModelEntryFlags::none },
 #endif
 	{ "speeds",						OBJECT_MODEL_FUNC_ARRAY(1), 																ObjectModelEntryFlags::none },
 	{ "temperatureCoefficients",	OBJECT_MODEL_FUNC_ARRAY(2), 																ObjectModelEntryFlags::none },
 	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->targetAdcValue), 											ObjectModelEntryFlags::none },
 	{ "tolerance",					OBJECT_MODEL_FUNC(self->tolerance, 3), 														ObjectModelEntryFlags::none },
 #if SUPPORT_SCANNING_PROBES
-	{ "touchMode",					OBJECT_MODEL_FUNC_IF(self->IsScanning(), self, 1),											ObjectModelEntryFlags::none },
+	{ "touchMode",					OBJECT_MODEL_FUNC_IF(self->IsScanning(), self, 2),											ObjectModelEntryFlags::none },
 #endif
 	{ "travelSpeed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->travelSpeed), 1), 					ObjectModelEntryFlags::none },
 	{ "triggerHeight",				OBJECT_MODEL_FUNC(-self->offsets[Z_AXIS], 3), 												ObjectModelEntryFlags::none },
 	{ "type",						OBJECT_MODEL_FUNC((int32_t)self->type), 													ObjectModelEntryFlags::none },
 	{ "value",						OBJECT_MODEL_FUNC_ARRAY(3), 																ObjectModelEntryFlags::live },
 
+	// 1. probe.loadCell members
+	{ "force",						OBJECT_MODEL_FUNC((float)self->GetReading() * self->gramsPerCount, 1),						ObjectModelEntryFlags::live },
+	{ "gramsPerCount",				OBJECT_MODEL_FUNC(self->gramsPerCount, 5), 													ObjectModelEntryFlags::none },
+	{ "preload",					OBJECT_MODEL_FUNC((float)self->tareBaseline * self->gramsPerCount, 1),						ObjectModelEntryFlags::none },
+	{ "preloadWindow",				OBJECT_MODEL_FUNC_ARRAY(5), 																ObjectModelEntryFlags::none },
+
 #if SUPPORT_SCANNING_PROBES
-	// 1. probe.touchMode members
+	// 2. probe.touchMode members
 	{ "active",						OBJECT_MODEL_FUNC(self->useTouchMode), 														ObjectModelEntryFlags::none },
 	{ "speed",						OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->touchModeProbeSpeed), 1),				ObjectModelEntryFlags::none },
 	{ "threshold",					OBJECT_MODEL_FUNC(self->touchModeThreshold, 2), 											ObjectModelEntryFlags::none },
@@ -124,8 +134,9 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 };
 
 constexpr uint8_t ZProbe::objectModelTableDescriptor[] =
-{ 	1 + SUPPORT_SCANNING_PROBES,
-	20 + 4 * SUPPORT_SCANNING_PROBES,
+{ 	2 + SUPPORT_SCANNING_PROBES,
+	18 + 4 * SUPPORT_SCANNING_PROBES,
+	4,
 #if SUPPORT_SCANNING_PROBES
 	4
 #endif
@@ -491,13 +502,22 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	else
 	{
 		const int v0 = GetReading();
-		reply.printf("Z probe %u: current reading %d", number, v0);
-		int32_t v1;
-		if (GetSecondaryValues(v1) == 1)
+		if (IsLoadCell() && gramsPerCount != 0.0)
 		{
-			reply.catf(" (%" PRIi32 ")", v1);
+			reply.printf("Z probe %u: current tared reading %d (baseline %" PRIi32 "), force %.1fg, threshold %" PRIi32 "g",
+							number, v0, tareBaseline, (double)((float)v0 * gramsPerCount), targetAdcValue);
 		}
-		reply.catf(", threshold %" PRIi32 ", trigger height %.3f", targetAdcValue, (double)-offsets[Z_AXIS]);
+		else
+		{
+			reply.printf("Z probe %u: current reading %d", number, v0);
+			int32_t v1;
+			if (GetSecondaryValues(v1) == 1)
+			{
+				reply.catf(" (%" PRIi32 ")", v1);
+			}
+			reply.catf(", threshold %" PRIi32, targetAdcValue);
+		}
+		reply.catf(", trigger height %.3f", (double)-offsets[Z_AXIS]);
 		if (temperatureCoefficients[0] != 0.0 || temperatureCoefficients[1] != 0.0)
 		{
 			reply.catf(" at %.1f" DEGREE_SYMBOL "C, temperature coefficients [%.1f/" DEGREE_SYMBOL "C, %.1f/" DEGREE_SYMBOL "C^2]",

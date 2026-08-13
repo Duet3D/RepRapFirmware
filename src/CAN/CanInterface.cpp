@@ -1515,8 +1515,9 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 	return rslt;
 }
 
-// Tare an analog handle, returning the baseline that the board latched. Only the board knows the raw reading, so it has to come back in the reply
-GCodeResult CanInterface::TareHandle(CanAddress boardAddress, RemoteInputHandle h, int32_t& baseline, const StringRef &reply) noexcept
+// Tare an analog handle and/or change its baseline tracking, returning the baseline that the board latched or holds.
+// Only the board knows the raw reading, so it has to come back in the reply
+GCodeResult CanInterface::TareHandle(CanAddress boardAddress, RemoteInputHandle h, uint8_t mode, int32_t& baseline, const StringRef &reply) noexcept
 {
 	if (!h.IsValid())
 	{
@@ -1533,6 +1534,7 @@ GCodeResult CanInterface::TareHandle(CanAddress boardAddress, RemoteInputHandle 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
 	auto msg = buf->SetupRequestMessage<CanMessageTareInputMonitor>(rid, GetCanAddress(), boardAddress);
 	msg->handle = h;
+	msg->mode = mode;
 	return SendRequestAndGetCustomReply(buf, rid, reply, nullptr, CanMessageType::tareInputMonitorReply,
 											[&baseline](const CanMessageBuffer *bufp) noexcept -> void
 												{

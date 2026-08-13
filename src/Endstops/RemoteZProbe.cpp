@@ -61,16 +61,16 @@ int32_t RemoteZProbe::GetRawReading() const noexcept
 				: 0;										// for digital probes the reading sent over CAN (stored in lastValue) is 0xFFFFFFFF (in 3.6.x), 0x7FFFFFF (3.7.x), or zero.
 }
 
-// For load cell probes the threshold is in grams and the reading in raw counts, so use the state reported by the board instead of comparing them
+// For load cell probes the threshold is in grams and the reading in counts, so use the state reported by the board instead of comparing them
 bool RemoteZProbe::Stopped() const noexcept
 {
 	return (type == ZProbeType::loadCell) ? currentState : ZProbe::Stopped();
 }
 
-// Latch the current load cell reading as the new baseline, so the reported force is zeroed and the trigger comparison starts from it
-GCodeResult RemoteZProbe::Tare(const StringRef& reply) noexcept
+// Send a tare request in the given mode and check that the cell is alive
+GCodeResult RemoteZProbe::DoTare(uint8_t mode, const StringRef& reply) noexcept
 {
-	const GCodeResult rslt = CanInterface::TareHandle(boardAddress, handle, tareBaseline, reply);
+	const GCodeResult rslt = CanInterface::TareHandle(boardAddress, handle, mode, tareBaseline, reply);
 	if (rslt == GCodeResult::ok)
 	{
 		// The driver pins the reading to exactly zero when the cell or its reference channel is dead or the signal is at the ADC rail,
@@ -83,6 +83,12 @@ GCodeResult RemoteZProbe::Tare(const StringRef& reply) noexcept
 		reprap.SensorsUpdated();
 	}
 	return rslt;
+}
+
+// Latch the current load cell reading as the new baseline, so the reported force is zeroed and the trigger comparison starts from it
+GCodeResult RemoteZProbe::Tare(const StringRef& reply) noexcept
+{
+	return DoTare(CanMessageTareInputMonitor::modeTareAndTrack, reply);
 }
 
 bool RemoteZProbe::SetProbing(bool isProbing) noexcept
@@ -101,17 +107,26 @@ bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 	}
 	else
 	{
-		if (isProbing && type == ZProbeType::loadCell)
+		if (type == ZProbeType::loadCell)
 		{
-			rslt = Tare(reply.GetRef());
-			if (rslt == GCodeResult::ok && preloadLimits[0] < preloadLimits[1])
+			if (isProbing)
 			{
-				const float preload = (float)tareBaseline * gramsPerCount;
-				if (preload < preloadLimits[0] || preload > preloadLimits[1])
+				// Latch the baseline and stop it tracking so that the trigger comparison stays fixed for the whole probing move
+				rslt = DoTare(CanMessageTareInputMonitor::modeTareAndHold, reply.GetRef());
+				if (rslt == GCodeResult::ok && preloadLimits[0] < preloadLimits[1])
 				{
-					reply.printf("load cell preload %.0fg is outside the safe window", (double)preload);
-					rslt = GCodeResult::error;
+					const float preload = (float)tareBaseline * gramsPerCount;
+					if (preload < preloadLimits[0] || preload > preloadLimits[1])
+					{
+						reply.printf("load cell preload %.0fg is outside the safe window", (double)preload);
+						rslt = GCodeResult::error;
+					}
 				}
+			}
+			else
+			{
+				// The nozzle may still be on the bed at this point, so resume tracking from the held baseline instead of latching a loaded one
+				rslt = CanInterface::TareHandle(boardAddress, handle, CanMessageTareInputMonitor::modeTrackOnly, tareBaseline, reply.GetRef());
 			}
 		}
 		if (rslt == GCodeResult::ok && isProbing && (type == ZProbeType::scanningAnalog || type == ZProbeType::analog || type == ZProbeType::loadCell))
@@ -166,8 +181,8 @@ GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& rep
 		}
 		if (type == ZProbeType::loadCell)
 		{
-			// Tare now so that the reported force starts from a defined zero; the baseline is latched again before every probing move
-			const GCodeResult rc2 = CanInterface::TareHandle(boardAddress, handle, tareBaseline, reply);
+			// Tare now so that the reported force starts from a defined zero, and let the baseline track drift until a probing move latches it
+			const GCodeResult rc2 = CanInterface::TareHandle(boardAddress, handle, CanMessageTareInputMonitor::modeTareAndTrack, tareBaseline, reply);
 			if (rc2 != GCodeResult::ok)
 			{
 				return rc2;
