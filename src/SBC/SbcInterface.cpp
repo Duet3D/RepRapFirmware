@@ -208,6 +208,15 @@ void SbcInterface::ExchangeData() noexcept
 			}
 
 			const CodeHeader *code = reinterpret_cast<const CodeHeader*>(transfer.ReadData(packet->length));
+
+			// Refuse codes with invalid lengths, else an over-long code would overrun GCodeBuffer::buffer in PutBinary later.
+			// This check must come after ReadData so the payload is consumed and the next packet is read from the correct offset
+			if (packet->length < sizeof(CodeHeader) || packet->length > MaxCodeBufferSize || (packet->length % sizeof(uint32_t)) != 0)
+			{
+				packetAcknowledged = codeBufferAvailable = false;
+				break;
+			}
+
 			const GCodeChannel channel(code->channel);
 			if (channel.IsValid())
 			{
@@ -1931,7 +1940,15 @@ void SbcInterface::DefragmentBufferedCodes() noexcept
 		else
 		{
 			// Ring buffer overlapped (rxPointer..txEnd, 0..txPointer)
-			if (!DefragmentCodeBlock(rxPointer, txEnd) &&
+			const bool tailDefragmented = DefragmentCodeBlock(rxPointer, txEnd);
+			if (txEnd == rxPointer)
+			{
+				// The tail block contained no pending codes so DefragmentCodeBlock left txEnd == rxPointer, which is not a valid encoding.
+				// Return to sequential mode, else the buffer walks in FillBuffer and InvalidateBufferedCodes would run off the end of the buffer
+				rxPointer = txEnd = 0;
+				sendBufferUpdate = true;
+			}
+			else if (!tailDefragmented &&
 				!DefragmentCodeBlock(0, txPointer) &&
 				SpiCodeBufferSize - (size_t)txEnd > MaxCodeBufferSize)
 			{
@@ -1969,7 +1986,7 @@ bool SbcInterface::DefragmentCodeBlock(uint16_t start, volatile uint16_t &end) n
 				else
 				{
 					// Gap size is too small. Move the remaining buffer but only once per run
-					memcpyu32(reinterpret_cast<uint32_t*>(gapStart), reinterpret_cast<uint32_t *>(bufHeader), (codeBuffer + end - gapStart) / sizeof(uint32_t));
+					memcpyu32(reinterpret_cast<uint32_t*>(gapStart), reinterpret_cast<uint32_t *>(bufHeader), (codeBuffer + end - reinterpret_cast<const char *>(bufHeader)) / sizeof(uint32_t));
 					readPointer = (uint16_t)(gapStart - codeBuffer + bufSize);
 					gapStart = nullptr;
 					end -= gapSize;
