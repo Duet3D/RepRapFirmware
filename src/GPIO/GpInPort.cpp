@@ -10,6 +10,7 @@
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <FilamentMonitors/FilamentMonitor.h>
+#include <Endstops/ZProbe.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/CanInterface.h>
@@ -36,12 +37,19 @@ constexpr uint8_t GpInputPort::objectModelTableDescriptor[] = { 1, 1 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GpInputPort)
 
+// This may be called from the step ISR via GpInPortEndstop, so it must not take the Z probes lock
 bool GpInputPort::GetState() const noexcept
 {
+	if (source == InputSource::probe)
+	{
+		const ZProbe *_ecv_from _ecv_null const zp = reprap.GetPlatform().GetEndstops().GetZProbeFromISR(sourceNumber);
+		const bool b = zp != nullptr && zp->Stopped();
+		return sourceInvert ? !b : b;
+	}
 	if (source != InputSource::physicalPort)
 	{
-		const bool b = FilamentMonitor::GetVirtualInputState(fmExtruder, source == InputSource::fmMotion);
-		return fmInvert ? !b : b;
+		const bool b = FilamentMonitor::GetVirtualInputState(sourceNumber, source == InputSource::fmMotion);
+		return sourceInvert ? !b : b;
 	}
 
 	// Temporary implementation until we use interrupts to track input pin state changes
@@ -109,8 +117,25 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 				return GCodeResult::error;
 			}
 			source = isMotion ? InputSource::fmMotion : InputSource::fmSwitch;
-			fmExtruder = (uint8_t)extruder;
-			fmInvert = invert;
+			sourceNumber = (uint8_t)extruder;
+			sourceInvert = invert;
+			reprap.SensorsUpdated();
+			return GCodeResult::ok;
+		}
+
+		// Check for a virtual port fed by the triggered state of a Z probe, e.g. "probe0"
+		if (StringStartsWith(virtualPinName, "probe") && isDigit(virtualPinName[5]))
+		{
+			const char *_ecv_array suffix;
+			const uint32_t probeNumber = StrToU32(virtualPinName + 5, &suffix);
+			if (probeNumber >= MaxZProbes || *suffix != 0)
+			{
+				reply.copy("Invalid Z probe input name");
+				return GCodeResult::error;
+			}
+			source = InputSource::probe;
+			sourceNumber = (uint8_t)probeNumber;
+			sourceInvert = invert;
 			reprap.SensorsUpdated();
 			return GCodeResult::ok;
 		}
@@ -152,9 +177,14 @@ GCodeResult GpInputPort::Configure(uint32_t gpinNumber, GCodeBuffer &gb, const S
 	else
 	{
 		// Report the pin details
+		if (source == InputSource::probe)
+		{
+			reply.printf("Pin %sprobe%u, active: %s", sourceInvert ? "!" : "", sourceNumber, GetState() ? "true" : "false");
+			return GCodeResult::ok;
+		}
 		if (source != InputSource::physicalPort)
 		{
-			reply.printf("Pin %sfm%u.%s, active: %s", fmInvert ? "!" : "", fmExtruder, (source == InputSource::fmMotion) ? "motion" : "switch", GetState() ? "true" : "false");
+			reply.printf("Pin %sfm%u.%s, active: %s", sourceInvert ? "!" : "", sourceNumber, (source == InputSource::fmMotion) ? "motion" : "switch", GetState() ? "true" : "false");
 			return GCodeResult::ok;
 		}
 #if SUPPORT_CAN_EXPANSION
