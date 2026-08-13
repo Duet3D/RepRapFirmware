@@ -96,7 +96,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "isCalibrated",				OBJECT_MODEL_FUNC_IF(self->IsScanning(), self->isCalibrated), 								ObjectModelEntryFlags::none },
 #endif
 	{ "lastStopHeight",				OBJECT_MODEL_FUNC(self->lastStopHeight, 3), 												ObjectModelEntryFlags::none },
-	{ "loadCell",					OBJECT_MODEL_FUNC_IF(self->IsLoadCell() && self->gramsPerCount != 0.0, self, 1),			ObjectModelEntryFlags::none },
+	{ "loadCell",					OBJECT_MODEL_FUNC_IF(self->IsLoadCell() && self->gramsPerCount != 0.0, self, 1),			ObjectModelEntryFlags::live },
 	{ "maxProbeCount",				OBJECT_MODEL_FUNC((int32_t)self->misc.parts.maxTaps), 										ObjectModelEntryFlags::none },
 #if SUPPORT_SCANNING_PROBES
 	{ "measuredHeight",				OBJECT_MODEL_FUNC_IF(self->IsScanning() && self->isCalibrated, self->GetLatestHeight()),	ObjectModelEntryFlags::live },
