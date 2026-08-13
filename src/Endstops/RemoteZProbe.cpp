@@ -67,6 +67,24 @@ bool RemoteZProbe::Stopped() const noexcept
 	return (type == ZProbeType::loadCell) ? currentState : ZProbe::Stopped();
 }
 
+// Latch the current load cell reading as the new baseline, so the reported force is zeroed and the trigger comparison starts from it
+GCodeResult RemoteZProbe::Tare(const StringRef& reply) noexcept
+{
+	const GCodeResult rslt = CanInterface::TareHandle(boardAddress, handle, tareBaseline, reply);
+	if (rslt == GCodeResult::ok)
+	{
+		// The driver pins the reading to exactly zero when the cell or its reference channel is dead or the signal is at the ADC rail,
+		// and a healthy cell never reads exactly zero through the noise
+		if (tareBaseline == 0)
+		{
+			reply.copy("load cell is not responding or out of range");
+			return GCodeResult::error;
+		}
+		reprap.SensorsUpdated();
+	}
+	return rslt;
+}
+
 bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 {
 	String<StringLength100> reply;
@@ -85,26 +103,15 @@ bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 	{
 		if (isProbing && type == ZProbeType::loadCell)
 		{
-			rslt = CanInterface::TareHandle(boardAddress, handle, tareBaseline, reply.GetRef());
-			if (rslt == GCodeResult::ok)
+			rslt = Tare(reply.GetRef());
+			if (rslt == GCodeResult::ok && preloadLimits[0] < preloadLimits[1])
 			{
-				// The driver pins the reading to exactly zero when the cell or its reference channel is dead or the signal is at the ADC rail,
-				// and a healthy cell never reads exactly zero through the noise
-				if (tareBaseline == 0)
+				const float preload = (float)tareBaseline * gramsPerCount;
+				if (preload < preloadLimits[0] || preload > preloadLimits[1])
 				{
-					reply.copy("load cell is not responding or out of range");
+					reply.printf("load cell preload %.0fg is outside the safe window", (double)preload);
 					rslt = GCodeResult::error;
 				}
-				else if (preloadLimits[0] < preloadLimits[1])
-				{
-					const float preload = (float)tareBaseline * gramsPerCount;
-					if (preload < preloadLimits[0] || preload > preloadLimits[1])
-					{
-						reply.printf("load cell preload %.0fg is outside the safe window", (double)preload);
-						rslt = GCodeResult::error;
-					}
-				}
-				reprap.SensorsUpdated();
 			}
 		}
 		if (rslt == GCodeResult::ok && isProbing && (type == ZProbeType::scanningAnalog || type == ZProbeType::analog || type == ZProbeType::loadCell))

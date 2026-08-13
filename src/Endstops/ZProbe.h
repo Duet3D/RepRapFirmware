@@ -32,6 +32,9 @@ public:
 	virtual GCodeResult CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) { return GCodeResult::error; }
 #endif
 
+	// The following should never be called for a non-load-cell probe, so by default we just return error with no message
+	virtual GCodeResult Tare(const StringRef& reply) noexcept { return GCodeResult::error; }
+
 #if SUPPORT_CAN_EXPANSION
 	// Process a remote input change that relates to this Z probe
 	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, uint32_t when, bool newState, int32_t reading) noexcept { }

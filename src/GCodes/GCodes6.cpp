@@ -916,14 +916,24 @@ void GCodes::SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept
 
 #if SUPPORT_SCANNING_PROBES
 
-// Calibrate height vs. reading for a scanning Z probe. We have already checked the probe is a scanning one and that scanningRange is a sensible value.
-GCodeResult GCodes::HandleM558Point1or2or3(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException)
+// Handle M558.1 to M558.3 for a scanning Z probe and M558.4 for a load cell probe
+GCodeResult GCodes::HandleM558Subcommand(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException)
 {
 	const auto zp = platform.GetEndstops().GetZProbe(probeNumber);
 	if (zp.IsNull())
 	{
 		reply.copy("invalid Z probe index");
 		return GCodeResult::error;
+	}
+
+	if (gb.GetCommandFraction() == 4)
+	{
+		if (!zp->IsLoadCell())
+		{
+			reply.printf("probe %u is not a load cell probe", probeNumber);
+			return GCodeResult::error;
+		}
+		return zp->Tare(reply);
 	}
 
 	if (!zp->IsScanning())

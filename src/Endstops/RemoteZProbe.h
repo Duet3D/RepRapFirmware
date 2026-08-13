@@ -40,6 +40,9 @@ public:
 	// Functions used only with programmable Z probes
 	GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept override;
 
+	// Functions used only with load cell Z probes
+	GCodeResult Tare(const StringRef& reply) noexcept override;
+
 	// Functions used only with scanning Z probes
 	GCodeResult GetCalibratedReading(float& val) const noexcept override;
 	GCodeResult CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;

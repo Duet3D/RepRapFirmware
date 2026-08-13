@@ -682,7 +682,7 @@ bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) con
 
 #endif
 
-// Handle M558, M558.1, M558.2 and M558.3
+// Handle M558 and its subcommands M558.1 to M558.4
 GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
 	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
@@ -690,7 +690,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 #if SUPPORT_SCANNING_PROBES
 	if (gb.GetCommandFraction() > 0)
 	{
-		return reprap.GetGCodes().HandleM558Point1or2or3(gb, reply, probeNumber);
+		return reprap.GetGCodes().HandleM558Subcommand(gb, reply, probeNumber);
 	}
 #endif
 
