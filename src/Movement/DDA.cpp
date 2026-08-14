@@ -1305,6 +1305,9 @@ void DDA::Prepare(DDARing& ring,
 						else		// we don't generate segments for leadscrew adjustment moves to remote drivers
 #endif
 						{
+#if SUPPORT_PHASE_STEPPING
+							move.PrepareLeadscrewAdjustmentDM(driver.localDriver);
+#endif
 							move.AddLinearSegments(driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
 						}
 					}

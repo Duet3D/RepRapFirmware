@@ -460,6 +460,7 @@ public:
 	bool UpdateCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
 	bool SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept;
 	StepMode GetStepMode(size_t axisOrExtruder) const noexcept;
+	void PrepareLeadscrewAdjustmentDM(size_t localDriver) noexcept;							// set up the DM that adjusts a leadscrew so that it executes the same way as the Z axis
 	void ResetPhaseStepMonitoringVariables() noexcept;
 
 	void PhaseStepControlLoop() noexcept;

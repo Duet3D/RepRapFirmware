@@ -2323,7 +2323,7 @@ PhaseStepParams Move::GetPhaseStepParams(size_t axisOrExtruder) const noexcept
 bool Move::UpdateCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
 {
 	const bool ret = dms[driver].UpdateCurrentMotion(when, mParams);
-	mParams.Scale(phaseStepMultiplier[driver]);
+	mParams.Scale(phaseStepMultiplier[(driver >= MaxAxesPlusExtruders) ? Z_AXIS : driver]);	// leadscrew adjustment DMs move Z motors, so they use the Z scale factor
 	return ret;
 }
 
@@ -2423,6 +2423,24 @@ StepMode Move::GetStepMode(size_t axisOrExtruder) const noexcept
 	return dms[axisOrExtruder].GetStepMode();
 }
 
+// Set up the DM that adjusts a leadscrew via a local driver so that it executes the same way as the Z axis.
+// When the Z axis uses phase stepping, the step pulses that this DM would generate are ignored by the driver, so it must be executed by the phase step control loop instead.
+// In that case re-key the shared phase offset of the driver from the Z axis position to this DM's position, so that the adjustment ramps away from the current commanded phase
+void Move::PrepareLeadscrewAdjustmentDM(size_t localDriver) noexcept
+{
+	DriveMovement& dm = dms[MaxAxesPlusExtruders + localDriver];
+	const DriveMovement& axisDm = dms[Z_AXIS];
+	dm.SetStepMode(axisDm.GetStepMode());
+	if (dm.IsPhaseStepEnabled())
+	{
+		dm.phaseStepControl.SetKv(axisDm.phaseStepControl.GetKv());
+		dm.phaseStepControl.SetKa(axisDm.phaseStepControl.GetKa());
+		dm.phaseStepControl.holdCurrentFraction = axisDm.phaseStepControl.holdCurrentFraction;
+		UpdateCurrentMotion(MaxAxesPlusExtruders + localDriver, StepTimer::GetMovementTimerTicks(), dm.phaseStepControl.mParams);
+		dm.phaseStepControl.UpdatePhaseOffset(localDriver);
+	}
+}
+
 void Move::PhaseStepControlLoop() noexcept
 {
 	// Record the control loop call interval
@@ -2463,6 +2481,13 @@ void Move::PhaseStepControlLoop() noexcept
 		if (dm->state != DMState::phaseStepping)
 		{
 			*dmp = dm->nextDM;
+			if (dm->drive >= MaxAxesPlusExtruders)
+			{
+				// A leadscrew adjustment has completed, so re-key the shared phase offset of the driver back to the Z axis position to preserve the displacement
+				DriveMovement& axisDm = dms[Z_AXIS];
+				UpdateCurrentMotion(Z_AXIS, now, axisDm.phaseStepControl.mParams);
+				axisDm.phaseStepControl.UpdatePhaseOffset(dm->drive - MaxAxesPlusExtruders);
+			}
 			if (dm->state >= DMState::firstMotionState)
 			{
 				InsertDM(dm);
@@ -2476,18 +2501,34 @@ void Move::PhaseStepControlLoop() noexcept
 		{
 			dm->phaseStepControl.CalculateCurrentFraction();
 
-			IterateLocalDrivers(dm->drive, [dm](uint8_t driver) noexcept -> void {
+			if (dm->drive >= MaxAxesPlusExtruders)
+			{
+				// Leadscrew adjustment move, so this DM controls a single driver
+				const size_t driver = dm->drive - MaxAxesPlusExtruders;
 				if ((dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver)) == 0)
 				{
-					if (likely(dm->state > DMState::starting))
-					{
-						// Driver has been stopped (probably by Move::CheckEndstops() so we don't need to update it)
-						dm->phaseStepControl.UpdatePhaseOffset(driver);
-					}
-					return;
+					dm->phaseStepControl.UpdatePhaseOffset(driver);
 				}
-				dm->phaseStepControl.InstanceControlLoop(driver);
-			});
+				else
+				{
+					dm->phaseStepControl.InstanceControlLoop(driver);
+				}
+			}
+			else
+			{
+				IterateLocalDrivers(dm->drive, [dm](uint8_t driver) noexcept -> void {
+					if ((dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver)) == 0)
+					{
+						if (likely(dm->state > DMState::starting))
+						{
+							// Driver has been stopped (probably by Move::CheckEndstops() so we don't need to update it)
+							dm->phaseStepControl.UpdatePhaseOffset(driver);
+						}
+						return;
+					}
+					dm->phaseStepControl.InstanceControlLoop(driver);
+				});
+			}
 			dmp = &(dm->nextDM);
 		}
 	}
