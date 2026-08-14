@@ -332,7 +332,7 @@ void SbcInterface::ExchangeData() noexcept
 
 			// Refuse codes with invalid lengths, else an over-long code would overrun GCodeBuffer::buffer in PutBinary later.
 			// This check must come after ReadData so the payload is consumed and the next packet is read from the correct offset
-			if (packet->length < sizeof(CodeHeader) || packet->length > MaxCodeBufferSize || (packet->length % sizeof(uint32_t)) != 0)
+			if (packet->length < sizeof(CodeHeader) || packet->length > MaxGCodeBinaryLength || (packet->length % sizeof(uint32_t)) != 0)
 			{
 				packetAcknowledged = codeBufferAvailable = false;
 				break;
@@ -2289,7 +2289,8 @@ void SbcInterface::DefragmentBufferedCodes() noexcept
 			{
 				// The tail block contained no pending codes so DefragmentCodeBlock left txEnd == rxPointer, which is not a valid encoding.
 				// Return to sequential mode, else the buffer walks in FillBuffer and InvalidateBufferedCodes would run off the end of the buffer
-				rxPointer = txEnd = 0;
+				rxPointer = 0;
+				txEnd = 0;
 				sendBufferUpdate = true;
 			}
 			else if (!tailDefragmented &&
