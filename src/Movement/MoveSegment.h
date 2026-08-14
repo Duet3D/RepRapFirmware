@@ -204,6 +204,9 @@ public:
 	// Release all MoveSegments in a chain
 	static void ReleaseAll(MoveSegment *_ecv_null item) noexcept;
 
+	// Ensure the free list is non-empty so that the next Allocate call cannot reach the memory allocator. Must only be called from the Move task with interrupts enabled
+	static void PrimeFreeList() noexcept { if (freeList == nullptr) { Release(Allocate(nullptr)); } }
+
 	// Return the number of MoveSegment objects that have been created
 	static unsigned int NumCreated() noexcept { return numCreated; }
 

@@ -1015,14 +1015,14 @@ void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValu
 	}
 }
 
-// Balance types v2 and v2 and store the min or max of them in v1
+// Balance types v1 and v2 and store the min or max of them in v1
 void ExpressionParser::EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2, bool evaluate, bool isMax) const THROWS(GCodeException)
 {
 	BalanceNumericTypes(v1, v2, evaluate);
 	if (v1.GetType() == TypeCode::Float)
 	{
 		v1.fVal = ((isMax) ? max<float> : min<float>)(v1.fVal, v2.fVal);
-		v1.param = max(v2.param, v2.param);
+		v1.param = max(v1.param, v2.param);
 	}
 	else
 	{
