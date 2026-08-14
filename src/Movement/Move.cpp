@@ -1839,6 +1839,7 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 	{
 		MoveSegment *_ecv_null prev = nullptr;
 
+		MoveSegment::PrimeFreeList();									// the Split below must not allocate, because taking the malloc mutex re-enables the step interrupt
 		BasePriorityBooster booster(NvicPriorityStep);					// shut out the step interrupt
 
 		tail = dm.segments;
