@@ -57,17 +57,26 @@ void RemoteHeater::Spin() noexcept
 			ClearCounters();
 			timeSetHeating = millis();
 			String<StringLength100> reply;
-			switch (SendTuningCommand(reply.GetRef(), true, true))
+			tuningState = TuningState::calibrating;
+			tuningPhase = TuningPhase::calibrating_heater;
+			switch (SendTuningCommand(reply.GetRef(), true, true))		// request heater calibration
 			{
 			case GCodeResult::ok:
-				tuningState = TuningState::heatingUp;
-				tuningPhase = TuningPhase::heating_up;
-				ReportTuningUpdate();
+				ReportTuningUpdate(true);
+				if (SendTuningCommand(reply.GetRef(), true, false) == GCodeResult::ok)
+				{
+					tuningState = TuningState::heatingUp;
+					tuningPhase = TuningPhase::heating_up;
+					ReportTuningUpdate();
+				}
+				else
+				{
+					reprap.GetPlatform().MessageF(ErrorMessage, "failed to turn heater on: %s\n", reply.c_str());
+					tuningState = TuningState::notTuning;
+				}
 				break;
 
 			case GCodeResult::notFinished:
-				tuningState = TuningState::calibrating;
-				tuningPhase = TuningPhase::calibrating_heater;
 				ReportTuningUpdate();
 				break;
 
@@ -79,7 +88,7 @@ void RemoteHeater::Spin() noexcept
 		}
 		else if (now - tuningBeginTime >= 20000)						// allow up to 20 seconds for starting temperature to settle
 		{
-			reprap.GetPlatform().Message(GenericMessage, "auto tune cancelled because starting temperature is not stable\n");
+			reprap.GetPlatform().Message(ErrorMessage, "auto tune cancelled because starting temperature is not stable\n");
 			StopTuning();
 		}
 		break;
@@ -90,9 +99,17 @@ void RemoteHeater::Spin() noexcept
 			switch (SendTuningCommand(reply.GetRef(), false, true))
 			{
 			case GCodeResult::ok:
-				tuningState = TuningState::heatingUp;
-				tuningPhase = TuningPhase::heating_up;
-				ReportTuningUpdate();
+				if (SendTuningCommand(reply.GetRef(), true, false) == GCodeResult::ok)
+				{
+					tuningState = TuningState::heatingUp;
+					tuningPhase = TuningPhase::heating_up;
+					ReportTuningUpdate();
+				}
+				else
+				{
+					reprap.GetPlatform().MessageF(ErrorMessage, "failed to turn heater on: %s\n", reply.c_str());
+					tuningState = TuningState::notTuning;
+				}
 				break;
 
 			case GCodeResult::notFinished:
