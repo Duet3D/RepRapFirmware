@@ -8,10 +8,11 @@
 #ifndef SRC_LEDSTRIPS_LEDSTRIPBASE_H_
 #define SRC_LEDSTRIPS_LEDSTRIPBASE_H_
 
-#include <ObjectModel/ObjectModel.h>
+#include <RepRapFirmware.h>
 
 #if SUPPORT_LED_STRIPS
 
+#include <ObjectModel/ObjectModel.h>
 #include <Hardware/IoPorts.h>
 #include <General/NamedEnum.h>
 
@@ -22,7 +23,18 @@ class CanMessageGenericParser;
 class LedStripBase INHERIT_OBJECT_MODEL
 {
 public:
-	explicit LedStripBase(LedStripType p_type) noexcept : type(p_type) { }
+	enum class ColorOrder : uint8_t
+	{
+		BGR = 0,			// default for DotStar LEDs
+		BRG,
+		RGB,
+		RBG,
+		GBR,
+		GRB,				// default for WS2812 LEDs
+		count
+	};
+
+	explicit LedStripBase(LedStripType p_type) noexcept : type(p_type) { colorOrder = (IsNeoPixel()) ? DefaultNeoPixelColorOrder : DefaultDotStarColorOrder; }
 	virtual ~LedStripBase() override { }
 
 	// Configure or report on this LED strip. If pinName is not null then we are doing the initial configuration; else we are doing minor configuration or reporting.
@@ -42,8 +54,8 @@ public:
 	// Test whether this strip is bit-banged and therefore requires motion to be stopped before sending a command
 	virtual bool MustStopMovement() const noexcept = 0;
 
-	// Get the LED strip type
-	LedStripType GetType() const noexcept { return type; }
+protected:
+	DECLARE_OBJECT_MODEL
 
 	// Return true if the LED strip type is NeoPixel
 	bool IsNeoPixel() const noexcept { return type != LedStripType::DotStar; }
@@ -51,10 +63,11 @@ public:
 	// Get the LED strip type as text
 	const char *_ecv_array GetTypeText() const noexcept;
 
-protected:
-	DECLARE_OBJECT_MODEL
+	static constexpr ColorOrder DefaultNeoPixelColorOrder = ColorOrder::GRB;
+	static constexpr ColorOrder DefaultDotStarColorOrder = ColorOrder::BGR;
 
-private:
+	uint32_t maxLeds = DefaultMaxLedsPerStrip;
+	ColorOrder colorOrder;												// which order we need to send the data in
 	LedStripType type;
 };
 

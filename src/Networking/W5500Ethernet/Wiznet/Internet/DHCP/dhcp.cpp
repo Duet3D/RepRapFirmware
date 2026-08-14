@@ -52,6 +52,7 @@
 #include <Networking/W5500Ethernet/Wiznet/Ethernet/socketlib.h>
 #include "dhcp.h"
 #include <cstring>
+#include <atomic>
 
 /* If you want to display debug & processing message, Define _DHCP_DEBUG_ in dhcp.h */
 
@@ -215,7 +216,7 @@ DhcpState dhcp_state = DhcpState::init;				// DHCP state
 int8_t   dhcp_retry_count;
 
 uint32_t dhcp_lease_time;
-volatile uint32_t dhcp_tick_1s;             	    // unit 1 second
+std::atomic<uint32_t> dhcp_tick_1s;             	// unit 1 second
 uint32_t dhcp_tick_next;
 
 uint32_t DHCP_XID;      							// Any number

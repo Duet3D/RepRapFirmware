@@ -12,6 +12,10 @@
 
 #include "DDA.h"
 
+#if SUPPORT_3RD_ORDER
+# include "MovementProfile.h"
+#endif
+
 class MovementState;
 
 class DDARing final INHERIT_OBJECT_MODEL
@@ -19,8 +23,7 @@ class DDARing final INHERIT_OBJECT_MODEL
 public:
 	DDARing() noexcept;
 
-	void Init1(unsigned int numDdas) noexcept;
-	void Init2() noexcept;
+	void Init(unsigned int numDdas) noexcept;
 	void Exit() noexcept;
 
 	bool CanAddMove() const noexcept;
@@ -49,6 +52,9 @@ public:
 	float GetAccelerationMmPerSecSquared() const noexcept;								// Get the (peak) acceleration for reporting in the object model
 	float GetDecelerationMmPerSecSquared() const noexcept;								// Get the (peak) deceleration for reporting in the object model
 	float GetTotalExtrusionRate() const noexcept;
+	float GetCurrentMoveDistance() const noexcept;
+	float GetCurrentMoveDuration() const noexcept;
+	FilePosition GetCurrentMoveFilePosition() const noexcept;							// Get the file position of the move being executed, or noFilePosition if there is none
 
 	void GetCurrentMachinePosition(float m[MaxAxes]) const noexcept;					// Get the position at the end of the last queued move in untransformed coords
 	void GetLastEndpoints(LogicalDrivesBitmap logicalDrives, int32_t returnedEndpoints[MaxAxesPlusExtruders]) const noexcept;
@@ -83,28 +89,36 @@ protected:
 private:
 	bool IsTimeToPrepareMove(uint32_t prepareAdvanceTime, uint32_t moveTimeLeft) const noexcept;
 	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, SimulationMode simulationMode) noexcept;
+#if SUPPORT_3RD_ORDER
+	void PlanMoves(DDA *firstUnpreparedMove, bool stopping) noexcept;
+	bool NeedNewPlan(DDA *moveToPrepare) const noexcept;
+#endif
 
 	DDA* addPointer;															// Pointer to the next DDA that we can use to add a new move, if this DDA is free
 	DDA* volatile getPointer;													// Pointer to the oldest committed or provisional move, if not equal to addPointer
 
 	unsigned int numDdasInRing;													// The number of DDAs that this ring contains
-	uint32_t gracePeriod;														// The minimum idle time in milliseconds, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
+	uint32_t gracePeriod = DefaultGracePeriod;									// The minimum idle time in milliseconds, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
-	const Tool *_ecv_null lastFeedForwardTool;									// the tool we last applied heater feedforward to
-	float lastAverageExtrusionSpeed;											// the extrusion speed we last set heater feedforward for
+#if SUPPORT_3RD_ORDER
+	MovementProfile plannedProfile;												// the profile planned for a collection of moves
+#endif
 
-	uint32_t scheduledMoves;													// Number of moves scheduled in this ring
-	uint32_t completedMoves;													// Number of moves completed in this ring
+	const Tool *_ecv_null lastFeedForwardTool = nullptr;						// the tool we last applied heater feedforward to
+	float lastAverageExtrusionSpeed = 0.0;										// the extrusion speed we last set heater feedforward for
 
-	unsigned int numLookaheadUnderruns;											// How many times we have run out of moves to adjust during lookahead
-	unsigned int numNoMoveUnderruns;											// How many times we wanted a new move but there were none
-	unsigned int numLookaheadErrors;											// How many times our lookahead algorithm failed
+	uint32_t scheduledMoves = 0;												// Number of moves scheduled in this ring
+	uint32_t completedMoves = 0;												// Number of moves completed in this ring
 
-	float simulationTime;														// Print time since we started simulating
+	unsigned int numLookaheadUnderruns = 0;										// How many times we have run out of moves to adjust during lookahead
+	unsigned int numNoMoveUnderruns = 0;										// How many times we wanted a new move but there were none
+	unsigned int numLookaheadErrors = 0;										// How many times our lookahead algorithm failed
+
+	float simulationTime = 0.0;													// Print time since we started simulating
 
 	float startCoordinates[MaxAxes];											// the axis coordinates to start the next move from
 
-	volatile bool waitingForRingToEmpty;										// True if Move has signalled that we are waiting for this ring to empty
+	volatile bool waitingForRingToEmpty = false;								// True if Move has signalled that we are waiting for this ring to empty
 };
 
 #if 0	//TODO save this code for now to remind us how to start the laser, remove it when we have sorted that out

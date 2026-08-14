@@ -21,6 +21,7 @@
 #include "DataTransfer.h"
 
 class Platform;
+class SerialCDC;
 
 class GCodeBuffer;
 
@@ -45,11 +46,18 @@ public:
 	void EventOccurred(bool timeCritical = false) noexcept;						// Called when a new event has happened. It can optionally start off a new transfer immediately
 	GCodeResult HandleM576(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Set the SPI communication parameters
 
+#if SUPPORTS_SBC_OVER_USB
+	void RequestUsbSwitch(SerialCDC *dev, unsigned int usbDevIndex) noexcept;	// Request a switch to USB transport (called from main task)
+	void Suspend() noexcept;													// Freeze the SBC task so it can't re-attach USB during a teardown
+#endif
+
+	DataTransfer& GetDataTransfer() noexcept { return transfer; }
+
 	bool IsPrintAborted() noexcept;												// Check if the current print has been aborted
 	bool FillBuffer(GCodeBuffer &gb) noexcept;									// Try to fill up the G-code buffer with the next available G-code
 
-	void SetPauseReason(FilePosition position, PrintPausedReason reason) noexcept;	// Set parameters for the next pause request
-	void SetEmergencyPauseReason(FilePosition position, PrintPausedReason reason) noexcept;	// Set parameters for the next emergency pause request
+	void SetPauseReason(FilePosition position, FilePosition position2, PrintPausedReason reason) noexcept;	// Set parameters for the next pause request
+	void SetEmergencyPauseReason(FilePosition position, FilePosition position2, PrintPausedReason reason) noexcept;	// Set parameters for the next emergency pause request
 	void ReportPause() noexcept;												// Report that the print has been paused
 
 	void HandleGCodeReply(MessageType type, const char *reply) noexcept;		// accessed by Platform
@@ -57,6 +65,8 @@ public:
 
 	bool FileExists(const char *filename) noexcept;
 	bool DeleteFileOrDirectory(const char *fileOrDirectory, bool recursive = false) noexcept;
+	bool SecureDeleteFile(const char *filename) noexcept;	// zero-overwrite + fsync + unlink on the SBC; files only
+	size_t GetFileList(const char *directory, uint32_t startIndex, char *buffer, size_t bufferLength, bool& endOfList) noexcept;	// Read packed FileListEntry records starting at the given entry index
 
 	FileHandle OpenFile(const char *filename, OpenMode mode, FilePosition& fileLength, uint32_t preAllocSize = 0) noexcept;
 	int ReadFile(FileHandle handle, char *buffer, size_t bufferLength) noexcept;
@@ -75,12 +85,13 @@ private:
 	uint32_t numDisconnects, numTimeouts, numSbcTimeouts, lastTransferTime;
 
 	uint32_t maxDelayBetweenTransfers, maxFileOpenDelay, numMaxEvents;
-	bool skipNextDelay;
+	uint32_t burstModeWindow, burstModeDelay;					// configurable burst mode timing
+	uint32_t burstModeStartTime;								// millis() when burst mode was last (re)activated, 0 = inactive
 	std::atomic<bool> delaying;
-	volatile uint32_t numEvents;
+	std::atomic<uint32_t> numEvents;
 
 	GCodeFileInfo fileInfo;
-	FilePosition pauseFilePosition;
+	FilePosition pauseFilePosition, pauseFilePosition2;
 	PrintPausedReason pauseReason;
 	bool reportPause, reportPauseWritten, printAborted;
 
@@ -89,6 +100,11 @@ private:
 	volatile bool sendBufferUpdate;
 
 	uint32_t iapRamAvailable;											// must be at least 32Kb otherwise the SPI IAP can't work
+
+#if SUPPORTS_SBC_OVER_USB
+	SerialCDC *pendingUsbDevice;										// set from main task, read from SBC task
+	unsigned int usbDeviceIndex;										// index of the USB device used for SBC mode (for reinit on disconnect)
+#endif
 
 	// File I/O
 	Mutex fileMutex;													// locked while a file operation is performed
@@ -108,7 +124,9 @@ private:
 		write,
 		seek,
 		truncate,
-		close
+		close,
+		secureDeleteFile,
+		getFileList
 	} fileOperation;
 	std::atomic<bool> fileOperationPending;
 
@@ -121,6 +139,7 @@ private:
 	const char * fileWriteBuffer;
 	size_t fileBufferLength;
 	FilePosition fileOffset;
+	bool fileListEndOfList;
 	// End of file operation variables
 
 	volatile OutputStack gcodeReply;
@@ -139,17 +158,19 @@ private:
 	bool DoFileOperation(FileOperation f) noexcept;							// Ask the SBC task to do a file operation
 };
 
-inline void SbcInterface::SetPauseReason(FilePosition position, PrintPausedReason reason) noexcept
+inline void SbcInterface::SetPauseReason(FilePosition position, FilePosition position2, PrintPausedReason reason) noexcept
 {
 	TaskCriticalSectionLocker locker;
 	pauseFilePosition = position;
+	pauseFilePosition2 = position2;
 	pauseReason = reason;
 	reportPauseWritten = false;
 }
 
-inline void SbcInterface::SetEmergencyPauseReason(FilePosition position, PrintPausedReason reason) noexcept
+inline void SbcInterface::SetEmergencyPauseReason(FilePosition position, FilePosition position2, PrintPausedReason reason) noexcept
 {
 	pauseFilePosition = position;
+	pauseFilePosition2 = position2;
 	pauseReason = reason;
 	reportPauseWritten = false;
 	reportPause = true;

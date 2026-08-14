@@ -12,62 +12,38 @@
 #include <Platform/RepRap.h>
 #include <Platform/Tasks.h>
 
-GCodeException::GCodeException(const GCodeBuffer *null gb, int col, const char *_ecv_array msg) noexcept : column(col), message(msg)
+GCodeException::GCodeException(const GCodeBuffer *_ecv_null gb, int col, const char *_ecv_array msg) noexcept : line(-1), column(col), message(msg)
 {
-	if (gb != nullptr)
-	{
+	if (   gb != nullptr
+		&& (gb->IsDoingFileMacro() || gb->IsDoingFile())
 #if HAS_SBC_INTERFACE
-		// Don't output the line number in case this exception is thrown from a SBC evaluation request, it's prepended by DSF
-		line = (!reprap.UsingSbcInterface() || RTOSIface::GetCurrentTask() == Tasks::GetMainTask()) ? gb->GetLineNumber() : -1;
-#else
-		line = gb->GetLineNumber();
+		&& (!reprap.UsingSbcInterface() || RTOSIface::GetCurrentTask() == Tasks::GetMainTask())		// don't output the filename or line number if this exception is thrown from a SBC evaluation request, they are prepended by DSF
 #endif
-		if (gb->IsDoingFileMacro())
-		{
-			source = GCodeExceptionSource::macro;
-		}
-		else if (gb->IsDoingFile())
-		{
-			source = GCodeExceptionSource::file;
-		}
-		else
-		{
-			source = GCodeExceptionSource::other;
-			line = -1;
-		}
-	}
-	else
+	   )
 	{
-		source = GCodeExceptionSource::other;
-		line = -1;
+		line = gb->GetLineNumber();
+		file = gb->GetFileName();
 	}
 }
 
-GCodeException::GCodeException(const GCodeBuffer *null gb, int col, const char *_ecv_array msg, uint32_t uparam) noexcept : GCodeException(gb, col, msg)
+GCodeException::GCodeException(const GCodeBuffer *_ecv_null gb, int col, const char *_ecv_array msg, uint32_t uparam) noexcept : GCodeException(gb, col, msg)
 {
 	param.u = uparam;
 }
 
-GCodeException::GCodeException(const GCodeBuffer *null gb, int col, const char *_ecv_array msg, const char *_ecv_array sparam) noexcept : GCodeException(gb, col, msg)
+GCodeException::GCodeException(const GCodeBuffer *_ecv_null gb, int col, const char *_ecv_array msg, const char *_ecv_array sparam) noexcept : GCodeException(gb, col, msg)
 {
 	stringParam.copy(sparam);
 }
 
 // Construct the error message. This will be prefixed with "Error: " when it is returned to the user.
-void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null gb) const noexcept
+void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *_ecv_null gb) const noexcept
 {
 	// Print the file location, if possible
-	switch(source)
+	if (!file.IsNull())
 	{
-	case GCodeExceptionSource::file:
-		reply.copy("in GCode file");
-		break;
-	case GCodeExceptionSource::macro:
-		reply.copy("in file macro");
-		break;
-	case GCodeExceptionSource::other:
-	default:
-		break;
+		const auto text = file.Get();
+		reply.printf("in file %s", text.Ptr());
 	}
 
 	if (line >= 0)
@@ -105,7 +81,6 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null 
 				if (gb->GetCommandFraction() >= 0)
 				{
 					reply.catf("%c%d.%d: ", gb->GetCommandLetter(), gb->GetCommandNumber(), gb->GetCommandFraction());
-
 				}
 				else
 				{

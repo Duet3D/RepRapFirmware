@@ -210,11 +210,11 @@ public:
 	bool EvaluateValueForDisplay(const char *_ecv_array str, ExpressionValue& expr) const noexcept;
 #endif
 
-	void SetMappedFanSpeed(const GCodeBuffer *null gb, float f) noexcept;				// Set the speeds of fans mapped for the current tool
+	void SetMappedFanSpeed(const GCodeBuffer *null gb, float f) noexcept;			// Set the speeds of fans mapped for the current tool
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *_ecv_array reply) noexcept;	// Handle G-Code replies
 	void EmergencyStop() noexcept;													// Cancel everything
 
-	const GridDefinition& GetDefaultGrid() const { return defaultGrid; };			// Get the default grid definition
+	const GridDefinition& GetDefaultGrid() const noexcept { return defaultGrid; };	// Get the default grid definition
 	void ActivateHeightmap(bool activate) noexcept;									// (De-)Activate the height map
 
 	size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
@@ -222,7 +222,7 @@ public:
 #if SUPPORT_SCANNING_PROBES
 	size_t GetNumScanningProbeReadingsLeftToTake() const noexcept;
 	void TakeScanningProbeReading() noexcept;										// Take and store a reading from a scanning Z probe
-	GCodeResult HandleM558Point1or2or3(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException);	// Calibrate a scanning Z probe
+	GCodeResult HandleM558Subcommand(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException);	// Calibrate a scanning Z probe or tare a load cell probe
 #endif
 
 	// These next two are public because they are used by class SbcInterface
@@ -253,16 +253,10 @@ public:
 	const KeepoutZone *GetKeepoutZone(size_t) const noexcept { return &keepoutZone; }
 #endif
 
-#if SUPPORT_OBJECT_MODEL
 	float GetWorkplaceOffset(size_t axis, size_t workplaceNumber) const noexcept
 	{
 		return workplaceCoordinates[workplaceNumber][axis];
 	}
-
-# if SUPPORT_COORDINATE_ROTATION
-	float GetRotationAngle(const MovementState& ms) const noexcept { return ms.g68Angle; }
-	float GetRotationCentre(const MovementState& ms, size_t index) const noexcept pre(index < 2) { return ms.g68Centre[index]; }
-# endif
 
 	size_t GetNumInputs() const noexcept { return NumGCodeChannels; }
 	const GCodeBuffer *_ecv_null GetInput(size_t n) const noexcept { return gcodeSources[n]; }
@@ -281,17 +275,20 @@ public:
 	bool IsHeaterUsedByDifferentCurrentTool(int heaterNumber, const Tool *tool) const noexcept;	// Check if the specified heater is used by a current tool other than the specified one
 	void MessageBoxClosed(bool cancelled, bool shouldAbort, bool m292, uint32_t seq, ExpressionValue rslt) noexcept;
 
-# if HAS_VOLTAGE_MONITOR
-	const char *_ecv_array null GetPowerFailScript() const noexcept { return powerFailScript; }
-# endif
+#if SUPPORT_ASYNC_MOVES
+	size_t GetNumMotionSystemsUsed() const noexcept { return numMotionSystemsUsed; }
+#endif
 
-# if SUPPORT_LASER
+#if HAS_VOLTAGE_MONITOR
+	const char *_ecv_array null GetPowerFailScript() const noexcept { return powerFailScript; }
+#endif
+
+#if SUPPORT_LASER
 	// Return laser PWM in 0..1. Only the primary movement queue is permitted to control the laser.
 	float GetLaserPwm() const noexcept
 	{
-		return (float)moveStates[0].laserPwmOrIoBits.laserPwm * (1.0/65535.0);
+		return (float)moveStates[0].raw.laserPwmOrIoBits.laserPwm * (1.0/65535.0);
 	}
-# endif
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -380,6 +377,7 @@ private:
 	void DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps) noexcept;
 
 	void StartPrinting(bool fromStart) noexcept;								// Start printing the file already selected
+	void AbortStateMachine(GCodeBuffer& gb) noexcept;								// Clean up state machine side effects before aborting
 	void StopPrint(GCodeBuffer *_ecv_null gbp, StopPrintReason reason) noexcept;	// Stop the current print
 
 	bool DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;					// Get G Codes from a file and print them
@@ -462,7 +460,6 @@ private:
 	bool ToolHeatersAtSetTemperatures(const Tool *_ecv_null tool, bool waitWhenCooling, float tolerance, bool waitOnFault) const noexcept;
 																							// Wait for the heaters associated with the specified tool to reach their set temperatures
 	void GenerateTemperatureReport(const GCodeBuffer& gb, const StringRef& reply) const noexcept;	// Store a standard-format temperature report in reply
-	OutputBuffer *_ecv_null GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
 	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexcept;			// Check whether we need to report temperatures or status
 
 	void RestorePosition(MovementState& ms, const RestorePoint& rp) noexcept;				// Restore user position from a restore point
@@ -529,7 +526,7 @@ private:
 	void StopObject(GCodeBuffer& gb) noexcept;
 	void ChangeToObject(GCodeBuffer& gb, int i) noexcept;
 
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+#if HAS_WIFI_NETWORKING || NUM_ASYNC_CHANNELS != 0 || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// Handle M997
 #endif
 
@@ -601,11 +598,11 @@ private:
 #endif
 	Pwm_t ConvertLaserPwm(float reqVal) const noexcept;
 
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_CHANNELS != 0
 # if ALLOW_ARBITRARY_PANELDUE_PORT
 	uint8_t serialChannelForPanelDueFlashing;
 # else
-	static constexpr uint8_t serialChannelForPanelDueFlashing = 1;
+	static constexpr uint8_t serialChannelForPanelDueFlashing = FirstAuxChannel;
 # endif
 	static bool emergencyStopCommanded;
 	static void CommandEmergencyStop(AsyncSerial *p) noexcept;
@@ -617,8 +614,11 @@ private:
 	NetworkGCodeInput* httpInput;										// These cache incoming G-codes...
 	NetworkGCodeInput* telnetInput;										// ...
 #endif
-#if defined(SERIAL_MAIN_DEVICE) && (!SAME5x || CORE_USES_TINYUSB)
-	BufferedStreamGCodeInput* usbInput;									// USB input with out-of-band urgent command scanning
+#if defined(SERIAL_USB_DEVICE) && (!SAME5x || CORE_USES_TINYUSB)
+	UsbGCodeInput* usbInput;											// USB input with out-of-band urgent command scanning and disconnect reset
+# if defined(SERIAL_USB2_DEVICE)
+	UsbGCodeInput* usb2Input;											// USB input with out-of-band urgent command scanning and disconnect reset
+# endif
 #endif
 
 	GCodeBuffer *_ecv_null gcodeSources[NumGCodeChannels];						// The various sources of gcodes
@@ -627,6 +627,7 @@ private:
 	GCodeBuffer *_ecv_null  TelnetGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)]; }
 	GCodeBuffer *_ecv_null  FileGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File)]; }
 	GCodeBuffer *_ecv_null  UsbGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)]; }
+	GCodeBuffer *_ecv_null  Usb2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB2)]; }
 	GCodeBuffer *_ecv_null  AuxGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux)]; }					// This one is for the PanelDue on the async serial interface
 	GCodeBuffer *_ecv_null  TriggerGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Trigger)]; }			// Used for executing config.g and trigger macro files
 	GCodeBuffer *_ecv_null  QueuedGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue)]; }
@@ -686,6 +687,7 @@ private:
 	ParameterLettersBitmap allAxisLetters;		// Which axis letters are in use
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
 	bool limitAxes;								// Don't think outside the box
+	bool limitAxesRelative;						// Clamp relative moves to the axis limits instead of throwing an error
 	bool noMovesBeforeHoming;					// Don't allow movement prior to homing the associates axes
 
 	AxesBitmap toBeHomed;						// Bitmap of axes still to be homed
@@ -790,11 +792,13 @@ private:
 	bool displayNoToolWarning;					// True if we need to display a 'no tool selected' warning
 	bool m501SeenInConfigFile;					// true if M501 was executed from config.g
 	bool daemonRunning;
+
+#if SUPPORT_ASYNC_MOVES
+	uint8_t numMotionSystemsUsed;
+#endif
 	char filamentToLoad[FilamentNameLength];	// Name of the filament being loaded
 
 	static constexpr const float MinServoPulseWidth = 544.0, MaxServoPulseWidth = 2400.0;
-
-	static constexpr int8_t ObjectModelAuxStatusReportType = 100;		// A non-negative value distinct from any M408 report type
 };
 
 // Called by the Move task to report that a move could not be queued

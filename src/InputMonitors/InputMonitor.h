@@ -16,9 +16,9 @@
 #include <RTOSIface/RTOSIface.h>
 #include <General/FreelistManager.h>
 
-struct CanMessageCreateInputMonitorNew;
-struct CanMessageChangeInputMonitorNew;
-struct CanMessageInputChangedNew;
+struct CanMessageCreateInputMonitorV1;
+struct CanMessageChangeInputMonitorV1;
+struct CanMessageInputChangedV2;
 class CanMessageBuffer;
 
 class InputMonitor
@@ -30,25 +30,25 @@ public:
 
 	static void Init() noexcept;
 
-	static GCodeResult Create(const CanMessageCreateInputMonitorNew& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept;
-	static GCodeResult Change(const CanMessageChangeInputMonitorNew& msg, const StringRef& reply, uint8_t& extra) noexcept;
+	static GCodeResult Create(const CanMessageCreateInputMonitorV1& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept;
+	static GCodeResult Change(const CanMessageChangeInputMonitorV1& msg, const StringRef& reply, uint8_t& extra) noexcept;
 
-	static uint32_t AddStateChanges(CanMessageInputChangedNew *msg) noexcept;
+	static uint32_t AddStateChanges(CanMessageInputChangedV2 *msg) noexcept;
 	static void ReadInputs(CanMessageBuffer *buf) noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
-	static unsigned int AddAnalogHandleData(uint8_t *buffer, size_t spaceLeft) noexcept;
+	static unsigned int AddAnalogHandleDataV1(uint8_t *buffer, size_t spaceLeft) noexcept;
 #endif
 
 	static void CommonDigitalPortInterrupt(CallbackParameter cbp) noexcept;
-	static void CommonAnalogPortInterrupt(CallbackParameter cbp, uint32_t reading) noexcept;
+	static void CommonAnalogPortInterrupt(CallbackParameter cbp, int32_t reading) noexcept;
 
 private:
 	bool IsDigital() const noexcept { return threshold == 0; }
 	bool Activate(bool useInterrupt) noexcept;
 	void Deactivate() noexcept;
 	void DigitalInterrupt() noexcept;
-	void AnalogInterrupt(uint32_t reading) noexcept;
+	void AnalogInterrupt(int32_t reading) noexcept;
 	uint32_t GetAnalogValue() const noexcept;
 
 	static bool Delete(uint16_t hndl) noexcept;
@@ -56,10 +56,11 @@ private:
 
 	InputMonitor *next;
 	uint32_t whenLastSent;
+	uint32_t whenStateChanged;
 	IoPort port;
 	uint16_t handle;
 	uint16_t minInterval;
-	uint32_t threshold;
+	int32_t threshold;
 	bool active;
 	volatile bool state;
 	volatile bool sendDue;

@@ -38,7 +38,6 @@ namespace MoveTiming
 	constexpr uint32_t MaximumMoveStartAdvanceClocks = StepClockRate/1000;			// 1ms
 
 	constexpr uint32_t StandardMoveWakeupInterval = 500;							// milliseconds
-	constexpr uint32_t MachineCoordinateUpdateInterval = 200;						// milliseconds
 
 #if SUPPORT_CAN_EXPANSION
 	constexpr uint32_t NominalRemoteDriverPositionUpdateInterval = StepClockRate/10;						// how often we aim to generate an interrupt to update the position of remote drivers

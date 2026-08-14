@@ -23,7 +23,7 @@ public:
 #if SUPPORT_CAN_EXPANSION
 		boardAddress(CanInterface::GetCanAddress()),
 #endif
-		currentState(false) { }
+		source(InputSource::physicalPort), sourceNumber(0), sourceInvert(false), currentState(false) { }
 	GpInputPort(const GpInputPort&) = delete;
 
 	bool GetState() const noexcept;
@@ -39,11 +39,22 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
+	enum class InputSource : uint8_t
+	{
+		physicalPort = 0,							// the state comes from a local or remote input pin
+		fmSwitch,									// the state comes from the filament present indication of a filament monitor
+		fmMotion,									// the state comes from the motion detection of a filament monitor
+		probe										// the state comes from the triggered state of a Z probe
+	};
+
 	IoPort port;									// will be initialised by PwmPort default constructor
 #if SUPPORT_CAN_EXPANSION
 	RemoteInputHandle handle;
 	CanAddress boardAddress;
 #endif
+	InputSource source;
+	uint8_t sourceNumber;							// the extruder or Z probe number if the source is not a physical port
+	bool sourceInvert;								// whether to invert the state if the source is not a physical port
 	bool currentState;
 };
 

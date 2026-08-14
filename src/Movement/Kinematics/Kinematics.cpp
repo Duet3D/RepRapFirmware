@@ -20,9 +20,9 @@
 #include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
-const char *_ecv_array const Kinematics::HomeAllFileName = "homeall.g";
+#include <limits>
 
-#if SUPPORT_OBJECT_MODEL
+const char *_ecv_array const Kinematics::HomeAllFileName = "homeall.g";
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -46,8 +46,6 @@ constexpr ObjectModelTableEntry Kinematics::objectModelTable[] =
 constexpr uint8_t Kinematics::objectModelTableDescriptor[] = { 2, 1, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Kinematics)
-
-#endif
 
 // Constructor. Pass segsPerSecond <= 0.0 to get non-segmented kinematics.
 Kinematics::Kinematics(KinematicsType t, SegmentationType segType) noexcept
@@ -392,7 +390,7 @@ void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *_ecv_array nor
 // Round a float value to int32_t and return the original error code if it will fit, else return a microstep position too large error
 /*static*/ void Kinematics::RoundToInt32(MovementError& errorCode, float pos, int32_t& whereToStore) noexcept
 {
-	constexpr float limit = std::numeric_limits<int32_t>::max() - 10;
+	constexpr float limit = (float)(std::numeric_limits<int32_t>::max() - 10);
 	if (fabsf(pos) <= limit)
 	{
 		whereToStore = lrintf(pos);

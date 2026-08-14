@@ -41,6 +41,11 @@
 #define LWIP_HDR_INET_H
 
 #include "lwip/opt.h"
+
+#if LWIP_SOCKET_EXTERNAL_HEADERS
+#include LWIP_SOCKET_EXTERNAL_HEADER_INET_H
+#else /* LWIP_SOCKET_EXTERNAL_HEADERS */
+
 #include "lwip/def.h"
 #include "lwip/ip_addr.h"
 #include "lwip/ip6_addr.h"
@@ -120,6 +125,18 @@ extern const struct in6_addr in6addr_any;
 
 #define IN_LOOPBACKNET      IP_LOOPBACKNET
 
+#define IN6_IS_ADDR_UNSPECIFIED(a)  ip6_addr_isany((ip6_addr_t*)(a))
+#define IN6_IS_ADDR_LOOPBACK(a)     ip6_addr_isloopback((ip6_addr_t*)(a))
+#define IN6_IS_ADDR_MULTICAST(a)    ip6_addr_ismulticast((ip6_addr_t*)(a))
+#define IN6_IS_ADDR_LINKLOCAL(a)    ip6_addr_islinklocal((ip6_addr_t*)(a))
+#define IN6_IS_ADDR_SITELOCAL(a)    ip6_addr_issitelocal((ip6_addr_t*)(a))
+#define IN6_IS_ADDR_V4MAPPED(a)     ip6_addr_isipv4mappedipv6((ip6_addr_t*)(a))
+#define IN6_IS_ADDR_V4COMPAT(a)     ip6_addr_isipv4compat((ip6_addr_t*)(a))
+#define IN6_IS_ADDR_MC_NODELOCAL(a) ip6_addr_ismulticast_iflocal((ip6_addr_t*)(a))
+#define IN6_IS_ADDR_MC_LINKLOCAL(a) ip6_addr_ismulticast_linklocal((ip6_addr_t*)(a))
+#define IN6_IS_ADDR_MC_SITELOCAL(a) ip6_addr_ismulticast_sitelocal((ip6_addr_t*)(a))
+#define IN6_IS_ADDR_MC_ORGLOCAL(a)  ip6_addr_ismulticast_orglocal((ip6_addr_t*)(a))
+#define IN6_IS_ADDR_MC_GLOBAL(a)    ip6_addr_ismulticast_global((ip6_addr_t*)(a))
 
 #ifndef INET_ADDRSTRLEN
 #define INET_ADDRSTRLEN     IP4ADDR_STRLEN_MAX
@@ -165,5 +182,7 @@ extern const struct in6_addr in6addr_any;
 #ifdef __cplusplus
 }
 #endif
+
+#endif /* LWIP_SOCKET_EXTERNAL_HEADERS */
 
 #endif /* LWIP_HDR_INET_H */

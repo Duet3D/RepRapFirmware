@@ -311,7 +311,6 @@ bool CoreKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const String
 	{
 		Kinematics::Configure(mCode, gb, reply, error);
 		reply.catf(", %smatrix:", ((modified) ? "modified " : ""));
-		const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
 		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{

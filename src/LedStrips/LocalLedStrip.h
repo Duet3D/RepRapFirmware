@@ -59,9 +59,9 @@ protected:
 
 	struct LedParams
 	{
-		uint32_t red;
-		uint32_t green;
-		uint32_t blue;
+		uint32_t firstColour;			// the colour that is transmitted first
+		uint32_t secondColour;			// the colour that is transmitted second
+		uint32_t thirdColour;			// the colour that is transmitted last (but before white, if white is supported)
 		uint32_t white;
 		uint32_t brightness;
 		uint32_t numLeds;
@@ -72,6 +72,7 @@ protected:
 #if SUPPORT_REMOTE_COMMANDS
 		void GetM150Params(CanMessageGenericParser& parser) noexcept;
 #endif
+		void SwapColours(ColorOrder order) noexcept;
 	};
 
 	GCodeResult CommonConfigure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array _ecv_null pinName, bool& seen) THROWS(GCodeException);
@@ -101,7 +102,6 @@ protected:
 	static constexpr bool useDma = false;
 #endif
 
-	uint32_t maxLeds = DefaultMaxNumLeds;
 	size_t chunkBufferSize = 0;											// the size of the allocated buffer
 	uint8_t *_ecv_array _ecv_null chunkBuffer = nullptr;				// pointer to 32-bit aligned buffer for holding the data to send
 
@@ -111,8 +111,6 @@ protected:
 
 private:
 	GCodeResult AllocateChunkBuffer(const StringRef& reply) noexcept;
-
-	static constexpr size_t DefaultMaxNumLeds = 60;
 };
 
 #endif

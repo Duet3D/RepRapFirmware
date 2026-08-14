@@ -84,6 +84,30 @@
 #define LWIP_NETCONN            	0
 #define LWIP_SOCKET             	0
 
+/*
+   -----------------------------------------------
+   ---------- Application layer (altcp) -----------
+   -----------------------------------------------
+*/
+
+#ifdef MBEDTLS_CONFIG_FILE
+# define LWIP_ALTCP              1
+# define LWIP_ALTCP_TLS          1
+# define LWIP_ALTCP_TLS_MBEDTLS  1
+# define ALTCP_MBEDTLS_AUTHMODE                 MBEDTLS_SSL_VERIFY_NONE       /* no client cert auth needed for web server */
+# define ALTCP_MBEDTLS_USE_SESSION_CACHE        1
+# define ALTCP_MBEDTLS_USE_SESSION_TICKETS      1
+# define ALTCP_MBEDTLS_SESSION_TICKET_CIPHER    MBEDTLS_CIPHER_AES_128_GCM    /* match our TLS cipher suite */
+# if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
+#  define ALTCP_MBEDTLS_SESSION_CACHE_SIZE  4
+# else
+#  define ALTCP_MBEDTLS_SESSION_CACHE_SIZE  2	// must match MBEDTLS_SSL_CACHE_DEFAULT_MAX_ENTRIES
+# endif
+#else
+# define LWIP_ALTCP              0
+# define LWIP_ALTCP_TLS          0
+#endif
+
 /* Uncomment following line to use DHCP instead of fixed IP */
 #define DHCP_USED
 
@@ -114,12 +138,34 @@
 /**
  * MEM_SIZE: the size of the heap memory. If the application will send
  * a lot of data that needs to be copied, this should be set high.
+ * We allocate the heap dynamically at the time the network is first enabled so that we can
+ * choose the appropriate size depending on whether TLS is required or not.
+ * LWIP_RAM_HEAP_POINTER must be set to the allocated buffer before lwip_init() is called.
  */
 #if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
-#define MEM_SIZE                		16384
+# ifdef MBEDTLS_CONFIG_FILE
+#define MEM_SIZE_WITH_TLS               49152   // 48KiB - LwIP shares its heap with MbedTls
+# endif
+#define MEM_SIZE_WITHOUT_TLS            20480
 #else
-#define MEM_SIZE                		14848
+# ifdef MBEDTLS_CONFIG_FILE
+#define MEM_SIZE_WITH_TLS               43008   // 42KiB - LwIP shares its heap with MbedTls
+# endif
+#define MEM_SIZE_WITHOUT_TLS            16384
 #endif
+
+// MEM_SIZE is set at runtime via lwipHeapSize (see LwipEthernetInterface.cpp).
+// We define a maximum here so that LwIP computes correct internal sizes (e.g. mem_size_t width).
+#ifdef MEM_SIZE_WITH_TLS
+# define MEM_SIZE                       MEM_SIZE_WITH_TLS
+#else
+# define MEM_SIZE                       MEM_SIZE_WITHOUT_TLS
+#endif
+
+// The heap is allocated dynamically in LwipEthernetInterface.cpp before lwip_init() is called.
+// This suppresses the static ram_heap[] BSS array that would otherwise always consume MEM_SIZE bytes.
+extern void *lwipRamHeap;
+#define LWIP_RAM_HEAP_POINTER           lwipRamHeap
 
 /**
  * MEMP_NUM_UDP_PCB: the number of UDP protocol control blocks. One
@@ -135,7 +181,21 @@
 #if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
 # define MEMP_NUM_TCP_PCB				10
 #else
-# define MEMP_NUM_TCP_PCB				8
+# define MEMP_NUM_TCP_PCB				9
+#endif
+
+/**
+ * MEMP_NUM_ALTCP_PCB: the number of simultaneously active ALTCP wrapper PCBs.
+ *
+ * When TLS is enabled, each TLS endpoint can consume more than one ALTCP PCB
+ * (wrapper + inner TCP layer), so this must be larger than MEMP_NUM_TCP_PCB
+ * to avoid allocation failures when opening FTPS data ports. This has a direct
+ * impact on LwIP heap memory if TLS is used
+ */
+#ifdef MBEDTLS_CONFIG_FILE
+# define MEMP_NUM_ALTCP_PCB			(MEMP_NUM_TCP_PCB * 2)
+#else
+# define MEMP_NUM_ALTCP_PCB			MEMP_NUM_TCP_PCB
 #endif
 
 /**
@@ -152,12 +212,19 @@
  * MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments.
  * (requires the LWIP_TCP option)
  */
-# define MEMP_NUM_TCP_SEG				10
+#define MEMP_NUM_TCP_SEG				10
 
 /**
  * MEMP_NUM_REASSDATA: the number of IP packets simultaneously queued for
  * reassembly (whole packets, not fragments!)
  */
+/**
+ * MEMP_NUM_SYS_TIMEOUT: the default (LWIP_NUM_SYS_TIMEOUT_INTERNAL) only
+ * covers the cyclic timers.  mDNS probing, MQTT, and SNTP allocate dynamic
+ * timeouts on top of that, so add headroom.
+ */
+#define MEMP_NUM_SYS_TIMEOUT			(LWIP_NUM_SYS_TIMEOUT_INTERNAL + 4)
+
 #define MEMP_NUM_REASSDATA              5
 
 /**
@@ -191,15 +258,10 @@
 /**
  * PBUF_POOL_SIZE: the number of buffers in the pbuf pool. Needs to be enough for IP packet reassembly.
  */
-#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
-// When SBC mode is enabled we allocate the SBC transfer buffers from the PBUF pool memory.
+// When SBC mode is enabled on the SAME70 we allocate the SBC transfer buffers from the PBUF pool memory.
 // This means that the PBUF pool must be large enough to accommodate those buffers, which currently need 16384 bytes.
-// The non-cached RAM size is set in file Cache.cpp in project CoreN2G. Currently it is set to 80kb.
-// We may as well use the remainder of the non-cached RAM block for additional pbufs, so we allocate a few more here.
-# define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 8)
-#else
-# define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 4)
-#endif
+// The non-cached RAM size is set in file Cache.cpp in project CoreN2G. Currently it is set to 72kb.
+#define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 4)
 
 /**
  * PBUF_POOL_BUFSIZE: the size of each pbuf in the pbuf pool.
@@ -217,6 +279,15 @@
  * LWIP_DHCP==1: Enable DHCP module.
  */
 #define LWIP_DHCP               1
+
+/**
+ * LWIP_DHCP_DOES_ACD_CHECK==0: Bind the interface as soon as the DHCP ACK arrives.
+ * With ACD enabled, dhcp_bind() is deferred until a full RFC 5227 address conflict detection pass
+ * (probe + announce) completes, which adds several seconds of delay before the interface gets its
+ * IP address on every boot. The DHCP server already owns the lease pool, so conflict detection on
+ * a leased address buys us nothing here - skip it for faster network availability.
+ */
+#define LWIP_DHCP_DOES_ACD_CHECK    0
 #endif
 
 /* --------- IGMP options ---------- */
@@ -336,6 +407,7 @@ extern uint32_t random32(void) noexcept;
  */
 #define LWIP_STATS                        1
 
+
 /**
  * LWIP_STATS_DISPLAY==1: Compile in the statistics output functions.
  */
@@ -369,7 +441,7 @@ extern uint32_t random32(void) noexcept;
 
 #define LWIP_NOASSERT					0
 
-#define LWIP_DEBUG
+//#define LWIP_DEBUG
 #define LWIP_DBG_MIN_LEVEL              LWIP_DBG_LEVEL_ALL
 #define LWIP_DBG_TYPES_ON               LWIP_DBG_ON
 

@@ -17,7 +17,7 @@
 enum class TypeCode : uint8_t
 {
 	None = 0,
-	Bool,
+	Bool_tc,
 	Char,
 	Uint32,
 	Int32,
@@ -41,7 +41,7 @@ enum class TypeCode : uint8_t
 	DriverId_tc,		// renamed for eCv to avoid clash with class DriverId
 	MacAddress_tc,		// renamed for eCv to avoid clash with class MacAddress
 	Special,
-	Port,
+	Port_tc,
 	UniqueId_tc,
 	Duration,			// a duration represented an unsigned number of seconds (used by the 12864 LCD code)
 #if SUPPORT_CAN_EXPANSION

@@ -15,6 +15,7 @@
 #include <Movement/StepTimer.h>
 #include <Endstops/Endstop.h>
 #include <Cache.h>
+#include <Serial.h>
 
 # if SAME70
 #  include <xdmac/xdmac.h>
@@ -864,14 +865,9 @@ inline void TmcDriverState::StartTransfer() noexcept
 }
 
 // ISR for the USART
+static void Tmc2660SpiHandler(void*) noexcept SPEED_CRITICAL;
 
-#ifndef TMC2660_SPI_Handler
-# error TMC handler name not defined
-#endif
-
-extern "C" void TMC2660_SPI_Handler(void) noexcept SPEED_CRITICAL;
-
-void TMC2660_SPI_Handler(void) noexcept
+static void Tmc2660SpiHandler(void*) noexcept
 {
 	TmcDriverState *_ecv_array _ecv_null driver = currentDriver;	// capture volatile variable
 	if (driver != nullptr)
@@ -912,7 +908,7 @@ void SmartDrivers::Init(const Pin driverSelectPins[NumDirectDrivers], size_t num
 	numTmc2660Drivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
 
 	// Make sure the ENN pins are high
-	SetPinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
+	SetPinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
 
 	// The pins are already set up for SPI in the pins table
 	SetPinFunction(TMC2660MosiPin, TMC2660PeriphMode);
@@ -935,10 +931,7 @@ void SmartDrivers::Init(const Pin driverSelectPins[NumDirectDrivers], size_t num
 	USART_TMC2660->US_BRGR = SystemCoreClockFreq/DriversSpiClockFrequency;		// set SPI clock frequency
 	USART_TMC2660->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
 
-	// We need a few microseconds of delay here for the USART to sort itself out before we send any data,
-	// otherwise the processor generates two short reset pulses on its own NRST pin, and resets itself.
-	// 2016-07-07: removed this delay, because we no longer send commands to the TMC2660 drivers immediately.
-	//delay(10);
+	Serial::SetUsartVector(Tmc2660UsartInstance, Tmc2660SpiHandler, nullptr);
 #else
 	// Set up the SPI interface with data changing on the falling edge of the clock and captured on the rising edge
 	spi_reset(SPI_TMC2660);										// this clears the transmit and receive registers and puts the SPI into slave mode
@@ -974,7 +967,7 @@ void SmartDrivers::Init(const Pin driverSelectPins[NumDirectDrivers], size_t num
 // Shut down the drivers and stop any related interrupts. Don't call Spin() again after calling this as it may re-enable them.
 void SmartDrivers::Exit() noexcept
 {
-	digitalWrite(GlobalTmc2660EnablePin, HIGH);
+	digitalWrite(GlobalTmcEnablePin, HIGH);
 	NVIC_DisableIRQ(TMC2660_SPI_IRQn);
 	driversState = DriversState::noPower;
 }
@@ -1145,7 +1138,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 
 				if (allInitialised)
 				{
-					digitalWrite(GlobalTmc2660EnablePin, LOW);
+					digitalWrite(GlobalTmcEnablePin, LOW);
 					driversState = DriversState::ready;
 				}
 			}
@@ -1164,7 +1157,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 	}
 	else if (driversState != DriversState::noPower)
 	{
-		digitalWrite(GlobalTmc2660EnablePin, HIGH);			// disable the drivers
+		digitalWrite(GlobalTmcEnablePin, HIGH);			// disable the drivers
 		driversState = DriversState::noPower;
 		EndstopOrZProbe::SetDriversNotStalled(LocalDriversBitmap::MakeLowestNBits(MaxSmartDrivers));
 	}
@@ -1173,7 +1166,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 // This is called from the tick ISR, possibly while Spin (with powered either true or false) is being executed
 void SmartDrivers::TurnDriversOff() noexcept
 {
-	digitalWrite(GlobalTmc2660EnablePin, HIGH);				// disable the drivers
+	digitalWrite(GlobalTmcEnablePin, HIGH);				// disable the drivers
 	driversState = DriversState::noPower;
 	EndstopOrZProbe::SetDriversNotStalled(LocalDriversBitmap::MakeLowestNBits(MaxSmartDrivers));
 }

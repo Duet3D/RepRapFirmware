@@ -13,11 +13,12 @@
 #include "CanMessageBuffer.h"
 #include "CanInterface.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
+#include <limits>
 
 #define STRINGIZE2(_v)	#_v
 #define STRINGIZE(_v)	STRINGIZE2(_v)
 
-CanMessageGenericConstructor::CanMessageGenericConstructor(const ParamDescriptor *p_param) noexcept
+CanMessageGenericConstructor::CanMessageGenericConstructor(const ParamDescriptor *_ecv_array p_param) noexcept
 	: paramTable(p_param), dataLen(0)
 {
 	msg.paramMap = 0;
@@ -50,7 +51,7 @@ void CanMessageGenericConstructor::InsertValue(const void *vp, size_t sz, size_t
 void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb) THROWS(GCodeException)
 {
 	uint32_t paramBit = 1;
-	for (const ParamDescriptor *d = paramTable; d->letter != 0; ++d)
+	for (const ParamDescriptor *_ecv_array d = paramTable; d->letter != 0; ++d)
 	{
 		if (d->letter >= 'A' && d->letter <= 'Z' && gb.Seen(d->letter))			// we use letters outside A..Z to flag a table entry as obsolete
 		{
@@ -169,7 +170,7 @@ unsigned int CanMessageGenericConstructor::FindInsertPoint(char c, ParamDescript
 {
 	unsigned int pos = 0;
 	uint32_t paramBit = 1;
-	for (const ParamDescriptor *d = paramTable; d->letter != 0; ++d)
+	for (const ParamDescriptor *_ecv_array d = paramTable; d->letter != 0; ++d)
 	{
 		const bool present = (msg.paramMap & paramBit) != 0;
 		if (d->letter == c)
@@ -310,7 +311,7 @@ void CanMessageGenericConstructor::AddCharParam(char c, char v) THROWS(GCodeExce
 	InsertValue(&v, sz, pos);
 }
 
-void CanMessageGenericConstructor::AddStringParam(char c, const char *v) THROWS(GCodeException)
+void CanMessageGenericConstructor::AddStringParam(char c, const char *_ecv_array v) THROWS(GCodeException)
 {
 	ParamDescriptor::ParamType t;
 	size_t sz;
@@ -340,7 +341,7 @@ void CanMessageGenericConstructor::AddDriverIdParam(char c, DriverId did) THROWS
 	InsertValue(&did.localDriver, sz, pos);
 }
 
-void CanMessageGenericConstructor::AddFloatArrayParam(char c, const float *v, size_t numV) THROWS(GCodeException)
+void CanMessageGenericConstructor::AddFloatArrayParam(char c, const float *_ecv_array v, size_t numV) THROWS(GCodeException)
 {
 	ParamDescriptor::ParamType t;
 	size_t sz;
@@ -353,9 +354,9 @@ void CanMessageGenericConstructor::AddFloatArrayParam(char c, const float *v, si
 	InsertValue(v, numV * sizeof(float), pos + sizeof(uint8_t));
 }
 
-GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply, uint8_t *extra) const noexcept
+GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply, uint8_t *_ecv_null extra) const noexcept
 {
-	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
+	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
 		reply.copy("no CAN buffer available");

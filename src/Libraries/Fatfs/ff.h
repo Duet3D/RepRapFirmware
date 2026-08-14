@@ -122,11 +122,23 @@ extern PARTITION VolToPart[];	/* Volume - Partition mapping table */
 
 #if FF_STR_VOLUME_ID
 #ifndef FF_VOLUME_STRS
-extern const char* VolumeStr[FF_VOLUMES];	/* User defied volume ID */
+extern const char* VolumeStr[FF_VOLUMES];	/* User defined volume ID */
 #endif
 #endif
 
+#if FF_LRU
 
+typedef struct _DiskBuffer {
+	BYTE *data;					// Pointer to data in suitable memory with suitable alignment
+	struct _DiskBuffer *next;	// Link to next buffer in free buffer list
+	LBA_t sector;				// the sector number in the buffer, if the volume is valid
+	BYTE volume;				// the number of the volume in the buffer
+	bool dirty;					// true if the buffer is dirty and needs to be written back
+} DiskBuffer;
+
+extern void ff_add_buffer_to_freelist(DiskBuffer *buf) noexcept;
+
+#endif
 
 /* Filesystem object structure (FATFS) */
 
@@ -135,7 +147,9 @@ typedef struct {
 	BYTE	pdrv;			/* Volume hosting physical drive */
 	BYTE	ldrv;			/* Logical drive number (used only when FF_FS_REENTRANT) */
 	BYTE	n_fats;			/* Number of FATs (1 or 2) */
+#if !FF_LRU
 	BYTE	wflag;			/* win[] status (b0:dirty) */
+#endif
 	BYTE	fsi_flag;		/* FSINFO status (b7:disabled, b0:dirty) */
 	WORD	id;				/* Volume mount ID */
 	WORD	n_rootdir;		/* Number of root directory entries (FAT12/16) */
@@ -170,15 +184,21 @@ typedef struct {
 #if FF_FS_EXFAT
 	LBA_t	bitbase;		/* Allocation bitmap base sector */
 #endif
-	LBA_t	winsect;		/* Current sector appearing in the win[] */
-#if SAME70
-	BYTE	*win;			// pointer to the sector buffer, which is in non-cached memory
+#if FF_LRU
+	DiskBuffer *sector_buffer;	/* pointer to the disk buffer we are using, or null */
 #else
-	BYTE	win[FF_MAX_SS];	/* Disk access window for Directory, FAT (and file data at tiny cfg) */
+	LBA_t	winsect_act;		/* Current sector appearing in the win[] */
+# if SAME70
+	BYTE	*win_act;			/* pointer to the sector buffer, which is in non-cached memory */
+# else
+	BYTE	win_act[FF_MAX_SS];	/* Disk access window for Directory, FAT (and file data at tiny cfg) */
+# endif
 #endif
 } FATFS;
 
-
+# if SAME70 && !FF_LRU
+static inline void ff_set_win(FATFS *fs, BYTE *buf) noexcept { fs->win_act = buf; }
+# endif
 
 /* Object ID and allocation information (FFOBJID) */
 
@@ -214,7 +234,11 @@ typedef struct {
 	LBA_t	sect;			/* Sector number appearing in buf[] (0:invalid) */
 #if !FF_FS_READONLY
 	LBA_t	dir_sect;		/* Sector number containing the directory entry (not used at exFAT) */
+# if FF_LRU
+	DWORD	dir_ofs;		// offset within sector of directory entry
+# else
 	BYTE*	dir_ptr;		/* Pointer to the directory entry in the win[] (not used at exFAT) */
+# endif
 #endif
 #if FF_USE_FASTSEEK
 	DWORD*	cltbl;			/* Pointer to the cluster link map table (nulled on open, set by application) */
@@ -233,7 +257,11 @@ typedef struct {
 	DWORD	dptr;			/* Current read/write offset */
 	DWORD	clust;			/* Current cluster */
 	LBA_t	sect;			/* Current sector (0:Read operation has terminated) */
+#if FF_LRU
+	DWORD	dir_ofs;		// offset of the directory entry in the sector buffer
+#else
 	BYTE*	dir;			/* Pointer to the directory item in the win[] */
+#endif
 	BYTE	fn[12];			/* SFN (in/out) {body[8],ext[3],status[1]} */
 #if FF_USE_LFN
 	DWORD	blk_ofs;		/* Offset of current entry block being processed (0xFFFFFFFF:Invalid) */
@@ -299,6 +327,9 @@ typedef enum {
 #if 1	//dc42
 	, FR_NOT_EMPTY			/* (20) Can't delete directory because it is not empty */
 #endif
+#if FF_LRU
+	, FR_NOT_IN_BUFFER		// the requested sector was not found in a buffer
+#endif
 } FRESULT;
 
 
@@ -342,7 +373,7 @@ int f_puts (const TCHAR* str, FIL* cp) noexcept;							/* Put a string to the fi
 int f_printf (FIL* fp, const TCHAR* str, ...) noexcept;						/* Put a formatted string to the file */
 TCHAR* f_gets (TCHAR* buff, int len, FIL* fp) noexcept;						/* Get a string from the file */
 
-/* Some API fucntions are implemented as macro */
+/* Some API functions are implemented as macro */
 
 #define f_eof(fp) ((int)((fp)->fptr == (fp)->obj.objsize))
 #define f_error(fp) ((fp)->err)

@@ -2,6 +2,8 @@
 #define PINS_DUET3_MB6HC_H__
 
 #include <PinDescription.h>
+#include <SPI/SpiParameters.h>
+#include <UART/UartParameters.h>
 
 #define BOARD_SHORT_NAME		"MB6HC"
 #define BOARD_NAME				"Duet 3 MB6HC"
@@ -22,14 +24,22 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define HAS_WIFI_NETWORKING		1
 #define WIFI_USES_ESP32			1
 
+#ifndef NO_S_CURVE
+# define SUPPORT_3RD_ORDER		1		// by default we support 3rd-order motion control on the 6HC
+#endif
+
 // Storage support
 #ifdef USE_EMBEDDED_FILES
 # define HAS_EMBEDDED_FILES		1
 # define HAS_SBC_INTERFACE		0
+# define SUPPORTS_SBC_OVER_SPI	0
+# define SUPPORTS_SBC_OVER_USB	0
 # define HAS_MASS_STORAGE		0
 # define HAS_HIGH_SPEED_SD		0
 #else
 # define HAS_SBC_INTERFACE		1
+# define SUPPORTS_SBC_OVER_SPI	1
+# define SUPPORTS_SBC_OVER_USB	CORE_USES_TINYUSB
 # define HAS_MASS_STORAGE		1
 # define HAS_HIGH_SPEED_SD		1
 #endif
@@ -37,7 +47,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define HAS_CPU_TEMP_SENSOR		1
 
 #define SUPPORT_TMC51xx			1
-#define TMC51xx_USES_USART		1
+#define TMC_USES_USART			1
+#define SINGLE_DRIVER			0
 
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			0
@@ -46,6 +57,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define HAS_VREF_MONITOR		1
 
 #define SUPPORT_CAN_EXPANSION	1
+#define SUPPORT_BRS				1
 #define DUAL_CAN				1					// support the second CAN interface as simple CAN (not FD)
 #define SUPPORT_LED_STRIPS		1
 #define SUPPORT_DMA_DOTSTAR		1
@@ -54,8 +66,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_BME280			1
+#define SUPPORT_BME68X			1
 #define SUPPORT_ADS131A02		1
-#define SUPPORT_OBJECT_MODEL	1
 
 #ifdef USE_EMBEDDED_FILES
 #define SUPPORT_ACCELEROMETERS	0
@@ -90,14 +102,15 @@ constexpr size_t MaxSmartDrivers = 6;				// The maximum number of direct smart d
 constexpr size_t MaxCanDrivers = 30;
 constexpr size_t MaxCanBoards = 20;
 
-constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
+constexpr float MaxMotorCurrent = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
 constexpr float Tmc5160SenseResistor = 0.050;
 
 constexpr size_t MaxPortsPerHeater = 3;
 
 constexpr size_t MaxBedHeaters = 12;
 constexpr size_t MaxChamberHeaters = 8;
-constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder heater, used only for the legacy status response
+constexpr size_t MaxHeatersPerBed = 4;
+constexpr size_t MaxHeatersPerChamber = 4;
 
 constexpr size_t NumThermistorInputs = 4;
 constexpr size_t NumTmcDriversSenseChannels = 1;
@@ -114,21 +127,59 @@ constexpr size_t MaxExtrudersPerTool = 12;			// Increased in 3.5.2 because a use
 
 constexpr unsigned int MaxTriggers = 32;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 
-constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
-constexpr size_t FirstAuxChannel = 1;
-constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
+// USB and other serial devices
+#define SERIAL_USB_DEVICE (serialUSB)
+#if CORE_USES_TINYUSB
+constexpr size_t NumUsbChannels = 2;
+# define SERIAL_USB2_DEVICE (serialUSB2)
+#else
+constexpr size_t NumUsbChannels = 1;
+#endif
 
-#define SERIAL_MAIN_DEVICE serialUSB
-#define SERIAL_AUX_DEVICE serialUart1
-#define SERIAL_AUX2_DEVICE serialUart2
+#define NUM_ASYNC_PORTS			(2)
+#define NUM_ASYNC_CHANNELS		(2)
 
-// Shared SPI (USART 1)
-constexpr Pin APIN_USART_SSPI_SCK = PortBPin(13);
-constexpr GpioPinFunction USARTSPIMosiPeriphMode = GpioPinFunction::C;
-constexpr Pin APIN_USART_SSPI_MOSI = PortBPin(1);
-constexpr GpioPinFunction USARTSPIMisoPeriphMode = GpioPinFunction::C;
-constexpr Pin APIN_USART_SSPI_MISO = PortBPin(0);
-constexpr GpioPinFunction USARTSPISckPeriphMode = GpioPinFunction::C;
+constexpr size_t NumSerialChannels = NumUsbChannels + NUM_ASYNC_CHANNELS;				// The number of serial IO channels not counting the WiFi serial connection (USB, USB2, and two auxiliary UARTs)
+
+constexpr UartParameters Serial0Params =
+{
+	.uartOrUsartInstance = 2,						// uart 2
+	.rxPin = PortDPin(25),
+	.txPin = PortDPin(26),
+	.pinFunction = GpioPinFunction::C,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
+
+constexpr UartParameters Serial1Params =
+{
+	.uartOrUsartInstance = 2 | 0x80,				// usart 2
+	.rxPin = PortDPin(15),
+	.txPin = PortDPin(16),
+	.pinFunction = GpioPinFunction::B,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
+
+constexpr UartParameters SerialWiFiParams =
+{
+	.uartOrUsartInstance = 4,						// uart 4
+	.rxPin = PortDPin(18),
+	.txPin = PortDPin(19),
+	.pinFunction = GpioPinFunction::C,
+	.numRxSlots = 512,
+	.numTxSlots = 512
+};
+
+// Shared SPI definitions
+constexpr SpiParameters SharedSpiParams =
+{
+	.usartNumber = 0,
+	.mosiPin = PortBPin(1),
+	.misoPin = PortBPin(0),
+	.sclkPin = PortBPin(13),
+	.pinFunction = GpioPinFunction::C,
+};
 
 constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB port
 
@@ -141,23 +192,22 @@ constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortBPin(05), PortDPin(10), P
 //constexpr Pin DIAG_PINS[NumDirectDrivers] =			{ PortDPin(29), PortCPin(17), PortDPin(13), PortCPin(02), PortDPin(31), PortCPin(10) };
 
 // Pin assignments etc. using USART1 in SPI mode
-constexpr Pin GlobalTmc51xxEnablePin = PortAPin(9);		// The pin that drives ENN of all TMC drivers
-constexpr Pin GlobalTmc51xxCSPin = PortDPin(17);		// The pin that drives CS of all TMC drivers
-Usart * const USART_TMC51xx = USART1;
-constexpr uint32_t  ID_TMC51xx_SPI = ID_USART1;
-constexpr IRQn TMC51xx_SPI_IRQn = USART1_IRQn;
-#define TMC51xx_SPI_Handler	USART1_Handler
+constexpr Pin GlobalTmcEnablePin = PortAPin(9);		// The pin that drives ENN of all TMC drivers
+constexpr Pin GlobalTmcCSPin = PortDPin(17);		// The pin that drives CS of all TMC drivers
+Usart * const USART_TMC = USART1;
+constexpr uint32_t  ID_TMC_SPI = ID_USART1;
+constexpr IRQn TMC_SPI_IRQn = USART1_IRQn;
 
 // These next two are #defines to avoid the need to #include DmacManager.h here
-#define TMC51xx_DmaTxPerid	((uint32_t)DmaTrigSource::usart1tx)
-#define TMC51xx_DmaRxPerid	((uint32_t)DmaTrigSource::usart1rx)
+#define TMC_DmaTxPerid	((uint32_t)DmaTrigSource::usart1tx)
+#define TMC_DmaRxPerid	((uint32_t)DmaTrigSource::usart1rx)
 
-constexpr Pin TMC51xxMosiPin = PortBPin(4);
-constexpr GpioPinFunction TMC51xxMosiPinPeriphMode = GpioPinFunction::D;
-constexpr Pin TMC51xxMisoPin = PortAPin(21);
-constexpr GpioPinFunction TMC51xxMisoPinPeriphMode = GpioPinFunction::A;
-constexpr Pin TMC51xxSclkPin = PortAPin(23);
-constexpr GpioPinFunction TMC51xxSclkPinPeriphMode = GpioPinFunction::A;
+constexpr Pin TMCMosiPin = PortBPin(4);
+constexpr GpioPinFunction TMCMosiPinPeriphMode = GpioPinFunction::D;
+constexpr Pin TMCMisoPin = PortAPin(21);
+constexpr GpioPinFunction TMCMisoPinPeriphMode = GpioPinFunction::A;
+constexpr Pin TMCSclkPin = PortAPin(23);
+constexpr GpioPinFunction TMCSclkPinPeriphMode = GpioPinFunction::A;
 
 constexpr uint32_t DefaultStandstillCurrentPercent = 71;
 
@@ -200,7 +250,7 @@ constexpr Pin UsbDetectPin = PortCPin(19);
 // RS485 control
 // Modbus (board version 1.02 and later)
 constexpr Pin ModbusTxPin = PortCPin(10);										// was Driver 5 diag0 prior to version 1.06c board
-constexpr const char *ModbusTxPinName = "rs485.tx";
+constexpr const char *_ecv_array ModbusTxPinName = "rs485.tx";
 
 // SD cards
 // PD24 is SWD_EXT_RESET on pre-1.02 boards, PanelDue Card Detect on 1.20 and later
@@ -229,11 +279,6 @@ constexpr Pin EthernetPhyOtherPins[] = {
 		PortDPin(5), PortDPin(6), PortDPin(7), PortDPin(8), PortDPin(9)
 };
 constexpr auto EthernetPhyOtherPinsFunction = GpioPinFunction::A;
-
-// Shared SPI definitions
-#define USART_SPI		1
-#define USART_SSPI		USART0
-#define ID_SSPI			ID_USART0
 
 // List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
 // The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
@@ -395,14 +440,6 @@ constexpr size_t NumVirtualPins = 0;
 
 static_assert(NumNamedPins == NumRealPins + NumVirtualPins);
 
-// Serial Interfaces
-constexpr Pin APIN_Serial0_RXD = PortDPin(25);
-constexpr Pin APIN_Serial0_TXD = PortDPin(26);
-constexpr auto Serial0PinFunction = GpioPinFunction::C;
-constexpr Pin APIN_Serial1_RXD = PortDPin(15);
-constexpr Pin APIN_Serial1_TXD = PortDPin(16);
-constexpr auto Serial1PinFunction = GpioPinFunction::B;
-
 // SD Card
 constexpr Pin HsmciMclkPin = PortAPin(25);
 constexpr auto HsmciMclkPinFunction = GpioPinFunction::D;
@@ -440,10 +477,6 @@ constexpr Pin APIN_ESP_SPI_MISO = PortCPin(26);
 constexpr Pin APIN_ESP_SPI_SCK  = PortCPin(24);
 constexpr Pin APIN_ESP_SPI_SS0  = PortCPin(25);
 constexpr GpioPinFunction SPIPeriphMode = GpioPinFunction::C;
-
-constexpr Pin APIN_SerialWiFi_TXD = PortDPin(19);
-constexpr Pin APIN_SerialWiFi_RXD = PortDPin(18);
-constexpr GpioPinFunction SerialWiFiPeriphMode = GpioPinFunction::C;
 
 constexpr Pin EspEnablePin = PortCPin(14);			// Low on this in holds the WiFi module in reset (ESP_EN)
 constexpr Pin EspDataReadyPin = PortAPin(2);		// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)

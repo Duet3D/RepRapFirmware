@@ -7,6 +7,7 @@
 
 #include <GCodes/CollisionAvoider.h>
 #include <Movement/MoveDebugFlags.h>
+#include <limits>
 
 #if SUPPORT_ASYNC_MOVES
 
@@ -60,7 +61,7 @@ bool CollisionAvoider::UpdatePositions(const float axisPositions[], AxesBitmap a
 		{
 			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::CollisionData))
 			{
-				const char *const axisLetters = reprap.GetGCodes().GetAxisLetters();
+				const char *_ecv_array const axisLetters = reprap.GetGCodes().GetAxisLetters();
 				debugPrintf("Potential collision between axis %c at %.1f and axis %c at %.1f\n", axisLetters[lowerAxis], (double)newLowerMax, axisLetters[upperAxis], (double)newUpperMin);
 			}
 			return false;

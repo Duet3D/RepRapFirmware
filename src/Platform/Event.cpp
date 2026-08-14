@@ -230,6 +230,10 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 
 		case EventType::expansion_reconnect:
 			str.printf("Expansion board %u reconnected", ep->boardAddress);
+			if ((ep->param & 2) != 0)
+			{
+				str.cat(", its heaters were switched off");
+			}
 			return ErrorMessage;
 		}
 	}

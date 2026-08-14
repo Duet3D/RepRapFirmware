@@ -15,7 +15,11 @@ unsigned int AppGetXoscFrequency() noexcept
 // Return the XOSC number
 unsigned int AppGetXoscNumber() noexcept
 {
+#ifdef INDX
+	return 0;
+#else
 	return 1;
+#endif
 }
 
 // End

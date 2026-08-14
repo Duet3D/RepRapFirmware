@@ -20,8 +20,6 @@
 // is more likely to cause errors. This constant sets the delay required after a retract or reprime move before we accept the measurement.
 const int32_t SyncDelayMillis = 10;
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -34,14 +32,8 @@ constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. RotatingMagnetFilamentMonitor members
-#ifdef DUET3_ATE
-	{ "agc",				OBJECT_MODEL_FUNC((int32_t)self->agc),																	ObjectModelEntryFlags::live },
-#endif
-	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(
-#if SUPPORT_CAN_EXPANSION
-													self->IsLocal() &&
-#endif
-													self->dataReceived && self->HaveCalibrationData(), self, 1), 					ObjectModelEntryFlags::liveNotPanelDue },
+	{ "agc",				OBJECT_MODEL_FUNC_IF(self->haveAgc, (int32_t)self->agc),												ObjectModelEntryFlags::live },
+	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->HaveCalibrationData(), self, 1), 											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 #ifdef DUET3_ATE
 	{ "mag",				OBJECT_MODEL_FUNC((int32_t)self->magnitude),															ObjectModelEntryFlags::live },
@@ -67,15 +59,13 @@ constexpr uint8_t RotatingMagnetFilamentMonitor::objectModelTableDescriptor[] =
 #ifdef DUET3_ATE
 	4,
 #else
-	2,
+	3,
 #endif
 	4,
 	5
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(RotatingMagnetFilamentMonitor, Duet3DFilamentMonitor)
-
-#endif
 
 RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept
 	: Duet3DFilamentMonitor(drv, monitorType, did),
@@ -97,6 +87,7 @@ void RotatingMagnetFilamentMonitor::Init() noexcept
 	version = 1;
 	magnitude = 0;
 	agc = 0;
+	haveAgc = false;
 	backwards = false;
 	sensorError = false;
 	InitReceiveBuffer();
@@ -114,7 +105,13 @@ void RotatingMagnetFilamentMonitor::Reset() noexcept
 
 bool RotatingMagnetFilamentMonitor::HaveCalibrationData() const noexcept
 {
-	return magneticMonitorState != MagneticMonitorState::calibrating && totalExtrusionCommanded > 10.0;
+#if SUPPORT_CAN_EXPANSION
+	if (!IsLocal())
+	{
+		return hasLiveData && totalExtrusionCommanded > 10.0 && avgPercentage > 0;	// we divide by the average when reconstructing the measured sensitivity
+	}
+#endif
+	return dataReceived && magneticMonitorState != MagneticMonitorState::calibrating && totalExtrusionCommanded > 10.0;
 }
 
 float RotatingMagnetFilamentMonitor::MeasuredSensitivity() const noexcept
@@ -328,6 +325,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 
 					case TypeMagnetV3InfoTypeAgc:
 						agc = val & 0x00FF;
+						haveAgc = true;
 						break;
 
 					default:
@@ -349,12 +347,13 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 		if (receivedPositionReport)
 		{
 			// We have a completed a position report
-			lastKnownPosition = sensorValue & TypeMagnetAngleMask;
+			lastKnownPosition = val & TypeMagnetAngleMask;
 			const uint16_t angleChange = (val - sensorValue) & TypeMagnetAngleMask;			// angle change in range 0..1023
 			const int32_t movement = (angleChange <= 512) ? (int32_t)angleChange : (int32_t)angleChange - 1024;
 			movementMeasuredSinceLastSync += (float)movement/1024;
 			sensorValue = val;
 			lastMeasurementTime = millis();
+			CheckForMotion(val & TypeMagnetAngleMask, TypeMagnetAngleMask, MotionDetectionMinCounts);
 
 			if (haveStartBitData)					// if we have a synchronised value for the amount of extrusion commanded
 			{
@@ -532,6 +531,17 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear() noexcept
 						: FilamentSensorStatus::ok;
 }
 
+// Get the filament present state of the optional microswitch, returning true if it is known
+bool RotatingMagnetFilamentMonitor::GetLocalFilamentPresent(bool& present) const noexcept
+{
+	if (switchOpenMask == 0 || !dataReceived || sensorError)
+	{
+		return false;
+	}
+	present = (sensorValue & switchOpenMask) == 0;
+	return true;
+}
+
 // Print diagnostic info for this sensor
 void RotatingMagnetFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
 {
@@ -663,6 +673,41 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 		}
 	}
 	return rslt;
+}
+
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+
+// Update the live data of a remote monitor. The measured calibration data isn't sent over CAN, so reconstruct it from the percentages and the configured sensitivity
+void RotatingMagnetFilamentMonitor::UpdateLiveData(const FilamentMonitorDataV2& data) noexcept
+{
+	Duet3DFilamentMonitor::UpdateLiveData(data);
+	if (data.extraDataValid)
+	{
+		agc = data.extraData;
+		haveAgc = true;
+	}
+	if (hasLiveData)
+	{
+		totalMovementMeasured = totalExtrusionCommanded * (float)avgPercentage/(100 * mmPerRev);
+		minMovementRatio = (float)minPercentage/(100 * mmPerRev);
+		maxMovementRatio = (float)maxPercentage/(100 * mmPerRev);
+	}
+}
+
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+
+void RotatingMagnetFilamentMonitor::GetLiveData(FilamentMonitorDataV2& data) const noexcept
+{
+	Duet3DFilamentMonitor::GetLiveData(data);
+	if (haveAgc)
+	{
+		data.extraDataValid = 1;
+		data.extraData = agc;
+	}
 }
 
 #endif

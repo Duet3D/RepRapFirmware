@@ -50,8 +50,6 @@ constexpr size_t LargeFontNumber = 0;
 constexpr uint32_t NormalRefreshMillis = 250;
 constexpr uint32_t FastRefreshMillis = 50;
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -73,8 +71,6 @@ constexpr ObjectModelTableEntry Display::objectModelTable[] =
 constexpr uint8_t Display::objectModelTableDescriptor[] = { 1, 1 + SUPPORT_ROTARY_ENCODER };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Display)
-
-#endif
 
 Display::Display() noexcept
 	: lcd(nullptr), menu(nullptr),
@@ -257,18 +253,13 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 
 #if SUPPORT_ILI9488_LCD
 		case 3:		// SPI TFT display with ILI9488 controller
-			SetPinFunction(LcdSpiMosiPin, LcdSpiPinFunction);
-			SetPinFunction(LcdSpiMisoPin, LcdSpiPinFunction);
-			SetPinFunction(LcdSpiSclkPin, LcdSpiPinFunction);
-			SetDriveStrength(LcdSpiMosiPin, 2);
-			SetDriveStrength(LcdSpiSclkPin, 2);
 			SetPinMode(LcdFlashCsPin, OUTPUT_HIGH);							// in case the flash chip is fitted, deselect it
 			SetPinMode(LcdFontCsPin, OUTPUT_HIGH);							// in case the font chip is fitted, deselect it
 			InitDisplay(gb,
 # if USE_FONT_CHIP
-							new LcdILI9488(LcdFontCsPin, LcdSercomNumber),
+							new LcdILI9488(LcdFontCsPin, LcdSpiParams),
 # else
-							new LcdILI9488(tftFonts, ARRAY_SIZE(tftFonts), LcdSercomNumber),
+							new LcdILI9488(tftFonts, ARRAY_SIZE(tftFonts), LcdSpiParams),
 # endif
 								LcdSpiCsPin, NoPin, false);
 			touchController = new ResistiveTouch(RtpSpiCsPin, RtpPenPin);

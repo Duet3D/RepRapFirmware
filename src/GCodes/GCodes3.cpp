@@ -21,7 +21,7 @@
 #include <Hardware/I2C.h>
 #include <Movement/StepperDrivers/SmartDrivers.h>
 
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+#if HAS_WIFI_NETWORKING || NUM_ASYNC_CHANNELS != 0 || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 # include <Comms/FirmwareUpdater.h>
 #endif
 
@@ -48,7 +48,8 @@ GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply) THROWS
 	bool dummySeen;
 	gb.TryGetLimitedUIValue('S', sParam, dummySeen, NumVisibleRestorePoints);
 	SavePosition(gb, sParam);
-	reprap.StateUpdated();										// tell DWC/DSF that a restore point has been changed
+	reprap.StateUpdated();										// tell DWC/DSF that a restore point has been changed (copy in 'state')
+	reprap.MotionSystemUpdated();								// tell DWC/DSF that a restore point, nextToolNumber and the previousToolNumber have been updated (copy in 'move.motionSystems')
 	return GCodeResult::ok;
 }
 
@@ -113,7 +114,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 		ToolOffsetTransform(ms);
 
 		Move& move = reprap.GetMove();
-		if (move.GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesIncluded, false, limitAxes) != LimitPositionResult::ok)
+		if (move.GetKinematics().LimitPosition(ms.raw.coords, nullptr, numVisibleAxes, axesIncluded, false, limitAxes) != LimitPositionResult::ok)
 		{
 			ToolOffsetInverseTransform(ms);					// make sure the limits are reflected in the user position
 		}
@@ -395,8 +396,8 @@ GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 	Platform& pfm = platform;
 	const bool ok = endstopsToWaitFor.IterateWhile([&pfm, activeHigh](unsigned int axis, unsigned int) noexcept -> bool
 								{
-									const bool stopped = pfm.GetEndstops().Stopped(axis);
-									return stopped == activeHigh;
+									const bool isStopped = pfm.GetEndstops().Stopped(axis);
+									return isStopped == activeHigh;
 								}
 							 )
 				&& portsToWaitFor.IterateWhile([&pfm, activeHigh](unsigned int port, unsigned int) noexcept -> bool
@@ -410,6 +411,7 @@ GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 // Handle M581
 GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	if (gb.GetCommandFraction() > 1) { return GCodeResult::errorNotSupported; }
 	const unsigned int triggerNumber = gb.GetLimitedUIValue('T', MaxTriggers);
 	return triggers[triggerNumber].Configure(triggerNumber, gb, reply);
 }
@@ -419,7 +421,7 @@ GCodeResult GCodes::CheckTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS
 {
 	const unsigned int triggerNumber = gb.GetLimitedUIValue('T', MaxTriggers);
 	const bool unconditional = gb.Seen('S') && gb.GetUIValue() == 1;
-	if (unconditional || triggers[triggerNumber].CheckLevel())
+	if (unconditional || triggers[triggerNumber].CheckLevel(triggerNumber))
 	{
 		triggersPending.SetBit(triggerNumber);
 	}
@@ -528,7 +530,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 					reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numTotalAxes, initialCoords);
 					for (MovementState& ms : moveStates)
 					{
-						ms.coords[drive] = initialCoords[drive];		// user has defined a new axis, so set its position
+						ms.raw.coords[drive] = initialCoords[drive];		// user has defined a new axis, so set its position
 						ToolOffsetInverseTransform(ms);
 					}
 					reprap.MoveUpdated();
@@ -588,6 +590,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	if (seen || seenExtrude)
 	{
+#if SUPPORT_3RD_ORDER
+		move.UpdateSCurveFlagAndJerk();
+#endif
 		reprap.MoveUpdated();
 #if SUPPORT_CAN_EXPANSION
 		rslt = max(rslt, move.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply));
@@ -721,7 +726,7 @@ GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply) THROWS(
 	return GCodeResult::ok;
 }
 
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+#if HAS_WIFI_NETWORKING || NUM_ASYNC_CHANNELS != 0 || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Handle M997
 GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
@@ -742,7 +747,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THRO
 	}
 #endif
 
-#if HAS_AUX_DEVICES && ALLOW_ARBITRARY_PANELDUE_PORT	// Disabled until we allow PanelDue on another port
+#if NUM_ASYNC_CHANNELS != 0 && ALLOW_ARBITRARY_PANELDUE_PORT	// Disabled until we allow PanelDue on another port
 	if (gb.Seen('A'))
 	{
 		serialChannelForPanelDueFlashing = gb.GetLimitedUIValue('A', NumSerialChannels, 1);
@@ -800,14 +805,14 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THRO
 		}
 
 		// Check prerequisites of all modules to be updated, if any are not met then don't update any of them
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
+#if HAS_WIFI_NETWORKING || NUM_ASYNC_CHANNELS != 0
 		const auto result = FirmwareUpdater::CheckFirmwareUpdatePrerequisites(
 				firmwareUpdateModuleMap, gb, reply,
-# if HAS_AUX_DEVICES
+# if NUM_ASYNC_CHANNELS != 0
 				serialChannelForPanelDueFlashing,
-#else
+# else
 				0,
-#endif
+# endif
 				filenameString.GetRef());
 		if (result != GCodeResult::ok)
 		{
@@ -935,6 +940,9 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 
 	if (seen)
 	{
+#if SUPPORT_3RD_ORDER
+		move.UpdateSCurveFlagAndJerk();
+#endif
 		reprap.MoveUpdated();
 	}
 	else
@@ -1011,6 +1019,27 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 					:
 #endif
 					reprap.GetMove().ConfigureLocalDriver(gb, reply, id.localDriver);
+#if SUPPORT_CAN_EXPANSION
+		// If it's M569 with an S parameter then store the direction setting
+		if (res <= GCodeResult::warning && gb.GetCommandFraction() <= 0 && id.IsRemote())
+		{
+			bool direction;
+			bool seen = false;
+			if (gb.TryGetBValue('S', direction, seen))
+			{
+				reprap.GetExpansion().StoreDriverDirection(id, direction);
+			}
+			uint32_t mode;
+			if (gb.TryGetUIValue('D', mode, seen))
+			{
+				reprap.GetExpansion().StoreDriverMode(id, mode);
+			}
+			if (seen)
+			{
+				reprap.BoardsUpdated();
+			}
+		}
+#endif
 		if (res != GCodeResult::ok || (!isSetOfReadings && gb.GetCommandFraction() != 4))
 		{
 			break;
@@ -1238,8 +1267,7 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 						}
 						text += 6;			// skip ", z = "
 					}
-					// no break
-
+					[[fallthrough]];
 				case 7:		// new layer, but we are given the Z height, not the layer number
 				case 8:
 					{
@@ -1347,11 +1375,8 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 	}
 	else
 	{
-		// It's a serious event that causes the print to pause by default, so send an alert
-		if ((mt & LogLevelMask) != 0)
-		{
-			platform.MessageF((MessageType)(mt & (LogLevelMask | ErrorMessageFlag | WarningMessageFlag)), "%s\n", eventText.c_str());	// log the event
-		}
+		// It's a serious event that causes the print to pause by default, so send an alert, also log the message and include it in the DWC console
+		platform.MessageF((MessageType)(HttpMessage | (mt & (LogLevelMask | ErrorMessageFlag | WarningMessageFlag))), "%s\n", eventText.c_str());	// log the event
 		const bool isPrinting = IsReallyPrinting();
 		reprap.SendSimpleAlert(GenericMessage, eventText.c_str(), (isPrinting) ? "Printing paused" : "Event notification");
 		if (IsReallyPrinting())

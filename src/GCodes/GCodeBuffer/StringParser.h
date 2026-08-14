@@ -40,6 +40,7 @@ public:
 	char GetCommandLetter() const noexcept { return commandLetter; }
 	bool HasCommandNumber() const noexcept { return hasCommandNumber; }
 	int GetCommandNumber() const noexcept { return commandNumber; }
+	void SetModalGCommand(int num) noexcept;
 	int8_t GetCommandFraction() const noexcept { return commandFraction; }
 	bool IsLastCommand() const noexcept;
 	bool ContainsExpression() const noexcept { return seenExpression; }
@@ -62,6 +63,7 @@ public:
 	void GetUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCodeException);				// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);				// Get a :-separated list of drivers after a key letter
 	ExpressionValue GetExpression() THROWS(GCodeException);										// Get an expression after a key letter
+	bool GetStringOrUIValue(uint32_t& uival, const StringRef& str) THROWS(GCodeException);		// Get an unsigned integer or nonempty string after a key letter
 
 	void ResetIndentationAfterPop() noexcept;										// Reset the indentation level to the last one
 	void SetFinished() noexcept;											// Set the G Code finished
@@ -101,7 +103,7 @@ private:
 	bool LineFinished() noexcept;											// Deal with receiving end-of-line and return true if we have a command
 	void InternalGetQuotedString(const StringRef& str) THROWS(GCodeException)
 		pre (readPointer >= 0; gb.buffer[readPointer] == '"'; str.IsEmpty());
-	void InternalGetPossiblyQuotedString(const StringRef& str) THROWS(GCodeException)
+	void InternalGetPossiblyQuotedString(const StringRef& str, bool stopStopAtSpace) THROWS(GCodeException)
 		pre (readPointer >= 0);
 	float ReadFloatValue() THROWS(GCodeException);
 	uint32_t ReadUIValue() THROWS(GCodeException);
@@ -166,7 +168,6 @@ private:
 	bool seenLeadingTab;
 	bool seenMetaCommand;
 	bool warnedAboutMixedSpacesAndTabs;
-	bool overflowed;
 	bool seenExpression;
 
 	bool checksumRequired;								// True if we only accept commands with a valid checksum

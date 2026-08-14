@@ -24,6 +24,13 @@ struct MotionParameters
 	float position = 0.0;
 	float speed = 0.0;
 	float acceleration = 0.0;
+
+	void Scale(float multiplier) noexcept
+	{
+		position *= multiplier;
+		speed *= multiplier;
+		acceleration *= multiplier;
+	}
 };
 
 enum class StepMode
@@ -45,7 +52,7 @@ struct PhaseStepParams
 	float Ka;
 };
 
-const char* TranslateStepMode(const StepMode mode) noexcept;
+const char *_ecv_array TranslateStepMode(const StepMode mode) noexcept;
 
 class PhaseStep
 {
@@ -62,7 +69,7 @@ public:
 	bool IsEnabled() const noexcept { return enabled; }
 	void UpdatePhaseOffset(size_t driver) noexcept;
 	void SetPhaseOffset(size_t driver, uint16_t offset) noexcept;
-	uint16_t GetPhaseOffset(size_t driver) const noexcept;
+	uint16_t GetPhaseOffset(size_t driver) noexcept;
 	float CalculateCurrentFraction() noexcept;
 
 	// Configuration methods

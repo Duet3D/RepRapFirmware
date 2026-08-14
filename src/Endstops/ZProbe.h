@@ -16,7 +16,7 @@ public:
 	ZProbe(unsigned int num, ZProbeType p_type) noexcept;
 
 	virtual void SetIREmitter(bool on) const noexcept = 0;			// caution, this is called from within the tick ISR
-	virtual uint32_t GetRawReading() const noexcept = 0;
+	virtual int32_t GetRawReading() const noexcept = 0;
 	virtual bool SetProbing(bool isProbing) noexcept = 0;			// put the probe in the probing state, returning true if successful
 	virtual GCodeResult AppendPinNames(const StringRef& str) noexcept = 0;		// not const because it may update the state too
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException);		// 'seen' is an in-out parameter
@@ -32,12 +32,15 @@ public:
 	virtual GCodeResult CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) { return GCodeResult::error; }
 #endif
 
+	// The following should never be called for a non-load-cell probe, so by default we just return error with no message
+	virtual GCodeResult Tare(const StringRef& reply) noexcept { return GCodeResult::error; }
+
 #if SUPPORT_CAN_EXPANSION
 	// Process a remote input change that relates to this Z probe
-	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState, uint32_t reading) noexcept { }
+	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, uint32_t when, bool newState, int32_t reading) noexcept { }
 
 	// Process a remote reading that relates to this Z probe
-	virtual void UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint32_t reading) noexcept { }
+	virtual void UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint32_t when, int32_t reading) noexcept { }
 #endif
 
 	bool Stopped() const noexcept override;
@@ -63,6 +66,7 @@ public:
 	bool GetTurnHeatersOff() const noexcept { return misc.parts.turnHeatersOff; }
 	bool GetSaveToConfigOverride() const noexcept { return misc.parts.saveToConfigOverride; }
 	int32_t GetTargetAdcValue() const noexcept { return targetAdcValue; }
+	int32_t GetThresholdCounts() const noexcept;
 	unsigned int GetMaxTaps() const noexcept { return misc.parts.maxTaps; }
 	int32_t GetReading() const noexcept;
 	int32_t GetSecondaryValues(int32_t& v1) const noexcept;
@@ -73,6 +77,8 @@ public:
 	void SetSaveToConfigOverride() noexcept { misc.parts.saveToConfigOverride = true; }
 	void SetDeployedByUser(bool b) noexcept { isDeployedByUser = b; }
 	void SetLastStoppedHeight(float h) noexcept;
+
+	bool IsLoadCell() const noexcept { return type == ZProbeType::loadCell; }				// load cell probes report a force and need a scale to convert the reading
 
 #if SUPPORT_SCANNING_PROBES
 	// Scanning Z probe support
@@ -94,6 +100,10 @@ public:
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
+
+#if SUPPORT_CAN_EXPANSION
+	virtual bool IsRemote() const noexcept { return false; }	// overridden in class RemoteZProbe
+#endif
 
 	float GetTriggerHeightCompensation() const noexcept;		// return the amount by which the trigger height is increased by temperature compensation
 
@@ -119,6 +129,9 @@ protected:
 	float tolerance;					// maximum difference between probe heights when doing >1 taps
 	float actualTriggerHeight;			// the actual trigger height of the probe, taking account of the temperature coefficient
 	float lastStopHeight;				// the height at which the last G30 probe move stopped
+	float gramsPerCount;				// load cell scale, zero if the probe is not a force-sensing one. Carries the sign, because the reading may fall under load.
+	float preloadLimits[2];				// safe window for the load cell preload in grams, active when the first value is below the second
+	int32_t tareBaseline;				// the reading that the load cell tare latched, in raw counts
 
 #if SUPPORT_SCANNING_PROBES
 	// Scanning support
@@ -152,7 +165,7 @@ public:
 	~MotorStallZProbe() override { }
 
 	void SetIREmitter(bool on) const noexcept override { }
-	uint32_t GetRawReading() const noexcept override { return 4000; }
+	int32_t GetRawReading() const noexcept override { return 4000; }
 	bool SetProbing(bool isProbing) noexcept override { return true; }
 	GCodeResult AppendPinNames(const StringRef& str) noexcept override { return GCodeResult::ok; }
 
@@ -169,7 +182,7 @@ public:
 	~DummyZProbe() noexcept override { }
 
 	void SetIREmitter(bool on) const noexcept override { }
-	uint32_t GetRawReading() const noexcept override { return 4000; }
+	int32_t GetRawReading() const noexcept override { return 4000; }
 	bool SetProbing(bool isProbing) noexcept override { return true; }
 	GCodeResult AppendPinNames(const StringRef& str) noexcept override { return GCodeResult::ok; }
 

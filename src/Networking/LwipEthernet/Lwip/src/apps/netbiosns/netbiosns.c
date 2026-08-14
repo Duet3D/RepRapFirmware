@@ -240,12 +240,12 @@ static struct udp_pcb *netbiosns_pcb;
 
 /** Decode a NetBIOS name (from packet to string) */
 static int
-netbiosns_name_decode(char *name_enc, char *name_dec, int name_dec_len)
+netbiosns_name_decode(const char *name_enc, char *name_dec, int name_dec_len)
 {
-  char *pname;
-  char  cname;
-  char  cnbname;
-  int   idx = 0;
+  const char *pname;
+  char       cname;
+  char       cnbname;
+  int        idx = 0;
 
   LWIP_UNUSED_ARG(name_dec_len);
 
@@ -391,7 +391,7 @@ netbiosns_recv(void *arg, struct udp_pcb *upcb, struct pbuf *p, const ip_addr_t 
               resp->resp_hdr.authorityRRs  = 0;
               resp->resp_hdr.additionalRRs = 0;
 
-              /* prepare NetBIOS header datas */
+              /* prepare NetBIOS header data */
               MEMCPY( resp->resp_name.encname, netbios_question_hdr->encname, sizeof(netbios_question_hdr->encname));
               resp->resp_name.nametype     = netbios_question_hdr->nametype;
               resp->resp_name.type         = netbios_question_hdr->type;

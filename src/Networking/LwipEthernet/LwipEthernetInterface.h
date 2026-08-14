@@ -15,8 +15,13 @@
 #include <Networking/NetworkInterface.h>
 #include <Networking/NetworkDefs.h>
 
+extern "C" {
+#include "lwip/opt.h"
+}
+
 // We have 8 sockets available for Ethernet
-const size_t NumHttpSockets = 5;				// sockets 0-4 are for HTTP
+const size_t NumHttpSockets = 5;					// sockets 0-4 are for HTTP
+
 const SocketNumber FtpSocketNumber = 5;
 const SocketNumber FtpDataSocketNumber = 6;
 const SocketNumber TelnetSocketNumber = 7;
@@ -31,7 +36,8 @@ const size_t NumEthernetSockets = 8;
 
 // Forward declarations
 class LwipSocket;
-struct tcp_pcb;
+struct altcp_pcb;
+struct altcp_tls_config;
 
 // The main network class that drives Ethernet network.
 class LwipEthernetInterface : public NetworkInterface
@@ -45,7 +51,7 @@ public:
 	void Spin() noexcept override;
 	void Diagnostics(const StringRef& reply) noexcept override;
 
-	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
+	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, int tlsParam = 1) noexcept override;			// enable or disable the network
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
 	int EnableState() const noexcept override;
@@ -63,9 +69,9 @@ public:
 	const MacAddress& GetMacAddress() const noexcept override { return macAddress; }
 
 	// LwIP interfaces
-	bool ConnectionEstablished(tcp_pcb *pcb) noexcept;
+	bool ConnectionEstablished(altcp_pcb *pcb) noexcept;
 
-	void OpenDataPort(TcpPort port) noexcept override;
+	bool OpenDataPort(TcpPort port, bool useTls = false) noexcept override;
 	void TerminateDataPort() noexcept override;
 
 protected:
@@ -96,17 +102,31 @@ private:
 	void ShutdownProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumSelectableProtocols);
 
+#if LWIP_ALTCP_TLS
+	bool SupportsTls() const noexcept override { return tlsConfig != nullptr; }
+	uint8_t *ReadPemFile(const char *filename, size_t& len) noexcept;
+	bool LoadTlsCertificates(const StringRef& reply) noexcept override;
+	void FreeTlsConfig() noexcept;
+#endif
+
 	Platform& platform;
 
 	LwipSocket *sockets[NumEthernetSockets];
-	size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
 
 	bool closeDataPort;
-	tcp_pcb *listeningPcbs[NumTcpProtocols];
+	altcp_pcb *listeningPcbs[NumTcpProtocols];
+
+#if LWIP_ALTCP_TLS
+	altcp_pcb *tlsListeningPcbs[NumSelectableProtocols];
+	altcp_tls_config *tlsConfig = nullptr;
+#endif
 
 	bool activated;
 	bool initialised;
 	bool usingDhcp = true;
+#if LWIP_ALTCP_TLS
+	bool tlsAllowed = true;							// if false, allocate the smaller non-TLS heap on first Start()
+#endif
 
 	IPAddress ipAddress;
 	IPAddress netmask;

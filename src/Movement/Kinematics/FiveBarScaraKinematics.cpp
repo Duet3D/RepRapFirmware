@@ -21,8 +21,6 @@
 
 //#define debugPrintf if(0) debugPrintf
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -41,8 +39,6 @@ constexpr ObjectModelTableEntry FiveBarScaraKinematics::objectModelTable[] =
 constexpr uint8_t FiveBarScaraKinematics::objectModelTableDescriptor[] = { 1, 1 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(FiveBarScaraKinematics, ZLeadscrewKinematics)
-
-#endif
 
 FiveBarScaraKinematics::FiveBarScaraKinematics() noexcept
 	: ZLeadscrewKinematics(KinematicsType::scara, SegmentationType(true, false, false))
@@ -181,7 +177,7 @@ bool FiveBarScaraKinematics::isCantilevered(int mode) const noexcept
 float FiveBarScaraKinematics::getAbsoluteAngle(float xOrig, float yOrig, float xDest, float yDest) const noexcept
 {
 	const float length = fastSqrtf(fsquare(xOrig - xDest) + fsquare(yOrig - yDest));
-	const float y = fabs(yOrig - yDest);
+	const float y = fabsf(yOrig - yDest);
 	float angle = asinf(y / length) * 180.0f / Pi;
 
 	const int quad = getQuadrant(xDest - xOrig, yDest - yOrig);

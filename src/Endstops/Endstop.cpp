@@ -6,13 +6,12 @@
  */
 
 #include "Endstop.h"
+#include <Movement/StepTimer.h>
 
 // Endstop base class
-#if SUPPORT_TMC2660 || SUPPORT_TMC51xx
+#if SUPPORT_TMC2660 || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
 LocalDriversBitmap EndstopOrZProbe::stalledDrivers;			// used to track which drivers are reported as stalled, for stall detect endstops and stall detect Z probes
 #endif
-
-#if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -36,11 +35,15 @@ constexpr uint8_t Endstop::objectModelTableDescriptor[] = { 1, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Endstop)
 
-#endif
-
 Endstop::Endstop(uint8_t p_axis, EndStopPosition pos) noexcept
 	: EndstopOrZProbe(p_axis), atHighEnd(pos == EndStopPosition::highEndStop)
 {
+}
+
+void EndstopHitDetails::SetAction(EndstopHitAction a, uint32_t p_whenTriggered, bool p_haveTriggerTime) noexcept
+{
+	action = (uint32_t)a;
+	whenTriggered = (p_haveTriggerTime) ? p_whenTriggered : StepTimer::GetTimerTicks();
 }
 
 // End

@@ -10,15 +10,15 @@
 #if SUPPORT_CAN_EXPANSION
 
 #include <CAN/CanInterface.h>
+#include <CAN/CanMessageGenericConstructor.h>
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <Platform/Event.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/StepTimer.h>
+#include <CanMessageGenericTables.h>
 
 ReadWriteLock ExpansionManager::boardsLock;
-
-#if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -34,9 +34,9 @@ constexpr ObjectModelArrayTableEntry ExpansionManager::objectModelArrayTable[] =
 	// 0. Drivers
 	{
 		&boardsLock,
-		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t
+		[] (const ObjectModel *_ecv_from self, const ObjectExplorationContext& context) noexcept -> size_t
 				{ return ((const ExpansionManager*)self)->FindIndexedBoard(context.GetLastIndex()).numDrivers; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+		[] (const ObjectModel *_ecv_from self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 				{ return ExpressionValue(&((const ExpansionManager*)self)->FindIndexedBoard(context.GetIndex(1)).driverData[context.GetLastIndex()]); }
 	}
 };
@@ -63,6 +63,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	{ "name",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::longName),			ObjectModelEntryFlags::none },
 	{ "shortName",			OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::shortName),			ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).state.ToString()),								ObjectModelEntryFlags::none },
+	{ "timeout",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).connectionTimeoutSeconds),			ObjectModelEntryFlags::none },
 	{ "uniqueId",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).uniqueId.IsValid(),
 													self->FindIndexedBoard(context.GetLastIndex()).uniqueId),								ObjectModelEntryFlags::none },
 	{ "v12",				OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasV12, self, 3),							ObjectModelEntryFlags::liveNotPanelDue },
@@ -98,7 +99,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 {
 	7,				// number of sections
-	17,				// section 0: boards[]
+	18,				// section 0: boards[]
 	3,				// section 1: mcuTemp
 	3,				// section 2: vIn
 	3,				// section 3: v12
@@ -109,14 +110,13 @@ constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ExpansionManager)
 
-#endif
-
 ExpansionBoardData::ExpansionBoardData() noexcept
 	: typeName(nullptr), neverUsedRam(0),
 	  accelerometerLastRunDataPoints(0), closedLoopLastRunDataPoints(0),
 	  whenLastStatusReportReceived(0),
 	  driverData(nullptr),
 	  accelerometerRuns(0), closedLoopRuns(0),
+	  connectionTimeoutSeconds(DefaultConnectionTimeoutSeconds),
 	  hasMcuTemp(false), hasVin(false), hasV12(false), hasAccelerometer(false),
 	  state(BoardState::unknown), numDrivers(0)
 {
@@ -174,7 +174,12 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 
 			board.neverUsedRam = 0;
 			board.whenLastStatusReportReceived = millis();
-			if (board.state == BoardState::running)
+			if (isNewFormat && buf->msg.announceV1.isReconnect)
+			{
+				// The board lost and regained time sync but did not restart, so its configuration is intact. P bit 1 tells the event macro whether the board switched its heaters off
+				Event::AddEvent(EventType::expansion_reconnect, (buf->msg.announceV1.wasShutDown) ? 3 : 1, src, 0, "");
+			}
+			else if (board.state == BoardState::running)
 			{
 				Event::AddEvent(EventType::expansion_reconnect, 0, src, 0, "");
 			}
@@ -182,17 +187,17 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 			String<StringLength100> boardTypeAndFirmwareVersion;
 			if (isNewFormat)
 			{
-				boardTypeAndFirmwareVersion.copy(buf->msg.announceNew.boardTypeAndFirmwareVersion, CanMessageAnnounceNew::GetMaxTextLength(buf->dataLength));
+				boardTypeAndFirmwareVersion.copy(buf->msg.announceV1.boardTypeAndFirmwareVersion, CanMessageAnnounceV1::GetMaxTextLength(buf->dataLength));
 			}
 			else
 			{
-				boardTypeAndFirmwareVersion.copy(buf->msg.announceOld.boardTypeAndFirmwareVersion, CanMessageAnnounceOld::GetMaxTextLength(buf->dataLength));
+				boardTypeAndFirmwareVersion.copy(buf->msg.announceV0.boardTypeAndFirmwareVersion, CanMessageAnnounceV0::GetMaxTextLength(buf->dataLength));
 			}
 			UpdateBoardState(src, BoardState::unknown);
 			if (board.typeName == nullptr || strcmp(board.typeName, boardTypeAndFirmwareVersion.c_str()) != 0)
 			{
 				// To save memory, see if we already have another board with the same type name
-				const char *newTypeName = nullptr;
+				const char *_ecv_array _ecv_null newTypeName = nullptr;
 				for (const ExpansionBoardData& data : boards)
 				{
 					if (data.typeName != nullptr && strcmp(boardTypeAndFirmwareVersion.c_str(), data.typeName) == 0)
@@ -204,7 +209,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 
 				if (newTypeName == nullptr)
 				{
-					char * const temp = new char[boardTypeAndFirmwareVersion.strlen() + 1];
+					char *_ecv_array const temp = new char[boardTypeAndFirmwareVersion.strlen() + 1];
 					strcpy(temp, boardTypeAndFirmwareVersion.c_str());
 					newTypeName = temp;
 				}
@@ -213,13 +218,13 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 				DeleteArray(board.driverData);
 				if (isNewFormat)
 				{
-					board.numDrivers = buf->msg.announceNew.numDrivers;
-					board.usesUf2Binary = buf->msg.announceNew.usesUf2Binary;
-					board.uniqueId.SetFromRemote(buf->msg.announceNew.uniqueId);
+					board.numDrivers = buf->msg.announceV1.numDrivers;
+					board.usesUf2Binary = buf->msg.announceV1.usesUf2Binary;
+					board.uniqueId.SetFromRemote(buf->msg.announceV1.uniqueId);
 				}
 				else
 				{
-					board.numDrivers = buf->msg.announceOld.numDrivers;
+					board.numDrivers = buf->msg.announceV0.numDrivers;
 					board.usesUf2Binary = false;
 					board.uniqueId.Clear();
 				}
@@ -246,48 +251,99 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 		UpdateBoardState(address, BoardState::running);
 	}
 
-	const CanMessageBoardStatus& msg = buf->msg.boardStatus;
-	if (msg.hasMovementDelay)
+	if (buf->id.MsgType() == CanMessageType::boardStatusReportV1)
 	{
-		StepTimer::ProcessMovementDelayRequest(msg.movementDelay);
+		const CanMessageBoardStatusV1& msg = buf->msg.boardStatusV1;
+		if (msg.hasMovementDelay)
+		{
+			StepTimer::ProcessMovementDelayRequest(msg.movementDelay);
+		}
+		else
+		{
+			board.neverUsedRam = msg.neverUsedRam;
+		}
+
+		// We must process the data in the correct order, to ensure that we pick up the right values
+		size_t index = 0;
+		board.hasVin = msg.hasVin;
+		if (msg.hasVin)
+		{
+			board.vin = msg.shortValues[index++];
+			board.hasVin = true;
+		}
+		board.hasV12 = msg.hasV12;
+		if (msg.hasV12)
+		{
+			board.v12 = msg.shortValues[index++];
+		}
+		board.hasMcuTemp = msg.hasMcuTemp;
+		if (msg.hasMcuTemp)
+		{
+			board.mcuTemp = msg.shortValues[index++];
+		}
+		board.hasAccelerometer = msg.hasAccelerometer;
+		board.hasClosedLoop = msg.hasClosedLoop;
+		board.hasInductiveSensor = msg.hasInductiveSensor;
+
+		size_t offset = msg.GetAnalogHandlesOffset();
+		for (unsigned int i = 0; i < msg.numAnalogHandles && offset + sizeof(AnalogHandleDataV1) < buf->dataLength; ++i)
+		{
+			AnalogHandleDataV1 data;
+			memcpy(&data, (const uint8_t *_ecv_array)&msg + offset, sizeof(AnalogHandleDataV1));
+			offset += sizeof(AnalogHandleDataV1);
+			// Currently only Z probes use analog handles, so ask the EndstopsManager to deal with it
+			if (data.handle.parts.type == RemoteInputHandle::typeZprobe)
+			{
+				reprap.GetPlatform().GetEndstops().HandleRemoteAnalogZProbeValueChange(address, data.handle.parts.major, data.handle.parts.minor, CanInterface::Convert16bitReceivedTimeStampTo32bits(data.when), data.reading);
+			}
+		}
 	}
 	else
 	{
-		board.neverUsedRam = msg.neverUsedRam;
-	}
-
-	// We must process the data in the correct order, to ensure that we pick up the right values
-	size_t index = 0;
-	board.hasVin = msg.hasVin;
-	if (msg.hasVin)
-	{
-		board.vin = msg.values[index++];
-		board.hasVin = true;
-	}
-	board.hasV12 = msg.hasV12;
-	if (msg.hasV12)
-	{
-		board.v12 = msg.values[index++];
-	}
-	board.hasMcuTemp = msg.hasMcuTemp;
-	if (msg.hasMcuTemp)
-	{
-		board.mcuTemp = msg.values[index++];
-	}
-	board.hasAccelerometer = msg.hasAccelerometer;
-	board.hasClosedLoop = msg.hasClosedLoop;
-	board.hasInductiveSensor = msg.hasInductiveSensor;
-
-	size_t offset = msg.GetAnalogHandlesOffset();
-	for (unsigned int i = 0; i < msg.numAnalogHandles && offset + sizeof(AnalogHandleData) < buf->dataLength; ++i)
-	{
-		AnalogHandleData data;
-		memcpy(&data, (const uint8_t*)&msg + offset, sizeof(AnalogHandleData));
-		offset += sizeof(AnalogHandleData);
-		// Currently only Z probes use analog handles, so ask the EndstopsManager to deal with it
-		if (data.handle.parts.type == RemoteInputHandle::typeZprobe)
+		// Must be CanMessageType::boardStatusReportV0
+		const CanMessageBoardStatusV0& msg = buf->msg.boardStatusV0;
+		if (msg.hasMovementDelay)
 		{
-			reprap.GetPlatform().GetEndstops().HandleRemoteAnalogZProbeValueChange(address, data.handle.parts.major, data.handle.parts.minor, data.reading);
+			StepTimer::ProcessMovementDelayRequest(msg.movementDelay);
+		}
+		else
+		{
+			board.neverUsedRam = msg.neverUsedRam;
+		}
+
+		// We must process the data in the correct order, to ensure that we pick up the right values
+		size_t index = 0;
+		board.hasVin = msg.hasVin;
+		if (msg.hasVin)
+		{
+			board.vin = msg.values[index++];
+			board.hasVin = true;
+		}
+		board.hasV12 = msg.hasV12;
+		if (msg.hasV12)
+		{
+			board.v12 = msg.values[index++];
+		}
+		board.hasMcuTemp = msg.hasMcuTemp;
+		if (msg.hasMcuTemp)
+		{
+			board.mcuTemp = msg.values[index++];
+		}
+		board.hasAccelerometer = msg.hasAccelerometer;
+		board.hasClosedLoop = msg.hasClosedLoop;
+		board.hasInductiveSensor = msg.hasInductiveSensor;
+
+		size_t offset = msg.GetAnalogHandlesOffset();
+		for (unsigned int i = 0; i < msg.numAnalogHandles && offset + sizeof(AnalogHandleDataV0) < buf->dataLength; ++i)
+		{
+			AnalogHandleDataV0 data;
+			memcpy(&data, (const uint8_t *_ecv_array)&msg + offset, sizeof(AnalogHandleDataV0));
+			offset += sizeof(AnalogHandleDataV0);
+			// Currently only Z probes use analog handles, so ask the EndstopsManager to deal with it
+			if (data.handle.parts.type == RemoteInputHandle::typeZprobe)
+			{
+				reprap.GetPlatform().GetEndstops().HandleRemoteAnalogZProbeValueChange(address, data.handle.parts.major, data.handle.parts.minor, buf->timeStamp, data.reading);
+			}
 		}
 	}
 }
@@ -305,16 +361,11 @@ void ExpansionManager::ProcessDriveStatusReport(const CanMessageBuffer *buf) noe
 			DriverData& dd = board.driverData[driver];
 			if (msg.hasClosedLoopData)
 			{
-				dd.status.all = msg.closedLoopData[driver].status;
-				dd.averageCurrentFraction = msg.closedLoopData[driver].averageCurrentFraction;
-				dd.maxCurrentFraction = msg.closedLoopData[driver].maxCurrentFraction;
-				dd.rmsPositionError = msg.closedLoopData[driver].rmsPositionError;
-				dd.maxAbsPositionError = msg.closedLoopData[driver].maxAbsPositionError;
-				dd.haveClosedLoopData = true;
+				dd.StoreClosedLoopStatus(msg.closedLoopData[driver]);
 			}
 			else
 			{
-				dd.status.all = msg.openLoopData[driver].status;
+				dd.StoreOpenLoopStatus(msg.openLoopData[driver]);
 			}
 		}
 
@@ -323,8 +374,38 @@ void ExpansionManager::ProcessDriveStatusReport(const CanMessageBuffer *buf) noe
 	}
 }
 
+void ExpansionManager::StoreDriverDirection(DriverId did, bool direction) noexcept
+{
+	ExpansionBoardData& board = boards[did.boardAddress];
+	if (board.HasDrivers())
+	{
+		board.driverData[did.localDriver].StoreDirection(direction);
+	}
+}
+
+void ExpansionManager::StoreDriverMode(DriverId did, uint32_t mode) noexcept
+{
+	ExpansionBoardData& board = boards[did.boardAddress];
+	if (board.HasDrivers())
+	{
+		board.driverData[did.localDriver].StoreMode(mode);
+	}
+}
+
+bool ExpansionManager::GetDriverDirection(DriverId did) const noexcept
+{
+	const ExpansionBoardData& board = boards[did.boardAddress];
+	return !board.HasDrivers() || board.driverData[did.localDriver].GetDirection();
+}
+
+DriverMode ExpansionManager::GetDriverMode(DriverId did) const noexcept
+{
+	const ExpansionBoardData& board = boards[did.boardAddress];
+	return (!board.HasDrivers()) ? DriverMode::unknown : board.driverData[did.localDriver].GetMode();
+}
+
 // Return a pointer to the expansion board, if it is present
-const ExpansionBoardData *ExpansionManager::GetBoardDetails(uint8_t address) const noexcept
+const ExpansionBoardData *_ecv_null ExpansionManager::GetBoardDetails(uint8_t address) const noexcept
 {
 	return (address < ARRAY_SIZE(boards) && boards[address].state == BoardState::running) ? &boards[address] : nullptr;
 }
@@ -350,10 +431,10 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 
 		msg1->type = (moduleNumber == (unsigned int)FirmwareModule::bootloader) ? CanMessageReturnInfo::typeBootloaderName : CanMessageReturnInfo::typeBoardName;
 		{
-			const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf1, rid1, reply, &extra);
-			if (rslt != GCodeResult::ok)
+			const GCodeResult rslt2 = CanInterface::SendRequestAndGetStandardReply(buf1, rid1, reply, &extra);
+			if (rslt2 != GCodeResult::ok)
 			{
-				return rslt;
+				return rslt2;
 			}
 		}
 	}
@@ -486,8 +567,9 @@ void ExpansionManager::Spin() noexcept
 		{
 			// We can get interrupted here by the CanReceive task, which may update 'board.whenLastStatusReportReceived'.
 			// So read and save that value before we call millis().
+			// We flag the board as timed out at half its connection timeout, so that this happens before the board switches its heaters off
 			const uint32_t lastTimeReceived = board.whenLastStatusReportReceived;	// capture volatile variable before we call millis()
-			if (millis() - lastTimeReceived > StatusMessageTimeoutMillis)
+			if (millis() - lastTimeReceived > (uint32_t)board.connectionTimeoutSeconds * 500)
 			{
 				{
 					WriteLocker lock(boardsLock);
@@ -497,6 +579,44 @@ void ExpansionManager::Spin() noexcept
 			}
 		}
 	}
+}
+
+// Process M959
+GCodeResult ExpansionManager::ConfigureConnectionTimeout(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	if (gb.Seen('B'))
+	{
+		const uint32_t address = gb.GetLimitedUIValue('B', 1, CanId::MaxCanAddress + 1);
+		if (gb.Seen('T'))
+		{
+			const uint32_t timeout = gb.GetLimitedUIValue('T', MinConnectionTimeoutSeconds, std::numeric_limits<uint16_t>::max() + 1);
+			{
+				WriteLocker lock(boardsLock);
+				boards[address].connectionTimeoutSeconds = (uint16_t)timeout;
+			}
+			reprap.BoardsUpdated();
+			CanMessageGenericConstructor cons(M959Params);
+			cons.PopulateFromCommand(gb);
+			return cons.SendAndGetResponse(CanMessageType::setConnectionTimeout, (CanAddress)address, reply);
+		}
+		reply.printf("Board %u connection timeout %u seconds", (unsigned int)address, boards[address].connectionTimeoutSeconds);
+		return GCodeResult::ok;
+	}
+
+	ReadLocker lock(boardsLock);
+	for (CanAddress addr = 1; addr <= CanId::MaxCanAddress; addr++)
+	{
+		const ExpansionBoardData& board = boards[addr];
+		if (board.state != BoardState::unknown)
+		{
+			reply.lcatf("Board %u connection timeout %u seconds", addr, board.connectionTimeoutSeconds);
+		}
+	}
+	if (reply.IsEmpty())
+	{
+		reply.copy("No expansion boards found");
+	}
+	return GCodeResult::ok;
 }
 
 void ExpansionManager::EmergencyStop() noexcept

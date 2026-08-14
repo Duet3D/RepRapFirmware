@@ -33,8 +33,13 @@ constexpr NetworkProtocol
 	MdnsProtocol = 6, AnyProtocol = 255;
 
 constexpr TcpPort DefaultHttpPort = 80;
+constexpr TcpPort DefaultHttpsPort = 443;
+
 constexpr TcpPort DefaultFtpPort = 21;
+constexpr TcpPort DefaultFtpsPort = 990;
 constexpr TcpPort DefaultTelnetPort = 23;
+constexpr TcpPort DefaultTelnetsPort = 992;
+
 #if SUPPORT_MULTICAST_DISCOVERY
 constexpr TcpPort DefaultMulticastDiscoveryPort = 10002;	// this is actually a UDP port
 #endif
@@ -56,6 +61,7 @@ constexpr TcpPort DefaultPortNumbers[NumSelectableProtocols] =
 	0,
 #endif
 };
+
 constexpr const char *_ecv_array ProtocolNames[NumSelectableProtocols] =
 {
 	"HTTP", "FTP", "TELNET",
@@ -70,6 +76,9 @@ constexpr const char *_ecv_array ProtocolNames[NumSelectableProtocols] =
 	"",
 #endif
 };
+
+constexpr const char *TlsCertFile = "/sys/server.crt";		// TLS certificate file
+constexpr const char *TlsKeyFile  = "/sys/server.key";		// TLS private key file
 
 struct MacAddress
 {

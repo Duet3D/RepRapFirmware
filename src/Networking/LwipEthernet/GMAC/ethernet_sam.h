@@ -66,12 +66,6 @@ bool ethernet_link_established() noexcept;
 // Update IPv4 configuration on demand
 void ethernet_set_configuration(IPAddress ipAddress, IPAddress netMask, IPAddress gateWay) noexcept;
 
-// Must be called periodically to keep the LwIP timers running
-void ethernet_timers_update() noexcept;
-
-// Reads all stored network packets and processes them
-void ethernet_task() noexcept;
-
 // Returns the network interface's current IPv4 address
 void ethernet_get_ipaddress(IPAddress& ipAddress, IPAddress& netMask, IPAddress& gateWay) noexcept;
 

@@ -22,10 +22,10 @@ protected:
 	bool Interrupt() noexcept override;
 
 #if SUPPORT_CAN_EXPANSION
-	void UpdateLiveData(const FilamentMonitorDataNew2& data) noexcept override;
+	void UpdateLiveData(const FilamentMonitorDataV2& data) noexcept override;
 #endif
 #if SUPPORT_REMOTE_COMMANDS
-	void GetLiveData(FilamentMonitorDataNew2& data) const noexcept override;
+	void GetLiveData(FilamentMonitorDataV2& data) const noexcept override;
 #endif
 
 	void InitReceiveBuffer() noexcept;
@@ -39,6 +39,9 @@ protected:
 	PollResult PollReceiveBuffer(uint16_t& measurement) noexcept;
 	bool IsReceiving() const noexcept;
 	bool IsWaitingForStartBit() const noexcept;
+
+	void CheckForMotion(uint16_t newPosition, uint16_t positionMask, uint16_t minCounts) noexcept;
+	bool IsLocalMotionDetected() const noexcept override { return lastMovementTime != 0 && millis() - lastMovementTime < FilamentMonitorMotionLatchTime; }
 
 	uint32_t overrunErrorCount;
 	uint32_t polarityErrorCount;
@@ -73,6 +76,8 @@ private:
 
 	uint32_t startBitLength;
 	uint32_t errorRecoveryStartTime;
+	uint32_t lastMovementTime = 0;									// when we last detected filament movement, 0 if never
+	uint16_t motionRefPosition = 0;									// the position at which we last detected movement
 	size_t lastBitChangeIndex;
 	uint16_t valueBeingAssembled;
 	uint8_t nibblesAssembled;

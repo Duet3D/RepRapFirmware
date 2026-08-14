@@ -2,14 +2,14 @@
  * @file
  * Implementation of raw protocol PCBs for low-level handling of
  * different types of protocols besides (or overriding) those
- * already available in lwIP.\n
+ * already available in lwIP.<br>
  * See also @ref raw_raw
  *
  * @defgroup raw_raw RAW
  * @ingroup callbackstyle_api
  * Implementation of raw protocol PCBs for low-level handling of
  * different types of protocols besides (or overriding) those
- * already available in lwIP.\n
+ * already available in lwIP.<br>
  * @see @ref api
  */
 
@@ -106,7 +106,7 @@ raw_input_local_match(struct raw_pcb *pcb, u8_t broadcast)
 #endif /* LWIP_IPV4 */
       /* Handle IPv4 and IPv6: catch all or exact match */
       if (ip_addr_isany(&pcb->local_ip) ||
-          ip_addr_cmp(&pcb->local_ip, ip_current_dest_addr())) {
+          ip_addr_eq(&pcb->local_ip, ip_current_dest_addr())) {
         return 1;
       }
   }
@@ -166,7 +166,7 @@ raw_input(struct pbuf *p, struct netif *inp)
   while (pcb != NULL) {
     if ((pcb->protocol == proto) && raw_input_local_match(pcb, broadcast) &&
         (((pcb->flags & RAW_FLAGS_CONNECTED) == 0) ||
-         ip_addr_cmp(&pcb->remote_ip, ip_current_src_addr()))) {
+         ip_addr_eq(&pcb->remote_ip, ip_current_src_addr()))) {
       /* receive callback function available? */
       if (pcb->recv != NULL) {
         u8_t eaten;
@@ -384,6 +384,7 @@ raw_sendto(struct raw_pcb *pcb, struct pbuf *p, const ip_addr_t *ipaddr)
   if (netif == NULL) {
     LWIP_DEBUGF(RAW_DEBUG | LWIP_DBG_LEVEL_WARNING, ("raw_sendto: No route to "));
     ip_addr_debug_print(RAW_DEBUG | LWIP_DBG_LEVEL_WARNING, ipaddr);
+    LWIP_DEBUGF(RAW_DEBUG | LWIP_DBG_LEVEL_WARNING, ("\n"));
     return ERR_RTE;
   }
 
@@ -609,6 +610,7 @@ raw_new(u8_t proto)
 #if LWIP_MULTICAST_TX_OPTIONS
     raw_set_multicast_ttl(pcb, RAW_TTL);
 #endif /* LWIP_MULTICAST_TX_OPTIONS */
+    pcb_tci_init(pcb);
     pcb->next = raw_pcbs;
     raw_pcbs = pcb;
   }
@@ -659,7 +661,7 @@ void raw_netif_ip_addr_changed(const ip_addr_t *old_addr, const ip_addr_t *new_a
   if (!ip_addr_isany(old_addr) && !ip_addr_isany(new_addr)) {
     for (rpcb = raw_pcbs; rpcb != NULL; rpcb = rpcb->next) {
       /* PCB bound to current local interface address? */
-      if (ip_addr_cmp(&rpcb->local_ip, old_addr)) {
+      if (ip_addr_eq(&rpcb->local_ip, old_addr)) {
         /* The PCB is bound to the old ipaddr and
          * is set to bound to the new one instead */
         ip_addr_copy(rpcb->local_ip, *new_addr);

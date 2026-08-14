@@ -19,6 +19,8 @@ enum class HangprinterAnchorMode {
 	AllOnTop, // Result in a prism (speeds get limited, specially going down in Z)
 };
 
+constexpr size_t HANGPRINTER_MAX_ANCHORS = 8;
+
 class HangprinterKinematics : public RoundBedKinematics
 {
 public:
@@ -43,6 +45,7 @@ public:
 	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const noexcept override;
 	AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const noexcept override;
 	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept override;
+	LogicalDrivesBitmap GetControllingDrives(size_t axis, bool forHoming) const noexcept override;
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif
@@ -57,6 +60,8 @@ public:
 																					uint32_t setSpoolGearTeeth[] _ecv_null = nullptr, uint32_t setMotorGearTeeth[] _ecv_null = nullptr,
 																					float setSpoolRadii[] _ecv_null = nullptr) noexcept;
 #endif
+	GCodeResult ComputeODrive3TorqueFromForce(DriverId driver, float force_Newton, float& motorTorque_Nm,
+																					bool& positionMode, const StringRef& reply) const noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
@@ -65,22 +70,21 @@ protected:
 	bool IsInsidePrismSides(float const coords[3], unsigned const discount_last) const noexcept;
 
 private:
+	enum class FlexAlgorithm : uint8_t { None = 0, Qp = 1, Tikhonov = 2 };
+
 	// Basic facts about movement system
-	static constexpr const char*_ecv_array ANCHOR_CHARS = "ABCDIJKLO";
-	static constexpr size_t HANGPRINTER_MAX_ANCHORS = 5;
+	static constexpr const char*_ecv_array ANCHOR_CHARS = "ABCDIJLO";
 	static constexpr size_t DefaultNumAnchors = 4;
 
 	void Init() noexcept;
 	void Recalc() noexcept;
 	void ForwardTransform(float const distances[HANGPRINTER_MAX_ANCHORS], float machinePos[3]) const noexcept;
-	void ForwardTransformTetrahedron(float const distances[HANGPRINTER_MAX_ANCHORS], float machinePos[3]) const noexcept;
-	void ForwardTransformQuadrilateralPyramid(float const distances[HANGPRINTER_MAX_ANCHORS], float machinePos[3]) const noexcept;
 	float MotorPosToLinePos(const int32_t motorPos, size_t axis) const noexcept;
 
 	void PrintParameters(const StringRef& reply) const noexcept;			// Print all the parameters for debugging
 
 	// The real defaults are in the cpp file
-	HangprinterAnchorMode anchorMode = HangprinterAnchorMode::LastOnTop;
+	HangprinterAnchorMode anchorMode = HangprinterAnchorMode::None;
 	size_t numAnchors = DefaultNumAnchors;
 	float printRadius = 0.0F;
 	float anchors[HANGPRINTER_MAX_ANCHORS][3];
@@ -99,28 +103,83 @@ private:
 	// Flex compensation configurables
 	float moverWeight_kg = 0.0F;
 	float springKPerUnitLength = 0.0F;
-	float minPlannedForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
-	float maxPlannedForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	float minForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	float maxForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	float guyWireLengths[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
-	float targetForce_Newton = 0.0F;
 	float torqueConstants[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+
+	FlexAlgorithm flexAlgorithm = FlexAlgorithm::Qp;
+	bool flexEnabled = false;
+	bool ignoreGravity = false;
+	bool ignorePretension = false;
 
 	// Derived parameters
 	float k0[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	float spoolRadiiSq[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	float k2[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	float stepsPerMmAtOrigin[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	bool useConstantSpoolModel[HANGPRINTER_MAX_ANCHORS] = { false };
 	float distancesOrigin[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
-	float springKsOrigin[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
-	float relaxedSpringLengthsOrigin[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
-	float fOrigin[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	float printRadiusSquared = 0.0F;
 
 	float SpringK(float const springLength) const noexcept;
 	void StaticForces(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept;
-	void StaticForcesTetrahedron(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept;
-	void StaticForcesQuadrilateralPyramid(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept;
-	void flexDistances(float const machinePos[3], float const distances[HANGPRINTER_MAX_ANCHORS],
+	struct StaticForcesConfig {
+		bool ignoreGravity = false;
+		bool ignorePretension = false;
+		float massKg = 0.0f;
+		float g = 9.81f;
+		float lambda = 1e-3f;
+		float tol = 1e-3f;
+		float stepDamp = 0.75f;
+		int maxItersTarget = 100;
+		const float *Tmax = nullptr;
+		const float *Tmin = nullptr;
+	};
+	struct StaticForcesResult {
+		float *tensions = nullptr;
+		float achievedForce[3] = { 0.0F };
+		float requestedForce[3] = { 0.0F };
+		float residual[3] = { 0.0F };
+		float supportedGravityFrac = 0.0f;
+	};
+	void StaticForcesTikhonov(
+		const float mover[3],
+		const StaticForcesConfig &cfg,
+		StaticForcesResult &out) const noexcept;
+	void StaticForcesQp(
+		const float mover[3],
+		const StaticForcesConfig &cfg,
+		StaticForcesResult &out) const noexcept;
+	void FlexDistances(float const machinePos[3], float const distances[HANGPRINTER_MAX_ANCHORS],
 	                   float flex[HANGPRINTER_MAX_ANCHORS]) const noexcept;
+	void FlexDistances(float const machinePos[3],
+	                   float flex[HANGPRINTER_MAX_ANCHORS]) const noexcept;
+
+
+	struct SolverResult {
+		float pos[3] = { 0.0F };
+		bool converged{false};
+		size_t iterations{0};
+		float cost{std::numeric_limits<float>::infinity()};
+	};
+
+	void AccumulateJtJandGrad(float const J[HANGPRINTER_MAX_ANCHORS][3],
+	                          float const residuals[HANGPRINTER_MAX_ANCHORS],
+	                          float JTJ[3][3], float grad[3]) const noexcept;
+
+	float ResidualsAndDerivatives(const float linePositions[HANGPRINTER_MAX_ANCHORS],
+	                              float const pos[3],
+	                              float residuals[HANGPRINTER_MAX_ANCHORS],
+	                              float jacobian[HANGPRINTER_MAX_ANCHORS][3],
+	                              float (*hessians)[3][3] = nullptr) const noexcept;
+
+	SolverResult SolveHybrid(const float linePositions[HANGPRINTER_MAX_ANCHORS],
+	                         float initial[3],
+	                         float eta,
+	                         float tol,
+	                         size_t halleyIters,
+	                         size_t maxIters) const noexcept;
 
 #if DUAL_CAN
 	// Some CAN helpers

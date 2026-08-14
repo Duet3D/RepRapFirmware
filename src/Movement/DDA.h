@@ -12,6 +12,7 @@
 #include "DriveMovement.h"
 #include "StepTimer.h"
 #include "MoveSegment.h"
+#include "MovementProfile.h"
 #include "MovementError.h"
 #include <Platform/Tasks.h>
 #include "RawMove.h"
@@ -22,30 +23,59 @@
 
 class DDARing;
 class CanMessageMovementLinearShaped;
+class MovementProfile;
 
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
 struct PrepParams
 {
+#if SUPPORT_3RD_ORDER
+	uint32_t phaseClocks[7];							// the number of step clocks for each phase
+	motioncalc_t initialAcceleration, peakAcceleration;	// the accelerations, always positive
+	motioncalc_t initialDeceleration, peakDeceleration;	// the decelerations, always negative
+    motioncalc_t distances[7];							// the distances of each phase
+    motioncalc_t jerk;									// the magnitude of the rate of change of acceleration or deceleration, always positive; or zero if not using S-curve acceleration
+#else
 	uint32_t accelClocks, steadyClocks, decelClocks;
-	float acceleration;								// the acceleration to use, always positive
-	float deceleration;								// the deceleration to use, always negative
-	float accelDistance;
-	float decelStartDistance;
-	float totalDistance;
+	motioncalc_t acceleration;							// the acceleration to use, always positive
+	motioncalc_t deceleration;							// the deceleration to use, always negative
+	motioncalc_t accelDistance;
+	motioncalc_t decelStartDistance;
+#endif
+	motioncalc_t totalDistance;
+	motioncalc_t startSpeed, topSpeed, endSpeed;		// the speeds reached
+#if SUPPORT_3RD_ORDER
+    mutable motioncalc_t phase1StartSpeed, phase1EndSpeed, phase5StartSpeed, phase5EndSpeed;
+	mutable bool speedsCalculated = false;				// true if the previous 4 speeds have been calculated and stored
+#endif
+
 	bool useInputShaping;
 
+#if SUPPORT_3RD_ORDER
+	uint32_t SteadyClocks() const noexcept { return phaseClocks[3]; }
+	uint32_t TotalAccelClocks() const noexcept { return phaseClocks[0] + phaseClocks[1] + phaseClocks[2]; }
+	uint32_t TotalDecelClocks() const noexcept { return phaseClocks[4] + phaseClocks[5] + phaseClocks[6]; }
+	motioncalc_t TotalAccelDistance() const noexcept { return distances[0] + distances[1] + distances[2]; }
+	motioncalc_t TotalDecelDistance() const noexcept { return distances[4] + distances[5] + distances[6]; }
+	void EnsureSpeedsSet() const noexcept;
+#else
+	uint32_t SteadyClocks() const noexcept { return steadyClocks; }
 	uint32_t TotalAccelClocks() const noexcept { return accelClocks; }
 	uint32_t TotalDecelClocks() const noexcept { return decelClocks; }
-	float TotalAccelDistance() const noexcept { return accelDistance; }
+	motioncalc_t TotalAccelDistance() const noexcept { return accelDistance; }
+#endif
 
 	// Get the total clocks needed
-	uint32_t TotalClocks() const noexcept { return TotalAccelClocks() + steadyClocks + TotalDecelClocks(); }
+	uint32_t TotalClocks() const noexcept { return TotalAccelClocks() + SteadyClocks() + TotalDecelClocks(); }
 
-	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
-	void SetFromDDA(const DDA& dda) noexcept;
+	// Set up the parameters from the DDA. Only called when not using 3rd order motion control.
+	void SetFromDDA(DDA& dda) noexcept;
 
 	void DebugPrint() const noexcept;
 };
+
+#if SUPPORT_3RD_ORDER
+struct MultipleMoveParameters;
+#endif
 
 // This defines a single coordinated movement of one or several motors
 class DDA final
@@ -60,7 +90,10 @@ public:
 	enum DDAState : uint8_t
 	{
 		empty,				// empty or being filled in
-		provisional,		// ready, but could be subject to modifications
+#if SUPPORT_3RD_ORDER
+		created,			// filled in but not yet planned
+#endif
+		planned,			// ready, but could be subject to modifications
 		committed			// has been converted into move segments already
 	};
 
@@ -80,7 +113,11 @@ public:
 	void SetNext(DDA *n) noexcept { next = n; }
 	void SetPrevious(DDA *p) noexcept { prev = p; }
 	bool Free() noexcept;
-	void Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode simMode) noexcept SPEED_CRITICAL;	// Calculate all the values and freeze this DDA
+	void Prepare(DDARing& ring,
+#if SUPPORT_3RD_ORDER
+					MovementProfile& plannedProfile,
+#endif
+					uint32_t prepareAdvanceTime, SimulationMode simMode) noexcept SPEED_CRITICAL;	// Calculate all the values and freeze this DDA
 	bool CanPauseAfter() const noexcept;
 	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }							// Return true if this involves both XY movement and extrusion
 	bool UsingStandardFeedrate() const noexcept { return flags.usingStandardFeedrate; }
@@ -95,8 +132,9 @@ public:
 	DDAState GetState() const noexcept { return (DDAState)flags.stateBits; }
 	void SetState(DDAState state) noexcept { flags.stateBits = (uint32_t)state; }
 	bool IsCommitted() const noexcept { return GetState() == DDA::committed; }
-	DDA* GetNext() const noexcept { return next; }
-	DDA* GetPrevious() const noexcept { return prev; }
+	bool IsProvisional() const noexcept;
+	DDA* GetNext() const noexcept { return _ecv_not_null(next); }
+	DDA* GetPrevious() const noexcept { return _ecv_not_null(prev); }
 	uint32_t GetTimeLeft() const noexcept;
 
 	const int32_t *_ecv_array DriveCoordinates() const noexcept { return endPoint; }				// Get endpoints of a move in machine coordinates
@@ -105,15 +143,35 @@ public:
 	void GetEndCoordinates(float returnedCoords[MaxAxes]) noexcept;					// Calculate the machine axis coordinates (after bed and skew correction) at the end of this move
 
 	FilePosition GetFilePosition() const noexcept { return filePos; }
+	int8_t GetGCommandNumber() const noexcept { return gCommandNumber; }
 	float GetRequestedSpeedMmPerClock() const noexcept { return requestedSpeed; }
 	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(requestedSpeed); }
 	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(topSpeed); }
 	float GetAccelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
+#if SUPPORT_3RD_ORDER
+		{ return InverseConvertAcceleration(afterPrepare.peakAcceleration); }
+#else
 		{ return InverseConvertAcceleration(maxAcceleration); }
+#endif
 	float GetDecelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
-		{ return InverseConvertAcceleration(maxDeceleration); }
+#if SUPPORT_3RD_ORDER
+		{ return InverseConvertAcceleration(afterPrepare.peakDeceleration); }
+#else
+		{ return InverseConvertAcceleration(maxAcceleration); }
+#endif
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float GetTotalExtrusionRate() const noexcept;
+
+#if SUPPORT_3RD_ORDER
+	bool IsSCurveMove() const noexcept { return flags.useScurve; }
+	bool IsFullyPlanned() const noexcept { return flags.fullyPlanned; }
+	float GetMovementRatio() const noexcept { return movementRatio; }
+	void SetSpeedRatioAndMaxJunctionSpeedForPrintingMoves(const Move& move) noexcept;
+	void SetSpeedRatioAndMaxJunctionSpeedForNonPrintingMoves(const Move& move) noexcept;
+	void SetStartSpeedAndAcceleration(float speed, float acceleration) noexcept { startSpeed = speed; startAcceleration = acceleration; }
+
+	static void PlanMoves(DDA *firstUnpreparedMove, MovementProfile& plannedProfile, bool stopping) noexcept;
+#endif
 
 	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcept;	// Try to push babystepping earlier in the move queue
 	const Tool *_ecv_null GetTool() const noexcept { return tool; }
@@ -146,25 +204,21 @@ public:
 #endif
 
 #if SUPPORT_LASER
-	uint32_t ManageLaserPower(Platform& p) const noexcept;							// Manage the laser power
+	uint32_t ManageLaserPower(Platform& p) const noexcept;					// Manage the laser power
 #endif
 
 #if SUPPORT_IOBITS
 	IoBits_t GetIoBits() const noexcept { return laserPwmOrIoBits.ioBits; }
 #endif
 
-	void DebugPrint(const char *_ecv_array tag) const noexcept;						// print the DDA only
+	void DebugPrint(const char *_ecv_array tag) const noexcept;				// print the DDA only
 
-	static void PrintMoves() noexcept;												// print saved moves for debugging
+	static void PrintMoves() noexcept;										// print saved moves for debugging
 
 #if DDA_LOG_PROBE_CHANGES
 	static const size_t MaxLoggedProbePositions = 40;
 	static size_t numLoggedProbePositions;
 	static int32_t loggedProbePositions[XYZ_AXES * MaxLoggedProbePositions];
-#endif
-
-#if 0	// debug only
-	static uint32_t stepsRequested[NumDirectDrivers], stepsDone[NumDirectDrivers];
 #endif
 
 private:
@@ -173,9 +227,15 @@ private:
 	MovementError RecalculateMove(DDARing& ring) noexcept SPEED_CRITICAL;
 	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
 
+#if SUPPORT_3RD_ORDER
+	static void PlanDeceleratingMoves(double distance, double acc, MovementProfile& plannedProfile) noexcept SPEED_CRITICAL;
+	void AllocateMoveFromPlan(MovementProfile& plannedProfile, PrepParams& params) noexcept SPEED_CRITICAL;
+#endif
+
 	void MatchSpeeds() noexcept SPEED_CRITICAL;
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be an acceleration-only move
+	bool UsesInputShaping() const noexcept;									// return true if this move should use input shaping
 	void DebugPrintVector(const char *_ecv_array name, const float *_ecv_array vec, size_t len) const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
@@ -228,7 +288,12 @@ private:
 					 // These bits are modified during processing of the move
 					 doneIoBits : 1,				// set if we have written the IOBITS ports for this move
 					 doneFeedForward : 1,			// set if we have commanded feedforward for this move
-					 doneOutputOnExtrude: 1;		// set if we have set/cleared output on extrude for this move
+					 doneOutputOnExtrude: 1			// set if we have set/cleared output on extrude for this move
+#if SUPPORT_3RD_ORDER
+					 , useScurve : 1,				// set if this move uses S-curve acceleration
+					 fullyPlanned : 1				// set if this move can't be made to go any faster even if we add more moves to the ring
+#endif
+					 ;
 		};
 		uint32_t all;								// so that we can print all the flags at once for debugging
 	} flags;
@@ -236,18 +301,24 @@ private:
 	const Tool *_ecv_null tool;						// which tool (if any) is active
 
     FilePosition filePos;							// The position in the SD card file after this move was read, or zero if not read from SD card
+	int8_t gCommandNumber;							// Which of G0/G1/G2/G3 generated this move (0-3), or -1 if not a modal motion command; used to restore the modal context on resume
 
 	int32_t endPoint[MaxAxesPlusExtruders];  		// Machine coordinates of the endpoint
 	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;							// How long is the move in hypercuboid space
-    float maxAcceleration, maxDeceleration;			// The maximum acceleration and deceleration to use, always positive
+    float maxAcceleration;							// The maximum acceleration and deceleration to use, always positive
+#if SUPPORT_3RD_ORDER
+	float jerk;										// The magnitude of the rate of change of acceleration or deceleration, always positive
+#endif
     float requestedSpeed;							// The speed that the user asked for
     float virtualExtruderPosition;					// the virtual extruder position at the end of this move, used for pause/resume
 
     // These vary depending on how we connect the move with its predecessor and successor, but remain constant while the move is being executed
-	float startSpeed;
-	float endSpeed;
-	float topSpeed;
+    float startSpeed, topSpeed, endSpeed;
+#if SUPPORT_3RD_ORDER
+    float startAcceleration;
+    float movementRatio;							// for moves with extrusion and axis movement this is the ratio of total extrusion to total distance. For non extruding moves it is 1.0.
+#endif
 
 	float proportionDone;							// what proportion of the extrusion in the G1 or G0 move of which this is a part has been done after this segment is complete
 	float initialUserC0, initialUserC1;				// if this is a segment of an arc move, the user X and Y coordinates at the start
@@ -265,11 +336,18 @@ private:
 			float accelDistance;
 			float decelDistance;
 			float targetNextSpeed;					// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
+#if SUPPORT_3RD_ORDER
+			float startSpeedRatio;					// the ratio of start speed of this move to the end speed of the previous move needed to maintain the same extrusion speed across the boundary
+			float maxPrevEndSpeed;					// the maximum end speed we can have for the previous move to remain within the instantaneous speed change limits
+#endif
 		} beforePrepare;
 
 		// Values that are not set or accessed before Prepare is called
 		struct
 		{
+			// These are used for reporting the current move parameters in the object model
+			float peakAcceleration, peakDeceleration;
+
 			// These are calculated from the above and used in the ISR, so they are set up by Prepare()
 			uint32_t moveStartTime;					// clock count at which the move is due to start (before execution) or was started (during execution)
 			float averageExtrusionSpeed;			// the average extrusion speed in mm/sec, for applying heater feedforward
@@ -286,7 +364,28 @@ private:
 
 inline bool DDA::CanPauseAfter() const noexcept
 {
-	return flags.canPauseAfter && next->GetState() == DDAState::provisional;
+	return flags.canPauseAfter && !next->IsCommitted();		// we can't easily cancel moves that have already been sent to CAN expansion boards
+}
+
+inline bool DDA::IsProvisional() const noexcept
+{
+#if SUPPORT_3RD_ORDER
+	return GetState() == created || GetState() == planned;
+#else
+	return GetState() == planned;
+#endif
+}
+
+// Return true if this move should use input shaping
+inline bool DDA::UsesInputShaping() const noexcept
+{
+	return flags.xyMoving
+			&& !(   flags.isolatedMove
+				 || flags.isLeadscrewAdjustmentMove
+#if SUPPORT_SCANNING_PROBES
+				 || flags.scanningProbeMove
+#endif
+				);
 }
 
 #endif /* DDA_H_ */

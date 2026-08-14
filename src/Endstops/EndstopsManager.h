@@ -19,6 +19,7 @@ class CanMessageBuffer;
 #endif
 
 class StallDetectionEndstop;
+class GpInPortEndstop;
 
 // Endstop manager class
 class EndstopsManager INHERIT_OBJECT_MODEL
@@ -70,10 +71,10 @@ public:
 	GCodeResult ProgramZProbe(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 #if SUPPORT_CAN_EXPANSION
-	void HandleRemoteEndstopChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
-	void HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state, uint32_t reading) noexcept;
-	void HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t reading) noexcept;
-	void HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled) noexcept;
+	void HandleRemoteEndstopChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t when, bool state) noexcept;
+	void HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t when, bool state, int32_t reading) noexcept;
+	void HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t when, int32_t reading) noexcept;
+	void HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled, uint32_t when) noexcept;
 	void DisableRemoteStallEndstops() noexcept;
 #endif
 
@@ -88,9 +89,7 @@ private:
 	// Add an endstop to the active list
 	void AddToActive(EndstopOrZProbe &_ecv_from e) noexcept;
 
-#if SUPPORT_OBJECT_MODEL
 	size_t GetNumProbesToReport() const noexcept;
-#endif
 
 	// Translate end stop result to text
 	static const char *_ecv_array TranslateEndStopResult(bool hit, bool atHighEnd) noexcept;
@@ -107,6 +106,10 @@ private:
 #if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 	StallDetectionEndstop *_ecv_null extrudersEndstop;				// the endstop used for extruder stall detection, one will do for all extruders
 #endif
+	GpInPortEndstop *_ecv_null extruderInputEndstop;				// the endstop used for extruders bound to input ports, one will do for all extruders
+
+	static constexpr uint8_t NoGpinPort = 0xFF;						// value in extruderGpinNumbers meaning use stall detection
+	uint8_t extruderGpinNumbers[MaxExtruders];						// number of the input port that terminates a G1 H1 E move for each extruder, or NoGpinPort
 	ZProbe *_ecv_from _ecv_null zProbes[MaxZProbes];				// the Z probes used. The first one is always non-null.
 	ZProbe *_ecv_from _ecv_null defaultZProbe;
 

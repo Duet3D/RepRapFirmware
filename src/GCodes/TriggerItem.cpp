@@ -10,6 +10,7 @@
 #include "GCodes.h"
 #include <PrintMonitor/PrintMonitor.h>
 #include "GCodeBuffer/GCodeBuffer.h"
+#include "GCodeBuffer/ExpressionParser.h"
 
 TriggerItem::TriggerItem() noexcept : condition(0)
 {
@@ -22,156 +23,237 @@ void TriggerItem::Init() noexcept
 	lowLevelEndstops.Clear();
 	highLevelInputs.Clear();
 	lowLevelInputs.Clear();
-	condition = 0;
+	expr.Delete();
+	condition = -1;
 }
 
 // Return true if this trigger is unused, i.e. it doesn't watch any pins
 bool TriggerItem::IsUnused() const noexcept
 {
-	return highLevelEndstops.IsEmpty() && lowLevelEndstops.IsEmpty() && highLevelInputs.IsEmpty() && lowLevelInputs.IsEmpty();
+	return (highLevelEndstops | lowLevelEndstops).IsEmpty() && (highLevelInputs | lowLevelInputs).IsEmpty() && expr.IsNull();
 }
 
 // Check whether this trigger is active and update the input states. This is called in a polling loop, so it needs to be fast.
-// TODO when we switch to interrupt-driven endstops, make this interrupt-driven instead
-bool TriggerItem::Check() noexcept
+bool TriggerItem::Check(unsigned int number) noexcept
 {
+	if (condition < 0) { return false; }			// don't check if the trigger is disabled
+
 	bool triggered = false;
 
-	// Check the endstops
-	const AxesBitmap endstopsMonitored = highLevelEndstops | lowLevelEndstops;
-	if (endstopsMonitored.IsNonEmpty())
+	if (expr.IsNull())
 	{
-		EndstopsManager& endstops = reprap.GetPlatform().GetEndstops();
-		endstopsMonitored.Iterate([this, &endstops, &triggered](unsigned int axis, unsigned int) noexcept
-									{
-										const bool stopped = endstops.Stopped(axis);
-										if (stopped != endstopStates.IsBitSet(axis))
+		Platform& platform = reprap.GetPlatform();
+
+		// Check the endstops
+		const AxesBitmap endstopsMonitored = highLevelEndstops | lowLevelEndstops;
+		if (endstopsMonitored.IsNonEmpty())
+		{
+			EndstopsManager& endstops = platform.GetEndstops();
+			endstopsMonitored.Iterate([this, &endstops, &triggered](unsigned int axis, unsigned int) noexcept
 										{
-											if (stopped)
+											const bool stopped = endstops.Stopped(axis);
+											if (stopped != endstopStates.IsBitSet(axis))
 											{
-												endstopStates.SetBit(axis);
-												if (highLevelEndstops.IsBitSet(axis))
+												if (stopped)
+												{
+													endstopStates.SetBit(axis);
+													if (highLevelEndstops.IsBitSet(axis))
+													{
+														triggered = true;
+													}
+												}
+												else
+												{
+													endstopStates.ClearBit(axis);
+													if (lowLevelEndstops.IsBitSet(axis))
+													{
+														triggered = true;
+													}
+												}
+											}
+										}
+									);
+		}
+
+		const InputPortsBitmap portsMonitored = highLevelInputs | lowLevelInputs;
+		if (portsMonitored.IsNonEmpty())
+		{
+			portsMonitored.Iterate([this, &platform, &triggered](unsigned int inPort, unsigned int) noexcept
+									{
+										const bool isActive = reprap.GetPlatform().GetGpInPort(inPort).GetState();
+										if (isActive != inputStates.IsBitSet(inPort))
+										{
+											if (isActive)
+											{
+												inputStates.SetBit(inPort);
+												if (highLevelInputs.IsBitSet(inPort))
 												{
 													triggered = true;
 												}
 											}
 											else
 											{
-												endstopStates.ClearBit(axis);
-												if (lowLevelEndstops.IsBitSet(axis))
+												inputStates.ClearBit(inPort);
+												if (lowLevelInputs.IsBitSet(inPort))
 												{
 													triggered = true;
 												}
 											}
+
 										}
 									}
 								);
+		}
 	}
-
-	const InputPortsBitmap portsMonitored = highLevelInputs | lowLevelInputs;
-	if (portsMonitored.IsNonEmpty())
+	else
 	{
-		Platform& platform = reprap.GetPlatform();
-		portsMonitored.Iterate([this, &platform, &triggered](unsigned int inPort, unsigned int) noexcept
-								{
-									const bool isActive = reprap.GetPlatform().GetGpInPort(inPort).GetState();
-									if (isActive != inputStates.IsBitSet(inPort))
-									{
-										if (isActive)
-										{
-											inputStates.SetBit(inPort);
-											if (highLevelInputs.IsBitSet(inPort))
-											{
-												triggered = true;
-											}
-										}
-										else
-										{
-											inputStates.ClearBit(inPort);
-											if (lowLevelInputs.IsBitSet(inPort))
-											{
-												triggered = true;
-											}
-										}
-
-									}
-								}
-							);
+		// We have an expression to evaluate
+		try
+		{
+			const bool oldVal = exprResult;
+			exprResult = EvaluateExpression();
+			triggered = exprResult && !oldVal;
+		}
+		catch (const GCodeException& e)
+		{
+			condition = -1;
+			String<StringLength256> errorMessage;
+			e.GetMessage(errorMessage.GetRef(), nullptr);
+			errorMessage.catf("\nTrigger %u disabled\n", number);
+			reprap.GetPlatform().Message(ErrorMessage, errorMessage.c_str());
+		}
 	}
+
 	return triggered &&
-			(condition == 0
-				|| (condition == 1 && reprap.GetPrintMonitor().IsPrinting())
-				|| (condition == 2 && !reprap.GetPrintMonitor().IsPrinting())
+			(   condition == 0
+			 || (2 - condition == (int)reprap.GetPrintMonitor().IsPrinting())		// condition == 1 && IsPrinting || condition == 2 && !IsPrinting
 			);
 }
 
-// Handle M581 for this trigger
+// Handle M581 and M581.1 for this trigger. We have already checked that gb.GetCommandFraction() returns <= 1.
 GCodeResult TriggerItem::Configure(unsigned int number, GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
-	bool seen = false;
-	if (gb.Seen('R'))
+	// We allow the P-1 parameter to be used with both M581 and M581.1
+	bool seen = gb.Seen('P');
+	if (seen)
 	{
-		seen = true;
-		condition = gb.GetIValue();
-	}
-	else if (IsUnused())
-	{
-		condition = 0;					// this is a new trigger, so set no condition
-	}
-
-	const int sParam = (gb.Seen('S')) ? gb.GetIValue() : 1;
-	if (gb.Seen('P'))
-	{
-		// We need a try..catch block here so that if we pass an array we do not abort when trying to read a single value
+		// We need a try..catch block here so that if we pass an array of unsigned or a string we do not abort when trying to read a single integer
 		try
 		{
 			if (gb.GetIValue() == -1)
 			{
-				Init();						// P-1 clears all inputs and sets condition to 0
+				Init();						// P-1 deletes the trigger
+				condition = -1;
 				return GCodeResult::ok;
 			}
 		} catch (const GCodeException&) { }
-		gb.Seen('P');
-		seen = true;
-		uint32_t inputNumbers[MaxGpInPorts];
-		size_t numValues = MaxGpInPorts;
-		gb.GetUnsignedArray(inputNumbers, numValues, false);
-		const InputPortsBitmap portsToWaitFor = InputPortsBitmap::MakeFromArray(inputNumbers, numValues);
-		if (sParam < 0)
+	}
+
+	const bool wasUnused = IsUnused();		// save for later
+
+	switch (gb.GetCommandFraction())
+	{
+	case 1:									// trigger on an expression
+		if (gb.Seen('P'))
 		{
-			highLevelInputs &= ~portsToWaitFor;
-			lowLevelInputs &= ~portsToWaitFor;
+			highLevelInputs.Clear();
+			lowLevelInputs.Clear();
+			highLevelEndstops.Clear();
+			lowLevelEndstops.Clear();
+			String<StringLength256> conditionString;
+			gb.GetQuotedString(conditionString.GetRef(), false);		// may throw
+			expr.Assign(conditionString.c_str());
+		}
+		break;
+
+	default:								// trigger on inputs and/or endstops
+		{
+			const int sParam = (gb.Seen('S')) ? gb.GetIValue() : 1;			// S is ignored if there is no P or axis letter parameter, so don't set 'seen'
+
+			// See if there are inputs to trigger on
+			if (gb.Seen('P'))
+			{
+				expr.Delete();
+				uint32_t inputNumbers[MaxGpInPorts];
+				size_t numValues = MaxGpInPorts;
+				gb.GetUnsignedArray(inputNumbers, numValues, false);
+				const InputPortsBitmap portsToWaitFor = InputPortsBitmap::MakeFromArray(inputNumbers, numValues);
+				if (sParam < 0)
+				{
+					highLevelInputs &= ~portsToWaitFor;
+					lowLevelInputs &= ~portsToWaitFor;
+				}
+				else
+				{
+					((sParam >= 1) ? highLevelInputs : lowLevelInputs) |= portsToWaitFor;
+				}
+			}
+
+			// See if there are endstops to trigger on
+			{
+				AxesBitmap endstopsToWaitFor;
+				for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
+				{
+					if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[axis]))
+					{
+						seen = true;
+						expr.Delete();
+						endstopsToWaitFor.SetBit(axis);
+					}
+				}
+				if (endstopsToWaitFor.IsNonEmpty())
+				{
+					if (sParam < 0)
+					{
+						highLevelEndstops &= ~endstopsToWaitFor;
+						lowLevelEndstops &= ~endstopsToWaitFor;
+					}
+					else
+					{
+						((sParam >= 1) ? highLevelEndstops : lowLevelEndstops) |= endstopsToWaitFor;
+					}
+				}
+			}
+		}
+	}
+
+	if (!IsUnused())
+	{
+		if (gb.Seen('R'))
+		{
+			condition = gb.GetIValue();
+			seen = true;
+		}
+		else if (seen && wasUnused)
+		{
+			condition = 0;										// this is a new trigger, so set no enable condition
+		}
+	}
+
+	if (seen)
+	{
+		// If trigger inputs or the enable condition have been changed, determine the initial state
+		if (expr.IsNull())
+		{
+
+			inputStates.Clear();
+			(void)Check(number);								// set up initial input states
 		}
 		else
 		{
-			((sParam >= 1) ? highLevelInputs : lowLevelInputs) |= portsToWaitFor;
+			// Get the initial value of the expression
+			try
+			{
+				exprResult = EvaluateExpression();				// may throw
+			}
+			catch (const GCodeException&)
+			{
+				Init();											// clear the trigger
+				throw;											// report the error
+			}
 		}
-	}
-
-	AxesBitmap endstopsToWaitFor;
-	for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
-	{
-		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[axis]))
-		{
-			seen = true;
-			endstopsToWaitFor.SetBit(axis);
-		}
-	}
-
-	if (sParam < 0)
-	{
-		highLevelEndstops &= ~endstopsToWaitFor;
-		lowLevelEndstops &= ~endstopsToWaitFor;
 	}
 	else
-	{
-		((sParam >= 1) ? highLevelEndstops : lowLevelEndstops) |= endstopsToWaitFor;
-	}
-
-	inputStates.Clear();
-	(void)Check();					// set up initial input states
-
-	if (!seen)
 	{
 		reply.printf("Trigger %u ", number);
 		if (IsUnused())
@@ -182,35 +264,45 @@ GCodeResult TriggerItem::Configure(unsigned int number, GCodeBuffer &gb, const S
 		{
 			if (condition < 0)
 			{
-				reply.cat("if enabled would fire on a");
+				reply.cat("if enabled would fire");
 			}
 			else if (condition == 1)
 			{
-				reply.cat("fires only when printing on a");
+				reply.cat("fires only when printing");
 			}
 			else if (condition == 2)
 			{
-				reply.cat("fires only when not printing on a");
+				reply.cat("fires only when not printing");
 			}
 			else
 			{
-				reply.cat("fires on a");
+				reply.cat("fires");
 			}
-			const bool hasHighLevel = !highLevelEndstops.IsEmpty() || !highLevelInputs.IsEmpty();
-			if (hasHighLevel)
+			if (expr.IsNull())
 			{
-				reply.cat(" rising edge of endstops/inputs");
-				AppendInputNames(highLevelEndstops, highLevelInputs, reply);
-			}
-			const bool hasLowLevel = !lowLevelEndstops.IsEmpty() || !lowLevelInputs.IsEmpty();
-			if (hasLowLevel)
-			{
+				reply.cat(" on a");
+				const bool hasHighLevel = !highLevelEndstops.IsEmpty() || !highLevelInputs.IsEmpty();
 				if (hasHighLevel)
 				{
-					reply.cat(" or a");
+					reply.cat(" rising edge of endstops/inputs");
+					AppendInputNames(highLevelEndstops, highLevelInputs, reply);
 				}
-				reply.cat(" falling edge of endstops/inputs");
-				AppendInputNames(lowLevelEndstops, lowLevelInputs, reply);
+				const bool hasLowLevel = !lowLevelEndstops.IsEmpty() || !lowLevelInputs.IsEmpty();
+				if (hasLowLevel)
+				{
+					if (hasHighLevel)
+					{
+						reply.cat(" or a");
+					}
+					reply.cat(" falling edge of endstops/inputs");
+					AppendInputNames(lowLevelEndstops, lowLevelInputs, reply);
+				}
+			}
+			else
+			{
+				reply.cat((condition > 0) ? " and" : " when");
+				const auto ptr = expr.Get();
+				reply.catf(" expression {%s} becomes true", ptr.Ptr());
 			}
 		}
 	}
@@ -218,11 +310,12 @@ GCodeResult TriggerItem::Configure(unsigned int number, GCodeBuffer &gb, const S
 }
 
 // Handle M582 for this trigger
-bool TriggerItem::CheckLevel() noexcept
+bool TriggerItem::CheckLevel(unsigned int number) noexcept
 {
 	endstopStates = lowLevelEndstops;
 	inputStates = lowLevelInputs;
-	return Check();
+	exprResult = false;
+	return Check(number);
 }
 
 void TriggerItem::AppendInputNames(AxesBitmap endstops, InputPortsBitmap inputs, const StringRef &reply) noexcept
@@ -237,6 +330,15 @@ void TriggerItem::AppendInputNames(AxesBitmap endstops, InputPortsBitmap inputs,
 		endstops.Iterate([axisLetters, &reply](unsigned int axis, unsigned int) noexcept { reply.catf(" %c", axisLetters[axis]); } );
 		inputs.Iterate([&reply](unsigned int port, unsigned int) noexcept { reply.catf(" %d", port); } );
 	}
+}
+
+bool TriggerItem::EvaluateExpression() THROWS(GCodeException)
+{
+	const auto ptr = expr.Get();
+	ExpressionParser parser(nullptr, ptr.Ptr());
+	const bool ret = parser.ParseBoolean();
+	parser.CheckForExtraCharacters();
+	return ret;
 }
 
 // End

@@ -10,6 +10,7 @@
 #if SUPPORT_HTTP
 
 #include "Network.h"
+#include "NetworkInterface.h"
 #include "Socket.h"
 #include "GCodes/GCodes.h"
 #include "General/IP4String.h"
@@ -43,7 +44,7 @@ HttpResponder::HttpResponder(NetworkResponder *_ecv_from _ecv_null n) noexcept :
 }
 
 // Ask the responder to accept this connection, returns true if it did
-bool HttpResponder::Accept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept
+bool HttpResponder::TryAccept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept
 {
 	if (responderState == ResponderState::free && protocol == HttpProtocol)
 	{
@@ -262,7 +263,7 @@ bool HttpResponder::CharFromClient(char c) noexcept
 				parseState = HttpParseState::doingCommandWord;
 				break;
 			}
-			// no break
+			[[fallthrough]];
 		case '%':	// none of our keys needs escaping, so treat an escape within a key as an error
 		case '&':	// key with no value
 			RejectMessage("bad qualifier key");
@@ -396,8 +397,7 @@ bool HttpResponder::CharFromClient(char c) noexcept
 			break;		// ignore spaces between header key and value
 		}
 		parseState = HttpParseState::doingHeaderValue;
-		// no break
-
+		[[fallthrough]];
 	case HttpParseState::doingHeaderValue:
 		if (c == '\n')
 		{
@@ -455,13 +455,25 @@ bool HttpResponder::CharFromClient(char c) noexcept
 	return false;
 }
 
+void HttpResponder::ResetParser() noexcept
+{
+	clientPointer = 0;
+	parseState = HttpParseState::doingCommandWord;
+	numCommandWords = 0;
+	numQualKeys = 0;
+	numHeaderKeys = 0;
+	commandWords[0] = clientMessage;
+}
+
 // Get the Json response for this command.
 // 'value' is null-terminated, but we also pass its length in case it contains embedded nulls, which matters when uploading files.
 // Return true if we generated a json response to send, false if we didn't and changed the state instead.
 // This may also return true with response == nullptr if we tried to generate a response but ran out of buffers.
 bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer *_ecv_null &response, bool& keepOpen) noexcept
 {
-	keepOpen = false;	// assume we don't want to persist the connection
+	// Keep connections alive if this is an encrypted connection. Without it, every connection
+	// takes ~165ms for TLS setup (on a 6HC), which adds significant computing time and latency
+	keepOpen = skt->UsingTls();
 
 	const char *_ecv_array _ecv_null parameter;
 	if (StringEqualsIgnoreCase(request, "connect") && (parameter = GetKeyValue("password")) != nullptr)
@@ -910,9 +922,10 @@ void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWeb
 				{
 					nameOfFileToSend = OLD_INDEX_PAGE_FILE;			// the index file wasn't found, so try the old one
 				}
-				else if (strchr(nameOfFileToSend, '.') == nullptr)	// if we were asked to return a file without a '.' in the name, return the index page
+				else if (strchr(nameOfFileToSend, '.') == nullptr	// a file without a '.' in the name is a client-side route, ...
+						 || StringStartsWith(nameOfFileToSend, "Explorer/"))	// ... as is the Explorer editor (e.g. Explorer/edit/sys/config.g), which carries the target filename
 				{
-					nameOfFileToSend = INDEX_PAGE_FILE;
+					nameOfFileToSend = INDEX_PAGE_FILE;				// serve the index page so DWC's router can take over
 				}
 				else
 				{
@@ -1002,8 +1015,14 @@ void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWeb
 	}
 
 	outBuf->catf("Content-Length: %lu\r\n", fileToSend->Length());
-	outBuf->cat("Connection: close\r\n\r\n");
-	Commit();
+	const bool keepAlive = skt->UsingTls();
+	outBuf->catf("Connection: %s\r\n\r\n", keepAlive ? "keep-alive" : "close");
+	if (keepAlive)
+	{
+		ResetParser();
+		timer = millis();
+	}
+	Commit(keepAlive ? ResponderState::reading : ResponderState::free);
 #else
 	RejectMessage("file not found", 404);
 #endif
@@ -1162,6 +1181,11 @@ void HttpResponder::SendJsonResponse(const char *_ecv_array command) noexcept
 	}
 
 	// Here if everything is OK
+	if (keepOpen)
+	{
+		ResetParser();
+		timer = millis();
+	}
 	Commit(keepOpen ? ResponderState::reading : ResponderState::free, false);
 	if (reprap.Debug(Module::Webserver))
 	{
@@ -1445,7 +1469,7 @@ void HttpResponder::DoUpload() noexcept
 #endif
 
 // This is called to force termination if we implement the specified protocol
-void HttpResponder::Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept
+void HttpResponder::TryTerminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept
 {
 	if (responderState != ResponderState::free && (protocol == HttpProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{
@@ -1644,7 +1668,7 @@ HttpResponder::HttpSession HttpResponder::sessions[MaxHttpSessions];
 unsigned int HttpResponder::numSessions = 0;
 unsigned int HttpResponder::clientsServed = 0;
 
-volatile uint16_t HttpResponder::seq = 0;
+std::atomic<uint16_t> HttpResponder::seq = 0;
 volatile OutputStack HttpResponder::gcodeReply;
 Mutex HttpResponder::gcodeReplyMutex;
 

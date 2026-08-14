@@ -8,6 +8,10 @@
 # include <Libraries/sd_mmc/sd_mmc.h>
 # include <Libraries/sd_mmc/conf_sd_mmc.h>
 
+# if FF_LRU
+#  include <Platform/Tasks.h>			// for AllocPermanent
+# endif
+
 // Check that the LFN configuration in FatFS is sufficient
 static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
 
@@ -23,21 +27,43 @@ static_assert(SD_MMC_MEM_CNT == NumSdCards);
 # include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #endif
 
-// A note on using mutexes:
-// Each SD card volume has its own mutex. There is also one for the file table, and one for the find first/find next buffer.
-// The FatFS subsystem locks and releases the appropriate volume mutex when it is called.
-// Any function that needs to acquire both the file table mutex and a volume mutex MUST take the file table mutex first, to avoid deadlocks.
-// Any function that needs to acquire both the find buffer mutex and a volume mutex MUST take the find buffer mutex first, to avoid deadlocks.
-// No function should need to take both the file table mutex and the find buffer mutex.
-// No function in here should be called when the caller already owns the shared SPI mutex.
+// A note on the use of mutexes within the module and FatFs:
+// - There is  a mutex for the file table (fsMutex) and another for the find first/find next buffer (dirMutex).
+// When FF_LRU in ff_conf.h is not set:
+// - Each SD card volume also has its own mutex
+// - The FatFs subsystem locks and releases the appropriate volume mutex when any of its functions is called
+// - Any function that needs to acquire both the file table mutex and a volume mutex MUST take the file table mutex first to avoid deadlocks.
+// - Any function that needs to acquire both the find first/next mutex and a volume mutex MUST take the find first/next mutex first, to avoid deadlocks
+// When FF_LRU in ff_conf.h is set:
+// - There is a shared volume mutex because the LRU buffers are shared between volumes
+// - The FatFs subsystem locks and releases this shared volume mutex when any of its functions is called
+//   This means that we can't concurrently access different volumes from different tasks; however we don't expect this to be requested often, so the performance drop should be unimportant
+// In both cases:
+// - No function should need to take both the file table mutex and the find first/next buffer mutex.
+// - No function in here should be called when the caller already owns the shared SPI mutex.
 
 #if HAS_MASS_STORAGE
 
 // Private data and methods
 
+# if FF_LRU
+static DiskBuffer sdCardBuffers[NumLruBuffers];
+# endif
+
 # if SAME70
-alignas(4) static __nocache uint8_t sectorBuffers[NumSdCards][512];
+
+#  if FF_LRU
+alignas(4) static __nocache uint8_t sectorBuffers[NumLruBuffers][FF_MAX_SS];
+#  else
+alignas(4) static __nocache uint8_t sectorBuffers[NumSdCards][FF_MAX_SS];
+#  endif
+
 alignas(4) static __nocache char writeBufferStorage[NumFileWriteBuffers][FileWriteBufLen];
+
+# elif FF_LRU
+
+alignas(4) static uint8_t sectorBuffers[NumLruBuffers][FF_MAX_SS];
+
 # endif
 
 enum class CardDetectState : uint8_t
@@ -53,7 +79,9 @@ struct SdCardInfo INHERIT_OBJECT_MODEL
 	FATFS fileSystem;
 	uint32_t cdChangedTime;
 	uint32_t mountStartTime;
+#if !FF_LRU
 	Mutex volMutex;
+#endif
 	uint16_t seq;
 	Pin cdPin;
 	bool mounting;
@@ -69,9 +97,8 @@ protected:
 void SdCardInfo::Clear(unsigned int card) noexcept
 {
 	memset(&fileSystem, 0, sizeof(fileSystem));
-# if SAME70
-	fileSystem.win = sectorBuffers[card];
-	memset(sectorBuffers[card], 0, sizeof(sectorBuffers[card]));
+# if SAME70 && !FF_LRU
+	ff_set_win(&fileSystem, sectorBuffers[card]);
 # endif
 }
 
@@ -133,8 +160,11 @@ static DIR findDir;
 
 #endif	// HAS_MASS_STORAGE
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 static Mutex dirMutex;
+#endif
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 static FileInfoParser infoParser;
 #endif
 
@@ -145,6 +175,10 @@ static FileWriteBuffer *_ecv_null freeWriteBuffers;
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 static Mutex fsMutex;
 static FileStore files[MAX_FILES];
+#endif
+
+#if HAS_MASS_STORAGE && FF_LRU
+static Mutex sharedVolMutex;
 #endif
 
 // Construct a full path name from a path and a filename. Returns false if error i.e. filename too long
@@ -259,7 +293,11 @@ static unsigned int InternalUnmount(size_t card) noexcept
 {
 	SdCardInfo& inf = info[card];
 	MutexLocker lock1(fsMutex);
+#if FF_LRU
+	MutexLocker lock2(sharedVolMutex);
+#else
 	MutexLocker lock2(inf.volMutex);
+#endif
 	const unsigned int invalidated = MassStorage::InvalidateFiles(&inf.fileSystem);
 	const char path[3] = { (char)('0' + card), ':', 0 };
 	f_mount(nullptr, path, 0);
@@ -336,8 +374,12 @@ void MassStorage::Init() noexcept
 {
 	fsMutex.Create("FileSystem");
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	dirMutex.Create("DirSearch");
+#endif
+
+#if HAS_MASS_STORAGE && FF_LRU
+	sharedVolMutex.Create("SDall");
 #endif
 
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -365,8 +407,20 @@ void MassStorage::Init() noexcept
 		inf.seq = 0;
 		inf.cdPin = SdCardDetectPins[card];
 		inf.cardState = (inf.cdPin == NoPin) ? CardDetectState::present : CardDetectState::notPresent;
+#if !FF_LRU
 		inf.volMutex.Create(VolMutexNames[card]);
+#endif
 	}
+
+#  if FF_LRU
+	// Allocate the SD card buffers
+	for (unsigned int i = 0; i < NumLruBuffers; ++i)
+	{
+		DiskBuffer *const buf = &sdCardBuffers[i];
+		buf->data = sectorBuffers[i];
+		ff_add_buffer_to_freelist(buf);
+	}
+#  endif
 
 	sd_mmc_init(SdWriteProtectPins, SdSpiCSPins);		// initialize SD MMC stack
 
@@ -790,9 +844,133 @@ bool MassStorage::Delete(const StringRef& filePath, ErrorMessageMode errorMessag
 # endif
 }
 
+// Overwrite the file contents with zeros, flush to media, then delete
+// One zero-write pass is sufficient for SD/eMMC - wear-leveling makes multi-pass wipes meaningless on flash
+// Returns true if the delete succeeded; a failed overwrite is logged but does not block the delete
+bool MassStorage::SecureDelete(const StringRef& filePath, ErrorMessageMode errorMessageMode) noexcept
+{
+# if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		// Uses the new SecureDeleteFile request opcode (DSF performs zero-overwrite + fsync + unlink)
+		// Older DSF that doesn't know this opcode will not respond, and SbcInterface::SecureDeleteFile
+		// will time out and return false - that's the right signal for a security-sensitive operation
+		if (reprap.GetSbcInterface().SecureDeleteFile(filePath.c_str()))
+		{
+			return true;
+		}
+		if (errorMessageMode != ErrorMessageMode::noMessage)
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to securely delete %s\n", filePath.c_str());
+		}
+		return false;
+	}
+# endif
+
+# if HAS_MASS_STORAGE
+	if (!FileExists(filePath.c_str()))
+	{
+		// Nothing to wipe; let Delete handle the missing-file case per errorMessageMode
+		return Delete(filePath, errorMessageMode, false);
+	}
+
+	// OpenMode::append is intentional here. Despite the name, it is the only FileStore mode that opens
+	// an existing file read-write WITHOUT truncating it - and that is exactly what makes the wipe real:
+	// we seek to 0 and overwrite the file's own clusters in place. OpenMode::write would truncate first,
+	// so the zeros would land on freshly-allocated clusters and leave the original data on the old ones
+	// The FileExists() guard above means append's create-if-missing behaviour never triggers
+	FileStore * const f = OpenFile(filePath.c_str(), OpenMode::append, 0);
+	if (f != nullptr)
+	{
+		const FilePosition len = f->Length();
+		if (len != 0)
+		{
+			bool wipeOk = f->Seek(0);
+			if (wipeOk)
+			{
+				constexpr size_t ZeroChunk = 256;
+				static const uint8_t zeros[ZeroChunk] = { 0 };
+				FilePosition remaining = len;
+				while (wipeOk && remaining != 0)
+				{
+					const size_t toWrite = (remaining > ZeroChunk) ? ZeroChunk : (size_t)remaining;
+					wipeOk = f->Write(zeros, toWrite);
+					remaining -= toWrite;
+				}
+				if (wipeOk)
+				{
+					wipeOk = f->Flush();
+				}
+			}
+			if (!wipeOk && errorMessageMode != ErrorMessageMode::noMessage)
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "SecureDelete failed to overwrite %s\n", filePath.c_str());
+			}
+		}
+		f->Close();
+	}
+	return Delete(filePath, errorMessageMode, false);
+# else
+	return false;
+# endif
+}
+
 #endif
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
+
+#if HAS_SBC_INTERFACE
+
+// In SBC mode directory listings are fetched from DSF in chunks, because sending one request per entry would mean
+// one SPI round trip per entry. Only one search can be active at a time, which dirMutex already guarantees
+constexpr size_t SbcFileListBufferSize = 1024;
+
+alignas(4) static char sbcListBuffer[SbcFileListBufferSize];
+static String<MaxFilenameLength> sbcListDirectory;
+static size_t sbcListBytes, sbcListPos;
+static uint32_t sbcListNextIndex;
+static bool sbcListEnd;
+
+// Return the next entry of the listing being read, fetching another chunk if the current one is exhausted. Call with dirMutex owned
+static bool GetNextSbcListEntry(FileInfo& file_info) noexcept
+{
+	if (sbcListPos == sbcListBytes)
+	{
+		if (sbcListEnd)
+		{
+			return false;
+		}
+		sbcListBytes = reprap.GetSbcInterface().GetFileList(sbcListDirectory.c_str(), sbcListNextIndex, sbcListBuffer, SbcFileListBufferSize, sbcListEnd);
+		sbcListPos = 0;
+		if (sbcListBytes == 0)
+		{
+			return false;
+		}
+	}
+
+	// Give up if the remaining data is too short to hold another entry, which means DSF sent us something we don't understand
+	const size_t nameOffset = sbcListPos + sizeof(FileListEntry);
+	if (nameOffset > sbcListBytes)
+	{
+		return false;
+	}
+
+	const FileListEntry *const entry = reinterpret_cast<const FileListEntry*>(sbcListBuffer + sbcListPos);
+	if (nameOffset + entry->nameLength > sbcListBytes)
+	{
+		return false;
+	}
+
+	file_info.isDirectory = entry->isDirectory;
+	file_info.size = entry->size;
+	file_info.lastModified = (time_t)entry->lastModified;
+	file_info.fileName.copy(sbcListBuffer + nameOffset, entry->nameLength);
+	sbcListPos = nameOffset + ((entry->nameLength + 3) & ~3);
+	sbcListNextIndex++;
+	return true;
+}
+
+#endif
 
 // Open a directory to read a file list. Returns true if it contains any files, false otherwise.
 // If this returns true then the file system mutex is owned. The caller must subsequently release the mutex either
@@ -812,6 +990,23 @@ bool MassStorage::FindFirst(const char *_ecv_array directory, FileInfo &file_inf
 	{
 		return false;
 	}
+
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		sbcListDirectory.copy(loc.c_str());
+		sbcListNextIndex = 0;
+		sbcListBytes = sbcListPos = 0;
+		sbcListEnd = false;
+		if (GetNextSbcListEntry(file_info))
+		{
+			return true;
+		}
+
+		dirMutex.Release();
+		return false;
+	}
+#endif
 
 #if HAS_MASS_STORAGE
 	if (f_opendir(&findDir, loc.c_str()) == FR_OK)
@@ -852,6 +1047,19 @@ bool MassStorage::FindNext(FileInfo &file_info) noexcept
 		return false;		// error, we don't hold the mutex
 	}
 
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		if (GetNextSbcListEntry(file_info))
+		{
+			return true;
+		}
+
+		dirMutex.Release();
+		return false;
+	}
+#endif
+
 #if HAS_MASS_STORAGE
 	FILINFO entry;
 
@@ -871,7 +1079,6 @@ bool MassStorage::FindNext(FileInfo &file_info) noexcept
 		return true;
 	}
 #endif
-	// TODO implement SBC interface for this
 
 	dirMutex.Release();
 	return false;
@@ -1123,7 +1330,11 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 # if HAS_MASS_STORAGE
 	SdCardInfo& inf = info[card];
 	MutexLocker lock1(fsMutex);
+# if FF_LRU
+	MutexLocker lock2(sharedVolMutex);
+# else
 	MutexLocker lock2(inf.volMutex);
+# endif
 	if (!inf.mounting)
 	{
 		if (inf.isMounted)
@@ -1277,9 +1488,7 @@ void MassStorage::Diagnostics(const StringRef& reply) noexcept
 	reply.lcatf("SD card 0 %s", (MassStorage::IsCardDetected(0) ? "detected" : "not detected"));
 #  endif
 
-	// Show the longest SD card write time
-	reply.lcatf("SD card longest read time %.1fms, write time %.1fms, max retries %u",
-								(double)DiskioGetAndClearLongestReadTime(), (double)DiskioGetAndClearLongestWriteTime(), DiskioGetAndClearMaxRetryCount());
+	DiskioAppendStats(reply);				// show SD card stats
 # endif
 }
 
@@ -1375,20 +1584,10 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, SdCardReturnedInfo
 	return InfoResult::ok;
 }
 
-Mutex& MassStorage::GetVolumeMutex(size_t vol) noexcept
-{
-	return info[vol].volMutex;
-}
-
-# if SUPPORT_OBJECT_MODEL
-
 const ObjectModel *_ecv_from MassStorage::GetVolume(size_t vol) noexcept
 {
 	return &info[vol];
 }
-
-# endif
-
 
 // Functions called by FatFS to acquire/release mutual exclusion
 extern "C"
@@ -1402,14 +1601,22 @@ extern "C"
 	// Lock sync object
 	int ff_mutex_take (int vol) noexcept
 	{
+#if FF_LRU
+		sharedVolMutex.Take();
+#else
 		info[vol].volMutex.Take();
+#endif
 		return 1;
 	}
 
 	// Unlock sync object
 	void ff_mutex_give (int vol) noexcept
 	{
+#if FF_LRU
+		sharedVolMutex.Release();
+#else
 		info[vol].volMutex.Release();
+#endif
 	}
 
 	// Delete a sync object

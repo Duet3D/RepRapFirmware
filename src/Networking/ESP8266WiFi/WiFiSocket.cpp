@@ -27,6 +27,23 @@ void WiFiSocket::Init(SocketNumber n) noexcept
 	txBufferSpace = 0;
 }
 
+// Return true if this socket's local port is the TLS variant of its protocol
+bool WiFiSocket::UsingTls() const noexcept
+{
+	if (localPort == 0)
+	{
+		return false;
+	}
+
+	const WiFiInterface *iface = GetInterface();
+	if (protocol == FtpDataProtocol)
+	{
+		// FTP data connections use a dynamically assigned port; its TLS-ness is latched by OpenDataPort to track the control connection's PROT state
+		return iface->ftpDataPortTls && iface->ftpDataPort == localPort;
+	}
+	return protocol < NumSelectableProtocols && iface->GetTlsPortNumber(protocol) == localPort;
+}
+
 // Close a connection when the last packet has been sent
 void WiFiSocket::Close() noexcept
 {
@@ -146,14 +163,18 @@ void WiFiSocket::Poll() noexcept
 			// state, other than to check if we're here a bit too long.
 			if (state == SocketState::connecting)
 			{
-				// Check for timeout
-				if (millis() - whenInState >= ConnectTimeout)
+				// An inbound TLS connection sits in this state while the WiFi module runs the
+				// handshake (it reports a non-zero local port for an accepted connection); that
+				// can take several seconds, so allow it much longer than an outgoing connect
+				const uint32_t timeout = (localPort != 0) ? TlsHandshakeTimeout : ConnectTimeout;
+				if (millis() - whenInState >= timeout)
 				{
 					Close();
 				}
 			}
 			else
 			{
+				localPort = resp.Value().localPort;
 				whenInState = millis();
 				state = SocketState::connecting;
 			}
@@ -185,8 +206,7 @@ void WiFiSocket::Poll() noexcept
 		// We can get here if a peer has sent very little data and then instantly closed
 		// the connection, e.g. when an FTP peer transferred very small files over the
 		// data port. In such cases we must notify the responder about this transmission!
-		// no break
-
+		[[fallthrough]];
 	case ConnState::connected:
 		if (state != SocketState::connected)
 		{

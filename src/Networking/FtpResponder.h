@@ -16,8 +16,8 @@ public:
 	explicit FtpResponder(NetworkResponder *_ecv_from _ecv_null n) noexcept;
 
 	bool Spin() noexcept override;								// do some work, returning true if we did anything significant
-	bool Accept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept override;	// ask the responder to accept this connection, returns true if it did
-	void Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept override;	// terminate the responder if it is serving the specified protocol on the specified interface
+	bool TryAccept(Socket *_ecv_from s, NetworkProtocol protocol) noexcept override;	// ask the responder to accept this connection, returns true if it did
+	void TryTerminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept override;	// terminate the responder if it is serving the specified protocol on the specified interface
 
 	void Diagnostics(const StringRef& reply) const noexcept override;
 
@@ -40,6 +40,7 @@ protected:
 	static const uint32_t ftpPasvPortTimeout = 10000;	// maximum time to wait for an FTP data connection in milliseconds
 
 	Socket *_ecv_from _ecv_null dataSocket;
+	bool dataConnectionTls;								// true if the data connection should use TLS
 	TcpPort passivePort;
 	uint32_t passivePortOpenTime;
 	OutputBuffer *_ecv_null dataBuf;

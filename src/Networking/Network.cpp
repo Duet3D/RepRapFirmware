@@ -17,9 +17,10 @@
 #include <Platform/TaskPriorities.h>
 
 #if HAS_NETWORKING
-#include "NetworkClient.h"
-#include "NetworkBuffer.h"
-#include "NetworkInterface.h"
+# include "NetworkClient.h"
+# include "NetworkBuffer.h"
+# include "NetworkInterface.h"
+# include "Socket.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 #if HAS_LWIP_NETWORKING
@@ -99,7 +100,7 @@ Network::Network(Platform& p) noexcept : platform(p)
 	interfaces[0] = new LwipEthernetInterface(p);
 # elif defined(DUET_NG) || defined(DUET3MINI_V04)
 	interfaces[0] = nullptr;			// we set this up in Init()
-# elif defined(FMDC_V02) || defined(FMDC_V03)
+# elif defined(FMDC_V03)
 	interfaces[0] = new WiFiInterface(p);
 # elif defined(DUET_M)
 	interfaces[0] = new W5500Interface(p);
@@ -235,7 +236,7 @@ void Network::TerminateResponders(const NetworkInterface *iface, NetworkProtocol
 {
 	for (NetworkResponder *_ecv_from _ecv_null r = responders; r != nullptr; r = r->GetNext())
 	{
-		r->Terminate(protocol, iface);
+		r->TryTerminate(protocol, iface);
 	}
 }
 
@@ -359,7 +360,7 @@ GCodeResult Network::ReportProtocols(unsigned int interface, const StringRef& re
 #endif
 }
 
-GCodeResult Network::EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply) noexcept
+GCodeResult Network::EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply, int tlsParam) noexcept
 {
 #if HAS_NETWORKING
 	if (interface < GetNumNetworkInterfaces())
@@ -384,7 +385,7 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 # endif
 #endif // HAS_RESPONDERS
 		}
-		return iface->EnableInterface(mode, ssid, reply);
+		return iface->EnableInterface(mode, ssid, reply, tlsParam);
 	}
 	reply.printf("Invalid network interface '%d'\n", interface);
 	return GCodeResult::error;
@@ -449,13 +450,13 @@ WifiFirmwareUploader *_ecv_null Network::GetWifiUploader() const noexcept
 	return nullptr;
 }
 
-void Network::ResetWiFiForUpload(bool external) noexcept
+void Network::ResetWiFiForUpload() noexcept
 {
 #if HAS_WIFI_NETWORKING
 	WiFiInterface *_ecv_null const wifiInterface = FindWiFiInterface();
 	if (wifiInterface != nullptr)
 	{
-		wifiInterface->ResetWiFiForUpload(external);
+		wifiInterface->ResetWiFiForUpload();
 	}
 #endif
 }
@@ -598,8 +599,7 @@ GCodeResult Network::ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& 
 								int mqttInterface =  MqttClient::GetInterface();
 								if (mqttInterface == static_cast<int>(interface) || mqttInterface < 0)
 								{
-									result = EnableProtocol(interface, protocol, port,
-																				ip.GetV4LittleEndian(), secure, reply);
+									result = EnableProtocol(interface, protocol, port, ip.GetV4LittleEndian(), secure, reply);
 
 									if (mqttInterface < 0 && result == GCodeResult::ok)
 									{
@@ -762,7 +762,16 @@ void Network::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 	switch (part)
 	{
 	case 0:
-		reply.printf("=== Network ===\nSlowest loop: %.2fms; fastest: %.2fms", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+		// fastLoop sentinel (UINT32_MAX) means Spin() hasn't iterated since the previous M122
+		// cleared it; printing the raw value yields a ~5.7M ms phantom rather than something useful
+		if (fastLoop == UINT32_MAX)
+		{
+			reply.printf("=== Network ===\nSlowest loop: n/a; fastest: n/a");
+		}
+		else
+		{
+			reply.printf("=== Network ===\nSlowest loop: %.2fms; fastest: %.2fms", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+		}
 		fastLoop = UINT32_MAX;
 		slowLoop = 0;
 
@@ -921,10 +930,15 @@ bool Network::FindResponder(Socket *_ecv_from skt, NetworkProtocol protocol) noe
 #if HAS_RESPONDERS
 	for (NetworkResponder *_ecv_from _ecv_null r = responders; r != nullptr; r = r->GetNext())
 	{
-		if (r->Accept(skt, protocol))
+		if (r->TryAccept(skt, protocol))
 		{
 			return true;
 		}
+	}
+
+	if (reprap.Debug(Module::Network))
+	{
+		debugPrintf("No responder accepted: proto=%d lport=%u rport=%u\n", (int)protocol, skt->GetLocalPort(), skt->GetRemotePort());
 	}
 #endif
 	return false;

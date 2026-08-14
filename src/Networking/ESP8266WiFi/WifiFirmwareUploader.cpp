@@ -10,11 +10,10 @@
 #if HAS_WIFI_NETWORKING && (HAS_MASS_STORAGE || HAS_EMBEDDED_FILES)
 
 #include "WiFiInterface.h"
-
-#include <Devices.h>
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
 #include <Storage/FileStore.h>
+#include <AsyncSerial.h>
 
 constexpr uint32_t Esp32FlashModuleSize = 4 * 1024 * 1024;		// assume at least 4Mbytes flash
 
@@ -668,7 +667,7 @@ void WifiFirmwareUploader::Spin() noexcept
 				// First attempt at this baud rate
 				MessageF("Trying to connect at %u baud: ", baud);
 			}
-			interface.ResetWiFiForUpload(false);
+			interface.ResetWiFiForUpload();
 			uploadPort.begin(baud);
 			lastAttemptTime = lastResetTime = millis();
 			state = UploadState::connecting;

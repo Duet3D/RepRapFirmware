@@ -15,7 +15,7 @@
 #if SUPPORT_LED_STRIPS && SUPPORT_DMA_DOTSTAR
 
 DotStarLedStrip::DotStarLedStrip() noexcept
-	: LocalLedStrip(LedStripType::DotStar, DefaultDotStarSpiClockFrequency), colorOrder(ColorOrder::BGR)
+	: LocalLedStrip(LedStripType::DotStar, DefaultDotStarSpiClockFrequency)
 {
 }
 
@@ -24,12 +24,6 @@ GCodeResult DotStarLedStrip::Configure(GCodeBuffer& gb, const StringRef& reply, 
 {
 	bool seen = false;
 	GCodeResult rslt = CommonConfigure(gb, reply, pinName, seen);
-
-	uint32_t order;
-	if (gb.TryGetLimitedUIValue('K', order, seen, (uint32_t)ColorOrder::count))
-	{
-		colorOrder = (ColorOrder)order;
-	}
 
 	if (seen)
 	{
@@ -51,18 +45,6 @@ GCodeResult DotStarLedStrip::Configure(CanMessageGenericParser& parser, const St
 {
 	bool seen = false;
 	GCodeResult rslt = CommonConfigure(parser, reply, seen, extra);
-
-	uint32_t order;
-	if (parser.GetUintParam('K', order))
-	{
-		if (order >= (uint32_t)ColorOrder::count)
-		{
-			reply.printf("Invalid color order K=%lu", order);
-			return GCodeResult::warning;
-		}
-		colorOrder = (ColorOrder)order;
-		seen = true;
-	}
 
 	if (seen)
 	{
@@ -98,57 +80,7 @@ GCodeResult DotStarLedStrip::HandleM150(CanMessageGenericParser& parser, const S
 		params.numLeds = numRemaining;
 	}
 
-	uint32_t data;
-# if USE_16BIT_SPI
-	// Swap bytes for 16-bit SPI
-	switch (colorOrder)
-	{
-	case ColorOrder::BRG:
-		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.blue & 255)) | ((params.red & 255) << 24) | ((params.green & 255) << 16);
-		break;
-	case ColorOrder::RGB:
-		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.red & 255)) | ((params.green & 255) << 24) | ((params.blue & 255) << 16);
-		break;
-	case ColorOrder::GRB:	// no idea why but RBG and GRB behave the wrong way round in testing with 2 different LED strips so have just swapped them so it works in practice.
-		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.red & 255)) | ((params.blue & 255) << 24) | ((params.green & 255) << 16);
-		break;
-	case ColorOrder::GBR:
-		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.green & 255)) | ((params.blue & 255) << 24) | ((params.red & 255) << 16);
-		break;
-	case ColorOrder::RBG:	// see above note about GRB
-		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.green & 255)) | ((params.red & 255) << 24) | ((params.blue & 255) << 16);
-		break;
-	case ColorOrder::BGR:
-	default:
-		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.blue & 255)) | ((params.green & 255) << 24) | ((params.red & 255) << 16);
-		break;
-	}
-# else
-	// Untested, might suffer from same RBG/GRB issue as above
-	switch (colorOrder)
-	{
-	case ColorOrder::BRG:
-		data = (params.brightness >> 3) | 0xE0 | ((params.blue & 255) << 8) | ((params.red & 255) << 16) | ((params.green & 255) << 24);
-		break;
-	case ColorOrder::RGB:
-		data = (params.brightness >> 3) | 0xE0 | ((params.red & 255) << 8) | ((params.green & 255) << 16) | ((params.blue & 255) << 24);
-		break;
-	case ColorOrder::RBG:
-		data = (params.brightness >> 3) | 0xE0 | ((params.red & 255) << 8) | ((params.blue & 255) << 16) | ((params.green & 255) << 24);
-		break;
-	case ColorOrder::GBR:
-		data = (params.brightness >> 3) | 0xE0 | ((params.green & 255) << 8) | ((params.blue & 255) << 16) | ((params.red & 255) << 24);
-		break;
-	case ColorOrder::GRB:
-		data = (params.brightness >> 3) | 0xE0 | ((params.green & 255) << 8) | ((params.red & 255) << 16) | ((params.blue & 255) << 24);
-		break;
-	case ColorOrder::BGR:
-	default:
-		data = (params.brightness >> 3) | 0xE0 | ((params.blue & 255) << 8) | ((params.green & 255) << 16) | ((params.red & 255) << 24);
-		break;
-	}
-# endif
-	return SendDotStarData(data, params.numLeds, params.following);
+	return SendDotStarData(params);
 }
 
 #endif
@@ -174,57 +106,7 @@ GCodeResult DotStarLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply)
 		params.numLeds = numRemaining;
 	}
 
-	uint32_t data;
-# if USE_16BIT_SPI
-	// Swap bytes for 16-bit SPI
-	switch (colorOrder)
-	{
-	case ColorOrder::BRG:
-		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.blue & 255)) | ((params.red & 255) << 24) | ((params.green & 255) << 16);
-		break;
-	case ColorOrder::RGB:
-		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.red & 255)) | ((params.green & 255) << 24) | ((params.blue & 255) << 16);
-		break;
-	case ColorOrder::GRB:	// no idea why but RBG and GRB behave the wrong way round in testing with 2 different LED strips so have just swapped them so it works in practice.
-		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.red & 255)) | ((params.blue & 255) << 24) | ((params.green & 255) << 16);
-		break;
-	case ColorOrder::GBR:
-		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.green & 255)) | ((params.blue & 255) << 24) | ((params.red & 255) << 16);
-		break;
-	case ColorOrder::RBG:	// see above note about GRB
-		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.green & 255)) | ((params.red & 255) << 24) | ((params.blue & 255) << 16);
-		break;
-	case ColorOrder::BGR:
-	default:
-		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.blue & 255)) | ((params.green & 255) << 24) | ((params.red & 255) << 16);
-		break;
-	}
-# else
-	// Untested, might suffer from same RBG/GRB issue as above
-	switch (colorOrder)
-	{
-	case ColorOrder::BRG:
-		data = (params.brightness >> 3) | 0xE0 | ((params.blue & 255) << 8) | ((params.red & 255) << 16) | ((params.green & 255) << 24);
-		break;
-	case ColorOrder::RGB:
-		data = (params.brightness >> 3) | 0xE0 | ((params.red & 255) << 8) | ((params.green & 255) << 16) | ((params.blue & 255) << 24);
-		break;
-	case ColorOrder::RBG:
-		data = (params.brightness >> 3) | 0xE0 | ((params.red & 255) << 8) | ((params.blue & 255) << 16) | ((params.green & 255) << 24);
-		break;
-	case ColorOrder::GBR:
-		data = (params.brightness >> 3) | 0xE0 | ((params.green & 255) << 8) | ((params.blue & 255) << 16) | ((params.red & 255) << 24);
-		break;
-	case ColorOrder::GRB:
-		data = (params.brightness >> 3) | 0xE0 | ((params.green & 255) << 8) | ((params.red & 255) << 16) | ((params.blue & 255) << 24);
-		break;
-	case ColorOrder::BGR:
-	default:
-		data = (params.brightness >> 3) | 0xE0 | ((params.blue & 255) << 8) | ((params.green & 255) << 16) | ((params.red & 255) << 24);
-		break;
-	}
-# endif
-	return SendDotStarData(data, params.numLeds, params.following);
+	return SendDotStarData(params);
 }
 
 // Return the number of buffer bytes we need per LED
@@ -234,7 +116,7 @@ size_t DotStarLedStrip::GetBytesPerLed() const noexcept
 }
 
 // Send data to DotStar LEDs
-GCodeResult DotStarLedStrip::SendDotStarData(uint32_t data, uint32_t numLeds, bool following) noexcept
+GCodeResult DotStarLedStrip::SendDotStarData(LedParams params) noexcept
 {
 	// Set up the data in the DMA buffer.
 	// Sending at least 32 zero bits (start frame) tells the LEDs that this is new data starting with the first LED in the strip.
@@ -255,21 +137,30 @@ GCodeResult DotStarLedStrip::SendDotStarData(uint32_t data, uint32_t numLeds, bo
 	}
 
 	// Can we fit the remaining data and stop bits in the buffer?
-	unsigned int numStopWordsNeeded = (following) ? 0 : min<unsigned int>((numLeds + totalSent + 63)/64, MaxLedsPerBuffer - 1);
+	unsigned int numStopWordsNeeded = (params.following) ? 0 : min<unsigned int>((params.numLeds + totalSent + 63)/64, MaxLedsPerBuffer - 1);
 	unsigned int thisChunk;
-	if (numLeds + numStopWordsNeeded <= spaceLeft)
+	if (params.numLeds + numStopWordsNeeded <= spaceLeft)
 	{
-		thisChunk = numLeds;
+		thisChunk = params.numLeds;
 	}
 	else
 	{
-		thisChunk = min<unsigned int>(spaceLeft, numLeds - 1);
+		thisChunk = min<unsigned int>(spaceLeft, params.numLeds - 1);
 		numStopWordsNeeded = 0;
 	}
 
-	numRemaining = numLeds - thisChunk;
+	numRemaining = params.numLeds - thisChunk;
 	totalSent += thisChunk;
-	needStartFrame = (numRemaining == 0 && !following);
+	needStartFrame = (numRemaining == 0 && !params.following);
+
+	params.SwapColours(colorOrder);											// put the colours in the right order for this LED strip
+	uint32_t data;
+# if USE_16BIT_SPI
+	// Swap bytes for 16-bit SPI
+	data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.firstColour & 255)) | ((params.secondColour & 255) << 24) | ((params.thirdColour & 255) << 16);
+# else
+	data = (params.brightness >> 3) | 0xE0 | ((params.firstColour & 255) << 8) | ((params.secondColour & 255) << 16) | ((params.thirdColour & 255) << 24);
+# endif
 
 	for (unsigned int i = 0; i < thisChunk; ++i)
 	{

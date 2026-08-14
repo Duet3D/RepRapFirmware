@@ -28,6 +28,7 @@ Licence: GPL
 #include <RepRapFirmware.h>
 #include <Platform/RepRap.h>
 #include "Heater.h"
+#include "HeaterCollection.h"
 #include "TemperatureError.h"
 #include <RTOSIface/RTOSIface.h>
 
@@ -36,7 +37,7 @@ class HeaterMonitor;
 class GCodeBuffer;
 class CanMessageSensorTemperatures;
 class CanMessageHeatersStatus;
-class CanMessageHeaterFeedForwardNew;
+class CanMessageHeaterFeedForwardV1;
 
 class Heat INHERIT_OBJECT_MODEL
 {
@@ -57,20 +58,25 @@ public:
 	void SetExtrusionMinTemp(float t) noexcept;							// Set minimum extrusion temperature
 	void SetRetractionMinTemp(float t) noexcept;						// Set minimum retraction temperature
 
-	int GetBedHeater(size_t index) const noexcept						// Get a hot bed heater number
+	int GetBedHeater(size_t index) const noexcept						// Get the first bed heater number (deprecated, use mapping methods)
 	pre(index < MaxBedHeaters);
-	void SetBedHeater(size_t index, int heater)	 noexcept				// Set a hot bed heater number
-	pre(index < MaxBedHeaters; -1 <= heater; heater < MaxHeaters);
-	bool IsBedHeater(int heater) const noexcept;						// Check if this heater is a bed heater
+	void SetBedHeaters(size_t index, const int32_t heaterNumbers[], size_t count) noexcept;	// Set multiple bed heaters for a slot
+	void ClearBedHeaters(size_t index) noexcept;						// Clear all bed heaters for a slot
+	size_t GetBedHeaterCount(size_t index) const noexcept;			// Get the number of bed heaters for a slot
+	int GetBedHeaterAt(size_t index, size_t pos) const noexcept;		// Get a specific bed heater for a slot
 
-	int GetChamberHeater(size_t index) const noexcept					// Get a chamber heater number
+	int GetChamberHeater(size_t index) const noexcept					// Get the first chamber heater number (deprecated, use mapping methods)
 	pre(index < MaxChamberHeaters);
-	void SetChamberHeater(size_t index, int heater)	 noexcept			// Set a chamber heater number
-	pre(index < MaxChamberHeaters; -1 <= heater; heater < MaxHeaters);
-	bool IsChamberHeater(int heater) const noexcept;					// Check if this heater is a chamber heater
+	void SetChamberHeaters(size_t index, const int32_t heaterNumbers[], size_t count) noexcept;	// Set multiple chamber heaters for a slot
+	void ClearChamberHeaters(size_t index) noexcept;					// Clear all chamber heaters for a slot
+	size_t GetChamberHeaterCount(size_t index) const noexcept;		// Get the number of chamber heaters for a slot
+	int GetChamberHeaterAt(size_t index, size_t pos) const noexcept;	// Get a specific chamber heater for a slot
 
+	const auto& GetBedHeaters() const noexcept { return bedHeaters; }
+	const auto& GetChamberHeaters() const noexcept { return chamberHeaters; }
+
+	HeaterFunction GetHeaterFunction(int heater) const noexcept;		// Check if this heater is a bed heater, chamber heater or tool heater
 	void SetAsToolHeater(int8_t heater) const noexcept;					// called when a tool is created that uses this heater
-	bool IsBedOrChamberHeater(int heater) const noexcept;				// Queried by the Platform class
 
 	bool SlowHeatersAtSetTemperatures(float tolerance, bool waitOnFault) const noexcept;	// Are all slow heaters at temperature within tolerance?
 
@@ -82,7 +88,6 @@ public:
 	GCodeResult SetOrReportHeaterModel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Create a sensor or change the parameters for an existing sensor
-	GCodeResult SetPidParameters(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException); // Set the P/I/D parameters for a heater
 	GCodeResult HandleM143(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException);	// Configure heater protection (M143)
 
 	ReadLockedPointer<TemperatureSensor> FindSensor(int sn) const noexcept;	// Get a pointer to the temperature sensor entry
@@ -92,6 +97,8 @@ public:
 
 	float GetHighestTemperatureLimit() const noexcept;					// Get the highest temperature limit of any heater
 	size_t GetNumHeatersToReport() const noexcept;
+	size_t GetNumBedSlotsToReport() const noexcept { return bedHeaters.GetNumSlotsToReport(); }
+	size_t GetNumChamberSlotsToReport() const noexcept { return chamberHeaters.GetNumSlotsToReport(); }
 	size_t GetNumSensorsToReport() const noexcept;
 
 	void Diagnostics(const StringRef& reply) noexcept;					// Output useful information
@@ -144,18 +151,20 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
-	GCodeResult ProcessM307New(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept;
+	GCodeResult ProcessM307(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept;
 	GCodeResult ProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	GCodeResult SetFaultDetection(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept;
 	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;
-	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
+	GCodeResult SetTemperature(const CanMessageSetHeaterTemperatureV1& msg, const StringRef& reply) noexcept;
 	GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept;
-	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardNew& msg, const StringRef& reply) noexcept;
+	GCodeResult ApplyFeedForward(const CanMessageHeaterFeedForwardV1& msg, const StringRef& reply) noexcept;
+
+	void SetDefaultHeaterModel(CanMessageBuffer& buf) noexcept;			// set and report the default model for a heater
 #endif
 
 	static TaskHandle GetHeatTask() noexcept;
 
-	static ReadWriteLock sensorsLock;							// needs to be public so that the OMT in EndstopsManager can lock it
+	static ReadWriteLock sensorsLock;									// needs to be public so that the OMT in EndstopsManager can lock it
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
@@ -165,13 +174,17 @@ private:
 	void DeleteSensor(unsigned int sn) noexcept;
 	void InsertSensor(TemperatureSensor *newSensor) noexcept;
 
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+	template<size_t N, size_t M> void WriteCollectionTempSettings(const StringRef& buf, const HeaterCollection<N, M>& collection, const char *mCode) const noexcept;
+#endif
+
 #if SUPPORT_REMOTE_COMMANDS
 	void SendHeatersStatus(CanMessageBuffer& buf) noexcept;
 #endif
 
 	static ReadWriteLock heatersLock;
 
-	uint8_t volatile sensorCount;
+	std::atomic<uint8_t> sensorCount;
 	TemperatureSensor *_ecv_from _ecv_null volatile sensorsRoot;	// The sensor list
 
 	Heater *_ecv_from heaters[MaxHeaters];						// Each element is a local or remote heater
@@ -181,8 +194,8 @@ private:
 	float retractionMinTemp;									// Minimum temperature to allow regular retraction
 	unsigned int sensorOrderingErrors;							// Counts any issue with unordered temperature sensors
 	bool coldExtrude;											// Is cold extrusion allowed?
-	int8_t bedHeaters[MaxBedHeaters];							// Indices of the hot bed heaters to use or -1 if none is available
-	int8_t chamberHeaters[MaxChamberHeaters];					// Indices of the chamber heaters to use or -1 if none is available
+	HeaterCollection<MaxBedHeaters, MaxHeatersPerBed> bedHeaters;
+	HeaterCollection<MaxChamberHeaters, MaxHeatersPerChamber> chamberHeaters;
 	int8_t heaterBeingTuned;									// which PID is currently being tuned
 	int8_t lastHeaterTuned;										// which PID we last finished tuning
 
@@ -227,14 +240,34 @@ inline void Heat::SetRetractionMinTemp(float t) noexcept
 	reprap.HeatUpdated();
 }
 
-inline int Heat::GetBedHeater(size_t index) const noexcept
+inline int Heat::GetBedHeater(size_t slot) const noexcept
 {
-	return bedHeaters[index];
+	return bedHeaters.GetFirstHeater(slot);
 }
 
-inline int Heat::GetChamberHeater(size_t index) const noexcept
+inline int Heat::GetChamberHeater(size_t slot) const noexcept
 {
-	return chamberHeaters[index];
+	return chamberHeaters.GetFirstHeater(slot);
+}
+
+inline size_t Heat::GetBedHeaterCount(size_t slot) const noexcept
+{
+	return bedHeaters.GetHeaterCount(slot);
+}
+
+inline size_t Heat::GetChamberHeaterCount(size_t slot) const noexcept
+{
+	return chamberHeaters.GetHeaterCount(slot);
+}
+
+inline int Heat::GetBedHeaterAt(size_t slot, size_t index) const noexcept
+{
+	return bedHeaters.GetHeaterAt(slot, index);
+}
+
+inline int Heat::GetChamberHeaterAt(size_t slot, size_t index) const noexcept
+{
+	return chamberHeaters.GetHeaterAt(slot, index);
 }
 
 #endif

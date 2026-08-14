@@ -85,7 +85,7 @@ public:
 	void CreateAdditionalInterface() noexcept;
 #endif
 
-	GCodeResult EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply) noexcept;
+	GCodeResult EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply, int tlsParam = 1) noexcept;
 	GCodeResult EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept;
 	GCodeResult DisableProtocol(unsigned int interface, NetworkProtocol protocol, const StringRef& reply) noexcept;
 	GCodeResult ReportProtocols(unsigned int interface, const StringRef& reply) const noexcept;
@@ -93,7 +93,7 @@ public:
 	// WiFi interfaces
 	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & longReply);
 	WifiFirmwareUploader *_ecv_null GetWifiUploader() const noexcept;
-	void ResetWiFiForUpload(bool external) noexcept;
+	void ResetWiFiForUpload() noexcept;
 	const char *_ecv_array GetWiFiServerVersion() const noexcept;
 
 #if HAS_NETWORKING

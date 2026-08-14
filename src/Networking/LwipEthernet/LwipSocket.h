@@ -17,7 +17,7 @@
 #include "Networking/Socket.h"
 
 typedef int8_t err_t;
-struct tcp_pcb;
+struct altcp_pcb;
 struct pbuf;
 
 // Socket structure for LwIP that we use to track TCP connections
@@ -25,21 +25,25 @@ class LwipSocket : public Socket
 {
 public:
 	LwipSocket(NetworkInterface *iface) noexcept;
+	void Init(SocketNumber s, TcpPort serverPort, NetworkProtocol p, bool p_outgoing = false) noexcept;
+#if LWIP_ALTCP_TLS
+	void InitTls(TcpPort port) noexcept { localTlsPort = port; }
+#endif
 	int GetState() const noexcept { return (int)state; }		// for debugging
 
 	// LwIP interfaces
-	bool AcceptConnection(tcp_pcb *pcb) noexcept;
+	bool AcceptConnection(altcp_pcb *pcb) noexcept;
 	void DataReceived(pbuf *data) noexcept;
 	void DataSent(size_t numBytes) noexcept;
 	void ConnectionClosedGracefully() noexcept;
 	void ConnectionError(err_t err) noexcept;
 
 	// Inherited members of the Socket class
-	void Init(SocketNumber s, TcpPort serverPort, NetworkProtocol p, bool outgoing = false) noexcept;
+	bool UsingTls() const noexcept override;
 	void TerminateAndDisable() noexcept override;
 	void Poll() noexcept override;
 	void Close() noexcept override;
-	bool IsClosing() const noexcept { return (state == SocketState::closing); }
+	bool IsClosing() const noexcept override { return (state == SocketState::closing) || (state == SocketState::peerDisconnecting); }
 	void Terminate() noexcept override;
 	bool ReadChar(char& c) noexcept override;
 	bool ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept override;
@@ -72,13 +76,18 @@ private:
 	uint32_t whenClosed;
 	bool responderFound;
 
-	tcp_pcb *connectionPcb;
+	altcp_pcb *connectionPcb;
+#if LWIP_ALTCP_TLS
+	TcpPort localTlsPort;
+#endif
+
 	pbuf *volatile receivedData;
 	size_t readIndex;
 	bool outgoing;
 
 	SocketState state;
 	size_t unAcked;
+	bool txShutdownRequested;
 };
 
 #endif	// HAS_LWIP_NETWORKING

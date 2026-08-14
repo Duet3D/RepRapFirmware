@@ -12,8 +12,7 @@
 #include <Movement/StepTimer.h>
 
 NeoPixelLedStrip::NeoPixelLedStrip(bool p_isRGBW) noexcept
-	: LocalLedStrip((p_isRGBW) ? LedStripType::NeoPixel_RGBW : LedStripType::NeoPixel_RGB, DefaultNeoPixelSpiClockFrequency),
-	  isRGBW(p_isRGBW)
+	: LocalLedStrip((p_isRGBW) ? LedStripType::NeoPixel_RGBW : LedStripType::NeoPixel_RGB, DefaultNeoPixelSpiClockFrequency)
 {
 }
 
@@ -62,19 +61,7 @@ GCodeResult NeoPixelLedStrip::HandleM150(CanMessageGenericParser& parser, const 
 
 	LedParams params;
 	params.GetM150Params(parser);
-	params.ApplyBrightness();
-
-#if SUPPORT_DMA_NEOPIXEL
-	if (UsesDma())
-	{
-		SpiSendData(params);
-	}
-	else
-#endif
-	{
-		BitBangData(params);
-	}
-	return GCodeResult::ok;
+	return NeoPixelSendData(params);
 }
 
 #endif
@@ -96,6 +83,12 @@ GCodeResult NeoPixelLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply
 
 	LedParams params;
 	params.GetM150Params(gb);
+	return NeoPixelSendData(params);
+}
+
+GCodeResult NeoPixelLedStrip::NeoPixelSendData(LedParams& params) noexcept
+{
+	params.SwapColours(colorOrder);
 	params.ApplyBrightness();
 
 #if SUPPORT_DMA_NEOPIXEL
@@ -114,7 +107,7 @@ GCodeResult NeoPixelLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply
 // Return the number of buffer bytes we need per LED
 size_t NeoPixelLedStrip::GetBytesPerLed() const noexcept
 {
-	const size_t bytesPerLed = (isRGBW) ? 4 : 3;
+	const size_t bytesPerLed = (IsRGBW()) ? 4 : 3;
 	return (useDma) ? bytesPerLed * 4 : bytesPerLed;
 }
 
@@ -145,18 +138,18 @@ static void EncodeNeoPixelByte(uint8_t *_ecv_array p, uint8_t val) noexcept
 // Send data to NeoPixel LEDs by DMA to SPI
 GCodeResult NeoPixelLedStrip::SpiSendData(const LedParams& params) noexcept
 {
-	const unsigned int bytesPerLed = (isRGBW) ? 16 : 12;
+	const unsigned int bytesPerLed = (IsRGBW()) ? 16 : 12;
 	unsigned int numLeds = params.numLeds;
 	uint8_t *_ecv_array p = chunkBuffer + (bytesPerLed * numAlreadyInBuffer);
 	while (numLeds != 0 && p + bytesPerLed <= chunkBuffer + chunkBufferSize)
 	{
-		EncodeNeoPixelByte(p, (uint8_t)params.green);
+		EncodeNeoPixelByte(p, (uint8_t)params.firstColour);
 		p += 4;
-		EncodeNeoPixelByte(p, (uint8_t)params.red);
+		EncodeNeoPixelByte(p, (uint8_t)params.secondColour);
 		p += 4;
-		EncodeNeoPixelByte(p, (uint8_t)params.blue);
+		EncodeNeoPixelByte(p, (uint8_t)params.thirdColour);
 		p += 4;
-		if (isRGBW)
+		if (IsRGBW())
 		{
 			EncodeNeoPixelByte(p, (uint8_t)params.white);
 			p += 4;
@@ -193,15 +186,15 @@ __attribute__((aligned(16)))			// SAME5 and SAM4E cache lines are 16 bytes long
 #endif
 GCodeResult NeoPixelLedStrip::BitBangData(const LedParams& params) noexcept
 {
-	const unsigned int bytesPerLed = (isRGBW) ? 4 : 3;
+	const unsigned int bytesPerLed = (IsRGBW()) ? 4 : 3;
 	unsigned int numLeds = params.numLeds;
 	uint8_t *_ecv_array p = chunkBuffer + (bytesPerLed * numAlreadyInBuffer);
 	while (numLeds != 0 && p + bytesPerLed <= chunkBuffer + chunkBufferSize)
 	{
-		*p++ = (uint8_t)params.green;
-		*p++ = (uint8_t)params.red;
-		*p++ = (uint8_t)params.blue;
-		if (isRGBW)
+		*p++ = (uint8_t)params.firstColour;
+		*p++ = (uint8_t)params.secondColour;
+		*p++ = (uint8_t)params.thirdColour;
+		if (IsRGBW())
 		{
 			*p++ = (uint8_t)params.white;
 		}

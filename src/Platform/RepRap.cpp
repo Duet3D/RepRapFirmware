@@ -1,4 +1,5 @@
 #include "RepRap.h"
+#include <General/IapInfo.h>
 
 #include <Devices.h>
 #include <Movement/Move.h>
@@ -334,13 +335,13 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "zProbes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbes),							ObjectModelEntryFlags::verbose },
 
 	// 3. state (see declaration of StateSubTableNumber above)
-	{ "atxPower",				OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerState()),	ObjectModelEntryFlags::none },
-	{ "atxPowerPort",			OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerPort()),	ObjectModelEntryFlags::none },
-	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),					ObjectModelEntryFlags::none },
-	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).GetCurrentToolNumber()),	ObjectModelEntryFlags::live },
+	{ "atxPower",				OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerState()),		ObjectModelEntryFlags::none },
+	{ "atxPowerPort",			OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerPort()),		ObjectModelEntryFlags::none },
+	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),													ObjectModelEntryFlags::none },
+	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).GetCurrentToolNumber()),		ObjectModelEntryFlags::live },
 	{ "deferredPowerDown",		OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->IsDeferredPowerDown()),	ObjectModelEntryFlags::none },
-	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),								ObjectModelEntryFlags::none },
-	{ "gpOut",					OBJECT_MODEL_FUNC_ARRAY(6),												ObjectModelEntryFlags::liveNotPanelDue },
+	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),																ObjectModelEntryFlags::none },
+	{ "gpOut",					OBJECT_MODEL_FUNC_ARRAY(6),																				ObjectModelEntryFlags::liveNotPanelDue },
 #if SUPPORT_LASER
 	// 2020-04-24: return the configured laser PWM even if the laser is temporarily turned off
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF(self->gCodes->GetMachineType() == MachineType::laser, self->gCodes->GetLaserPwm(), 2),	ObjectModelEntryFlags::live },
@@ -355,12 +356,12 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "macroRestarted",			OBJECT_MODEL_FUNC(self->gCodes->GetMacroRestarted()),					ObjectModelEntryFlags::none },
 	{ "messageBox",				OBJECT_MODEL_FUNC_IF_NOSELF(MessageBox::HaveCurrent(), MessageBox::GetCurrent(), 0), ObjectModelEntryFlags::important },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
-	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none },
+	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none | ObjectModelEntryFlags::obsolete },
 #if HAS_VOLTAGE_MONITOR
 	{ "powerFailScript",		OBJECT_MODEL_FUNC(self->gCodes->GetPowerFailScript()),					ObjectModelEntryFlags::none },
 #endif
-	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).previousToolNumber),	ObjectModelEntryFlags::none },
-	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(7),												ObjectModelEntryFlags::none },
+	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).previousToolNumber),	ObjectModelEntryFlags::none | ObjectModelEntryFlags::obsolete },
+	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(7),												ObjectModelEntryFlags::obsolete },
 	{ "startupError",			OBJECT_MODEL_FUNC_IF(!self->configErrorMessage.IsNull(), self, 6),		ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
 	{ "thisActive",
@@ -441,7 +442,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
 RepRap::RepRap() noexcept
 	: boardsSeq(0), directoriesSeq(0), fansSeq(0), heatSeq(0), inputsSeq(0), jobSeq(0), ledStripsSeq(0), moveSeq(0), globalSeq(0),
-	  networkSeq(0), scannerSeq(0), sensorsSeq(0), spindlesSeq(0), stateSeq(0), toolsSeq(0), volumesSeq(0),
+	  networkSeq(0), sensorsSeq(0), spindlesSeq(0), stateSeq(0), toolsSeq(0), volumesSeq(0),
 	  lastWarningMillis(0),
 	  ticksInSpinState(0), heatTaskIdleTicks(0),
 	  beepFrequency(0), beepDuration(0), beepTimer(0),
@@ -555,6 +556,13 @@ void RepRap::Init() noexcept
 	delay(100);											// give the tick ISR time to collect voltage readings
 	platform->ResetVoltageMonitors();					// get rid of the spurious zero minimum voltage readings
 
+#if 0	//DEBUG
+# if !SAME70
+	SCnSCB->ACTLR |= SCnSCB_ACTLR_DISDEFWBUF_Msk;		// disable write buffer
+# endif
+	delay(5000);										// give me time to connect YAT before much else happens
+#endif
+
 	platform->MessageF(UsbMessage, "%s\n", VersionText);
 
 #if HAS_SBC_INTERFACE && !HAS_MASS_STORAGE
@@ -652,6 +660,41 @@ void RepRap::Init() noexcept
 	slowLoop = 0;
 }
 
+#if HAS_SBC_INTERFACE && SUPPORTS_SBC_OVER_USB
+
+GCodeResult RepRap::SwitchToUsbSbcMode(GCodeBuffer& gb, const StringRef& reply) noexcept
+{
+	// Determine the SerialCDC device from the GCode channel M576.1 was sent on
+	SerialCDC *usbDev = nullptr;
+	unsigned int usbIndex;
+	switch (gb.GetChannel().ToBaseType())
+	{
+	case GCodeChannel::USB:
+		usbIndex = 0;
+		usbDev = &SERIAL_USB_DEVICE;
+		break;
+#ifdef SERIAL_USB2_DEVICE
+	case GCodeChannel::USB2:
+		usbIndex = 1;
+		usbDev = &SERIAL_USB2_DEVICE;
+		break;
+#endif
+	default:
+		reply.copy("M576.1 must be sent over a USB channel");
+		return GCodeResult::error;
+	}
+
+	// Shut down USB GCode processing for this device
+	platform->ShutdownUsbDevice(usbIndex);
+
+	// Signal SBC task to switch to USB transport
+	sbcInterface->RequestUsbSwitch(usbDev, usbIndex);
+
+	return GCodeResult::ok;
+}
+
+#endif // HAS_SBC_INTERFACE && SUPPORTS_SBC_OVER_USB
+
 // Run a startup file
 bool RepRap::RunStartupFile(c_string filename, bool isMainConfigFile) noexcept
 {
@@ -667,28 +710,6 @@ bool RepRap::RunStartupFile(c_string filename, bool isMainConfigFile) noexcept
 		platform->Message(UsbMessage, "Done!\n");
 	}
 	return rslt;
-}
-
-void RepRap::Exit() noexcept
-{
-#if HAS_HIGH_SPEED_SD && !SAME5x		// SAME5x MCI driver is RTOS-aware so it doesn't need this
-	hsmci_set_idle_func(nullptr);
-#endif
-	active = false;
-	heat->Exit();
-	move->Exit();
-	gCodes->Exit();
-#if SUPPORT_IOBITS
-	portControl->Exit();
-#endif
-#if SUPPORT_DIRECT_LCD
- 	display->Exit();
-#endif
-	network->Exit();
-	platform->Exit();
-#if SUPPORT_ACCELEROMETERS
-	Accelerometers::Exit();
-#endif
 }
 
 void RepRap::Spin() noexcept
@@ -820,7 +841,15 @@ __attribute__((noinline)) void RepRap::GenerateDeferredDiagnostics(MessageType d
 
 void RepRap::Timing(const StringRef& reply) noexcept
 {
-	reply.lcatf("Slowest loop: %.2fms; fastest: %.2fms", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+	// See Network.cpp Diagnostics() - sentinel handling to avoid printing a ~5.7M ms phantom value
+	if (fastLoop == UINT32_MAX)
+	{
+		reply.lcat("Slowest loop: n/a; fastest: n/a");
+	}
+	else
+	{
+		reply.lcatf("Slowest loop: %.2fms; fastest: %.2fms", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+	}
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
 }
@@ -856,7 +885,7 @@ void RepRap::GetDiagnosticsPart(unsigned int partNumber, const StringRef& reply)
 			reply.lcatf(
 				// Format string
 				"%s"											// firmware name
-				" version %s (%s%s) running on %s"				// firmware version, date, time, electronics
+				" version %s (%s) running on %s"				// firmware version, date, time, electronics
 #ifdef DUET_NG
 				"%s%s"											// optional DueX expansion board
 #endif
@@ -867,7 +896,7 @@ void RepRap::GetDiagnosticsPart(unsigned int partNumber, const StringRef& reply)
 
 				// Parameters to match format string
 				FIRMWARE_NAME,
-				VERSION, DateText, TimeSuffix, platform->GetElectronicsString()
+				VERSION, DateTimeText, platform->GetElectronicsString()
 #ifdef DUET_NG
 				, ((expansionName == nullptr) ? "" : " + ")
 				, ((expansionName == nullptr) ? "" : expansionName)
@@ -1253,11 +1282,12 @@ void RepRap::Tick() noexcept
 #if 1
 				// Record the stack of the running task
 				const TaskHandle relevantTask = RTOSIface::GetCurrentTask();
+				if (relevantTask != nullptr)
 #else
 				// Record the stack of the stuck task
 				const TaskHandle relevantTask = (heatTaskStuck) ? Heat::GetHeatTask() : Tasks::GetMainTask();
-#endif
 				if (relevantTask == RTOSIface::GetCurrentTask())
+#endif
 				{
 #ifdef __ECV__
 					// eCv doesn't understand the gcc "register const... asm" line
@@ -1298,698 +1328,6 @@ void RepRap::Tick() noexcept
 bool RepRap::SpinTimeoutImminent() const noexcept
 {
 	return ticksInSpinState >= HighMainTaskTicksInSpinState;
-}
-
-#if 0	// removed because we ran out of flash memory on Duet 2
-
-// Get the JSON status response for the web server or the M408 command.
-// Type 1 is the ordinary JSON status response.
-// Type 2 is the same except that static parameters are also included.
-// Type 3 is the same but instead of static parameters we report print estimation values.
-OutputBuffer *_ecv_null RepRap::GetStatusResponse(uint8_t type, ResponseSource source) const noexcept
-{
-	// Need something to write to...
-	OutputBuffer *response;
-	if (!OutputBuffer::Allocate(response))
-	{
-		return nullptr;
-	}
-
-	// Machine status
-	response->printf("{\"status\":\"%c\",\"coords\":{", GetStatusCharacter());
-
-	// Homed axes
-	const size_t numVisibleAxes = gCodes->GetVisibleAxes();
-	AppendIntArray(response, "axesHomed", numVisibleAxes, [this](size_t axis) noexcept -> int { return (gCodes->IsAxisHomed(axis)) ? 1 : 0; });
-
-	// XYZ positions
-	// Coordinates may be NaNs or infinities, for example when delta or SCARA homing fails. We must replace any NaNs or infinities to avoid JSON parsing errors.
-	// Ideally we would report "unknown" or similar for axis positions that are not known because we haven't homed them, but that requires changes to both DWC and PanelDue.
-	// So we report 9999.9 instead.
-
-	// First the user coordinates
-	response->catf(",\"wpl\":%u,", gCodes->GetPrimaryWorkplaceCoordinateSystemNumber());
-	AppendFloatArray(response, "xyz", numVisibleAxes, [this](size_t axis) noexcept -> float { return gCodes->GetUserCoordinate(gCodes->GetPrimaryMovementState(), axis); }, 3);
-
-	// Machine coordinates
-	const MovementState& ms = gCodes->GetPrimaryMovementState();				// we only report the primary in this response
-	response->cat(',');
-	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept -> float { return ms.LiveMachineCoordinate(axis); }, 3);
-
-	// Actual extruder positions since power up, last G92 or last M23
-	response->cat(',');
-	AppendFloatArray(response, "extr", Tool::GetExtrudersInUse(), [this, &ms](size_t extruder) noexcept -> float { return ms.LiveMachineCoordinate(ExtruderToLogicalDrive(extruder)); }, 1);
-
-	// Current speeds
-	response->catf("},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}", (double)move->GetRequestedSpeedMmPerSec(), (double)move->GetTopSpeedMmPerSec());
-
-	// Current tool number
-	response->catf(",\"currentTool\":%d", ms.GetCurrentToolNumber());
-
-	// Output notifications
-	{
-		const bool sendBeep = ((source == ResponseSource::AUX || !platform->IsAuxEnabled(0) || platform->IsAuxRaw(0)) && beepDuration != 0 && beepFrequency != 0);
-		const bool sendMessage = !message.IsEmpty();
-
-		const ReadLockedPointer<const MessageBox> mbox(MessageBox::GetLockedCurrent());
-		const bool mboxActive = mbox.IsNotNull() && mbox->IsLegacyType();
-		if (sendBeep || sendMessage || mboxActive)
-		{
-			response->cat(",\"output\":{");
-
-			// Report beep values
-			if (sendBeep)
-			{
-				response->catf("\"beepDuration\":%u,\"beepFrequency\":%u", beepDuration, beepFrequency);
-				if (sendMessage || mboxActive)
-				{
-					response->cat(',');
-				}
-			}
-
-			// Report message
-			if (sendMessage)
-			{
-				response->catf("\"message\":\"%.s\"", message.c_str());
-				if (mboxActive)
-				{
-					response->cat(',');
-				}
-			}
-
-			// Report message box
-			if (mboxActive)
-			{
-				response->catf("\"msgBox\":{\"msg\":\"%.s\",\"title\":\"%.s\",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%u}",
-								mbox->GetMessage(), mbox->GetTitle(), mbox->GetMode(), mbox->GetSeq(), (double)mbox->GetTimeLeft(), (unsigned int)mbox->GetControls().GetRaw());
-			}
-			response->cat('}');
-		}
-	}
-
-	// ATX power
-	response->catf(",\"params\":{\"atxPower\":%d", platform->IsAtxPowerControlled() ? (platform->GetAtxPowerState() ? 1 : 0) : -1);
-
-	// Parameters
-	{
-		// Cooling fan values
-		response->cat(',');
-		const size_t numFans = fansManager->GetNumFansToReport();
-		AppendIntArray(response, "fanPercent", numFans,
-						[this](size_t fan) noexcept -> int
-						{
-							const float fanValue = fansManager->GetFanValue(fan);
-							return  (fanValue < 0.0) ? -1 : (int)lrintf(fanValue * 100.0);
-						});
-
-		// Speed and Extrusion factors in %
-		response->catf(",\"speedFactor\":%.1f,", (double)(gCodes->GetPrimarySpeedFactor() * 100.0));
-		AppendFloatArray(response, "extrFactors", Tool::GetExtrudersInUse(), [this](size_t extruder) noexcept -> float { return gCodes->GetExtrusionFactor(extruder) * 100.0; }, 1);
-
-		// Z babystepping
-		response->catf(",\"babystep\":%.3f}", (double)gCodes->GetTotalBabyStepOffset(Z_AXIS));
-
-#if 0	// DWC hasn't used rr_status for years so remove it to reduce flash memory usage
-		// G-code reply sequence for webserver (sequence number for AUX is handled later)
-		if (source == ResponseSource::HTTP)
-		{
-			response->catf(",\"seq\":%" PRIu32, network->GetHttpReplySeq());
-		}
-#endif
-		// Sensors
-		response->cat(",\"sensors\":{");
-
-		// Probe
-		const auto zp = platform->GetZProbeOrDefault(0);
-		const int32_t v0 = zp->GetReading();
-		int32_t v1;
-		switch (zp->GetSecondaryValues(v1))
-		{
-			case 1:
-				response->catf("\"probeValue\":%" PRIi32 ",\"probeSecondary\":[%" PRIi32 "],", v0, v1);
-				break;
-			default:
-				response->catf("\"probeValue\":%" PRIi32 ",", v0);
-				break;
-		}
-
-		// Send fan RPM value(s)
-		AppendIntArray(response, "fanRPM", numFans, [this](size_t fan) noexcept -> int { return (int)fansManager->GetFanRPM(fan); });
-		response->cat('}');
-	}
-
-	/* Temperatures */
-	{
-		response->cat(",\"temps\":{");
-
-		/* Bed */
-		const int8_t bedHeater = (MaxBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
-		if (bedHeater != -1)
-		{
-			response->catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"standby\":%.1f,\"state\":%u,\"heater\":%d},",
-				(double)heat->GetHeaterTemperature(bedHeater), (double)heat->GetActiveTemperature(bedHeater), (double)heat->GetStandbyTemperature(bedHeater),
-					heat->GetStatus(bedHeater).ToBaseType(), bedHeater);
-		}
-
-		/* Chamber */
-		const int8_t chamberHeater = (MaxChamberHeaters > 0) ? heat->GetChamberHeater(0) : -1;
-		if (chamberHeater != -1)
-		{
-			response->catf("\"chamber\":{\"current\":%.1f,\"active\":%.1f,\"state\":%u,\"heater\":%d},",
-				(double)heat->GetHeaterTemperature(chamberHeater), (double)heat->GetActiveTemperature(chamberHeater),
-					heat->GetStatus(chamberHeater).ToBaseType(), chamberHeater);
-		}
-
-		/* Cabinet */
-		const int8_t cabinetHeater = (MaxChamberHeaters > 1) ? heat->GetChamberHeater(1) : -1;
-		if (cabinetHeater != -1)
-		{
-			response->catf("\"cabinet\":{\"current\":%.1f,\"active\":%.1f,\"state\":%u,\"heater\":%d},",
-				(double)heat->GetHeaterTemperature(cabinetHeater), (double)heat->GetActiveTemperature(cabinetHeater),
-					heat->GetStatus(cabinetHeater).ToBaseType(), cabinetHeater);
-		}
-
-		/* Heaters */
-
-		// Current temperatures
-		{
-			const size_t numHeaters = heat->GetNumHeatersToReport();
-			AppendFloatArray(response, "current", numHeaters, [this](size_t heater) noexcept -> float { return heat->GetHeaterTemperature(heater); }, 1);
-
-			// Current states
-			response->cat(',');
-			AppendIntArray(response, "state", numHeaters, [this](size_t heater) noexcept -> int { return (int)heat->GetStatus(heater).ToBaseType(); });
-		}
-
-		// Tool temperatures
-		response->cat(",\"tools\":{\"active\":[");
-		{
-			ReadLocker lock(Tool::toolListLock);
-			for (const Tool *_ecv_null tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
-			{
-				AppendFloatArray(response, nullptr, tool->HeaterCount(), [tool](unsigned int n) noexcept -> float { return tool->GetToolHeaterActiveTemperature(n); }, 1);
-				if (tool->Next() != nullptr)
-				{
-					response->cat(',');
-				}
-			}
-
-			response->cat("],\"standby\":[");
-			for (const Tool *_ecv_null tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
-			{
-				AppendFloatArray(response, nullptr, tool->HeaterCount(), [tool](unsigned int n) noexcept -> float { return tool->GetToolHeaterStandbyTemperature(n); }, 1);
-				if (tool->Next() != nullptr)
-				{
-					response->cat(',');
-				}
-			}
-		}
-
-		response->cat("]}");
-	}
-
-	// Time since last reset
-	response->catf(",\"time\":%.1f", (double)(millis64()/1000u));
-
-	// Spindles
-	if (gCodes->GetMachineType() == MachineType::cnc || type == 2)
-	{
-		size_t numSpindles = MaxSpindles;
-		while (numSpindles != 0 && platform->AccessSpindle(numSpindles - 1).GetState() == SpindleState::unconfigured)
-		{
-			--numSpindles;
-		}
-
-		if (numSpindles != 0)
-		{
-			response->cat(",\"spindles\":[");
-			for (size_t i = 0; i < numSpindles; i++)
-			{
-				if (i != 0)
-				{
-					response->cat(',');
-				}
-
-				const Spindle& spindle = platform->AccessSpindle(i);
-				response->catf("{\"current\":%" PRIi32 ",\"active\":%" PRIi32 ",\"state\":\"%s\"}", spindle.GetCurrentRpm(), spindle.GetRpm(), spindle.GetState().ToString());
-			}
-			response->cat(']');
-		}
-	}
-
-#if 0	// removed to reduce flash memory usage, was if SUPPORT_LASER
-	if (gCodes->GetMachineType() == MachineType::laser)
-	{
-		response->catf(",\"laser\":%.1f", (double)(gCodes->GetLaserPwm() * 100.0));		// 2020-04-24: return the configured laser PWM even if the laser is temporarily turned off
-	}
-#endif
-
-	/* Extended Status Response */
-	if (type == 2)
-	{
-		// Cold Extrude/Retract
-		response->catf(",\"coldExtrudeTemp\":%.1f", (double)(heat->ColdExtrude() ? 0.0f : heat->GetExtrusionMinTemp()));
-		response->catf(",\"coldRetractTemp\":%.1f", (double)(heat->ColdExtrude() ? 0.0f : heat->GetRetractionMinTemp()));
-
-		// Compensation type
-		response->cat(",\"compensation\":");
-		if (move->IsUsingMesh())
-		{
-			response->cat("\"Mesh\"");
-		}
-		else
-		{
-			response->cat("\"None\"");
-		}
-
-		// Controllable Fans
-		FansBitmap controllableFans;
-		for (size_t fan = 0; fan < MaxFans; fan++)
-		{
-			if (fansManager->IsFanControllable(fan))
-			{
-				controllableFans.SetBit(fan);
-			}
-		}
-		response->catf(",\"controllableFans\":%lu", (uint32_t)controllableFans.GetRaw());
-
-		// Maximum hotend temperature - DWC just wants the highest one
-		response->catf(",\"tempLimit\":%.1f", (double)(heat->GetHighestTemperatureLimit()));
-
-		// Endstops
-		uint32_t endstops = 0;
-		const size_t numTotalAxes = gCodes->GetTotalAxes();
-		for (size_t axis = 0; axis < numTotalAxes; axis++)
-		{
-			if (platform->GetEndstops().Stopped(axis))
-			{
-				endstops |= (1u << axis);
-			}
-		}
-		response->catf(",\"endstops\":%" PRIu32, endstops);
-
-		// Firmware name, machine geometry and number of axes
-		response->catf(",\"firmwareName\":\"%s\",\"firmwareVersion\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\"",
-			FIRMWARE_NAME, VERSION, move->GetGeometryString(), numVisibleAxes, numTotalAxes, gCodes->GetAxisLetters());
-
-#if HAS_MASS_STORAGE
-		// Total and mounted volumes
-		size_t mountedCards = 0;
-		for (size_t i = 0; i < MassStorage::GetNumVolumes(); i++)
-		{
-			if (MassStorage::IsDriveMounted(i))
-			{
-				mountedCards |= (1u << i);
-			}
-		}
-		response->catf(",\"volumes\":%u,\"mountedVolumes\":%u", MassStorage::GetNumVolumes(), mountedCards);
-#endif
-
-		// Machine mode and name
-		response->catf(",\"mode\":\"%.s\",\"name\":\"%.s\"", gCodes->GetMachineModeString(), myName.c_str());
-
-		// Probe trigger threshold, trigger height, type
-		{
-			const auto zp = platform->GetZProbeOrDefault(0);
-			response->catf(",\"probe\":{\"threshold\":%" PRIi32 ",\"height\":%.2f,\"type\":%u}",
-							zp->GetTargetAdcValue(), (double)zp->GetConfiguredTriggerHeight(), (unsigned int)zp->GetProbeType());
-		}
-
-		// Tool Mapping
-		{
-			response->cat(",\"tools\":[");
-			ReadLocker lock(Tool::toolListLock);
-			for (const Tool *_ecv_null tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
-			{
-				// Number
-				response->catf("{\"number\":%d,", tool->Number());
-
-				// Heaters
-				AppendIntArray(response, "heaters", tool->HeaterCount(), [tool](size_t heater) noexcept -> int { return tool->GetHeater(heater); });
-
-				// Extruder drives
-				response->cat(',');
-				AppendIntArray(response, "drives", tool->DriveCount(), [tool](size_t drive) noexcept -> int { return tool->GetDrive(drive); });
-
-				// Axis mapping
-				response->cat(",\"axisMap\":[[");
-				tool->GetXAxisMap().Iterate
-					([response](unsigned int xi, unsigned int count) noexcept -> void
-						{
-							if (count != 0)
-							{
-								response->cat(',');
-							}
-							response->catf("%u", xi);
-						}
-					);
-				response->cat("],[");
-
-				tool->GetYAxisMap().Iterate
-					([response](unsigned int yi, unsigned int count) noexcept -> void
-						{
-							if (count != 0)
-							{
-								response->cat(',');
-							}
-							response->catf("%u", yi);
-						}
-					);
-				response->cat("]]");
-
-				// Fan mapping
-				response->catf(",\"fans\":%lu", (uint32_t)tool->GetFanMapping().GetRaw());
-
-				// Filament (if any)
-				if (tool->GetFilament() != nullptr)
-				{
-					response->catf(",\"filament\":\"%.s\"", tool->GetFilament()->GetName());
-				}
-
-				// Spindle (if configured)
-				if (tool->GetSpindleNumber() > -1)
-				{
-					response->catf(",\"spindle\":%d,\"spindleRpm\":%" PRIi32, tool->GetSpindleNumber(), tool->GetSpindleRpm());
-				}
-
-				// Offsets
-				response->cat(',');
-				AppendFloatArray(response, "offsets", numVisibleAxes, [tool](size_t axis) noexcept -> float { return tool->GetOffset(axis); }, 2);
-
-  				// Do we have any more tools?
-				response->cat((tool->Next() != nullptr) ? "}," : "}");
-			}
-			response->cat(']');
-		}
-
-		// MCU temperatures
-#if HAS_CPU_TEMP_SENSOR
-		{
-			const MinCurMax temps = platform->GetMcuTemperatures();
-			response->catf(",\"mcutemp\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)temps.minimum, (double)temps.current, (double)temps.maximum);
-		}
-#endif
-
-#if HAS_VOLTAGE_MONITOR
-		// Power in voltages
-		{
-			const MinCurMax voltages = platform->GetPowerVoltages();
-			response->catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)voltages.minimum, (double)voltages.current, (double)voltages.maximum);
-		}
-#endif
-
-#if HAS_12V_MONITOR
-		// Power in voltages
-		{
-			const MinCurMax voltages = platform->GetV12Voltages();
-			response->catf(",\"v12\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", (double)voltages.minimum, (double)voltages.current, (double)voltages.maximum);
-		}
-#endif
-	}
-	else if (type == 3)
-	{
-		// Current Layer
-		response->catf(",\"currentLayer\":%d", printMonitor->GetCurrentLayer());
-
-		// Current Layer Time
-		response->catf(",\"currentLayerTime\":%.1f,", (double)(printMonitor->GetCurrentLayerTime()));
-
-		// Raw Extruder Positions
-		AppendFloatArray(response, "extrRaw", Tool::GetExtrudersInUse(), [this](size_t extruder) noexcept -> float { return gCodes->GetRawExtruderTotalByDrive(extruder); }, 1);
-
-		// Fraction of file printed
-		response->catf(",\"fractionPrinted\":%.1f", (double)((printMonitor->IsPrinting()) ? (printMonitor->FractionOfFilePrinted() * 100.0) : 0.0));
-
-		// Byte position of the file being printed
-		response->catf(",\"filePosition\":%lu", gCodes->GetPrintingFilePosition());
-
-		// First Layer Duration is no longer included
-
-		// First Layer Height is no longer included
-
-		// Print Duration
-		response->catf(",\"printDuration\":%.1f", (double)(printMonitor->GetPrintDuration()));
-
-		// Warm-Up Time
-		response->catf(",\"warmUpDuration\":%.1f", (double)(printMonitor->GetWarmUpDuration()));
-
-		/* Print Time Estimations */
-		response->catf(",\"timesLeft\":{\"file\":%.1f,\"filament\":%.1f}", (double)(printMonitor->EstimateTimeLeft(fileBased)), (double)(printMonitor->EstimateTimeLeft(filamentBased)));
-	}
-
-	response->cat('}');
-	return response;
-}
-
-#endif
-
-#if 0	// removed because we ran out of flash memory on Duet 2
-
-OutputBuffer *_ecv_null RepRap::GetConfigResponse() noexcept
-{
-	// We need some resources to return a valid config response...
-	OutputBuffer *_ecv_null response;
-	if (!OutputBuffer::Allocate(response))
-	{
-		return nullptr;
-	}
-
-	const size_t numAxes = gCodes->GetVisibleAxes();
-
-	// Axis minima
-	response->copy('{');
-	AppendFloatArray(response, "axisMins", numAxes, [this](size_t axis) noexcept -> float { return move->AxisMinimum(axis); }, 2);
-
-	// Axis maxima
-	response->cat(',');
-	AppendFloatArray(response, "axisMaxes", numAxes, [this](size_t axis) noexcept -> float { return move->AxisMaximum(axis); }, 2);
-
-	// Accelerations
-	response->cat(',');
-	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept -> float { return InverseConvertAcceleration(move->NormalAcceleration(drive)); }, 2);
-
-	// Motor currents
-	response->cat(',');
-	AppendIntArray(response, "currents", MaxAxesPlusExtruders, [this](size_t drive) noexcept -> int { return (int)move->GetMotorCurrent(drive, 906); });
-
-	// Firmware details
-	response->catf(",\"firmwareElectronics\":\"%.s", platform->GetElectronicsString());
-#ifdef DUET_NG
-	c_string _ecv_null expansionName = DuetExpansion::GetExpansionBoardName();
-	if (expansionName != nullptr)
-	{
-		response->catf(" + %.s", expansionName);
-	}
-	c_string _ecv_null additionalExpansionName = DuetExpansion::GetAdditionalExpansionBoardName();
-	if (additionalExpansionName != nullptr)
-	{
-		response->catf(" + %.s", additionalExpansionName);
-	}
-#endif
-	response->catf("\",\"firmwareName\":\"%.s\",\"firmwareVersion\":\"%.s\"", FIRMWARE_NAME, VERSION);
-#ifdef BOARD_SHORT_NAME
-	response->catf(",\"boardName\":\"%.s\"", BOARD_SHORT_NAME);
-#endif
-
-#if HAS_WIFI_NETWORKING
-	// If we have WiFi networking, send the WiFi module firmware version
-# ifdef DUET_NG
-	if (platform->IsDuetWiFi())
-# endif
-	{
-		response->catf(",\"dwsVersion\":\"%.s\"", network->GetWiFiServerVersion());
-	}
-#endif
-
-	response->catf(",\"firmwareDate\":\"%.s\"", DATE);
-
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	// System files folder
-	response->catf(", \"sysdir\":\"%.s\"", platform->GetSysDir().Ptr());
-#endif
-
-	// Motor idle parameters
-	response->catf(",\"idleCurrentFactor\":%.1f", (double)(move->GetIdleCurrentFactor() * 100.0));
-	response->catf(",\"idleTimeout\":%.1f,", (double)(move->IdleTimeout()));
-
-	// Maximum jerk
-	AppendFloatArray(response, "minFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept -> float { return InverseConvertSpeedToMmPerSec(move->GetMaxInstantDv(drive)); }, 2);
-
-	// Maximum feedrates
-	response->cat(',');
-	AppendFloatArray(response, "maxFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept -> float { return InverseConvertSpeedToMmPerSec(move->MaxFeedrate(drive)); }, 2);
-
-	// Config file is no longer included, because we can use rr_configfile or M503 instead
-	response->cat('}');
-
-	return response;
-}
-
-#endif
-
-// Get the JSON status response for PanelDue
-// Type 0 was the old-style webserver status response, but is no longer supported.
-// Type 1 is the new-style webserver status response.
-// Type 2 is the M105 S2 response, which is like the new-style status response but some fields are omitted.
-// Type 3 is the M105 S3 response, which is like the M105 S2 response except that static values are also included.
-// 'seq' is the response sequence number, if it is not -1 and we have a different sequence number then we send the gcode response
-OutputBuffer *_ecv_null RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexcept
-{
-	// Need something to write to...
-	OutputBuffer *_ecv_null response;
-	if (!OutputBuffer::Allocate(response))
-	{
-		// Should never happen
-		return nullptr;
-	}
-
-	// Send the status. Note that 'S' has always meant that the machine is halted in this version of the status response, so we use A for pAused.
-	char ch = GetStatusCharacter();
-	if (ch == 'S')			// if paused then send 'A'
-	{
-		ch = 'A';
-	}
-	else if (ch == 'H')		// if halted then send 'S'
-	{
-		ch = 'S';
-	}
-	response->printf("{\"status\":\"%c\",\"heaters\":", ch);
-
-	// Send the heater actual temperatures. If there is no bed heater, send zero for PanelDue.
-	const int8_t bedHeater = (MaxBedHeaters > 0) ? heat->GetBedHeater(0) : -1;
-	ch = ',';
-	response->catf("[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetHeaterTemperature(bedHeater)));
-	for (size_t heater = DefaultE0Heater; heater < Tool::GetToolHeatersInUse(); heater++)
-	{
-		response->catf("%c%.1f", ch, (double)(heat->GetHeaterTemperature(heater)));
-		ch = ',';
-	}
-	response->cat((ch == '[') ? "[]" : "]");
-
-	// Send the heater active temperatures
-	response->catf(",\"active\":[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetActiveTemperature(bedHeater)));
-	for (size_t heater = DefaultE0Heater; heater < Tool::GetToolHeatersInUse(); heater++)
-	{
-		response->catf(",%.1f", (double)(heat->GetActiveTemperature(heater)));
-	}
-	response->cat(']');
-
-	// Send the heater standby temperatures
-	response->catf(",\"standby\":[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetStandbyTemperature(bedHeater)));
-	for (size_t heater = DefaultE0Heater; heater < Tool::GetToolHeatersInUse(); heater++)
-	{
-		response->catf(",%.1f", (double)(heat->GetStandbyTemperature(heater)));
-	}
-	response->cat(']');
-
-	// Send the heater statuses (0=off, 1=standby, 2=active, 3 = fault)
-	response->catf(",\"hstat\":[%u", (bedHeater == -1) ? 0u : (unsigned int)heat->GetStatus(bedHeater).ToBaseType());
-	for (size_t heater = DefaultE0Heater; heater < Tool::GetToolHeatersInUse(); heater++)
-	{
-		response->catf(",%u", heat->GetStatus(heater).ToBaseType());
-	}
-	response->cat("],");
-
-	// User coordinates
-	const size_t numVisibleAxes = gCodes->GetVisibleAxes();
-	const MovementState& ms = gCodes->GetPrimaryMovementState();
-	AppendFloatArray(response, "pos", numVisibleAxes, [this, &ms](size_t axis) noexcept -> float { return gCodes->GetUserCoordinate(ms, axis); }, 3);
-
-	// Machine coordinates
-	response->cat(',');
-	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept -> float { return ms.LiveMachineCoordinate(axis); }, 3);
-
-	// Send the speed and extruder override factors
-	response->catf(",\"sfactor\":%.1f,", (double)(gCodes->GetPrimarySpeedFactor() * 100.0));
-	AppendFloatArray(response, "efactor", Tool::GetExtrudersInUse(), [this](size_t extruder) noexcept -> float { return gCodes->GetExtrusionFactor(extruder) * 100.0; }, 1);
-
-	// Send the baby stepping offset
-	response->catf(",\"babystep\":%.03f", (double)(gCodes->GetTotalBabyStepOffset(Z_AXIS)));
-
-	// Send the current tool number
-	response->catf(",\"tool\":%d", gCodes->GetPrimaryMovementState().GetCurrentToolNumber());
-
-	// Send the Z probe value
-	const auto zp = platform->GetZProbeOrDefault(0);
-	const int32_t v0 = zp->GetReading();
-	int32_t v1;
-	switch (zp->GetSecondaryValues(v1))
-	{
-	case 1:
-		response->catf(",\"probe\":\"%" PRIi32 " (%" PRIi32 ")\"", v0, v1);
-		break;
-	default:
-		response->catf(",\"probe\":\"%" PRIi32 "\"", v0);
-		break;
-	}
-
-	// Send the fan settings, for PanelDue firmware 1.13 and later
-	// Currently, PanelDue assumes that the first value is the print cooling fan speed and only uses that one, so send the mapped fan speed first
-	response->catf(",\"fanPercent\":[%.1f", (double)(gCodes->GetPrimaryMovementState().virtualFanSpeed * 100.0));
-	for (size_t i = 0; i < MaxFans; ++i)
-	{
-		const float fanValue = fansManager->GetFanValue(i);
-		response->catf(",%d", (fanValue < 0.0) ? -1 : (int)lrintf(fanValue * 100.0));
-	}
-	response->cat("],");
-
-	// Send fan RPM value(s)
-	AppendIntArray(response, "fanRPM", fansManager->GetNumFansToReport(), [this](size_t fan) noexcept ->int { return (int)fansManager->GetFanRPM(fan);});
-
-	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
-	response->cat(',');
-	AppendIntArray(response, "homed", numVisibleAxes, [this](size_t axis) noexcept -> int { return (gCodes->IsAxisHomed(axis)) ? 1 : 0; });
-
-	if (printMonitor->IsPrinting())
-	{
-		// Send the fraction printed
-		response->catf(",\"fraction_printed\":%.4f", (double)max<float>(0.0, printMonitor->FractionOfFilePrinted()));
-	}
-
-	// Short messages are now pushed directly to PanelDue, so don't include them here as well
-	// We no longer send the amount of http buffer space here because the web interface doesn't use these forms of status response
-
-	// Deal with the message box.
-	// Don't send it if we are flashing firmware, because when we flash firmware we send messages directly to PanelDue and we don't want them to get cleared.
-	if (!gCodes->IsFlashing())
-	{
-		const ReadLockedPointer<const MessageBox> mbox(MessageBox::GetLockedCurrent());
-		if (mbox.IsNotNull() && mbox->IsLegacyType())
-		{
-			response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%u,\"msgBox.msg\":\"%.s\",\"msgBox.title\":\"%.s\"",
-				mbox->GetMode(), mbox->GetSeq(), (double)mbox->GetTimeLeft(), (unsigned int)mbox->GetControls().GetRaw(), mbox->GetMessage(), mbox->GetTitle());
-		}
-		else
-		{
-			response->cat(",\"msgBox.mode\":-1");					// tell PanelDue that there is no active message box
-		}
-	}
-
-	if (type == 2)
-	{
-		if (printMonitor->IsPrinting())
-		{
-			// Send estimated times left based on file progress, filament usage, and layers
-			response->catf(",\"timesLeft\":[%.1f,%.1f,0.0]",
-					(double)(printMonitor->EstimateTimeLeft(fileBased)),
-					(double)(printMonitor->EstimateTimeLeft(filamentBased)));
-		}
-	}
-	else if (type == 3)
-	{
-		// Add the static fields
-		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\",\"volumes\":%u,\"numTools\":%u,\"myName\":\"%.s\",\"firmwareName\":\"%.s\"",
-						move->GetGeometryString(), numVisibleAxes, gCodes->GetTotalAxes(), gCodes->GetAxisLetters(),
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-							MassStorage::GetNumVolumes(),
-#else
-							0,
-#endif
-								Tool::GetNumberOfContiguousTools(), myName.c_str(), FIRMWARE_NAME);
-	}
-
-	response->cat("}\n");			// include a newline to help PanelDue resync
-	return response;
 }
 
 // Start constructing a JSON response in the provided output buffer. If there was a line number, put it in the response.
@@ -2221,7 +1559,7 @@ OutputBuffer *_ecv_null RepRap::GetFileFragment(const GCodeBuffer *_ecv_null gb,
 			for (unsigned int charsWrittenThisCall = 0; charsWrittenThisCall < thumbnailMaxDataSize; )
 			{
 				// Read a line
-				char lineBuffer[MaxGCodeLength];
+				char lineBuffer[MaxGCodeStringLength];
 				const int charsRead = f->ReadLine(lineBuffer, sizeof(lineBuffer));
 				if (charsRead < 0 || (isThumbnail && charsRead == 0))
 				{
@@ -2541,11 +1879,13 @@ void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 	}
 #endif
 
-	if (platform->IsChanEnabled(1) && !platform->IsChanRaw(1))
+#if NUM_ASYNC_CHANNELS != 0
+	if (platform->IsChanEnabled(FirstAuxChannel) && !platform->IsChanRaw(FirstAuxChannel))
 	{
 		platform->PanelDueBeep(freq, ms);
 		bleeped = true;
 	}
+#endif
 
 	if (!bleeped)
 	{
@@ -2565,10 +1905,12 @@ void RepRap::SetMessage(c_string msg) noexcept
 #endif
 	StateUpdated();
 
-	if (platform->IsChanEnabled(1) && !platform->IsChanRaw(1))
+#if NUM_ASYNC_CHANNELS != 0
+	if (platform->IsChanEnabled(FirstAuxChannel) && !platform->IsChanRaw(FirstAuxChannel))
 	{
-		platform->SendPanelDueMessage(1, msg);
+		platform->SendPanelDueMessage(FirstAuxChannel, msg);
 	}
+#endif
 	platform->Message(MessageType::LogInfo, msg);
 }
 
@@ -2754,15 +2096,27 @@ void RepRap::PrepareToLoadIap() noexcept
 
 	// Send this message before we start using RAM that may contain message buffers
 	platform->Message(AuxMessage, "Updating main firmware\n");
-	platform->Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
+#if HAS_SBC_INTERFACE && SUPPORTS_SBC_OVER_USB
+	// Don't send a text message over the USB port when it's being used for the SBC binary protocol
+	if (!usingSbcInterface || sbcInterface->GetDataTransfer().GetTransportType() != SbcTransportType::usb)
+#endif
+	{
+		platform->Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
+	}
 
 	// Allow time for the firmware update message to be sent
+	// When the SBC is on USB, keep this short - DSF is waiting for the next transfer response
+	const uint32_t flushTime =
+#if HAS_SBC_INTERFACE && SUPPORTS_SBC_OVER_USB
+		(usingSbcInterface && sbcInterface->GetDataTransfer().GetTransportType() == SbcTransportType::usb) ? 100 :
+#endif
+		1000;
 	const uint32_t now = millis();
 	do
 	{
-		(void)platform->FlushMessages();	// make sure the USB and aux messages get sent
-		RTOSIface::Yield();					// let the network task have the CPU so that it can fetch the status
-	} while (millis() - now < 1000);
+		(void)platform->FlushMessages();
+		RTOSIface::Yield();
+	} while (millis() - now < flushTime);
 
 	// The machine will be unresponsive for a few seconds, don't risk damaging the heaters.
 	// This also shuts down tasks and interrupts that might make use of the RAM that we are about to load the IAP binary into.
@@ -2785,8 +2139,14 @@ void RepRap::PrepareToLoadIap() noexcept
 	DuetExpansion::Exit();					// stop the DueX polling task
 #endif
 	StopAnalogTask();
-	serialUSB.end();
-	StopUsbTask();
+#if HAS_SBC_INTERFACE && SUPPORTS_SBC_OVER_USB
+	// Don't shut down USB yet if the SBC is connected via USB - ReceiveAndStartIap() still needs it to receive the remaining IAP chunks
+	if (!usingSbcInterface || sbcInterface->GetDataTransfer().GetTransportType() != SbcTransportType::usb)
+#endif
+	{
+		platform->DisconnectUsb();
+		StopUsbTask();
+	}
 
 	Cache::Disable();						// disable the cache because it interferes with flash memory access
 
@@ -2802,10 +2162,10 @@ void RepRap::PrepareToLoadIap() noexcept
 	{
 		if (*p != 0x7E)
 		{
-			SERIAL_AUX_DEVICE.printf("At %08" PRIx32 ": %02x\n", reinterpret_cast<uint32_t>(p), *p);
+			asyncPorts[0]->printf("At %08" PRIx32 ": %02x\n", reinterpret_cast<uint32_t>(p), *p);
 		}
 	}
-	SERIAL_AUX_DEVICE.printf("Scan complete\n");
+	asyncPorts[0]->printf("Scan complete\n");
 	delay(1000);							// give it time to send the message
 #endif
 }
@@ -2838,25 +2198,43 @@ void RepRap::StartIap(c_string _ecv_null filename) noexcept
 # endif
 #endif
 
-#if HAS_MASS_STORAGE
-	if (filename != nullptr)
+	// Write IapInfo struct above the stack for IAP to read
 	{
-		// Newer versions of IAP reserve space above the stack for us to pass the firmware filename
-		String<MaxFilenameLength> firmwareFileLocation;
-		MassStorage::CombineName(firmwareFileLocation.GetRef(), FIRMWARE_DIRECTORY, filename[0] == 0 ? IAP_FIRMWARE_FILE : filename);
 		const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
-		if (topOfStack + firmwareFileLocation.strlen() + 1 <=
-# if SAME5x
-						HSRAM_ADDR + HSRAM_SIZE
-# else
-						IRAM_ADDR + IRAM_SIZE
-# endif
-		   )
+		IapInfo * const info = reinterpret_cast<IapInfo *>(topOfStack);
+		info->magic = IapInfo::MagicValue;
+
+		// Pass AUX baud rate if AUX is enabled, otherwise 0 (IAP won't init AUX)
+#if NUM_ASYNC_CHANNELS != 0
+		info->auxBaudRate = platform->IsChanEnabled(FirstAuxChannel) ? platform->GetBaudRate(FirstAuxChannel) : 0;
+#else
+		info->auxBaudRate = 0;
+#endif
+
+#if HAS_SBC_INTERFACE
+		if (filename == nullptr)
 		{
-			strcpy(reinterpret_cast<char *_ecv_array>(topOfStack), firmwareFileLocation.c_str());
+			// SBC mode
+# if SUPPORTS_SBC_OVER_USB
+			info->transport = (sbcInterface->GetDataTransfer().GetTransportType() == SbcTransportType::usb)
+								? IapInfo::TransportUsb : IapInfo::TransportSpi;
+# else
+			info->transport = IapInfo::TransportSpi;
+# endif
+			info->firmwareFilename[0] = 0;
+		}
+		else
+#endif
+		{
+#if HAS_MASS_STORAGE
+			// SD mode - include firmware filename
+			info->transport = IapInfo::TransportSd;
+			String<MaxFilenameLength> firmwareFileLocation;
+			MassStorage::CombineName(firmwareFileLocation.GetRef(), FIRMWARE_DIRECTORY, filename[0] == 0 ? IAP_FIRMWARE_FILE : filename);
+			strcpy(info->firmwareFilename, firmwareFileLocation.c_str());
+#endif
 		}
 	}
-#endif
 
 #if defined(DUET_NG) || defined(DUET_M)
 	IoPort::WriteDigital(DiagPin, !DiagOnPolarity);	// turn the DIAG LED off
@@ -2954,7 +2332,7 @@ uint32_t RepRap::SendAlert(MessageType mt, c_string msg, c_string title, int sPa
 
 	platform->MessageF(MessageType::LogInfo, "M291: - %s - %s", (strlen(title) > 0 ? title : "[no title]"), msg);
 
-	mt = (MessageType)((uint32_t)mt & ((uint32_t)UsbMessage | (uint32_t)TelnetMessage | (uint32_t)Aux2Message));
+	mt = (MessageType)((uint32_t)mt & ((uint32_t)UsbMessage | (uint32_t)Usb2Message | (uint32_t)TelnetMessage | (uint32_t)AuxMessage | (uint32_t)Aux2Message));
 	if (mt != NoDestinationMessage)
 	{
 		// Source was USB, Telnet or serial so also send the message back to the sending channel
@@ -2980,12 +2358,12 @@ void RepRap::SendSimpleAlert(MessageType mt, c_string msg, c_string title) noexc
 }
 
 // Save the first error message generated while running config.g
-void RepRap::SaveConfigError(c_string filename, unsigned int lineNumber, c_string errorMessage) noexcept
+void RepRap::SaveConfigError(AutoStringHandle&  filename, unsigned int lineNumber, c_string errorMessage) noexcept
 {
 	if (configErrorMessage.IsNull())
 	{
 		configErrorLine = lineNumber;
-		configErrorFilename.Assign(filename);
+		configErrorFilename = filename;
 		configErrorMessage.Assign(errorMessage);
 		StateUpdated();
 	}

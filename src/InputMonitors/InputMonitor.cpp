@@ -13,6 +13,7 @@
 #include <Hardware/IoPorts.h>
 #include <CAN/CanInterface.h>
 #include <CanMessageBuffer.h>
+#include <Movement/StepTimer.h>
 
 InputMonitor * volatile InputMonitor::monitorsList = nullptr;
 ReadWriteLock InputMonitor::listLock;
@@ -100,13 +101,14 @@ void InputMonitor::DigitalInterrupt() noexcept
 		state = newState;
 		if (active)
 		{
+			whenStateChanged = StepTimer::GetTimerTicks();
 			sendDue = true;
 			CanInterface::WakeAsyncSenderFromIsr();
 		}
 	}
 }
 
-void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
+void InputMonitor::AnalogInterrupt(int32_t reading) noexcept
 {
 	const bool newState = reading >= threshold;
 	if (newState != state)
@@ -114,6 +116,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 		state = newState;
 		if (active)
 		{
+			whenStateChanged = StepTimer::GetTimerTicks();
 			sendDue = true;
 			CanInterface::WakeAsyncSender();
 		}
@@ -130,7 +133,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 	static_cast<InputMonitor*>(cbp.vp)->DigitalInterrupt();
 }
 
-/*static*/ void InputMonitor::CommonAnalogPortInterrupt(CallbackParameter cbp, uint32_t reading) noexcept
+/*static*/ void InputMonitor::CommonAnalogPortInterrupt(CallbackParameter cbp, int32_t reading) noexcept
 {
 	static_cast<InputMonitor*>(cbp.vp)->AnalogInterrupt(reading);
 }
@@ -178,7 +181,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 	return false;
 }
 
-/*static*/ GCodeResult InputMonitor::Create(const CanMessageCreateInputMonitorNew& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept
+/*static*/ GCodeResult InputMonitor::Create(const CanMessageCreateInputMonitorV1& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept
 {
 	WriteLocker lock(listLock);
 
@@ -214,9 +217,9 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 	return GCodeResult::error;
 }
 
-/*static*/ GCodeResult InputMonitor::Change(const CanMessageChangeInputMonitorNew& msg, const StringRef& reply, uint8_t& extra) noexcept
+/*static*/ GCodeResult InputMonitor::Change(const CanMessageChangeInputMonitorV1& msg, const StringRef& reply, uint8_t& extra) noexcept
 {
-	if (msg.action == CanMessageChangeInputMonitorNew::actionDelete)
+	if (msg.action == CanMessageChangeInputMonitorV1::actionDelete)
 	{
 		WriteLocker lock(listLock);
 
@@ -239,27 +242,27 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 	GCodeResult rslt;
 	switch (msg.action)
 	{
-	case CanMessageChangeInputMonitorNew::actionDoMonitor:
+	case CanMessageChangeInputMonitorV1::actionDoMonitor:
 		rslt = (m->Activate(true)) ? GCodeResult::ok : GCodeResult::error;
 		break;
 
-	case CanMessageChangeInputMonitorNew::actionDontMonitor:
+	case CanMessageChangeInputMonitorV1::actionDontMonitor:
 		m->Deactivate();
 		rslt = GCodeResult::ok;
 		break;
 
-	case CanMessageChangeInputMonitorNew::actionReturnPinName:
+	case CanMessageChangeInputMonitorV1::actionReturnPinName:
 		m->port.AppendPinName(reply);
 		reply.catf(", min interval %ums", m->minInterval);
 		rslt = GCodeResult::ok;
 		break;
 
-	case CanMessageChangeInputMonitorNew::actionChangeThreshold:
-		m->threshold = msg.param;
+	case CanMessageChangeInputMonitorV1::actionChangeThreshold:
+		m->threshold = (int32_t)msg.param;
 		rslt = GCodeResult::ok;
 		break;
 
-	case CanMessageChangeInputMonitorNew::actionChangeMinInterval:
+	case CanMessageChangeInputMonitorV1::actionChangeMinInterval:
 		m->minInterval = msg.param;
 		rslt = GCodeResult::ok;
 		break;
@@ -276,7 +279,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 
 // Check the input monitors and add any pending ones to the message
 // Return the number of ticks before we should be woken again, or TaskBase::TimeoutUnlimited if we shouldn't be work until an input changes state
-/*static*/ uint32_t InputMonitor::AddStateChanges(CanMessageInputChangedNew *msg) noexcept
+/*static*/ uint32_t InputMonitor::AddStateChanges(CanMessageInputChangedV2 *msg) noexcept
 {
 	uint32_t timeToWait = TaskBase::TimeoutUnlimited;
 	ReadLocker lock(listLock);
@@ -296,7 +299,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 					monitorState = p->state;
 				}
 
-				if (msg->AddEntry(p->handle, p->GetAnalogValue(), monitorState))
+				if (msg->AddEntry(p->handle, StepTimer::ConvertToMasterTime(p->whenStateChanged), p->GetAnalogValue(), monitorState))
 				{
 					p->whenLastSent = now;
 				}
@@ -332,7 +335,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 	const uint16_t pattern = req.pattern.all & mask;
 
 	// Construct the new message in the same buffer
-	auto reply = buf->SetupResponseMessage<CanMessageReadInputsReply>(rid, CanInterface::GetCanAddress(), srcAddress);
+	auto reply = buf->SetupResponseMessage<CanMessageReadInputsReplyV0>(rid, CanInterface::GetCanAddress(), srcAddress);
 
 	unsigned int count = 0;
 	ReadLocker lock(listLock);
@@ -356,21 +359,22 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 #if SUPPORT_REMOTE_COMMANDS
 
 // Append analog handle data to the supplied buffer
-/*static*/ unsigned int InputMonitor::AddAnalogHandleData(uint8_t *buffer, size_t spaceLeft) noexcept
+/*static*/ unsigned int InputMonitor::AddAnalogHandleDataV1(uint8_t *buffer, size_t spaceLeft) noexcept
 {
 	unsigned int count = 0;
 	ReadLocker lock(listLock);
 	InputMonitor *h = monitorsList;
-	while (h != nullptr && spaceLeft >= sizeof(AnalogHandleData))
+	while (h != nullptr && spaceLeft >= sizeof(AnalogHandleDataV1))
 	{
 		if (!h->IsDigital())
 		{
-			AnalogHandleData data;
-			data.reading = h->GetAnalogValue();
+			AnalogHandleDataV1 data;
 			data.handle.all = h->handle;
-			memcpy(buffer, &data, sizeof(AnalogHandleData));
-			buffer += sizeof(AnalogHandleData);
-			spaceLeft -= sizeof(AnalogHandleData);
+			data.when = (uint16_t)StepTimer::GetMasterTime();
+			data.reading = h->GetAnalogValue();
+			memcpy(buffer, &data, sizeof(AnalogHandleDataV1));
+			buffer += sizeof(AnalogHandleDataV1);
+			spaceLeft -= sizeof(AnalogHandleDataV1);
 			++count;
 		}
 		h = h->next;

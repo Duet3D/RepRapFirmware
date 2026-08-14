@@ -9,20 +9,16 @@
 #ifndef SRC_HARDWARE_SAME5X_DEVICES_H_
 #define SRC_HARDWARE_SAME5X_DEVICES_H_
 
-#include <AsyncSerial.h>
-
-extern AsyncSerial serialUart0, serialUart1;
-
 #define SUPPORT_USB		1		// needed by SerialCDC.h
 #include <SerialCDC.h>
 
 extern SerialCDC serialUSB;
+#if CORE_USES_TINYUSB
+extern SerialCDC serialUSB2;
+#endif
 
 void DeviceInit() noexcept;
 void StopAnalogTask() noexcept;
 void StopUsbTask() noexcept;
-
-// GCLK numbers not defined in the core
-constexpr unsigned int GclkNum25MHz = 2;		// for Ethernet PHY
 
 #endif /* SRC_HARDWARE_SAME5X_DEVICES_H_ */

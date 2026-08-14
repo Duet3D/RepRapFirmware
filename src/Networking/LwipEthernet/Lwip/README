@@ -17,12 +17,13 @@ FEATURES
     multiple network interfaces
   * ICMP (Internet Control Message Protocol) for network maintenance and debugging
   * IGMP (Internet Group Management Protocol) for multicast traffic management
-  * MLD (Multicast listener discovery for IPv6). Aims to be compliant with 
+  * MLD (Multicast listener discovery for IPv6). Aims to be compliant with
     RFC 2710. No support for MLDv2
   * ND (Neighbor discovery and stateless address autoconfiguration for IPv6).
     Aims to be compliant with RFC 4861 (Neighbor discovery) and RFC 4862
     (Address autoconfiguration)
-  * DHCP, AutoIP/APIPA (Zeroconf) and (stateless) DHCPv6
+  * DHCP, AutoIP/APIPA (Zeroconf), ACD (Address Conflict Detection)
+    and (stateless) DHCPv6
   * UDP (User Datagram Protocol) including experimental UDP-lite extensions
   * TCP (Transmission Control Protocol) with congestion control, RTT estimation
     fast recovery/fast retransmit and sending SACKs
@@ -63,37 +64,39 @@ help improve lwIP by use of Savannah's interface, Git and the
 mailing list. A core team of developers will commit changes to the
 Git source tree.
 
-The lwIP TCP/IP stack is maintained in the 'lwip' Git module and
-contributions (such as platform ports) are in the 'contrib' Git module.
+The lwIP TCP/IP stack is maintained in the 'src' directory and
+contributions (such as platform ports and applications) are in
+the 'contrib' directory.
 
 See doc/savannah.txt for details on Git server access for users and
 developers.
 
-The current Git trees are web-browsable:
-  http://git.savannah.gnu.org/cgit/lwip.git
-  http://git.savannah.gnu.org/cgit/lwip/lwip-contrib.git
+The current Git tree is web-browsable:
+  https://git.savannah.gnu.org/cgit/lwip.git
 
 Submit patches and bugs via the lwIP project page:
-  http://savannah.nongnu.org/projects/lwip/
+  https://savannah.nongnu.org/projects/lwip/
 
 Continuous integration builds (GCC, clang):
-  https://travis-ci.org/yarrick/lwip-merged
+  https://github.com/lwip-tcpip/lwip/actions
 
 
 DOCUMENTATION
 
 Self documentation of the source code is regularly extracted from the current
 Git sources and is available from this web page:
-  http://www.nongnu.org/lwip/
-
-There is now a constantly growing wiki about lwIP at
-  http://lwip.wikia.com/wiki/LwIP_Wiki
+  https://www.nongnu.org/lwip/
 
 Also, there are mailing lists you can subscribe at
-  http://savannah.nongnu.org/mail/?group=lwip
+  https://savannah.nongnu.org/mail/?group=lwip
 plus searchable archives:
-  http://lists.nongnu.org/archive/html/lwip-users/
-  http://lists.nongnu.org/archive/html/lwip-devel/
+  https://lists.nongnu.org/archive/html/lwip-users/
+  https://lists.nongnu.org/archive/html/lwip-devel/
+
+There is a wiki about lwIP at
+  https://lwip.wikia.com/wiki/LwIP_Wiki
+You might get questions answered there, but unfortunately, it is not as
+well maintained as it should be.
 
 lwIP was originally written by Adam Dunkels:
   http://dunkels.com/adam/

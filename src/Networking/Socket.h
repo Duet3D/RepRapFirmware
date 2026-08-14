@@ -13,6 +13,7 @@
 
 const uint32_t FindResponderTimeout = 2000;		// how long we wait for a responder to become available
 const uint32_t ConnectTimeout = 2000;			// how long we wait for an outgoing connection attempt
+const uint32_t TlsHandshakeTimeout = 10000;		// how long we allow an inbound TLS connection to complete its handshake
 const uint32_t MaxAckTime = 4000;				// how long we wait for a connection to acknowledge the remaining data before it is closed
 const uint32_t MaxWriteTime = 2000;				// how long we wait for a write operation to complete before it is cancelled
 
@@ -33,8 +34,10 @@ public:
 	TcpPort GetRemotePort() const noexcept { return remotePort; }
 	NetworkProtocol GetProtocol() const noexcept { return protocol; }
 
+	virtual bool UsingTls() const noexcept = 0;
 	virtual void Poll() noexcept = 0;
 	virtual void Close() noexcept = 0;
+	virtual bool IsClosing() const noexcept = 0;
 	virtual void Terminate() noexcept = 0;
 	virtual void TerminateAndDisable() noexcept = 0;
 	virtual bool ReadChar(char& c) noexcept = 0;

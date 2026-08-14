@@ -15,8 +15,6 @@
 # include <CanMessageFormats.h>
 #endif
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -29,30 +27,27 @@ constexpr ObjectModelTableEntry FopDt::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. FopDt members
-	{ "coolingExp",			OBJECT_MODEL_FUNC(self->coolingRateExponent, 1),									ObjectModelEntryFlags::none },
-	{ "coolingRate",		OBJECT_MODEL_FUNC(self->basicCoolingRate, 3),										ObjectModelEntryFlags::none },
-	{ "deadTime",			OBJECT_MODEL_FUNC(self->deadTime, 1),												ObjectModelEntryFlags::none },
+	{ "coolingExp",			OBJECT_MODEL_FUNC(self->basicModel.coolingRateExponent, 1),							ObjectModelEntryFlags::none },
+	{ "coolingRate",		OBJECT_MODEL_FUNC(self->basicModel.basicCoolingRate, 3),							ObjectModelEntryFlags::none },
+	{ "deadTime",			OBJECT_MODEL_FUNC(self->basicModel.deadTime, 1),									ObjectModelEntryFlags::none },
 	{ "enabled",			OBJECT_MODEL_FUNC(self->enabled),													ObjectModelEntryFlags::none },
-	{ "fanCoolingRate",		OBJECT_MODEL_FUNC(self->fanCoolingRate, 3),											ObjectModelEntryFlags::none },
-	{ "heatingRate",		OBJECT_MODEL_FUNC(self->heatingRate, 3),											ObjectModelEntryFlags::none },
+	{ "fanCoolingRate",		OBJECT_MODEL_FUNC(self->basicModel.fanCoolingRate, 3),								ObjectModelEntryFlags::none },
+	{ "heatingRate",		OBJECT_MODEL_FUNC(self->basicModel.heatingRate, 3),									ObjectModelEntryFlags::none },
 	{ "inverted",			OBJECT_MODEL_FUNC(self->inverted),													ObjectModelEntryFlags::none },
 	{ "maxPwm",				OBJECT_MODEL_FUNC(self->maxPwm, 2),													ObjectModelEntryFlags::none },
 	{ "pid",				OBJECT_MODEL_FUNC(self, 1),															ObjectModelEntryFlags::none },
-	{ "standardVoltage",	OBJECT_MODEL_FUNC(self->standardVoltage, 1),										ObjectModelEntryFlags::none },
+	{ "standardVoltage",	OBJECT_MODEL_FUNC(self->basicModel.standardVoltage, 1),								ObjectModelEntryFlags::none },
 
 	// 1. PID members
 	{ "d",					OBJECT_MODEL_FUNC(self->loadChangeParams.tD * self->loadChangeParams.kP, 3),		ObjectModelEntryFlags::none },
 	{ "i",					OBJECT_MODEL_FUNC(self->loadChangeParams.recipTi * self->loadChangeParams.kP, 4),	ObjectModelEntryFlags::none },
-	{ "overridden",			OBJECT_MODEL_FUNC(self->pidParametersOverridden),									ObjectModelEntryFlags::none },
 	{ "p",					OBJECT_MODEL_FUNC(self->loadChangeParams.kP, 5),									ObjectModelEntryFlags::none },
-	{ "used",				OBJECT_MODEL_FUNC(self->usePid),													ObjectModelEntryFlags::none },
+	{ "used",				OBJECT_MODEL_FUNC((bool)self->basicModel.usePid),									ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t FopDt::objectModelTableDescriptor[] = { 2, 10, 5 };
+constexpr uint8_t FopDt::objectModelTableDescriptor[] = { 2, 10, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(FopDt)
-
-#endif
 
 // The heater model is disabled until the user declares the heater to be a bed, chamber or tool heater
 FopDt::FopDt() noexcept
@@ -74,14 +69,15 @@ bool FopDt::SetParameters(float phr, float pbcr, float pfcr, float pcrExponent, 
 		: nullptr;
 	if (err == nullptr)
 	{
-		heatingRate = phr;
-		basicCoolingRate = pbcr;
-		fanCoolingRate = pfcr;
-		coolingRateExponent = pcrExponent;
-		deadTime = pdt;
+		basicModel.heatingRate = phr;
+		basicModel.basicCoolingRate = pbcr;
+		basicModel.fanCoolingRate = pfcr;
+		basicModel.coolingRateExponent = pcrExponent;
+		basicModel.deadTime = pdt;
+		basicModel.usePid = pUsePid;
+		basicModel.standardVoltage = pVoltage;
+		basicModel.fzero = 0.0;
 		maxPwm = pMaxPwm;
-		standardVoltage = pVoltage;
-		usePid = pUsePid;
 		inverted = pInverted;
 		enabled = true;
 		CalcPidConstants(100.0);
@@ -94,38 +90,23 @@ bool FopDt::SetParameters(float phr, float pbcr, float pfcr, float pcrExponent, 
 #if SUPPORT_REMOTE_COMMANDS
 
 // Check the model parameters are sensible, if they are then save them and return true. If not then write an error message to reply and return false.
-bool FopDt::SetParameters(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept
+bool FopDt::SetParameters(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept
 {
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
 	const char *_ecv_array _ecv_null const err =
-		  (msg.heatingRate/msg.basicCoolingRate < 0.1) ? "estimated temperature rise too small"					// minimum 10C temperature rise (same as with earlier heater model)
-		: (msg.fanCoolingRate < 0.0) ? "fan reduces cooling rate"
-		: (msg.coolingRateExponent < 1.0 || msg.coolingRateExponent > 1.6) ? "cooling rate exponent out of range"
-		: (msg.deadTime <= 0.0099) ? "dead time too small"
-		: (msg.deadTime * msg.basicCoolingRate > 50.0) ? "dead time too close to cooling time constant"			// dead time less than half the cooling time constant
+		  (msg.basicModel.heatingRate/msg.basicModel.basicCoolingRate < 0.1) ? "estimated temperature rise too small"					// minimum 10C temperature rise (same as with earlier heater model)
+		: (msg.basicModel.fanCoolingRate < 0.0) ? "fan reduces cooling rate"
+		: (msg.basicModel.coolingRateExponent < 1.0 || msg.basicModel.coolingRateExponent > 1.6) ? "cooling rate exponent out of range"
+		: (msg.basicModel.deadTime <= 0.0099) ? "dead time too small"
+		: (msg.basicModel.deadTime * msg.basicModel.basicCoolingRate > 50.0) ? "dead time too close to cooling time constant"			// dead time less than half the cooling time constant
 		: (msg.maxPwm <= 0.0099 || msg.maxPwm > 1.0) ? "PWM out of range"
 		: nullptr;
 	if (err == nullptr)
 	{
-		heatingRate = msg.heatingRate;
-		basicCoolingRate = msg.basicCoolingRate;
-		fanCoolingRate = msg.fanCoolingRate;
-		coolingRateExponent = msg.coolingRateExponent;
-		deadTime = msg.deadTime;
+		basicModel = msg.basicModel;
 		maxPwm = msg.maxPwm;
-		standardVoltage = msg.standardVoltage;
-		usePid = msg.usePid;
 		inverted = msg.inverted;
-		pidParametersOverridden = msg.pidParametersOverridden;
-
-		if (msg.pidParametersOverridden)
-		{
-			SetRawPidParameters(msg.kP, msg.recipTi, msg.tD);
-		}
-		else
-		{
-			CalcPidConstants(100.0);
-		}
+		CalcPidConstants(100.0);
 		enabled = true;
 		return true;
 	}
@@ -137,39 +118,17 @@ bool FopDt::SetParameters(const CanMessageHeaterModelNewNew& msg, const StringRe
 
 void FopDt::Reset() noexcept
 {
-	SetDefaultToolParameters();						// set some values so that we don't report rubbish in the OM
+	SetDefaultModel(DefaultToolHeaterModel);		// set some values so that we don't report rubbish in the OM
 	enabled = false;								// heater is disabled until the parameters are set
 }
 
-// Set up default parameters for a tool heater and enable the model
-void FopDt::SetDefaultToolParameters() noexcept
+void FopDt::SetDefaultModel(const HeaterModel& model) noexcept
 {
-	heatingRate = DefaultToolHeaterHeatingRate;
-	basicCoolingRate = DefaultToolHeaterBasicCoolingRate;
-	deadTime = DefaultToolHeaterDeadTime;
-	fanCoolingRate = 0.0;
-	coolingRateExponent = DefaultToolHeaterCoolingRateExponent;
+	basicModel = model;
+	basicModel.zero = 0;
 	maxPwm = 1.0;
-	standardVoltage = 0.0;
-	usePid = true;
-	inverted = pidParametersOverridden = false;
-	CalcPidConstants(200.0);
-	enabled = true;
-}
-
-// Set up default parameters for a bed/chamber heater and enable the model
-void FopDt::SetDefaultBedOrChamberParameters() noexcept
-{
-	heatingRate = DefaultBedHeaterHeatingRate;
-	basicCoolingRate = DefaultBedHeaterBasicCoolingRate;
-	deadTime = DefaultBedHeaterDeadTime;
-	fanCoolingRate = 0.0;
-	coolingRateExponent = DefaultBedHeaterCoolingRateExponent;
-	maxPwm = 1.0;
-	standardVoltage = 0.0;
-	usePid = false;
-	inverted = pidParametersOverridden = false;
-	CalcPidConstants(60.0);
+	inverted = false;
+	CalcPidConstants(basicModel.typicalTemperature);
 	enabled = true;
 }
 
@@ -185,75 +144,50 @@ M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const noexcept
 	return rslt;
 }
 
-// Override the PID parameters. We set both sets to the same parameters.
-void FopDt::SetM301PidParameters(const M301PidParameters& pp) noexcept
-{
-	SetRawPidParameters(pp.kP * (1.0/255.0), pp.kI/pp.kP, pp.kD/pp.kP);
-}
-
-void FopDt::SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcept
-{
-	loadChangeParams.kP = setpointChangeParams.kP = p_kP;
-	loadChangeParams.recipTi = setpointChangeParams.recipTi = p_recipTi;
-	loadChangeParams.tD = setpointChangeParams.tD = p_tD;
-	pidParametersOverridden = true;
-}
-
 // Append a M307 command describing this heater followed by a newline to the string
 void FopDt::AppendM307Command(unsigned int heaterNumber, const StringRef& str, bool includeVoltage) const noexcept
 {
 	str.catf("M307 H%u R%.3f K%.3f:%.3f D%.2f E%.2f S%.2f B%d",
 				heaterNumber,
-				(double)heatingRate,
-				(double)basicCoolingRate,
-				(double)fanCoolingRate,
-				(double)deadTime,
-				(double)coolingRateExponent,
+				(double)basicModel.heatingRate,
+				(double)basicModel.basicCoolingRate,
+				(double)basicModel.fanCoolingRate,
+				(double)basicModel.deadTime,
+				(double)basicModel.coolingRateExponent,
 				(double)maxPwm,
-				(usePid) ? 0 : 1);
+				(basicModel.usePid) ? 0 : 1);
 	if (inverted)
 	{
 		str.cat(" I1");
 	}
 	if (includeVoltage)
 	{
-		str.catf(" V%.1f", (double)standardVoltage);
+		str.catf(" V%.1f", (double)basicModel.standardVoltage);
 	}
 	str.cat('\n');
-}
-
-// If PID parameters are overridden, append a M307 command for this heater followed by a newline to the string
-void FopDt::AppendM301Command(unsigned int heaterNumber, const StringRef& str) const noexcept
-{
-	if (pidParametersOverridden)
-	{
-		const M301PidParameters pp = GetM301PidParameters(false);
-		str.catf("M301 H%u P%.1f I%.3f D%.1f\n", heaterNumber, (double)pp.kP, (double)pp.kI, (double)pp.kD);
-	}
 }
 
 // Append the model parameters to a reply string
 void FopDt::AppendModelParameters(unsigned int heaterNumber, const StringRef& str, bool includeVoltage) const noexcept
 {
-	const char *_ecv_array const mode = (!usePid) ? "bang-bang"
-								: (pidParametersOverridden) ? "custom PID"
+	const char *_ecv_array const mode = (!basicModel.usePid) ? "bang-bang"
 									: "PID";
-	str.catf("Heater %u: heating rate %.3f, cooling rate %.3f", heaterNumber, (double)heatingRate, (double)basicCoolingRate);
-	if (fanCoolingRate > 0.0)
+	str.catf("Heater %u: heating rate %.3f, cooling rate %.3f", heaterNumber, (double)basicModel.heatingRate, (double)basicModel.basicCoolingRate);
+	if (basicModel.fanCoolingRate > 0.0)
 	{
-		str.catf("/%.3f", (double)fanCoolingRate);
+		str.catf("/%.3f", (double)basicModel.fanCoolingRate);
 	}
-	str.catf(", dead time %.2f, max PWM %.2f, mode %s", (double)deadTime, (double)maxPwm, mode);
+	str.catf(", dead time %.2f, max PWM %.2f, mode %s", (double)basicModel.deadTime, (double)maxPwm, mode);
 	if (inverted)
 	{
 		str.cat(", reverse control");
 	}
 	if (includeVoltage)
 	{
-		str.catf(", calibrated at %.1fV", (double)standardVoltage);
+		str.catf(", calibrated at %.1fV", (double)basicModel.standardVoltage);
 	}
 	str.lcatf("Predicted max temperature rise %d" DEGREE_SYMBOL "C", (int)EstimateMaxTemperatureRise());
-	if (usePid)
+	if (basicModel.usePid)
 	{
 		M301PidParameters params = GetM301PidParameters(false);
 		str.lcatf("PID parameters: heating P%.1f I%.3f D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
@@ -294,88 +228,27 @@ void FopDt::AppendModelParameters(unsigned int heaterNumber, const StringRef& st
 
 void FopDt::CalcPidConstants(float targetTemperature) noexcept
 {
-	if (!pidParametersOverridden)
-	{
-		// Calculate the cooling rate per degC at this temperature. We assume the fan is at 20% speed.
-		const float temperatureRise = max<float>(targetTemperature - NormalAmbientTemperature, 1.0);		// avoid division by zero!
-		const float averageCoolingRatePerDegC = GetCoolingRate(temperatureRise, 0.2)/temperatureRise;
-		loadChangeParams.kP = 0.7/(heatingRate * deadTime);
-		loadChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.25)/(1.14 * powf(deadTime, 0.75));		// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
-		loadChangeParams.tD = deadTime * 0.7;
+	// Calculate the cooling rate per degC at this temperature. We assume the fan is at 20% speed.
+	const float temperatureRise = max<float>(targetTemperature - NormalAmbientTemperature, 1.0);		// avoid division by zero!
+	const float averageCoolingRatePerDegC = basicModel.GetTotalCoolingRate(temperatureRise, 0.2)/temperatureRise;
+	loadChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
+	loadChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.25)/(1.14 * powf(basicModel.deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
+	loadChangeParams.tD = basicModel.deadTime * 0.7;
 
-		setpointChangeParams.kP = 0.7/(heatingRate * deadTime);
-		setpointChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.5)/powf(deadTime, 0.5);			// Ti = timeConstant^0.5 * deadTime^0.5
-		setpointChangeParams.tD = deadTime * 0.7;
-	}
-}
-
-// Adjust the actual heater PWM for supply voltage
-float FopDt::CorrectPwmForVoltage(float requiredPwm, float actualVoltage) const noexcept
-{
-	if (requiredPwm < maxPwm && standardVoltage >= 10.0 && actualVoltage >= 10.0)
-	{
-		requiredPwm *= fsquare(standardVoltage/actualVoltage);
-	}
-	return min<float>(requiredPwm, maxPwm);
-}
-
-float FopDt::GetPwmCorrectionForFan(float temperatureRise, float fanPwmChange) const noexcept
-{
-	return temperatureRise * 0.01 * fanCoolingRate * fanPwmChange / heatingRate;
-}
-
-// Calculate the expected cooling rate for a given temperature rise above ambient
-float FopDt::GetCoolingRate(float temperatureRise, float fanPwm) const noexcept
-{
-	temperatureRise *= 0.01;
-	// If the temperature rise is negative then we must not try to raise it to a non-integral power!
-	const float adjustedTemperatureRise = (temperatureRise < 0.0) ? -powf(-temperatureRise, coolingRateExponent) : powf(temperatureRise, coolingRateExponent);
-	return basicCoolingRate * adjustedTemperatureRise + temperatureRise * fanCoolingRate * fanPwm;
-}
-
-// Get an estimate of the expected heating rate at the specified temperature rise and PWM. The result may be negative.
-float FopDt::GetNetHeatingRate(float temperatureRise, float fanPwm, float heaterPwm) const noexcept
-{
-	return heatingRate * heaterPwm - GetCoolingRate(temperatureRise, fanPwm);
-}
-
-// Get an estimate of the heater PWM required to maintain a specified temperature
-float FopDt::EstimateRequiredPwm(float temperatureRise, float fanPwm) const noexcept
-{
-	return GetCoolingRate(temperatureRise, fanPwm)/heatingRate;
-}
-
-float FopDt::EstimateMaxTemperatureRise() const noexcept
-{
-	return EstimateMaxTemperatureRise(heatingRate, basicCoolingRate, coolingRateExponent);
-}
-
-/*static*/ float FopDt::EstimateMaxTemperatureRise(float hr, float cr, float cre) noexcept
-{
-	return 100.0 * powf(hr/cr, 1.0/cre);
+	setpointChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
+	setpointChangeParams.recipTi = fastSqrtf(averageCoolingRatePerDegC/basicModel.deadTime);			// Ti = timeConstant^0.5 * deadTime^0.5
+	setpointChangeParams.tD = basicModel.deadTime * 0.7;
 }
 
 #if SUPPORT_CAN_EXPANSION
 
-void FopDt::SetupCanMessage(unsigned int heater, CanMessageHeaterModelNewNew& msg) const noexcept
+void FopDt::SetupCanMessage(unsigned int heater, CanMessageHeaterModelV3& msg) const noexcept
 {
 	msg.heater = heater;
-	msg.heatingRate = heatingRate;
-	msg.basicCoolingRate = basicCoolingRate;
-	msg.fanCoolingRate = fanCoolingRate;
-	msg.fZero = 0.0;
-	msg.coolingRateExponent = coolingRateExponent;
-	msg.deadTime = deadTime;
+	msg.basicModel = basicModel;
 	msg.maxPwm = maxPwm;
-	msg.standardVoltage = standardVoltage;
 	msg.enabled = enabled;
-	msg.usePid = usePid;
 	msg.inverted = inverted;
-	msg.pidParametersOverridden = pidParametersOverridden;
-
-	msg.kP = setpointChangeParams.kP;
-	msg.recipTi = setpointChangeParams.recipTi;
-	msg.tD = setpointChangeParams.tD;
 }
 
 #endif

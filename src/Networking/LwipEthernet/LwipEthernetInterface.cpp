@@ -44,8 +44,13 @@ extern "C"
 #include "lwip/stats.h"
 #endif
 
+#include "lwip/mem.h"
 #include "lwip/dhcp.h"
 #include "lwip/tcp.h"
+#include "lwip/altcp.h"
+#if LWIP_ALTCP_TLS
+#include "lwip/altcp_tls.h"
+#endif
 #include "lwip/timeouts.h"
 
 #include "lwip/apps/netbiosns.h"
@@ -53,6 +58,25 @@ extern "C"
 
 extern struct netif gs_net_if;
 }
+
+// LwIP heap buffer: defined here and referenced via LWIP_RAM_HEAP_POINTER in lwipopts.h.
+// Allocated dynamically in Start() to avoid consuming RAM when networking is never enabled.
+// Must have C linkage so that LwIP's C code (mem.c) can access it without name mangling.
+extern "C" { void *lwipRamHeap = nullptr; }
+
+#if LWIP_ALTCP_TLS_MBEDTLS
+// mbedTLS allocator wrappers - routes mbedtls_calloc/free through the lwIP heap.
+// Declared in LibMbedTls/configs/config-rrf.h with size_t parameters to avoid
+// mem_size_t type differences between SAME54 (u16_t) and SAME70 (u32_t).
+extern "C" void *mbedtls_lwip_calloc(size_t count, size_t size)
+{
+	return mem_calloc((mem_size_t)count, (mem_size_t)size);
+}
+extern "C" void mbedtls_lwip_free(void *ptr)
+{
+	mem_free(ptr);
+}
+#endif
 
 // Interface to get access to the PBUF memory pool so that when we are not going to enable Ethernet we can use the memory for something else
 // These functions may used on the Duet 3 Mini when the WiFi interface is enabled or SBC mode is enabled.
@@ -94,18 +118,35 @@ void *AllocateFromPbufPool(size_t bytes) noexcept
 	return nullptr;
 }
 
-// MDNS support
+// MDNS service strings for plain protocols (index matches NetworkProtocol)
 const char * const MdnsServiceStrings[NumSelectableProtocols] =
 {
 	"_http", "_ftp", "_telnet",
 #if SUPPORT_MULTICAST_DISCOVERY
-	"_duet_discovery"
+	"_duet_discovery",
+#else
+	nullptr,
 #endif
+	nullptr		// MQTT is client-only, no mDNS service
 };
+
+#if LWIP_ALTCP_TLS
+// MDNS service strings for TLS-secured protocol variants (nullptr = none)
+const char * const MdnsTlsServiceStrings[NumSelectableProtocols] =
+{
+	"_https", "_ftps", "_telnets", nullptr, nullptr
+};
+#endif
 
 const char * const MdnsTxtRecords[2] = { "product=" FIRMWARE_NAME, "version=" VERSION };
 constexpr unsigned int MdnsTtl = 10 * 60;			// same value as on the Duet 0.6/0.8.5
+
 constexpr uint8_t ListenBacklog = 8;
+#if SAME70
+constexpr uint8_t TlsListenBacklog = 4;				// Limit backlog for incoming TLS connections to reduce RAM usage
+#else
+constexpr uint8_t TlsListenBacklog = 2;
+#endif
 
 /*-----------------------------------------------------------------------------------*/
 
@@ -118,7 +159,7 @@ extern "C"
 {
 	// Callback functions for LWIP (may be called from ISR)
 	// This occasionally seems to get called with a null pcb argument, so check for that here
-	static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err) noexcept
+	static err_t conn_accept(void *arg, altcp_pcb *pcb, err_t err) noexcept
 	{
 		LWIP_UNUSED_ARG(arg);
 		LWIP_UNUSED_ARG(err);
@@ -131,7 +172,11 @@ extern "C"
 				return ERR_OK;
 			}
 
-			tcp_abort(pcb);
+			if (reprap.Debug(Module::Network))
+			{
+				debugPrintf("LWIP accept rejected: lport=%u rport=%u, aborting\n", altcp_get_port(pcb, 1), altcp_get_port(pcb, 0));
+			}
+			altcp_abort(pcb);
 		}
 		return ERR_ABRT;
 	}
@@ -151,8 +196,6 @@ LwipEthernetInterface::LwipEthernetInterface(Platform& p) noexcept
 		sockets[i] = new LwipSocket(this);
 	}
 }
-
-#if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -176,19 +219,22 @@ constexpr uint8_t LwipEthernetInterface::objectModelTableDescriptor[] = { 1, 6 }
 
 DEFINE_GET_OBJECT_MODEL_TABLE(LwipEthernetInterface)
 
-#endif
-
 void LwipEthernetInterface::Init() noexcept
 {
 	interfaceMutex.Create("LwipIface");
-
 	lwipMutex.Create("LwipCore");
 
 	// Clear the PCBs
-	for (tcp_pcb*& pcb : listeningPcbs)
+	for (altcp_pcb*& pcb : listeningPcbs)
 	{
 		pcb = nullptr;
 	}
+#if LWIP_ALTCP_TLS
+	for (altcp_pcb*& pcb : tlsListeningPcbs)
+	{
+		pcb = nullptr;
+	}
+#endif
 
 	macAddress = platform.GetDefaultMacAddress();
 }
@@ -196,6 +242,8 @@ void LwipEthernetInterface::Init() noexcept
 void LwipEthernetInterface::IfaceStartProtocol(NetworkProtocol protocol) noexcept
 {
 	StartProtocol(protocol);
+
+	MutexLocker lock(lwipMutex);
 	RebuildMdnsServices();
 }
 
@@ -204,6 +252,7 @@ void LwipEthernetInterface::IfaceShutdownProtocol(NetworkProtocol protocol, bool
 	ShutdownProtocol(protocol);
 	if (permanent)
 	{
+		MutexLocker lock(lwipMutex);
 		RebuildMdnsServices();
 	}
 }
@@ -211,7 +260,7 @@ void LwipEthernetInterface::IfaceShutdownProtocol(NetworkProtocol protocol, bool
 #if HAS_CLIENTS
 void LwipEthernetInterface::ConnectProtocol(NetworkProtocol protocol) noexcept
 {
-	tcp_pcb *pcb = tcp_new();
+	altcp_pcb *pcb = altcp_new(nullptr);
 	if (pcb == nullptr)
 	{
 		platform.Message(ErrorMessage, "unable to allocate a pcb\n");
@@ -221,7 +270,7 @@ void LwipEthernetInterface::ConnectProtocol(NetworkProtocol protocol) noexcept
 		ip_addr_t remote;
 		memset(&remote, 0, sizeof(remote));
 		remote.addr = ipAddresses[protocol];
-		err_t res = tcp_connect(pcb, &remote, portNumbers[protocol], conn_accept);
+		err_t res = altcp_connect(pcb, &remote, portNumbers[protocol], conn_accept);
 
 		if (res != ERR_OK)
 		{
@@ -240,53 +289,261 @@ void LwipEthernetInterface::ConnectProtocol(NetworkProtocol protocol) noexcept
 }
 #endif
 
+#if LWIP_ALTCP_TLS
+
+// Maximum allowed size for a PEM certificate or key file
+static constexpr FilePosition MaxPemFileSize = 2048;
+
+// Read a PEM file from /sys into a newly allocated buffer. Returns the buffer and sets len.
+// The buffer includes a null terminator (required by mbedTLS PEM parsing) which is included in len.
+// Returns nullptr if the file cannot be opened, is too large, or cannot be read.
+uint8_t *LwipEthernetInterface::ReadPemFile(const char *filename, size_t& len) noexcept
+{
+	FileStore *f = MassStorage::OpenFile(filename, OpenMode::read, 0);
+	if (f == nullptr)
+	{
+		return nullptr;
+	}
+
+	const FilePosition fileLen = f->Length();
+	if (fileLen > MaxPemFileSize)
+	{
+		f->Close();
+		return nullptr;
+	}
+
+	// Allocate fileLen + 1 for null terminator (mbedTLS PEM parser requires this)
+	uint8_t *buf = new (std::nothrow) uint8_t[fileLen + 1];
+	if (buf == nullptr)
+	{
+		f->Close();
+		return nullptr;
+	}
+
+	const int bytesRead = f->Read(reinterpret_cast<char *>(buf), fileLen);
+	f->Close();
+
+	if (bytesRead != (int)fileLen)
+	{
+		delete[] buf;
+		return nullptr;
+	}
+
+	buf[fileLen] = 0;		// null terminate for PEM parser
+	len = fileLen + 1;
+	return buf;
+}
+
+// Load TLS certificate and private key from TlsCertFile and TlsKeyFile
+// Returns true if the TLS config was created successfully
+bool LwipEthernetInterface::LoadTlsCertificates(const StringRef& reply) noexcept
+{
+	if (tlsConfig != nullptr)
+	{
+		return true;		// already loaded
+	}
+
+	size_t certLen = 0, keyLen = 0;
+	uint8_t *certBuf = ReadPemFile(TlsCertFile, certLen);
+	if (certBuf == nullptr)
+	{
+		reply.printf("Failed to load TLS certificate %s", TlsCertFile);
+		return false;
+	}
+
+	uint8_t *keyBuf = ReadPemFile(TlsKeyFile, keyLen);
+	if (keyBuf == nullptr)
+	{
+		delete[] certBuf;
+		reply.printf("Failed to load TLS key %s", TlsKeyFile);
+		return false;
+	}
+
+	MutexLocker lock(lwipMutex);
+	tlsConfig = altcp_tls_create_config_server_privkey_cert(keyBuf, keyLen, nullptr, 0, certBuf, certLen);
+
+	delete[] certBuf;
+	delete[] keyBuf;
+
+	if (tlsConfig == nullptr)
+	{
+		reply.copy("Failed to create TLS config - check certificate and key files");
+		return false;
+	}
+
+	return true;
+}
+
+// Free the TLS config if no protocol is still using TLS. This needs to be called with lwipMutex held
+void LwipEthernetInterface::FreeTlsConfig() noexcept
+{
+	if (tlsConfig == nullptr)
+	{
+		return;
+	}
+
+	// Keep the config as long as any protocol still has TLS enabled
+	for (size_t i = 0; i < NumSelectableProtocols; ++i)
+	{
+		if (tlsProtocolEnabled[i])
+		{
+			return;
+		}
+	}
+
+	altcp_tls_free_config(tlsConfig);
+	tlsConfig = nullptr;
+}
+
+#endif // LWIP_ALTCP_TLS
+
 void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 {
-	if (   listeningPcbs[protocol] == nullptr
+	// Create the plain (non-TLS) listener if plain protocol is enabled
+	if (protocolEnabled[protocol]
+		&& listeningPcbs[protocol] == nullptr
 #if SUPPORT_MULTICAST_DISCOVERY
 		&& protocol != MulticastDiscoveryProtocol
 #endif
 #if SUPPORT_MQTT
 		&& protocol != MqttProtocol
 #endif
-	   )
+	)
 	{
-		tcp_pcb *pcb = tcp_new();
+		MutexLocker lock(lwipMutex);
+		altcp_pcb *pcb = altcp_new(nullptr);
 		if (pcb == nullptr)
 		{
 			platform.Message(ErrorMessage, "unable to allocate a pcb\n");
 		}
 		else
 		{
-			tcp_bind(pcb, IP_ADDR_ANY, portNumbers[protocol]);
-			pcb = tcp_listen_with_backlog(pcb, ListenBacklog);
-			if (pcb == nullptr)
+			if (altcp_bind(pcb, IP_ADDR_ANY, portNumbers[protocol]) != ERR_OK)
 			{
-				platform.Message(ErrorMessage, "tcp_listen call failed\n");
+				platform.Message(ErrorMessage, "tcp_bind call failed\n");
+				altcp_abort(pcb);
 			}
 			else
 			{
-				listeningPcbs[protocol] = pcb;
-				tcp_accept(listeningPcbs[protocol], conn_accept);
+				altcp_pcb *const listeningPcb = altcp_listen_with_backlog(pcb, ListenBacklog);
+				if (listeningPcb == nullptr)
+				{
+					platform.Message(ErrorMessage, "tcp_listen call failed\n");
+					altcp_abort(pcb);
+				}
+				else
+				{
+					listeningPcbs[protocol] = listeningPcb;
+					altcp_accept(listeningPcbs[protocol], conn_accept);
+				}
 			}
 		}
 	}
+
+#if LWIP_ALTCP_TLS
+	// Create the TLS listener if TLS is enabled for this protocol
+	if (tlsProtocolEnabled[protocol] && tlsListeningPcbs[protocol] == nullptr)
+	{
+		if (tlsConfig == nullptr)
+		{
+			// TLS certificates were not loaded successfully, stop here
+			return;
+		}
+
+		MutexLocker lock(lwipMutex);
+		altcp_pcb *pcb = altcp_tls_new(tlsConfig, IPADDR_TYPE_V4);
+		if (pcb == nullptr)
+		{
+			platform.Message(ErrorMessage, "unable to allocate a TLS pcb\n");
+		}
+		else
+		{
+			if (altcp_bind(pcb, IP_ADDR_ANY, tlsPortNumbers[protocol]) != ERR_OK)
+			{
+				platform.Message(ErrorMessage, "tcp_bind call for TLS failed\n");
+				altcp_abort(pcb);
+			}
+			else
+			{
+				altcp_pcb *const listeningPcb = altcp_listen_with_backlog(pcb, TlsListenBacklog);
+				if (listeningPcb == nullptr)
+				{
+					platform.Message(ErrorMessage, "tcp_listen call for TLS failed\n");
+					altcp_abort(pcb);
+				}
+				else
+				{
+					tlsListeningPcbs[protocol] = listeningPcb;
+					altcp_accept(tlsListeningPcbs[protocol], conn_accept);
+				}
+			}
+		}
+	}
+#endif
 
 	switch(protocol)
 	{
 	case HttpProtocol:
 		for (SocketNumber skt = 0; skt < NumHttpSockets; ++skt)
 		{
-			sockets[skt]->Init(skt, portNumbers[protocol], protocol);
+			if (protocolEnabled[protocol])
+			{
+				sockets[skt]->Init(skt, portNumbers[protocol], protocol);
+#if LWIP_ALTCP_TLS
+				if (tlsProtocolEnabled[protocol])
+				{
+					sockets[skt]->InitTls(tlsPortNumbers[protocol]);
+				}
+#endif
+			}
+#if LWIP_ALTCP_TLS
+			else if (tlsProtocolEnabled[protocol])
+			{
+				sockets[skt]->Init(skt, tlsPortNumbers[protocol], protocol);
+				sockets[skt]->InitTls(tlsPortNumbers[protocol]);
+			}
+#endif
 		}
 		break;
 
 	case FtpProtocol:
-		sockets[FtpSocketNumber]->Init(FtpSocketNumber, portNumbers[protocol], protocol);
+		if (protocolEnabled[protocol])
+		{
+			sockets[FtpSocketNumber]->Init(FtpSocketNumber, portNumbers[protocol], protocol);
+#if LWIP_ALTCP_TLS
+			if (tlsProtocolEnabled[protocol])
+			{
+				sockets[FtpSocketNumber]->InitTls(tlsPortNumbers[protocol]);
+			}
+#endif
+		}
+#if LWIP_ALTCP_TLS
+		else if (tlsProtocolEnabled[protocol])
+		{
+			sockets[FtpSocketNumber]->Init(FtpSocketNumber, tlsPortNumbers[protocol], protocol);
+			sockets[FtpSocketNumber]->InitTls(tlsPortNumbers[protocol]);
+		}
+#endif
 		break;
 
 	case TelnetProtocol:
-		sockets[TelnetSocketNumber]->Init(TelnetSocketNumber, portNumbers[protocol], protocol);
+		if (protocolEnabled[protocol])
+		{
+			sockets[TelnetSocketNumber]->Init(TelnetSocketNumber, portNumbers[protocol], protocol);
+#if LWIP_ALTCP_TLS
+			if (tlsProtocolEnabled[protocol])
+			{
+				sockets[TelnetSocketNumber]->InitTls(tlsPortNumbers[protocol]);
+			}
+#endif
+		}
+#if LWIP_ALTCP_TLS
+		else if (tlsProtocolEnabled[protocol])
+		{
+			sockets[TelnetSocketNumber]->Init(TelnetSocketNumber, tlsPortNumbers[protocol], protocol);
+			sockets[TelnetSocketNumber]->InitTls(tlsPortNumbers[protocol]);
+		}
+#endif
 		break;
 
 #if SUPPORT_MULTICAST_DISCOVERY
@@ -335,11 +592,23 @@ void LwipEthernetInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
 		break;
 	}
 
+	MutexLocker lock(lwipMutex);
+
 	if (listeningPcbs[protocol] != nullptr)
 	{
-		tcp_close(listeningPcbs[protocol]);
+		altcp_close(listeningPcbs[protocol]);
 		listeningPcbs[protocol] = nullptr;
 	}
+
+#if LWIP_ALTCP_TLS
+	if (tlsListeningPcbs[protocol] != nullptr)
+	{
+		altcp_close(tlsListeningPcbs[protocol]);
+		tlsListeningPcbs[protocol] = nullptr;
+	}
+
+	FreeTlsConfig();
+#endif
 }
 
 // This is called at the end of config.g processing.
@@ -391,6 +660,20 @@ void LwipEthernetInterface::Start() noexcept
 	{
 		const char *hostname = reprap.GetNetwork().GetHostname();
 
+		// Allocate the LwIP heap buffer.  We do this here (lazily) rather than using a static BSS array
+		// so that systems that never enable Ethernet don't consume this RAM at all.
+		// The size depends on whether TLS is going to be used.
+#ifdef MEM_SIZE_WITH_TLS
+		const size_t heapSize = tlsAllowed ? (MEM_SIZE_WITH_TLS) : (MEM_SIZE_WITHOUT_TLS);
+#else
+		const size_t heapSize = MEM_SIZE_WITHOUT_TLS;
+#endif
+		// LwIP's mem_init() requires: LWIP_MEM_ALIGN_SIZE(heapSize) + 2 * SIZEOF_STRUCT_MEM bytes plus
+		// up to MEM_ALIGNMENT-1 bytes for alignment. We add MEM_ALIGNMENT extra to be safe.
+		const size_t heapAlloc = heapSize + 32 + MEM_ALIGNMENT;	// 32 > 2*SIZEOF_STRUCT_MEM, safe margin for alignment
+		lwipRamHeap = new uint8_t[heapAlloc];
+		mem_set_size((mem_size_t)heapSize);
+
 		// Allow the MAC address to be set only before LwIP is started...
 		ethernet_configure_interface(macAddress.bytes, hostname);
 		init_ethernet(DefaultIpAddress, DefaultNetMask, DefaultGateway);
@@ -398,19 +681,18 @@ void LwipEthernetInterface::Start() noexcept
 		if (ethernetif_GetPhyInitResult() != GMAC_OK)
 		{
 			SetState(NetworkState::initFailed);
+			return;
 		}
-		else
-		{
-			// Initialise mDNS subsystem
-			mdns_resp_init();
-			mdns_resp_add_netif(&gs_net_if, hostname, MdnsTtl);
 
-			// Initialise NetBIOS responder
-			netbiosns_init();
-			netbiosns_set_name(hostname);
+		// Initialise mDNS subsystem
+		mdns_resp_init();
+		mdns_resp_add_netif(&gs_net_if, hostname);
 
-			initialised = true;
-		}
+		// Initialise NetBIOS responder
+		netbiosns_init();
+		netbiosns_set_name(hostname);
+
+		initialised = true;
 	}
 
 	SetState(NetworkState::establishingLink);
@@ -467,8 +749,7 @@ void LwipEthernetInterface::Spin() noexcept
 	case NetworkState::obtainingIP:
 		if (ethernet_link_established())
 		{
-			// Check for incoming packets and pending timers
-			ethernet_task();
+			// Service pending lwIP timers
 			sys_check_timeouts();
 
 			// Have we obtained an IP address yet?
@@ -501,8 +782,7 @@ void LwipEthernetInterface::Spin() noexcept
 		// Check that the link is still up
 		if (ethernet_link_established())
 		{
-			// Check for incoming packets and pending timers
-			ethernet_task();
+			// Service pending lwIP timers
 			sys_check_timeouts();
 
 #if HAS_CLIENTS
@@ -523,14 +803,10 @@ void LwipEthernetInterface::Spin() noexcept
 			}
 #endif
 
-			// Poll the next TCP socket
-			sockets[nextSocketToPoll]->Poll();
-
-			// Move on to the next TCP socket for next time
-			++nextSocketToPoll;
-			if (nextSocketToPoll == NumEthernetSockets)
+			// Poll all TCP sockets
+			for (LwipSocket *s : sockets)
 			{
-				nextSocketToPoll = 0;
+				s->Poll();
 			}
 
 			// Check if the data port needs to be closed
@@ -559,7 +835,9 @@ void LwipEthernetInterface::Diagnostics(const StringRef& reply) noexcept
 	}
 
 #if LWIP_STATS
-	if (reprap.Debug(Module::Network))
+	// lwIP is only initialised in Start(), which Activate() skips when the interface is disabled.
+	// Calling stats_display() before that deref's uninitialised memp tables and crashes
+	if (reprap.Debug(Module::Network) && GetState() != NetworkState::disabled)
 	{
 		// This prints LwIP diagnostics data to the USB port - blocking!
 		stats_display();
@@ -568,11 +846,61 @@ void LwipEthernetInterface::Diagnostics(const StringRef& reply) noexcept
 }
 
 // Enable or disable the network. For Ethernet the ssid parameter is not used.
-GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept
+// tlsParam: -1 = clear stored TLS material (/sys/server.{crt,key}) and come up plain
+//            0 = plain mode (no TLS heap allocation)
+//            1 = enable TLS (load /sys/server.{crt,key}, allocate TLS-sized LwIP heap)
+GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, int tlsParam) noexcept
 {
+#if LWIP_ALTCP_TLS
+	// Handle T-1 first: securely wipe and delete the SD-resident cert/key. Subsequent bring-up is plain.
+	// Only honoured while the interface is down, matching the documented rule
+	if (tlsParam < 0 && !activated)
+	{
+		bool wiped = false;
+		String<MaxFilenameLength> path;
+		path.copy(TlsCertFile);
+		if (MassStorage::SecureDelete(path.GetRef(), ErrorMessageMode::noMessage))
+		{
+			wiped = true;
+		}
+		path.copy(TlsKeyFile);
+		if (MassStorage::SecureDelete(path.GetRef(), ErrorMessageMode::noMessage))
+		{
+			wiped = true;
+		}
+		if (wiped)
+		{
+			platform.Message(NetworkInfoMessage, "TLS: stored cert/key wiped and deleted from /sys/\n");
+		}
+	}
+	const bool tlsAllowedParam = (tlsParam > 0);
+#else
+	(void)tlsParam;
+	const bool tlsAllowedParam = false;
+#endif
+
 	if (!activated)
 	{
-		SetState((mode == 0) ? NetworkState::disabled : NetworkState::enabled);
+		if (mode == 0)
+		{
+			SetState(NetworkState::disabled);
+		}
+		else
+		{
+#if LWIP_ALTCP_TLS
+			if (!initialised)
+			{
+				tlsAllowed = tlsAllowedParam;
+			}
+#endif
+			Start();
+#if LWIP_ALTCP_TLS
+			if (tlsAllowed && !LoadTlsCertificates(reply))
+			{
+				return GCodeResult::warning;
+			}
+#endif
+		}
 	}
 	else if (mode == 0)
 	{
@@ -585,8 +913,20 @@ GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ss
 	}
 	else if (GetState() == NetworkState::disabled)
 	{
+#if LWIP_ALTCP_TLS
+		if (!initialised || (tlsConfig == nullptr && tlsAllowed && !tlsAllowedParam))
+		{
+			tlsAllowed = tlsAllowedParam;
+		}
+#endif
 		SetState(NetworkState::enabled);
 		Start();
+#if LWIP_ALTCP_TLS
+		if (tlsAllowed && !LoadTlsCertificates(reply))
+		{
+			return GCodeResult::warning;
+		}
+#endif
 	}
 	return GCodeResult::ok;
 }
@@ -596,7 +936,7 @@ int LwipEthernetInterface::EnableState() const noexcept
 	return (GetState() == NetworkState::disabled) ? 0 : 1;
 }
 
-bool LwipEthernetInterface::ConnectionEstablished(tcp_pcb *pcb) noexcept
+bool LwipEthernetInterface::ConnectionEstablished(altcp_pcb *pcb) noexcept
 {
 	for (LwipSocket *s : sockets)
 	{
@@ -613,6 +953,8 @@ bool LwipEthernetInterface::ConnectionEstablished(tcp_pcb *pcb) noexcept
 
 void LwipEthernetInterface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept
 {
+	MutexLocker lock(lwipMutex);
+
 	if (GetState() == NetworkState::obtainingIP || GetState() == NetworkState::active)
 	{
 		const bool wantDhcp = p_ipAddress.IsNull();
@@ -651,6 +993,7 @@ void LwipEthernetInterface::UpdateHostname(const char *hostname) noexcept
 {
 	if (initialised)
 	{
+		MutexLocker lock(lwipMutex);
 		netbiosns_set_name(hostname);
 		RebuildMdnsServices();			// This updates the mDNS hostname too
 	}
@@ -662,48 +1005,94 @@ GCodeResult LwipEthernetInterface::SetMacAddress(const MacAddress& mac, const St
 	return GCodeResult::ok;
 }
 
-void LwipEthernetInterface::OpenDataPort(TcpPort port) noexcept
+bool LwipEthernetInterface::OpenDataPort(TcpPort port, bool useTls) noexcept
 {
-	if (listeningPcbs[NumSelectableProtocols] != nullptr)
+	if (listeningPcbs[FtpDataProtocol] != nullptr)
 	{
+		if (reprap.Debug(Module::Network))
+		{
+			debugPrintf("LWIP OpenDataPort replacing existing FTP data listener\n");
+		}
 		closeDataPort = true;
 		TerminateDataPort();
 	}
 
-	tcp_pcb *pcb = tcp_new();
+	MutexLocker lock(lwipMutex);
+
+#if LWIP_ALTCP_TLS
+	altcp_pcb *pcb = useTls ? altcp_tls_new(tlsConfig, IPADDR_TYPE_V4) : altcp_new(nullptr);
+#else
+	altcp_pcb *pcb = altcp_new(nullptr);
+#endif
 	if (pcb == nullptr)
 	{
-		platform.Message(ErrorMessage, "unable to allocate a pcb\n");
+		if (reprap.Debug(Module::Network))
+		{
+			debugPrintf("LWIP OpenDataPort alloc failed: port=%u tls=%d\n", port, useTls);
+		}
+		return false;
 	}
-	else
+
+	if (altcp_bind(pcb, IP_ADDR_ANY, port) != ERR_OK)
 	{
-		tcp_bind(pcb, IP_ADDR_ANY, port);
-		pcb = tcp_listen_with_backlog(pcb, 0);
-		if (pcb == nullptr)
+		if (reprap.Debug(Module::Network))
 		{
-			platform.Message(ErrorMessage, "tcp_listen call failed\n");
+			debugPrintf("tcp_bind call failed for FTP data connection\n");
 		}
-		else
-		{
-			listeningPcbs[NumSelectableProtocols] = pcb;
-			tcp_accept(listeningPcbs[NumSelectableProtocols], conn_accept);
-			sockets[FtpDataSocketNumber]->Init(FtpDataSocketNumber, port, FtpDataProtocol);
-		}
+		altcp_abort(pcb);
+		return false;
 	}
+
+	altcp_pcb *const listeningPcb = altcp_listen(pcb);
+	if (listeningPcb == nullptr)
+	{
+
+		if (reprap.Debug(Module::Network))
+		{
+			debugPrintf("tcp_listen call failed for FTP data connection\n");
+		}
+		altcp_abort(pcb);
+		return false;
+	}
+
+	altcp_accept(listeningPcb, conn_accept);
+	listeningPcbs[FtpDataProtocol] = listeningPcb;
+	sockets[FtpDataSocketNumber]->Init(FtpDataSocketNumber, port, FtpDataProtocol);
+#if LWIP_ALTCP_TLS
+	if (useTls && tlsConfig != nullptr)
+	{
+		sockets[FtpDataSocketNumber]->InitTls(port);
+	}
+#endif
+	if (reprap.Debug(Module::Network))
+	{
+		debugPrintf("LWIP OpenDataPort ok: port=%u tls=%d\n", port, useTls);
+	}
+
+	return true;
 }
 
 // Close FTP data port and purge associated resources
 void LwipEthernetInterface::TerminateDataPort() noexcept
 {
+	if (reprap.Debug(Module::Network))
+	{
+		debugPrintf("LWIP TerminateDataPort: closeDataPort=%d socketClosing=%d listener=%d\n", closeDataPort, sockets[FtpDataSocketNumber]->IsClosing(), listeningPcbs[FtpDataProtocol] != nullptr);
+	}
+
 	if (closeDataPort || !sockets[FtpDataSocketNumber]->IsClosing())
 	{
 		closeDataPort = false;
 		sockets[FtpDataSocketNumber]->TerminateAndDisable();
 
-		if (listeningPcbs[NumSelectableProtocols] != nullptr)
+		MutexLocker lock(lwipMutex);
+		if (listeningPcbs[FtpDataProtocol] != nullptr)
 		{
-			tcp_close(listeningPcbs[NumSelectableProtocols]);
-			listeningPcbs[NumSelectableProtocols] = nullptr;
+			if (altcp_close(listeningPcbs[FtpDataProtocol]) != ERR_OK)
+			{
+				altcp_abort(listeningPcbs[FtpDataProtocol]);
+			}
+			listeningPcbs[FtpDataProtocol] = nullptr;
 		}
 	}
 	else
@@ -718,12 +1107,15 @@ void LwipEthernetInterface::InitSockets() noexcept
 {
 	for (size_t i = 0; i < NumSelectableProtocols; ++i)
 	{
-		if (protocolEnabled[i])
+		if (protocolEnabled[i]
+#if LWIP_ALTCP_TLS
+			|| tlsProtocolEnabled[i]
+#endif
+		)
 		{
 			StartProtocol(i);
 		}
 	}
-	nextSocketToPoll = 0;
 }
 
 void LwipEthernetInterface::TerminateSockets() noexcept
@@ -732,6 +1124,35 @@ void LwipEthernetInterface::TerminateSockets() noexcept
 	{
 		socket->Terminate();
 	}
+
+	// Also drop all listener PCBs so InitSockets() recreates them cleanly.
+	for (altcp_pcb *&pcb : listeningPcbs)
+	{
+		if (pcb != nullptr)
+		{
+			altcp_accept(pcb, nullptr);
+			if (altcp_close(pcb) != ERR_OK)
+			{
+				altcp_abort(pcb);
+			}
+			pcb = nullptr;
+		}
+	}
+
+#if LWIP_ALTCP_TLS
+	for (altcp_pcb *&pcb : tlsListeningPcbs)
+	{
+		if (pcb != nullptr)
+		{
+			altcp_accept(pcb, nullptr);
+			if (altcp_close(pcb) != ERR_OK)
+			{
+				altcp_abort(pcb);
+			}
+			pcb = nullptr;
+		}
+	}
+#endif
 }
 
 void GetServiceTxtEntries(struct mdns_service *service, void *txt_userdata)
@@ -745,21 +1166,29 @@ void GetServiceTxtEntries(struct mdns_service *service, void *txt_userdata)
 void LwipEthernetInterface::RebuildMdnsServices() noexcept
 {
 	mdns_resp_remove_netif(&gs_net_if);
-	mdns_resp_add_netif(&gs_net_if, reprap.GetNetwork().GetHostname(), MdnsTtl);
-	mdns_resp_add_service(&gs_net_if, "echo", "_echo", DNSSD_PROTO_TCP, 0, 0, nullptr, nullptr);
+	mdns_resp_add_netif(&gs_net_if, reprap.GetNetwork().GetHostname());
+	mdns_resp_add_service(&gs_net_if, "echo", "_echo", DNSSD_PROTO_TCP, 0, nullptr, nullptr);
 
 	for (size_t protocol = 0; protocol < NumSelectableProtocols; protocol++)
 	{
-		if (protocolEnabled[protocol]
-			// Exclude clients since these are not services
 #if SUPPORT_MQTT
-			&& protocol != MqttProtocol
+		if (protocol == MqttProtocol) { continue; }		// MQTT is client-only
 #endif
-		)
+#if !SUPPORT_MULTICAST_DISCOVERY
+		if (protocol == MulticastDiscoveryProtocol) { continue; }
+#endif
+		if (protocolEnabled[protocol] && MdnsServiceStrings[protocol] != nullptr)
 		{
 			service_get_txt_fn_t txtFunc = (protocol == HttpProtocol) ? GetServiceTxtEntries : nullptr;
-			mdns_resp_add_service(&gs_net_if, ProtocolNames[protocol], MdnsServiceStrings[protocol], DNSSD_PROTO_TCP, portNumbers[protocol], MdnsTtl, txtFunc, nullptr);
+			mdns_resp_add_service(&gs_net_if, ProtocolNames[protocol], MdnsServiceStrings[protocol], DNSSD_PROTO_TCP, portNumbers[protocol], txtFunc, nullptr);
 		}
+#if LWIP_ALTCP_TLS
+		if (tlsProtocolEnabled[protocol] && MdnsTlsServiceStrings[protocol] != nullptr)
+		{
+			service_get_txt_fn_t txtFunc = (protocol == HttpProtocol) ? GetServiceTxtEntries : nullptr;
+			mdns_resp_add_service(&gs_net_if, ProtocolNames[protocol], MdnsTlsServiceStrings[protocol], DNSSD_PROTO_TCP, tlsPortNumbers[protocol], txtFunc, nullptr);
+		}
+#endif
 	}
 
 	mdns_resp_netif_settings_changed(&gs_net_if);

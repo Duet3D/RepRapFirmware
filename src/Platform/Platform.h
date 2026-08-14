@@ -27,6 +27,7 @@ Licence: GPL
 #include <RepRapFirmware.h>
 #include <ObjectModel/ObjectModel.h>
 #include <Hardware/IoPorts.h>
+#include <SPI/SharedSpiDevice.h>
 #include <Fans/FansManager.h>
 
 #include <TemperatureError.h>
@@ -41,6 +42,7 @@ Licence: GPL
 #include <GPIO/GpInPort.h>
 #include <GPIO/GpOutPort.h>
 #include <Comms/AuxDevice.h>
+#include <Comms/UsbDeviceRrf.h>
 #include <General/IPAddress.h>
 #include <General/function_ref.h>
 
@@ -56,6 +58,8 @@ Licence: GPL
 # include <CanMessageFormats.h>
 # include <RemoteInputHandle.h>
 #endif
+
+class AsyncSerial;
 
 #if SUPPORT_PANELDUE_FLASH
 class PanelDueUpdater;
@@ -122,7 +126,7 @@ enum class BoardType : uint8_t
 	Duet3_6XD_v100 = 2,
 	Duet3_6XD_v101 = 3,
 	Duet3_6XD_v102 = 4,
-#elif defined(FMDC_V02) || defined(FMDC_V03)
+#elif defined(FMDC_V03)
 	FMDC,
 #elif defined(DUET_NG)
 	DuetWiFi_10 = 1,
@@ -135,6 +139,8 @@ enum class BoardType : uint8_t
 	DuetM_10 = 1,
 #elif defined(PCCB_10)
 	PCCB_v10 = 1
+#elif defined(INDX)
+	Indx,
 #else
 # error Unknown board
 #endif
@@ -159,6 +165,10 @@ enum class DiagnosticTestType : unsigned int
 	TimeCRC32 = 107,				// time how long it takes to calculate CRC32
 	TimeGetTimerTicks = 108,		// time now long it takes to read the step clock
 	UndervoltageEvent = 109,		// pretend an undervoltage condition has occurred
+#if SUPPORT_3RD_ORDER
+	TimeCubicSolver = 110,
+	TimeQuarticSolver = 111,
+#endif
 
 	SetWriteBuffer = 500,			// enable/disable the write buffer
 
@@ -199,7 +209,7 @@ enum class ErrorCode : uint32_t
 class ConfigurableFolder
 {
 public:
-	ConfigurableFolder(const char *_ecv_array defValue) noexcept : userValue(nullptr), defaultValue(defValue) { }
+	explicit ConfigurableFolder(const char *_ecv_array defValue) noexcept : userValue(nullptr), defaultValue(defValue) { }
 	ReadLockedPointer<const char> GetLockedPointer() const noexcept;
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	void AppendToString(const StringRef& path) const noexcept;
@@ -207,7 +217,7 @@ public:
 #endif
 private:
 	mutable ReadWriteLock lock;
-	const char *_ecv_array GetUnlockedPointer() const noexcept { return (userValue == nullptr) ? defaultValue : userValue; }
+	const char *_ecv_array GetUnlockedPointer() const noexcept { return (userValue == nullptr) ? defaultValue : _ecv_not_null(userValue); }
 	const char *_ecv_array _ecv_null userValue;
 	const char *_ecv_array defaultValue;
 };
@@ -228,10 +238,11 @@ public:
 	void Init() noexcept;									// Set the machine up after a restart.  If called subsequently this should set the machine up as if
 															// it has just been restarted; it can do this by executing an actual restart if you like, but beware the loop of death...
 	void Spin() noexcept;									// This gets called in the main loop and should do any housekeeping needed
-	void Exit() noexcept;									// Shut down tidily. Calling Init after calling this should reset to the beginning
 
 	void Diagnostics(unsigned int part, const StringRef& reply) noexcept;
 	static constexpr unsigned int NumPlatformDiagnosticParts = 7;
+
+	static SharedSpiDevice& GetSharedSpiDevice() noexcept { return *_ecv_not_null(mainSharedSpiDevice); }
 
 	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf, unsigned int d) THROWS(GCodeException);
 	static const char *_ecv_array GetResetReasonText() noexcept;
@@ -256,10 +267,8 @@ public:
 	const char *_ecv_array GetElectronicsString() const noexcept;
 	const char *_ecv_array GetBoardString() const noexcept;
 
-#if SUPPORT_OBJECT_MODEL
 	size_t GetNumGpInputsToReport() const noexcept;
 	size_t GetNumGpOutputsToReport() const noexcept;
-#endif
 
 #if defined(DUET_NG) || defined(DUET3MINI)
 	bool IsDuetWiFi() const noexcept;
@@ -296,13 +305,20 @@ public:
 	bool SetDateTime(time_t t) noexcept;							// Sets the current RTC date and time or returns false on error
 
   	// Communications and data storage
-	void AppendUsbReply(const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept;
+	void AppendUsbReply(size_t usbNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept;
+	void ShutdownUsbDevice(unsigned int index) noexcept;
+	void ReinitUsbDevice(unsigned int index) noexcept;
+	void DisconnectUsb() noexcept;							// Disconnect the USB device from the host, ending all CDC interfaces
 	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, bool rawMessage) noexcept;
 	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, const char *_ecv_array msg, bool rawMessage) noexcept;
 
 	void ResetChannel(size_t chan) noexcept;						// Re-initialise a serial channel
 	bool IsChanEnabled(size_t chan) const noexcept;					// Any device on the serial line?
     bool IsChanRaw(size_t chan) const noexcept;						// Is the serial line in raw mode?
+
+#if NUM_ASYNC_PORTS != 0
+    AsyncSerial *GetAsyncPort(size_t auxNumber) pre(auxNumber < NUM_ASYNC_PORTS) noexcept { return asyncPorts[auxNumber]; }
+#endif
 
 #if SUPPORT_PANELDUE_FLASH
 	PanelDueUpdater *_ecv_null GetPanelDueUpdater() noexcept { return panelDueUpdater; }
@@ -518,6 +534,8 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
+	static SharedSpiDevice *_ecv_null mainSharedSpiDevice;
+
 	void RawMessage(const GCodeBuffer *_ecv_null gb, MessageType type, const char *_ecv_array message) noexcept;	// called by Message after handling error/warning flags
 	float GetCpuTemperature() const noexcept;
 	GCodeResult PrintTestReport(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) const THROWS(GCodeException);
@@ -609,16 +627,16 @@ private:
   	// Serial/USB
 	uint8_t commsParams[NumSerialChannels];							// the M575 S parameter for each serial channel
 	AuxMode GetChannelMode(size_t chan) const noexcept;
-	uint32_t usbMessageSeq = 0;										// message sequence number when in PanelDue mode
+	UsbDeviceRrf usbDevices[NumUsbChannels];
 
-	volatile OutputStack usbOutput;
-	Mutex usbMutex;
-
-#if HAS_AUX_DEVICES
+#if NUM_ASYNC_PORTS != 0
+	AsyncSerial *_ecv_null asyncPorts[NUM_ASYNC_PORTS] = { 0 };
+#endif
+#if (NUM_ASYNC_CHANNELS != 0)
 	AuxDevice auxDevices[NumAuxChannels];
 #endif
 #if SUPPORT_PANELDUE_FLASH
-	PanelDueUpdater *_ecv_null panelDueUpdater;
+	PanelDueUpdater *_ecv_null panelDueUpdater = nullptr;
 #endif
 
 	// Files
@@ -642,8 +660,8 @@ private:
 	volatile uint16_t currentVin, highestVin, lowestVin;
 	uint16_t lastVinUnderVoltageValue, lastVinOverVoltageValue;
 	uint16_t autoPauseReading, autoResumeReading;
-	uint32_t numVinUnderVoltageEvents, previousVinUnderVoltageEvents;
-	volatile uint32_t numVinOverVoltageEvents, previousVinOverVoltageEvents;
+	std::atomic<uint32_t> numVinUnderVoltageEvents, numVinOverVoltageEvents;
+	uint32_t previousVinUnderVoltageEvents, previousVinOverVoltageEvents;
 
 #ifdef DUET3_MB6HC
 	float powerMonitorVoltageRange;
@@ -669,7 +687,8 @@ private:
 	AnalogChannelNumber v12MonitorAdcChannel;
 	volatile uint16_t currentV12, highestV12, lowestV12;
 	uint16_t lastV12UnderVoltageValue;
-	uint32_t numV12UnderVoltageEvents, previousV12UnderVoltageEvents;
+	std::atomic<uint32_t> numV12UnderVoltageEvents;
+	uint32_t previousV12UnderVoltageEvents;
 #endif
 
 	// Event handling

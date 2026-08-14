@@ -63,6 +63,7 @@ void StallDetectionEndstop::PrimeAxis(const Kinematics &_ecv_from kin, const Axi
 #if SUPPORT_CAN_EXPANSION
 	remoteDriversMonitored.Clear();
 	newStallReported = false;
+	haveTriggerTime = false;
 #endif
 	numDriversLeft = 0;
 	logicalDrivesToMonitor.IterateWithExceptions([this, speed](unsigned int drive, unsigned int count) THROWS(GCodeException)
@@ -83,6 +84,7 @@ void StallDetectionEndstop::PrimeExtruders(ExtrudersBitmap extruders, const floa
 #if SUPPORT_CAN_EXPANSION
 	remoteDriversMonitored.Clear();
 	newStallReported = false;
+	haveTriggerTime = false;
 #endif
 	numDriversLeft = 0;
 	extruders.IterateWithExceptions([this, speeds](unsigned int extruder, unsigned int count) THROWS(GCodeException)
@@ -149,11 +151,11 @@ EndstopHitDetails StallDetectionEndstop::GetResult(
 	rslt.axis = GetAxis();
 	if (rslt.axis == NO_AXIS)
 	{
-		rslt.SetAction(EndstopHitAction::stopAll);
+		rslt.SetAction(EndstopHitAction::stopAll, whenTriggered, haveTriggerTime);
 	}
 	else if (stopAll)
 	{
-		rslt.SetAction(EndstopHitAction::stopAll);
+		rslt.SetAction(EndstopHitAction::stopAll, whenTriggered, haveTriggerTime);
 		if (GetAtHighEnd())
 		{
 			rslt.setAxisHigh = true;
@@ -165,7 +167,7 @@ EndstopHitDetails StallDetectionEndstop::GetResult(
 	}
 	else if (individualMotors && numDriversLeft > 1)
 	{
-		rslt.SetAction(EndstopHitAction::stopDriver);
+		rslt.SetAction(EndstopHitAction::stopDriver, whenTriggered, haveTriggerTime);
 #if SUPPORT_CAN_EXPANSION
 		rslt.driver.boardAddress = boardAddress;
 #endif
@@ -173,7 +175,7 @@ EndstopHitDetails StallDetectionEndstop::GetResult(
 	}
 	else
 	{
-		rslt.SetAction(EndstopHitAction::stopAxis);
+		rslt.SetAction(EndstopHitAction::stopAxis, whenTriggered, haveTriggerTime);
 		if (GetAtHighEnd())
 		{
 			rslt.setAxisHigh = true;
@@ -253,6 +255,9 @@ bool StallDetectionEndstop::Acknowledge(EndstopHitDetails what) noexcept
 			localDriversMonitored.ClearBit(what.driver.localDriver);
 		}
 		--numDriversLeft;
+#if SUPPORT_CAN_EXPANSION
+		haveTriggerTime = false;
+#endif
 		return false;
 
 	default:
@@ -285,9 +290,9 @@ void StallDetectionEndstop::DeleteRemoteStallEndstops() noexcept
 }
 
 // Record any notifications of stalled remote drivers that we are interested in
-void StallDetectionEndstop::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled) noexcept
+void StallDetectionEndstop::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled, uint16_t when) noexcept
 {
-	remoteDriversMonitored.IterateWhile([this, boardAddress, driversReportedStalled](RemoteDriversMonitored& entry, size_t count) noexcept -> bool
+	remoteDriversMonitored.IterateWhile([this, boardAddress, driversReportedStalled, when](RemoteDriversMonitored& entry, size_t count) noexcept -> bool
 										{
 											if (boardAddress == entry.boardId)
 											{
@@ -296,6 +301,8 @@ void StallDetectionEndstop::HandleStalledRemoteDrivers(CanAddress boardAddress, 
 												if (newStalls.IsNonEmpty())
 												{
 													entry.driversStalled |= newStalls;
+													whenTriggered = when;
+													haveTriggerTime = true;
 													newStallReported = true;
 												}
 												return false;

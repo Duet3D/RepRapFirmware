@@ -10,8 +10,14 @@
 #ifndef SRC_HEATING_FOPDT_H_
 #define SRC_HEATING_FOPDT_H_
 
-#include "RepRapFirmware.h"
-#include "ObjectModel/ObjectModel.h"
+#include <RepRapFirmware.h>
+#include <ObjectModel/ObjectModel.h>
+#include <HeaterModel.h>
+
+#if SUPPORT_CAN_EXPANSION
+class StringRef;
+class CanMessageHeaterModelV3;
+#endif
 
 // This is how PID parameters are stored internally
 struct PidParameters
@@ -33,9 +39,6 @@ struct M301PidParameters
 class FileStore;
 #endif
 
-#if SUPPORT_CAN_EXPANSION
-struct CanMessageHeaterModelNewNew;
-#endif
 
 class FopDt INHERIT_OBJECT_MODEL
 {
@@ -44,40 +47,39 @@ public:
 
 	void Reset() noexcept;
 	bool SetParameters(float phr, float pbcr, float pfcr, float pcrExponent, float pdt, float pMaxPwm, float pVoltage, bool pUsePid, bool pInverted, const StringRef& reply) noexcept;
-	void SetDefaultToolParameters() noexcept;
-	void SetDefaultBedOrChamberParameters() noexcept;
+	void SetDefaultModel(const HeaterModel& model) noexcept;
 #if SUPPORT_REMOTE_COMMANDS
-	bool SetParameters(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept;
+	bool SetParameters(const CanMessageHeaterModelV3& msg, const StringRef& reply) noexcept;
+	const HeaterModel& GetBasicModel() const noexcept { return basicModel; }
 #endif
 
 	// Stored parameters
-	float GetHeatingRate() const noexcept { return heatingRate; }
-	float GetBasicCoolingRate() const noexcept { return basicCoolingRate; }
-	float GetFanCoolingRate() const noexcept { return fanCoolingRate; }
-	float GetCoolingRateExponent() const noexcept { return coolingRateExponent; }
-	float GetDeadTime() const noexcept { return deadTime; }
+	float GetHeatingRate() const noexcept { return basicModel.heatingRate; }
+	float GetBasicCoolingRate() const noexcept { return basicModel.basicCoolingRate; }
+	float GetFanCoolingRate() const noexcept { return basicModel.fanCoolingRate; }
+	float GetCoolingRateExponent() const noexcept { return basicModel.coolingRateExponent; }
+
+	float GetDeadTime() const noexcept { return basicModel.deadTime; }
 	float GetMaxPwm() const noexcept { return maxPwm; }
-	float GetVoltage() const noexcept { return standardVoltage; }
-	bool UsePid() const noexcept { return usePid; }
+	float GetVoltage() const noexcept { return basicModel.standardVoltage; }
+	bool UsePid() const noexcept { return basicModel.usePid; }
 	bool IsInverted() const noexcept { return inverted; }
 	bool IsEnabled() const noexcept { return enabled; }
 
-	float EstimateRequiredPwm(float temperatureRise, float fanPwm) const noexcept;
+	float EstimateRequiredPwm(float temperatureRise, float fanPwm, float actualVoltage, float filamentPwm) const noexcept;
 	float EstimateMaxTemperatureRise() const noexcept;
 
-	float GetNetHeatingRate(float temperatureRise, float fanPwm, float heaterPwm) const noexcept;
-	float CorrectPwmForVoltage(float requiredPwm, float actualVoltage) const noexcept;
-	float GetPwmCorrectionForFan(float temperatureRise, float fanPwmChange) const noexcept;
+	float GetExpectedHeatingRate(float temperatureRise, float fanPwm, float heaterPwm, float actualVoltage, float filamentPwm) const noexcept;
+	float GetPwmCorrectionForFan(float temperatureRise, float oldFanPwm, float newFanPwm) const noexcept;
 	void CalcPidConstants(float targetTemperature) noexcept;
+	float CalculateBasicCoolingRate(float temperatureRise, float coolingRate) const noexcept;				// Calculate the basic cooling rate from measurements
+	float CalculateFanCoolingRate(float temperatureRise, float coolingRate, float fanPwm) const noexcept;	// Calculate the fan cooling rate from measurements
 
 	void AppendM307Command(unsigned int heaterNumber, const StringRef& str, bool includeVoltage) const noexcept;
-	void AppendM301Command(unsigned int heaterNumber, const StringRef& str) const noexcept;
 	void AppendModelParameters(unsigned int heaterNumber, const StringRef& str, bool includeVoltage) const noexcept;
 
 	// Derived parameters
-	bool ArePidParametersOverridden() const noexcept { return pidParametersOverridden; }
 	M301PidParameters GetM301PidParameters(bool forLoadChange) const noexcept;
-	void SetM301PidParameters(const M301PidParameters& params) noexcept;
 
 	const PidParameters& GetPidParameters(bool forLoadChange) const noexcept
 	{
@@ -89,31 +91,56 @@ public:
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void SetupCanMessage(unsigned int heater, CanMessageHeaterModelNewNew& msg) const noexcept;
+	void SetupCanMessage(unsigned int heater, CanMessageHeaterModelV3& msg) const noexcept;
 #endif
 
 protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	float GetCoolingRate(float temperatureRise, float fanPwm) const noexcept;
-	void SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcept;
 	static float EstimateMaxTemperatureRise(float hr, float cr, float cre) noexcept;
 
-	float heatingRate;						// the rate at which the heater heats up at full PWM with no cooling
-	float basicCoolingRate;					// the rate at which the heater cools down when it is 100C above ambient and the fan is off
-	float fanCoolingRate;					// the additional cooling rate at 100C above ambient with the fan on at full PWM
-	float coolingRateExponent;				// how the basic cooling rate varies with temperature difference
-	float deadTime;
+	HeaterModel basicModel;
 	float maxPwm;
-	float standardVoltage;					// power voltage reading at which tuning was done, or 0 if unknown
 	bool enabled;
-	bool usePid;
 	bool inverted;
-	bool pidParametersOverridden;
 
 	PidParameters setpointChangeParams;		// parameters for handling changes in the setpoint
 	PidParameters loadChangeParams;			// parameters for handling changes in the load
 };
+
+// Get an estimate of the expected heating rate at the specified temperature rise and PWM. The result may be negative.
+inline float FopDt::GetExpectedHeatingRate(float temperatureRise, float fanPwm, float heaterPwm, float actualVoltage, float filamentPwm) const noexcept
+{
+	return basicModel.GetExpectedHeatingRate(temperatureRise, fanPwm, heaterPwm, actualVoltage, filamentPwm);
+}
+
+// Get an estimate of the heater PWM required to maintain a specified temperature
+inline float FopDt::EstimateRequiredPwm(float temperatureRise, float fanPwm, float actualVoltage, float filamentPwm) const noexcept
+{
+	return basicModel.GetExpectedPwm(temperatureRise, fanPwm, actualVoltage, filamentPwm);
+}
+
+inline float FopDt::GetPwmCorrectionForFan(float temperatureRise, float oldFanPwm, float newFanPwm) const noexcept
+{
+	return basicModel.GetPwmCorrectionForFan(temperatureRise, oldFanPwm, newFanPwm);
+}
+
+inline float FopDt::EstimateMaxTemperatureRise() const noexcept
+{
+	return basicModel.EstimateMaxTemperatureRise();
+}
+
+// Calculate the basic cooling rate from measurements
+inline float FopDt::CalculateBasicCoolingRate(float temperatureRise, float coolingRate) const noexcept
+{
+	return basicModel.CalculateBasicCoolingRate(temperatureRise, coolingRate);
+}
+
+// Calculate the fan cooling rate from measurements
+inline float FopDt::CalculateFanCoolingRate(float temperatureRise, float coolingRate, float fanPwm) const noexcept
+{
+	return basicModel.CalculateFanCoolingRate(temperatureRise, coolingRate, fanPwm);
+}
 
 #endif /* SRC_HEATING_FOPDT_H_ */

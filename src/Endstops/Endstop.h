@@ -33,14 +33,14 @@ public:
 	virtual EndstopHitDetails CheckTriggered() noexcept = 0;
 	virtual bool Acknowledge(EndstopHitDetails what) noexcept = 0;
 #if SUPPORT_CAN_EXPANSION
-	virtual void HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled) noexcept { }		// overridden for stall endstops
+	virtual void HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled, uint16_t when) noexcept { }		// overridden for stall endstops
 #endif
 	EndstopOrZProbe *_ecv_from _ecv_null GetNext() const noexcept { return next; }
 	void SetNext(EndstopOrZProbe *_ecv_from _ecv_null e) noexcept { next = e; }
 
 	unsigned int GetAxis() const noexcept { return axis; }
 
-#if HAS_STALL_DETECT && (SUPPORT_TMC2660 || SUPPORT_TMC51xx)
+#if HAS_STALL_DETECT && (SUPPORT_TMC2660 || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI)
 	static void SetDriversStalled(LocalDriversBitmap drivers) noexcept;
 	static void SetDriversNotStalled(LocalDriversBitmap drivers) noexcept;
 #endif
@@ -51,18 +51,23 @@ protected:
 	static LocalDriversBitmap GetStalledDrivers(LocalDriversBitmap driversOfInterest) noexcept;
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+	uint32_t whenTriggered;
+	bool haveTriggerTime = false;
+#endif
+
 private:
 	EndstopOrZProbe *_ecv_from _ecv_null next;			// next endstop in linked list
 	uint8_t axis;										// which axis this endstop is on
 
-#if HAS_STALL_DETECT && (SUPPORT_TMC2660 || SUPPORT_TMC51xx)
+#if HAS_STALL_DETECT && (SUPPORT_TMC2660 || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI)
 	static LocalDriversBitmap stalledDrivers;				// used to track which drivers are reported as stalled, for stall detect endstops and stall detect Z probes
 #endif
 };
 
 #if HAS_STALL_DETECT
 
-# if SUPPORT_TMC2660 || SUPPORT_TMC51xx
+# if SUPPORT_TMC2660 || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
 
 // This is called by the TMC driver to tell us which drivers are stalled or not stalled
 inline void EndstopOrZProbe::SetDriversStalled(LocalDriversBitmap drivers) noexcept
@@ -105,7 +110,7 @@ public:
 
 #if SUPPORT_CAN_EXPANSION
 	// Process a remote endstop input change that relates to this endstop
-	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool state) noexcept { }
+	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, uint32_t when, bool state) noexcept { }
 	virtual void DeleteRemoteStallEndstops() noexcept { }		// overridden in class StallEndtop
 #endif
 

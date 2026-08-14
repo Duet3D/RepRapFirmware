@@ -180,6 +180,12 @@ uint16_t Tool::numToolsToReport = 0;
 			reply.copy("bad heater number");
 			return nullptr;
 		}
+		const HeaterFunction fn = reprap.GetHeat().GetHeaterFunction(h[i]);
+		if (fn == HeaterFunction::bed || fn == HeaterFunction::chamber)
+		{
+			reply.printf("heater %d is already assigned as a %s heater", (int)h[i], (fn == HeaterFunction::bed) ? "bed" : "chamber");
+			return nullptr;
+		}
 	}
 
 	// Check that the spindle - if given - is configured
@@ -408,7 +414,7 @@ uint16_t Tool::numToolsToReport = 0;
 }
 
 // Test whether the specified heater is used by any tool
-/*static*/ bool Tool::IsHeaterAssignedToTool(int8_t heater) noexcept
+/*static*/ bool Tool::IsHeaterAssignedToTool(int heater) noexcept
 {
 	ReadLocker lock(toolListLock);
 	for (Tool *_ecv_null tool = toolList; tool != nullptr; tool = tool->Next())
@@ -702,7 +708,7 @@ void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHea
 	for (size_t heaterIndex = 0; heaterIndex < heaterCount; heaterIndex++)
 	{
 		const int heaterNumber = heaters[heaterIndex];
-		if (!reprap.GetHeat().IsBedOrChamberHeater(heaterNumber) && heaterNumber >= (int)numHeaters)
+		if (reprap.GetHeat().GetHeaterFunction(heaterNumber) == HeaterFunction::tool && heaterNumber >= (int)numHeaters)
 		{
 			numHeaters = (uint16_t)heaterNumber + 1;
 		}
@@ -823,7 +829,7 @@ void Tool::SetToolHeaterActiveOrStandbyTemperature(size_t heaterNumber, float te
 	}
 }
 
-void Tool::SetSpindleRpm(uint32_t rpm, bool isCurrentTool) THROWS(GCodeException)
+void Tool::SetSpindleRpm(const GCodeBuffer& gb, uint32_t rpm, bool isCurrentTool) THROWS(GCodeException)
 {
 	if (spindleNumber > -1)
 	{
@@ -836,7 +842,7 @@ void Tool::SetSpindleRpm(uint32_t rpm, bool isCurrentTool) THROWS(GCodeException
 		}
 		else if (!spindle.IsValidRpm(rpm))
 		{
-			throw GCodeException(-1, -1, "Requested spindle RPM out of range");
+			throw GCodeException(&gb, -1, "Requested spindle RPM out of range");
 		}
 		else
 		{

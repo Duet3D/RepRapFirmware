@@ -16,8 +16,6 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Math/Deviation.h>
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -62,8 +60,6 @@ constexpr ObjectModelTableEntry LinearDeltaKinematics::objectModelTable[] =
 constexpr uint8_t LinearDeltaKinematics::objectModelTableDescriptor[] = { 2, 7, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(LinearDeltaKinematics, RoundBedKinematics)
-
-#endif
 
 LinearDeltaKinematics::LinearDeltaKinematics() noexcept : RoundBedKinematics(KinematicsType::linearDelta, SegmentationType(true, false, true)), numTowers(UsualNumTowers)
 {
@@ -467,7 +463,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(MovementState& ms, size_t numFacto
 			initialSum += zp;
 			initialSumOfSquares += fcsquare(zp);
 		}
-		initialDeviation.Set(initialSumOfSquares, initialSum, numPoints);
+		initialDeviation.Set((float)initialSumOfSquares, (float)initialSum, numPoints);
 	}
 
 	// Do 1 or more Newton-Raphson iterations
@@ -483,7 +479,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(MovementState& ms, size_t numFacto
 			{
 				const size_t adjustedJ = (numFactors == 8 && j >= 6) ? j + 1 : j;		// skip diagonal rod length if doing 8-factor calibration
 				const floatc_t d =
-					ComputeDerivative(adjustedJ, probeMotorPositions(i, DELTA_A_AXIS), probeMotorPositions(i, DELTA_B_AXIS), probeMotorPositions(i, DELTA_C_AXIS));
+					ComputeDerivative(adjustedJ, (float)probeMotorPositions(i, DELTA_A_AXIS), (float)probeMotorPositions(i, DELTA_B_AXIS), (float)probeMotorPositions(i, DELTA_C_AXIS));
 				if (std::isnan(d))			// a couple of users have reported getting Nans in the derivative, probably due to points being unreachable
 				{
 					reply.printf("Auto calibration failed because probe point P%u was unreachable using the current delta parameters. Try a smaller probing radius.", i);
@@ -587,14 +583,14 @@ bool LinearDeltaKinematics::DoAutoCalibration(MovementState& ms, size_t numFacto
 					probeMotorPositions(i, axis) += solution[axis];
 				}
 				float newPosition[XYZ_AXES];
-				ForwardTransform(probeMotorPositions(i, DELTA_A_AXIS), probeMotorPositions(i, DELTA_B_AXIS), probeMotorPositions(i, DELTA_C_AXIS), newPosition);
+				ForwardTransform((float)probeMotorPositions(i, DELTA_A_AXIS), (float)probeMotorPositions(i, DELTA_B_AXIS), (float)probeMotorPositions(i, DELTA_C_AXIS), newPosition);
 				corrections[i] = newPosition[Z_AXIS];
 				expectedResiduals[i] = probePoints.GetZHeight(i) + newPosition[Z_AXIS];
 				finalSum += expectedResiduals[i];
 				finalSumOfSquares += fcsquare(expectedResiduals[i]);
 			}
 
-			finalDeviation.Set(finalSumOfSquares, finalSum, numPoints);
+			finalDeviation.Set((float)finalSumOfSquares, (float)finalSum, numPoints);
 
 			if (reprap.Debug(Module::Kinematics))
 			{

@@ -19,6 +19,7 @@ struct RawMove
 	float feedRate;													// feed rate of this move in units per step clock
 	float moveStartVirtualExtruderPosition;							// the virtual extruder position at the start of this move, for normal moves
 	FilePosition filePos;											// offset in the file being printed at the start of reading this move
+	int8_t gCommandNumber;											// which of G0/G1/G2/G3 generated this move (0-3), or -1 if not a modal motion command; used to restore the modal context on resume
 	float proportionDone;											// what proportion of the entire move has been done when this segment is complete
 #if 0	// we don't use this yet
 	float cosXyAngle;												// the cosine of the change in XY angle between the previous move and this move
@@ -91,11 +92,16 @@ constexpr size_t ResumeObjectRestorePointNumber = NumVisibleRestorePoints + 1;
 
 // Details of a move that are needed only by GCodes
 // CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
-class MovementState final : public RawMove
+class MovementState final INHERIT_OBJECT_MODEL
 {
+protected:
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
+
 public:
+	RawMove raw;
+
 #if SUPPORT_ASYNC_MOVES
-	AxesBitmap GetAxesAndExtrudersOwned() const noexcept { return axesAndExtrudersOwned; }	// Get the axes and extruders that this movement system owns
+	AxesBitmap GetAxesAndExtrudersOwned() const noexcept { return raw.axesAndExtrudersOwned; }	// Get the axes and extruders that this movement system owns
 	ParameterLettersBitmap GetOwnedAxisLetters() const noexcept { return ownedAxisLetters; } // Get the letters denoting axes that this movement system owns
 	LogicalDrivesBitmap AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept;	// try to allocate the requested axes, if we can't then return the logical drives we can't allocate
 	LogicalDrivesBitmap AllocateDrives(LogicalDrivesBitmap drivesNeeded) noexcept;			// try to allocate logical drives directly
@@ -112,7 +118,6 @@ public:
 	void ChangeSingleEndpointAfterHoming(size_t drive, int32_t ep) noexcept;
 	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;			// adjust the endpoints following delta calibration
 	float LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept;				// Get a single coordinate for reporting e.g.in the OM
-	void ForceLiveCoordinatesUpdate() noexcept { forceLiveCoordinatesUpdate = true; }		// Force the stored coordinates to be updated next time LiveMachineCoordinate is called
 	void UpdateOwnedDriveEndpointsFromMotors() noexcept;									// fetch lastKnownEndpoints from the motors for our owned drives and update the endpoints in our DDA ring
 	void UpdateOwnedDriveLastEndpoints(const int32_t endPoints[MaxAxes]) noexcept;			// update lastKnownEndpoints for our owned drives
 
@@ -194,6 +199,7 @@ public:
 	float restartMoveFractionDone;									// how much of the next move was printed before the pause or power failure (from M26)
 	float restartInitialUserC0;										// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
 	float restartInitialUserC1;										// if the print was paused during an arc move, the user Y coordinate at the start of that move (from M26)
+	int8_t restartGCommandNumber;									// which of G0/G1/G2/G3 generated the move we are restarting at (0-3), or -1 if unknown, so we can restore the modal command context, as set by M26
 
 	RestorePoint restorePoints[NumTotalRestorePoints];
 
@@ -233,6 +239,7 @@ public:
 	bool xyPlane;													// true if the G17/G18/G19 selected plane of the arc move is XY in the original user coordinates
 	SegmentedMoveState segMoveState;
 	bool pausedInMacro;												// if we are paused then this is true if we paused while fileGCode was executing a macro
+	bool positionMayBeInaccurate;									// set when a move that can stop short of its commanded target (endstop/probe/stall/raw) is queued, so the position is re-read at the next standstill
 
 	static void SetInitialMotorPositions(const float initialPosition[MaxAxesPlusExtruders]) noexcept;
 	static void SaveEndpointsBeforeSimulating() noexcept;
@@ -243,9 +250,6 @@ public:
 
 private:
 	MovementSystemNumber msNumber;
-	mutable bool forceLiveCoordinatesUpdate = true;					// true if we want to force latestLiveCoordinates to be updated
-	mutable float latestLiveCoordinates[MaxAxesPlusExtruders];		// the most recent set of live coordinates that we fetched
-	mutable uint32_t latestLiveCoordinatesFetchedAt = 0;			// when we fetched the live coordinates
 
 	static int32_t lastKnownEndpoints[MaxAxesPlusExtruders];		// the last stored position of the logical drives
 	static int32_t endpointsAtSimulationStart[MaxAxesPlusExtruders];	// the endpoints when we started a simulation

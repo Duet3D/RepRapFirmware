@@ -61,6 +61,8 @@
 
 #include <limits>
 
+#define AVOID_SHORT_SEGMENTS	(0)
+
 constexpr float MinStepPulseTiming = 0.2;												// we assume that we always generate step high and low times at least this wide without special action
 
 Task<Move::MoveTaskStackWords> Move::moveTask;
@@ -110,12 +112,23 @@ constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 		OBJECT_MODEL_ARRAY_VALUE_NOSELF(reprap.GetGCodes().GetWorkplaceOffset(context.GetIndex(1), context.GetLastIndex()), 3)
 	},
 
+	// 5. Motion systems
+	{
+		nullptr,					// no lock needed
+#if SUPPORT_ASYNC_MOVES
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetNumMotionSystemsUsed()),
+#else
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(1),
+#endif
+		OBJECT_MODEL_ARRAY_VALUE_NOSELF(&reprap.GetGCodes().GetMovementState(context.GetLastIndex())),
+	},
+
 #if SUPPORT_COORDINATE_ROTATION
-	// 5. Rotation centre coordinates
+	// 6. Rotation centre coordinates
 	{
 		nullptr,					// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(2),
-		OBJECT_MODEL_ARRAY_VALUE_NOSELF(reprap.GetGCodes().GetRotationCentre(reprap.GetGCodes().GetPrimaryMovementState(), context.GetLastIndex()))
+		OBJECT_MODEL_ARRAY_VALUE_NOSELF(reprap.GetGCodes().GetPrimaryMovementState().g68Centre[context.GetLastIndex()])
 	},
 #elif SUPPORT_KEEPOUT_ZONES
 	{
@@ -126,7 +139,7 @@ constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 #endif
 
 #if SUPPORT_KEEPOUT_ZONES
-	// 6. Keepout zone list
+	// 7. Keepout zone list
 	{
 		nullptr,					// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetNumKeepoutZones()),
@@ -156,6 +169,9 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Move members
+#if SUPPORT_3RD_ORDER
+	{ "accelerationTime",		OBJECT_MODEL_FUNC(self->accelerationTime * StepClocksToSeconds, 3),								ObjectModelEntryFlags::notPanelDue },
+#endif
 	{ "axes",					OBJECT_MODEL_FUNC_ARRAY(0), 																	ObjectModelEntryFlags::live },
 	{ "backlashFactor",			OBJECT_MODEL_FUNC((int32_t)self->GetBacklashCorrectionDistanceFactor()),						ObjectModelEntryFlags::none },
 	{ "calibration",			OBJECT_MODEL_FUNC(self, 3),																		ObjectModelEntryFlags::notPanelDue },
@@ -164,36 +180,43 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "extruders",				OBJECT_MODEL_FUNC_ARRAY(1),																		ObjectModelEntryFlags::liveNotPanelDue },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 1),																		ObjectModelEntryFlags::none },
 #if SUPPORT_KEEPOUT_ZONES
-	{ "keepout",				OBJECT_MODEL_FUNC_ARRAY(6),																		ObjectModelEntryFlags::notPanelDue },
+	{ "keepout",				OBJECT_MODEL_FUNC_ARRAY(7),																		ObjectModelEntryFlags::notPanelDue },
 #endif
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
 	{ "limitAxes",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().LimitAxes()),										ObjectModelEntryFlags::none },
+	{ "motionSystems",			OBJECT_MODEL_FUNC_ARRAY(5),																		ObjectModelEntryFlags::liveNotPanelDue },
 	{ "noMovesBeforeHoming",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().NoMovesBeforeHoming()),								ObjectModelEntryFlags::none },
-	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).maxPrintingAcceleration), 1),	ObjectModelEntryFlags::none },
+	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).raw.maxPrintingAcceleration), 1),	ObjectModelEntryFlags::obsolete },
 	{ "queue",					OBJECT_MODEL_FUNC_ARRAY(2),																		ObjectModelEntryFlags::none },
 #if SUPPORT_COORDINATE_ROTATION
-	{ "rotation",				OBJECT_MODEL_FUNC(self, 15),																	ObjectModelEntryFlags::notPanelDue },
+	{ "rotation",				OBJECT_MODEL_FUNC(self, 16),																	ObjectModelEntryFlags::notPanelDue | ObjectModelEntryFlags::obsolete },
 #endif
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
-	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).speedFactor, 2),						ObjectModelEntryFlags::none },
-	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).maxTravelAcceleration), 1),		ObjectModelEntryFlags::none },
-	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).latestVirtualExtruderPosition, 5),		ObjectModelEntryFlags::liveNotPanelDue },
-	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetCurrentMovementState(context).currentCoordinateSystem),				ObjectModelEntryFlags::none },
+	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).speedFactor, 2),	ObjectModelEntryFlags::none },
+	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).raw.maxTravelAcceleration), 1),		ObjectModelEntryFlags::obsolete },
+#if SUPPORT_3RD_ORDER
+	{ "usingSCurve",			OBJECT_MODEL_FUNC(self->usingSCurve),															ObjectModelEntryFlags::none },
+#endif
+	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).latestVirtualExtruderPosition, 5),		ObjectModelEntryFlags::liveNotPanelDue | ObjectModelEntryFlags::obsolete },
+	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetCurrentMovementState(context).currentCoordinateSystem),		ObjectModelEntryFlags::obsolete },
 
 	// 1. Move.Idle members
 	{ "factor",					OBJECT_MODEL_FUNC(self->GetIdleCurrentFactor(), 1),												ObjectModelEntryFlags::none },
 	{ "timeout",				OBJECT_MODEL_FUNC(0.001f * (float)self->idleTimeout, 1),										ObjectModelEntryFlags::none },
 
 	// 2. move.currentMove members
-	{ "acceleration",			OBJECT_MODEL_FUNC(self->GetAccelerationMmPerSecSquared(), 1),									ObjectModelEntryFlags::live },
-	{ "deceleration",			OBJECT_MODEL_FUNC(self->GetDecelerationMmPerSecSquared(), 1),									ObjectModelEntryFlags::live },
-	{ "extrusionRate",			OBJECT_MODEL_FUNC(self->GetTotalExtrusionRate(), 2),											ObjectModelEntryFlags::live },
+	{ "acceleration",			OBJECT_MODEL_FUNC(self->GetAccelerationMmPerSecSquared(0), 1),									ObjectModelEntryFlags::liveNotPanelDue },
+	{ "deceleration",			OBJECT_MODEL_FUNC(self->GetDecelerationMmPerSecSquared(0), 1),									ObjectModelEntryFlags::liveNotPanelDue },
+	{ "distance",				OBJECT_MODEL_FUNC(self->GetCurrentMoveDistance(0), 2),											ObjectModelEntryFlags::liveNotPanelDue },
+	{ "duration",				OBJECT_MODEL_FUNC(self->GetCurrentMoveDuration(0), 2),											ObjectModelEntryFlags::liveNotPanelDue },
+	{ "extrusionRate",			OBJECT_MODEL_FUNC(self->GetTotalExtrusionRate(0), 2),											ObjectModelEntryFlags::liveNotPanelDue },
+	{ "filePosition",			OBJECT_MODEL_FUNC_IF(self->GetCurrentMoveFilePosition(0) != noFilePosition, self->GetCurrentMoveFilePosition(0)),		ObjectModelEntryFlags::liveNotPanelDue },
 # if SUPPORT_LASER
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetGCodes().GetMachineType() == MachineType::laser,
-															reprap.GetPlatform().GetLaserPwm(), 2),								ObjectModelEntryFlags::live },
+															reprap.GetPlatform().GetLaserPwm(), 2),								ObjectModelEntryFlags::liveNotPanelDue },
 # endif
-	{ "requestedSpeed",			OBJECT_MODEL_FUNC(self->GetRequestedSpeedMmPerSec(), 1),										ObjectModelEntryFlags::live },
-	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeedMmPerSec(), 1),												ObjectModelEntryFlags::live },
+	{ "requestedSpeed",			OBJECT_MODEL_FUNC(self->GetRequestedSpeedMmPerSec(0), 1),										ObjectModelEntryFlags::liveNotPanelDue },
+	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeedMmPerSec(0), 1),												ObjectModelEntryFlags::liveNotPanelDue },
 
 	// 3. move.calibration members
 	{ "final",					OBJECT_MODEL_FUNC(self, 5),																		ObjectModelEntryFlags::none },
@@ -278,16 +301,19 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "phaseStep",			OBJECT_MODEL_FUNC(self->GetStepMode(ExtruderToLogicalDrive(context.GetLastIndex())) == StepMode::phase),							ObjectModelEntryFlags::notPanelDue },
 #endif
 	{ "position",			OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetGCodes().GetCurrentMovementState(context).LiveMachineCoordinate(ExtruderToLogicalDrive(context.GetLastIndex())), 1)),	ObjectModelEntryFlags::liveNotPanelDue },
-	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetPressureAdvanceClocksForExtruder(context.GetLastIndex())/StepClockRate, 3),								ObjectModelEntryFlags::none },
+	{ "pressAdv",			OBJECT_MODEL_FUNC(&(self->GetExtruderShaperForExtruder(context.GetLastIndex()))),													ObjectModelEntryFlags::none },
+	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetExtruderShaperForExtruder(context.GetLastIndex()).GetK0Seconds(), 3),									ObjectModelEntryFlags::obsolete },
 	{ "printingJerk",		OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetPrintingInstantDv(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),	ObjectModelEntryFlags::none },
 	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1), 								ObjectModelEntryFlags::liveNotPanelDue },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->DriveStepsPerMm(ExtruderToLogicalDrive(context.GetLastIndex())), 2),										ObjectModelEntryFlags::none },
 
 	// 11. move.extruders[].nonlinear members
+#if SUPPORT_NONLINEAR_EXTRUSION
 	{ "a",					OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].A, 3),									ObjectModelEntryFlags::none },
 	{ "b",					OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].B, 3),									ObjectModelEntryFlags::none },
 	{ "upperLimit",			OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].limit, 2),								ObjectModelEntryFlags::none },
+#endif
 
 	// 12. move.axes[].microstepping members
 	{ "interpolated",		OBJECT_MODEL_FUNC(self->GetMicrostepInterpolation(context.GetLastIndex())),									ObjectModelEntryFlags::none },
@@ -297,41 +323,53 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "interpolated",		OBJECT_MODEL_FUNC(self->GetMicrostepInterpolation(ExtruderToLogicalDrive(context.GetLastIndex()))),			ObjectModelEntryFlags::none },
 	{ "value",				OBJECT_MODEL_FUNC((int32_t)self->GetMicrostepping(ExtruderToLogicalDrive(context.GetLastIndex()))),			ObjectModelEntryFlags::none },
 
-	// 14. boards[0].drivers[]
+	// 14. boards[0].drivers[] members
+	{ "config",				OBJECT_MODEL_FUNC(self, 15),																				ObjectModelEntryFlags::none },
 	{ "status",				OBJECT_MODEL_FUNC(self->GetLocalDriverStatus(context.GetLastIndex()).all),									ObjectModelEntryFlags::liveNotPanelDue },
 
+	// 15. boards[0].drivers[].config members
+	{ "direction",			OBJECT_MODEL_FUNC((int32_t)self->directions[context.GetLastIndex()]), 										ObjectModelEntryFlags::none },
+#if HAS_SMART_DRIVERS
+	{ "mode",				OBJECT_MODEL_FUNC_NOSELF((int32_t)SmartDrivers::GetDriverMode(context.GetLastIndex())), 					ObjectModelEntryFlags::none },
+#endif
+
 #if SUPPORT_COORDINATE_ROTATION
-	// 15. move.rotation members
-	{ "angle",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRotationAngle(reprap.GetGCodes().GetPrimaryMovementState())),	ObjectModelEntryFlags::none },
-	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(5),																				ObjectModelEntryFlags::none },
+	// 16. move.rotation members
+	{ "angle",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimaryMovementState().g68Angle),							ObjectModelEntryFlags::none },
+	{ "centre",				OBJECT_MODEL_FUNC_ARRAY(6),																					ObjectModelEntryFlags::none },
 #endif
 };
 
 constexpr uint8_t Move::objectModelTableDescriptor[] =
 {
-	15 + SUPPORT_COORDINATE_ROTATION,
-	17 + SUPPORT_COORDINATE_ROTATION + SUPPORT_KEEPOUT_ZONES,
-	2,
-	5 + SUPPORT_LASER,
-	3,
-	2,
-	2,
-	6 + (int)(HAS_MASS_STORAGE || HAS_SBC_INTERFACE),
-	2,
-	4,
+	16 + SUPPORT_COORDINATE_ROTATION,										// number of sections
+	18 + SUPPORT_COORDINATE_ROTATION + SUPPORT_KEEPOUT_ZONES + 2 * SUPPORT_3RD_ORDER,		// section 0
+	2,																		// section 1
+	8 + SUPPORT_LASER,														// section 2
+	3,																		// section 3
+	2,																		// section 4
+	2,																		// section 5
+	6 + (int)(HAS_MASS_STORAGE || HAS_SBC_INTERFACE),						// section 6
+	2,																		// section 7
+	4,																		// section 8
 #ifdef DUET_NG	// Duet WiFi/Ethernet doesn't have settable standstill current and doesn't support phase stepping
 	23,																		// section 9: move.axes[]
-	16,																		// section 10: move.extruders[]
+	17,																		// section 10: move.extruders[]
 #else
 	24 + SUPPORT_PHASE_STEPPING,											// section 9: move.axes[]
-	17 + SUPPORT_PHASE_STEPPING,											// section 10: move.extruders[]
+	18 + SUPPORT_PHASE_STEPPING,											// section 10: move.extruders[]
 #endif
+#if SUPPORT_NONLINEAR_EXTRUSION
 	3,																		// section 11: move.extruders[].nonlinear
+#else
+	0,
+#endif
 	2,																		// section 12: move.axes[].microstepping
 	2,																		// section 13: move.extruders[].microstepping
-	1,																		// section 5: boards.drivers
+	2,																		// section 14: boards.drivers[]
+	1 + HAS_SMART_DRIVERS,													// section 15: boards.drivers[].config
 #if SUPPORT_COORDINATE_ROTATION
-	2,
+	2,																		// section 16: move.rotation
 #endif
 };
 
@@ -365,13 +403,17 @@ Move::Move() noexcept
 	kinematics = Kinematics::Create(KinematicsType::cartesian);		// default to Cartesian
 	for (DDARing& ring : rings)
 	{
-		ring.Init1(InitialDdaRingLength);
+		ring.Init(InitialDdaRingLength);
 	}
 }
 
 void Move::Init() noexcept
 {
 	// Axes
+#if SUPPORT_3RD_ORDER
+	accelerationTime = 0.0;
+#endif
+
 	for (size_t axis = 0; axis < MaxAxes; ++axis)
 	{
 		axisMinima[axis] = DefaultAxisMinimum;
@@ -380,6 +422,10 @@ void Move::Init() noexcept
 		maxFeedrates[axis] = ConvertSpeedFromMmPerSec(DefaultAxisMaxFeedrate);
 		reducedAccelerations[axis] = normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
 		printingInstantDvs[axis] = maxInstantDvs[axis] = ConvertSpeedFromMmPerSec(DefaultAxisInstantDv);
+#if SUPPORT_3RD_ORDER
+		// The jerks get initialised when the acceleration time is set, however VectorBoxIntersection may fail if jerks for unused logical drives are zero or negative
+		jerks[axis] = 1.0;
+#endif
 
 		backlashMm[axis] = 0.0;
 		backlashSteps[axis] = 0;
@@ -399,6 +445,10 @@ void Move::Init() noexcept
 		maxFeedrates[drive] = ConvertSpeedFromMmPerSec(DefaultEMaxFeedrate);
 		normalAccelerations[drive] = reducedAccelerations[drive] = ConvertAcceleration(DefaultEAcceleration);
 		printingInstantDvs[drive] = maxInstantDvs[drive] = ConvertSpeedFromMmPerSec(DefaultEInstantDv);
+#if SUPPORT_3RD_ORDER
+		// The jerks get initialised when the acceleration time is set, however VectorBoxIntersection may fail if jerks for unused logical drives are zero or negative
+		jerks[drive] = 1.0;
+#endif
 	}
 
 	minimumMovementSpeed = ConvertSpeedFromMmPerSec(DefaultMinFeedrate);
@@ -528,7 +578,7 @@ void Move::Init() noexcept
 
 #if HAS_SMART_DRIVERS
 	// Initialise TMC driver module
-# if SUPPORT_TMC51xx
+# if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
 	SmartDrivers::Init();
 # elif SUPPORT_TMC22xx
 #  if TMC22xx_VARIABLE_NUM_DRIVERS
@@ -550,12 +600,6 @@ void Move::Init() noexcept
 	logOnStallDrivers.Clear();
 	eventOnStallDrivers.Clear();
 #endif
-
-	// DDA rings
-	for (DDARing& ring : rings)
-	{
-		ring.Init2();
-	}
 
 #if SUPPORT_ASYNC_MOVES
 	auxMoveAvailable = false;
@@ -633,7 +677,7 @@ void Move::Exit() noexcept
 #if SUPPORT_REMOTE_COMMANDS
 		if (CanInterface::InExpansionMode())
 		{
-			// In expansion mode we don't need the Move task to do anything, and in particular we must not perform udle detection.
+			// In expansion mode we don't need the Move task to do anything, and in particular we must not perform idle detection.
 			// We could terminate the Move task here but currently we don't because:
 			// (a) if we do then we must make sure that any attempts to wake it up are benign
 			// (b) in future we may wish to use the Move task to queue movement commands
@@ -835,7 +879,7 @@ void Move::MoveAvailable() noexcept
 	}
 }
 
-// Tell the lookahead ring we are waiting for it to empty and return true if it is
+// Tell the lookahead ring we are waiting for it to empty and return true if it is. Called from the Main task.
 bool Move::WaitingForAllMovesFinished(MovementSystemNumber msNumber
 #if SUPPORT_ASYNC_MOVES
 										, LogicalDrivesBitmap logicalDrivesOwned
@@ -986,21 +1030,16 @@ void Move::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 			minExtrusionPending = maxExtrusionPending = 0.0;
 #endif
 
-#if STEPS_DEBUG
-# if 0	// DEBUG
-			reply.lcat("Pos req/act/dcf/state/seg:");
-# else
-			reply.lcat("Pos req/act/dcf:");
-# endif
+			DriveMovement::DiagnosticHeader(reply);
 			for (size_t drive = 0; drive < reprap.GetGCodes().GetTotalAxes(); ++drive)
 			{
-# if 0	// DEBUG
-				reply.catf(" %.2f/%" PRIi32 "/%.2f/%u/%u", (double)dms[drive].positionRequested, dms[drive].currentMotorPosition, (double)dms[drive].distanceCarriedForwards, (unsigned int)dms[drive].state, dms[drive].segments != nullptr);
-# else
-				reply.catf(" %.2f/%" PRIi32 "/%.2f", (double)dms[drive].positionRequested, dms[drive].currentMotorPosition, (double)dms[drive].distanceCarriedForwards);
-# endif
+				dms[drive].Diagnostics(reply);
 			}
-#endif
+			for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
+			{
+				dms[drive].Diagnostics(reply);
+			}
+
 #if 0	// DEBUG
 			reply.lcat("ADM:");
 			for (const DriveMovement *dm = activeDMs; dm != nullptr; dm = dm->nextDM)
@@ -1061,7 +1100,7 @@ void Move::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 MovementError Move::MotorMovementToSteps(size_t drive, float coord, int32_t& whereToStore) const noexcept
 {
 	const float pos = coord * driveStepsPerMm[drive];
-	constexpr float limit = std::numeric_limits<int32_t>::max() - 10;
+	constexpr float limit = (float)(std::numeric_limits<int32_t>::max() - 10);
 	if (fabsf(pos) <= limit)
 	{
 		whereToStore = lrintf(pos);
@@ -1142,8 +1181,8 @@ void Move::SetMotorPosition(size_t drive, int32_t pos, bool clearBacklash) noexc
 
 	if (dm->IsPhaseStepEnabled())
 	{
-		GetCurrentMotion(drive, now, dm->phaseStepControl.mParams);
-		IterateLocalDrivers(drive, [dm, &currentPhases](uint8_t driver){
+		UpdateCurrentMotion(drive, now, dm->phaseStepControl.mParams);
+		IterateLocalDrivers(drive, [dm, &currentPhases](uint8_t driver) noexcept -> void {
 			currentPhases[driver] = dm->phaseStepControl.CalculateStepPhase((size_t)driver);
 			dm->phaseStepControl.SetPhaseOffset(driver, 0);
 		});
@@ -1166,8 +1205,8 @@ void Move::SetMotorPosition(size_t drive, int32_t pos, bool clearBacklash) noexc
 #if SUPPORT_PHASE_STEPPING
 	if (dm->IsPhaseStepEnabled())
 	{
-		GetCurrentMotion(drive, now, dm->phaseStepControl.mParams);
-		IterateLocalDrivers(drive, [dm, &currentPhases](uint8_t driver){
+		UpdateCurrentMotion(drive, now, dm->phaseStepControl.mParams);
+		IterateLocalDrivers(drive, [dm, &currentPhases](uint8_t driver) noexcept -> void {
 			uint16_t newPhase = dm->phaseStepControl.CalculateStepPhase((size_t)driver);
 
 			dm->phaseStepControl.SetPhaseOffset(driver, currentPhases[driver] - newPhase);
@@ -1176,9 +1215,9 @@ void Move::SetMotorPosition(size_t drive, int32_t pos, bool clearBacklash) noexc
 #endif
 }
 
-void Move::SetMotorPositions(LogicalDrivesBitmap drives, const int32_t *positions, bool clearBacklash) noexcept
+void Move::SetMotorPositions(LogicalDrivesBitmap drives, const int32_t *_ecv_array positions, bool clearBacklash) noexcept
 {
-	drives.Iterate([this, positions, clearBacklash](unsigned int drive, unsigned int count) noexcept { SetMotorPosition(drive, positions[drive], clearBacklash); });
+	drives.Iterate([this, positions, clearBacklash](unsigned int drive, unsigned int count) noexcept -> void { SetMotorPosition(drive, positions[drive], clearBacklash); });
 }
 
 void Move::SetLastEndpoints(MovementSystemNumber msNumber, LogicalDrivesBitmap logicalDrives, const int32_t *_ecv_array ep) noexcept
@@ -1282,7 +1321,7 @@ bool Move::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limi
 
 	String<StringLength100> scratchString;
 	scratchString.printf("M208 S%d", sParam);
-	axesProbed.Iterate([&scratchString, limits](unsigned int axis, unsigned int) noexcept { scratchString.catf(" %c%.2f", reprap.GetGCodes().GetAxisLetters()[axis], (double)limits[axis]); });
+	axesProbed.Iterate([&scratchString, limits](unsigned int axis, unsigned int) noexcept -> void { scratchString.catf(" %c%.2f", reprap.GetGCodes().GetAxisLetters()[axis], (double)limits[axis]); });
 	scratchString.cat('\n');
 	return f->Write(scratchString.c_str());
 }
@@ -1291,7 +1330,7 @@ bool Move::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limi
 
 #if SUPPORT_REMOTE_COMMANDS
 
-GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
+GCodeResult Move::EutSetRemotePressureAdvanceV1(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
 {
 	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
 	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
@@ -1301,7 +1340,7 @@ GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequ
 	}
 
 	GCodeResult rslt = GCodeResult::ok;
-	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) noexcept
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) noexcept -> void
 						{
 							if (driver >= NumDirectDrivers)
 							{
@@ -1310,7 +1349,33 @@ GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequ
 							}
 							else
 							{
-								dms[driver].extruderShaper.SetKseconds(msg.values[count]);
+								dms[driver].extruderShaper.SetParametersSimple(msg.values[count]);
+							}
+						}
+				   );
+	return rslt;
+}
+
+GCodeResult Move::EutSetRemotePressureAdvanceV2(const CanMessageMultipleDrivesRequest<ShortPressureAdvanceParameters>& msg, size_t dataLength, const StringRef& reply) noexcept
+{
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	{
+		reply.copy("bad data length");
+		return GCodeResult::error;
+	}
+
+	GCodeResult rslt = GCodeResult::ok;
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) noexcept -> void
+						{
+							if (driver >= NumDirectDrivers)
+							{
+								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
+								rslt = GCodeResult::error;
+							}
+							else
+							{
+								dms[driver].extruderShaper.SetParameters(msg.values[count]);
 							}
 						}
 				   );
@@ -1341,7 +1406,7 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 	for (size_t driver = 0; driver < numDriversToRevert; ++driver)
 	{
 		int32_t steps = 0;
-		if (msg.whichDrives & (1u << driver))
+		if ((msg.whichDrives & (1u << driver)) !=0)
 		{
 			const int32_t stepsWanted = msg.finalStepCounts[index++];
 			const int32_t stepsTaken = GetLastMoveStepsTaken(driver);
@@ -1371,10 +1436,12 @@ void Move::GetLiveMachineCoordinates(float coords[MaxAxes]) const noexcept
 	// Get the positions of each motor
 	int32_t currentMotorPositions[MaxAxes];
 	{
-		AtomicCriticalSectionLocker lock;											// to make sure we get a consistent set of coordinates
+		AtomicCriticalSectionLocker lock; // to make sure we get a consistent set of coordinates
+		const uint32_t now = StepTimer::GetTimerTicks();
 		for (size_t i = 0; i < numTotalAxes; ++i)
 		{
-			currentMotorPositions[i] = dms[i].currentMotorPosition - currentBacklashSteps[i];
+			const float position = dms[i].GetCurrentPosition(now);
+			currentMotorPositions[i] = std::lrint(position - currentBacklashSteps[i]);
 		}
 	}
 
@@ -1488,14 +1555,33 @@ void Move::PrepareScanningProbeDataCollection(const DDA& dda, const PrepParams& 
 	if (probeControl.numReadingsNeeded != 0)
 	{
 		probeControl.accelClocks = params.TotalAccelClocks();
-		probeControl.acceleration = params.acceleration;
-		probeControl.deceleration = params.deceleration;
+#if SUPPORT_3RD_ORDER
+		if (dda.flags.useScurve)
+		{
+			// The following is only approximate but should be good enough
+			probeControl.acceleration = (float)((params.peakAcceleration * params.TotalAccelClocks() - (motioncalc_t)0.5 * params.jerk * (msquare((motioncalc_t)params.phaseClocks[0]) + msquare((motioncalc_t)params.phaseClocks[2])))/params.TotalAccelClocks());
+			probeControl.deceleration = (float)((params.peakDeceleration * params.TotalDecelClocks() + (motioncalc_t)0.5 * params.jerk * (msquare((motioncalc_t)params.phaseClocks[4]) + msquare((motioncalc_t)params.phaseClocks[6])))/params.TotalDecelClocks());
+		}
+		else
+		{
+			probeControl.acceleration = (float)params.peakAcceleration;
+			probeControl.deceleration = (float)params.peakDeceleration;
+		}
+#else
+		probeControl.acceleration = (float)params.acceleration;
+		probeControl.deceleration = (float)params.deceleration;
+#endif
 		probeControl.initialSpeed = dda.startSpeed;
 		probeControl.topSpeed = dda.topSpeed;
-		probeControl.steadyClocks = params.steadyClocks;
-		probeControl.distancePerReading = params.totalDistance/(float)probeControl.numReadingsNeeded;
-		probeControl.accelDistance = params.accelDistance;
-		probeControl.decelStartDistance = params.decelStartDistance;
+		probeControl.steadyClocks = params.SteadyClocks();
+		probeControl.distancePerReading = (float)(params.totalDistance/(motioncalc_t)probeControl.numReadingsNeeded);
+#if SUPPORT_3RD_ORDER
+		probeControl.accelDistance = (float)params.TotalAccelDistance();
+		probeControl.decelStartDistance = (float)(params.totalDistance - params.TotalDecelDistance());
+#else
+		probeControl.accelDistance = (float)params.accelDistance;
+		probeControl.decelStartDistance = (float)params.decelStartDistance;
+#endif
 		probeControl.startTime = dda.afterPrepare.moveStartTime;
 		probeControl.timer.SetCallback(ScanningProbeGlobalTimerCallback, CallbackParameter(this));
 #if 0
@@ -1528,7 +1614,7 @@ void Move::SetupNextScanningProbeReading() noexcept
 		}
 		else if (distance <= probeControl.decelStartDistance)
 		{
-			wakeupTime = (distance - probeControl.accelDistance)/probeControl.topSpeed + probeControl.accelClocks;
+			wakeupTime = (uint32_t)((distance - probeControl.accelDistance)/probeControl.topSpeed) + probeControl.accelClocks;
 		}
 		else
 		{
@@ -1614,17 +1700,33 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 	return ret + adjustment;
 }
 
+#if SUPPORT_3RD_ORDER
+
+// Calculate the initial speed given the duration, distance, acceleration and jerk
+static inline motioncalc_t CalcInitialSpeed(uint32_t duration, motioncalc_t distance, motioncalc_t a, motioncalc_t j) noexcept
+{
+	return distance/(motioncalc_t)duration - (OneHalf * a + OneSixth * j * (motioncalc_t)duration) * (motioncalc_t)duration;
+}
+
+#else
+
 // Calculate the initial speed given the duration, distance and acceleration
 static inline motioncalc_t CalcInitialSpeed(uint32_t duration, motioncalc_t distance, motioncalc_t a) noexcept
 {
 	return distance/(motioncalc_t)duration - OneHalf * a * (motioncalc_t)duration;
 }
 
+#endif
+
 // Add a segment into a segment list, which may be empty.
 // If the list is not empty then the new segment may overlap segments already in the list.
 // The units of the input parameters are steps for distance and step clocks for time.
 MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a,
+#if SUPPORT_3RD_ORDER
+	 	 	 	 	 	 	 	 motioncalc_t j, MovementFlags moveFlags, motioncalc_t pressureAdvanceClocks
+#else
 								 	 	 	 	 MovementFlags moveFlags, motioncalc_t pressureAdvanceClocksTimesDuration
+#endif
 							) noexcept
 {
 	if ((int32_t)duration <= 0)
@@ -1634,15 +1736,26 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 		Platform::hasGenericDebug = true;
 	}
 
+#if SUPPORT_3RD_ORDER
+	// Adjust the distance and acceleration (and implicitly the initial speed) to account for pressure advance
+	distance += (a + (motioncalc_t)0.5 * j * (motioncalc_t)duration) * pressureAdvanceClocks * (motioncalc_t)duration;
+	a += j * pressureAdvanceClocks;
+#else
 	// Adjust the distance (and implicitly the initial speed) to account for pressure advance
 	distance += a * pressureAdvanceClocksTimesDuration;
+#endif
 
 #if !SEGMENT_DEBUG
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
 #endif
 	{
+#if SUPPORT_3RD_ORDER
+		debugPrintf("Add seg: st=%" PRIu32 " t=%7" PRIu32 " dist=%9.3f u=%10.4e a=%10.4e j=%10.4e f=x%02" PRIx32 "\n",
+					startTime, duration, (double)distance, (double)CalcInitialSpeed(duration, distance, a, j), (double)a, (double)j, moveFlags.all);
+#else
 		debugPrintf("Add seg: st=%" PRIu32 " t=%7" PRIu32 " dist=%9.3f u=%10.4e a=%10.4e f=x%02" PRIx32 "\n",
 					startTime, duration, (double)distance, (double)CalcInitialSpeed(duration, distance, a), (double)a, moveFlags.all);
+#endif
 	}
 
 	MoveSegment *_ecv_null prev = nullptr;
@@ -1658,25 +1771,34 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 			{
 				break;															// new segment fits entirely before the existing one
 			}
+#if AVOID_SHORT_SEGMENTS
 			if (offset >= -MoveSegment::MinDuration && duration >= 10 * (uint32_t)MoveSegment::MinDuration)	// if it starts only slightly earlier and we can reasonably shorten it
 			{
 				startTime = seg->GetStartTime();								// then just delay and shorten the new segment slightly, to avoid creating a tiny segment
-#if SEGMENT_DEBUG
+# if SEGMENT_DEBUG
 				debugPrintf("Adjusting(1) t=%" PRIu32 " a=%.4e", duration, (double)a);
-#endif
+# endif
 				duration = (uint32_t)((int32_t)duration + offset);
-#if SEGMENT_DEBUG
+# if SEGMENT_DEBUG
 				debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
-#endif
+# endif
 			}
 			else																// new segment starts before the existing one and can't be delayed/shortened so that it doesn't
+#endif
 			{
 				// Insert part of the new segment before the existing one, then merge the rest
+				seg = MoveSegment::Allocate(seg);
 				const uint32_t firstDuration = -offset;
 				const motioncalc_t mFirstDuration = (motioncalc_t)firstDuration;
+#if SUPPORT_3RD_ORDER
+				const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a, j) + (OneHalf * a + OneSixth * j * mFirstDuration) * mFirstDuration) * mFirstDuration;
+#else
 				const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + OneHalf * a * mFirstDuration) * mFirstDuration;
-				seg = MoveSegment::Allocate(seg);
-				seg->SetParameters(startTime, firstDuration, firstDistance, a, moveFlags);
+#endif
+				seg->SetParameters(startTime, firstDuration, firstDistance, a J_ACTUAL_PARAMETER(j), moveFlags);
+#if SUPPORT_3RD_ORDER
+				a += j * mFirstDuration;
+#endif
 				if (prev == nullptr)
 				{
 					list = _ecv_not_null(seg);
@@ -1705,21 +1827,23 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 		// At this point the new segment starts later or at the same time as the existing one (i.e. offset is non-negative)
 		if (offset < (int32_t)seg->GetDuration())													// if new segment starts before the existing one ends
 		{
+#if AVOID_SHORT_SEGMENTS
 			if (offset != 0 && offset + MoveSegment::MinDuration >= (int32_t)seg->GetDuration() && duration >= 10 * (uint32_t)MoveSegment::MinDuration)
 			{
 				// New segment starts just before the existing one ends, but we can delay and shorten it to start when the existing segment ends
-#if SEGMENT_DEBUG
+# if SEGMENT_DEBUG
 				debugPrintf("Adjusting(3) t=%" PRIu32 " a=%.4e", duration, (double)a);
-#endif
+# endif
 				const uint32_t startDelay = seg->GetDuration() - (uint32_t)offset;
 				startTime += startDelay;																	// postpone and shorten it a little
 				duration -= startDelay;
-#if SEGMENT_DEBUG
+# if SEGMENT_DEBUG
 				debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
-#endif
+# endif
 				// Go round the loop again
 			}
 			else
+#endif
 			{
 				// The new segment overlaps the existing one and can't be delayed so that it doesn't.
 				// If the new segment starts later than the existing one does, split the existing one.
@@ -1736,28 +1860,36 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 
 				// The segment we wish to add now starts at the same time as 'seg' but it may end earlier or later than the one at 'seg' does.
 				int32_t timeDifference = (int32_t)(duration - seg->GetDuration());
+#if AVOID_SHORT_SEGMENTS
 				if (timeDifference > 0 && timeDifference <= MoveSegment::MinDuration && duration >= 10 * (uint32_t)MoveSegment::MinDuration)
 				{
 					// New segment is slightly longer then the old one but it can be shortened
-#if SEGMENT_DEBUG
+# if SEGMENT_DEBUG
 					debugPrintf("Adjusting(3) t=%" PRIu32 " a=%.4e", duration, (double)a);
-#endif
+# endif
 					duration -= (uint32_t)timeDifference;
-#if SEGMENT_DEBUG
+# if SEGMENT_DEBUG
 					debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
-#endif
+# endif
 					timeDifference = 0;
 				}
-
+#endif
 				if (timeDifference > 0)
 				{
 					// The existing segment is shorter in time than the new one, so add the new segment in two or more parts
 					const motioncalc_t segDuration = (motioncalc_t)seg->GetDuration();
+#if SUPPORT_3RD_ORDER
+					const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a, j) + (OneHalf * a + OneSixth * j * segDuration) * segDuration) * segDuration;	// distance moved by the first part of the new segment
+#else
 					const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + OneHalf * a * segDuration) * segDuration;		// distance moved by the first part of the new segment
+#endif
 #if SEGMENT_DEBUG
 					debugPrintf("merge1: ");
 #endif
-					seg->Merge(firstDistance, a, moveFlags);
+					seg->Merge(firstDistance, a J_ACTUAL_PARAMETER(j), moveFlags);
+#if SUPPORT_3RD_ORDER
+					a += j * segDuration;
+#endif
 #if CHECK_SEGMENTS
 					CheckSegment(__LINE__, prev);
 					CheckSegment(__LINE__, seg);
@@ -1784,7 +1916,7 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 #if SEGMENT_DEBUG
 					debugPrintf("merge2: ");
 #endif
-					seg->Merge(distance, a, moveFlags);
+					seg->Merge(distance, a J_ACTUAL_PARAMETER(j), moveFlags);
 					goto finished;								// ugly but saves some code
 				}
 			}
@@ -1797,7 +1929,7 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 	// If we get here then the new segment (or what's left of it) needs to be added before 'seg' which may be null
 	{
 		MoveSegment *newSeg = MoveSegment::Allocate(seg);
-		newSeg->SetParameters(startTime, duration, distance, a, moveFlags);
+		newSeg->SetParameters(startTime, duration, distance, a J_ACTUAL_PARAMETER(j), moveFlags);
 		if (prev == nullptr)
 		{
 			list = newSeg;
@@ -1823,12 +1955,13 @@ finished:
 // We never add a segment that starts earlier than the earliest existing segment (if any).
 void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags) noexcept
 {
+#if 0	//debug
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
 	{
-		debugPrintf("AddLin: st=%" PRIu32 " steps=%.1f\n", startTime, (double)steps);
-		//dda.DebugPrint("addlin");
-		params.DebugPrint();
+//		debugPrintf("AddLin: st=%" PRIu32 " steps=%.1f\n", startTime, (double)steps);
+//		params.DebugPrint();
 	}
+#endif
 
 	DriveMovement& dm = dms[logicalDrive];
 	MoveSegment *_ecv_null tail;
@@ -1891,13 +2024,40 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 	}
 
 	// Now it's safe to insert/merge new segments into 'tail'
+#if SUPPORT_3RD_ORDER
+	const uint32_t accelConstantStartTime = startTime + params.phaseClocks[0];
+	const uint32_t accelEndStartTime = accelConstantStartTime + params.phaseClocks[1];
+	const uint32_t steadyStartTime = accelEndStartTime + params.phaseClocks[2];
+	const uint32_t decelStartTime = steadyStartTime + params.phaseClocks[3];
+	const uint32_t decelConstantStartTime = decelStartTime + params.phaseClocks[4];
+	const uint32_t decelEndStartTime = decelConstantStartTime + params.phaseClocks[5];
+#else
 	const uint32_t steadyStartTime = startTime + params.TotalAccelClocks();
 	const uint32_t decelStartTime = steadyStartTime + params.steadyClocks;
+#endif
 	const motioncalc_t totalDistance = (motioncalc_t)params.totalDistance;
-	const motioncalc_t stepsPerMm = (motioncalc_t)steps/totalDistance;
+	const motioncalc_t stepsPerMm = steps/totalDistance;
 
 	// Phases with zero duration will not get executed and may lead to infinities in the calculations. Avoid introducing them. Keep the total distance correct.
 	// When using input shaping we can save some FP multiplications by multiplying the acceleration or deceleration time by the pressure advance just once instead of once per impulse
+#if SUPPORT_3RD_ORDER
+	motioncalc_t phase0PressureAdvanceClocks, phase1PressureAdvanceClocks, phase2PressureAdvanceClocks, phase4PressureAdvanceClocks, phase5PressureAdvanceClocks, phase6PressureAdvanceClocks;
+	if (moveFlags.isExtruder && !moveFlags.nonPrintingMove)
+	{
+		params.EnsureSpeedsSet();				// calculate the intermediate speeds
+
+		phase0PressureAdvanceClocks = (params.phaseClocks[0] == 0) ? (motioncalc_t)0.0 : dm.extruderShaper.GetAverageAdvanceClocks(params.startSpeed, params.phase1StartSpeed, steps);
+		phase1PressureAdvanceClocks = (params.phaseClocks[1] == 0) ? (motioncalc_t)0.0 : dm.extruderShaper.GetAverageAdvanceClocks(params.phase1StartSpeed, params.phase1EndSpeed, steps);
+		phase2PressureAdvanceClocks = (params.phaseClocks[2] == 0) ? (motioncalc_t)0.0 : dm.extruderShaper.GetAverageAdvanceClocks(params.phase1EndSpeed, params.topSpeed, steps);
+		phase4PressureAdvanceClocks = (params.phaseClocks[4] == 0) ? (motioncalc_t)0.0 : dm.extruderShaper.GetAverageAdvanceClocks(params.phase5StartSpeed, params.topSpeed, steps);
+		phase5PressureAdvanceClocks = (params.phaseClocks[5] == 0) ? (motioncalc_t)0.0 : dm.extruderShaper.GetAverageAdvanceClocks(params.phase5EndSpeed, params.phase5StartSpeed, steps);
+		phase6PressureAdvanceClocks = (params.phaseClocks[6] == 0) ? (motioncalc_t)0.0 : dm.extruderShaper.GetAverageAdvanceClocks(params.endSpeed, params.phase5EndSpeed, steps);
+	}
+	else
+	{
+		phase0PressureAdvanceClocks = phase1PressureAdvanceClocks = phase2PressureAdvanceClocks = phase4PressureAdvanceClocks = phase5PressureAdvanceClocks = phase6PressureAdvanceClocks = (motioncalc_t)0.0;
+	}
+#else
 	motioncalc_t accelDistance, accelPressureAdvance;
 	if (params.accelClocks == 0)
 	{
@@ -1907,7 +2067,9 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 	else
 	{
 		accelDistance = (params.decelClocks + params.steadyClocks == 0) ? totalDistance : (motioncalc_t)params.accelDistance;
-		accelPressureAdvance = (moveFlags.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)(params.accelClocks * dm.extruderShaper.GetKclocks()) : (motioncalc_t)0.0;
+		accelPressureAdvance = (moveFlags.isExtruder && !moveFlags.nonPrintingMove)
+								? (motioncalc_t)params.accelClocks * dm.extruderShaper.GetAverageAdvanceClocks(params.startSpeed, params.topSpeed, steps)
+								: (motioncalc_t)0.0;
 	}
 
 	motioncalc_t decelDistance, decelPressureAdvance;
@@ -1919,10 +2081,13 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 	else
 	{
 		decelDistance = totalDistance - ((params.steadyClocks == 0) ? accelDistance : (motioncalc_t)params.decelStartDistance);
-		decelPressureAdvance = (moveFlags.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)(params.decelClocks * dm.extruderShaper.GetKclocks()) : (motioncalc_t)0.0;
+		decelPressureAdvance = (moveFlags.isExtruder && !moveFlags.nonPrintingMove)
+								? (motioncalc_t)params.decelClocks * dm.extruderShaper.GetAverageAdvanceClocks(params.endSpeed, params.topSpeed, steps)
+								: (motioncalc_t)0.0;
 	}
 
 	const motioncalc_t steadyDistance = (params.steadyClocks == 0) ? (motioncalc_t)0.0 : totalDistance - accelDistance - decelDistance;
+#endif
 
 #if STEPS_DEBUG
 	{
@@ -1933,9 +2098,40 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 
 	if (moveFlags.noShaping)
 	{
+#if SUPPORT_3RD_ORDER
+		const motioncalc_t scaledJerk = params.jerk * stepsPerMm;
+		if (params.phaseClocks[0] != 0)
+		{
+			tail = AddSegment(tail, startTime, params.phaseClocks[0], params.distances[0] * stepsPerMm, params.initialAcceleration * stepsPerMm, scaledJerk, moveFlags, phase0PressureAdvanceClocks);
+		}
+		if (params.phaseClocks[1] != 0)
+		{
+			tail = AddSegment(tail, accelConstantStartTime, params.phaseClocks[1], params.distances[1] * stepsPerMm, params.peakAcceleration * stepsPerMm, (motioncalc_t)0.0, moveFlags, phase1PressureAdvanceClocks);
+		}
+		if (params.phaseClocks[2] != 0)
+		{
+			tail = AddSegment(tail, accelEndStartTime, params.phaseClocks[2], params.distances[2] * stepsPerMm, params.peakAcceleration * stepsPerMm, -scaledJerk, moveFlags, phase2PressureAdvanceClocks);
+		}
+		if (params.phaseClocks[3] != 0)
+		{
+			tail = AddSegment(tail, steadyStartTime, params.phaseClocks[3], params.distances[3] * stepsPerMm, (motioncalc_t)0.0, (motioncalc_t)0.0, moveFlags, (motioncalc_t)0.0);
+		}
+		if (params.phaseClocks[4] != 0)
+		{
+			tail = AddSegment(tail, decelStartTime, params.phaseClocks[4], params.distances[4] * stepsPerMm, params.initialDeceleration * stepsPerMm, -scaledJerk, moveFlags, phase4PressureAdvanceClocks);
+		}
+		if (params.phaseClocks[5] != 0)
+		{
+			tail = AddSegment(tail, decelConstantStartTime, params.phaseClocks[5], params.distances[5] * stepsPerMm, params.peakDeceleration * stepsPerMm, (motioncalc_t)0.0, moveFlags, phase5PressureAdvanceClocks);
+		}
+		if (params.phaseClocks[6] != 0)
+		{
+			tail = AddSegment(tail, decelEndStartTime, params.phaseClocks[6], params.distances[6] * stepsPerMm, params.peakDeceleration * stepsPerMm, scaledJerk, moveFlags, phase6PressureAdvanceClocks);
+		}
+#else
 		if (params.accelClocks != 0)
 		{
-			tail = AddSegment(tail, startTime, params.accelClocks, accelDistance * stepsPerMm, (motioncalc_t)params.acceleration * stepsPerMm, moveFlags, accelPressureAdvance);
+			tail = AddSegment(tail, startTime, params.accelClocks, accelDistance * stepsPerMm, params.acceleration * stepsPerMm, moveFlags, accelPressureAdvance);
 		}
 		if (params.steadyClocks != 0)
 		{
@@ -1943,8 +2139,9 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 		}
 		if (params.decelClocks != 0)
 		{
-			tail = AddSegment(tail, decelStartTime, params.decelClocks, decelDistance * stepsPerMm, (motioncalc_t)params.deceleration * stepsPerMm, moveFlags, decelPressureAdvance);
+			tail = AddSegment(tail, decelStartTime, params.decelClocks, decelDistance * stepsPerMm, params.deceleration * stepsPerMm, moveFlags, decelPressureAdvance);
 		}
+#endif
 	}
 	else
 	{
@@ -1952,9 +2149,40 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 		{
 			const motioncalc_t factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
 			const uint32_t startDelay = axisShaper.GetImpulseDelay(index);
+#if SUPPORT_3RD_ORDER
+			const motioncalc_t scaledJerk = params.jerk * factor;
+			if (params.phaseClocks[0] != 0)
+			{
+				tail = AddSegment(tail, startTime + startDelay, params.phaseClocks[0], params.distances[0] * factor, params.initialAcceleration * factor, scaledJerk, moveFlags, phase0PressureAdvanceClocks);
+			}
+			if (params.phaseClocks[1] != 0)
+			{
+				tail = AddSegment(tail, accelConstantStartTime + startDelay, params.phaseClocks[1], params.distances[1] * factor, params.peakAcceleration * factor, (motioncalc_t)0.0, moveFlags, phase1PressureAdvanceClocks);
+			}
+			if (params.phaseClocks[2] != 0)
+			{
+				tail = AddSegment(tail, accelEndStartTime + startDelay, params.phaseClocks[2], params.distances[2] * factor, params.peakAcceleration * factor, -scaledJerk, moveFlags, phase2PressureAdvanceClocks);
+			}
+			if (params.phaseClocks[3] != 0)
+			{
+				tail = AddSegment(tail, steadyStartTime + startDelay, params.phaseClocks[3], params.distances[3] * factor, (motioncalc_t)0.0, (motioncalc_t)0.0, moveFlags, (motioncalc_t)0.0);
+			}
+			if (params.phaseClocks[4] != 0)
+			{
+				tail = AddSegment(tail, decelStartTime + startDelay, params.phaseClocks[4], params.distances[4] * factor, params.initialDeceleration * factor, -scaledJerk, moveFlags, phase4PressureAdvanceClocks);
+			}
+			if (params.phaseClocks[5] != 0)
+			{
+				tail = AddSegment(tail, decelConstantStartTime + startDelay, params.phaseClocks[5], params.distances[5] * factor, params.peakDeceleration * factor, (motioncalc_t)0.0, moveFlags, phase5PressureAdvanceClocks);
+			}
+			if (params.phaseClocks[6] != 0)
+			{
+				tail = AddSegment(tail, decelEndStartTime + startDelay, params.phaseClocks[6], params.distances[6] * factor, params.peakDeceleration * factor, scaledJerk, moveFlags, phase6PressureAdvanceClocks);
+			}
+#else
 			if (params.accelClocks != 0)
 			{
-				tail = AddSegment(tail, startTime + startDelay, params.accelClocks, accelDistance * factor, (motioncalc_t)params.acceleration * factor, moveFlags, accelPressureAdvance);
+				tail = AddSegment(tail, startTime + startDelay, params.accelClocks, accelDistance * factor, params.acceleration * factor, moveFlags, accelPressureAdvance);
 			}
 			if (params.steadyClocks != 0)
 			{
@@ -1962,8 +2190,9 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 			}
 			if (params.decelClocks != 0)
 			{
-				tail = AddSegment(tail, decelStartTime + startDelay, params.decelClocks, decelDistance * factor, (motioncalc_t)params.deceleration * factor, moveFlags, decelPressureAdvance);
+				tail = AddSegment(tail, decelStartTime + startDelay, params.decelClocks, decelDistance * factor, params.deceleration * factor, moveFlags, decelPressureAdvance);
 			}
+#endif
 		}
 	}
 
@@ -2070,6 +2299,7 @@ void Move::ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepC
 {
 	switch (config)
 	{
+	default:
 		break;
 	case PhaseStepConfig::kv:
 		dms[axisOrExtruder].phaseStepControl.SetKv(value);
@@ -2089,15 +2319,18 @@ PhaseStepParams Move::GetPhaseStepParams(size_t axisOrExtruder) const noexcept
 }
 
 // Get the motor position in the current move so far, also speed and acceleration. Units are full steps and step clocks.
-bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
+// segments might be updated
+bool Move::UpdateCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
 {
-	return dms[driver].GetCurrentMotion(when, phaseStepMultiplier[driver], mParams);
+	const bool ret = dms[driver].UpdateCurrentMotion(when, mParams);
+	mParams.Scale(phaseStepMultiplier[driver]);
+	return ret;
 }
 
 bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept
 {
 	bool hasRemoteDrivers = false;
-	IterateRemoteDrivers(axisOrExtruder, [&hasRemoteDrivers](DriverId driver) { hasRemoteDrivers = true; });
+	IterateRemoteDrivers(axisOrExtruder, [&hasRemoteDrivers](DriverId driver) noexcept -> void { hasRemoteDrivers = true; });
 
 	// Phase stepping does not support remote drivers
 	if (hasRemoteDrivers && mode == StepMode::phase)
@@ -2111,9 +2344,9 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& re
 
 	bool interpolation;
 	unsigned int microsteps = GetMicrostepping(axisOrExtruder, interpolation);
-	GetCurrentMotion(axisOrExtruder, now, dm->phaseStepControl.mParams);								// Update position variable
+	UpdateCurrentMotion(axisOrExtruder, now, dm->phaseStepControl.mParams); // Update position variable
 
-	IterateLocalDrivers(axisOrExtruder, [this, dm, &ret, &mode, axisOrExtruder, microsteps](uint8_t driver) {
+	IterateLocalDrivers(axisOrExtruder, [this, dm, &ret, &mode, axisOrExtruder, microsteps](uint8_t driver) noexcept -> void {
 		// If we are going from step dir to phase step, we need to update the phase offset so the calculated phase matches MSCNT
 		if (!SmartDrivers::IsPhaseSteppingEnabled(driver) && mode == StepMode::phase)
 		{
@@ -2131,7 +2364,7 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& re
 		{
 			const uint16_t targetPhase = dm->phaseStepControl.CalculateStepPhase(driver) / 4;
 			uint16_t mscnt = SmartDrivers::GetMicrostepPosition(driver);
-			int16_t steps = ((int16_t)mscnt - (int16_t)targetPhase) / (256 / microsteps);
+			int16_t steps = ((int16_t)mscnt - (int16_t)targetPhase) / (int)(256 / microsteps);
 			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PhaseStep))
 			{
 				debugPrintf("dms[%u]: mscnt=%u, targetPhase=%u, steps=%d", axisOrExtruder, mscnt, targetPhase, steps);
@@ -2147,7 +2380,7 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& re
 				digitalWrite(DIRECTION_PINS[driver], true);
 			}
 
-			steps = abs(steps);
+			steps = (int16_t)abs((int)steps);
 
 			while (steps > 0)
 			{
@@ -2204,7 +2437,7 @@ void Move::PhaseStepControlLoop() noexcept
 	flags.Clear();
 
 	{
-		const DriveMovement *dm = phaseStepDMs;
+		const DriveMovement *_ecv_null dm = phaseStepDMs;
 		while (dm != nullptr)
 		{
 			if (dm->state > DMState::starting)
@@ -2221,11 +2454,11 @@ void Move::PhaseStepControlLoop() noexcept
 	}
 
 	bool inserted = false;
-	DriveMovement **dmp = &phaseStepDMs;
+	DriveMovement *_ecv_null *dmp = &phaseStepDMs;
 	while (*dmp != nullptr)
 	{
-		DriveMovement * const dm = *dmp;
-		GetCurrentMotion(dm->drive, now, dm->phaseStepControl.mParams);
+		DriveMovement * const dm = _ecv_not_null(*dmp);
+		UpdateCurrentMotion(dm->drive, now, dm->phaseStepControl.mParams);
 
 		if (dm->state != DMState::phaseStepping)
 		{
@@ -2243,7 +2476,7 @@ void Move::PhaseStepControlLoop() noexcept
 		{
 			dm->phaseStepControl.CalculateCurrentFraction();
 
-			IterateLocalDrivers(dm->drive, [dm](uint8_t driver) {
+			IterateLocalDrivers(dm->drive, [dm](uint8_t driver) noexcept -> void {
 				if ((dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver)) == 0)
 				{
 					if (likely(dm->state > DMState::starting))
@@ -2376,7 +2609,7 @@ void Move::DeactivateDM(DriveMovement *dmToRemove) noexcept
 #endif
 	while (*dmp != nullptr)
 	{
-		DriveMovement * const dm = *dmp;
+		DriveMovement * const dm = _ecv_not_null(*dmp);
 		if (dm == dmToRemove)
 		{
 			(*dmp) = dm->nextDM;
@@ -2409,7 +2642,7 @@ void Move::CheckEndstops(bool executingMove) noexcept
 		{
 		case EndstopHitAction::stopAll:
 #if SUPPORT_CAN_EXPANSION
-			if (StopAllDrivers(executingMove)) { wakeAsyncSender = true; }
+			if (StopAllDrivers(executingMove, hitDetails.whenTriggered)) { wakeAsyncSender = true; }
 #else
 			StopAllDrivers(executingMove);
 #endif
@@ -2435,7 +2668,7 @@ void Move::CheckEndstops(bool executingMove) noexcept
 		case EndstopHitAction::stopAxis:
 			// We must stop the drive before we mess with its coordinates
 #if SUPPORT_CAN_EXPANSION
-			if (StopAxisOrExtruder(executingMove, hitDetails.axis)) { wakeAsyncSender = true; }
+			if (StopAxisOrExtruder(executingMove, hitDetails.axis, hitDetails.whenTriggered)) { wakeAsyncSender = true; }
 #else
 			StopAxisOrExtruder(executingMove, hitDetails.axis);
 #endif
@@ -2456,7 +2689,7 @@ void Move::CheckEndstops(bool executingMove) noexcept
 					DriveMovement& dm = dms[hitDetails.axis];
 					if (dm.state >= DMState::firstMotionState)
 					{
-						if (CanMotion::StopDriverWhenExecuting(hitDetails.driver, dm.GetNetStepsTakenThisMove()))
+						if (CanMotion::StopDriverWhenExecuting(hitDetails.driver, dm.GetNetStepsTakenThisMove(hitDetails.whenTriggered)))
 						{
 							wakeAsyncSender = true;
 						}
@@ -2738,29 +2971,29 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 
 // This is called when we abort a move because we have hit an endstop.
 // It stops all drives and adjusts the end points of the current move to account for how far through the move we got.
-bool Move::StopAllDrivers(bool executingMove) noexcept
+bool Move::StopAllDrivers(bool executingMove, uint32_t when) noexcept
 {
 	bool wakeAsyncSender = false;
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 	{
-		if (StopAxisOrExtruder(executingMove, drive)) { wakeAsyncSender = true; }
+		if (StopAxisOrExtruder(executingMove, drive, when)) { wakeAsyncSender = true; }
 	}
 	return wakeAsyncSender;
 }
 
 // Stop a drive and re-calculate the end position. Return true if any remote drivers were scheduled to be stopped.
-bool Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
+bool Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive, uint32_t when) noexcept
 {
 	DriveMovement& dm = dms[logicalDrive];
 	int32_t netStepsTaken;
-	const bool wasMoving = dm.StopLogicalDrive(netStepsTaken);
+	const bool wasMoving = dm.StopLogicalDrive(netStepsTaken, when);
 	bool wakeAsyncSender = false;
 #if SUPPORT_CAN_EXPANSION
 	if (wasMoving)
 	{
 		IterateDrivers(logicalDrive,
-						[](uint8_t)->void { },						// no action if the driver is local
-						[executingMove, netStepsTaken, &wakeAsyncSender](DriverId did)->void
+						[](uint8_t) noexcept -> void { },						// no action if the driver is local
+						[executingMove, netStepsTaken, &wakeAsyncSender](DriverId did) noexcept -> void
 							{
 								if (executingMove)
 								{
@@ -2777,6 +3010,17 @@ bool Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
 	(void)wasMoving;
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+	if (wakeAsyncSender)
+	{
+		// We stopped one or more remote drivers, which will be reverted.
+		// For now we don't revert local drivers, instead we assume that all drivers for an axis are either all local or all remote.
+		// So adjust the current motor position for this logical drive to be the position that we will revert the remote drivers to.
+		// Otherwise we will pick up the wrong machine position when setting position after homing or probing.
+		// Ideally we would revert local drivers too, then we would execute this code unconditionally.
+		dm.currentMotorPosition = dm.positionAtMoveStart + netStepsTaken;
+	}
+#endif
 	return wakeAsyncSender;
 }
 
@@ -2882,6 +3126,7 @@ void Move::SetAxisDriversConfig(size_t axis, size_t numValues, const DriverId dr
 		}
 	}
 	dms[axis].driversNormallyUsed = bitmap;
+	dms[axis].isExtruder = false;
 }
 
 // Set the characteristics of an axis
@@ -2901,7 +3146,7 @@ void Move::SetAxisType(size_t axis, AxisWrapType wrapType, bool isNistRotational
 #if 0	// shortcut axes not implemented yet
 	case AxisWrapType::wrapWithShortcut:
 		shortcutAxes.SetBit(axis);
-		// no break
+		[[fallthrough]];
 #endif
 	case AxisWrapType::wrapAt360:
 		continuousAxes.SetBit(axis);
@@ -2916,17 +3161,19 @@ void Move::SetAxisType(size_t axis, AxisWrapType wrapType, bool isNistRotational
 void Move::SetExtruderDriver(size_t extruder, DriverId driver) noexcept
 {
 	extruderDrivers[extruder] = driver;
+	const size_t logicalDriveNumber = ExtruderToLogicalDrive(extruder);
 	if (driver.IsLocal())
 	{
 #if HAS_SMART_DRIVERS
-		SmartDrivers::SetAxisNumber(driver.localDriver, ExtruderToLogicalDrive(extruder));
+		SmartDrivers::SetAxisNumber(driver.localDriver, logicalDriveNumber);
 #endif
-		dms[ExtruderToLogicalDrive(extruder)].driversNormallyUsed = StepPins::CalcDriverBitmap(driver.localDriver);
+		dms[logicalDriveNumber].driversNormallyUsed = StepPins::CalcDriverBitmap(driver.localDriver);
 	}
 	else
 	{
-		dms[ExtruderToLogicalDrive(extruder)].driversNormallyUsed = 0;
+		dms[logicalDriveNumber].driversNormallyUsed = 0;
 	}
+	dms[logicalDriveNumber].isExtruder = true;
 }
 
 void Move::SetDriverStepTiming(size_t driver, const float microseconds[4]) noexcept
@@ -3022,9 +3269,9 @@ GCodeResult Move::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& repl
 		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[axis]))
 		{
 			IterateDrivers(axis,
-							[&drivers](uint8_t localDriver){ drivers.SetBit(localDriver); }
+							[&drivers](uint8_t localDriver) noexcept -> void { drivers.SetBit(localDriver); }
 # if SUPPORT_CAN_EXPANSION
-						  , [&canDrivers](DriverId driver){ canDrivers.AddEntry(driver); }
+						  , [&canDrivers](DriverId driver) noexcept -> void { canDrivers.AddEntry(driver); }
 # endif
 						  );
 		}
@@ -3070,7 +3317,7 @@ GCodeResult Move::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& repl
 #endif
 		   ))
 		{
-			drivers.Iterate([sgThreshold](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallThreshold(drive, sgThreshold); });
+			drivers.Iterate([sgThreshold](unsigned int drive, unsigned int) noexcept -> void { SmartDrivers::SetStallThreshold(drive, sgThreshold); });
 		}
 	}
 
@@ -3079,7 +3326,7 @@ GCodeResult Move::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& repl
 		bool sgFilter;
 		if (gb.TryGetBValue('F', sgFilter, seen))
 		{
-			drivers.Iterate([sgFilter](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallFilter(drive, sgFilter); });
+			drivers.Iterate([sgFilter](unsigned int drive, unsigned int) noexcept -> void { SmartDrivers::SetStallFilter(drive, sgFilter); });
 		}
 	}
 
@@ -3088,7 +3335,7 @@ GCodeResult Move::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& repl
 	{
 		seen = true;
 		const unsigned int stepsPerSecond = gb.GetUIValue();
-		drivers.Iterate([stepsPerSecond](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallMinimumStepsPerSecond(drive, stepsPerSecond); });
+		drivers.Iterate([stepsPerSecond](unsigned int drive, unsigned int) noexcept -> void { SmartDrivers::SetStallMinimumStepsPerSecond(drive, stepsPerSecond); });
 	}
 
 	// Check for coolconf parameter
@@ -3096,7 +3343,7 @@ GCodeResult Move::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& repl
 		uint32_t coolStepConfig;
 		if (gb.TryGetLimitedUIValue('T', coolStepConfig, seen, 1u << 16))
 		{
-			drivers.Iterate([coolStepConfig](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetRegister(drive, SmartDriverRegister::coolStep, coolStepConfig); } );
+			drivers.Iterate([coolStepConfig](unsigned int drive, unsigned int) noexcept -> void { SmartDrivers::SetRegister(drive, SmartDriverRegister::coolStep, coolStepConfig); } );
 		}
 	}
 
@@ -3104,24 +3351,26 @@ GCodeResult Move::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& repl
 	{
 		uint32_t action;
 		if (gb.TryGetLimitedUIValue('R', action, seen, 4))
-		switch (action)
 		{
-		case 0:
-		default:
-			logOnStallDrivers &= ~drivers;
-			eventOnStallDrivers &= ~drivers;
-			break;
+			switch (action)
+			{
+			case 0:
+			default:
+				logOnStallDrivers &= ~drivers;
+				eventOnStallDrivers &= ~drivers;
+				break;
 
-		case 1:
-			eventOnStallDrivers &= ~drivers;
-			logOnStallDrivers |= drivers;
-			break;
+			case 1:
+				eventOnStallDrivers &= ~drivers;
+				logOnStallDrivers |= drivers;
+				break;
 
-		case 2:
-		case 3:
-			logOnStallDrivers &= ~drivers;
-			eventOnStallDrivers |= drivers;
-			break;
+			case 2:
+			case 3:
+				logOnStallDrivers &= ~drivers;
+				eventOnStallDrivers |= drivers;
+				break;
+			}
 		}
 	}
 
@@ -3164,7 +3413,7 @@ GCodeResult Move::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& repl
 	}
 
 	drivers.Iterate
-		([buf, this, &reply](unsigned int drive, unsigned int) noexcept
+		([buf, this, &reply](unsigned int drive, unsigned int) noexcept -> void
 			{
 #  if SUPPORT_CAN_EXPANSION
 				buf->lcatf("Driver 0.%u: ", drive);
@@ -3502,11 +3751,11 @@ void Move::OnEndstopOrZProbeStatesChanged() noexcept
 GCodeResult Move::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndExtruders, const StringRef& reply) noexcept
 {
 	CanDriversData<StepsPerUnitAndMicrostepping> data;
-	axesAndExtruders.Iterate([this, &data](unsigned int axisOrExtruder, unsigned int count) noexcept
+	axesAndExtruders.Iterate([this, &data](unsigned int axisOrExtruder, unsigned int count) noexcept -> void
 								{
 									const StepsPerUnitAndMicrostepping driverData(DriveStepsPerMm(axisOrExtruder), GetRawMicrostepping(axisOrExtruder));
 									this->IterateRemoteDrivers(axisOrExtruder,
-																[&data, &driverData](DriverId driver) noexcept
+																[&data, &driverData](DriverId driver) noexcept -> void
 																{
 																	data.AddEntry(driver, driverData);
 																}
@@ -3522,7 +3771,7 @@ GCodeResult Move::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndExtru
 
 // Get and lock the aux move buffer. If successful, return a pointer to the buffer.
 // The caller must not attempt to lock the aux buffer more than once, and must call ReleaseAuxMove to release the buffer.
-AsyncMove *Move::LockAuxMove() noexcept
+AsyncMove *_ecv_null Move::LockAuxMove() noexcept
 {
 	AtomicCriticalSectionLocker lock;
 	if (!auxMoveLocked && !auxMoveAvailable)

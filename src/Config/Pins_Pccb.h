@@ -56,7 +56,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;
 
 #define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		0					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
-#define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_LED_STRIPS		1					// set nonzero to support DotStar LED strips
 #define SUPPORT_DMA_DOTSTAR		1
@@ -98,8 +97,9 @@ constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors p
 
 constexpr size_t MaxBedHeaters = 1;
 constexpr size_t MaxChamberHeaters = 1;
+constexpr size_t MaxHeatersPerBed = 4;
+constexpr size_t MaxHeatersPerChamber = 4;
 constexpr int8_t DefaultBedHeater = -1;
-constexpr int8_t DefaultE0Heater = 0;				// Index of the default first extruder heater, used only for the legacy status response
 
 constexpr size_t NumThermistorInputs = 2;
 constexpr size_t NumTmcDriversSenseChannels = 1;
@@ -124,8 +124,10 @@ constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 constexpr size_t MaxLedStrips = 2;					// Maximum number of LED strips
 
+constexpr size_t NumUsbChannels = 1;
 constexpr size_t NumSerialChannels = 1;				// The number of serial IO channels (USB only)
-#define SERIAL_MAIN_DEVICE serialUSB
+
+#define SERIAL_USB_DEVICE serialUSB
 
 // SerialUSB
 constexpr Pin UsbVBusPin = PortCPin(11);			// Pin used to monitor VBUS on USB port

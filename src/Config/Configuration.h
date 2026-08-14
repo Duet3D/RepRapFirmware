@@ -67,6 +67,7 @@ constexpr unsigned int MinVisibleAxes = 2;				// the minimum number of axes that
 
 constexpr unsigned int DefaultBacklashCorrectionDistanceFactor = 10;	// backlash correction is spread over (backlash amount * this) mm
 
+// We allow a slightly higher tolerance than the standard NIST values because rounding error may make the apparent radius a little smaller than actual
 constexpr float MaxCncRadiusErrorMm = 0.0022;			// max difference between G2/G3 start and end distances from arc centre when in CNC mm mode, see NIST 3.5.3.2 (NIST standard is 0.002mm)
 constexpr float MaxCncRadiusErrorInches = 0.00022;		// max difference between G2/G3 start and end distances from arc centre when in CNC inches mode, see NIST 3.5.3.2 (NIST standard is 0.0002 inches)
 constexpr float MaxNonCncRadiusError = 0.05;			// max difference between G2/G3 start and end distances from arc centre when not in CNC mode (mm)
@@ -165,7 +166,7 @@ constexpr size_t MaxStringExpressionLength = StringLength256;
 
 // Increased GCODE_LENGTH because M587 and M589 commands on the Duet WiFi can get very long and GCode meta commands can get even longer
 // Also if HAS_SBC_INTERFACE is enabled then it needs to be large enough to hold SBC commands sent in binary mode, see GCodeBuffer.h
-constexpr size_t MaxGCodeLength = 256;					// maximum number of non-comment characters in a line of GCode including the null terminator
+constexpr size_t MaxGCodeStringLength = 256;			// maximum number of non-comment characters in a line of GCode including the null terminator
 
 // Define the maximum length of a GCode that we can queue to synchronise it to a move. Long enough for M150 R255 U255 B255 P255 S255 F1 encoded in binary mode (64 bytes).
 constexpr size_t ShortGCodeLength = 64;
@@ -263,8 +264,14 @@ constexpr size_t MaxI2cOrModbusValues = 34;						// max bytes in M260 or M261 co
 // File handling
 #if defined(DUET3) || defined(DUET3MINI)
 constexpr size_t MAX_FILES = 20;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
+# if SAME70
+constexpr unsigned int NumLruBuffers = 10;				// Number of disk buffers to allocate if FF_LRU is enabled in ff_config.h
+# else
+constexpr unsigned int NumLruBuffers = 5;				// Number of disk buffers to allocate if FF_LRU is enabled in ff_config.h
+# endif
 #else
 constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
+constexpr unsigned int NumLruBuffers = 2;				// Number of disk buffers to allocate if FF_LRU is enabled in ff_confg.h
 #endif
 
 constexpr size_t MaxLiteralArrayElements = 40;			// Maximum number of array elements we are allowed in a literal array

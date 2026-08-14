@@ -21,7 +21,10 @@
 # elif defined(DUET3MINI_V04)
 #  define DUET3MINI		1
 #  define PLATFORM Duet3Mini
-# elif defined(FMDC_V02) || defined(FMDC_V03)
+# elif defined(INDX)
+#  define DUET3MINI		1
+#  define PLATFORM Duet3_INDX
+# elif defined(FMDC_V03)
 #  define DUET3MINI		1
 #  define PLATFORM FMDC
 # else
@@ -38,6 +41,10 @@
 #endif
 
 #include P_INCLUDE_FILE
+
+// Derive channel counts from platform-specific values
+constexpr size_t FirstAuxChannel = NumUsbChannels;
+constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 
 // Apply default values to anything not configured
 #ifndef SUPPORT_NONLINEAR_EXTRUSION
@@ -92,14 +99,16 @@
 # define SUPPORT_BME280			0
 #endif
 
+#ifndef SUPPORT_BME68X
+# define SUPPORT_BME68X			0
+#endif
+
 #ifndef SUPPORT_ADS131A02
 # define SUPPORT_ADS131A02		0
 #endif
 
-#define HAS_AUX_DEVICES			(defined(SERIAL_AUX_DEVICE))		// if SERIAL_AUX_DEVICE is defined then we have one or more aux devices
-
 #ifndef SUPPORT_PANELDUE_FLASH
-# define SUPPORT_PANELDUE_FLASH	HAS_AUX_DEVICES
+# define SUPPORT_PANELDUE_FLASH	(NUM_ASYNC_CHANNELS != 0)
 #endif
 
 #ifndef ALLOW_ARBITRARY_PANELDUE_PORT
@@ -126,6 +135,10 @@
 # define SUPPORT_TMC51xx		0
 #endif
 
+#ifndef SUPPORT_TMC2240_SPI
+# define SUPPORT_TMC2240_SPI	0
+#endif
+
 #ifndef VARIABLE_NUM_DRIVERS
 # define VARIABLE_NUM_DRIVERS	0
 #endif
@@ -134,15 +147,15 @@
 # define SUPPORT_CAN_EXPANSION	0
 #endif
 
+#ifndef SUPPORT_BRS
+# define SUPPORT_BRS			0
+#endif
+
 #ifndef DUAL_CAN
 # define DUAL_CAN				0
 #endif
 
-#ifndef SUPPORT_OBJECT_MODEL
-# define SUPPORT_OBJECT_MODEL	0
-#endif
-
-#define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx || SUPPORT_TMC51xx)
+#define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI)
 #ifndef HAS_STALL_DETECT
 # define HAS_STALL_DETECT		(SUPPORT_TMC2660 || SUPPORT_TMC51xx)
 #endif
@@ -259,6 +272,14 @@
 #define SUPPORT_PHASE_STEPPING	0
 #endif
 
+#ifdef SUPPORT_3RD_ORDER
+# if SUPPORT_3RD_ORDER && !SUPPORT_PHASE_STEPPING
+#  error Cannot support S Curve acceleration without phase stepping
+# endif
+#else
+# define SUPPORT_3RD_ORDER		0
+#endif
+
 #ifndef SUPPORT_PROBE_POINTS_FILE
 # define SUPPORT_PROBE_POINTS_FILE	0
 #endif
@@ -319,8 +340,8 @@
 # define SUPPORT_MODBUS_RTU				0
 #endif
 
-#if SUPPORT_MODBUS_RTU && !HAS_AUX_DEVICES
-# error Cannot support Modbus RTU without aux devices
+#if SUPPORT_MODBUS_RTU && (NUM_ASYNC_CHANNELS == 0)
+# error Cannot support Modbus RTU without async channels
 #endif
 
 // Function to look up a pin name pass back the corresponding index into the pin table

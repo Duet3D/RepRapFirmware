@@ -17,7 +17,7 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <limits>
 
-static void GlobalScanningProbeCallback(CallbackParameter param, RemoteInputHandle h, uint32_t val) noexcept
+static void GlobalScanningProbeCallback(CallbackParameter param, RemoteInputHandle h, int32_t val) noexcept
 {
 	((RemoteZProbe*)param.vp)->ScanningProbeCallback(h, val);
 }
@@ -54,11 +54,41 @@ GCodeResult RemoteZProbe::AppendPinNames(const StringRef& str) noexcept
 }
 
 // Get the raw reading. Not used with scanning Z probes except for reporting in the object model.
-uint32_t RemoteZProbe::GetRawReading() const noexcept
+int32_t RemoteZProbe::GetRawReading() const noexcept
 {
-	return (type == ZProbeType::scanningAnalog) ? lastValue
-			: (lastValue > 0) ? 1000						// if it's not a scanning probe then it must be digital because we don't yet support analog probes on expansion boards
-				: 0;										// for digital probes the reading sent over CAN (stored in lastValue) is 0xFFFFFFFF or zero.
+	return (type == ZProbeType::scanningAnalog || type == ZProbeType::analog || type == ZProbeType::loadCell) ? lastValue
+			: (lastValue != 0) ? 1000						// if it's not a scanning probe then it must be digital because we don't yet support analog probes on expansion boards
+				: 0;										// for digital probes the reading sent over CAN (stored in lastValue) is 0xFFFFFFFF (in 3.6.x), 0x7FFFFFF (3.7.x), or zero.
+}
+
+// For load cell probes the threshold is in grams and the reading in counts, so use the state reported by the board instead of comparing them
+bool RemoteZProbe::Stopped() const noexcept
+{
+	return (type == ZProbeType::loadCell) ? currentState : ZProbe::Stopped();
+}
+
+// Send a tare request in the given mode and check that the cell is alive
+GCodeResult RemoteZProbe::DoTare(uint8_t mode, const StringRef& reply) noexcept
+{
+	const GCodeResult rslt = CanInterface::TareHandle(boardAddress, handle, mode, tareBaseline, reply);
+	if (rslt == GCodeResult::ok)
+	{
+		// The driver pins the reading to exactly zero when the cell or its reference channel is dead or the signal is at the ADC rail,
+		// and a healthy cell never reads exactly zero through the noise
+		if (tareBaseline == 0)
+		{
+			reply.copy("load cell is not responding or out of range");
+			return GCodeResult::error;
+		}
+		reprap.SensorsUpdated();
+	}
+	return rslt;
+}
+
+// Latch the current load cell reading as the new baseline, so the reported force is zeroed and the trigger comparison starts from it
+GCodeResult RemoteZProbe::Tare(const StringRef& reply) noexcept
+{
+	return DoTare(CanMessageTareInputMonitor::modeTareAndTrack, reply);
 }
 
 bool RemoteZProbe::SetProbing(bool isProbing) noexcept
@@ -77,9 +107,31 @@ bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 	}
 	else
 	{
-		if (isProbing && type == ZProbeType::scanningAnalog)
+		if (type == ZProbeType::loadCell)
 		{
-			rslt = CanInterface::ChangeHandleThreshold(boardAddress, handle, targetAdcValue, nullptr, reply.GetRef());
+			if (isProbing)
+			{
+				// Latch the baseline and stop it tracking so that the trigger comparison stays fixed for the whole probing move
+				rslt = DoTare(CanMessageTareInputMonitor::modeTareAndHold, reply.GetRef());
+				if (rslt == GCodeResult::ok && preloadLimits[0] < preloadLimits[1])
+				{
+					const float preload = (float)tareBaseline * gramsPerCount;
+					if (preload < preloadLimits[0] || preload > preloadLimits[1])
+					{
+						reply.printf("load cell preload %.0fg is outside the safe window", (double)preload);
+						rslt = GCodeResult::error;
+					}
+				}
+			}
+			else
+			{
+				// The nozzle may still be on the bed at this point, so resume tracking from the held baseline instead of latching a loaded one
+				rslt = CanInterface::TareHandle(boardAddress, handle, CanMessageTareInputMonitor::modeTrackOnly, tareBaseline, reply.GetRef());
+			}
+		}
+		if (rslt == GCodeResult::ok && isProbing && (type == ZProbeType::scanningAnalog || type == ZProbeType::analog || type == ZProbeType::loadCell))
+		{
+			rslt = CanInterface::ChangeHandleThreshold(boardAddress, handle, GetThresholdCounts(), &currentState, reply.GetRef());
 		}
 		if (rslt == GCodeResult::ok)
 		{
@@ -97,9 +149,9 @@ bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 // Create a remote Z probe
 GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& reply) noexcept
 {
-	if (type != ZProbeType::unfilteredDigital && type != ZProbeType::blTouch && type != ZProbeType::scanningAnalog)
+	if (type != ZProbeType::analog && type != ZProbeType::unfilteredDigital && type != ZProbeType::blTouch && type != ZProbeType::scanningAnalog && type != ZProbeType::loadCell)
 	{
-		reply.copy("only Z probe types 8, 9 and 11 are supported on expansion boards");
+		reply.copy("only Z probe types 1, 8, 9, 11 and 12 are supported on expansion boards");
 		return GCodeResult::error;
 	}
 
@@ -112,7 +164,7 @@ GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& rep
 	RemoteInputHandle h;
 	h.Set(RemoteInputHandle::typeZprobe, number, 0);
 	bool state = false;
-	const uint16_t threshold = (type == ZProbeType::scanningAnalog) ? DefaultZProbeADValue : 0;		// nonzero threshold makes it an analog handle
+	const uint16_t threshold = (type == ZProbeType::analog || type == ZProbeType::scanningAnalog || type == ZProbeType::loadCell) ? DefaultZProbeADValue : 0;		// nonzero threshold makes it an analog handle
 	const GCodeResult rc = CanInterface::CreateHandle(boardAddress, h, pinNames.c_str(), threshold, ActiveProbeReportInterval, &state, reply);
 	if (rc < GCodeResult::error)								// don't set the handle unless it is valid, or we will get an error when this probe is deleted
 	{
@@ -125,6 +177,16 @@ GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& rep
 		else
 		{
 			lastValue = (state) ? 1 : 0;						// set the initial state if it's a digital Z probe
+			currentState = state;
+		}
+		if (type == ZProbeType::loadCell)
+		{
+			// Tare now so that the reported force starts from a defined zero, and let the baseline track drift until a probing move latches it
+			const GCodeResult rc2 = CanInterface::TareHandle(boardAddress, handle, CanMessageTareInputMonitor::modeTareAndTrack, tareBaseline, reply);
+			if (rc2 != GCodeResult::ok)
+			{
+				return rc2;
+			}
 		}
 	}
 	return rc;
@@ -137,9 +199,9 @@ GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, boo
 	{
 		seen = true;
 		const uint32_t newType = gb.GetUIValue();
-		if (newType != (uint32_t)ZProbeType::unfilteredDigital && newType != (uint32_t)ZProbeType::blTouch && newType != (uint32_t)ZProbeType::scanningAnalog)
+		if (newType != (uint32_t)ZProbeType::unfilteredDigital && newType != (uint32_t)ZProbeType::blTouch && newType != (uint32_t)ZProbeType::scanningAnalog && newType != (uint32_t)ZProbeType::analog && newType != (uint32_t)ZProbeType::loadCell)
 		{
-			reply.copy("only Z probe types 8, 9 and 11 are supported on expansion boards");
+			reply.copy("only Z probe types 1, 8, 9, 11 and 12 are supported on expansion boards");
 			return GCodeResult::error;
 		}
 
@@ -152,16 +214,22 @@ GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, boo
 		type = (ZProbeType)newType;
 	}
 
-	// No other configuration items affect remote probes differently from others, so just call the base class function
-	return ZProbe::Configure(gb, reply, seen);
+	// All other configuration items are handled by the base class function
+	const GCodeResult rslt = ZProbe::Configure(gb, reply, seen);
+	if (rslt == GCodeResult::ok && type == ZProbeType::loadCell && gb.Seen('V'))
+	{
+		// The scale converts the grams threshold to counts, so a new scale invalidates the count threshold held by the board
+		return CanInterface::ChangeHandleThreshold(boardAddress, handle, GetThresholdCounts(), &currentState, reply);
+	}
+	return rslt;
 }
 
 GCodeResult RemoteZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) /*override*/ THROWS(GCodeException)
 {
 	GCodeResult rslt = ZProbe::HandleG31(gb, reply);
-	if (type == ZProbeType::scanningAnalog && gb.Seen('P') && (rslt == GCodeResult::ok || rslt <= GCodeResult::warning))
+	if ((type == ZProbeType::analog || type == ZProbeType::scanningAnalog || type == ZProbeType::loadCell) && gb.Seen('P') && (rslt == GCodeResult::ok || rslt <= GCodeResult::warning))
 	{
-		const GCodeResult rslt2 = CanInterface::ChangeHandleThreshold(boardAddress, handle, targetAdcValue, nullptr, reply);
+		const GCodeResult rslt2 = CanInterface::ChangeHandleThreshold(boardAddress, handle, GetThresholdCounts(), &currentState, reply);
 		if (rslt2 > rslt) { rslt = rslt2; }
 	}
 	return rslt;
@@ -223,29 +291,35 @@ GCodeResult RemoteZProbe::CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& 
 		const int32_t driveLevel = gb.GetLimitedIValue('S', -1, 31);
 		if (driveLevel < 0)
 		{
-			param = CanMessageChangeInputMonitorNew::paramAutoCalibrateDriveLevelAndReport;
+			param = CanMessageChangeInputMonitorV1::paramAutoCalibrateDriveLevelAndReport;
 		}
 		else
 		{
 			uint32_t offset = 0;
 			bool dummy = false;
-			gb.TryGetLimitedUIValue('R', offset, dummy, CanMessageChangeInputMonitorNew::maxParamOffset + 1);
-			param = (offset << CanMessageChangeInputMonitorNew::paramOffsetShift) | (uint32_t)driveLevel;
+			gb.TryGetLimitedUIValue('R', offset, dummy, CanMessageChangeInputMonitorV1::maxParamOffset + 1);
+			param = (offset << CanMessageChangeInputMonitorV1::paramOffsetShift) | (uint32_t)driveLevel;
 		}
 	}
 	else
 	{
-		param = CanMessageChangeInputMonitorNew::paramReportDriveLevel;
+		param = CanMessageChangeInputMonitorV1::paramReportDriveLevel;
 	}
 	uint8_t returnedDriveLevel;
 	return CanInterface::SetHandleDriveLevel(boardAddress, handle, param, returnedDriveLevel, reply);
 }
 
 // Callback function for digital Z probes
-void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState, uint32_t reading) noexcept
+void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, uint32_t when, bool newState, int32_t reading) noexcept
 {
 	if (src == boardAddress)
 	{
+		currentState = newState;
+		if (newState)
+		{
+			whenTriggered = when;
+			haveTriggerTime = true;
+		}
 		if (type == ZProbeType::scanningAnalog && useTouchMode)
 		{
 			touchTriggered = newState;
@@ -255,16 +329,33 @@ void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, 
 }
 
 // Process a remote reading that relates to this Z probe
-void RemoteZProbe::UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint32_t reading) noexcept
+void RemoteZProbe::UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint32_t when, int32_t reading) noexcept
 {
 	if (src == boardAddress)
 	{
+		if (type != ZProbeType::loadCell)				// the board compares load cell readings itself and reports state changes via HandleRemoteInputChange
+		{
+			bool triggered = (reading > targetAdcValue);
+			if (misc.parts.probingAway)
+			{
+				triggered = !triggered;
+			}
+			if (triggered)
+			{
+				whenTriggered = when;
+				haveTriggerTime = true;
+			}
+			else
+			{
+				haveTriggerTime = false;
+			}
+		}
 		lastValue = reading;
 	}
 }
 
 // Callback function for scanning analog Z probes
-void RemoteZProbe::ScanningProbeCallback(RemoteInputHandle h, uint32_t val) noexcept
+void RemoteZProbe::ScanningProbeCallback(RemoteInputHandle h, int32_t val) noexcept
 {
 	if (h == handle)
 	{

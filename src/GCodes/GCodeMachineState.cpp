@@ -45,6 +45,9 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 #if HAS_SBC_INTERFACE
 	  fileId(prev.fileId),
 #endif
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
+	  fname(prev.fname),
+#endif
 	  lockedResources(prev.lockedResources),
 	  lineNumber((withinSameFile) ? prev.lineNumber : 0),
 	  selectedPlane(prev.selectedPlane), drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
@@ -98,6 +101,9 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& copyFrom, GCodeMachineSt
 #endif
 #if HAS_SBC_INTERFACE
 	  fileId(copyFrom.fileId),
+#endif
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
+	  fname(copyFrom.fname),
 #endif
 	  lockedResources(copyFrom.lockedResources),
 	  lineNumber(copyFrom.lineNumber),
@@ -233,6 +239,7 @@ void GCodeMachineState::CloseFile() noexcept
 				{
 					ms->fileId = NoFileId;
 					ms->fileFinished = false;
+					ms->fname.Assign(nullptr);
 				}
 			}
 		}
@@ -241,7 +248,18 @@ void GCodeMachineState::CloseFile() noexcept
 #endif
 	{
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-		fileState.Close();
+		if (fileState.IsLive())
+		{
+			const FileData currentFile(fileState);					// take a copy because we are about to close it
+			for (GCodeMachineState *ms = this; ms != nullptr; ms = ms->GetPrevious())
+			{
+				if (ms->fileState == currentFile)
+				{
+					ms->fileState.Close();
+					ms->fname.Assign(nullptr);
+				}
+			}
+		}
 #endif
 	}
 }
@@ -252,8 +270,9 @@ void GCodeMachineState::WaitForAcknowledgement(uint32_t seq) noexcept
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	if (fileState.IsLive())
 	{
-		// Stop reading from the current file
-		CloseFile();
+		// Stop reading from the current file by closing only our own reference to it. Don't call CloseFile here because that
+		// closes the file in the stack frames below too, which would prevent the invoking file from resuming after acknowledgement
+		fileState.Close();
 	}
 #endif
 	waitingForAcknowledgement = true;

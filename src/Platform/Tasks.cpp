@@ -27,7 +27,30 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include <freertos_task_additions.h>
-#include <malloc.h>						// non-standard include file, defines 'mallinfo'
+
+#ifdef __ECV__
+
+// mallinfo.h is a nonstandard file so it isn't included in eCv standard include files
+// We put the definitions we need here.
+
+struct mallinfo {
+  size_t arena;    /* total space allocated from system */
+  size_t ordblks;  /* number of non-inuse chunks */
+  size_t smblks;   /* unused -- always zero */
+  size_t hblks;    /* number of mmapped regions */
+  size_t hblkhd;   /* total space in mmapped regions */
+  size_t usmblks;  /* unused -- always zero */
+  size_t fsmblks;  /* unused -- always zero */
+  size_t uordblks; /* total allocated space */
+  size_t fordblks; /* total non-inuse space */
+  size_t keepcost; /* top-most, releasable (via malloc_trim) space */
+};
+
+extern struct mallinfo mallinfo (void);
+
+#else
+# include <malloc.h>					// non-standard include file, defines 'mallinfo'
+#endif
 
 const char memPattern = (char)0xA5;		// this must be the same pattern as FreeRTOS because we use common code for checking for stack overflow
 
@@ -57,9 +80,9 @@ extern DeviceVectors exception_table;
 constexpr unsigned int IdleTaskStackWords = 50;				// currently we don't use the idle task for anything, so this can be quite small
 static Task<IdleTaskStackWords> idleTask;
 
-extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize) noexcept
+extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, configSTACK_DEPTH_TYPE *pulIdleTaskStackSize) noexcept
 {
-	*ppxIdleTaskTCBBuffer = (xSTATIC_TCB*)idleTask.GetTaskMemory();
+	*ppxIdleTaskTCBBuffer = (xSTATIC_TCB *_ecv_from)idleTask.GetTaskMemory();
 	*ppxIdleTaskStackBuffer = (uint32_t*)idleTask.GetStackBase();
 	*pulIdleTaskStackSize = idleTask.GetStackSize();
 }
@@ -154,11 +177,15 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array _ecv_null stk) noexcept
 	SetPinMode(ActLedPin, (ActOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);		// set up activity LED and turn it off
 #endif
 
+#ifdef INDX
+	SetPinMode(CanBufferDisablePin, OUTPUT_HIGH);							// turn the CAN buffer off, it may interfere with USB on v0.1 boards
+#endif
+
 #if !defined(DEBUG)		// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
 	// Check the integrity of the firmware by checking the firmware CRC
-	// If we have embedded files then the CRC is stored after those files, so we need to fetch the CRC address form the vector table
+	// If we have embedded files then the CRC is stored after those files, so we need to fetch the CRC address from the vector table
 	{
-		const char *_ecv_array firmwareStart = reinterpret_cast<const char *_ecv_array>(SCB->VTOR & 0xFFFFFF80);
+		const char *_ecv_array firmwareStart = reinterpret_cast<const char *_ecv_array>(SCB->VTOR & 0xFFFFFF80u);
 		const char *_ecv_array firmwareCrcAddr = (const char *_ecv_array)exception_table
 # if SAME5x
 										.pvReservedM9;
@@ -222,7 +249,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array _ecv_null stk) noexcept
 	// We could also trap unaligned memory access, if we change the gcc options to not generate code that uses unaligned memory access.
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
 
-#if !SAME5x
+#if SAME70 || SAM4E || SAM4S
 	// When doing a software reset, we disable the NRST input (User reset) to prevent the negative-going pulse that gets generated on it being held
 	// in the capacitor and changing the reset reason from Software to User. So enable it again here. We hope that the reset signal will have gone away by now.
 # ifndef RSTC_MR_KEY_PASSWD

@@ -50,7 +50,6 @@ public:
 	void EmergencyStop() noexcept;
  	void Init() noexcept;
 	void Spin() noexcept;
-	void Exit() noexcept;
 
 	void Diagnostics(MessageType mtype, const StringRef& reply) noexcept;
 	unsigned int GetNumberOfDiagnosticParts() const noexcept;
@@ -96,6 +95,9 @@ public:
 #if HAS_SBC_INTERFACE
  	bool UsingSbcInterface() const noexcept { return usingSbcInterface; }
  	SbcInterface& GetSbcInterface() const noexcept { return *sbcInterface; }
+# if SUPPORTS_SBC_OVER_USB
+	GCodeResult SwitchToUsbSbcMode(GCodeBuffer& gb, const StringRef& reply) noexcept;
+# endif
 #endif
 #if SUPPORT_CAN_EXPANSION
  	ExpansionManager& GetExpansion() const noexcept { return *expansion; }
@@ -115,8 +117,6 @@ public:
 	OutputBuffer *_ecv_null GetStatusResponse(uint8_t type, ResponseSource source) const noexcept;
 	OutputBuffer *_ecv_null GetConfigResponse() noexcept;
 #endif
-
-	OutputBuffer *_ecv_null GetLegacyStatusResponse(uint8_t type, int seq) const noexcept;
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	OutputBuffer *_ecv_null GetFilesResponse(const GCodeBuffer *_ecv_null gb, c_string dir, unsigned int startAt, int maxItems, bool flagsDirs) noexcept;
@@ -150,7 +150,7 @@ public:
 
 	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
 
-	void SaveConfigError(c_string filename, unsigned int lineNumber, c_string errorMessage) noexcept;
+	void SaveConfigError(AutoStringHandle& filename, unsigned int lineNumber, c_string errorMessage) noexcept;
 
 	void BoardsUpdated() noexcept { ++boardsSeq; }
 	void DirectoriesUpdated() noexcept { ++directoriesSeq; }
@@ -161,8 +161,8 @@ public:
 	void LedStripsUpdated() noexcept { ++ledStripsSeq; }
 	void JobUpdated() noexcept { ++jobSeq; }
 	void MoveUpdated() noexcept { ++moveSeq; }
+	void MotionSystemUpdated() noexcept { MoveUpdated(); }			// motion systems in the OM are currently inside 'move'
 	void NetworkUpdated() noexcept { ++networkSeq; }
-	void ScannerUpdated() noexcept { ++scannerSeq; }
 	void SensorsUpdated() noexcept { ++sensorsSeq; }
 	void SpindlesUpdated() noexcept { ++spindlesSeq; }
 	void StateUpdated() noexcept { ++stateSeq; }
@@ -243,7 +243,7 @@ private:
 #endif
 
 	uint16_t boardsSeq, directoriesSeq, fansSeq, heatSeq, inputsSeq, jobSeq, ledStripsSeq, moveSeq, globalSeq;
-	uint16_t networkSeq, scannerSeq, sensorsSeq, spindlesSeq, stateSeq, toolsSeq, volumesSeq;
+	uint16_t networkSeq, sensorsSeq, spindlesSeq, stateSeq, toolsSeq, volumesSeq;
 
 	GlobalVariables globalVariables;
 
@@ -302,7 +302,7 @@ inline bool RepRap::IsStopped() const noexcept { return stopped; }
 template <size_t NumWords> class MemoryWatcher
 {
 public:
-	__attribute__((noinline)) MemoryWatcher(uint32_t *p_address) noexcept;
+	__attribute__((noinline)) explicit MemoryWatcher(uint32_t *_ecv_array p_address) noexcept;
 	__attribute__((noinline)) MemoryWatcher() noexcept;
 	~MemoryWatcher() noexcept;
 	__attribute__((noinline)) bool Check(unsigned int tag) noexcept;
@@ -310,13 +310,13 @@ public:
 private:
 	void Init() noexcept;
 
-	volatile uint32_t* checkedData;
+	volatile uint32_t *_ecv_array checkedData;
 	uint32_t checkSum;
 	volatile uint32_t dataCopy[NumWords];
 };
 
 // Constructor to watch memory at a specified start address
-template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher(uint32_t *p_address) noexcept
+template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher(uint32_t *_ecv_array p_address) noexcept
 	: checkedData(p_address)
 {
 	Init();
@@ -325,7 +325,7 @@ template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher(uint32_t *p_ad
 // Constructor to watch memory immediately after the memory occupied by this memory watcher object
 template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher() noexcept
 {
-	checkedData = reinterpret_cast<uint32_t*>(this) + (sizeof(*this) / sizeof(uint32_t));
+	checkedData = reinterpret_cast<uint32_t *_ecv_array>(this) + (sizeof(*this) / sizeof(uint32_t));
 	Init();
 }
 
@@ -370,7 +370,7 @@ template <size_t NumWords> bool MemoryWatcher<NumWords>::Check(unsigned int tag)
 	{
 		const bool fix = (csumProtected != checkSum && csumCopy == checkSum);
 		constexpr c_string msg = "Mem diff: offset %u, original %08" PRIx32 ", copy %08" PRIx32 ", flags %08" PRIx32 "\n";
-		const uint32_t flags = ((csumProtected == checkSum) ? 0 : 1) | ((csumCopy == checkSum) ? 0 : 0x10) | ((fix) ? 0x0100 : 0) | (tag << 16);
+		const uint32_t flags = ((csumProtected == checkSum) ? 0u : 1u) | ((csumCopy == checkSum) ? 0u : 0x10u) | ((fix) ? 0x0100u : 0u) | (tag << 16);
 		reprap.LogDebugMessage(msg, (unsigned int)badOffset * 4, checkedData[badOffset], dataCopy[badOffset], flags);
 
 		if (fix)

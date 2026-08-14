@@ -558,7 +558,7 @@ void GCodes::ClearBedMapping() noexcept
 	reprap.GetMove().SetIdentityTransform();
 	for (MovementState& ms : moveStates)
 	{
-		reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetNumber(), true, ms.currentTool);
+		reprap.GetMove().GetCurrentUserPosition(ms.raw.coords, ms.GetNumber(), true, ms.currentTool);
 		ToolOffsetInverseTransform(ms);		// update user coordinates to remove any height map offset there was at the current position
 	}
 }
@@ -604,7 +604,7 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 	float userPositionTarget[MaxAxes];
 	MovementState& ms = GetMovementState(gb);
 	memcpyf(userPositionTarget, ms.currentUserPosition, numVisibleAxes);
-	memcpyf(straightProbeSettings.GetTarget(), ms.coords, numVisibleAxes);		// this is needed in case there are mapped axes, see ToolOffsetTransform
+	memcpyf(straightProbeSettings.GetTarget(), ms.raw.coords, numVisibleAxes);		// this is needed in case there are mapped axes, see ToolOffsetTransform
 
 	bool seen = false;
 	bool doesMove = false;
@@ -771,7 +771,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 
 	// Decide which way and how far to go
 	ToolOffsetTransform(ms);
-	m585Settings.probingLimit = (gb.Seen('R')) ? ms.coords[m585Settings.axisNumber] + gb.GetDistance()
+	m585Settings.probingLimit = (gb.Seen('R')) ? ms.raw.coords[m585Settings.axisNumber] + gb.GetDistance()
 								: (gb.Seen('S') && gb.GetIValue() > 0) ? reprap.GetMove().AxisMinimum(m585Settings.axisNumber)
 									: reprap.GetMove().AxisMaximum(m585Settings.axisNumber);
 	if (m585Settings.useProbe)
@@ -825,14 +825,14 @@ bool GCodes::SetupM585ProbingMove(GCodeBuffer& gb) noexcept
 	MovementState& ms = GetMovementState(gb);
 	SetMoveBufferDefaults(ms);
 	ToolOffsetTransform(ms);
-	ms.feedRate = m585Settings.feedRate;
-	ms.coords[m585Settings.axisNumber] = m585Settings.probingLimit;
-	ms.reduceAcceleration = reduceAcceleration;
-	ms.checkEndstops = true;
-	ms.canPauseAfter = false;
+	ms.raw.feedRate = m585Settings.feedRate;
+	ms.raw.coords[m585Settings.axisNumber] = m585Settings.probingLimit;
+	ms.raw.reduceAcceleration = reduceAcceleration;
+	ms.raw.checkEndstops = true;
+	ms.raw.canPauseAfter = false;
 	zProbeTriggered = false;
-	ms.linearAxesMentioned = reprap.GetMove().IsAxisLinear(m585Settings.axisNumber);
-	ms.rotationalAxesMentioned = reprap.GetMove().IsAxisRotational(m585Settings.axisNumber);
+	ms.raw.linearAxesMentioned = reprap.GetMove().IsAxisLinear(m585Settings.axisNumber);
+	ms.raw.rotationalAxesMentioned = reprap.GetMove().IsAxisRotational(m585Settings.axisNumber);
 	NewSingleSegmentMoveAvailable(ms);
 	return true;
 }
@@ -890,13 +890,13 @@ bool GCodes::SetupM675ProbingMove(GCodeBuffer& gb, bool towardsMin) noexcept
 	MovementState& ms = GetMovementState(gb);
 	SetMoveBufferDefaults(ms);
 	ToolOffsetTransform(ms);
-	ms.coords[m675Settings.axisNumber] = towardsMin ? reprap.GetMove().AxisMinimum(m675Settings.axisNumber) : reprap.GetMove().AxisMaximum(m675Settings.axisNumber);
-	ms.feedRate = m675Settings.feedRate;
-	ms.checkEndstops = true;
-	ms.canPauseAfter = false;
+	ms.raw.coords[m675Settings.axisNumber] = towardsMin ? reprap.GetMove().AxisMinimum(m675Settings.axisNumber) : reprap.GetMove().AxisMaximum(m675Settings.axisNumber);
+	ms.raw.feedRate = m675Settings.feedRate;
+	ms.raw.checkEndstops = true;
+	ms.raw.canPauseAfter = false;
 	zProbeTriggered = false;
-	ms.linearAxesMentioned = reprap.GetMove().IsAxisLinear(m675Settings.axisNumber);
-	ms.rotationalAxesMentioned = reprap.GetMove().IsAxisRotational(m675Settings.axisNumber);
+	ms.raw.linearAxesMentioned = reprap.GetMove().IsAxisLinear(m675Settings.axisNumber);
+	ms.raw.rotationalAxesMentioned = reprap.GetMove().IsAxisRotational(m675Settings.axisNumber);
 	NewSingleSegmentMoveAvailable(ms);						// kick off the move
 	return true;
 }
@@ -906,24 +906,34 @@ void GCodes::SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept
 	MovementState& ms = GetMovementState(gb);
 	SetMoveBufferDefaults(ms);
 	ToolOffsetTransform(ms);
-	ms.coords[m675Settings.axisNumber] = position;
-	ms.feedRate = m675Settings.feedRate;
-	ms.canPauseAfter = false;
-	ms.linearAxesMentioned = reprap.GetMove().IsAxisLinear(m675Settings.axisNumber);
-	ms.rotationalAxesMentioned = reprap.GetMove().IsAxisRotational(m675Settings.axisNumber);
+	ms.raw.coords[m675Settings.axisNumber] = position;
+	ms.raw.feedRate = m675Settings.feedRate;
+	ms.raw.canPauseAfter = false;
+	ms.raw.linearAxesMentioned = reprap.GetMove().IsAxisLinear(m675Settings.axisNumber);
+	ms.raw.rotationalAxesMentioned = reprap.GetMove().IsAxisRotational(m675Settings.axisNumber);
 	NewSingleSegmentMoveAvailable(ms);
 }
 
 #if SUPPORT_SCANNING_PROBES
 
-// Calibrate height vs. reading for a scanning Z probe. We have already checked the probe is a scanning one and that scanningRange is a sensible value.
-GCodeResult GCodes::HandleM558Point1or2or3(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException)
+// Handle M558.1 to M558.3 for a scanning Z probe and M558.4 for a load cell probe
+GCodeResult GCodes::HandleM558Subcommand(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException)
 {
 	const auto zp = platform.GetEndstops().GetZProbe(probeNumber);
 	if (zp.IsNull())
 	{
 		reply.copy("invalid Z probe index");
 		return GCodeResult::error;
+	}
+
+	if (gb.GetCommandFraction() == 4)
+	{
+		if (!zp->IsLoadCell())
+		{
+			reply.printf("probe %u is not a load cell probe", probeNumber);
+			return GCodeResult::error;
+		}
+		return zp->Tare(reply);
 	}
 
 	if (!zp->IsScanning())

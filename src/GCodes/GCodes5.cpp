@@ -101,6 +101,11 @@ GCodeResult GCodes::SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply)
 		UnlockMovement(gb);							// in case we are in a macro - avoid unlocking the wrong movement system later
 		const MovementSystemNumber queueNumber = gb.GetLimitedUIValue('P', ARRAY_SIZE(moveStates));
 		gb.SetActiveQueueNumber(queueNumber);
+		if (queueNumber + 1 > numMotionSystemsUsed)
+		{
+			numMotionSystemsUsed = queueNumber + 1;
+			reprap.MotionSystemUpdated();
+		}
 		reprap.InputsUpdated();
 	}
 	else
@@ -115,7 +120,7 @@ GCodeResult GCodes::CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) 
 {
 	// Find the two specified axes
 	int lowerAxisNumber = -1, upperAxisNumber = -1;
-	float lowerValue, upperValue;
+	float lowerValue = 0.0f, upperValue = 0.0f;
 	for (unsigned int i = 0; i < numVisibleAxes; ++i)
 	{
 		if (gb.Seen(axisLetters[i]))
@@ -321,6 +326,9 @@ void GCodes::ChangeToObject(GCodeBuffer& gb, int objectNumber) noexcept
 {
 	MovementState& ms = GetMovementState(gb);
 	ms.currentObjectNumber = objectNumber;
+	reprap.JobUpdated();
+	reprap.MotionSystemUpdated();
+
 	const bool cancelCurrentObject = buildObjects.CheckObject(objectNumber);
 	if (cancelCurrentObject && !ms.currentObjectCancelled)
 	{
@@ -341,17 +349,17 @@ GCodeResult GCodes::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& repl
 	{
 		// For backwards compatibility with old versions of Marlin (e.g. for Cura and the Prusa fork of slic3r), set both accelerations
 		seen = true;
-		ms.maxTravelAcceleration = ms.maxPrintingAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
+		ms.raw.maxTravelAcceleration = ms.raw.maxPrintingAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
 	}
 	if (gb.Seen('P'))
 	{
 		seen = true;
-		ms.maxPrintingAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
+		ms.raw.maxPrintingAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
 	}
 	if (gb.Seen('T'))
 	{
 		seen = true;
-		ms.maxTravelAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
+		ms.raw.maxTravelAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
 	}
 	if (seen)
 	{
@@ -360,7 +368,7 @@ GCodeResult GCodes::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& repl
 	else
 	{
 		reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f mm/sec^2",
-						(double)InverseConvertAcceleration(ms.maxPrintingAcceleration), (double)InverseConvertAcceleration(ms.maxTravelAcceleration));
+						(double)InverseConvertAcceleration(ms.raw.maxPrintingAcceleration), (double)InverseConvertAcceleration(ms.raw.maxTravelAcceleration));
 	}
 	return GCodeResult::ok;
 }

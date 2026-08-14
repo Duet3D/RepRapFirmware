@@ -352,7 +352,7 @@ const char *_ecv_array _ecv_null Menu::ParseMenuLine(char *_ecv_array const comm
 		case '"':			// a string with no letter is a T argument
 			ch = 'T';
 			--args;
-			// no break
+			[[fallthrough]];
 		case 'T':
 		case 'L':
 		case 'A':
@@ -429,7 +429,7 @@ const char *_ecv_array _ecv_null Menu::ParseMenuLine(char *_ecv_array const comm
 		AddItem(newItem, true);
 		column += newItem->GetWidth();
 	}
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	else if (StringEqualsIgnoreCase(commandWord, "files"))		//TODO make sure that fname has been set, it defaults to "main"
 	{
 		const char *_ecv_array const actionString = AppendString(action);

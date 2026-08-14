@@ -21,13 +21,14 @@ protected:
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) override;
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
-	void GetLiveData(FilamentMonitorDataNew2& data) const noexcept override;
+	void GetLiveData(FilamentMonitorDataV2& data) const noexcept override;
 #endif
 	FilamentSensorStatus Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) noexcept override;
 	FilamentSensorStatus Clear() noexcept override;
+	bool IsLocalMotionDetected() const noexcept override { return samplesReceived != 0 && millis() - lastMeasurementTime < FilamentMonitorMotionLatchTime; }
 
 #if SUPPORT_CAN_EXPANSION
-	void UpdateLiveData(const FilamentMonitorDataNew2& data) noexcept override;
+	void UpdateLiveData(const FilamentMonitorDataV2& data) noexcept override;
 #endif
 
 	void Diagnostics(const StringRef& reply) noexcept override;
@@ -77,6 +78,9 @@ private:
 	uint8_t samplesReceived;
 	bool comparisonStarted;
 	bool calibrationStarted;
+#if SUPPORT_CAN_EXPANSION
+	bool hasLiveData = false;								// whether the calibration data of a remote monitor has been reconstructed
+#endif
 };
 
 #endif /* SRC_FILAMENTSENSORS_PULSEDFILAMENTMONITOR_H_ */

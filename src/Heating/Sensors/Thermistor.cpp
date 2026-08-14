@@ -401,7 +401,7 @@ void Thermistor::Poll() noexcept
 		// VREF is the measured voltage at VREF less the drop of a 15 ohm resistor.
 		// VSSA is the voltage measured across the VSSA fuse. We assume the same maximum resistance for the fuse.
 		// Assume a maximum ADC reading offset of 100.
-		constexpr int32_t maxDrop = (OversampledAdcRange * VrefSeriesR)/(MinVrefLoadR + VrefSeriesR) + (100 << AdcOversampleBits);
+		constexpr int32_t maxDrop = (int32_t)((OversampledAdcRange * VrefSeriesR)/(MinVrefLoadR + VrefSeriesR) + (100 << AdcOversampleBits));
 
 		if (averagedVrefReading < OversampledAdcRange - maxDrop)
 		{
