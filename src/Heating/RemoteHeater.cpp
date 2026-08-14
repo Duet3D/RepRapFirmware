@@ -99,6 +99,11 @@ void RemoteHeater::Spin() noexcept
 			switch (SendTuningCommand(reply.GetRef(), false, true))
 			{
 			case GCodeResult::ok:
+				if (!reply.IsEmpty())
+				{
+					// If the expansion board returned calibration parameters, show them
+					reprap.GetPlatform().MessageF(GenericMessage, "%s\n", reply.c_str());
+				}
 				if (SendTuningCommand(reply.GetRef(), true, false) == GCodeResult::ok)
 				{
 					tuningState = TuningState::heatingUp;
