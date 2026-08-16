@@ -725,11 +725,16 @@ void LocalHeater::DoTuningStep() noexcept
 
 		if (tuningStartTemp.GetDeviation() <= 2.0)
 		{
-			timeSetHeating = now;
-			lastPwm = tuningPwm;										// turn on heater at specified power
+			// Currently, local heaters never need to be calibrated, so we always skip that phase
 			mode = HeaterMode::tuning0a_calibrating_heater;
 			tuningPhase = TuningPhase::calibrating_heater;
+			ReportTuningUpdate(true);
+
+			mode = HeaterMode::tuning1_heating_up;
+			tuningPhase = TuningPhase::heating_up;
 			ReportTuningUpdate();
+			timeSetHeating = now;
+			lastPwm = tuningPwm;										// turn on heater at specified power
 			return;
 		}
 
@@ -741,12 +746,6 @@ void LocalHeater::DoTuningStep() noexcept
 
 		reprap.GetPlatform().Message(GenericMessage, "Auto tune cancelled because starting temperature is not stable\n");
 		break;
-
-	case HeaterMode::tuning0a_calibrating_heater:
-		// Currently we only perform heater calibration on certain expansion boards e.g. INDX
-		mode = HeaterMode::tuning1_heating_up;
-		tuningPhase = TuningPhase::heating_up;
-		return;
 
 	case HeaterMode::tuning1_heating_up:								// Heating up
 #if SUPPORT_REMOTE_COMMANDS
@@ -992,6 +991,7 @@ void LocalHeater::DoTuningStep() noexcept
 		}
 		return;
 
+	case HeaterMode::tuning0a_calibrating_heater:
 	default:
 		// Should not happen, but if it does then quit
 		break;

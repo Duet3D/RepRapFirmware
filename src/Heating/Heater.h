@@ -161,7 +161,7 @@ protected:
 
 	GCodeResult SetModel(float hr, float bcr, float fcr, float coolingRateExponent, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;
 																	// set the process model
-	void ReportTuningUpdate() noexcept;								// tell the user what's happening
+	void ReportTuningUpdate(bool skipping = false) noexcept;		// tell the user what's happening
 	void CalculateModel(HeaterParameters& params) noexcept;			// calculate G, td and tc from the accumulated readings
 	void SetAndReportModelAfterTuning(bool usingFans) noexcept;
 

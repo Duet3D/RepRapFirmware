@@ -360,11 +360,11 @@ void Heater::GetAutoTuneStatus(const StringRef& reply) const noexcept
 }
 
 // Tell the user what's happening, called after the tuning phase has been updated
-void Heater::ReportTuningUpdate() noexcept
+void Heater::ReportTuningUpdate(bool skipping) noexcept
 {
 	if (tuningPhase < TuningPhase::numPhases)
 	{
-		reprap.GetPlatform().MessageF(GenericMessage, "Auto tune starting phase %u, %s\n", (unsigned int)tuningPhase, TuningPhaseText[(unsigned int)tuningPhase]);
+		reprap.GetPlatform().MessageF(GenericMessage, "Auto tune %s phase %u: %s\n", (skipping) ? "skipping" : "starting", (unsigned int)tuningPhase, TuningPhaseText[(unsigned int)tuningPhase]);
 	}
 }
 
