@@ -480,7 +480,7 @@ GCodeResult RemoteHeater::SetDefaultModel(HeaterFunction func) noexcept
 	msg->heaterFunction = (uint16_t)func;
 	String<1> dummy;
 	const GCodeResult rslt = CanInterface::SendRequestAndGetCustomReply
-								(	buf, rid, dummy.GetRef(), nullptr, CanMessageType::heaterModelReport,
+								(	buf, rid, dummy.GetRef(), nullptr, nullptr, CanMessageType::heaterModelReport,
 									[this, buf](const CanMessageBuffer*) noexcept->void
 									{
 										model.SetDefaultModel(buf->msg.heaterModelReport.model);
