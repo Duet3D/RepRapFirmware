@@ -54,7 +54,7 @@ protected:
 	bool IsRemote() const noexcept override { return true; }
 
 private:
-	GCodeResult DoTare(uint8_t mode, const StringRef& reply) noexcept;
+	GCodeResult DoTare(uint32_t mode, const StringRef& reply) noexcept;
 
 	CanAddress boardAddress;
 	RemoteInputHandle handle;

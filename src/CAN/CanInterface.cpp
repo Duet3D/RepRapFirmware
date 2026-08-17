@@ -1412,7 +1412,7 @@ GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandl
 	return rslt;
 }
 
-static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle h, uint8_t action, uint32_t param, uint8_t *_ecv_null retVal, const StringRef &reply) noexcept
+static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle h, uint8_t action, uint32_t param, uint8_t *_ecv_null retVal, const StringRef &reply, uint32_t *_ecv_null words = nullptr) noexcept
 {
 	if (!h.IsValid())
 	{
@@ -1432,7 +1432,7 @@ static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle
 	msg->action = action;
 	msg->param = param;
 	uint8_t extra;
-	const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, &extra);
+	const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, &extra, words);
 	if (rslt == GCodeResult::ok && retVal != nullptr)
 	{
 		*retVal = extra;
@@ -1525,26 +1525,10 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 
 // Tare an analog handle and/or change its baseline tracking, returning the baseline that the board latched or holds.
 // Only the board knows the raw reading, so it has to come back in the reply
-GCodeResult CanInterface::TareHandle(CanAddress boardAddress, RemoteInputHandle h, uint8_t mode, int32_t& baseline, const StringRef &reply) noexcept
+GCodeResult CanInterface::TareHandle(CanAddress boardAddress, RemoteInputHandle h, uint32_t mode, int32_t& baseline, const StringRef &reply) noexcept
 {
-	if (!h.IsValid())
-	{
-		reply.copy("Invalid remote handle");
-		return GCodeResult::error;
-	}
-
-	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
-	if (buf == nullptr)
-	{
-		return GCodeResult::noCanBuffer;
-	}
-
-	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
-	auto msg = buf->SetupRequestMessage<CanMessageTareInputMonitor>(rid, GetCanAddress(), boardAddress);
-	msg->handle = h;
-	msg->mode = mode;
 	uint32_t words[CanMessageStandardReply::MaxNumWords];
-	const GCodeResult rslt = SendRequestAndGetStandardReply(buf, rid, reply, nullptr, words);
+	const GCodeResult rslt = ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionTare, mode, nullptr, reply, words);
 	if (rslt == GCodeResult::ok)
 	{
 		baseline = (int32_t)words[0];

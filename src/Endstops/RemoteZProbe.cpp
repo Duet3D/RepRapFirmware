@@ -68,7 +68,7 @@ bool RemoteZProbe::Stopped() const noexcept
 }
 
 // Send a tare request in the given mode and check that the cell is alive
-GCodeResult RemoteZProbe::DoTare(uint8_t mode, const StringRef& reply) noexcept
+GCodeResult RemoteZProbe::DoTare(uint32_t mode, const StringRef& reply) noexcept
 {
 	const GCodeResult rslt = CanInterface::TareHandle(boardAddress, handle, mode, tareBaseline, reply);
 	if (rslt == GCodeResult::ok)
@@ -88,7 +88,7 @@ GCodeResult RemoteZProbe::DoTare(uint8_t mode, const StringRef& reply) noexcept
 // Latch the current load cell reading as the new baseline, so the reported force is zeroed and the trigger comparison starts from it
 GCodeResult RemoteZProbe::Tare(const StringRef& reply) noexcept
 {
-	return DoTare(CanMessageTareInputMonitor::modeTareAndTrack, reply);
+	return DoTare(CanMessageChangeInputMonitorV1::paramTareAndTrack, reply);
 }
 
 bool RemoteZProbe::SetProbing(bool isProbing) noexcept
@@ -112,7 +112,7 @@ bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 			if (isProbing)
 			{
 				// Latch the baseline and stop it tracking so that the trigger comparison stays fixed for the whole probing move
-				rslt = DoTare(CanMessageTareInputMonitor::modeTareAndHold, reply.GetRef());
+				rslt = DoTare(CanMessageChangeInputMonitorV1::paramTareAndHold, reply.GetRef());
 				if (rslt == GCodeResult::ok && preloadLimits[0] < preloadLimits[1])
 				{
 					const float preload = (float)tareBaseline * gramsPerCount;
@@ -126,7 +126,7 @@ bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 			else
 			{
 				// The nozzle may still be on the bed at this point, so resume tracking from the held baseline instead of latching a loaded one
-				rslt = CanInterface::TareHandle(boardAddress, handle, CanMessageTareInputMonitor::modeTrackOnly, tareBaseline, reply.GetRef());
+				rslt = CanInterface::TareHandle(boardAddress, handle, CanMessageChangeInputMonitorV1::paramTrackOnly, tareBaseline, reply.GetRef());
 			}
 		}
 		if (rslt == GCodeResult::ok && isProbing && (type == ZProbeType::scanningAnalog || type == ZProbeType::analog || type == ZProbeType::loadCell))
@@ -182,7 +182,7 @@ GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& rep
 		if (type == ZProbeType::loadCell)
 		{
 			// Tare now so that the reported force starts from a defined zero, and let the baseline track drift until a probing move latches it
-			const GCodeResult rc2 = CanInterface::TareHandle(boardAddress, handle, CanMessageTareInputMonitor::modeTareAndTrack, tareBaseline, reply);
+			const GCodeResult rc2 = CanInterface::TareHandle(boardAddress, handle, CanMessageChangeInputMonitorV1::paramTareAndTrack, tareBaseline, reply);
 			if (rc2 != GCodeResult::ok)
 			{
 				return rc2;
