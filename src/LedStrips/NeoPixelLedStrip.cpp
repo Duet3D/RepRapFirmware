@@ -169,10 +169,6 @@ GCodeResult NeoPixelLedStrip::SpiSendData(const LedParams& params) noexcept
 #endif
 
 // Bit bang data to Neopixels. See https://wp.josh.com/2014/05/13/ws2812-neopixels-are-not-so-finicky-once-you-get-to-know-them/ for the timing requirements.
-constexpr uint32_t NanosecondsToCycles(uint32_t ns) noexcept
-{
-	return (ns * (uint64_t)SystemCoreClockFreq)/1000000000u;
-}
 
 constexpr uint32_t T0H = NanosecondsToCycles(300);
 constexpr uint32_t T1H = NanosecondsToCycles(700);
