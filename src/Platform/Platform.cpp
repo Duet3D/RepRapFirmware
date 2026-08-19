@@ -282,7 +282,9 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	// 4. boards[0].accelerometer members
 	{ "orientation",		OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerOrientation()),				ObjectModelEntryFlags::none },
 	{ "points",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerDataPoints()),				ObjectModelEntryFlags::none },
+	{ "resolution",			OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerResolution()),				ObjectModelEntryFlags::none },
 	{ "runs",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerRuns()),						ObjectModelEntryFlags::none },
+	{ "samplingRate",		OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerSamplingRate()),				ObjectModelEntryFlags::none },
 #endif
 };
 
@@ -307,7 +309,7 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 	0,																		// section 3: v12
 #endif
 #if SUPPORT_ACCELEROMETERS
-	3,																		// section 4: boards[0].accelerometer
+	5,																		// section 4: boards[0].accelerometer
 #else
 	0,
 #endif

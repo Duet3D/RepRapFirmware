@@ -26,6 +26,8 @@ namespace Accelerometers
 	unsigned int GetLocalAccelerometerRuns() noexcept;
 	unsigned int GetLocalAccelerometerDataPoints() noexcept;
 	uint8_t GetLocalAccelerometerOrientation() noexcept;
+	uint16_t GetLocalAccelerometerSamplingRate() noexcept;
+	uint8_t GetLocalAccelerometerResolution() noexcept;
 	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void Exit() noexcept;
