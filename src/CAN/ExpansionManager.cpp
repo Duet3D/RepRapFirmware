@@ -18,6 +18,10 @@
 #include <Movement/StepTimer.h>
 #include <CanMessageGenericTables.h>
 
+#if SUPPORT_ACCELEROMETERS
+# include <Accelerometers/Accelerometers.h>
+#endif
+
 ReadWriteLock ExpansionManager::boardsLock;
 
 // Object model table and functions
@@ -183,6 +187,9 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 			{
 				Event::AddEvent(EventType::expansion_reconnect, 0, src, 0, "");
 			}
+#if SUPPORT_ACCELEROMETERS
+			Accelerometers::RemoteBoardRestarted(src);
+#endif
 			board.hasVin = board.hasV12 = board.hasMcuTemp = false;
 			String<StringLength100> boardTypeAndFirmwareVersion;
 			if (isNewFormat)

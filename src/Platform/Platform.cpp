@@ -1410,8 +1410,8 @@ void Platform::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 #ifdef I2C_IFACE
 		{
 			const TwoWire::ErrorCounts errs = I2C_IFACE.GetErrorCounts(true);
-			reply.lcatf("I2C nak errors %" PRIu32 ", send timeouts %" PRIu32 ", receive timeouts %" PRIu32 ", finishTimeouts %" PRIu32 ", resets %" PRIu32,
-				errs.naks, errs.sendTimeouts, errs.recvTimeouts, errs.finishTimeouts, errs.resets);
+			reply.lcatf("I2C nak errors %" PRIu32 ", send timeouts %" PRIu32 ", receive timeouts %" PRIu32 ", finishTimeouts %" PRIu32 ", resets %" PRIu32 ", bus recoveries %" PRIu32,
+				errs.naks, errs.sendTimeouts, errs.recvTimeouts, errs.finishTimeouts, errs.resets, errs.recoveries);
 		}
 #endif
 		break;
@@ -2148,6 +2148,10 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 #ifdef DUET_NG
 	case (unsigned int)DiagnosticTestType::PrintExpanderStatus:
 		reply.printf("Expander status %04X\n", DuetExpansion::DiagnosticRead());
+		break;
+
+	case (unsigned int)DiagnosticTestType::WedgeI2CBus:
+		DuetExpansion::WedgeI2CBus(reply);
 		break;
 #endif
 
