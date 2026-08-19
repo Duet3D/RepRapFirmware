@@ -35,11 +35,7 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 #ifdef DUET3_ATE
 	{ "brightness",			OBJECT_MODEL_FUNC((int32_t)self->brightness),															ObjectModelEntryFlags::live },
 #endif
-	{ "calibrated",			OBJECT_MODEL_FUNC_IF(
-#if SUPPORT_CAN_EXPANSION
-													self->IsLocal() &&
-#endif
-													self->dataReceived && self->HaveCalibrationData(), self, 1),					ObjectModelEntryFlags::liveNotPanelDue },
+	{ "calibrated",			OBJECT_MODEL_FUNC_IF(self->HaveCalibrationData(), self, 1),												ObjectModelEntryFlags::liveNotPanelDue },
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 #ifdef DUET3_ATE
 	{ "shutter",			OBJECT_MODEL_FUNC((int32_t)self->shutter),																ObjectModelEntryFlags::live },
@@ -90,6 +86,7 @@ void LaserFilamentMonitor::Init() noexcept
 	parityErrorCount = framingErrorCount = overrunErrorCount = polarityErrorCount = overdueCount = 0;
 	lastMeasurementTime = 0;
 	imageQuality = shutter = brightness = lastErrorCode = 0;
+	haveShutter = false;
 	version = 1;
 	backwards = false;
 	sensorError = false;
@@ -108,7 +105,13 @@ void LaserFilamentMonitor::Reset() noexcept
 
 bool LaserFilamentMonitor::HaveCalibrationData() const noexcept
 {
-	return laserMonitorState != LaserMonitorState::calibrating && totalExtrusionCommanded > 10.0;
+#if SUPPORT_CAN_EXPANSION
+	if (!IsLocal())
+	{
+		return hasLiveData && totalExtrusionCommanded > 10.0;
+	}
+#endif
+	return dataReceived && laserMonitorState != LaserMonitorState::calibrating && totalExtrusionCommanded > 10.0;
 }
 
 float LaserFilamentMonitor::MeasuredSensitivity() const noexcept
@@ -270,6 +273,7 @@ void LaserFilamentMonitor::HandleIncomingData() noexcept
 				case TypeLaserMessageTypeQuality:
 					brightness = val & 0x00FF;
 					shutter = (val >> 8) & 0x1F;
+					haveShutter = true;
 					break;
 
 				case TypeLaserMessageTypeInfo:
@@ -289,6 +293,7 @@ void LaserFilamentMonitor::HandleIncomingData() noexcept
 
 					case TypeLaserInfoTypeShutter:
 						shutter = val & 0x00FF;
+						haveShutter = true;
 						break;
 					}
 					break;
@@ -308,8 +313,9 @@ void LaserFilamentMonitor::HandleIncomingData() noexcept
 			const int32_t movement = (positionChange <= positionRange/2u) ? (int32_t)positionChange : (int32_t)positionChange - (int32_t)positionRange;
 			movementMeasuredSinceLastSync += (float)movement * (((val & TypeLaserLargeDataRangeBitMask) != 0) ? 0.01 : 0.02);
 			sensorValue = val;
-			lastKnownPosition = val & positionRange;
+			lastKnownPosition = val & (positionRange - 1u);
 			lastMeasurementTime = millis();
+			CheckForMotion(lastKnownPosition, positionRange - 1u, MotionDetectionMinCounts);
 
 			if (haveStartBitData)	// if we have a synchronised  value for the amount of extrusion commanded
 			{
@@ -483,6 +489,17 @@ FilamentSensorStatus LaserFilamentMonitor::Clear() noexcept
 						: FilamentSensorStatus::ok;
 }
 
+// Get the filament present state of the optional microswitch, returning true if it is known
+bool LaserFilamentMonitor::GetLocalFilamentPresent(bool& present) const noexcept
+{
+	if (switchOpenMask == 0 || !dataReceived || sensorError)
+	{
+		return false;
+	}
+	present = (sensorValue & switchOpenMask) == 0;
+	return true;
+}
+
 // Print diagnostic info for this sensor
 void LaserFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
 {
@@ -604,6 +621,41 @@ GCodeResult LaserFilamentMonitor::Configure(const CanMessageGenericParser& parse
 		}
 	}
 	return rslt;
+}
+
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+
+// Update the live data of a remote monitor. The measured calibration data isn't sent over CAN, so reconstruct it from the percentages
+void LaserFilamentMonitor::UpdateLiveData(const FilamentMonitorDataV2& data) noexcept
+{
+	Duet3DFilamentMonitor::UpdateLiveData(data);
+	if (data.extraDataValid)
+	{
+		shutter = data.extraData;
+		haveShutter = true;
+	}
+	if (hasLiveData)
+	{
+		totalMovementMeasured = totalExtrusionCommanded * (float)avgPercentage * 0.01;
+		minMovementRatio = (float)minPercentage * 0.01;
+		maxMovementRatio = (float)maxPercentage * 0.01;
+	}
+}
+
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+
+void LaserFilamentMonitor::GetLiveData(FilamentMonitorDataV2& data) const noexcept
+{
+	Duet3DFilamentMonitor::GetLiveData(data);
+	if (haveShutter)
+	{
+		data.extraDataValid = 1;
+		data.extraData = shutter;
+	}
 }
 
 #endif

@@ -7,7 +7,9 @@
 
 #include "FilesMenuItem.h"
 
-#if SUPPORT_DIRECT_LCD && HAS_MASS_STORAGE
+#if SUPPORT_DIRECT_LCD && (HAS_MASS_STORAGE || HAS_SBC_INTERFACE)
+
+#include <Platform/RepRap.h>
 
 FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char *_ecv_array cmd, const char *_ecv_array dir, const char *_ecv_array acFile, unsigned int nf) noexcept
 	: MenuItem(r, c, w, LeftAlign, fn), numDisplayLines(nf), command(cmd), initialDirectory(dir), m_acFile(acFile),
@@ -90,6 +92,15 @@ void FilesMenuItem::Draw(Lcd &_ecv_from lcd, PixelNumber rightMargin, bool highl
 		switch (sdCardState)
 		{
 		case CardState::notStarted:
+#if HAS_SBC_INTERFACE
+			if (reprap.UsingSbcInterface())
+			{
+				sdCardState = CardState::mounted;			// the SBC provides the files, so there is nothing to mount
+				EnterDirectory();
+				break;
+			}
+#endif
+#if HAS_MASS_STORAGE
 			if (MassStorage::CheckDriveMounted(currentDirectory.c_str()))
 			{
 				sdCardState = CardState::mounted;
@@ -99,9 +110,11 @@ void FilesMenuItem::Draw(Lcd &_ecv_from lcd, PixelNumber rightMargin, bool highl
 			{
 				sdCardState = CardState::mounting;
 			}
+#endif
 			break;
 
 		case CardState::mounting:
+#if HAS_MASS_STORAGE
 			{
 				const size_t card = (isdigit(currentDirectory[0]) && currentDirectory[1] == ':') ? currentDirectory[0] - '0' : 0;
 				String<StringLength50> reply;
@@ -129,6 +142,7 @@ void FilesMenuItem::Draw(Lcd &_ecv_from lcd, PixelNumber rightMargin, bool highl
 					break;
 				}
 			}
+#endif
 			break;
 
 		case CardState::mounted:

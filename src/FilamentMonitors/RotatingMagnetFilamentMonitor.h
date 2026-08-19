@@ -27,6 +27,13 @@ protected:
 #endif
 	FilamentSensorStatus Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) noexcept override;
 	FilamentSensorStatus Clear() noexcept override;
+	bool GetLocalFilamentPresent(bool& present) const noexcept override;
+#if SUPPORT_CAN_EXPANSION
+	void UpdateLiveData(const FilamentMonitorDataV2& data) noexcept override;
+#endif
+#if SUPPORT_REMOTE_COMMANDS
+	void GetLiveData(FilamentMonitorDataV2& data) const noexcept override;
+#endif
 
 private:
 	static constexpr float DefaultMmPerRev = 25.1;
@@ -57,6 +64,8 @@ private:
 	static constexpr uint16_t TypeMagnetV3InfoTypeAgc = 0x0300;
 
 	static constexpr uint16_t TypeMagnetAngleMask = 0x03FF;			// we use a 10-bit sensor angle
+
+	static constexpr uint16_t MotionDetectionMinCounts = 4;			// angle change that counts as movement, about 0.1mm of filament at the default sensitivity
 
 	void Init() noexcept;
 	void Reset() noexcept;
@@ -91,6 +100,7 @@ private:
 	uint8_t lastErrorCode;									// the last error code received
 	uint8_t magnitude;										// the last magnitude received (sensor firmware V3)
 	uint8_t agc;											// the last agc received (sensor firmware V3)
+	bool haveAgc;											// true if we received an agc value, locally or over CAN
 	bool sensorError;										// true if received an error report (cleared by a position report)
 
 	bool wasPrintingAtStartBit;

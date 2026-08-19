@@ -273,6 +273,20 @@ bool Duet3DFilamentMonitor::IsWaitingForStartBit() const noexcept
 	return state == RxdState::waitingForStartBit;
 }
 
+// Update motion detection from a new position report. The reference position only advances when the threshold is crossed,
+// so slow movement accumulates until it triggers but stationary jitter below the threshold never does
+void Duet3DFilamentMonitor::CheckForMotion(uint16_t newPosition, uint16_t positionMask, uint16_t minCounts) noexcept
+{
+	const uint16_t change = (newPosition - motionRefPosition) & positionMask;
+	const uint16_t range = positionMask + 1u;
+	const int32_t movement = (change <= range/2) ? (int32_t)change : (int32_t)change - (int32_t)range;
+	if (movement >= (int32_t)minCounts || -movement >= (int32_t)minCounts)
+	{
+		motionRefPosition = newPosition;
+		lastMovementTime = millis();
+	}
+}
+
 #if SUPPORT_CAN_EXPANSION
 
 void Duet3DFilamentMonitor::UpdateLiveData(const FilamentMonitorDataV2& data) noexcept

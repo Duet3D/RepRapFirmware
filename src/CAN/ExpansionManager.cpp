@@ -18,6 +18,10 @@
 #include <Movement/StepTimer.h>
 #include <CanMessageGenericTables.h>
 
+#if SUPPORT_ACCELEROMETERS
+# include <Accelerometers/Accelerometers.h>
+#endif
+
 ReadWriteLock ExpansionManager::boardsLock;
 
 // Object model table and functions
@@ -179,9 +183,15 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 				// The board lost and regained time sync but did not restart, so its configuration is intact. P bit 1 tells the event macro whether the board switched its heaters off
 				Event::AddEvent(EventType::expansion_reconnect, (buf->msg.announceV1.wasShutDown) ? 3 : 1, src, 0, "");
 			}
-			else if (board.state == BoardState::running)
+			else
 			{
-				Event::AddEvent(EventType::expansion_reconnect, 0, src, 0, "");
+				if (board.state == BoardState::running)
+				{
+					Event::AddEvent(EventType::expansion_reconnect, 0, src, 0, "");
+				}
+#if SUPPORT_ACCELEROMETERS
+				Accelerometers::RemoteBoardRestarted(src);
+#endif
 			}
 			board.hasVin = board.hasV12 = board.hasMcuTemp = false;
 			String<StringLength100> boardTypeAndFirmwareVersion;

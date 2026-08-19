@@ -49,7 +49,7 @@ constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 	// 3. Values
 	{
 		nullptr,
-		OBJECT_MODEL_ARRAY_COUNT((self->type == ZProbeType::dumbModulated) ? 2 : 1),
+		OBJECT_MODEL_ARRAY_COUNT((self->type == ZProbeType::dumbModulated || self->IsLoadCell()) ? 2 : 1),
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 					{	int32_t v1 = 0;
 						return ExpressionValue
@@ -65,8 +65,14 @@ constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(ARRAY_SIZE(ZProbe::diveHeights)),
 		OBJECT_MODEL_ARRAY_VALUE(self->diveHeights[context.GetLastIndex()], 1)
 	},
+	// 5. Preload window
+	{
+		nullptr,
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(ARRAY_SIZE(ZProbe::preloadLimits)),
+		OBJECT_MODEL_ARRAY_VALUE(self->preloadLimits[context.GetLastIndex()], 1)
+	},
 #if SUPPORT_SCANNING_PROBES
-	// 5. Scanning probe coefficients
+	// 6. Scanning probe coefficients
 	{
 		nullptr,
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(ARRAY_SIZE(ZProbe::scanCoefficients)),
@@ -90,6 +96,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "isCalibrated",				OBJECT_MODEL_FUNC_IF(self->IsScanning(), self->isCalibrated), 								ObjectModelEntryFlags::none },
 #endif
 	{ "lastStopHeight",				OBJECT_MODEL_FUNC(self->lastStopHeight, 3), 												ObjectModelEntryFlags::none },
+	{ "loadCell",					OBJECT_MODEL_FUNC_IF(self->IsLoadCell() && self->gramsPerCount != 0.0, self, 1),			ObjectModelEntryFlags::live },
 	{ "maxProbeCount",				OBJECT_MODEL_FUNC((int32_t)self->misc.parts.maxTaps), 										ObjectModelEntryFlags::none },
 #if SUPPORT_SCANNING_PROBES
 	{ "measuredHeight",				OBJECT_MODEL_FUNC_IF(self->IsScanning() && self->isCalibrated, self->GetLatestHeight()),	ObjectModelEntryFlags::live },
@@ -97,22 +104,28 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "offsets",					OBJECT_MODEL_FUNC_ARRAY(0), 																ObjectModelEntryFlags::none },
 	{ "recoveryTime",				OBJECT_MODEL_FUNC(self->recoveryTime, 1), 													ObjectModelEntryFlags::none },
 #if SUPPORT_SCANNING_PROBES
-	{ "scanCoefficients",			OBJECT_MODEL_FUNC_ARRAY_IF(self->IsScanning(), 5), 											ObjectModelEntryFlags::none },
+	{ "scanCoefficients",			OBJECT_MODEL_FUNC_ARRAY_IF(self->IsScanning(), 6), 											ObjectModelEntryFlags::none },
 #endif
 	{ "speeds",						OBJECT_MODEL_FUNC_ARRAY(1), 																ObjectModelEntryFlags::none },
 	{ "temperatureCoefficients",	OBJECT_MODEL_FUNC_ARRAY(2), 																ObjectModelEntryFlags::none },
 	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->targetAdcValue), 											ObjectModelEntryFlags::none },
 	{ "tolerance",					OBJECT_MODEL_FUNC(self->tolerance, 3), 														ObjectModelEntryFlags::none },
 #if SUPPORT_SCANNING_PROBES
-	{ "touchMode",					OBJECT_MODEL_FUNC_IF(self->IsScanning(), self, 1),											ObjectModelEntryFlags::none },
+	{ "touchMode",					OBJECT_MODEL_FUNC_IF(self->IsScanning(), self, 2),											ObjectModelEntryFlags::none },
 #endif
 	{ "travelSpeed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->travelSpeed), 1), 					ObjectModelEntryFlags::none },
 	{ "triggerHeight",				OBJECT_MODEL_FUNC(-self->offsets[Z_AXIS], 3), 												ObjectModelEntryFlags::none },
 	{ "type",						OBJECT_MODEL_FUNC((int32_t)self->type), 													ObjectModelEntryFlags::none },
 	{ "value",						OBJECT_MODEL_FUNC_ARRAY(3), 																ObjectModelEntryFlags::live },
 
+	// 1. probe.loadCell members
+	{ "force",						OBJECT_MODEL_FUNC((float)self->GetReading() * self->gramsPerCount, 1),						ObjectModelEntryFlags::live },
+	{ "gramsPerCount",				OBJECT_MODEL_FUNC(self->gramsPerCount, 5), 													ObjectModelEntryFlags::none },
+	{ "preload",					OBJECT_MODEL_FUNC((float)self->tareBaseline * self->gramsPerCount, 1),						ObjectModelEntryFlags::none },
+	{ "preloadWindow",				OBJECT_MODEL_FUNC_ARRAY(5), 																ObjectModelEntryFlags::none },
+
 #if SUPPORT_SCANNING_PROBES
-	// 1. probe.touchMode members
+	// 2. probe.touchMode members
 	{ "active",						OBJECT_MODEL_FUNC(self->useTouchMode), 														ObjectModelEntryFlags::none },
 	{ "speed",						OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->touchModeProbeSpeed), 1),				ObjectModelEntryFlags::none },
 	{ "threshold",					OBJECT_MODEL_FUNC(self->touchModeThreshold, 2), 											ObjectModelEntryFlags::none },
@@ -121,8 +134,9 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 };
 
 constexpr uint8_t ZProbe::objectModelTableDescriptor[] =
-{ 	1 + SUPPORT_SCANNING_PROBES,
-	17 + 4 * SUPPORT_SCANNING_PROBES,
+{ 	2 + SUPPORT_SCANNING_PROBES,
+	18 + 4 * SUPPORT_SCANNING_PROBES,
+	4,
 #if SUPPORT_SCANNING_PROBES
 	4
 #endif
@@ -154,6 +168,9 @@ void ZProbe::SetDefaults() noexcept
 	travelSpeed = ConvertSpeedFromMmPerSec(DefaultZProbeTravelSpeed);
 	recoveryTime = 0.0;
 	tolerance = DefaultZProbeTolerance;
+	gramsPerCount = 0.0;
+	preloadLimits[0] = preloadLimits[1] = 0.0;
+	tareBaseline = 0;
 	misc.parts.maxTaps = DefaultZProbeTaps;
 	misc.parts.turnHeatersOff = misc.parts.saveToConfigOverride = misc.parts.probingAway = false;
 	type = ZProbeType::none;
@@ -305,6 +322,11 @@ int32_t ZProbe::GetReading() const noexcept
 
 int32_t ZProbe::GetSecondaryValues(int32_t& v1) const noexcept
 {
+	if (IsLoadCell())
+	{
+		v1 = tareBaseline;
+		return 1;
+	}
 	const Platform& p = reprap.GetPlatform();
 	if (p.GetZProbeOnFilter().IsValid() && p.GetZProbeOffFilter().IsValid())
 	{
@@ -318,6 +340,18 @@ int32_t ZProbe::GetSecondaryValues(int32_t& v1) const noexcept
 		}
 	}
 	return 0;
+}
+
+// Return the trigger threshold in raw ADC counts. For load cell probes the threshold is in grams and both it and the scale carry a sign,
+// so the count threshold is clamped away from zero because a zero threshold would turn the remote handle into a digital input
+int32_t ZProbe::GetThresholdCounts() const noexcept
+{
+	if (IsLoadCell() && gramsPerCount != 0.0)
+	{
+		const int32_t counts = (int32_t)((float)targetAdcValue / gramsPerCount);
+		return (counts != 0) ? counts : ((targetAdcValue < 0) == (gramsPerCount < 0.0)) ? 1 : -1;
+	}
+	return targetAdcValue;
 }
 
 // Test whether we are at or near the stop. May be called from an ISR as well and from a normal task context.
@@ -468,13 +502,22 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	else
 	{
 		const int v0 = GetReading();
-		reply.printf("Z probe %u: current reading %d", number, v0);
-		int32_t v1;
-		if (GetSecondaryValues(v1) == 1)
+		if (IsLoadCell() && gramsPerCount != 0.0)
 		{
-			reply.catf(" (%" PRIi32 ")", v1);
+			reply.printf("Z probe %u: current tared reading %d (baseline %" PRIi32 "), force %.1fg, threshold %" PRIi32 "g",
+							number, v0, tareBaseline, (double)((float)v0 * gramsPerCount), targetAdcValue);
 		}
-		reply.catf(", threshold %" PRIi32 ", trigger height %.3f", targetAdcValue, (double)-offsets[Z_AXIS]);
+		else
+		{
+			reply.printf("Z probe %u: current reading %d", number, v0);
+			int32_t v1;
+			if (GetSecondaryValues(v1) == 1)
+			{
+				reply.catf(" (%" PRIi32 ")", v1);
+			}
+			reply.catf(", threshold %" PRIi32, targetAdcValue);
+		}
+		reply.catf(", trigger height %.3f", (double)-offsets[Z_AXIS]);
 		if (temperatureCoefficients[0] != 0.0 || temperatureCoefficients[1] != 0.0)
 		{
 			reply.catf(" at %.1f" DEGREE_SYMBOL "C, temperature coefficients [%.1f/" DEGREE_SYMBOL "C, %.1f/" DEGREE_SYMBOL "C^2]",
@@ -533,6 +576,47 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& see
 		seen = true;
 	}
 
+	if (gb.Seen('V'))										// load cell scale in grams per count
+	{
+		if (!IsLoadCell())
+		{
+			reply.copy("V parameter is only valid for load cell Z probes");
+			return GCodeResult::error;
+		}
+		const float newScale = gb.GetFValue();
+		if (newScale == 0.0)
+		{
+			reply.copy("load cell scale must not be zero");
+			return GCodeResult::error;
+		}
+		gramsPerCount = newScale;
+		seen = true;
+	}
+
+	if (gb.Seen('U'))										// load cell preload window
+	{
+		if (!IsLoadCell())
+		{
+			reply.copy("U parameter is only valid for load cell Z probes");
+			return GCodeResult::error;
+		}
+		size_t numValues = 2;
+		gb.GetFloatArray(preloadLimits, numValues, false);
+		if (numValues != 2 || preloadLimits[0] > preloadLimits[1])
+		{
+			preloadLimits[0] = preloadLimits[1] = 0.0;
+			reply.copy("preload window must be two values in ascending order");
+			return GCodeResult::error;
+		}
+		seen = true;
+	}
+
+	if (IsLoadCell() && gramsPerCount == 0.0)
+	{
+		reply.copy("load cell Z probes need the V parameter to set the scale in grams per count");
+		return GCodeResult::error;
+	}
+
 	if (seen)
 	{
 		reprap.SensorsUpdated();
@@ -554,6 +638,14 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& see
 					(double)recoveryTime,
 					(misc.parts.turnHeatersOff) ? "suspended" : "normal",
 						misc.parts.maxTaps, (double)tolerance);
+	if (gramsPerCount != 0.0)
+	{
+		reply.catf(", %.4g grams/count", (double)gramsPerCount);
+	}
+	if (preloadLimits[0] < preloadLimits[1])
+	{
+		reply.catf(", preload window %.0f to %.0f grams", (double)preloadLimits[0], (double)preloadLimits[1]);
+	}
 	return rslt;
 }
 

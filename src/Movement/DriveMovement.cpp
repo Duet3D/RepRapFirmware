@@ -49,7 +49,7 @@ void DriveMovement::Init(size_t drv) noexcept
 	stepMode = StepMode::stepDir;
 #endif
 	u = (motioncalc_t)0.0;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	peakDeltaV = peakDeltaA = (motioncalc_t)0.0;
 	finalSpeed = finalAcc = (motioncalc_t)0.0;
 #endif
@@ -79,7 +79,7 @@ void DriveMovement::DiagnosticHeader(const StringRef& reply) noexcept
 #else
 				"Drive req/act/dcf"
 #endif
-# if SUPPORT_S_CURVE
+# if SUPPORT_3RD_ORDER
 				" deltaV/deltaA"
 # endif
 				":");
@@ -93,7 +93,7 @@ void DriveMovement::Diagnostics(const StringRef& reply) noexcept
 # else
 	reply.lcatf("%2u: %.2f/%" PRIi32 "/%.2f", drive, (double)positionRequested, currentMotorPosition, (double)distanceCarriedForwards);
 # endif
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	reply.catf(" %.2f/%.2f",
 				(double)InverseConvertSpeedToMmPerSec((float)peakDeltaV/reprap.GetMove().DriveStepsPerMm(drive)),
 				(double)InverseConvertAcceleration((float)peakDeltaA/reprap.GetMove().DriveStepsPerMm(drive))
@@ -150,7 +150,7 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 	return false;
 }
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 
 # define DEBUG_DISCONTINUITIES	(1)			// set nonzero to generate debug messages if extruder 0 has discontinuous speed or acceleration
 
@@ -242,7 +242,7 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 		{
 			segmentFlags.Init();
 			state = DMState::idle;								// if we have been round this loop already then we will have changed the state, so reset it to idle
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 			MovementStopped();
 #endif
 			return nullptr;
@@ -256,7 +256,7 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 			driversCurrentlyUsed = 0;							// don't generate a step on that interrupt
 			driverEndstopsTriggeredAtStart = 0;					// reset since we will be setting this in DDA::Prepare()
 			nextStepTime = seg->GetStartTime();					// this is when we want the interrupt
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 			MovementStopped();									// say we have stopped. NewSegment will be called again for this segment when the state changes from 'starting' to something else.
 #endif
 			return seg;
@@ -279,7 +279,7 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 		}
 
 		seg->SetExecuting();
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		UpdateSpeedAndAccelerationChange(seg->CalcU(), seg->GetSpeedChange(), seg->GetA(), seg->GetAccChange());
 #else
 		u = seg->CalcU(); // used for GetCurrentPosition()

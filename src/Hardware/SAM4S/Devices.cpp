@@ -43,14 +43,11 @@ void SdhcInit() noexcept
 void WireInit() noexcept
 {
 	pmc_enable_periph_clk(WIRE_INTERFACE_ID);
-	SetPinFunction(TWI_Data, TWIPeriphMode);
-	SetPinFunction(TWI_CK, TWIPeriphMode);
-
 	NVIC_DisableIRQ(WIRE_ISR_ID);
 	NVIC_ClearPendingIRQ(WIRE_ISR_ID);
 }
 
-TwoWire Wire(WIRE_INTERFACE, WireInit);
+TwoWire Wire(WIRE_INTERFACE, TWI_Data, TWI_CK, TWIPeriphMode, WireInit);
 
 
 // Device initialisation

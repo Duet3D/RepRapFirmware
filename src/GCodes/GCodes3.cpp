@@ -590,7 +590,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	if (seen || seenExtrude)
 	{
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		move.UpdateSCurveFlagAndJerk();
 #endif
 		reprap.MoveUpdated();
@@ -940,7 +940,7 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 
 	if (seen)
 	{
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		move.UpdateSCurveFlagAndJerk();
 #endif
 		reprap.MoveUpdated();
@@ -1073,39 +1073,44 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 			return GCodeResult::error;
 		}
 
-		float angle, centreX, centreY;
-		gb.MustSee('R');
-		angle = gb.GetFValue();
-		gb.MustSee('A', 'X');
-		centreX = gb.GetFValue();
-		gb.MustSee('B', 'Y');
-		centreY = gb.GetFValue();
-
 		MovementState& ms = GetMovementState(gb);
-		ms.g68Centre[0] = centreX + GetWorkplaceOffset(gb, 0);
-		ms.g68Centre[1] = centreY + GetWorkplaceOffset(gb, 1);
-#if SUPPORT_ASYNC_MOVES
-		const float oldG68Angle = ms.g68Angle;
-#endif
-		if (gb.Seen('I'))
+		if (gb.Seen('R'))
 		{
-			ms.g68Angle += angle;
+			const float angle = gb.GetFValue();
+			gb.MustSee('A', 'X');
+			const float centreX = gb.GetFValue();
+			gb.MustSee('B', 'Y');
+			const float centreY = gb.GetFValue();
+
+			ms.g68Centre[0] = centreX + GetWorkplaceOffset(gb, 0);
+			ms.g68Centre[1] = centreY + GetWorkplaceOffset(gb, 1);
+#if SUPPORT_ASYNC_MOVES
+			const float oldG68Angle = ms.g68Angle;
+#endif
+			if (gb.Seen('I'))
+			{
+				ms.g68Angle += angle;
+			}
+			else
+			{
+				ms.g68Angle = angle;
+			}
+#if SUPPORT_ASYNC_MOVES
+			if (ms.g68Angle != 0.0 && oldG68Angle == 0.0)
+			{
+				// We have just started doing coordinate rotation, so if we own axis letter X we need to own Y and vice versa
+				// Simplest is just to say we don't own either in the axis letters bitmap
+				ms.ReleaseAxisLetter('X');
+				ms.ReleaseAxisLetter('Y');
+			}
+#endif
+			UpdateCurrentUserPosition(gb);
+			reprap.MoveUpdated();
 		}
 		else
 		{
-			ms.g68Angle = angle;
+			reply.printf("XY rotation %.2f degrees centred on [%.3f %.3f]", (double)ms.g68Angle, (double)ms.g68Centre[0], (double)ms.g68Centre[1]);
 		}
-#if SUPPORT_ASYNC_MOVES
-		if (ms.g68Angle != 0.0 && oldG68Angle == 0.0)
-		{
-			// We have just started doing coordinate rotation, so if we own axis letter X we need to own Y and vice versa
-			// Simplest is just to say we don't own either in the axis letters bitmap
-			ms.ReleaseAxisLetter('X');
-			ms.ReleaseAxisLetter('Y');
-		}
-#endif
-		UpdateCurrentUserPosition(gb);
-		reprap.MoveUpdated();
 	}
 	return GCodeResult::ok;
 }

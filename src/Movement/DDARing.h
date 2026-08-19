@@ -12,7 +12,7 @@
 
 #include "DDA.h"
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 # include "MovementProfile.h"
 #endif
 
@@ -89,7 +89,7 @@ protected:
 private:
 	bool IsTimeToPrepareMove(uint32_t prepareAdvanceTime, uint32_t moveTimeLeft) const noexcept;
 	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, SimulationMode simulationMode) noexcept;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	void PlanMoves(DDA *firstUnpreparedMove, bool stopping) noexcept;
 	bool NeedNewPlan(DDA *moveToPrepare) const noexcept;
 #endif
@@ -100,7 +100,7 @@ private:
 	unsigned int numDdasInRing;													// The number of DDAs that this ring contains
 	uint32_t gracePeriod = DefaultGracePeriod;									// The minimum idle time in milliseconds, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	MovementProfile plannedProfile;												// the profile planned for a collection of moves
 #endif
 

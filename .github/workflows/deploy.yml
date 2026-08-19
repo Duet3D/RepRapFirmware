@@ -27,13 +27,24 @@ jobs:
           REF: ${{ github.ref_name }}
         run: |
           resolve() {
-            if git ls-remote --exit-code --heads "https://github.com/Duet3D/$1.git" "$REF" >/dev/null 2>&1; then
-              echo "$1: $REF"
-              echo "$1=$REF" >> "$GITHUB_OUTPUT"
-            else
-              echo "$1: $REF not found, using $2"
-              echo "$1=$2" >> "$GITHUB_OUTPUT"
-            fi
+            # Exit code 2 means the branch is genuinely absent, anything else is a failed lookup. Falling back
+            # on those would build against the wrong sources and upload them under the name of this branch
+            status=0
+            git ls-remote --exit-code --heads "https://github.com/Duet3D/$1.git" "$REF" >/dev/null 2>&1 || status=$?
+            case $status in
+              0)
+                echo "$1: $REF"
+                echo "$1=$REF" >> "$GITHUB_OUTPUT"
+                ;;
+              2)
+                echo "$1: $REF not found, using $2"
+                echo "$1=$2" >> "$GITHUB_OUTPUT"
+                ;;
+              *)
+                echo "Could not reach $1 to look up $REF" >&2
+                exit 1
+                ;;
+            esac
           }
           resolve CANlib 3.7-dev
           resolve CoreN2G 3.7-dev

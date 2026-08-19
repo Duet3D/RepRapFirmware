@@ -34,7 +34,7 @@ void Move::SetAcceleration(size_t drive, float value, bool reduced) noexcept
 	}
 }
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 
 // This is called whenever M201 changes normal accelerations or acceleration time, when changing axis/extruder driver assignment (in case new axes/extruders are created), and when changing the step mode.
 // It determines whether we should use S-curve acceleration and if so it recalculates the axis and extruder jerk values in case the accelerations or acceleration time has changed.
@@ -85,7 +85,7 @@ void Move::UpdateSCurveFlagAndJerk() noexcept
 
 #endif
 
-#if SUPPORT_S_CURVE && SUPPORT_CAN_EXPANSION
+#if SUPPORT_3RD_ORDER && SUPPORT_CAN_EXPANSION
 
 bool Move::AxisHasLocalDriver(size_t axis) const noexcept
 {
@@ -1356,7 +1356,7 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	// Prepare for movement
 	PrepParams params;
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	params.initialAcceleration = params.peakAcceleration = (motioncalc_t)msg.acceleration;
 	params.initialDeceleration = params.peakDeceleration = -(motioncalc_t)msg.deceleration;		// the deceleration is passed as a positive number in theCAN  message
 	params.phaseClocks[1] = msg.accelerationClocks;
@@ -1375,7 +1375,7 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	// We occasionally receive a message for a very short move with zero clocks needed. This messes up the calculations, so add one steady clock in this case.
 	if (clocksNeeded == 0)
 	{
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		clocksNeeded = params.phaseClocks[3] = 1;
 #else
 		clocksNeeded = params.steadyClocks = 1;
@@ -1392,7 +1392,7 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	params.startSpeed = params.topSpeed - aTimesT;
 	params.endSpeed = params.topSpeed - dTimesT;
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	params.speedsCalculated = false;
 	params.distances[1] = accelDistanceExTopSpeed + params.topSpeed * (motioncalc_t)msg.accelerationClocks;
 	params.distances[5] = decelDistanceExTopSpeed + params.topSpeed * (motioncalc_t)msg.decelClocks;

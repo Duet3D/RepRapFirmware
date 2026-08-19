@@ -222,7 +222,7 @@ public:
 #if SUPPORT_SCANNING_PROBES
 	size_t GetNumScanningProbeReadingsLeftToTake() const noexcept;
 	void TakeScanningProbeReading() noexcept;										// Take and store a reading from a scanning Z probe
-	GCodeResult HandleM558Point1or2or3(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException);	// Calibrate a scanning Z probe
+	GCodeResult HandleM558Subcommand(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException);	// Calibrate a scanning Z probe or tare a load cell probe
 #endif
 
 	// These next two are public because they are used by class SbcInterface
@@ -687,6 +687,7 @@ private:
 	ParameterLettersBitmap allAxisLetters;		// Which axis letters are in use
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
 	bool limitAxes;								// Don't think outside the box
+	bool limitAxesRelative;						// Clamp relative moves to the axis limits instead of throwing an error
 	bool noMovesBeforeHoming;					// Don't allow movement prior to homing the associates axes
 
 	AxesBitmap toBeHomed;						// Bitmap of axes still to be homed

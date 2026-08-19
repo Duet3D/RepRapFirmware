@@ -9,7 +9,7 @@
 
 #include "DDA.h"
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 
 #include "DDARing.h"
 #include "MovementProfile.h"
@@ -82,7 +82,7 @@ void DDA::SetSpeedRatioAndMaxJunctionSpeedForPrintingMoves(const Move& move) noe
 		const float axisDv = beforePrepare.startSpeedRatio * directionVector[axis] - prev->directionVector[axis];
 		if (fabsf(provisionalMaxEndSpeed * axisDv) > move.GetMaxInstantDv(axis))
 		{
-			provisionalMaxEndSpeed = move.GetMaxInstantDv(axis)/axisDv;
+			provisionalMaxEndSpeed = move.GetMaxInstantDv(axis)/fabsf(axisDv);
 		}
 	}
 	beforePrepare.maxPrevEndSpeed = provisionalMaxEndSpeed;
@@ -99,7 +99,7 @@ void DDA::SetSpeedRatioAndMaxJunctionSpeedForNonPrintingMoves(const Move& move) 
 		const float axisDv = directionVector[axis] - prev->directionVector[axis];
 		if (fabsf(provisionalMaxEndSpeed * axisDv) > move.GetMaxInstantDv(axis))
 		{
-			provisionalMaxEndSpeed = move.GetMaxInstantDv(axis)/axisDv;
+			provisionalMaxEndSpeed = move.GetMaxInstantDv(axis)/fabsf(axisDv);
 		}
 	}
 	beforePrepare.maxPrevEndSpeed = provisionalMaxEndSpeed;

@@ -204,6 +204,14 @@ struct FileChunkHeader
 	uint32_t filenameLength;
 };
 
+struct GetFileListHeader
+{
+	uint32_t startIndex;
+	uint32_t maxLength;
+	uint16_t directoryLength;
+	uint16_t padding;
+};
+
 struct OpenFileHeader
 {
 	bool forWriting;
@@ -253,7 +261,8 @@ enum class FirmwareRequest : uint16_t
 	TruncateFile = 23,						// Truncate a file
 	CloseFile = 24,							// Close a file again
 	DeleteFileOrDirectoryRecursively = 25,	// Delete a file or directory recursively
-	SecureDeleteFile = 26					// Securely delete a file (zero-overwrite + fsync, then unlink). Files only - directories rejected by DSF
+	SecureDeleteFile = 26,					// Securely delete a file (zero-overwrite + fsync, then unlink). Files only - directories rejected by DSF
+	GetFileList = 27						// Request part of a directory listing, starting at the given entry index
 };
 
 struct PrintPausedHeader
@@ -299,8 +308,9 @@ enum class SbcRequest : uint16_t
 	FileTruncateResult = 28,					// Result of a file truncate request
     SetLastCodeResult = 29,						// Set the result of the last executed code
     ObjectModelKeyChanged = 30,					// Increment the sequence number of an object model key provided exclusively by DSF
+	FileListResult = 31,						// Result of a directory listing request
 
-	InvalidRequest = 31
+	InvalidRequest = 32
 };
 
 struct BooleanHeader
@@ -368,6 +378,24 @@ struct FileChunk
 struct FileDataHeader
 {
 	int32_t bytesRead;
+};
+
+struct FileListHeader
+{
+	uint32_t dataLength;						// number of bytes of entry data following this header
+	bool endOfList;								// set when the final entry of the directory is part of this response
+	uint8_t paddingA;
+	uint16_t paddingB;
+};
+
+// One entry of a file list, followed by the name padded to the next dword boundary
+struct FileListEntry
+{
+	uint32_t size;
+	uint32_t lastModified;						// seconds since 1 Jan 1970, zero if unknown
+	uint16_t nameLength;
+	bool isDirectory;
+	uint8_t padding;
 };
 
 struct GetObjectModelHeader

@@ -69,6 +69,7 @@ public:
 	GCodeChannel ReadDeleteLocalVariable(const StringRef& varName) noexcept;				// Read a variable deletion request
 	FileHandle ReadOpenFileResult(FilePosition& fileLength) noexcept;						// Read the result of a file open request
 	int ReadFileData(char *buffer, size_t length) noexcept;									// Read file data from the SBC
+	size_t ReadFileList(char *buffer, size_t length, bool& endOfList) noexcept;				// Read a chunk of a directory listing from the SBC
 	GCodeChannel ReadSetLastCodeResult(GCodeResult& result) noexcept;						// Read the result of the last executed code
 
 	void ResendPacket(const PacketHeader *packet) noexcept;
@@ -92,6 +93,7 @@ public:
 	bool WriteCheckFileExists(const char *filename) noexcept;
 	bool WriteDeleteFileOrDirectory(const char *filename, bool recursive = false) noexcept;
 	bool WriteSecureDeleteFile(const char *filename) noexcept;
+	bool WriteGetFileList(const char *directory, uint32_t startIndex, uint32_t maxLength) noexcept;
 	bool WriteOpenFile(const char *filename, bool forWriting, bool append, uint32_t preAllocSize) noexcept;
 	bool WriteReadFile(FileHandle handle, size_t bufferSize) noexcept;
 	bool WriteFileData(FileHandle handle, const char *data, size_t& length) noexcept;

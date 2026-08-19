@@ -777,6 +777,31 @@ int DataTransfer::ReadFileData(char *buffer, size_t length) noexcept
 	return bytesToRead;
 }
 
+// Read a chunk of a directory listing. Returns the number of bytes copied into the buffer
+size_t DataTransfer::ReadFileList(char *buffer, size_t length, bool& endOfList) noexcept
+{
+	// Read header
+	const FileListHeader *header = ReadDataHeader<FileListHeader>();
+	endOfList = header->endOfList;
+
+	// Read entry data if applicable. The read pointer must be advanced even if we cannot use the data
+	if (header->dataLength == 0)
+	{
+		return 0;
+	}
+
+	const char *listData = ReadData(header->dataLength);
+	if (header->dataLength > length)
+	{
+		// DSF is told how much room we have, so this means the two sides disagree about the format
+		endOfList = true;
+		return 0;
+	}
+
+	memcpy(buffer, listData, header->dataLength);
+	return header->dataLength;
+}
+
 GCodeChannel DataTransfer::ReadSetLastCodeResult(GCodeResult& result) noexcept
 {
 	// Read header
@@ -1913,6 +1938,30 @@ bool DataTransfer::WriteSecureDeleteFile(const char *filename) noexcept
 
 	// Write filename
 	WriteData(filename, filenameLength);
+	return true;
+}
+
+bool DataTransfer::WriteGetFileList(const char *directory, uint32_t startIndex, uint32_t maxLength) noexcept
+{
+	// Check if it fits
+	size_t directoryLength = strlen(directory);
+	if (!CanWritePacket(sizeof(GetFileListHeader) + directoryLength))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::GetFileList, sizeof(GetFileListHeader) + directoryLength);
+
+	// Write header
+	GetFileListHeader *header = WriteDataHeader<GetFileListHeader>();
+	header->startIndex = startIndex;
+	header->maxLength = maxLength;
+	header->directoryLength = directoryLength;
+	header->padding = 0;
+
+	// Write directory name
+	WriteData(directory, directoryLength);
 	return true;
 }
 

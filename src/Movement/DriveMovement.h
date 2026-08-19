@@ -100,7 +100,7 @@ private:
 
 	motioncalc_t GetStepsTakenThisSegment(uint32_t when) const noexcept;
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	void UpdateSpeedAndAccelerationChange(motioncalc_t newSpeed, motioncalc_t speedChange, motioncalc_t newAcc, motioncalc_t accChange) noexcept;
 	void MovementStopped() noexcept;
 	void PrintRetiredSegment() const noexcept;
@@ -158,7 +158,7 @@ private:
 	std::atomic<int32_t> movementAccumulator;			// the accumulated movement in microsteps since GetAccumulatedMovement was last called. Only used for extruders.
 	uint32_t extruderPrintingSince;						// the millis ticks when this extruder started doing printing moves
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	motioncalc_t finalSpeed, finalAcc;					// the final speed and acceleration of the current segment
 	motioncalc_t peakDeltaV, peakDeltaA;				// For debugging: the maximum instantaneous speed change and acceleration change recorded
 #endif
@@ -216,7 +216,15 @@ inline int32_t DriveMovement::GetNetStepsTakenThisSegment() const noexcept
 // Only valid for isolated moves. Caller must disable interrupts before calling this.
 inline int32_t DriveMovement::GetNetStepsTakenThisMove(uint32_t when) const noexcept
 {
-	return (int32_t)GetCurrentPosition(when) - positionAtMoveStart;
+	const float pos = GetCurrentPosition(when);
+	const int32_t ipos = lrintf(pos);
+#if 0	//DEBUG
+	const int32_t overshoot = (int32_t)(currentMotorPosition - ipos);
+	const uint32_t delay = StepTimer::GetTimerTicks() - when;
+	debugPrintf("ipos %ld cmp %ld delay %lu overshoot %ld speed %ld\n",
+					ipos, currentMotorPosition, delay, overshoot, (overshoot * (int32_t)StepClockRate)/(int32_t)delay);
+#endif
+	return ipos - positionAtMoveStart;
 }
 
 // Return true if this is an extruder executing a printing move
@@ -270,11 +278,10 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 inline float DriveMovement::GetCurrentPosition(uint32_t when) const noexcept
 {
 	AtomicCriticalSectionLocker lock;										// we don't want 'segments' changing while we do this
-
 	const MoveSegment* const seg = segments;
 	if (seg != nullptr)
 	{
-		int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
+		int32_t timeSinceStart = (int32_t)(StepTimer::ConvertLocalToMovementTime(when) - seg->GetStartTime());
 		if (timeSinceStart >= 0)
 		{
 			if ((uint32_t)timeSinceStart >= seg->GetDuration())				// if segment should have finished by now
@@ -282,16 +289,17 @@ inline float DriveMovement::GetCurrentPosition(uint32_t when) const noexcept
 				// We can't get the next segment because that needs `NewSegment()` to be called
 				timeSinceStart = seg->GetDuration();
 			}
-
-			return (float)((u + 0.5 * seg->GetA() * timeSinceStart) * timeSinceStart
-							  + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards
-						  );
+#if SUPPORT_3RD_ORDER
+			const motioncalc_t movement = (u + ((motioncalc_t)0.5 * seg->GetA() + OneSixth * seg->GetJ() * timeSinceStart) * timeSinceStart) * timeSinceStart;
+#else
+			const motioncalc_t movement = (u + (motioncalc_t)0.5 * seg->GetA() * timeSinceStart) * timeSinceStart;
+#endif
+			return (float)(movement + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 		}
 
 		// If we get here then we have been asked for the position before the current segment started
 		return (float)((motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 	}
-
 	// If we get here then no movement is taking place
 	return (float)((motioncalc_t)currentMotorPosition + distanceCarriedForwards);
 }
@@ -361,7 +369,7 @@ inline bool DriveMovement::UpdateCurrentMotion(uint32_t when, MotionParameters& 
 				timeSinceStart = seg->GetDuration();
 			}
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 			const float rawPosition = (float)((u + ((motioncalc_t)0.5 * seg->GetA() + OneSixth * seg->GetJ() * timeSinceStart) * timeSinceStart) * timeSinceStart
 										+ (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 #else
@@ -370,7 +378,7 @@ inline bool DriveMovement::UpdateCurrentMotion(uint32_t when, MotionParameters& 
 #endif
 			currentMotorPosition = (int32_t)rawPosition;												// store the approximate position for OM updates
 			mParams.position = rawPosition;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 			mParams.speed = (float)(u + (seg->GetA() + (motioncalc_t)0.5 * seg->GetJ() * timeSinceStart) * timeSinceStart);
 			mParams.acceleration = (float)(seg->GetA() + seg->GetJ() * timeSinceStart);
 #else

@@ -1984,7 +1984,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if defined(DUET3_ATE)
 				reply.lcatf("ATE firmware version %s date %s %s", Duet3Ate::GetFirmwareVersionString(), Duet3Ate::GetFirmwareDateString(), Duet3Ate::GetFirmwareTimeString());
 #else
-				reply.catf(" FIRMWARE_DATE: %s%s", DateText, TimeSuffix);
+				reply.catf(" FIRMWARE_DATE: %s", DateTimeText);
 #endif
 				break;
 
@@ -2002,10 +2002,33 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (gb.Seen('P'))
 					{
-						// Wait for the heaters associated with the specified tool to be ready
-						if (!ToolHeatersAtSetTemperatures(Tool::GetLockedTool(gb.GetIValue()).Ptr(), true, tolerance, gb.IsFileChannel()))
+						// Wait for the heaters associated with the specified tool(s) to be ready
+						uint32_t toolNumbers[MaxTools];
+						size_t toolCount = MaxTools;
+						gb.GetUnsignedArray(toolNumbers, toolCount, false);
+
+						if (toolCount == 0)
 						{
-							return false;
+							// If no tool numbers are given, wait for all tools
+							ReadLocker lock(Tool::toolListLock);
+							for (const Tool *_ecv_null tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
+							{
+								if (!ToolHeatersAtSetTemperatures(tool, true, tolerance, gb.IsFileChannel()))
+								{
+									return false;
+								}
+							}
+						}
+						else
+						{
+							for (size_t i = 0; i < toolCount; i++)
+							{
+								ReadLockedPointer<Tool> tool = Tool::GetLockedTool((int)toolNumbers[i]);
+								if (!ToolHeatersAtSetTemperatures(tool.Ptr(), true, tolerance, gb.IsFileChannel()))
+								{
+									return false;
+								}
+							}
 						}
 						seen = true;
 					}
@@ -2070,13 +2093,40 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						seen = true;
 					}
 
-					// Wait for the current tool and slow heaters to be ready
-					if (!seen && (
-							!ToolHeatersAtSetTemperatures(GetMovementState(gb).GetLockedCurrentTool().Ptr(), true, tolerance, gb.IsFileChannel()) ||
-							!reprap.GetHeat().SlowHeatersAtSetTemperatures(tolerance, gb.IsFileChannel())
-						))
+					// Wait for the tools of this motion system, unallocated tools and slow heaters to be ready
+					if (!seen)
 					{
-						return false;
+						{
+#if SUPPORT_ASYNC_MOVES
+							const MovementState& ms = GetMovementState(gb);
+#endif
+							ReadLocker lock(Tool::toolListLock);
+							for (const Tool *_ecv_null tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
+							{
+#if SUPPORT_ASYNC_MOVES
+								bool usedByOtherMotionSystem = false;
+								for (size_t i = 0; i < numMotionSystemsUsed; i++)
+								{
+									if (&moveStates[i] != &ms && moveStates[i].currentTool == tool)
+									{
+										usedByOtherMotionSystem = true;
+									}
+								}
+								if (usedByOtherMotionSystem)
+								{
+									continue;
+								}
+#endif
+								if (!ToolHeatersAtSetTemperatures(tool, true, tolerance, gb.IsFileChannel()))
+								{
+									return false;
+								}
+							}
+						}
+						if (!reprap.GetHeat().SlowHeatersAtSetTemperatures(tolerance, gb.IsFileChannel()))
+						{
+							return false;
+						}
 					}
 				}
 				break;
@@ -2556,7 +2606,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 					if (frac < 1 && gb.Seen('T'))
 					{
 						if (!LockAllMovementSystemsAndWaitForStandstill(gb))
@@ -2569,7 +2619,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 					if (seen)
 					{
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 						if (frac < 1)
 						{
 							move.UpdateSCurveFlagAndJerk();
@@ -2591,7 +2641,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(move.Acceleration(ExtruderToLogicalDrive(extruder), frac == 1)));
 							sep = ':';
 						}
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 						if (frac < 1)
 						{
 							reply.catf(", acceleration time %.2f sec", (double)(move.AccelerationTime() * (1.0/StepClockRate)));
@@ -2599,7 +2649,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 					}
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 					if (frac < 1 && move.AccelerationTime() != 0.0 && !move.IsUsingSCurve())
 					{
 						reply.lcat("Acceleration time (S-curve acceleration) is disabled because phase stepping is not enabled");
@@ -3687,10 +3737,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = DefineGrid(gb, reply);
 				break;
 
-			case 558: // Set or report Z probe type and for which axes it is used; M558.1 calibrate Z probe; M558.2 calibrate scanning Z probe drive strength
+			case 558: // Set or report Z probe type and for which axes it is used; M558.1 calibrate Z probe; M558.2 calibrate scanning Z probe drive strength; M558.4 tare load cell probe
 				result =
 #if SUPPORT_SCANNING_PROBES
-						(gb.GetCommandFraction() > 3) ? TryMacroFile(gb) :
+						(gb.GetCommandFraction() > 4) ? TryMacroFile(gb) :
 #endif
 							platform.GetEndstops().HandleM558(gb, reply);
 				break;
@@ -3768,13 +3818,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						seen = true;
 						noMovesBeforeHoming = (gb.GetIValue() > 0);
 					}
+					if (gb.Seen('R'))
+					{
+						seen = true;
+						limitAxesRelative = (gb.GetIValue() > 0);
+					}
 					if (seen)
 					{
 						reprap.MoveUpdated();
 					}
 					else
 					{
-						reply.printf("Movement outside the bed is %spermitted, movement before homing is %spermitted", (limitAxes) ? "not " : "", (noMovesBeforeHoming) ? "not " : "");
+						reply.printf("Movement outside the bed is %spermitted, movement before homing is %spermitted, relative moves are %sclamped to the axis limits", (limitAxes) ? "not " : "", (noMovesBeforeHoming) ? "not " : "", (limitAxesRelative) ? "" : "not ");
 					}
 				}
 				break;

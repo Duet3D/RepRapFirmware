@@ -183,6 +183,7 @@ MovementError DDARing::AddStandardMove(const RawMove &nextMove, bool doMotorMapp
 	const MovementError err = addPointer->InitStandardMove(*this, nextMove, doMotorMapping);
 	if (err == MovementError::ok)
 	{
+		addPointer->SetState(DDA::planned);
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
 	}
@@ -194,6 +195,7 @@ bool DDARing::AddSpecialMove(float feedRate, const float coords[MaxDriversPerAxi
 {
 	if (addPointer->InitLeadscrewMove(*this, feedRate, coords))
 	{
+		addPointer->SetState(DDA::planned);
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
 		return true;
@@ -208,6 +210,7 @@ bool DDARing::AddAsyncMove(const AsyncMove& nextMove) noexcept
 {
 	if (addPointer->InitAsyncMove(*this, nextMove))
 	{
+		addPointer->SetState(DDA::planned);
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
 		return true;
@@ -351,7 +354,7 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 				: MoveTiming::StandardMoveWakeupInterval;			// the queue is empty, nothing to do until new moves arrive
 }
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 
 // Return true if we need to create a new plan before we can prepare a move
 inline bool DDARing::NeedNewPlan(DDA *moveToPrepare) const noexcept
@@ -403,7 +406,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 #endif
 		  )
 	{
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		// If the move to prepare is an S-curve move than it may not have been planned yet.
 		// Even if it has been planned, if any moves have been added to the ring then we may need to re-plan it
 		if (firstUnpreparedMove->IsSCurveMove())
@@ -471,7 +474,7 @@ bool DDARing::SetWaitingToEmpty() noexcept
 	if (ret)
 	{
 		waitingForRingToEmpty = false;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		plannedProfile.Invalidate();				// we may be waiting for movement to stop after an asynchronous pause, in which case the planned profile may not have been completed
 #endif
 	}

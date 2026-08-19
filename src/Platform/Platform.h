@@ -165,7 +165,7 @@ enum class DiagnosticTestType : unsigned int
 	TimeCRC32 = 107,				// time how long it takes to calculate CRC32
 	TimeGetTimerTicks = 108,		// time now long it takes to read the step clock
 	UndervoltageEvent = 109,		// pretend an undervoltage condition has occurred
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	TimeCubicSolver = 110,
 	TimeQuarticSolver = 111,
 #endif
@@ -181,7 +181,8 @@ enum class DiagnosticTestType : unsigned int
 	UnalignedMemoryAccess = 1005,	// do an unaligned memory access to test exception handling
 	BusFault = 1006,				// generate a bus fault
 	AccessMemory = 1007,			// read or write  memory
-	MemoryLeak = 1008				// cause an out of memory fault
+	MemoryLeak = 1008,				// cause an out of memory fault
+	WedgeI2CBus = 1009				// leave an I2C slave holding SDA low to test bus recovery
 };
 
 /***************************************************************************************************************/

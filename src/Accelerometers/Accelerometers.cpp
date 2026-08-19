@@ -502,6 +502,8 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 		}
 		return rslt;
 	}
+
+	expectedRemoteBoardAddress = CanId::NoAddress;
 # endif
 
 	successfulStart = false;
@@ -584,7 +586,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			accelerometerFile = nullptr;
 			reprap.GetExpansion().AddAccelerometerRun(src, 0);
 		}
-		else if (msg.axes != expectedRemoteAxes || msg.firstSampleNumber != expectedRemoteSampleNumber || src != expectedRemoteBoardAddress)
+		else if (msg.axes != expectedRemoteAxes || msg.firstSampleNumber != (uint16_t)expectedRemoteSampleNumber || src != expectedRemoteBoardAddress)		// firstSampleNumber is only 16 bits wide in the message
 		{
 			f->Write("Received mismatched data\n");
 			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
@@ -660,6 +662,20 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 				reprap.GetExpansion().AddAccelerometerRun(src, expectedRemoteSampleNumber);
 			}
 		}
+	}
+}
+
+// Called when an expansion board announces itself after restarting. A collection that was running on it is lost, so finish the file instead of reporting busy forever
+void Accelerometers::RemoteBoardRestarted(CanAddress src) noexcept
+{
+	FileStore * const f = accelerometerFile;
+	if (f != nullptr && src == expectedRemoteBoardAddress)
+	{
+		f->Write("Board restarted before the collection was complete\n");
+		f->Truncate();
+		f->Close();
+		accelerometerFile = nullptr;
+		reprap.GetExpansion().AddAccelerometerRun(src, 0);
 	}
 }
 

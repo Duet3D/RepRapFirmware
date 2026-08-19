@@ -28,15 +28,11 @@ enum class EndstopHitAction : uint8_t
 struct EndstopHitDetails
 {
 	EndstopHitDetails() noexcept
-		: action((uint32_t)EndstopHitAction::none), internalUse(0), axis(NO_AXIS), setAxisLow(false), setAxisHigh(false), isZProbe(false), haveTriggerTime(false)
+		: action((uint32_t)EndstopHitAction::none), internalUse(0), axis(NO_AXIS), setAxisLow(false), setAxisHigh(false), isZProbe(false)
 	{
 	}
 
-	void SetAction(EndstopHitAction a, uint16_t p_whenTriggered, bool p_haveTriggerTime) noexcept
-	{
-		action = (uint32_t)a;
-		whenTriggered = p_whenTriggered; haveTriggerTime = p_haveTriggerTime;
-	}
+	void SetAction(EndstopHitAction a, uint32_t p_whenTriggered, bool p_haveTriggerTime) noexcept;
 
 	EndstopHitAction GetAction() const noexcept { return (EndstopHitAction)action; }
 
@@ -46,8 +42,7 @@ struct EndstopHitDetails
 			 axis : 6,				// which axis to stop if the action is stopAxis, and which axis to set the position of if setAxisLow or SetAxisHigh is true
 			 setAxisLow : 1,		// whether or not to set the axis position to its min
 			 setAxisHigh : 1,		// whether or not to set the axis position to its max
-			 isZProbe : 1,			// whether this is a Z probe
-			 haveTriggerTime : 1;	// set if whenTriggered is valid
+			 isZProbe : 1;			// whether this is a Z probe
 	DriverId driver;
 
 	static_assert(MaxAxes <= 64);				// because we have allocated 6 bits to hold the axis number
@@ -87,7 +82,8 @@ enum class ZProbeType : uint8_t
 	blTouch = 9,
 	zMotorStall = 10,
 	scanningAnalog = 11,
-	numTypes = 12					// must be 1 higher than the last type
+	loadCell = 12,
+	numTypes = 13					// must be 1 higher than the last type
 };
 
 #endif /* SRC_ENDSTOPS_ENDSTOPDEFS_H_ */
