@@ -511,6 +511,7 @@ void ExpansionManager::AddClosedLoopRun(CanAddress address, unsigned int numData
 void ExpansionManager::SaveAccelerometerOrientation(CanAddress address, uint8_t orientation) noexcept
 {
 	boards[address].accelerometerOrientation = orientation;
+	reprap.BoardsUpdated();
 }
 
 void ExpansionManager::SaveAccelerometerConfig(CanAddress address, uint16_t samplingRate, uint8_t resolution) noexcept
