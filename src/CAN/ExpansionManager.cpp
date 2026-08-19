@@ -425,6 +425,7 @@ void ExpansionManager::AddClosedLoopRun(CanAddress address, unsigned int numData
 void ExpansionManager::SaveAccelerometerOrientation(CanAddress address, uint8_t orientation) noexcept
 {
 	boards[address].accelerometerOrientation = orientation;
+	reprap.BoardsUpdated();
 }
 
 GCodeResult ExpansionManager::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
