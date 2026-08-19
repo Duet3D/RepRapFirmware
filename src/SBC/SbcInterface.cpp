@@ -1025,7 +1025,7 @@ void SbcInterface::ExchangeData() noexcept
 				fileSuccess = success;
 				if (!success || fileBufferLength == 0)
 				{
-					fileOperationPending = fileBufferLength != 0;
+					fileOperationPending = false;
 					fileOperation = FileOperation::none;
 					fileSemaphore.Give();
 				}
