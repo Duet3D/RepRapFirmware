@@ -109,6 +109,7 @@ namespace MassStorage
 #endif
 
 #if HAS_SBC_INTERFACE
+	void ConfigureSbcBuffering() noexcept;													// Re-slice the write buffers for SBC mode, called once on startup before any file is opened
 	bool AnyFileOpen() noexcept;															// Return true if any files are open on the file system
 	void InvalidateAllFiles() noexcept;
 #endif

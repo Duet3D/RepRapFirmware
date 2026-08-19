@@ -27,6 +27,7 @@ class GCodeBuffer;
 
 class OutputBuffer;
 class OutputStack;
+class FileWriteBuffer;
 
 //#define TRACK_FILE_CODES			// Uncomment this to enable code <-> code reply tracking for the file G-code channel
 
@@ -71,6 +72,8 @@ public:
 	FileHandle OpenFile(const char *filename, OpenMode mode, FilePosition& fileLength, uint32_t preAllocSize = 0) noexcept;
 	int ReadFile(FileHandle handle, char *buffer, size_t bufferLength) noexcept;
 	bool WriteFile(FileHandle handle, const char *buffer, size_t bufferLength) noexcept;
+	bool WriteFileAsync(FileHandle handle, FileWriteBuffer *buffer, std::atomic<bool>& errorFlag) noexcept;	// Write the buffer in the background; it is released when done and errorFlag is set if the write failed
+	void WaitForAsyncWrite() noexcept;											// Wait until no background write is in progress any more
 	bool SeekFile(FileHandle handle, FilePosition offset) noexcept;
 	bool TruncateFile(FileHandle handle) noexcept;
 	void CloseFile(FileHandle handle) noexcept;
@@ -84,7 +87,7 @@ private:
 	TransferState state;
 	uint32_t numDisconnects, numTimeouts, numSbcTimeouts, lastTransferTime;
 
-	uint32_t maxDelayBetweenTransfers, maxFileOpenDelay, numMaxEvents;
+	uint32_t maxDelayBetweenTransfers, numMaxEvents;
 	uint32_t burstModeWindow, burstModeDelay;					// configurable burst mode timing
 	uint32_t burstModeStartTime;								// millis() when burst mode was last (re)activated, 0 = inactive
 	std::atomic<bool> delaying;
@@ -107,9 +110,10 @@ private:
 #endif
 
 	// File I/O
-	Mutex fileMutex;													// locked while a file operation is performed
+	Mutex fileMutex;													// locked while a file operation is set up and, for synchronous ones, performed
 	unsigned int numOpenFiles;
-	BinarySemaphore fileSemaphore;										// resolved when the requested file operation has finished
+	BinarySemaphore fileSemaphore;										// resolved when the requested synchronous file operation has finished
+	BinarySemaphore asyncWriteSemaphore;								// resolved when a background write has finished, so that the next operation can be posted
 
 	// File operation variables, accessed by more than one task
 	enum class FileOperation {
@@ -122,6 +126,7 @@ private:
 		openAppend,
 		read,
 		write,
+		writeAsync,
 		seek,
 		truncate,
 		close,
@@ -140,6 +145,13 @@ private:
 	size_t fileBufferLength;
 	FilePosition fileOffset;
 	bool fileListEndOfList;
+
+	// Background write variables, separate from the above because synchronous operations set up their variables while a background write may still be in progress
+	FileWriteBuffer *asyncWriteBuffer;									// buffer being written, released by the SBC task when done
+	FileHandle asyncWriteHandle;
+	const char *asyncWriteData;											// next data to send
+	size_t asyncWriteLength;											// number of bytes still to send
+	std::atomic<bool> *asyncWriteErrorFlag;								// set if the write fails
 	// End of file operation variables
 
 	volatile OutputStack gcodeReply;
@@ -155,7 +167,10 @@ private:
 	void DefragmentBufferedCodes() noexcept;								// Attempt to defragment the code buffer ring to avoid stalls
 	bool DefragmentCodeBlock(uint16_t start, volatile uint16_t &end) noexcept;	// Defragment a specific code buffer region returning true if anything was defragmented
 	void InvalidateBufferedCodes(GCodeChannel channel) noexcept;           	// Invalidate every buffered G-code of the corresponding channel from the buffer ring
-	bool DoFileOperation(FileOperation f) noexcept;							// Ask the SBC task to do a file operation
+	bool WaitForFileSlot() noexcept;										// Wait until no background write occupies the file operation slot
+	void PostFileOperation(FileOperation f) noexcept;						// Hand a file operation to the SBC task
+	bool DoFileOperation(FileOperation f) noexcept;							// Ask the SBC task to do a file operation and wait for it to finish
+	void FinishAsyncWrite(bool success) noexcept;							// Release the buffer of the background write and free the file operation slot
 };
 
 inline void SbcInterface::SetPauseReason(FilePosition position, FilePosition position2, PrintPausedReason reason) noexcept

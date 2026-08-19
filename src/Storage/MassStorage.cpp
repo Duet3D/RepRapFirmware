@@ -58,8 +58,6 @@ alignas(4) static __nocache uint8_t sectorBuffers[NumLruBuffers][FF_MAX_SS];
 alignas(4) static __nocache uint8_t sectorBuffers[NumSdCards][FF_MAX_SS];
 #  endif
 
-alignas(4) static __nocache char writeBufferStorage[NumFileWriteBuffers][FileWriteBufLen];
-
 # elif FF_LRU
 
 alignas(4) static uint8_t sectorBuffers[NumLruBuffers][FF_MAX_SS];
@@ -169,7 +167,29 @@ static FileInfoParser infoParser;
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+# if SAME70
+alignas(4) static __nocache char writeBufferStorage[NumFileWriteBuffers * FileWriteBufLen];
+# else
+alignas(4) static char writeBufferStorage[NumFileWriteBuffers * FileWriteBufLen];	// 32-bit aligned for better HSMCI performance
+# endif
+# if HAS_SBC_INTERFACE
+static FileWriteBuffer writeBuffers[NumSbcFileWriteBuffers];
+# else
+static FileWriteBuffer writeBuffers[NumFileWriteBuffers];
+# endif
 static FileWriteBuffer *_ecv_null freeWriteBuffers;
+
+// Carve the write buffer storage into numBuffers buffers of bufLen bytes and put them all on the free list
+static void InitWriteBuffers(size_t numBuffers, size_t bufLen) noexcept
+{
+	TaskCriticalSectionLocker lock;
+	freeWriteBuffers = nullptr;
+	for (size_t i = 0; i < numBuffers; i++)
+	{
+		writeBuffers[i].Init(freeWriteBuffers, writeBufferStorage + i * bufLen);
+		freeWriteBuffers = &writeBuffers[i];
+	}
+}
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
@@ -383,15 +403,7 @@ void MassStorage::Init() noexcept
 #endif
 
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	freeWriteBuffers = nullptr;
-	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
-	{
-#  if SAME70
-		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers, writeBufferStorage[i]);
-#  else
-		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers);
-#  endif
-	}
+	InitWriteBuffers(NumFileWriteBuffers, FileWriteBufLen);
 # endif
 
 # if HAS_MASS_STORAGE
@@ -609,9 +621,11 @@ bool MassStorage::DirectoryExists(const StringRef& path) noexcept
 // Static helper functions
 size_t FileWriteBuffer::fileWriteBufLen = FileWriteBufLen;
 
+// The free list is guarded by a critical section rather than fsMutex because in SBC mode the SBC task releases buffers
+// while a task holding fsMutex may be waiting for it
 FileWriteBuffer *_ecv_null MassStorage::AllocateWriteBuffer() noexcept
 {
-	MutexLocker lock(fsMutex);
+	TaskCriticalSectionLocker lock;
 
 	FileWriteBuffer *_ecv_null const buffer = freeWriteBuffers;
 	if (buffer != nullptr)
@@ -625,12 +639,19 @@ FileWriteBuffer *_ecv_null MassStorage::AllocateWriteBuffer() noexcept
 
 void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept
 {
-	MutexLocker lock(fsMutex);
+	TaskCriticalSectionLocker lock;
 	buffer->SetNext(freeWriteBuffers);
 	freeWriteBuffers = buffer;
 }
 
 # if HAS_SBC_INTERFACE
+
+// Called once at startup when SBC mode is detected, before any file has been opened
+void MassStorage::ConfigureSbcBuffering() noexcept
+{
+	FileWriteBuffer::ConfigureSbcBuffering();
+	InitWriteBuffers(NumSbcFileWriteBuffers, SbcFileWriteBufLen);
+}
 
 // Return true if any files are open on the file system
 bool MassStorage::AnyFileOpen() noexcept

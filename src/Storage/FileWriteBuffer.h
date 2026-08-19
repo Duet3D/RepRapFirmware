@@ -22,6 +22,9 @@ constexpr size_t SbcFileWriteBufLen = 4096;					// Available size of each write 
 # error Unsupported processor
 #endif
 static_assert(FileWriteBufLen >= SbcFileWriteBufLen, "File write buffer must be at least as big as the configured SBC threshold");
+#if HAS_SBC_INTERFACE
+constexpr size_t NumSbcFileWriteBuffers = (NumFileWriteBuffers * FileWriteBufLen) / SbcFileWriteBufLen;	// In SBC mode the same storage is split into smaller buffers so that writes can be double-buffered
+#endif
 
 // Class to cache data that is about to be written to the SD card. This is NOT a ring buffer,
 // instead it just provides simple interfaces to cache a certain amount of data so that fewer
@@ -29,12 +32,9 @@ static_assert(FileWriteBufLen >= SbcFileWriteBufLen, "File write buffer must be 
 class FileWriteBuffer
 {
 public:
-#if SAME70
-	FileWriteBuffer(FileWriteBuffer *_ecv_null n, char *_ecv_array storage) noexcept : next(n), index(0), buf(storage) { }
-#else
-	explicit FileWriteBuffer(FileWriteBuffer *_ecv_null n) noexcept : next(n), index(0) { }
-#endif
-	static void UsingSbcMode() noexcept { fileWriteBufLen = SbcFileWriteBufLen; }	// only called by RepRap on startup
+	FileWriteBuffer() noexcept : next(nullptr), index(0), buf(nullptr) { }
+	void Init(FileWriteBuffer *_ecv_null n, char *_ecv_array storage) noexcept { next = n; index = 0; buf = storage; }
+	static void ConfigureSbcBuffering() noexcept { fileWriteBufLen = SbcFileWriteBufLen; }	// only called by MassStorage on startup
 
 	FileWriteBuffer *_ecv_null Next() const noexcept { return next; }
 	void SetNext(FileWriteBuffer *_ecv_null n) noexcept { next = n; }
@@ -53,11 +53,7 @@ private:
 	FileWriteBuffer *_ecv_null next;
 
 	size_t index;
-#if SAME70
 	char *_ecv_array buf;
-#else
-	alignas(4) char buf[FileWriteBufLen];								// 32-bit aligned buffer for better HSMCI performance
-#endif
 };
 
 inline size_t FileWriteBuffer::Store(const char *_ecv_array data, size_t length) noexcept
