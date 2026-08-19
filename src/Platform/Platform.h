@@ -171,7 +171,8 @@ enum class DiagnosticTestType : unsigned int
 	UnalignedMemoryAccess = 1005,	// do an unaligned memory access to test exception handling
 	BusFault = 1006,				// generate a bus fault
 	AccessMemory = 1007,			// read or write  memory
-	MemoryLeak = 1008				// cause an out of memory fault
+	MemoryLeak = 1008,				// cause an out of memory fault
+	WedgeI2CBus = 1009				// leave an I2C slave holding SDA low to test bus recovery
 };
 
 /***************************************************************************************************************/

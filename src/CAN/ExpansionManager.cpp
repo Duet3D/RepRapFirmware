@@ -16,6 +16,10 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/StepTimer.h>
 
+#if SUPPORT_ACCELEROMETERS
+# include <Accelerometers/Accelerometers.h>
+#endif
+
 ReadWriteLock ExpansionManager::boardsLock;
 
 #if SUPPORT_OBJECT_MODEL
@@ -178,6 +182,9 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 			{
 				Event::AddEvent(EventType::expansion_reconnect, 0, src, 0, "");
 			}
+#if SUPPORT_ACCELEROMETERS
+			Accelerometers::RemoteBoardRestarted(src);
+#endif
 			board.hasVin = board.hasV12 = board.hasMcuTemp = false;
 			String<StringLength100> boardTypeAndFirmwareVersion;
 			if (isNewFormat)

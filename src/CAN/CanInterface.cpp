@@ -1733,7 +1733,7 @@ GCodeResult CanInterface::DeleteFilamentMonitor(DriverId driver, GCodeBuffer* gb
 
 # if SUPPORT_ACCELEROMETERS
 
-GCodeResult CanInterface::StartAccelerometer(DriverId device, uint8_t axes, uint16_t numSamples, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+GCodeResult CanInterface::StartAccelerometer(DriverId device, uint8_t axes, uint32_t numSamples, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	CanMessageBuffer* const buf = AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(device.boardAddress, buf);
