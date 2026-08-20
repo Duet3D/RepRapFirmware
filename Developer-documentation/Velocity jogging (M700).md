@@ -65,6 +65,22 @@ the underlying handoff: `JogController::Spin` can only add one chunk per pass be
 `ms.segmentsLeft` to return to zero, which makes the fill rate a ping-pong between the GCode and Move
 tasks. Letting it enqueue more per pass would allow a shallower queue and lower latency.
 
+## What has actually been measured
+
+Everything below was run under the Renode emulator (`duet3-emulation/`), driving `M700` over the
+emulated aux UART and reconstructing velocity from timestamped STEP-pin edges. These are measurements,
+not arguments.
+
+| Claim | Result |
+|---|---|
+| Chunks blend into steady motion | Confirmed **at `D5`**. At the original `D3` it did not: a 20Hz stream at 10mm/s collapsed to 2.5mm/s at chunk boundaries and lost 7% of the commanded distance. That is what raised the default. |
+| Speed ceiling is `2·a·P` | Confirmed and linear in `P`. Commanding 90mm/s gave a measured peak of 20.08, 40.23 and 81.31 mm/s at `P` = 10, 20 and 40ms, against 20, 40 and 80 predicted. |
+| Losing the command stream decelerates rather than stops dead | Confirmed. A single `M700 X10` travels 3mm and stops: the 250ms watchdog plus the chunks already queued behind it. |
+| An axis at its limit stops, others keep their speed | Confirmed. With `M208 X0:5` and `M700 X10 Y10`, X stopped at exactly 5.000mm while Y carried on to 10.000mm at a steady 10.00mm/s. |
+
+Untested on real hardware. An emulator models what it was told to model: step timing here comes from
+the TC model, and nothing checks that a real TMC5160 driver would follow the pulses.
+
 ## Safety
 
 * **Speed clamp.** Each axis is clamped to its `M203` maximum *and* to `2·a·P`. That second limit is not
