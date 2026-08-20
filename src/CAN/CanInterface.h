@@ -123,6 +123,7 @@ namespace CanInterface
 	GCodeResult StartClosedLoopDataCollection(DriverId device, uint16_t filter, uint16_t numSamples, uint16_t p_rateRequested, uint8_t p_movementRequested, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult ProcessM655(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
+	void UpdateStatusLed() noexcept;
 #if SUPPORT_MULTICAST_DISCOVERY
 	void SetStatusLedIdentify(uint32_t seconds) noexcept;
 	void SetStatusLedNormal() noexcept;

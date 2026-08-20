@@ -228,26 +228,38 @@ void CanInterface::SetStatusLedNormal() noexcept
 
 #endif
 
-// This is called only from the CAN clock loop, so inline
-static inline void UpdateLed(uint32_t stepClocks) noexcept
+// Called frequently from Platform::Spin, so that we change the LED state as close to the step clock transition as the expansion boards do
+void CanInterface::UpdateStatusLed() noexcept
 {
+#if SUPPORT_REMOTE_COMMANDS
+	if (inExpansionMode && !StepTimer::CheckSynced())
+	{
+		// Blink fast to show that we haven't established clock sync with the master
+		reprap.GetPlatform().SetDiagLed((StepTimer::GetTimerTicks() & (1u << 17)) != 0);
+		return;
+	}
+
+	const uint32_t stepClocks = StepTimer::GetMasterTime();
+#else
+	const uint32_t stepClocks = StepTimer::GetTimerTicks();
+#endif
+
 #if SUPPORT_MULTICAST_DISCOVERY
 	if (identifying)
 	{
 		if (identTotalClocks != 0 && stepClocks - identInitialClocks >= identTotalClocks)
 		{
-			identifying = 0;							// stop identifying
+			identifying = false;						// stop identifying
 		}
 		else
 		{
-			// Blink the LED fast. This function gets called every 200ms, so that's the fastest we can blink it without having another task do it.
-			reprap.GetPlatform().InvertDiagLed();
+			reprap.GetPlatform().SetDiagLed((stepClocks & (1u << 17)) != 0);
 			return;
 		}
 	}
 #endif
 
-	// Blink the LED at about 1Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
+	// Blink the LED at about 1Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us
 	reprap.GetPlatform().SetDiagLed((stepClocks & (1u << 19)) != 0);
 }
 
@@ -659,8 +671,6 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		msg->timeSent = lastTimeSent;
 		SendCanMessage(TxBufferIndexTimeSync, 0, &buf);
 		++timeSyncMessagesSent;
-
-		UpdateLed(lastTimeSent);
 
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, CanClockIntervalMillis);
