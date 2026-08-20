@@ -4367,6 +4367,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = FindCenterOfCavity(gb, reply);
 				break;
 
+			case 700: // Set jog velocities
+				result = jogController.ProcessM700(gb, reply);
+				break;
+
 			case 701: // Load filament
 				result = LoadFilament(gb, reply);
 				break;
