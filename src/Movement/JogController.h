@@ -38,7 +38,11 @@ private:
 	static constexpr uint32_t MaxChunkMillis = 200;
 	static constexpr uint32_t DefaultTimeoutMillis = 250;
 	static constexpr uint32_t MaxTimeoutMillis = 10000;
-	static constexpr unsigned int DefaultMaxQueuedMoves = 3;
+	// Measured, not guessed. Under the Renode emulator a 20Hz M700 stream at 10mm/s stutters badly with
+	// a depth of 3 - velocity collapses to 2.5mm/s at chunk boundaries and 7% of the commanded distance
+	// is lost - because the producer cannot keep the ring topped up. 4 is clean; 5 leaves margin for a
+	// real machine, which has heaters, networking and the SD card competing for the same main loop.
+	static constexpr unsigned int DefaultMaxQueuedMoves = 5;
 	static constexpr unsigned int MinMaxQueuedMoves = 2;
 	static constexpr unsigned int MaxMaxQueuedMoves = 8;
 

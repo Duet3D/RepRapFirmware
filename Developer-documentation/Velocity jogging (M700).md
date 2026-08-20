@@ -15,7 +15,7 @@ M700 X<speed> Y<speed> Z<speed> ... [S0] [P<ms>] [R<ms>] [D<n>]
 | `S0` | Stop jogging now. |
 | `P` | Chunk time in ms, 10..200, default 50. See *Latency* below. |
 | `R` | Watchdog timeout in ms, default 250. |
-| `D` | How many moves to keep queued, 2..8, default 3. |
+| `D` | How many moves to keep queued, 2..8, default 5. |
 | none | Report status. |
 
 **The axis letters present define the whole velocity vector.** Any axis you do not mention is set to zero.
@@ -50,8 +50,20 @@ That reuse is the whole point of the design:
 ## Latency
 
 Response to a stick movement is roughly `D × P` plus the ~50 ms that `Move` prepares ahead
-(`MoveTiming::UsualMinimumPreparedTime`) — about 150–200 ms at the defaults. Reducing `D` or `P` sharpens
-the response but lowers the speed ceiling (see below) and leaves less slack for a busy main loop.
+(`MoveTiming::UsualMinimumPreparedTime`) — about **300 ms** at the defaults.
+
+`D` defaulted to 3 originally, for ~200 ms. That does not work. Measured under the Renode emulator, a
+20 Hz `M700` stream at 10 mm/s with `D3` collapses to 2.5 mm/s at chunk boundaries and loses 7% of the
+commanded distance: the producer cannot keep the ring topped up, so the ring repeatedly holds a single
+move, and lookahead correctly plans that move to stop at its end. `D4` is clean and `D5` is the default
+for margin, since a real machine has heaters, networking and the SD card competing for the same main
+loop that tops the queue up.
+
+If 300 ms is too slow, the honest lever is not `D` — dropping it back reintroduces the stutter. Either
+shorten `P` (which also lowers the speed ceiling below) and raise `D` to keep the same buffer, or fix
+the underlying handoff: `JogController::Spin` can only add one chunk per pass because it waits for
+`ms.segmentsLeft` to return to zero, which makes the fill rate a ping-pong between the GCode and Move
+tasks. Letting it enqueue more per pass would allow a shallower queue and lower latency.
 
 ## Safety
 
