@@ -29,7 +29,8 @@ protected:
 	size_t GetBytesPerLed() const noexcept override;
 
 private:
-	static constexpr uint32_t DefaultNeoPixelSpiClockFrequency = 2500000;				// must be between about 2MHz and about 4MHz
+	static constexpr uint32_t DefaultNeoPixelSpiClockFrequency = 3200000;				// each bit is encoded as 4 SPI bits, so T0H/T1L are one bit time and T1H/T0L are three
+																						// and only 3.16-3.33MHz keeps all four inside the WS2812B windows, with 3.2MHz centring them
 	static constexpr uint32_t MinNeoPixelResetTicks = (250 * StepClockRate)/1000000;	// 250us minimum Neopixel reset time on later chips
 
 	bool IsRGBW() const noexcept { return type == LedStripType::NeoPixel_RGBW; }
