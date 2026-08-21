@@ -463,7 +463,7 @@ public:
 	void PrepareLeadscrewAdjustmentDM(size_t localDriver) noexcept;							// set up the DM that adjusts a leadscrew so that it executes the same way as the Z axis
 	void ResetPhaseStepMonitoringVariables() noexcept;
 
-	void PhaseStepControlLoop() noexcept;
+	bool PhaseStepControlLoop() noexcept;					// update the coil currents of the phase stepping drivers, returning true if any of them is moving fast enough to need the higher SPI cadence
 #endif
 
 	void Interrupt() noexcept;
@@ -646,6 +646,8 @@ private:
 	StepTimer::Ticks maxPSControlLoopRuntime;				// The maximum time the control loop has taken to run
 	StepTimer::Ticks minPSControlLoopCallInterval;			// The minimum interval between the control loop being called
 	StepTimer::Ticks maxPSControlLoopCallInterval;			// The maximum interval between the control loop being called
+
+	bool phaseStepMovingFast;								// Whether any phase stepping driver is above the speed at which we defer the driver status poll
 #endif
 
 #if SUPPORT_ASYNC_MOVES

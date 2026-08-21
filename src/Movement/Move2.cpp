@@ -1036,8 +1036,35 @@ GCodeResult Move::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, 
 		return GCodeResult::error;
 
 #if SUPPORT_TMC22xx || SUPPORT_TMC51xx
-	case 2:			// read/write smart driver register
+	case 2:			// read/write smart driver register, or configure the sine table in step/dir mode
 		{
+# if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
+			if (gb.Seen('S'))
+			{
+				const unsigned int harmonic = gb.GetLimitedUIValue('S', 4, 17);
+				if (harmonic % 4 != 0)
+				{
+					reply.copy("Only harmonics that are multiples of 4 can be represented in the sine table");
+					return GCodeResult::error;
+				}
+				bool seenMagnitude = false, seenPhase = false;
+				float magnitude = 0.0, phase = 0.0;
+				gb.TryGetLimitedFValue('J', magnitude, seenMagnitude, 0.0, 90.0);
+				gb.TryGetLimitedFValue('O', phase, seenPhase, 0.0, 360.0);
+				if (seenPhase && phase != 0.0 && phase != 180.0)
+				{
+					reply.copy("Sine table correction phase must be 0 or 180");
+					return GCodeResult::error;
+				}
+				return SmartDrivers::ConfigureLutCorrection(drive, harmonic, seenMagnitude, magnitude, seenPhase, phase == 180.0, reply);
+			}
+			if (!gb.Seen('R'))
+			{
+				reply.printf("Driver %u waveform correction:", drive);
+				SmartDrivers::AppendLutCorrections(drive, reply);
+				return GCodeResult::ok;
+			}
+# endif
 			gb.MustSee('R');
 			const uint8_t regNum = gb.GetLimitedUIValue('R', 0, 0x80);
 			if (gb.Seen('V'))

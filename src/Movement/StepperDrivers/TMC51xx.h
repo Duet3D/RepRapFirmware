@@ -59,6 +59,8 @@ namespace SmartDrivers
 	uint32_t GetRegister(size_t driver, SmartDriverRegister reg) noexcept;
 	GCodeResult GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept;
 	GCodeResult SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
+	GCodeResult ConfigureLutCorrection(size_t driver, unsigned int harmonic, bool seenMagnitude, float magnitudeDegrees, bool seenPhase, bool phaseInverted, const StringRef& reply) noexcept;
+	void AppendLutCorrections(size_t driver, const StringRef& reply) noexcept;
 	StandardDriverStatus GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept;
 	uint32_t GetDriverMinClockFrequency() noexcept;
 	uint32_t GetDriverNominalClockFrequency() noexcept;

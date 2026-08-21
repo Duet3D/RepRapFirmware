@@ -639,6 +639,7 @@ void Move::Init() noexcept
 	{
 		rm = -(1.0/16.0);
 	}
+	phaseStepMovingFast = false;
 	ResetPhaseStepMonitoringVariables();
 #endif
 
@@ -2441,7 +2442,7 @@ void Move::PrepareLeadscrewAdjustmentDM(size_t localDriver) noexcept
 	}
 }
 
-void Move::PhaseStepControlLoop() noexcept
+bool Move::PhaseStepControlLoop() noexcept
 {
 	// Record the control loop call interval
 	const StepTimer::Ticks loopCallTime = StepTimer::GetTimerTicks();
@@ -2472,6 +2473,7 @@ void Move::PhaseStepControlLoop() noexcept
 	}
 
 	bool inserted = false;
+	float maxSpeed = 0.0;
 	DriveMovement *_ecv_null *dmp = &phaseStepDMs;
 	while (*dmp != nullptr)
 	{
@@ -2499,6 +2501,7 @@ void Move::PhaseStepControlLoop() noexcept
 		}
 		else
 		{
+			maxSpeed = max<float>(maxSpeed, fabsf(dm->phaseStepControl.mParams.speed));
 			dm->phaseStepControl.CalculateCurrentFraction();
 
 			if (dm->drive >= MaxAxesPlusExtruders)
@@ -2542,10 +2545,13 @@ void Move::PhaseStepControlLoop() noexcept
 		}
 	}
 
+	phaseStepMovingFast = maxSpeed > (phaseStepMovingFast ? ResumePollSpeed : DeferPollSpeed);
+
 	// Record how long this has taken to run
 	const StepTimer::Ticks loopRuntime = StepTimer::GetTimerTicks() - loopCallTime;
 	if (loopRuntime < minPSControlLoopRuntime) { minPSControlLoopRuntime = loopRuntime; }
 	if (loopRuntime > maxPSControlLoopRuntime) { maxPSControlLoopRuntime = loopRuntime; }
+	return phaseStepMovingFast;
 }
 
 

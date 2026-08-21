@@ -847,10 +847,33 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 {
 	constexpr int8_t kvSubCommand = 1;
 	constexpr int8_t kaSubCommand = 2;
+	constexpr int8_t correctionSubCommand = 3;
 
 	bool seen = false;
 	Move& move = reprap.GetMove();
 	int8_t commandFraction = gb.GetCommandFraction();
+	if (commandFraction == correctionSubCommand)
+	{
+		// The phase correction is a property of the driver, not the axis
+		gb.MustSee('P');
+		const DriverId id = gb.GetDriverId();
+		if (id.IsRemote())
+		{
+			reply.copy("Phase correction is not supported on remote drivers");
+			return GCodeResult::error;
+		}
+		if (id.localDriver >= move.GetNumActualDirectDrivers())
+		{
+			reply.printf("Driver number %u out of range", id.localDriver);
+			return GCodeResult::error;
+		}
+		if (gb.Seen('S') && !LockAllMovementSystemsAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+		return PhaseStep::ConfigureCorrection(id.localDriver, gb, reply);
+	}
+
 	for (size_t axis = 0; axis < numTotalAxes; axis++)
 	{
 		if (gb.Seen(axisLetters[axis]))
@@ -994,6 +1017,10 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 // Deal with M569
 GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	if (gb.GetCommandFraction() == 2 && gb.Seen('S') && !LockAllMovementSystemsAndWaitForStandstill(gb))
+	{
+		return GCodeResult::notFinished;
+	}
 	gb.MustSee('P');
 	size_t drivesCount = numVisibleAxes;
 	DriverId driverIds[drivesCount];
