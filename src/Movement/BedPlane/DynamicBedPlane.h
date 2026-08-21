@@ -41,6 +41,19 @@ class DynamicBedPlane final
 public:
 	static constexpr size_t MaxLeadscrews = 4;
 
+	// Complete, read-only result of the shared-Y transform. This is deliberately
+	// expressed as corrections rather than motor endpoints: applying the values
+	// to DDA or CAN state is a separate, later integration step.
+	struct Telemetry
+	{
+		DynamicBedPlaneCoefficients coefficients;
+		size_t numLeadscrews;
+		float leadscrewCorrections[MaxLeadscrews];
+		float minimumLeadscrewCorrection;
+		float maximumLeadscrewCorrection;
+		float leadscrewCorrectionSpread;
+	};
+
 	// Solve p(x) = intercept + xSlope*x such that it passes through the
 	// desired correction at both nozzles. The dynamic Y slope is held at zero.
 	static DynamicBedPlaneResult SolveSharedY(float leftX,
@@ -61,6 +74,19 @@ public:
 		size_t numLeadscrews,
 		const DynamicBedPlaneLimits& limits,
 		float corrections[]) noexcept;
+
+	// Run the complete two-nozzle -> ordered-leadscrew calculation and return a
+	// diagnostic snapshot. No planner or hardware state is read or modified.
+	// telemetry is updated only when the complete calculation succeeds.
+	static DynamicBedPlaneResult CalculateTelemetry(
+		float leftX,
+		float leftCorrection,
+		float rightX,
+		float rightCorrection,
+		const float leadscrewX[],
+		size_t numLeadscrews,
+		const DynamicBedPlaneLimits& limits,
+		Telemetry& telemetry) noexcept;
 
 private:
 	static bool IsFinite(float value) noexcept;

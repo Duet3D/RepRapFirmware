@@ -1,8 +1,10 @@
 # Dynamic IDEX bed-plane control
 
-## Scope of the foundation commit
+## Current implementation scope
 
-The initial commit adds an isolated mathematical transform and safety validation. It deliberately does not modify runtime behavior. This separation allows the transform to be unit-tested before motion-state, segmentation, CAN, and recovery concerns are introduced.
+The branch contains an isolated mathematical transform and safety validation, read-only access to configured `M671` leadscrew geometry, and enumeration of the individual mesh samples that stock firmware previously reduced immediately to one average. It deliberately does not modify runtime motion behavior.
+
+`DynamicBedPlane::CalculateTelemetry()` now runs the complete two-nozzle-to-leadscrew calculation in one side-effect-free call. It reports the fitted plane, ordered leadscrew corrections, extrema, and correction spread. Rejected calculations leave the caller's last known-good telemetry unchanged.
 
 ## Machine model
 
@@ -36,12 +38,12 @@ Evaluate `p(x)` at each configured `M671` leadscrew X coordinate. The result is 
    - track logical Z separately from physical leadscrew offsets;
    - serialize all offsets for pause, resume, power-fail recovery, and tool changes.
 6. Object model and configuration
-   - report disabled/enabled/dry-run state, plane coefficients, motor targets, maxima, and rejection reason;
-   - do not allocate a public G-code until the interface has been discussed upstream.
+	- report disabled/enabled/dry-run state, plane coefficients, motor targets, maxima, and rejection reason;
+	- do not allocate a public G-code until the interface has been discussed upstream.
 
 ## First runtime milestone
 
-The first planner-integrated version should be telemetry-only. It calculates the three motor endpoints and safety results for every move but continues sending the stock equal-Z movement. This makes trajectory comparison possible without changing hardware motion.
+The pure telemetry calculation is implemented. The next planner-integrated version should call it for eligible duplicate/mirror moves and retain the results for diagnostics while continuing to send the stock equal-Z movement. This makes trajectory comparison possible without changing hardware motion.
 
 ## Non-negotiable guards
 

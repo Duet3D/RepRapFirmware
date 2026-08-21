@@ -70,6 +70,28 @@ int main()
 																 tightSpreadLimits, coefficients);
 	assert(result == DynamicBedPlaneResult::ok);
 	result = DynamicBedPlane::CalculateLeadscrewCorrections(coefficients, screwX, 3,
-																				 tightSpreadLimits, motorCorrections);
+																		 tightSpreadLimits, motorCorrections);
 	assert(result == DynamicBedPlaneResult::motorSpreadLimitExceeded);
+
+	DynamicBedPlane::Telemetry telemetry = {};
+	result = DynamicBedPlane::CalculateTelemetry(-97.5f, -0.164f, 97.5f, 0.164f,
+														 screwX, 3, permissiveLimits, telemetry);
+	assert(result == DynamicBedPlaneResult::ok);
+	assert(telemetry.numLeadscrews == 3);
+	assert(NearlyEqual(telemetry.coefficients.xSlope, 0.328f / 195.0f));
+	assert(NearlyEqual(telemetry.leadscrewCorrections[0], motorCorrections[0]));
+	assert(NearlyEqual(telemetry.leadscrewCorrections[1], motorCorrections[1]));
+	assert(NearlyEqual(telemetry.leadscrewCorrections[2], motorCorrections[2]));
+	assert(NearlyEqual(telemetry.minimumLeadscrewCorrection, telemetry.leadscrewCorrections[2]));
+	assert(NearlyEqual(telemetry.maximumLeadscrewCorrection, telemetry.leadscrewCorrections[0]));
+	assert(NearlyEqual(telemetry.leadscrewCorrectionSpread,
+							 telemetry.maximumLeadscrewCorrection - telemetry.minimumLeadscrewCorrection));
+
+	// A rejected calculation must not replace the last known-good telemetry.
+	const DynamicBedPlane::Telemetry lastGoodTelemetry = telemetry;
+	result = DynamicBedPlane::CalculateTelemetry(-97.5f, -0.164f, 97.5f, 0.164f,
+														 screwX, 3, tightSpreadLimits, telemetry);
+	assert(result == DynamicBedPlaneResult::motorSpreadLimitExceeded);
+	assert(NearlyEqual(telemetry.leadscrewCorrectionSpread,
+							 lastGoodTelemetry.leadscrewCorrectionSpread));
 }

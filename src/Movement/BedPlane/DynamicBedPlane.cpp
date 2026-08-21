@@ -106,3 +106,55 @@ DynamicBedPlaneResult DynamicBedPlane::CalculateLeadscrewCorrections(
 	}
 	return DynamicBedPlaneResult::ok;
 }
+
+DynamicBedPlaneResult DynamicBedPlane::CalculateTelemetry(
+	float leftX,
+	float leftCorrection,
+	float rightX,
+	float rightCorrection,
+	const float leadscrewX[],
+	size_t numLeadscrews,
+	const DynamicBedPlaneLimits& limits,
+	Telemetry& telemetry) noexcept
+{
+	Telemetry proposed = {};
+	proposed.numLeadscrews = numLeadscrews;
+
+	DynamicBedPlaneResult result = SolveSharedY(leftX, leftCorrection,
+													 rightX, rightCorrection,
+													 limits, proposed.coefficients);
+	if (result != DynamicBedPlaneResult::ok)
+	{
+		return result;
+	}
+
+	result = CalculateLeadscrewCorrections(proposed.coefficients, leadscrewX,
+													 numLeadscrews, limits,
+													 proposed.leadscrewCorrections);
+	if (result != DynamicBedPlaneResult::ok)
+	{
+		return result;
+	}
+
+	if (numLeadscrews != 0)
+	{
+		proposed.minimumLeadscrewCorrection = proposed.leadscrewCorrections[0];
+		proposed.maximumLeadscrewCorrection = proposed.leadscrewCorrections[0];
+		for (size_t i = 1; i < numLeadscrews; ++i)
+		{
+			if (proposed.leadscrewCorrections[i] < proposed.minimumLeadscrewCorrection)
+			{
+				proposed.minimumLeadscrewCorrection = proposed.leadscrewCorrections[i];
+			}
+			if (proposed.leadscrewCorrections[i] > proposed.maximumLeadscrewCorrection)
+			{
+				proposed.maximumLeadscrewCorrection = proposed.leadscrewCorrections[i];
+			}
+		}
+		proposed.leadscrewCorrectionSpread = proposed.maximumLeadscrewCorrection
+			- proposed.minimumLeadscrewCorrection;
+	}
+
+	telemetry = proposed;
+	return DynamicBedPlaneResult::ok;
+}
