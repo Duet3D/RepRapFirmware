@@ -771,22 +771,9 @@ void Platform::Spin() noexcept
 		return;
 	}
 
-#if SUPPORT_REMOTE_COMMANDS
-	if (CanInterface::InExpansionMode())
-	{
-		// Update status LED
-		if (StepTimer::CheckSynced())
-		{
-			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetMasterTime() & (1u << 19)) != 0);
-		}
-		else
-		{
-			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 17)) != 0);
-		}
-	}
-#endif
-
 #if SUPPORT_CAN_EXPANSION
+	CanInterface::UpdateStatusLed();
+
 	// Turn off the ACT LED if it is time to do so
 	if (millis() - whenLastCanMessageProcessed > ActLedFlashTime)
 	{
@@ -4231,15 +4218,6 @@ void Platform::SetDiagLed(bool on) const noexcept
 {
 	digitalWrite(DiagPin, XNor(DiagOnPolarity, on));
 }
-
-#if SUPPORT_MULTICAST_DISCOVERY
-
-void Platform::InvertDiagLed() const noexcept
-{
-	digitalWrite(DiagPin, !digitalRead(DiagPin));
-}
-
-#endif
 
 #if HAS_CPU_TEMP_SENSOR && SAME5x
 

@@ -509,10 +509,6 @@ public:
 
 	void SetDiagLed(bool on) const noexcept;
 
-#if SUPPORT_MULTICAST_DISCOVERY
-	void InvertDiagLed() const noexcept;
-#endif
-
 #if defined(DUET3MINI) && SUPPORT_TMC2240 != 0
 	bool HasTmc2240Expansion() const noexcept { return hasTmc2240Expansion; }
 	const char *_ecv_array null GetExpansionBoardName() const noexcept { return (hasTmc2240Expansion) ? "Duet3 Mini 2+ (TMC2240)" : nullptr; }
