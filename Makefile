@@ -45,7 +45,7 @@ export DEBUG_FLAGS
 .DEFAULT_GOAL := help
 
 # Available build configurations
-CONFIGS := Duet3_MB6HC Duet3_MB6XD Duet3_CAN0 Duet3Mini5plus Duet3_MB6HC_no_SD
+CONFIGS := Duet3_MB6HC Duet3_MB6XD Duet3_CAN0 Duet3Mini5plus Duet3_MB6HC_no_SD Duet3_MB6HC_embedded
 
 # Print available targets
 .PHONY: help
@@ -83,7 +83,7 @@ help:
 # Build all configurations
 # Excluded from 'all' (still buildable as explicit targets): Duet3_MB6HC_no_SD (duplicate MB6HC binary name), Duet3_CAN0
 .PHONY: all
-all: $(filter-out Duet3_MB6HC_no_SD Duet3_CAN0,$(CONFIGS))
+all: $(filter-out Duet3_MB6HC_no_SD Duet3_CAN0 Duet3_MB6HC_embedded,$(CONFIGS))
 
 # Verify toolchain
 .PHONY: test-toolchain
@@ -201,6 +201,7 @@ $(WORKSPACE)/CANlib/SAM4S_RTOS/libCANlib.a:
 -include Makefiles/Duet3_CAN0.mk
 -include Makefiles/Duet3Mini5plus.mk
 -include Makefiles/Duet3_MB6HC_no_SD.mk
+-include Makefiles/Duet3_MB6HC_embedded.mk
 
 # Generic clean target
 .PHONY: clean

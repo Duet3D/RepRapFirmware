@@ -26,9 +26,9 @@
 /FMDC_V02_Debug/
 /FMDC_V03/
 /Duet3_MB6HC_no_SD/
+/Duet3_MB6HC_embedded/
 /Duet3_MB6HC_no_S_curve/
-/INDX/
+/tests/build/
 /.clangd
 /.clang-format
 /src/Temp/
-/.settings/
