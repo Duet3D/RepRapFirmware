@@ -1936,7 +1936,12 @@ size_t RepRap::GetStatusIndex() const noexcept
 			  		  : 												  9		// Printing
 			  	  	)
 			: (gCodes->IsDoingToolChange())								? 10	// Changing tool
-			: (gCodes->DoingFileMacro() || !move->NoLiveMovement() ||
+			// Jog motion deliberately does not count as busy. Jogging is continuous by nature, so it would
+			// pin the status at "busy" for as long as the operator holds the stick, and clients such as DWC
+			// and AxisControl grey their controls out when busy - including the very controls sending the
+			// jog commands. The machine is manually controlled and accepting commands, which is idle.
+			: (gCodes->DoingFileMacro() ||
+			   (!move->NoLiveMovement() && !gCodes->GetJogController().IsActive()) ||
 			   gCodes->WaitingForAcknowledgement() ||
 			   heat->IsTuningHeater())									? 11	// Busy
 			:															  12;	// Idle
