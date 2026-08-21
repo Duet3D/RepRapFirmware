@@ -4371,6 +4371,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = jogController.ProcessM700(gb, reply);
 				break;
 
+			case 604: // Configure one axis to follow another
+				result = axisFollower.Configure(gb, reply);
+				break;
+
 			case 701: // Load filament
 				result = LoadFilament(gb, reply);
 				break;

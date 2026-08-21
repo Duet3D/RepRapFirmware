@@ -4963,12 +4963,23 @@ void GCodes::ToolOffsetTransform(const MovementState& ms, const float coordsIn[M
 			}
 		}
 	}
+
+	// A following axis is derived last, from the machine coordinates, so that it tracks where the tool
+	// actually ends up rather than where it was asked to go. Tool length offsets are already applied
+	// here, which is what a G-code implementation has to compensate for by hand.
+	// This is the one point every move passes through - straight moves, arc segments and jog chunks -
+	// so deriving it here is what makes the follower part of the same move rather than a reaction to it.
+	axisFollower.Apply(coordsOut);
 }
 
 // Convert user coordinates to head reference point coordinates
 void GCodes::ToolOffsetTransform(MovementState& ms, AxesBitmap explicitAxes) const noexcept
 {
 	ToolOffsetTransform(ms, ms.currentUserPosition, ms.raw.coords, explicitAxes);
+
+	// Nothing commands the follower, so its user coordinate would otherwise never move and M114 and the
+	// object model would report a stale position while the machine coordinate tracked the leader.
+	axisFollower.SyncUserPosition(ms.currentUserPosition, ms.raw.coords, axisScaleFactors);
 }
 
 // Convert head reference point coordinates to user coordinates

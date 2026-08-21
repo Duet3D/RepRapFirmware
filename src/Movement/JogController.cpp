@@ -9,6 +9,7 @@
 #include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/Move.h>
+#include <Movement/AxisFollower.h>
 #include <Platform/RepRap.h>
 
 // Below this the chunk is not worth queueing; it is well under one microstep on any sane machine.
@@ -189,8 +190,17 @@ GCodeResult JogController::ProcessM700(GCodeBuffer& gb, const StringRef& reply) 
 	}
 
 #if SUPPORT_ASYNC_MOVES
-	if ((newJogAxes & ~jogAxes).IsNonEmpty()					// an axis we are not already moving has been added, so it may not be ours yet
-		&& gcodes.moveStates[0].AllocateAxes(newJogAxes, ParameterLettersBitmap()).IsNonEmpty())
+	// Include any following axis in the allocation. AllocateAxes sets the owned set rather than adding
+	// to it, so jogging would otherwise drop ownership of a follower and its motion would be silently
+	// discarded - the coordinate still updates, but no steps come out.
+	AxesBitmap axesToOwn = newJogAxes;
+	const AxisFollower& follower = gcodes.GetAxisFollowerForJog();
+	if (follower.IsEngaged() && follower.GetFollowerAxis() >= 0)
+	{
+		axesToOwn.SetBit((unsigned int)follower.GetFollowerAxis());
+	}
+	if ((axesToOwn & ~jogAxes).IsNonEmpty()						// an axis we are not already moving has been added, so it may not be ours yet
+		&& gcodes.moveStates[0].AllocateAxes(axesToOwn, ParameterLettersBitmap()).IsNonEmpty())
 	{
 		reply.copy("Cannot jog: axes are in use by another movement system");
 		return GCodeResult::error;

@@ -43,6 +43,7 @@ Licence: GPL
 #include <Movement/HomingMode.h>
 #include <Movement/MovementError.h>
 #include <Movement/JogController.h>
+#include <Movement/AxisFollower.h>
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 # include <Storage/CRC32.h>
@@ -274,6 +275,9 @@ public:
 	const MovementState& GetConstMovementState(const GCodeBuffer& gb) const noexcept;			// Get a reference to the movement state associated with the specified GCode buffer (there is a private non-const version)
 
 	JogController& GetJogController() noexcept { return jogController; }
+	AxisFollower& GetAxisFollower() noexcept { return axisFollower; }
+	MovementState& GetMovementStateForFollower() noexcept { return moveStates[0]; }	// the follower only applies to movement system 0
+	const AxisFollower& GetAxisFollowerForJog() const noexcept { return axisFollower; }
 
 	void RecordEndstopTriggered(size_t axis, HomingMode hmode) noexcept;
 
@@ -677,6 +681,7 @@ private:
 	MovementState moveStates[NumMovementSystems];	// Move details
 
 	JogController jogController;				// Velocity-mode movement, e.g. from a joystick
+	AxisFollower axisFollower;					// One axis tracking another, e.g. a Z-independent dust shoe
 
 	size_t numTotalAxes;						// How many axes we have
 	size_t numVisibleAxes;						// How many axes are visible
