@@ -1136,6 +1136,7 @@ bool WiFiInterface::ImportTlsFromSd(const StringRef& reply) noexcept
 
 	supportsTls = true;
 
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	// Securely delete the SD copies - they now live in ESP flash
 	String<MaxFilenameLength> path;
 	path.copy(TlsCertFile);
@@ -1144,6 +1145,10 @@ bool WiFiInterface::ImportTlsFromSd(const StringRef& reply) noexcept
 	(void)MassStorage::SecureDelete(path.GetRef(), ErrorMessageMode::messageAlways);
 
 	reply.copy("TLS cert/key imported to WiFi module flash; SD copies wiped and deleted");
+#else
+	// The source is a read-only embedded filesystem, so there is nothing to delete afterwards.
+	reply.copy("TLS cert/key imported to WiFi module flash");
+#endif
 	return true;
 }
 

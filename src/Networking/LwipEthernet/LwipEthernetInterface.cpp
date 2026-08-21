@@ -856,6 +856,7 @@ GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ss
 	// Only honoured while the interface is down, matching the documented rule
 	if (tlsParam < 0 && !activated)
 	{
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 		bool wiped = false;
 		String<MaxFilenameLength> path;
 		path.copy(TlsCertFile);
@@ -872,6 +873,10 @@ GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ss
 		{
 			platform.Message(NetworkInfoMessage, "TLS: stored cert/key wiped and deleted from /sys/\n");
 		}
+#else
+		// Nothing to wipe: with an embedded filesystem there is no writable storage to have kept them on.
+		platform.Message(NetworkInfoMessage, "TLS: no writable storage, nothing to wipe\n");
+#endif
 	}
 	const bool tlsAllowedParam = (tlsParam > 0);
 #else
