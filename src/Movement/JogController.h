@@ -33,16 +33,22 @@ private:
 	void ClampSpeeds() noexcept;
 	void ReportStatus(const StringRef& reply) const noexcept;
 
-	static constexpr uint32_t DefaultChunkMillis = 50;
+	// Measured on the emulator, timing from command injection to the step pins changing rate:
+	//   D=5 P=50 -> 257ms    D=3 P=20 -> 126ms    D=2 P=20 -> 50ms
+	//   D=2 P=15 ->  62ms    D=2 P=10 -> 127ms
+	// Latency stops following D*P below about 40ms of queued motion and then gets worse, because Move
+	// wants roughly MoveTiming::UsualMinimumPreparedTime queued before it will run moves. So P=20/D=2
+	// is an optimum rather than a compromise - shortening either makes it slower, not faster.
+	// Doubling the command rate changed nothing (50.3 -> 50.0ms), so this is the firmware, not the host.
+	static constexpr uint32_t DefaultChunkMillis = 20;
 	static constexpr uint32_t MinChunkMillis = 10;
 	static constexpr uint32_t MaxChunkMillis = 200;
 	static constexpr uint32_t DefaultTimeoutMillis = 250;
 	static constexpr uint32_t MaxTimeoutMillis = 10000;
-	// Measured, not guessed. Under the Renode emulator a 20Hz M700 stream at 10mm/s stutters badly with
-	// a depth of 3 - velocity collapses to 2.5mm/s at chunk boundaries and 7% of the commanded distance
-	// is lost - because the producer cannot keep the ring topped up. 4 is clean; 5 leaves margin for a
-	// real machine, which has heaters, networking and the SD card competing for the same main loop.
-	static constexpr unsigned int DefaultMaxQueuedMoves = 5;
+	// 2 with a 20ms chunk measured clean - no stutter over a 20Hz stream - and is what gets latency to
+	// 50ms. The earlier stutter at depth 3 was with 50ms chunks, where the ring holds far more time and
+	// the producer has correspondingly longer to fall behind.
+	static constexpr unsigned int DefaultMaxQueuedMoves = 2;
 	static constexpr unsigned int MinMaxQueuedMoves = 2;
 	static constexpr unsigned int MaxMaxQueuedMoves = 8;
 
