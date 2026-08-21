@@ -19,7 +19,8 @@ Evaluate `p(x)` at each configured `M671` leadscrew X coordinate. The result is 
 ## Planned integration points
 
 1. `Move::ComputeHeightCorrection`
-   - expose physical per-nozzle mesh samples instead of immediately reducing them to one scalar;
+   - enumerate mapped-axis mesh samples through `ForEachHeightCorrection()` before reducing them to one scalar;
+   - retain both transformed carriage coordinates and the legacy offset-adjusted lookup coordinates so duplicate-tool offsets are not irreversibly lost;
    - retain existing behavior unless the new mode is explicitly enabled.
 2. `ZLeadscrewKinematics`
    - provide read-only access to ordered `M671` coordinates through `GetNumLeadscrews()` and `GetLeadscrewCoordinates()`;

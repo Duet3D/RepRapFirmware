@@ -82,28 +82,54 @@ void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null t
 	}
 }
 
+// Enumerate the individual mapped-axis samples used for mesh correction.
+// Keep transformed and legacy map coordinates separate: tool offsets may encode
+// a multi-carriage layout and must not be discarded before future compensation.
+void Move::ForEachHeightCorrection(float xyzPoint[MaxAxes],
+														 const Tool *_ecv_null tool,
+														 function_ref_noexcept<void(const HeightCorrectionSample&) noexcept> callback) const noexcept
+{
+	const GridDefinition& grid = GetGrid();
+	const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetAxisNumber(1));
+
+	Tool::GetAxisMapping(tool, grid.GetAxisNumber(0))
+		.Iterate([this, xyzPoint, tool, axis1Axes, &callback](unsigned int axis0Axis, unsigned int) noexcept
+					{
+						const float transformedAxis0Coordinate = xyzPoint[axis0Axis];
+						const float mapAxis0Coordinate = transformedAxis0Coordinate + Tool::GetOffset(tool, axis0Axis);
+						axis1Axes.Iterate([this, xyzPoint, tool, axis0Axis, transformedAxis0Coordinate, mapAxis0Coordinate, &callback](unsigned int axis1Axis, unsigned int) noexcept
+											{
+												const float transformedAxis1Coordinate = xyzPoint[axis1Axis];
+												const float mapAxis1Coordinate = transformedAxis1Coordinate + Tool::GetOffset(tool, axis1Axis);
+												const HeightCorrectionSample sample =
+												{
+													axis0Axis,
+													axis1Axis,
+													transformedAxis0Coordinate,
+													transformedAxis1Coordinate,
+													mapAxis0Coordinate,
+													mapAxis1Coordinate,
+													heightMap.GetInterpolatedHeightError(mapAxis0Coordinate, mapAxis1Coordinate)
+												};
+												callback(sample);
+											}
+										);
+					}
+				);
+}
+
 // Compute the height correction needed at a point, ignoring taper
 float Move::ComputeHeightCorrection(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept
 {
 	float zCorrection = 0.0;
 	unsigned int numCorrections = 0;
-	const GridDefinition& grid = GetGrid();
-	const AxesBitmap axis1Axes = Tool::GetAxisMapping(tool, grid.GetAxisNumber(1));
-
-	// Transform the Z coordinate based on the average correction for each axis used as an X or Y axis.
-	Tool::GetAxisMapping(tool, grid.GetAxisNumber(0))
-		.Iterate([this, xyzPoint, tool, axis1Axes, &zCorrection, &numCorrections](unsigned int axis0Axis, unsigned int) noexcept
-					{
-						const float axis0Coord = xyzPoint[axis0Axis] + Tool::GetOffset(tool, axis0Axis);
-						axis1Axes.Iterate([this, xyzPoint, tool, axis0Coord, &zCorrection, &numCorrections](unsigned int axis1Axis, unsigned int) noexcept
-											{
-												const float axis1Coord = xyzPoint[axis1Axis] + Tool::GetOffset(tool, axis1Axis);
-												zCorrection += heightMap.GetInterpolatedHeightError(axis0Coord, axis1Coord);
-												++numCorrections;
-											}
-										);
-					}
-				);
+	ForEachHeightCorrection(xyzPoint, tool,
+		[&zCorrection, &numCorrections](const HeightCorrectionSample& sample) noexcept
+		{
+			zCorrection += sample.correction;
+			++numCorrections;
+		}
+	);
 
 	if (numCorrections > 1)
 	{

@@ -534,6 +534,20 @@ private:
 	void InverseBedTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept;				// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept;						// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept;				// Go from an axis transformed point back to user coordinates
+	struct HeightCorrectionSample
+	{
+		unsigned int axis0Axis;
+		unsigned int axis1Axis;
+		float transformedAxis0Coordinate;
+		float transformedAxis1Coordinate;
+		float mapAxis0Coordinate;
+		float mapAxis1Coordinate;
+		float correction;
+	};
+
+	void ForEachHeightCorrection(float xyzPoint[MaxAxes],
+								 const Tool *_ecv_null tool,
+								 function_ref_noexcept<void(const HeightCorrectionSample&) noexcept> callback) const noexcept;
 	float ComputeHeightCorrection(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept;			// Compute the height correction needed at a point, ignoring taper
 	void GetLiveMachineCoordinates(float coords[MaxAxes]) const noexcept;										// Get the current machine coordinates, independently of the above functions, so not affected by other tasks calling them
 
