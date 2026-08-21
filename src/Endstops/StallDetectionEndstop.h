@@ -37,7 +37,7 @@ public:
 	void PrimeExtruders(ExtrudersBitmap extruders, const float speeds[MaxExtruders]) THROWS(GCodeException);
 
 #if SUPPORT_CAN_EXPANSION
-	void HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled, uint16_t when) noexcept override;	// record any stalled remote drivers that are meant for us
+	void HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled, uint32_t when) noexcept override;	// record any stalled remote drivers that are meant for us
 	void DeleteRemoteStallEndstops() noexcept override;
 #endif
 

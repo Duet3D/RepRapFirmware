@@ -290,7 +290,7 @@ void StallDetectionEndstop::DeleteRemoteStallEndstops() noexcept
 }
 
 // Record any notifications of stalled remote drivers that we are interested in
-void StallDetectionEndstop::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled, uint16_t when) noexcept
+void StallDetectionEndstop::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled, uint32_t when) noexcept
 {
 	remoteDriversMonitored.IterateWhile([this, boardAddress, driversReportedStalled, when](RemoteDriversMonitored& entry, size_t count) noexcept -> bool
 										{
