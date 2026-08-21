@@ -10,6 +10,40 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/Move.h>
 #include <Platform/RepRap.h>
+#include <ObjectModel/ObjectModel.h>
+
+// Object model. AxisControl and DWC would otherwise have to parse the text of an M604 report to know
+// whether following is engaged, which is not something a UI should have to do.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...)		OBJECT_MODEL_FUNC_BODY(AxisFollower, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry AxisFollower::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. AxisFollower members
+	{ "engaged",	OBJECT_MODEL_FUNC(self->engaged),										ObjectModelEntryFlags::live },
+	{ "follower",	OBJECT_MODEL_FUNC(self->GetAxisLetterOrNull(self->followerAxis)),		ObjectModelEntryFlags::none },
+	{ "leader",		OBJECT_MODEL_FUNC(self->GetAxisLetterOrNull(self->leaderAxis)),			ObjectModelEntryFlags::none },
+	{ "offset",		OBJECT_MODEL_FUNC(self->offset, 3),										ObjectModelEntryFlags::none },
+	{ "scale",		OBJECT_MODEL_FUNC(self->scale, 3),										ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t AxisFollower::objectModelTableDescriptor[] = { 1, 5 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(AxisFollower)
+
+// Returns null when unconfigured, so the field reads as null rather than as a bogus axis letter.
+const char *_ecv_array AxisFollower::GetAxisLetterOrNull(int32_t axis) const noexcept
+{
+	if (axis < 0)
+	{
+		return nullptr;
+	}
+	static char letter[2] = { 0, 0 };
+	letter[0] = reprap.GetGCodes().GetAxisLetters()[axis];
+	return letter;
+}
 
 AxisFollower::AxisFollower() noexcept
 	: followerAxis(-1), leaderAxis(-1), scale(-1.0), offset(0.0), engaged(false)

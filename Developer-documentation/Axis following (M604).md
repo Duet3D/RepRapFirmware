@@ -106,6 +106,17 @@ redundant while following is engaged. It is harmless — the follower's coordina
 tool offset is simply ignored — but it is misleading to leave in, because it looks like it is doing
 something.
 
+## Object model
+
+`move.axisFollower` reports the state, so a UI does not have to parse the text of an `M604` report:
+
+```json
+{"engaged":true,"follower":"U","leader":"Z","offset":70.000,"scale":-1.000}
+```
+
+`follower` and `leader` are empty strings when nothing is configured. `engaged` is flagged `live`, so
+it appears in the frequently-updated part of the model.
+
 ## Limitations
 
 * Movement system 0 only.

@@ -14,8 +14,9 @@
 #define SRC_MOVEMENT_AXISFOLLOWER_H_
 
 #include <RepRapFirmware.h>
+#include <ObjectModel/ObjectModel.h>
 
-class AxisFollower
+class AxisFollower INHERIT_OBJECT_MODEL
 {
 public:
 	AxisFollower() noexcept;
@@ -34,8 +35,12 @@ public:
 	int32_t GetFollowerAxis() const noexcept { return followerAxis; }
 	void Disengage() noexcept { engaged = false; }
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
 	void Report(const StringRef& reply) const noexcept;
+	const char *_ecv_array GetAxisLetterOrNull(int32_t axis) const noexcept;
 
 	int32_t followerAxis;					// -1 when unconfigured
 	int32_t leaderAxis;
