@@ -23,8 +23,8 @@ public:
 
 	// Return the ordered M671 geometry without exposing mutable calibration state.
 	// The index order matches the physical Z drivers configured by M584.
-	size_t GetNumLeadscrews() const noexcept { return numLeadscrews; }
-	bool GetLeadscrewCoordinates(size_t index, float& x, float& y) const noexcept
+	size_t GetNumLeadscrews() const noexcept override { return numLeadscrews; }
+	bool GetLeadscrewCoordinates(size_t index, float& x, float& y) const noexcept override
 	{
 		if (index >= numLeadscrews)
 		{

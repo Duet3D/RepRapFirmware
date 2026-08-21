@@ -16,6 +16,7 @@
 #include "DDA.h"								// needed because of our inline functions
 #include "BedProbing/RandomProbePointSet.h"
 #include "BedProbing/Grid.h"
+#include "BedPlane/DynamicBedPlane.h"
 #include "Kinematics/Kinematics.h"
 #include "MoveSegment.h"
 #include "DriveMovement.h"
@@ -385,6 +386,11 @@ public:
 
 	HeightMap& AccessHeightMap() noexcept { return heightMap; }								// Access the bed probing grid
 	const GridDefinition& GetGrid() const noexcept { return heightMap.GetGrid(); }			// Get the grid definition
+	DynamicBedPlaneResult CalculateDynamicBedPlaneTelemetry(
+		float xyzPoint[MaxAxes],
+		const Tool *_ecv_null tool,
+		const DynamicBedPlaneLimits& limits,
+		DynamicBedPlane::Telemetry& telemetry) const noexcept;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool LoadHeightMapFromFile(FileStore *f, const char *_ecv_array fname, const StringRef& r) noexcept;	// Load the height map from a file returning true if an error occurred

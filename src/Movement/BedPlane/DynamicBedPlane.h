@@ -14,7 +14,13 @@
 enum class DynamicBedPlaneResult : uint8_t
 {
 	ok,
+	heightMapNotActive,
+	unsupportedSampleLayout,
+	meshSampleOutsideGrid,
+	nozzleYCoordinatesDiffer,
+	leadscrewGeometryUnavailable,
 	nonFiniteInput,
+	invalidLimits,
 	nozzleSeparationTooSmall,
 	tooManyLeadscrews,
 	slopeLimitExceeded,

@@ -104,6 +104,17 @@ public:
 	// Normally returns false, but overridden for delta kinematics and kinematics with multiple independently-drive Z leadscrews.
 	virtual bool SupportsAutoCalibration() const noexcept { return false; }
 
+	// Return ordered M671 geometry when the kinematics has independently driven
+	// Z leadscrews. Other kinematics expose no geometry.
+	virtual size_t GetNumLeadscrews() const noexcept { return 0; }
+	virtual bool GetLeadscrewCoordinates(size_t index, float& x, float& y) const noexcept
+	{
+		(void)index;
+		(void)x;
+		(void)y;
+		return false;
+	}
+
 	// Perform auto calibration. Override this implementation in kinematics that support it. Caller already owns the movement lock.
 	// Return true if an error occurred.
 	virtual bool DoAutoCalibration(MovementState& ms, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept

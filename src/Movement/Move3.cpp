@@ -139,6 +139,117 @@ float Move::ComputeHeightCorrection(float xyzPoint[MaxAxes], const Tool *_ecv_nu
 	return zCorrection + zShift;
 }
 
+// Calculate the dynamic bed plane that would be requested for this transformed
+// point. This is an explicit dry-run API: it does not update DDA endpoints,
+// specialMoveCoords, CAN messages, or any persistent Move state.
+DynamicBedPlaneResult Move::CalculateDynamicBedPlaneTelemetry(
+	float xyzPoint[MaxAxes],
+	const Tool *_ecv_null tool,
+	const DynamicBedPlaneLimits& limits,
+	DynamicBedPlane::Telemetry& telemetry) const noexcept
+{
+	if (!usingMesh || !heightMap.UsingHeightMap())
+	{
+		return DynamicBedPlaneResult::heightMapNotActive;
+	}
+
+	struct NozzleSample
+	{
+		float x;
+		float y;
+		float correction;
+	};
+
+	NozzleSample nozzleSamples[2] = {};
+	size_t numNozzleSamples = 0;
+	bool tooManyNozzleSamples = false;
+	bool sampleOutsideGrid = false;
+	ForEachHeightCorrection(xyzPoint, tool,
+		[this, &nozzleSamples, &numNozzleSamples, &tooManyNozzleSamples, &sampleOutsideGrid](const HeightCorrectionSample& sample) noexcept
+		{
+			if (!GetGrid().Contains(sample.transformedAxis0Coordinate, sample.transformedAxis1Coordinate))
+			{
+				sampleOutsideGrid = true;
+			}
+			else if (numNozzleSamples < ARRAY_SIZE(nozzleSamples))
+			{
+				nozzleSamples[numNozzleSamples++] =
+				{
+					sample.transformedAxis0Coordinate,
+					sample.transformedAxis1Coordinate,
+					heightMap.GetInterpolatedHeightError(sample.transformedAxis0Coordinate, sample.transformedAxis1Coordinate)
+				};
+			}
+			else
+			{
+				tooManyNozzleSamples = true;
+			}
+		}
+	);
+
+	if (sampleOutsideGrid)
+	{
+		return DynamicBedPlaneResult::meshSampleOutsideGrid;
+	}
+	if (tooManyNozzleSamples || numNozzleSamples != ARRAY_SIZE(nozzleSamples))
+	{
+		return DynamicBedPlaneResult::unsupportedSampleLayout;
+	}
+	if (fabsf(nozzleSamples[0].y - nozzleSamples[1].y) > 0.01f)
+	{
+		return DynamicBedPlaneResult::nozzleYCoordinatesDiffer;
+	}
+
+	if (nozzleSamples[0].x > nozzleSamples[1].x)
+	{
+		const NozzleSample temp = nozzleSamples[0];
+		nozzleSamples[0] = nozzleSamples[1];
+		nozzleSamples[1] = temp;
+	}
+
+	const float toolHeight = xyzPoint[Z_AXIS] + Tool::GetOffset(tool, Z_AXIS);
+	for (NozzleSample& sample : nozzleSamples)
+	{
+		sample.correction += zShift;
+		if (useTaper)
+		{
+			if (toolHeight >= taperHeight)
+			{
+				sample.correction = 0.0f;
+			}
+			else if (sample.correction < taperHeight)
+			{
+				sample.correction *= (taperHeight - toolHeight) * recipTaperHeight;
+			}
+		}
+	}
+
+	const size_t numLeadscrews = kinematics->GetNumLeadscrews();
+	if (numLeadscrews == 0)
+	{
+		return DynamicBedPlaneResult::leadscrewGeometryUnavailable;
+	}
+	if (numLeadscrews > DynamicBedPlane::MaxLeadscrews)
+	{
+		return DynamicBedPlaneResult::tooManyLeadscrews;
+	}
+
+	float leadscrewX[DynamicBedPlane::MaxLeadscrews];
+	for (size_t i = 0; i < numLeadscrews; ++i)
+	{
+		float leadscrewY;
+		if (!kinematics->GetLeadscrewCoordinates(i, leadscrewX[i], leadscrewY))
+		{
+			return DynamicBedPlaneResult::leadscrewGeometryUnavailable;
+		}
+	}
+
+	return DynamicBedPlane::CalculateTelemetry(
+		nozzleSamples[0].x, nozzleSamples[0].correction,
+		nozzleSamples[1].x, nozzleSamples[1].correction,
+		leadscrewX, numLeadscrews, limits, telemetry);
+}
+
 // Do the bed transform AFTER the axis transform
 void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *_ecv_null tool) const noexcept
 {

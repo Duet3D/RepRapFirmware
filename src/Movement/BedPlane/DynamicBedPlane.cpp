@@ -25,6 +25,10 @@ DynamicBedPlaneResult DynamicBedPlane::SolveSharedY(float leftX,
 	{
 		return DynamicBedPlaneResult::nonFiniteInput;
 	}
+	if (limits.minimumNozzleSeparation <= 0.0f || limits.maximumAbsoluteXSlope < 0.0f)
+	{
+		return DynamicBedPlaneResult::invalidLimits;
+	}
 
 	const float separation = rightX - leftX;
 	if (fabsf(separation) < limits.minimumNozzleSeparation)
@@ -64,11 +68,19 @@ DynamicBedPlaneResult DynamicBedPlane::CalculateLeadscrewCorrections(
 	{
 		return DynamicBedPlaneResult::tooManyLeadscrews;
 	}
+	if (numLeadscrews == 0 || leadscrewX == nullptr || corrections == nullptr)
+	{
+		return DynamicBedPlaneResult::leadscrewGeometryUnavailable;
+	}
 	if (!IsFinite(coefficients.intercept) || !IsFinite(coefficients.xSlope)
 		|| !IsFinite(limits.maximumAbsoluteMotorCorrection)
 		|| !IsFinite(limits.maximumMotorSpread))
 	{
 		return DynamicBedPlaneResult::nonFiniteInput;
+	}
+	if (limits.maximumAbsoluteMotorCorrection < 0.0f || limits.maximumMotorSpread < 0.0f)
+	{
+		return DynamicBedPlaneResult::invalidLimits;
 	}
 
 	float minimum = 0.0;

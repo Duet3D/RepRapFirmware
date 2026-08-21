@@ -28,6 +28,13 @@ public:
 	float GetMin(size_t axis) const noexcept pre(axis < 2) { return mins[axis]; }
 	float GetMax(size_t axis) const noexcept pre(axis < 2) { return maxs[axis]; }
 	float GetSpacing(size_t axis) const noexcept pre(axis < 2) { return spacings[axis]; }
+	bool Contains(float axis0, float axis1) const noexcept
+	{
+		return isValid
+			&& axis0 >= mins[0] && axis0 <= GetCoordinate(0, nums[0] - 1)
+			&& axis1 >= mins[1] && axis1 <= GetCoordinate(1, nums[1] - 1)
+			&& IsInRadius(axis0, axis1);
+	}
 
 	uint32_t NumAxisPoints(size_t axis) const noexcept pre(axis < 2) { return nums[axis]; }
 	uint32_t NumPoints() const noexcept { return nums[0] * nums[1]; }

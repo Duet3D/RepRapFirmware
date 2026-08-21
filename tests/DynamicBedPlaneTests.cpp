@@ -94,4 +94,19 @@ int main()
 	assert(result == DynamicBedPlaneResult::motorSpreadLimitExceeded);
 	assert(NearlyEqual(telemetry.leadscrewCorrectionSpread,
 							 lastGoodTelemetry.leadscrewCorrectionSpread));
+
+	result = DynamicBedPlane::CalculateTelemetry(-97.5f, -0.164f, 97.5f, 0.164f,
+														 screwX, 0, permissiveLimits, telemetry);
+	assert(result == DynamicBedPlaneResult::leadscrewGeometryUnavailable);
+
+	const DynamicBedPlaneLimits invalidLimits =
+	{
+		-1.0f,
+		0.01f,
+		1.0f,
+		2.0f
+	};
+	result = DynamicBedPlane::CalculateTelemetry(-97.5f, -0.164f, 97.5f, 0.164f,
+														 screwX, 3, invalidLimits, telemetry);
+	assert(result == DynamicBedPlaneResult::invalidLimits);
 }

@@ -6,6 +6,16 @@ The branch contains an isolated mathematical transform and safety validation, re
 
 `DynamicBedPlane::CalculateTelemetry()` now runs the complete two-nozzle-to-leadscrew calculation in one side-effect-free call. It reports the fitted plane, ordered leadscrew corrections, extrema, and correction spread. Rejected calculations leave the caller's last known-good telemetry unchanged.
 
+`Move::CalculateDynamicBedPlaneTelemetry()` is the first firmware-facing bridge. Given a point that has already passed through `AxisTransform`, it:
+
+- requires an active mesh and exactly two physical nozzle samples at the same Y;
+- rejects either nozzle outside the measured grid instead of accepting `HeightMap`'s normal edge clamping;
+- applies `zShift` and the configured taper to each physical nozzle sample;
+- reads ordered `M671` geometry through the base kinematics interface; and
+- returns the side-effect-free telemetry snapshot.
+
+No planner path calls this method yet. It cannot change a DDA, a CAN message, `specialMoveCoords`, or a physical motor endpoint.
+
 ## Machine model
 
 For two active nozzles at the same Y coordinate, hold dynamic Y slope at zero and solve:
