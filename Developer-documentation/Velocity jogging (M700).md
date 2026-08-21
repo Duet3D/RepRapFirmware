@@ -55,24 +55,34 @@ Measured on the emulator, timing from command injection to the step pins changin
 |---|---|---|---|
 | 5 | 50 ms | 257 ms | 100 mm/s |
 | 3 | 20 ms | 126 ms | 40 mm/s |
-| **2** | **20 ms** | **50 ms** | **40 mm/s** |
-| 2 | 15 ms | 62 ms | 30 mm/s |
-| 2 | 10 ms | 127 ms | 20 mm/s |
+| 2 | 30 ms | 90 ms | 60 mm/s |
+| 2 | 25 ms | 67 ms | 50 mm/s |
+| **2** | **20 ms** | **38.5 ms** | **40 mm/s** |
+| 2 | 15 ms | 44.6 ms | 30 mm/s |
+| 2 | 10 ms | never reaches 15 mm/s | 20 mm/s |
 
-The defaults are `D2 P20` because that is the measured optimum, not a compromise: latency stops
-following `D x P` below roughly 40ms of queued motion and then gets **worse**, because `Move` wants
-about `MoveTiming::UsualMinimumPreparedTime` (50ms, absolute minimum 25ms) queued before it will run
-moves. Shortening the chunk or the queue past that point makes jogging slower to respond, not faster.
+The defaults are `D2 P20` because that is the measured optimum, not a compromise. Above it latency
+tracks the queued chunk time `D x P`, as a FIFO should. Below roughly 40ms of queued motion it stops
+following `D x P` and gets **worse**, and shortening `P` far enough stops the axis reaching the
+commanded speed at all.
 
-Doubling the command rate (20ms to 10ms cadence) changed the result by 0.3ms, so this floor is in the
-firmware, not in how fast a host can send.
+**What that floor is not.** Three plausible explanations were measured and none of them holds:
 
-**To go below ~50ms** you have to reduce the preparation window in `MoveTiming`, which also affects
-print move preparation and CAN expansion timing. That is a machine-wide trade and has not been made
-here.
+| hypothesis | test | result |
+|---|---|---|
+| `Move` wants `MoveTiming::UsualMinimumPreparedTime` queued | halved it, 50ms to 25ms | 50.3 -> 50.2 ms: no effect |
+| lookahead grace period delays the first move | `M595 R0`, and `R0 P40` | ~2 ms |
+| the host cannot send fast enough | doubled command rate to 10ms cadence | 0.3 ms |
+
+Sizing the chunk adaptively to the requested speed - a short chunk for a slow jog, which the `2.a.P`
+ceiling says should be safe - was also implemented and measured, and is much worse: 3 to 15 mm/s went
+39.5 -> 75.4 ms and 1 to 3 mm/s went 79 -> 245 ms. It is not in the tree.
+
+So the sub-40ms floor is real and its cause is not yet identified. Going below it needs a mechanism
+this design does not have: revising a chunk that is already queued, rather than waiting it out.
 
 **To get more speed at the same latency, raise acceleration** rather than lengthening the chunk. The
-ceiling is `2.a.P`, so `M201 X4000` with `P=20` gives 160mm/s at the same 50ms.
+ceiling is `2.a.P`, so `M201 X4000` with `P=20` gives 160mm/s at the same ~38ms.
 
 ## Safety
 

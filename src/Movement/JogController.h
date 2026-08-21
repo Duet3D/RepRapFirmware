@@ -33,13 +33,16 @@ private:
 	void ClampSpeeds() noexcept;
 	void ReportStatus(const StringRef& reply) const noexcept;
 
-	// Measured on the emulator, timing from command injection to the step pins changing rate:
-	//   D=5 P=50 -> 257ms    D=3 P=20 -> 126ms    D=2 P=20 -> 50ms
-	//   D=2 P=15 ->  62ms    D=2 P=10 -> 127ms
-	// Latency stops following D*P below about 40ms of queued motion and then gets worse, because Move
-	// wants roughly MoveTiming::UsualMinimumPreparedTime queued before it will run moves. So P=20/D=2
-	// is an optimum rather than a compromise - shortening either makes it slower, not faster.
-	// Doubling the command rate changed nothing (50.3 -> 50.0ms), so this is the firmware, not the host.
+	// Latency is dominated by the chunk time already queued ahead of the change: the chunks are a FIFO
+	// and a new speed takes effect only once the queued ones have run. Measured on the emulator, command
+	// injection to the step pins changing rate, D=2: P=15 -> 44.6ms, P=20 -> 38.5ms, P=25 -> 67.2ms,
+	// P=30 -> 90.2ms, and P=10 cannot sustain 15mm/s at all (see MaxSpeedForAxis). So P=20/D=2 is a real
+	// optimum: shortening P makes it worse, not better. Sizing the chunk adaptively to the requested
+	// speed - short chunk for a slow jog - was tried and is much worse (3->15mm/s: 39.5 -> 75.4ms;
+	// 1->3mm/s: 79 -> 245ms). Whatever sets the floor below ~40ms of queued motion, it is not the
+	// queue arithmetic, and two plausible culprits were measured and cleared: MoveTiming's preparation
+	// window (halving UsualMinimumPreparedTime to 25ms moved 50.3 -> 50.2ms) and the lookahead grace
+	// period (M595 R0 is worth about 2ms). Doubling the host command rate changed nothing either.
 	static constexpr uint32_t DefaultChunkMillis = 20;
 	static constexpr uint32_t MinChunkMillis = 10;
 	static constexpr uint32_t MaxChunkMillis = 200;
