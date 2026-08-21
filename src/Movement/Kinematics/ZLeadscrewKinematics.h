@@ -20,6 +20,21 @@ public:
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException) override;
 	bool SupportsAutoCalibration() const noexcept override;
 	bool DoAutoCalibration(MovementState& ms, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept override;
+
+	// Return the ordered M671 geometry without exposing mutable calibration state.
+	// The index order matches the physical Z drivers configured by M584.
+	size_t GetNumLeadscrews() const noexcept { return numLeadscrews; }
+	bool GetLeadscrewCoordinates(size_t index, float& x, float& y) const noexcept
+	{
+		if (index >= numLeadscrews)
+		{
+			return false;
+		}
+		x = leadscrewX[index];
+		y = leadscrewY[index];
+		return true;
+	}
+
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif
