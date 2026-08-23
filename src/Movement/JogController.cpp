@@ -205,8 +205,14 @@ void JogController::Spin() noexcept
 		return;
 	}
 
-	// Something else has taken over movement, so get out of the way.
-	if (gcodes.IsReallyPrintingOrResuming())
+	// Something else has taken over movement, so get out of the way. A macro or a tool change moves axes
+	// on its own account, and jogging underneath it would fight it for the same movement system.
+	// DoingFileMacro deliberately excludes daemon.g (GCodes.cpp:374), so a daemon running on its usual
+	// cycle does not chop the jog stream up.
+	// Deliberately NOT included: WaitingForAcknowledgement. "Jog to the workpiece corner, then press OK"
+	// is a standard CNC setup pattern, and the machine is stationary with the operator at the controls,
+	// so blocking it would remove a genuinely useful workflow for no safety gain.
+	if (gcodes.IsReallyPrintingOrResuming() || gcodes.DoingFileMacro() || gcodes.IsDoingToolChange())
 	{
 		Stop();
 		return;
