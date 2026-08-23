@@ -44,6 +44,13 @@ void JogController::ClampSpeeds() noexcept
 	{
 		const float limit = MaxSpeedForAxis(axis);
 		requestedSpeeds[axis] = constrain<float>(requestedSpeeds[axis], -limit, limit);
+		// A speed below one chunk's minimum distance cannot be expressed at all, so treat it as zero rather
+		// than as a jog that generates nothing. Otherwise the axis counts as jogging, keeps the machine out
+		// of idle, and produces a chunk per pass that is only thrown away.
+		if (fabsf(requestedSpeeds[axis]) * (float)chunkClocks < MinChunkDistance)
+		{
+			requestedSpeeds[axis] = 0.0;
+		}
 		if (requestedSpeeds[axis] != 0.0)
 		{
 			jogAxes.SetBit(axis);
@@ -273,7 +280,13 @@ bool JogController::GenerateChunk(MovementState& ms) noexcept
 
 	if (distanceSquared < fsquare(MinChunkDistance))
 	{
-		return false;														// every jogged axis is up against its limit
+		// Nothing worth moving. The target has to be put back, not just abandoned: currentUserPosition was
+		// already advanced above, and SetMoveBufferDefaults seeds initialCoords from raw.coords, so a
+		// rejected chunk would otherwise become the next chunk's baseline and the reported position would
+		// climb at the commanded speed while the machine stood still, with nothing ever resyncing it.
+		memcpyf(ms.raw.coords, ms.initialCoords, numVisibleAxes);
+		gcodes.ToolOffsetInverseTransform(ms, ms.raw.coords, ms.currentUserPosition);
+		return false;
 	}
 
 	ms.raw.isCoordinated = true;
