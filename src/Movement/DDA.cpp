@@ -596,15 +596,16 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
 #if SUPPORT_3RD_ORDER
+	const bool sameMoveType =  flags.isPrintingMove == prev->flags.isPrintingMove
+							&& flags.xyMoving == prev->flags.xyMoving
+							&& flags.isNonPrintingExtruderMove == prev->flags.isNonPrintingExtruderMove;	// this is to prevent extruder-only moves being melded with Z-axis moves (issue 990)
 	if (   prev->IsProvisional()													// if previous move is queued but has not started yet
 		&& flags.useScurve == prev->flags.useScurve
-		&& flags.isPrintingMove == prev->flags.isPrintingMove
-		&& flags.xyMoving == prev->flags.xyMoving
-		&& flags.isNonPrintingExtruderMove == prev->flags.isNonPrintingExtruderMove	// this is to prevent extruder-only moves being melded with Z-axis moves (issue 990)
+		&& (move.GetJerkPolicy() != 0 || sameMoveType)									// and melding is allowed
 	   )
 	{
-		// We may be able to meld this move with the previous one
-		if (flags.isPrintingMove)
+		// We may be able to meld this move with the previous one. A jerk policy 1 meld between different move types cannot rely on the extrusion ratio, so use the axis jerk limits only
+		if (flags.isPrintingMove && sameMoveType)
 		{
 			SetSpeedRatioAndMaxJunctionSpeedForPrintingMoves(move);
 		}
