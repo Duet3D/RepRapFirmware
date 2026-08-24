@@ -22,10 +22,10 @@ class StallDetectionEndstop final : public Endstop
 public:
 	DECLARE_FREELIST_NEW_DELETE(StallDetectionEndstop)
 
-	StallDetectionEndstop(uint8_t p_axis, EndStopPosition pos, bool p_individualMotors) noexcept;		// for creating axis endstops
+	StallDetectionEndstop(uint8_t p_axis, EndStopPosition pos, bool p_individualMotors, bool p_useEncoder = false) noexcept;	// for creating axis endstops
 	StallDetectionEndstop() noexcept;																	// for creating the single extruders endstop
 
-	EndStopType GetEndstopType() const noexcept override { return (individualMotors) ? EndStopType::motorStallIndividual : EndStopType::motorStallAny; }
+	EndStopType GetEndstopType() const noexcept override;
 	bool Stopped() const noexcept override;
 	void PrimeAxis(const Kinematics &_ecv_from kin, const AxisDriversConfig& axisDrivers, float speed) THROWS(GCodeException) override;
 	EndstopHitDetails CheckTriggered() noexcept override;
@@ -68,6 +68,7 @@ private:
 #endif
 	unsigned int numDriversLeft;
 	bool individualMotors;
+	bool useEncoder;																					// detect the stall from the encoder position error instead of from StallGuard
 	bool stopAll;
 };
 

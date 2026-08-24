@@ -524,9 +524,15 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 					// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
 					ReplaceObject(axisEndstops[axis], new StallDetectionEndstop(axis, pos, true));
 					break;
+
+				case EndStopType::motorStallEncoder:
+					// Asking for an encoder endstop, which detects a stall from the encoder position error instead of from StallGuard
+					ReplaceObject(axisEndstops[axis], new StallDetectionEndstop(axis, pos, false, true));
+					break;
 #else
 				case EndStopType::motorStallAny:
 				case EndStopType::motorStallIndividual:
+				case EndStopType::motorStallEncoder:
 					DeleteObject(axisEndstops[axis]);
 					reply.copy("Stall detection not supported by this hardware");
 					return GCodeResult::error;

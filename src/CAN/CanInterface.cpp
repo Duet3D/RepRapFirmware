@@ -1247,7 +1247,7 @@ GCodeResult CanInterface::GetSetRemoteDriverStallParameters(const CanDriversList
 static String<StringLength100> enableEndstopsReply;
 
 // Enable a stall endstop on a remote board
-void CanInterface::EnableRemoteStallEndstop(DriverId did, float speed) THROWS(GCodeException)
+void CanInterface::EnableRemoteStallEndstop(DriverId did, float speed, bool useEncoder) THROWS(GCodeException)
 {
 	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -1258,6 +1258,7 @@ void CanInterface::EnableRemoteStallEndstop(DriverId did, float speed) THROWS(GC
 	auto msg = buf->SetupRequestMessage<CanMessageEnableStallEndstop>(rid, CanInterface::GetCanAddress(), did.boardAddress);
 	msg->driverNumber = did.localDriver;
 	msg->speed = speed;
+	msg->endstopType = useEncoder ? CanMessageEnableStallEndstop::typeEncoder : CanMessageEnableStallEndstop::typeMotorLoad;
 
 	enableEndstopsReply.Clear();
 	if (CanInterface::SendRequestAndGetStandardReply(buf, rid, enableEndstopsReply.GetRef(), nullptr) != GCodeResult::ok)

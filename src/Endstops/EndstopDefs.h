@@ -65,6 +65,7 @@ NamedEnum
 	zProbeAsEndstop,
 	motorStallAny,
 	motorStallIndividual,
+	motorStallEncoder,
 	numInputTypes
 );
 
