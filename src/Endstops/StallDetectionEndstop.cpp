@@ -287,6 +287,7 @@ void StallDetectionEndstop::DeleteRemoteStallEndstops() noexcept
 									}
 								  );
 	remoteDriversMonitored.Clear();
+	newStallReported = false;						// otherwise Stopped() keeps reporting the endstop as triggered until the next homing move primes it
 }
 
 // Record any notifications of stalled remote drivers that we are interested in
