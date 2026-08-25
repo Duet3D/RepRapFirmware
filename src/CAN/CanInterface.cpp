@@ -1073,7 +1073,10 @@ GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb
 
 	case 2:
 		{
-			gb.MustSee('R');
+			if (gb.Seen('V'))
+			{
+				gb.MustSee('R');
+			}
 			CanMessageGenericConstructor cons(M569Point2Params);
 			cons.PopulateFromCommand(gb);
 			return cons.SendAndGetResponse(CanMessageType::m569p2, driver.boardAddress, reply);
