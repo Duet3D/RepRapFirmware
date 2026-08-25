@@ -3589,7 +3589,7 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3Mini_Unknown:		return "Duet 3 " BOARD_SHORT_NAME " unknown variant";
 	case BoardType::Duet3Mini_WiFi:			return "Duet 3 " BOARD_SHORT_NAME " WiFi 1.02 or earlier";
 	case BoardType::Duet3Mini_Ethernet:		return "Duet 3 " BOARD_SHORT_NAME " Ethernet";
-	case BoardType::Duet3Mini_WiFi_ESP32:	return "Duet 3 " BOARD_SHORT_NAME " WiFi 1.03 or later";
+	case BoardType::Duet3Mini_WiFi_ESP32:	return "Duet 3 " BOARD_SHORT_NAME " WiFi 1.04 or later";
 #elif defined(DUET3_MB6HC)
 	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v1.0 or earlier";
 	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
