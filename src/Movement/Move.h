@@ -819,7 +819,7 @@ inline float Move::NormalAcceleration(size_t drive) const noexcept
 
 inline float Move::Acceleration(size_t drive, bool useReduced) const noexcept
 {
-	return (useReduced) ? min<float>(reducedAccelerations[drive], normalAccelerations[drive]) : normalAccelerations[drive];
+	return (useReduced) ? reducedAccelerations[drive] : normalAccelerations[drive];
 }
 
 inline float Move::MaxFeedrate(size_t drive) const noexcept

@@ -283,7 +283,6 @@ int32_t ZProbe::GetReading() const noexcept
 			switch (type)
 			{
 			case ZProbeType::analog:				// Simple or intelligent IR sensor
-			case ZProbeType::alternateAnalog:		// Alternate sensor
 			case ZProbeType::digital:				// Switch connected to Z probe input
 				zProbeVal = (int32_t)((p.GetZProbeOnFilter().GetSum() + p.GetZProbeOffFilter().GetSum()) / (int32_t)(2 * ZProbeAverageReadings));
 				break;

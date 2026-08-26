@@ -712,6 +712,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 		&& (   probeType == (uint32_t)ZProbeType::e1Switch_obsolete
 			|| probeType == (uint32_t)ZProbeType::endstopSwitch_obsolete
 			|| probeType == (uint32_t)ZProbeType::zSwitch_obsolete
+			|| probeType == (uint32_t)ZProbeType::alternateAnalog_obsolete
 		   )
 	   )
 	{
@@ -783,12 +784,12 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 					return GCodeResult::error;
 				}
 				else if (   probeNumber != 0
-						 && (   probeType == (unsigned int)ZProbeType::analog || probeType == (unsigned int)ZProbeType::alternateAnalog
+						 && (   probeType == (unsigned int)ZProbeType::analog
 							 || probeType == (unsigned int)ZProbeType::dumbModulated || probeType == (unsigned int)ZProbeType::digital
 							)
 						)
 				{
-					reply.copy("Types 1,2,3 and 5 are available for Z probe 0 only");
+					reply.copy("Types 1, 2 and 5 are available for Z probe 0 only");
 					return GCodeResult::error;
 				}
 				else
