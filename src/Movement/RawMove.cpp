@@ -632,6 +632,7 @@ void MovementState::UpdateCoordinatesFromLastKnownEndpoints() noexcept
 	Move& move = reprap.GetMove();
 	move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), machinePosition);
 	memcpyf(raw.coords, machinePosition, reprap.GetGCodes().GetTotalAxes());
+	move.UpdateStartCoordinates(msNumber, machinePosition);			// keep the ring in step with the motor-rounded coordinates, else the next move sees a sub-step delta on every axis
 	move.InverseAxisAndBedTransform(raw.coords, currentTool);
 }
 

@@ -2432,7 +2432,15 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		}
 	}
 
-	LoadFeedrateFromGCode(gb, ms);														// set up feedrate before we do the endstop calculations
+	try
+	{
+		LoadFeedrateFromGCode(gb, ms);													// set up feedrate before we do the endstop calculations
+	}
+	catch (const GCodeException&)
+	{
+		memcpyf(ms.currentUserPosition, initialUserPosition, numVisibleAxes);			// undo the user position update because this move will not be executed
+		throw;
+	}
 
 	AxesBitmap realAxesMoving;															// we'll need this later but only if ms.moveType == 0
 	if (ms.raw.moveType ==  0)
@@ -2551,7 +2559,16 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		ms.endstopsTriggered.Clear();
 	}
 
-	const bool hasExtrusion = LoadExtrusionFromGCode(gb, ms);								// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
+	bool hasExtrusion;
+	try
+	{
+		hasExtrusion = LoadExtrusionFromGCode(gb, ms);										// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
+	}
+	catch (const GCodeException&)
+	{
+		abandonMove();
+		throw;
+	}
 	if (hasExtrusion || axesMentioned.IsNonEmpty())											// if there is no movement at all, skip further processing and don't pass the move on the the Move system
 	{
 		if (ms.IsFirstMoveSincePrintingResumed())											// if this is the first move after skipping an object
@@ -3101,9 +3118,29 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 	}
 #endif
 
-	LoadFeedrateFromGCode(gb, ms);
+	try
+	{
+		LoadFeedrateFromGCode(gb, ms);
+	}
+	catch (const GCodeException&)
+	{
+		memcpyf(ms.currentUserPosition, initialUserPosition, numVisibleAxes);			// undo the user position update because this move will not be executed
+		throw;
+	}
 
-	const bool hasExtrusion = LoadExtrusionFromGCode(gb, ms);
+	bool hasExtrusion;
+	try
+	{
+		hasExtrusion = LoadExtrusionFromGCode(gb, ms);
+	}
+	catch (const GCodeException&)
+	{
+		// The extruder position restore is safe here because LoadExtrusionFromGCode refreshes moveStartVirtualExtruderPosition before it can throw
+		memcpyf(ms.currentUserPosition, initialUserPosition, numVisibleAxes);
+		memcpyf(ms.raw.coords, ms.initialCoords, numVisibleAxes);
+		ms.latestVirtualExtruderPosition = ms.raw.moveStartVirtualExtruderPosition;
+		throw;
+	}
 	if (ms.IsFirstMoveSincePrintingResumed())
 	{
 		if (!LockCurrentMovementSystemAndWaitForStandstill(gb))		// update the user position from the machine position
@@ -4746,6 +4783,22 @@ void GCodes::StopPrint(GCodeBuffer *_ecv_null gbp, StopPrintReason reason) noexc
 			ms.currentTool->SetActualZHop(0.0);
 			ms.currentTool->SetRetracted(false);
 		}
+#if SUPPORT_ASYNC_MOVES
+		// A motion system other than the primary one cannot run any code after the job has ended, so if it kept its axes or its tool then the next job could not allocate them
+		if (&ms != &moveStates[0])
+		{
+			ms.ReleaseAllOwnedAxesAndExtruders();
+			if (ms.currentTool != nullptr)
+			{
+				if (!IsSimulating())
+				{
+					ms.currentTool->Standby();
+				}
+				ms.raw.movementTool = ms.currentTool = nullptr;
+			}
+			ms.newToolNumber = -1;
+		}
+#endif
 	}
 
 	const char *_ecv_array _ecv_null printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
