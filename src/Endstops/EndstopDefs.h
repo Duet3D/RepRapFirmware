@@ -73,7 +73,7 @@ enum class ZProbeType : uint8_t
 	none = 0,
 	analog = 1,
 	dumbModulated = 2,
-	alternateAnalog = 3,
+	alternateAnalog_obsolete = 3,
 	endstopSwitch_obsolete = 4,
 	digital = 5,
 	e1Switch_obsolete = 6,
