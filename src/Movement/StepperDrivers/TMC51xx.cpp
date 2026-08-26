@@ -266,6 +266,12 @@ const uint32_t DefaultThighReg = DefaultThigh;
 
 constexpr uint8_t REGNUM_VACTUAL = 0x22;
 
+#if TMC_TYPE == 2240
+constexpr uint8_t REGNUM_2240_ADC_TEMP = 0x51;
+constexpr unsigned int ADC_TEMP_SHIFT = 0;
+constexpr uint32_t ADC_TEMP_MASK = 0x01FFF << ADC_TEMP_SHIFT;	// ADC temperature reading
+#endif
+
 // Microstep table registers
 constexpr uint8_t REGNUM_MSLUT0 = 0x60;						// MSLUT0-MSLUT7 hold the 256 difference bits of the quarter-wave microstep table
 constexpr uint8_t REGNUM_MSLUTSEL = 0x68;					// difference decoding: segment start positions X1-X3 and per-segment base increments W0-W3
@@ -455,6 +461,10 @@ public:
 	uint8_t GetIHold() const noexcept { return (writeRegisters[WriteIholdIrun] & IHOLDIRUN_IHOLD_MASK) >> IHOLDIRUN_IHOLD_SHIFT; }
 	uint32_t GetGlobalScaler() const noexcept { return writeRegisters[WriteGlobalScaler]; }
 	float CalculateCurrent() const noexcept;				// calculate what current the driver is actually using based on register values
+
+#if TMC_TYPE == 2240
+	float GetDriverTemperature() const noexcept;
+#endif
 
 	static void TransferTimedOut() noexcept { ++numTimeouts; }
 
@@ -1267,6 +1277,9 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 	}
 	ResetLoadRegisters();
 
+#if TMC_TYPE == 2240
+	reply.catf(", temp %.1f" DEGREE_SYMBOL "C", (double)GetDriverTemperature());
+#endif
 	reply.catf(", mspos %u, reads %u, writes %u timeouts %u", (unsigned int)(readRegisters[ReadMsCnt] & 1023), numReads, numWrites, numTimeouts);
 	numReads = numWrites = 0;
 	if (clearGlobalStats)
@@ -1274,6 +1287,15 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 		numTimeouts = 0;
 	}
 }
+
+#if TMC_TYPE == 2240
+
+float TmcDriverState::GetDriverTemperature() const noexcept
+{
+	return (float)(((readRegisters[ReadAdcTemp] & ADC_TEMP_MASK) >> ADC_TEMP_SHIFT) - 2038) * (1.0/7.7);
+}
+
+#endif
 
 void TmcDriverState::SetStallDetectFilter(bool sgFilter) noexcept
 {
@@ -2472,6 +2494,15 @@ GCodeResult SmartDrivers::SetStallEndstopReporting(uint16_t driverNumber, float 
 		driverStallsToNotify = 0;
 		return GCodeResult::ok;
 	}
+}
+
+#endif
+
+#if TMC_TYPE == 2240
+
+float SmartDrivers::GetDriverTemperature(size_t driver) noexcept
+{
+	return (driver < numTmcDrivers) ? driverStates[driver].GetDriverTemperature() : 0.0;
 }
 
 #endif
