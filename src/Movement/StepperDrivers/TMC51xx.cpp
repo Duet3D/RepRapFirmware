@@ -1028,6 +1028,9 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobal
 	}
 	ResetLoadRegisters();
 
+#if TMC_TYPE == 2240
+	reply.catf(", temp %.1f" DEGREE_SYMBOL "C", (double)GetDriverTemperature());
+#endif
 	reply.catf(", mspos %u, reads %u, writes %u timeouts %u", (unsigned int)(readRegisters[ReadMsCnt] & 1023), numReads, numWrites, numTimeouts);
 	numReads = numWrites = 0;
 	if (clearGlobalStats)
