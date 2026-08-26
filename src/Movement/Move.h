@@ -455,7 +455,7 @@ public:
 #endif
 
 #if SUPPORT_PHASE_STEPPING
-	void ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config);	// configure Ka & Kv parameters for phase stepping
+	GCodeResult ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config, const StringRef& reply) noexcept;	// configure Ka & Kv parameters for phase stepping
 	PhaseStepParams GetPhaseStepParams(size_t axisOrExtruder) const noexcept;
 	bool UpdateCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
 	bool SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept;
@@ -648,6 +648,10 @@ private:
 	StepTimer::Ticks maxPSControlLoopCallInterval;			// The maximum interval between the control loop being called
 
 	bool phaseStepMovingFast;								// Whether any phase stepping driver is above the speed at which we defer the driver status poll
+#endif
+
+#if SUPPORT_PHASE_STEPPING && SUPPORT_CAN_EXPANSION
+	LogicalDrivesBitmap remotePhaseStepDrives;				// logical drives whose remote drivers have been switched to phase stepping
 #endif
 
 #if SUPPORT_ASYNC_MOVES

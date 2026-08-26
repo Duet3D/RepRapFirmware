@@ -2296,7 +2296,7 @@ bool Move::EnableIfIdle(size_t driver) noexcept
 
 #if SUPPORT_PHASE_STEPPING
 
-void Move::ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config)
+GCodeResult Move::ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config, const StringRef& reply) noexcept
 {
 	switch (config)
 	{
@@ -2309,6 +2309,19 @@ void Move::ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepC
 		dms[axisOrExtruder].phaseStepControl.SetKa(value);
 		break;
 	}
+
+#if SUPPORT_CAN_EXPANSION
+	GCodeResult rslt = GCodeResult::ok;
+	IterateRemoteDrivers(axisOrExtruder, [config, value, &rslt, &reply](DriverId driver) noexcept -> void {
+		if (rslt == GCodeResult::ok)
+		{
+			rslt = CanInterface::SetRemotePhaseStepParam(driver, (config == PhaseStepConfig::kv) ? 'V' : 'A', value, reply);
+		}
+	});
+	return rslt;
+#else
+	return GCodeResult::ok;
+#endif
 }
 
 PhaseStepParams Move::GetPhaseStepParams(size_t axisOrExtruder) const noexcept
@@ -2330,14 +2343,41 @@ bool Move::UpdateCurrentMotion(size_t driver, uint32_t when, MotionParameters& m
 
 bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept
 {
-	bool hasRemoteDrivers = false;
+	bool hasRemoteDrivers = false, hasLocalDrivers = false;
 	IterateRemoteDrivers(axisOrExtruder, [&hasRemoteDrivers](DriverId driver) noexcept -> void { hasRemoteDrivers = true; });
+	IterateLocalDrivers(axisOrExtruder, [&hasLocalDrivers](uint8_t driver) noexcept -> void { hasLocalDrivers = true; });
 
-	// Phase stepping does not support remote drivers
+#if SUPPORT_CAN_EXPANSION
+	if (hasRemoteDrivers)
+	{
+		if (mode == StepMode::phase && hasLocalDrivers)
+		{
+			reply.copy("Phase stepping is not supported on axes with both local and remote drivers");
+			return false;
+		}
+		bool remoteOk = true;
+		IterateRemoteDrivers(axisOrExtruder, [mode, &remoteOk, &reply](DriverId driver) noexcept -> void {
+			if (remoteOk && CanInterface::SetRemoteDriverStepMode(driver, (unsigned int)mode, reply) != GCodeResult::ok)
+			{
+				remoteOk = false;
+			}
+		});
+		if (!remoteOk)
+		{
+			return false;
+		}
+		remotePhaseStepDrives.SetOrClearBit(axisOrExtruder, mode == StepMode::phase);
+		if (!hasLocalDrivers)
+		{
+			return true;
+		}
+	}
+#else
 	if (hasRemoteDrivers && mode == StepMode::phase)
 	{
 		return false;
 	}
+#endif
 
 	bool ret = true;
 	DriveMovement* dm = &dms[axisOrExtruder];
@@ -2421,6 +2461,12 @@ StepMode Move::GetStepMode(size_t axisOrExtruder) const noexcept
 	{
 		return StepMode::unknown;
 	}
+#if SUPPORT_CAN_EXPANSION
+	if (remotePhaseStepDrives.IsBitSet(axisOrExtruder))
+	{
+		return StepMode::phase;
+	}
+#endif
 	return dms[axisOrExtruder].GetStepMode();
 }
 

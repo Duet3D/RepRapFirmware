@@ -1211,6 +1211,44 @@ GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb
 	}
 }
 
+#if SUPPORT_PHASE_STEPPING
+
+// Handle M970 for a remote driver
+GCodeResult CanInterface::SetRemoteDriverStepMode(DriverId driver, unsigned int mode, const StringRef& reply) noexcept
+{
+	try
+	{
+		CanMessageGenericConstructor cons(M970Params);
+		cons.AddDriverIdParam('P', driver);
+		cons.AddUParam('S', mode);
+		return cons.SendAndGetResponse(CanMessageType::m970, driver.boardAddress, reply);
+	}
+	catch (const GCodeException& e)
+	{
+		e.GetMessage(reply, nullptr);
+		return GCodeResult::error;
+	}
+}
+
+// Handle M970.1/M970.2 for a remote driver, sending the Kv or Ka value as parameter 'V' or 'A'
+GCodeResult CanInterface::SetRemotePhaseStepParam(DriverId driver, char param, float value, const StringRef& reply) noexcept
+{
+	try
+	{
+		CanMessageGenericConstructor cons(M970Params);
+		cons.AddDriverIdParam('P', driver);
+		cons.AddFParam(param, value);
+		return cons.SendAndGetResponse(CanMessageType::m970, driver.boardAddress, reply);
+	}
+	catch (const GCodeException& e)
+	{
+		e.GetMessage(reply, nullptr);
+		return GCodeResult::error;
+	}
+}
+
+#endif
+
 // Handle M915 for a collection of remote drivers
 GCodeResult CanInterface::GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) THROWS(GCodeException)
 {

@@ -1439,6 +1439,9 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 
 	// Deal with the stall status. Note that the TCoolThrs setting prevents us getting a DIAG output at low speeds, but it doesn't seem to affect the stall status
 	if (   (rcvDataBlock[0] & (1u << 2)) != 0							// if the status indicates stalled
+#if SUPPORT_PHASE_STEPPING
+		&& !phaseStepEnabled											// SG_RESULT is only updated on a full step, and direct mode doesn't use the sequencer, so the stall status is frozen at its last step/dir value
+#endif
 		&& interval != 0
 		&& interval <= maxStallStepInterval								// if the motor speed is high enough to get a reliable stall indication
 	   )
