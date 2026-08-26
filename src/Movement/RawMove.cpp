@@ -484,6 +484,7 @@ LogicalDrivesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLetter
 		{
 			move.SetLastEndpoints(msNumber, drivesNeeded, lastKnownEndpoints);
 			move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), coords);
+			move.UpdateStartCoordinates(msNumber, coords);				// keep the ring in step with the motor-rounded coordinates, else the next move sees a stale start position
 			move.InverseAxisAndBedTransform(coords, currentTool);
 		}
 	}
@@ -507,6 +508,7 @@ LogicalDrivesBitmap MovementState::AllocateDrives(LogicalDrivesBitmap drivesNeed
 		axesAndExtrudersOwned |= affectedAxes;
 		move.SetLastEndpoints(msNumber, drivesNeeded, lastKnownEndpoints);
 		move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), coords);
+		move.UpdateStartCoordinates(msNumber, coords);
 		move.InverseAxisAndBedTransform(coords, currentTool);
 	}
 	return unavailableDrives;
@@ -535,6 +537,7 @@ void MovementState::UpdateCoordinatesFromLastKnownEndpoints() noexcept
 	float machinePosition[MaxAxes];
 	Move& move = reprap.GetMove();
 	move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), machinePosition);
+	move.UpdateStartCoordinates(msNumber, machinePosition);				// keep the ring in step with the motor-rounded coordinates, else the next move sees a stale start position
 	memcpyf(coords, machinePosition, reprap.GetGCodes().GetTotalAxes());
 	move.InverseAxisAndBedTransform(coords, currentTool);
 }
