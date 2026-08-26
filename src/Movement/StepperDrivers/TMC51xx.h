@@ -66,12 +66,16 @@ namespace SmartDrivers
 
 	const char *_ecv_array _ecv_null CheckStallDetectionEnabled(size_t driver, float speed) noexcept;
 
+#if SUPPORT_TMC2240_SPI
+	float GetDriverTemperature(size_t driver) noexcept;
+#endif
+
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult SetStallEndstopReporting(uint16_t driverNumber, float speed, const StringRef& reply) noexcept;
 	extern std::atomic<uint16_t> driverStallsToNotify;
 #endif
 }
 
-#endif
+#endif	// SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
 
 #endif /* SRC_MOVEMENT_STEPPERDRIVERS_TMC51XX_H_ */
