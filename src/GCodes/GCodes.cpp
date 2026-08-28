@@ -5076,6 +5076,7 @@ void GCodes::SetAxisNotHomed(unsigned int axis) noexcept
 	{
 		axesHomed.ClearBit(axis);
 		axesVirtuallyHomed = axesHomed;
+		axisFollower.NotifyAxisNotHomed(axis);
 		if (axis == Z_AXIS)
 		{
 			zDatumSetByProbing = false;
@@ -5092,6 +5093,7 @@ void GCodes::SetAllAxesNotHomed() noexcept
 	{
 		axesHomed.Clear();
 		axesVirtuallyHomed = axesHomed;
+		axisFollower.Disengage();
 		zDatumSetByProbing = false;
 		Tool::CheckZHopsValid(axesHomed);
 		reprap.MoveUpdated();

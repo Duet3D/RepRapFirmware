@@ -34,6 +34,7 @@ public:
 	bool IsEngaged() const noexcept { return engaged; }
 	int32_t GetFollowerAxis() const noexcept { return followerAxis; }
 	void Disengage() noexcept { engaged = false; }
+	void NotifyAxisNotHomed(unsigned int axis) noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL

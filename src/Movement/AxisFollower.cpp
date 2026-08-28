@@ -10,6 +10,7 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/Move.h>
 #include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 #include <ObjectModel/ObjectModel.h>
 
 // Object model. AxisControl and DWC would otherwise have to parse the text of an M604 report to know
@@ -48,6 +49,20 @@ const char *_ecv_array AxisFollower::GetAxisLetterOrNull(int32_t axis) const noe
 AxisFollower::AxisFollower() noexcept
 	: followerAxis(-1), leaderAxis(-1), scale(-1.0), offset(0.0), engaged(false)
 {
+}
+
+// Following is a relationship between two known positions, so losing the position of either end ends it.
+// This matters most for homing: H1/H2 moves write ms.raw.coords directly and never pass through
+// ToolOffsetTransform, so the follower cannot track them. Left engaged, the machine would come out of
+// homing still claiming a relationship that the homing moves had silently broken. Disengaging says so
+// instead; re-engaging afterwards recaptures the offset, which is the intended workflow anyway.
+void AxisFollower::NotifyAxisNotHomed(unsigned int axis) noexcept
+{
+	if (engaged && ((int32_t)axis == followerAxis || (int32_t)axis == leaderAxis))
+	{
+		engaged = false;
+		reprap.GetPlatform().Message(WarningMessage, "Axis following disengaged because an axis it uses is no longer homed\n");
+	}
 }
 
 void AxisFollower::Apply(float coords[MaxAxes]) const noexcept
