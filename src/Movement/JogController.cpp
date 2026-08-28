@@ -24,25 +24,31 @@ JogController::JogController() noexcept
 	}
 }
 
-// The highest speed we are prepared to run this axis at.
-// Besides the configured maximum there is a limit inherent in feeding the queue a chunk at a time. DDA::InitStandardMove
-// caps the entry speed of every move at sqrt(2.a.d) for that move alone, so that the move can always be the last one in
-// the ring and still stop at its end. With d = v.chunkTime that solves to v <= 2.a.chunkTime. Commanding more than this
-// would not go any faster, it would just quietly not be obeyed - so clamp to it and let the caller see the real ceiling.
-// Jogging faster means longer chunks, which means more latency; that trade-off is the P parameter of M700.
+// The highest speed we are prepared to run this axis at: its configured maximum, and nothing else.
+//
+// This used to also clamp to 2.a.P. That came from every chunk having to be stoppable within itself,
+// because DDA::InitStandardMove sets endSpeed = 0 (DDA.cpp:624) until a following move exists, and a
+// singly-generated chunk never had one. The machine never needed to stop within one chunk; it needs to
+// be able to decelerate from its current speed, which takes v/a however the motion was commanded.
+// Keeping enough chunks queued that each has a successor lets lookahead blend them, which is what an
+// ordinary G-code stream already relies on.
 float JogController::MaxSpeedForAxis(size_t axis) const noexcept
 {
-	const Move& move = reprap.GetMove();
-	return min<float>(move.MaxFeedrate(axis), 2.0 * move.NormalAcceleration(axis) * (float)chunkClocks);
+	return reprap.GetMove().MaxFeedrate(axis);
 }
 
 void JogController::ClampSpeeds() noexcept
 {
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
 	jogAxes.Clear();
+	clampedAxes.Clear();
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		const float limit = MaxSpeedForAxis(axis);
+		if (fabsf(requestedSpeeds[axis]) > limit)
+		{
+			clampedAxes.SetBit(axis);					// the host asked for more than M203 allows; say so rather than silently obeying something else
+		}
 		requestedSpeeds[axis] = constrain<float>(requestedSpeeds[axis], -limit, limit);
 		// A speed below one chunk's minimum distance cannot be expressed at all, so treat it as zero rather
 		// than as a jog that generates nothing. Otherwise the axis counts as jogging, keeps the machine out
@@ -78,6 +84,17 @@ void JogController::ReportStatus(const StringRef& reply) const noexcept
 	const char *_ecv_array const axisLetters = gcodes.GetAxisLetters();
 	reply.printf("Jogging %s, chunk %" PRIu32 "ms, timeout %" PRIu32 "ms, queue %u",
 					(active) ? "active" : "inactive", chunkMillis, timeoutMillis, maxQueuedMoves);
+	if (clampedAxes.IsNonEmpty())
+	{
+		reply.cat(", clamped to axis maximum:");
+		for (size_t axis = 0; axis < gcodes.GetVisibleAxes(); ++axis)
+		{
+			if (clampedAxes.IsBitSet(axis))
+			{
+				reply.catf(" %c%.1f", axisLetters[axis], (double)InverseConvertSpeedToMmPerSec(requestedSpeeds[axis]));
+			}
+		}
+	}
 	if (active)
 	{
 		reply.cat(", speeds");
