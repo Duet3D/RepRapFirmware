@@ -238,6 +238,8 @@ void GCodes::Reset() noexcept
 
 	nextGcodeSource = 0;
 
+	jogController.Stop();
+
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	fileToPrint.Close();
 #endif
@@ -466,6 +468,8 @@ void GCodes::Spin() noexcept
 #endif
 
 	CheckTriggers();
+
+	jogController.Spin();							// keep the movement queue topped up if we are jogging
 
 	// The autoPause buffer has priority, so spin that one first. It may have to wait for other buffers to release locks etc.
 	(void)SpinGCodeBuffer(*AutoPauseGCode());
@@ -1853,6 +1857,11 @@ bool GCodes::LockAllMovementSystemsAndWaitForStandstill(GCodeBuffer& gb) noexcep
 // As a side-effect it updates the user coordinates from the machine coordinates.
 bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept
 {
+	if (msNumber == 0)
+	{
+		jogController.Stop();						// jogging keeps feeding the queue, so we would never reach standstill while it is running
+	}
+
 	// Lock movement to stop another source adding moves to the queue
 	if (!LockResource(gb, MoveResourceBase + msNumber))
 	{
@@ -4954,12 +4963,23 @@ void GCodes::ToolOffsetTransform(const MovementState& ms, const float coordsIn[M
 			}
 		}
 	}
+
+	// A following axis is derived last, from the machine coordinates, so that it tracks where the tool
+	// actually ends up rather than where it was asked to go. Tool length offsets are already applied
+	// here, which is what a G-code implementation has to compensate for by hand.
+	// This is the one point every move passes through - straight moves, arc segments and jog chunks -
+	// so deriving it here is what makes the follower part of the same move rather than a reaction to it.
+	axisFollower.Apply(coordsOut);
 }
 
 // Convert user coordinates to head reference point coordinates
 void GCodes::ToolOffsetTransform(MovementState& ms, AxesBitmap explicitAxes) const noexcept
 {
 	ToolOffsetTransform(ms, ms.currentUserPosition, ms.raw.coords, explicitAxes);
+
+	// Nothing commands the follower, so its user coordinate would otherwise never move and M114 and the
+	// object model would report a stale position while the machine coordinate tracked the leader.
+	axisFollower.SyncUserPosition(ms.currentUserPosition, ms.raw.coords, axisScaleFactors);
 }
 
 // Convert head reference point coordinates to user coordinates
@@ -5056,6 +5076,7 @@ void GCodes::SetAxisNotHomed(unsigned int axis) noexcept
 	{
 		axesHomed.ClearBit(axis);
 		axesVirtuallyHomed = axesHomed;
+		axisFollower.NotifyAxisNotHomed(axis);
 		if (axis == Z_AXIS)
 		{
 			zDatumSetByProbing = false;
@@ -5072,6 +5093,7 @@ void GCodes::SetAllAxesNotHomed() noexcept
 	{
 		axesHomed.Clear();
 		axesVirtuallyHomed = axesHomed;
+		axisFollower.Disengage();
 		zDatumSetByProbing = false;
 		Tool::CheckZHopsValid(axesHomed);
 		reprap.MoveUpdated();

@@ -42,6 +42,8 @@ Licence: GPL
 #include <Movement/BedProbing/Grid.h>
 #include <Movement/HomingMode.h>
 #include <Movement/MovementError.h>
+#include <Movement/JogController.h>
+#include <Movement/AxisFollower.h>
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 # include <Storage/CRC32.h>
@@ -98,6 +100,8 @@ class SbcInterface;
 
 class GCodes
 {
+	friend class JogController;						// it builds moves for movement system 0 using the same private machinery that G1 does
+
 public:
 	explicit GCodes(Platform& p) noexcept;
 	void Spin() noexcept;														// Called in a tight loop to make this class work
@@ -269,6 +273,11 @@ public:
 	const MovementState& GetPrimaryMovementState() const noexcept { return moveStates[0]; }		// Temporary support for object model and status report values that only handle a single movement system
 	const MovementState& GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept;
 	const MovementState& GetConstMovementState(const GCodeBuffer& gb) const noexcept;			// Get a reference to the movement state associated with the specified GCode buffer (there is a private non-const version)
+
+	JogController& GetJogController() noexcept { return jogController; }
+	AxisFollower& GetAxisFollower() noexcept { return axisFollower; }
+	MovementState& GetMovementStateForFollower() noexcept { return moveStates[0]; }	// the follower only applies to movement system 0
+	const AxisFollower& GetAxisFollowerForJog() const noexcept { return axisFollower; }
 
 	void RecordEndstopTriggered(size_t axis, HomingMode hmode) noexcept;
 
@@ -670,6 +679,9 @@ private:
 
 	// The following contain the details of moves that the Move module fetches
 	MovementState moveStates[NumMovementSystems];	// Move details
+
+	JogController jogController;				// Velocity-mode movement, e.g. from a joystick
+	AxisFollower axisFollower;					// One axis tracking another, e.g. a Z-independent dust shoe
 
 	size_t numTotalAxes;						// How many axes we have
 	size_t numVisibleAxes;						// How many axes are visible
