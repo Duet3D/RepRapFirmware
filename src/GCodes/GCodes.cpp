@@ -238,6 +238,8 @@ void GCodes::Reset() noexcept
 
 	nextGcodeSource = 0;
 
+	jogController.Stop();
+
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	fileToPrint.Close();
 #endif
@@ -466,6 +468,8 @@ void GCodes::Spin() noexcept
 #endif
 
 	CheckTriggers();
+
+	jogController.Spin();							// keep the movement queue topped up if we are jogging
 
 	// The autoPause buffer has priority, so spin that one first. It may have to wait for other buffers to release locks etc.
 	(void)SpinGCodeBuffer(*AutoPauseGCode());
@@ -1853,6 +1857,11 @@ bool GCodes::LockAllMovementSystemsAndWaitForStandstill(GCodeBuffer& gb) noexcep
 // As a side-effect it updates the user coordinates from the machine coordinates.
 bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept
 {
+	if (msNumber == 0)
+	{
+		jogController.Stop();						// jogging keeps feeding the queue, so we would never reach standstill while it is running
+	}
+
 	// Lock movement to stop another source adding moves to the queue
 	if (!LockResource(gb, MoveResourceBase + msNumber))
 	{
