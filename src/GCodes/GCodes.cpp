@@ -1758,8 +1758,8 @@ bool GCodes::LockAllMovementSystemsAndWaitForStandstill(GCodeBuffer& gb) noexcep
 		}
 	}
 
-	// We failed to lock the ith movement system. To avoid possible deadlock we need to release any later locks that we have.
-	UnlockMovementFrom(gb, i + 1);
+	// We failed to lock the ith movement system. Release the lower ones we took, otherwise two channels each holding their own system deadlock waiting for the other
+	UnlockMovementTakenBelow(gb, i);
 	return false;
 }
 
@@ -5381,7 +5381,7 @@ bool GCodes::LockAllMovement(const GCodeBuffer& gb) noexcept
 	{
 		if (!LockMovement(gb, i))
 		{
-			UnlockMovementFrom(gb, i + 1);			// release any higher locks we own to avoid deadlock
+			UnlockMovementTakenBelow(gb, i);		// release the lower locks we took to avoid deadlock
 			return false;
 		}
 	}
@@ -5395,6 +5395,19 @@ void GCodes::UnlockMovementFrom(const GCodeBuffer& gb, MovementSystemNumber msNu
 	{
 		UnlockMovement(gb, msNumber);
 		++msNumber;
+	}
+}
+
+// Release movement locks below the specified one that we took ourselves, keeping any that were held when the current macro started
+void GCodes::UnlockMovementTakenBelow(const GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept
+{
+	const GCodeMachineState *_ecv_null const mc = gb.LatestMachineState().GetPrevious();
+	for (MovementSystemNumber i = 0; i < msNumber; i++)
+	{
+		if (mc == nullptr || !mc->lockedResources.IsBitSet(MoveResourceBase + i))
+		{
+			UnlockMovement(gb, i);
+		}
 	}
 }
 
@@ -5736,7 +5749,8 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 			if (otherGb.IsLaterThan(thisGb))
 			{
 				// Other input channel has skipped this sync point
-				GetMovementState(thisGb).UpdateCoordinatesFromLastKnownEndpoints();
+				// Update the coordinates of our own movement system, not the commanded one: after M596 they can differ, and the commanded system may be executing moves commanded by the other input channel
+				moveStates[thisGb.GetOwnQueueNumber()].UpdateCoordinatesFromLastKnownEndpoints();
 				thisGb.syncState = GCodeBuffer::SyncState::running;
 				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
 				synced = true;
@@ -5746,7 +5760,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 		}
 
 		// If we get here then the other input channel is also syncing, so it's safe to use the machine axis coordinates of the axes it owns to update our user coordinates
-		GetMovementState(thisGb).UpdateCoordinatesFromLastKnownEndpoints();
+		moveStates[thisGb.GetOwnQueueNumber()].UpdateCoordinatesFromLastKnownEndpoints();
 
 		// Now that we no longer need to read axis coordinates from the other motion system, flag that we have finished syncing
 		thisGb.syncState = GCodeBuffer::SyncState::synced;

@@ -1620,6 +1620,24 @@ static inline motioncalc_t CalcInitialSpeed(uint32_t duration, motioncalc_t dist
 	return distance/(motioncalc_t)duration - OneHalf * a * (motioncalc_t)duration;
 }
 
+#if CHECK_SEGMENTS
+
+// Check a segment for negative duration or overlap with its successor, dumping the list from it if bad
+static void CheckSegment(unsigned int line, MoveSegment *_ecv_null seg) noexcept
+{
+	if (   seg != nullptr
+		&& (   (int32_t)seg->GetDuration() <= 0
+			|| (seg->GetNext() != nullptr && (int32_t)(seg->GetNext()->GetStartTime() - (seg->GetStartTime() + seg->GetDuration())) < 0)
+		   )
+	   )
+	{
+		debugPrintf("bad seg at %u: ", line);
+		MoveSegment::DebugPrintList(seg);
+	}
+}
+
+#endif
+
 // Add a segment into a segment list, which may be empty.
 // If the list is not empty then the new segment may overlap segments already in the list.
 // The units of the input parameters are steps for distance and step clocks for time.
@@ -1629,8 +1647,11 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 {
 	if ((int32_t)duration <= 0)
 	{
-		const StringRef& dbgRef = Platform::genericDebugBuffer.GetRef();
-		dbgRef.printf("Adding zero or negative duration segment: d=%3e a=%.3e\n", (double)distance, (double)a);
+		if (Platform::genericDebugBuffer != nullptr)
+		{
+			const StringRef& dbgRef = Platform::genericDebugBuffer->GetRef();
+			dbgRef.printf("Adding zero or negative duration segment: d=%3e a=%.3e\n", (double)distance, (double)a);
+		}
 		Platform::hasGenericDebug = true;
 	}
 
@@ -1852,11 +1873,14 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 				if (tail->GetFlags().executing)
 				{
 					// Error, the segment we are trying to add overlaps an executing one
-					const StringRef& dbgRef = Platform::genericDebugBuffer.GetRef();
-					dbgRef.printf("Code 3 move error: new: start=%" PRIu32 " overlap=%" PRIu32 " time now=%" PRIu32 ", existing: ",
-									startTime, segStartTime + tail->GetDuration() - startTime, StepTimer::GetMovementTimerTicks());
-					tail->AppendDetails(dbgRef);
-					dbgRef.cat('\n');
+					if (Platform::genericDebugBuffer != nullptr)
+					{
+						const StringRef& dbgRef = Platform::genericDebugBuffer->GetRef();
+						dbgRef.printf("Code 3 move error: new: start=%" PRIu32 " overlap=%" PRIu32 " time now=%" PRIu32 ", existing: ",
+										startTime, segStartTime + tail->GetDuration() - startTime, StepTimer::GetMovementTimerTicks());
+						tail->AppendDetails(dbgRef);
+						dbgRef.cat('\n');
+					}
 					Platform::shouldTurnOffHeaters = true;
 					Platform::hasGenericDebug = true;
 					StepErrorHalt();

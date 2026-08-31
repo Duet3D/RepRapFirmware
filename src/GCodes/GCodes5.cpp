@@ -11,6 +11,8 @@
 #include "GCodeBuffer/GCodeBuffer.h"
 #include <Tools/Tool.h>
 #include <Platform/RepRap.h>
+#include <Movement/Move.h>
+#include <Movement/MoveDebugFlags.h>
 #include <Heating/Heat.h>
 
 // Check if the specified heater is used by a current tool other than the specified one
@@ -62,6 +64,32 @@ GCodeResult GCodes::ExecuteM400(GCodeBuffer& gb, const StringRef& reply) THROWS(
 {
 	if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 	{
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+		{
+			// Audit before ReleaseNonToolAxesAndExtruders re-stamps the endpoints: at standstill every owned axis must sit on its ring endpoint, a residual means motion was lost or truncated
+			const MovementState& ms = GetMovementState(gb);
+			Move& move = reprap.GetMove();
+			int32_t ringEnds[MaxAxesPlusExtruders];
+			move.GetLastEndpoints(ms.GetNumber(), ms.logicalDrivesOwned, ringEnds);
+			bool residualFound = false;
+			ms.logicalDrivesOwned.Iterate([&](unsigned int drive, unsigned int) noexcept
+				{
+					if (drive < numTotalAxes)
+					{
+						const int32_t diff = ringEnds[drive] - move.GetLiveMotorPosition(drive);
+						if (labs(diff) > 4)
+						{
+							Platform::moveWarningBuffer->catf("M400 residual drive %u: %" PRIi32 " steps\n", drive, diff);
+							Platform::hasMoveWarning = true;
+							residualFound = true;
+						}
+					}
+				});
+			if (residualFound && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::HaltOnBadMotion))
+			{
+				gb.ThrowGCodeException("M400 position residual detected, halting");
+			}
+		}
 		uint32_t param = 0;
 		bool seen = false;
 		gb.TryGetLimitedUIValue('S', param, seen, 2);

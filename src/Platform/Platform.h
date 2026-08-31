@@ -511,9 +511,20 @@ public:
 	// Build up a message in genericDebugBuffer, then set haveGenericDebug to true to indicate it is complete and ready to output.
 	// Optionally set shouldTurnOffHeaters before setting hasGenericDebug.
 	// It will be set false again when the message has been output and the buffer is free again.
-	static String<StringLength256> genericDebugBuffer;
+	static String<StringLength256> *_ecv_null genericDebugBuffer;
 	static bool hasGenericDebug;
 	static bool shouldTurnOffHeaters;
+
+	// Build up a warning in moveWarningBuffer the same way, then set hasMoveWarning. Emitted from Spin because the
+	// producers run on the Move task, whose stack cannot take the logging and output buffer paths of Message.
+	// Both buffers are allocated when debugging is first enabled, before the debug flags become visible, so the
+	// flag-gated producers never see a null pointer and the memory is not wasted in normal use. The step error
+	// producers are not flag-gated and must check for a null buffer; their flags and safety actions do not depend on it
+#if SUPPORT_ASYNC_MOVES
+	static String<StringLength256> *_ecv_null moveWarningBuffer;
+	static bool hasMoveWarning;
+#endif
+	static void EnsureDebugBuffers() noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS

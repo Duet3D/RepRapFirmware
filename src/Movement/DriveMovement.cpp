@@ -307,13 +307,16 @@ static inline motioncalc_t fastLimSqrtm(motioncalc_t f) noexcept
 // Notify a step error. This always returns false so that CalcNextStepTimeFull can tail-chain to it.
 bool DriveMovement::LogStepError(uint8_t type, float info, const MoveSegment *seg) noexcept
 {
-	const StringRef& dbgRef = Platform::genericDebugBuffer.GetRef();
-	dbgRef.printf("Code %u move error: info=%.3g, seg: ", type, (double)info);
-	if (seg != nullptr)
+	if (Platform::genericDebugBuffer != nullptr)
 	{
-		seg->AppendDetails(dbgRef);
+		const StringRef& dbgRef = Platform::genericDebugBuffer->GetRef();
+		dbgRef.printf("Code %u move error: info=%.3g, seg: ", type, (double)info);
+		if (seg != nullptr)
+		{
+			seg->AppendDetails(dbgRef);
+		}
+		dbgRef.cat('\n');
 	}
-	dbgRef.cat('\n');
 	Platform::shouldTurnOffHeaters = true;
 	Platform::hasGenericDebug = true;
 	reprap.GetMove().StepErrorHalt();

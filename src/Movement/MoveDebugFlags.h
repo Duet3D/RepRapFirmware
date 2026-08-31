@@ -22,6 +22,7 @@ namespace MoveDebugFlags
 	constexpr unsigned int Segments = 12;
 	constexpr unsigned int PhaseStep = 13;
 	constexpr unsigned int PrintTransforms = 14;
+	constexpr unsigned int HaltOnBadMotion = 15;
 }
 
 #endif /* SRC_MOVEMENT_MOVEDEBUGFLAGS_H_ */

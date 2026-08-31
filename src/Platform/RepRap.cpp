@@ -1119,6 +1119,10 @@ GCodeResult RepRap::ProcessM111(GCodeBuffer& gb, const StringRef& reply) THROWS(
 	{
 		if (module != Module::numModules)
 		{
+			if (flags != 0)
+			{
+				Platform::EnsureDebugBuffers();
+			}
 			debugMaps[module].SetFromRaw(flags);
 		}
 		else if (flags != 0)
@@ -1190,6 +1194,10 @@ GCodeResult RepRap::ProcessRemoteM111(const CanMessageGeneric& msg, const String
 	{
 		if (module < Module::numModules)
 		{
+			if (flags != 0)
+			{
+				Platform::EnsureDebugBuffers();
+			}
 			debugMaps[module].SetFromRaw(flags);
 		}
 		else if (flags != 0)

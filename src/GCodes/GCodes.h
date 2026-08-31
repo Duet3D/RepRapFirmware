@@ -366,6 +366,7 @@ private:
 	void UnlockMovement(const GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept;	// Unlock a particular movement system, if we own it
 #if SUPPORT_ASYNC_MOVES
 	void UnlockMovementFrom(const GCodeBuffer& gb, MovementSystemNumber firstMsNumber) noexcept;	// Release movement locks greater or equal to than the specified one
+	void UnlockMovementTakenBelow(const GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept;	// Release movement locks below the specified one that were not held when the current macro started
 #endif
 	bool WaitForEndstopOrProbingMoveToFinish(GCodeBuffer& gb) noexcept;			// Wait for movement to stop after performing a move that may terminate early
 
