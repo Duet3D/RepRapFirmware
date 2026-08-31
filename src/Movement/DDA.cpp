@@ -586,6 +586,13 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	// speed lower than the configured minimum movement speed. We must apply the minimum speed first and then limit it if necessary after that.
 	requestedSpeed = min<float>(max<float>(reqSpeed, move.MinMovementSpeed()),
 								VectorBoxIntersection(normalisedDirectionVector, move.MaxFeedrates()));
+#if SUPPORT_ASYNC_MOVES
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves) && reqSpeed > 1.3 * requestedSpeed)
+	{
+		Platform::moveWarningBuffer->catf("Feed clamp: req=%.1fmm/s allowed=%.1fmm/s dist=%.2fmm it=%u fpos=%" PRIu32 "\n", (double)InverseConvertSpeedToMmPerSec(reqSpeed), (double)InverseConvertSpeedToMmPerSec(requestedSpeed), (double)totalDistance, nextMove.inverseTimeMode ? 1u : 0u, (uint32_t)filePos);
+		Platform::hasMoveWarning = true;
+	}
+#endif
 
 	// On a Cartesian printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
 	// for diagonal moves. On other architectures, this is not OK and any movement in the XY plane should be limited on other ways.
@@ -1259,12 +1266,48 @@ void DDA::Prepare(DDARing& ring,
 		{
 			afterPrepare.moveStartTime = now + MoveTiming::AbsoluteMinimumPreparedTime;
 			move.AddPrepareHiccup();		// move was supposed to follow the previous one directly, so record a hiccup
+#if SUPPORT_ASYNC_MOVES
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+			{
+				Platform::moveWarningBuffer->catf("Late continuation: u=%.1fmm/s late=%" PRIi32 " now=%" PRIu32 "\n", (double)InverseConvertSpeedToMmPerSec(startSpeed), (int32_t)(now + MoveTiming::AbsoluteMinimumPreparedTime - prevEndTime), now);
+				Platform::hasMoveWarning = true;
+			}
+#endif
 		}
 	}
 	else
 	{
 		afterPrepare.moveStartTime = now + localPrepareAdvanceTime;
+#if SUPPORT_ASYNC_MOVES
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves) && startSpeed > 0.0)
+		{
+			Platform::moveWarningBuffer->catf("Orphaned continuation: u=%.1fmm/s prev state %u now=%" PRIu32 "\n", (double)InverseConvertSpeedToMmPerSec(startSpeed), (unsigned int)prev->GetState(), now);
+			Platform::hasMoveWarning = true;
+		}
+#endif
 	}
+
+#if SUPPORT_ASYNC_MOVES
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+	{
+		// Catch moves whose per-drive distance cannot fit in the planned duration - the collapsed-duration failure streams many steps in a tiny window and no other detector sees it.
+		// Only owned drives generate motion; unowned endpoint deltas are stale pinned copies patched later by SetLastEndpoints and must not be flagged
+		const float moveSeconds = (float)clocksNeeded * (1.0f / (float)StepClockRate);
+		for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
+		{
+			if (ownedDrives.IsBitSet(drive))
+			{
+				const float driveMm = (float)labs(endPoint[drive] - prev->endPoint[drive]) / move.DriveStepsPerMm(drive);
+				if (driveMm > 0.01 && driveMm > 1.3 * moveSeconds * InverseConvertSpeedToMmPerSec(move.MaxFeedrate(drive)))
+				{
+					Platform::moveWarningBuffer->catf("Overspeed drive %u: %.2fmm in %.4fs dv=%.4f ep=%" PRIi32 " pep=%" PRIi32 " fpos=%" PRIu32 "\n",
+						drive, (double)driveMm, (double)moveSeconds, (double)directionVector[drive], endPoint[drive], prev->endPoint[drive], (uint32_t)filePos);
+					Platform::hasMoveWarning = true;
+				}
+			}
+		}
+	}
+#endif
 
 	if (simMode < SimulationMode::normal)
 	{

@@ -338,8 +338,26 @@ size_t Platform::GetNumGpOutputsToReport() const noexcept
 }
 
 bool Platform::deliberateError = false;						// true if we deliberately caused an exception for testing purposes
-String<StringLength256> Platform::genericDebugBuffer;
+String<StringLength256> *_ecv_null Platform::genericDebugBuffer = nullptr;
 bool Platform::hasGenericDebug = false;
+#if SUPPORT_ASYNC_MOVES
+String<StringLength256> *_ecv_null Platform::moveWarningBuffer = nullptr;
+bool Platform::hasMoveWarning = false;
+#endif
+
+void Platform::EnsureDebugBuffers() noexcept
+{
+	if (genericDebugBuffer == nullptr)
+	{
+		genericDebugBuffer = new String<StringLength256>();
+	}
+#if SUPPORT_ASYNC_MOVES
+	if (moveWarningBuffer == nullptr)
+	{
+		moveWarningBuffer = new String<StringLength256>();
+	}
+#endif
+}
 bool Platform::shouldTurnOffHeaters = false;
 SharedSpiDevice *_ecv_null Platform::mainSharedSpiDevice = nullptr;
 
@@ -788,13 +806,22 @@ void Platform::Spin() noexcept
 	// Check for generic debug
 	if (hasGenericDebug)
 	{
-		Message(AddError(MessageType::GenericMessage), genericDebugBuffer.c_str());
+		Message(AddError(MessageType::GenericMessage), (genericDebugBuffer != nullptr) ? genericDebugBuffer->c_str() : "step error occurred but no debug buffer was allocated, use M111 to record details\n");
 		if (shouldTurnOffHeaters)
 		{
 			reprap.GetHeat().SwitchOffAll(true);
 		}
 		hasGenericDebug = false;
 	}
+
+#if SUPPORT_ASYNC_MOVES
+	if (hasMoveWarning && moveWarningBuffer != nullptr)
+	{
+		Message(WarningMessage, moveWarningBuffer->c_str());
+		moveWarningBuffer->Clear();
+		hasMoveWarning = false;
+	}
+#endif
 
 	// Check for M111 debug messages stored in the optional buffer
 	while (!isrDebugBuffer.IsEmpty())
