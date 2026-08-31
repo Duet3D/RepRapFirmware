@@ -386,6 +386,8 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 		return GCodeResult::error;
 	}
 
+	const uint32_t zProbeNumber = gb.Seen('K') ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
+
 	if (gb.Seen('P'))					// we use P not C, because C may be an axis
 	{
 		// Setting the port name(s), so there must be just one axis and we must be using switch-type endstops
@@ -447,12 +449,9 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 					return GCodeResult::error;
 #endif
 				case EndStopType::zProbeAsEndstop:
-					{
-						// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
-						const uint32_t zProbeNumber = gb.Seen('K') ? gb.GetUIValue() : 0;
-						ReplaceObject(axisEndstops[axis], new ZProbeEndstop(axis, pos, zProbeNumber));
-						break;
-					}
+					// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
+					ReplaceObject(axisEndstops[axis], new ZProbeEndstop(axis, pos, zProbeNumber));
+					break;
 
 				case EndStopType::inputPin:
 					if (   axisEndstops[axis] == nullptr
