@@ -209,13 +209,6 @@ void GCodes::Init() noexcept
 
 	laserMaxPower = DefaultMaxLaserPower;
 	laserPowerSticky = false;
-
-#if NUM_ASYNC_CHANNELS != 0
-	reprap.GetPlatform().GetAsyncPort(0)->SetInterruptCallback(GCodes::CommandEmergencyStop);
-#endif
-#if NUM_ASYNC_CHANNELS > 1
-	reprap.GetPlatform().GetAsyncPort(1)->SetInterruptCallback(GCodes::CommandEmergencyStop);
-#endif
 }
 
 // This is called from Init and when doing an emergency stop

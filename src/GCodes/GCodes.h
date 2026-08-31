@@ -262,6 +262,9 @@ public:
 	const GCodeBuffer *_ecv_null GetInput(size_t n) const noexcept { return gcodeSources[n]; }
 	const GCodeBuffer *_ecv_null GetInput(GCodeChannel n) const noexcept { return gcodeSources[n.RawValue()]; }
 	GCodeBuffer *_ecv_null GetSerialGCodeBuffer(size_t serialPortNumber) const noexcept;
+#if NUM_ASYNC_CHANNELS != 0
+	static void CommandEmergencyStop(AsyncSerial *p) noexcept;			// called from the serial ISR when the PanelDue halt sequence is received
+#endif
 
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
 
@@ -606,7 +609,6 @@ private:
 	static constexpr uint8_t serialChannelForPanelDueFlashing = FirstAuxChannel;
 # endif
 	static bool emergencyStopCommanded;
-	static void CommandEmergencyStop(AsyncSerial *p) noexcept;
 #endif
 
 	Platform& platform;													// The RepRap machine
