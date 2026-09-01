@@ -105,7 +105,8 @@ enum class PinUsedBy : uint8_t
 	temporaryInput,
 	sensor,
 	led,
-	sdCard
+	sdCard,
+	i2c
 };
 
 #include <Config/Pins.h>
@@ -743,6 +744,7 @@ const NvicPriority NvicPriorityWiFiUartRx = 2;		// UART used to receive debug da
 const NvicPriority NvicPriorityWiFiUartTx = 3;		// the SAME5x driver makes FreeRTOS calls during transmission, so use a lower priority
 const NvicPriority NvicPriorityDriverDiag = 4;
 const NvicPriority NvicPriorityAdc = 4;
+const NvicPriority NvicPriorityI2C = 4;				// the SharedI2CMaster ISR makes FreeRTOS calls, so this must be no higher priority than the FreeRTOS max syscall priority
 #else
 const NvicPriority NvicPriorityAuxUart = 3;			// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 const NvicPriority NvicPriorityWiFiUart = 3;		// UART used to receive debug data from the WiFi module

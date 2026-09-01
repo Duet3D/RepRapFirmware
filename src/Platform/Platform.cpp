@@ -1425,9 +1425,19 @@ void Platform::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 
 #ifdef I2C_IFACE
 		{
+# if SAM4S || SAM4E
 			const TwoWire::ErrorCounts errs = I2C_IFACE.GetErrorCounts(true);
 			reply.lcatf("I2C nak errors %" PRIu32 ", send timeouts %" PRIu32 ", receive timeouts %" PRIu32 ", finishTimeouts %" PRIu32 ", resets %" PRIu32 ", bus recoveries %" PRIu32,
 				errs.naks, errs.sendTimeouts, errs.recvTimeouts, errs.finishTimeouts, errs.resets, errs.recoveries);
+# else
+			if (I2C::sharedI2C != nullptr)
+			{
+				I2cErrors errs;
+				I2C::sharedI2C->GetAndClearErrors(errs);
+				reply.lcatf("I2C bus errors %u, naks %u, contentions %u, other errors %u, bus recoveries %u",
+					errs.busErrors, errs.naks, errs.contentions, errs.otherErrors, errs.recoveries);
+			}
+# endif
 		}
 #endif
 		break;
@@ -2603,7 +2613,10 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 				bValues[i] = (uint8_t)valuesToSend[i];
 			}
 
-			I2C::Init();
+			if (!I2C::Init(reply))
+			{
+				return GCodeResult::error;
+			}
 			const size_t bytesTransferred = I2C::Transfer(address, bValues, numToSend, numToReceive);
 
 			if (bytesTransferred < numToSend)
@@ -2915,7 +2928,10 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 	case -1:
 		{
 			const uint32_t address = gb.GetLimitedUIValue('A', 1u << 10);
-			I2C::Init();
+			if (!I2C::Init(reply))
+			{
+				return GCodeResult::error;
+			}
 			uint8_t bValues[MaxI2cOrModbusValues];
 			const size_t bytesRead = I2C::Transfer(address, bValues, 0, numValues);
 

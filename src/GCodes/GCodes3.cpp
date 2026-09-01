@@ -33,7 +33,7 @@
 # include <ClosedLoop/ClosedLoop.h>
 #endif
 
-#ifdef I2C_IFACE
+#if defined(I2C_IFACE) && (SAM4S || SAM4E)
 # include <Wire.h>
 #endif
 
