@@ -560,7 +560,7 @@ public:
 	unsigned int GetMicrostepping(bool& interpolation) const noexcept;
 	bool SetDriverMode(unsigned int mode) noexcept;
 	DriverMode GetDriverMode() const noexcept;
-	void SetCurrent(float current) noexcept;
+	GCodeResult SetCurrent(size_t driver, float current, const StringRef& reply) noexcept;
 	void Enable(bool en) noexcept;
 #if HAS_STALL_DETECT
 	void SetStallDetectThreshold(int sgThreshold) noexcept;
@@ -1485,15 +1485,25 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 }
 
 // Set the motor current
-void TmcDriverState::SetCurrent(float current) noexcept
+GCodeResult TmcDriverState::SetCurrent(size_t driver, float current, const StringRef& reply) noexcept
 {
-	motorCurrent = constrain<float>(current, 50.0,
+	const float maxCurrent =
 #if SUPPORT_TMC2240 && (SUPPORT_TMC2208 || SUPPORT_TMC2209)
 													(isTmc2240) ? MaximumTmc2240MotorCurrent :
 #endif
-													MaximumMotorCurrent
-									);
+													MaximumMotorCurrent;
+	motorCurrent = constrain<float>(current, 50.0, maxCurrent);
 	UpdateCurrent();
+	if (motorCurrent < current)
+	{
+#if SUPPORT_CAN_EXPANSION
+		reply.lcatf("Driver %u.%u current limited to %umA", CanInterface::GetCanAddress(), driver, (unsigned int)maxCurrent);
+#else
+		reply.lcatf("Driver %u current limited to %umA", driver, (unsigned int)MaxMotorCurrent);
+#endif
+		return GCodeResult::error;
+	}
+	return GCodeResult::ok;
 }
 
 void TmcDriverState::UpdateCurrent() noexcept
@@ -2361,12 +2371,14 @@ uint32_t SmartDrivers::GetAxisNumber(size_t drive) noexcept
 	return (drive < GetNumTmcDrivers()) ? driverStates[drive].GetAxisNumber() : 0;
 }
 
-void SmartDrivers::SetCurrent(size_t drive, float current) noexcept
+GCodeResult SmartDrivers::SetCurrent(size_t drive, float current, const StringRef& reply) noexcept
 {
 	if (drive < GetNumTmcDrivers())
 	{
-		driverStates[drive].SetCurrent(current);
+		return driverStates[drive].SetCurrent(drive, current, reply);
 	}
+	// We shouldn't get here because the driver number should be in range, so don't bother to report an error
+	return GCodeResult::ok;
 }
 
 void SmartDrivers::EnableDrive(size_t drive, bool en) noexcept

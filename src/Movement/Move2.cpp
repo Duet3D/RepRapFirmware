@@ -738,34 +738,20 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 #if SUPPORT_CAN_EXPANSION
 	CanDriversData<float> canDriversToUpdate;
 
-	IterateDrivers(axisOrExtruder,
-							[this, axisOrExtruder, code](uint8_t driver)
-							{
-								if (code == 917)
-								{
-# if HAS_SMART_DRIVERS
-									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
-# endif
-								}
-								else
-								{
-									UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
-								}
-							},
-							[this, axisOrExtruder, code, &canDriversToUpdate](DriverId driver)
-							{
-								if (code == 917)
-								{
-									canDriversToUpdate.AddEntry(driver, standstillCurrentPercent[axisOrExtruder]);
-								}
-								else
-								{
-									canDriversToUpdate.AddEntry(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
-								}
-							}
-						);
 	if (code == 917)
 	{
+		IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder](uint8_t driver)
+							{
+# if HAS_SMART_DRIVERS
+								SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
+# endif
+							},
+							[this, axisOrExtruder, &canDriversToUpdate](DriverId driver)
+							{
+								canDriversToUpdate.AddEntry(driver, standstillCurrentPercent[axisOrExtruder]);
+							}
+						);
 # if SUPPORT_PHASE_STEPPING
 		dms[axisOrExtruder].phaseStepControl.SetStandstillCurrent(standstillCurrentPercent[axisOrExtruder]);
 # endif
@@ -773,26 +759,45 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 	}
 	else
 	{
-		return CanInterface::SetRemoteDriverCurrents(canDriversToUpdate, reply);
+		GCodeResult rslt = GCodeResult::ok;
+		IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder, &rslt, reply](uint8_t driver)
+							{
+								rslt = max<GCodeResult>(rslt, UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder], reply));
+							},
+							[this, axisOrExtruder, &canDriversToUpdate](DriverId driver)
+							{
+								canDriversToUpdate.AddEntry(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
+							}
+						);
+		return max<GCodeResult>(rslt, CanInterface::SetRemoteDriverCurrents(canDriversToUpdate, reply));
 	}
 #else
-	IterateDrivers(axisOrExtruder,
-							[this, axisOrExtruder, code](uint8_t driver)
+	if (code == 917)
+	{
+		IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder](uint8_t driver)
 							{
-								if (code == 917)
-								{
 # if HAS_SMART_DRIVERS
-									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
+								SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
 # endif
-								}
-								else
-								{
-									UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
-								}
 							}
-	);
-	return GCodeResult::ok;
+		);
+		return GCodeResult::ok;
+	}
+	else
+	{
+		GCodeResult rslt = GCodeResult::ok;
+		IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder, &rslt, reply](uint8_t driver)
+							{
+								rslt = max<GCodeResult>(rslt, UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder], reply));
+							}
+		);
+		return rslt;
+	}
 #endif
+
 }
 
 #ifdef DUET3_MB6XD
@@ -865,19 +870,39 @@ void Move::GetActualDriverTimings(float timings[4]) noexcept
 #endif
 
 // This must not be called from an ISR, or with interrupts disabled.
-void Move::UpdateMotorCurrent(size_t driver, float current) noexcept
+GCodeResult Move::UpdateMotorCurrent(size_t driver, float current, const StringRef& reply) noexcept
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
 #if HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
 		{
-			SmartDrivers::SetCurrent(driver, current);
+			return SmartDrivers::SetCurrent(driver, current, reply);
 		}
 #else
-		// otherwise we can't set the motor current
+		// Otherwise we can't set the motor current
+# if SUPPORT_CAN_EXPANSION
+		reply.lcatf("cannot set motor current for driver %u.%u", CanInterface::GetCanAddress(), driver);
+# else
+		reply.lcatf("cannot set motor current for driver %u", driver);
+# endif
+		return GCodeResult::warning;
 #endif
 	}
+
+#if SUPPORT_CAN_EXPANSION
+	reply.lcatf("no driver %u.%u", CanInterface::GetCanAddress(), driver);
+#else
+	reply.lcatf("no driver %u", driver);
+#endif
+	return GCodeResult::error;
+}
+
+// This must not be called from an ISR, or with interrupts disabled.
+void Move::UpdateMotorCurrent(size_t driver, float current) noexcept
+{
+	String<1> dummy;
+	(void)UpdateMotorCurrent(driver, current, dummy.GetRef());
 }
 
 // Get the configured motor current for an axis or extruder
@@ -1482,7 +1507,7 @@ GCodeResult Move::EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<floa
 							{
 								motorCurrents[driver] = msg.values[count];
 								motorCurrentFraction[driver] = 1.0;
-								UpdateMotorCurrent(driver, msg.values[count]);
+								rslt = max<GCodeResult>(rslt, UpdateMotorCurrent(driver, msg.values[count], reply));
 							}
 						}
 				   );

@@ -136,7 +136,7 @@ public:
 		pre(drive < GetNumActualDirectDrivers());														// Deal with M569.0 for one local driver
 	GCodeResult ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) THROWS(GCodeException)
 		pre(driver < GetNumActualDirectDrivers());
-	GCodeResult SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply) noexcept;
+	GCodeResult SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, int code, const StringRef& reply) noexcept;
 
 	int GetMotorCurrent(size_t axisOrExtruder, int code) const noexcept;
 	void SetIdleCurrentFactor(float f) noexcept;
@@ -592,7 +592,9 @@ private:
 	void EngageBrake(size_t driver) noexcept;
 	void DisengageBrake(size_t driver) noexcept;
 
-	void UpdateMotorCurrent(size_t driver, float current) noexcept;
+	GCodeResult UpdateMotorCurrent(size_t driver, float current, const StringRef& reply) noexcept;
+	void UpdateMotorCurrent(size_t driver, float current) noexcept;				// simplified version of above when we want to ignore errors/warnings
+
 	void SetOneDriverDirection(uint8_t driver, bool direction) noexcept pre(driver < GetNumActualDirectDrivers());
 
 	StandardDriverStatus GetLocalDriverStatus(size_t driver) const noexcept;
