@@ -1269,6 +1269,16 @@ int ObjectModelTableEntry::IdCompare(const char *_ecv_array id) const noexcept
 			: -1;
 }
 
+// The ID string carries the '^' index markers that the expression parser appended, so report only the part before them.
+// This is a separate noinline function so that the buffer doesn't add to the stack usage of the recursive caller
+[[noreturn]] static void __attribute__((noinline)) ThrowUnknownValueException(const ObjectExplorationContext& context, const char *_ecv_array idString) THROWS(GCodeException)
+{
+	const char *_ecv_array _ecv_null const indexMarker = strchr(idString, '^');
+	String<StringLength50> shortId;
+	shortId.copy(idString, (indexMarker != nullptr) ? (size_t)(indexMarker - idString) : strlen(idString));
+	throw context.ConstructParseException("unknown value '%s'", shortId.c_str());
+}
+
 // Get the value of an object
 ExpressionValue ObjectModel::GetObjectValueUsingTableNumber(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *_ecv_array idString, uint8_t tableNumber) const THROWS(GCodeException)
 decrease(strlen(idString))	// recursion variant
@@ -1306,7 +1316,7 @@ decrease(strlen(idString))	// recursion variant
 		return ExpressionValue(false);
 	}
 
-	throw context.ConstructParseException("unknown value '%s'", idString);
+	ThrowUnknownValueException(context, idString);
 }
 
 ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *_ecv_array idString) const THROWS(GCodeException)

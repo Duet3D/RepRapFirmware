@@ -2370,6 +2370,7 @@ time_t ExpressionParser::ParseDateTime(const char *_ecv_array s) const THROWS(GC
 void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *_ecv_array name, ObjectExplorationContext& context, bool isParameter) THROWS(GCodeException)
 {
 	const char *_ecv_array _ecv_null pos = strchr(name, '^');
+	const size_t nameLength = (pos != nullptr) ? (size_t)(pos - name) : strlen(name);
 	if (pos != nullptr)
 	{
 		// Indexing into a variable
@@ -2432,7 +2433,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 				rslt.SetBool(var != nullptr);
 				return;
 			}
-			ThrowParseException("Cannot index into variable or parameter '%s' of non-array type", name);
+			ThrowVariableException("Cannot index into variable or parameter '%s' of non-array type", name, nameLength);
 		}
 		else if (context.WantExists())
 		{
@@ -2462,7 +2463,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 		// else fall through to throw error
 	}
 
-	ThrowParseException((isParameter) ? "unknown parameter '%s'" : "unknown variable '%s'", name);
+	ThrowVariableException(isParameter ? "unknown parameter '%s'" : "unknown variable '%s'", name, nameLength);
 }
 
 // Parse a quoted string, given that the current character is double-quote
@@ -2565,6 +2566,14 @@ void ExpressionParser::ThrowParseException(const char *_ecv_array str, const cha
 void ExpressionParser::ThrowParseException(const char *_ecv_array str, uint32_t param) const THROWS(GCodeException)
 {
 	throw GCodeException(gb, GetColumn(), str, param);
+}
+
+// The name passed to this function carries the '^' index markers that ParseIdentifierExpression appended, so report only the part before them
+void ExpressionParser::ThrowVariableException(const char *_ecv_array str, const char *_ecv_array name, size_t nameLength) const THROWS(GCodeException)
+{
+	String<StringLength50> shortName;
+	shortName.copy(name, nameLength);
+	ThrowParseException(str, shortName.c_str());
 }
 
 // Call this before making a recursive call, or before calling a function that needs a lot of stack from a recursive function
