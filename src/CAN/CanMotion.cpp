@@ -46,8 +46,10 @@ namespace CanMotion
 	static volatile uint32_t whenRevertedAll;
 	static Mutex stopListMutex;
 	static uint8_t nextSeq[CanId::MaxCanAddress + 1] = { 0 };
+	static bool warnedNoPaSnapshotSupport[CanId::MaxCanAddress + 1] = { false };
 
 	static CanMessageBuffer *_ecv_null GetBuffer(const PrepParams& params, DriverId canDriver) noexcept;
+	static bool BoardSupportsMovementPaSnapshot(CanAddress boardAddress) noexcept;
 	static void FreeMovementBuffers() noexcept;
 }
 
@@ -69,6 +71,16 @@ void CanMotion::FreeMovementBuffers() noexcept
 		movementBufferList = p->next;
 		CanMessageBuffer::Free(p);
 	}
+}
+
+bool CanMotion::BoardSupportsMovementPaSnapshot(CanAddress boardAddress) noexcept
+{
+	const ExpansionBoardData *const boardData = reprap.GetExpansion().GetBoardDetails(boardAddress);
+	if (boardData == nullptr)
+	{
+		return false;
+	}
+	return boardData->supportsMovementPaSnapshot;
 }
 
 // This is called by DDA::Prepare at the start of preparing a movement
@@ -140,6 +152,7 @@ CanMessageBuffer *_ecv_null CanMotion::GetBuffer(const PrepParams& params, Drive
 
 		move->acceleration = params.acceleration/params.totalDistance;					// scale the acceleration to correspond to unit distance
 		move->deceleration = -params.deceleration/params.totalDistance;					// scale the deceleration to correspond to unit distance
+		move->pressureAdvanceClocks = 0.0;
 		move->extruderDrives = 0;
 		move->numDrivers = canDriver.localDriver + 1;
 		move->zero1 = move->zero2 = 0;
@@ -168,14 +181,15 @@ void CanMotion::AddAxisMovement(const PrepParams& params, DriverId canDriver, in
 	}
 }
 
-void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver, float extrusion, bool usePressureAdvance) noexcept
+void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver, float extrusion, float pressureAdvanceClocks) noexcept
 {
 	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
 	if (buf != nullptr)
 	{
 		buf->msg.moveLinearShaped.perDrive[canDriver.localDriver].extrusion = extrusion;
 		buf->msg.moveLinearShaped.extruderDrives |= 1u << canDriver.localDriver;
-		buf->msg.moveLinearShaped.usePressureAdvance = usePressureAdvance;
+		buf->msg.moveLinearShaped.usePressureAdvance = (pressureAdvanceClocks > 0.0);
+		buf->msg.moveLinearShaped.pressureAdvanceClocks = pressureAdvanceClocks;
 	}
 }
 
@@ -199,6 +213,21 @@ uint32_t CanMotion::FinishMovement(const DDA& dda, uint32_t moveStartTime, bool 
 				CanMessageMovementLinearShaped& msg = buf->msg.moveLinearShaped;
 				if (msg.HasMotion())
 				{
+					if (!BoardSupportsMovementPaSnapshot(buf->id.Dst()))
+					{
+						if (!warnedNoPaSnapshotSupport[buf->id.Dst()])
+						{
+							warnedNoPaSnapshotSupport[buf->id.Dst()] = true;
+							reprap.GetPlatform().MessageF(ErrorMessage,
+								"CAN board %u is missing movement PA snapshot support; flash matching firmware on all boards\n",
+								buf->id.Dst());
+						}
+						reprap.EmergencyStop();
+						CanMessageBuffer::Free(buf);
+						buf = nextBuffer;
+						continue;
+					}
+
 					msg.whenToExecute = moveStartTime;
 					uint8_t& seq = nextSeq[buf->id.Dst()];
 					msg.seq = seq;
