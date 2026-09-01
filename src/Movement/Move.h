@@ -592,8 +592,7 @@ private:
 	void EngageBrake(size_t driver) noexcept;
 	void DisengageBrake(size_t driver) noexcept;
 
-	GCodeResult UpdateMotorCurrent(size_t driver, float current, const StringRef& reply) noexcept;
-	void UpdateMotorCurrent(size_t driver, float current) noexcept;				// simplified version of above when we want to ignore errors/warnings
+	void UpdateMotorCurrent(size_t driver, float current) noexcept;
 
 	void SetOneDriverDirection(uint8_t driver, bool direction) noexcept pre(driver < GetNumActualDirectDrivers());
 

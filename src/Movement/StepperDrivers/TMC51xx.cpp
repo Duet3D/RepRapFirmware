@@ -432,7 +432,7 @@ public:
 #endif
 	bool SetDriverMode(unsigned int mode) noexcept;
 	DriverMode GetDriverMode() const noexcept;
-	GCodeResult SetCurrent(size_t driver, float current, const StringRef& reply) noexcept;
+	void SetCurrent(float current) noexcept;
 	void Enable(bool en) noexcept;
 	bool UpdatePending() const noexcept { return (registersToUpdate.load() | newRegistersToUpdate.load()) != 0; }
 	void SetStallDetectThreshold(int sgThreshold) noexcept;
@@ -1167,20 +1167,10 @@ void TmcDriverState::AppendLutCorrections(const StringRef& reply) const noexcept
 }
 
 // Set the motor current
-GCodeResult TmcDriverState::SetCurrent(size_t driver, float current, const StringRef& reply) noexcept
+void TmcDriverState::SetCurrent(float current) noexcept
 {
 	motorCurrent = constrain<float>(current, MinimumMotorCurrent, MaxMotorCurrent);
 	UpdateCurrent();
-	if (motorCurrent < current)
-	{
-#if SUPPORT_CAN_EXPANSION
-		reply.lcatf("Driver %u.%u current limited to %umA", CanInterface::GetCanAddress(), driver, (unsigned int)MaxMotorCurrent);
-#else
-		reply.lcatf("Driver %u current limited to %umA", driver, (unsigned int)MaxMotorCurrent);
-#endif
-		return GCodeResult::error;
-	}
-	return GCodeResult::ok;
 }
 
 float TmcDriverState::CalculateCurrent() const noexcept
@@ -2146,14 +2136,17 @@ uint32_t SmartDrivers::GetAxisNumber(size_t drive) noexcept
 	return (drive < numTmcDrivers) ? driverStates[drive].GetAxisNumber() : 0;
 }
 
-GCodeResult SmartDrivers::SetCurrent(size_t driver, float current, const StringRef& reply) noexcept
+void SmartDrivers::SetCurrent(size_t driver, float current) noexcept
 {
 	if (driver < numTmcDrivers)
 	{
-		return driverStates[driver].SetCurrent(driver, current, reply);
+		driverStates[driver].SetCurrent(current);
 	}
-	// We shouldn't get here because the driver number should be in range, so don't bother to report an error
-	return GCodeResult::ok;
+}
+
+float SmartDrivers::GetMaxMotorCurrent(size_t driver) noexcept
+{
+	return MaxMotorCurrent;										// in this module, all drivers support the same maximum current
 }
 
 void SmartDrivers::EnableDrive(size_t driver, bool en) noexcept

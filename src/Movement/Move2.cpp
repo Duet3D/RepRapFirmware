@@ -763,7 +763,17 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 		IterateDrivers(axisOrExtruder,
 							[this, axisOrExtruder, &rslt, reply](uint8_t driver)
 							{
-								rslt = max<GCodeResult>(rslt, UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder], reply));
+# if HAS_SMART_DRIVERS
+								const float actualCurrent = min<float>(motorCurrents[axisOrExtruder], SmartDrivers::GetMaxMotorCurrent(driver));
+								if (actualCurrent < motorCurrents[axisOrExtruder])
+								{
+									reply.lcatf("Driver %u.%u current limited to %umA", CanInterface::GetCanAddress(), driver, (unsigned int)actualCurrent);
+									rslt = GCodeResult::error;
+								}
+# else
+								const float actualCurrent = motorCurrents[axisOrExtruder];
+# endif
+								UpdateMotorCurrent(driver, actualCurrent * motorCurrentFraction[axisOrExtruder]);
 							},
 							[this, axisOrExtruder, &canDriversToUpdate](DriverId driver)
 							{
@@ -791,6 +801,16 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 		IterateDrivers(axisOrExtruder,
 							[this, axisOrExtruder, &rslt, reply](uint8_t driver)
 							{
+# if HAS_SMART_DRIVERS
+								const float actualCurrent = min<float>(motorCurrents[axisOrExtruder], SmartDrivers::GetMaxMotorCurrent(driver));
+								if (actualCurrent < motorCurrents[axisOrExtruder])
+								{
+									reply.lcatf("Driver %u current limited to %umA", driver, (unsigned int)actualCurrent);
+									rslt = GCodeResult::error;
+								}
+# else
+								const float actualCurrent = motorCurrents[axisOrExtruder];
+# endif
 								rslt = max<GCodeResult>(rslt, UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder], reply));
 							}
 		);
@@ -870,39 +890,17 @@ void Move::GetActualDriverTimings(float timings[4]) noexcept
 #endif
 
 // This must not be called from an ISR, or with interrupts disabled.
-GCodeResult Move::UpdateMotorCurrent(size_t driver, float current, const StringRef& reply) noexcept
+void Move::UpdateMotorCurrent(size_t driver, float current) noexcept
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
 #if HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
 		{
-			return SmartDrivers::SetCurrent(driver, current, reply);
+			return SmartDrivers::SetCurrent(driver, current);
 		}
-#else
-		// Otherwise we can't set the motor current
-# if SUPPORT_CAN_EXPANSION
-		reply.lcatf("cannot set motor current for driver %u.%u", CanInterface::GetCanAddress(), driver);
-# else
-		reply.lcatf("cannot set motor current for driver %u", driver);
-# endif
-		return GCodeResult::warning;
 #endif
 	}
-
-#if SUPPORT_CAN_EXPANSION
-	reply.lcatf("no driver %u.%u", CanInterface::GetCanAddress(), driver);
-#else
-	reply.lcatf("no driver %u", driver);
-#endif
-	return GCodeResult::error;
-}
-
-// This must not be called from an ISR, or with interrupts disabled.
-void Move::UpdateMotorCurrent(size_t driver, float current) noexcept
-{
-	String<1> dummy;
-	(void)UpdateMotorCurrent(driver, current, dummy.GetRef());
 }
 
 // Get the configured motor current for an axis or extruder
@@ -1505,9 +1503,15 @@ GCodeResult Move::EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<floa
 							}
 							else
 							{
-								motorCurrents[driver] = msg.values[count];
+
+								motorCurrents[driver] = min<float>(msg.values[count], SmartDrivers::GetMaxMotorCurrent(driver));
+								if (motorCurrents[driver] < msg.values[count])
+								{
+									reply.lcatf("Driver %u.%u current limited to %umA", CanInterface::GetCanAddress(), driver, (unsigned int)motorCurrents[driver]);
+									rslt = GCodeResult::error;
+								}
 								motorCurrentFraction[driver] = 1.0;
-								rslt = max<GCodeResult>(rslt, UpdateMotorCurrent(driver, msg.values[count], reply));
+								UpdateMotorCurrent(driver, msg.values[count]);
 							}
 						}
 				   );
