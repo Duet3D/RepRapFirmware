@@ -430,7 +430,7 @@ void SbcInterface::ExchangeData() noexcept
 					if (transfer.WriteObjectModel(nullptr))
 					{
 						// Cannot store this object model response even if we wanted to
-						reprap.GetPlatform().MessageF(ErrorMessage, "Cannot store excessively long object model response, discarding request (total length %d, key %s, flags %s)", outBuf->Length(), key.c_str(), flags.c_str());
+						reprap.GetPlatform().MessageF(ErrorMessage, "Cannot store excessively long object model response, discarding request (total length %u, key %s, flags %s)", outBuf->Length(), key.c_str(), flags.c_str());
 					}
 					else
 					{
