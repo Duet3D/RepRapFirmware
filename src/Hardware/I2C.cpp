@@ -21,7 +21,13 @@ SharedI2CMaster *_ecv_null I2C::sharedI2C = nullptr;
 // The bus runs on a SERCOM, described by the same I2cParameters struct that the expansion boards use
 static const I2cParameters I2C0Params =
 {
+#if SAME70
+	.instanceNumber = I2CInstanceNumber,
+#elif SAME5x
 	.sercomNumber = I2CSercomNumber,
+#else
+# error Unsupported processor
+#endif
 	.sclPin = I2CSclPin,
 	.sdaPin = I2CSdaPin,
 	.pinFunction = I2CPinFunction,

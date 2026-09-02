@@ -389,7 +389,7 @@ constexpr GpioPinFunction CanPinsMode = GpioPinFunction::H;
 // I2C
 // Hardware I2C runs on the IO2 connector via SERCOM6: SDA on io2.out (PD09 = SERCOM6 PAD0), SCL on io2.in (PD08 = SERCOM6 PAD1).
 // Using IO2 for I2C requires the 470R bypass jumper on io2.in to be fitted, which is only present on board revision v1.01 and later.
-// Defining I2C_IFACE enables the M260/M261 commands; on this board the bus is driven by a SharedI2CMaster, see src/Hardware/I2C.cpp
+// Defining I2C_IFACE enables the M260/M261 commands; on this board the bus is driven by a SharedI2CMaster, see CoreN2G.
 #define I2C_IFACE	SharedI2CMaster
 constexpr uint8_t I2CSercomNumber = 6;
 constexpr Pin I2CSclPin = PortDPin(8);						// io2.in, requires the 470R bypass jumper

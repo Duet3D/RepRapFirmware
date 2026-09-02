@@ -183,6 +183,17 @@ constexpr SpiParameters SharedSpiParams =
 
 constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB port
 
+// I2C
+// Hardware I2C runs on the IO2 connector via TWIHS2: SDA on io2.out (PD27), SCL on io2.in (PD28).
+// Using IO2 for I2C requires the 470R bypass jumper on io2.in to be fitted, which is only present on board revision v1.02 and later.
+// Defining I2C_IFACE enables the M260/M261 commands; on this board the bus is driven by a SharedI2CMaster, see CoreN2G.
+#define I2C_IFACE	SharedI2CMaster
+constexpr uint8_t I2CInstanceNumber = 2;					// using TWIHS2
+constexpr Pin I2CSclPin = PortDPin(28);						// io2.in, requires the 470R bypass jumper
+constexpr Pin I2CSdaPin = PortDPin(27);						// io2.out
+constexpr GpioPinFunction I2CPinFunction = GpioPinFunction::C;
+constexpr const char *I2CBusPinNames = "io2.in+io2.out";	// names used to reserve the bus pins so they can't also be allocated as GPIO
+
 // Drivers
 constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin(18), PortCPin(16), PortCPin(28), PortCPin(01), PortCPin(04), PortCPin(9) };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortBPin(05), PortDPin(10), PortAPin(04), PortAPin(22), PortCPin(03), PortDPin(14) };
