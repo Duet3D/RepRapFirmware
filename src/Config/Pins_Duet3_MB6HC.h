@@ -192,7 +192,7 @@ constexpr uint8_t I2CInstanceNumber = 2;					// using TWIHS2
 constexpr Pin I2CSclPin = PortDPin(28);						// io2.in, requires the 470R bypass jumper
 constexpr Pin I2CSdaPin = PortDPin(27);						// io2.out
 constexpr GpioPinFunction I2CPinFunction = GpioPinFunction::C;
-constexpr const char *I2CBusPinNames = "io2.in+io2.out";	// names used to reserve the bus pins so they can't also be allocated as GPIO
+constexpr const char *I2CBusPinNames = "i2c0.clk+i2c0.dat";	// names used to reserve the bus pins so they can't also be allocated as GPIO
 
 // Drivers
 constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin(18), PortCPin(16), PortCPin(28), PortCPin(01), PortCPin(04), PortCPin(9) };
@@ -430,8 +430,8 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD24 SWD_EXT_RST
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io0.in,serial0.rx"	},	// PD25 IO0_IN  Serial0 RX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io0.out,serial0.tx"},	// PD26 IO0_OUT Serial0 TX
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io2.out,i2c0.dat"	},	// PD27 IO2_OUT
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io2.in,i2c0.clk"	},	// PD28 IO2_IN
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io2.out,i2c0.dat"	},	// PD27 IO2_OUT also I2C SDA
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io2.in,i2c0.clk"	},	// PD28 IO2_IN also I2C SCL
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD29 driver 0 diag
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_0,	PinCapability::ainr,	"io4.in"			},	// PD30 IO4_IN
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD31 driver 4 diag
