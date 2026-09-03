@@ -569,7 +569,7 @@ private:
 	void NewMoveAvailable(MovementState& ms) noexcept;							// Flag that a new move is available
 
 	void SetMoveBufferDefaults(MovementState& ms) noexcept;						// Set up default values in the move buffer
-	void ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept;	// Change a live extrusion factor
+	void ChangeExtrusionFactor(unsigned int extruder, float factor, bool immediate) noexcept;	// Change a live extrusion factor
 
 	MovementState& GetMovementState(const GCodeBuffer& gb) noexcept;			// Get a reference to the movement state associated with the specified GCode buffer
 

@@ -2790,6 +2790,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						extruder = gb.GetLimitedUIValue('D', numExtruders);
 					}
 
+					// OEM request: option to change extrusion factor with low latency
+					const bool immediate = gb.Seen('F') && gb.GetUIValue() == 1;
+
 					const Tool *_ecv_null const ct = GetMovementState(gb).currentTool;
 					if (!seenD && ct == nullptr)
 					{
@@ -2803,11 +2806,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							if (seenD)
 							{
-								ChangeExtrusionFactor(extruder, extrusionFactor);
+								ChangeExtrusionFactor(extruder, extrusionFactor, immediate);
 							}
 							else
 							{
-								ct->IterateExtruders([this, extrusionFactor](unsigned int extr) { ChangeExtrusionFactor(extr, extrusionFactor); });
+								ct->IterateExtruders([this, extrusionFactor, immediate](unsigned int extr) { ChangeExtrusionFactor(extr, extrusionFactor, immediate); });
 							}
 						}
 					}
@@ -2918,7 +2921,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							reprap.MoveUpdated();
 							if (IsAxisHomed(axis))
 							{
-								//TODO find which movement system owns the axis concerned and push the babystepping through that one
+								//TODO find which movement system owns the axis concerned and push the babystepping through that one - currently we assume motion system 0
 								const float amountPushed = reprap.GetMove().PushBabyStepping(0, axis, differences[axis]);
 								ms.initialCoords[axis] += amountPushed;
 
