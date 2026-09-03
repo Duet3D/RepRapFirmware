@@ -17,23 +17,24 @@ const size_t BufferSizePerQueueItem = ShortGCodeLength;
 class GCodeQueue : public GCodeInput
 {
 public:
-	GCodeQueue() noexcept;
+	explicit GCodeQueue(size_t p_msNumber) noexcept;
 
-	void Reset() noexcept override;										// Clean all the cached data from this input
-	bool FillBuffer(GCodeBuffer *gb) noexcept override;					// If there is another move to execute at this time, fill a buffer
-	size_t BytesCached() const noexcept override;						// How many bytes have been cached?
+	void Reset() noexcept override;														// Clean all the cached data from this input
+	bool FillBuffer(GCodeBuffer *gb) noexcept override;									// If there is another move to execute at this time, fill a buffer
+	size_t BytesCached() const noexcept override;										// How many bytes have been cached?
 
-	bool QueueCode(const GCodeBuffer &gb) noexcept;						// Queue a G-code
-	void PurgeEntries() noexcept;										// Remove stored codes when a print is being paused
-	void Clear() noexcept;												// Clean up all the stored codes
-	bool IsIdle() const noexcept;										// Return true if there is nothing to do
+	bool QueueCode(const GCodeBuffer &gb) noexcept;										// Queue a G-code
+	void PurgeEntries() noexcept;														// Remove stored codes when a print is being paused
+	void Clear() noexcept;																// Clean up all the stored codes
+	bool IsIdle() const noexcept;														// Return true if there is nothing to do
 
 	void Diagnostics(const StringRef& reply) noexcept;
 
-	static bool ShouldQueueG10(GCodeBuffer &gb, ParameterLettersBitmap allAxisLetters) noexcept;					// Return true if this code should be queued
-	static bool ShouldQueueMCode(GCodeBuffer &gb) THROWS(GCodeException);	// Return true if this code should be queued
+	bool ShouldQueueG10(GCodeBuffer &gb, ParameterLettersBitmap allAxisLetters) const noexcept;	// Return true if this code should be queued
+	bool ShouldQueueMCode(GCodeBuffer &gb) const THROWS(GCodeException);				// Return true if this code should be queued
 
 private:
+	size_t msNumber;
 	QueuedCode *_ecv_null freeItems;
 	QueuedCode *_ecv_null queuedItems;
 };

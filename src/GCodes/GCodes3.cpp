@@ -1183,7 +1183,7 @@ void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor, bool imm
 	extrusionFactors[extruder] = factor;
 	for (MovementState& ms : moveStates)
 	{
-		ms.ChangeExtrusionFactor(extruder, multiplier);
+		ms.ChangeExtrusionFactor(extruder, multiplier, immediate);
 	}
 	reprap.MoveUpdated();
 }

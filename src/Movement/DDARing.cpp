@@ -586,6 +586,13 @@ FilePosition DDARing::GetCurrentMoveFilePosition() const noexcept
 	return (cdda != nullptr) ? cdda->GetFilePosition() : noFilePosition;
 }
 
+// Fast change extrusion factor by modifying uncommitted moves already in the queue
+// Note, this may violate the jerk limits. That is acceptable to the OEM who requested it 'multiplier' should be close to 1.0 to avoid that.
+void DDARing::ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept
+{
+	//TODO
+}
+
 // Pause the print as soon as we can.
 // If we are able to skip any moves, return true and update ms.pauseRestorePoint to the first move we skipped.
 // If we can't skip any moves, update just the coordinates and laser PWM in ms.pauseRestorePoint and return false.

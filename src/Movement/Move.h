@@ -387,11 +387,11 @@ public:
 	void CancelStepping() noexcept;															// Stop generating steps
 #endif
 
-	bool NoLiveMovement() const noexcept { return rings[0].IsIdle(); }						// Is a move running, or are there any queued?
+	bool NoLiveMovement(size_t msNumber) const noexcept pre(msNumber < NumMovementSystems) { return rings[msNumber].IsIdle(); }		// Is a move running, or are there any queued?
 
-	uint32_t GetScheduledMoves() const noexcept { return rings[0].GetScheduledMoves(); }	// How many moves have been scheduled?
-	uint32_t GetCompletedMoves() const noexcept { return rings[0].GetCompletedMoves(); }	// How many moves have been completed?
-	void ResetMoveCounters() noexcept { rings[0].ResetMoveCounters(); }
+	uint32_t GetScheduledMoves(size_t msNumber) const noexcept pre(msNumber < NumMovementSystems) { return rings[msNumber].GetScheduledMoves(); }	// How many moves have been scheduled?
+	uint32_t GetCompletedMoves(size_t msNumber) const noexcept pre(msNumber < NumMovementSystems) { return rings[msNumber].GetCompletedMoves(); }	// How many moves have been completed?
+	void ResetMoveCounters(size_t msNumber) noexcept pre(msNumber < NumMovementSystems) { rings[msNumber].ResetMoveCounters(); }
 	void UpdateExtrusionPendingLimits(float extrusionPending) noexcept;
 
 	HeightMap& AccessHeightMap() noexcept { return heightMap; }								// Access the bed probing grid
@@ -399,7 +399,7 @@ public:
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool LoadHeightMapFromFile(FileStore *f, const char *_ecv_array fname, const StringRef& r) noexcept;	// Load the height map from a file returning true if an error occurred
-	bool SaveHeightMapToFile(FileStore *f, const char *_ecv_array fname) noexcept;						// Save the height map to a file returning true if an error occurred
+	bool SaveHeightMapToFile(FileStore *f, const char *_ecv_array fname) noexcept;							// Save the height map to a file returning true if an error occurred
 # if SUPPORT_PROBE_POINTS_FILE
 	bool LoadProbePointsFromFile(FileStore *f, const char *_ecv_array fname, const StringRef& r) noexcept;	// Load the probe points map from a file returning true if an error occurred
 	void ClearProbePointsInvalid() noexcept;
@@ -415,14 +415,14 @@ public:
 
 	const RandomProbePointSet& GetProbePoints() const noexcept { return probePoints; }		// Return the probe point set constructed from G30 commands
 
-	float GetTopSpeedMmPerSec(size_t msNumber) const noexcept { return rings[msNumber].GetTopSpeedMmPerSec(); }
-	float GetRequestedSpeedMmPerSec(size_t msNumber) const noexcept { return rings[msNumber].GetRequestedSpeedMmPerSec(); }
-	float GetAccelerationMmPerSecSquared(size_t msNumber) const noexcept { return rings[msNumber].GetAccelerationMmPerSecSquared(); }		// Get the (peak) acceleration for reporting in the object model
-	float GetDecelerationMmPerSecSquared(size_t msNumber) const noexcept { return rings[msNumber].GetDecelerationMmPerSecSquared(); }		// Get the (peak) deceleration for reporting in the object model
-	float GetCurrentMoveDistance(size_t msNumber) const noexcept { return rings[msNumber].GetCurrentMoveDistance(); }
-	float GetCurrentMoveDuration(size_t msNumber) const noexcept { return rings[msNumber].GetCurrentMoveDuration(); }
-	FilePosition GetCurrentMoveFilePosition(size_t msNumber) const noexcept { return rings[msNumber].GetCurrentMoveFilePosition(); }		// Get the file position of the move being executed, or noFilePosition if there is none
-	float GetTotalExtrusionRate(size_t msNumber) const noexcept { return rings[msNumber].GetTotalExtrusionRate(); }
+	float GetTopSpeedMmPerSec(size_t msNumber) const noexcept pre(msNumber < NumMovementSystems) { return rings[msNumber].GetTopSpeedMmPerSec(); }
+	float GetRequestedSpeedMmPerSec(size_t msNumber) const noexcept pre(msNumber < NumMovementSystems) { return rings[msNumber].GetRequestedSpeedMmPerSec(); }
+	float GetAccelerationMmPerSecSquared(size_t msNumber) const noexcept pre(msNumber < NumMovementSystems) { return rings[msNumber].GetAccelerationMmPerSecSquared(); }	// Get the (peak) acceleration for reporting in the object model
+	float GetDecelerationMmPerSecSquared(size_t msNumber) const noexcept pre(msNumber < NumMovementSystems) { return rings[msNumber].GetDecelerationMmPerSecSquared(); }	// Get the (peak) deceleration for reporting in the object model
+	float GetCurrentMoveDistance(size_t msNumber) const noexcept pre(msNumber < NumMovementSystems) { return rings[msNumber].GetCurrentMoveDistance(); }
+	float GetCurrentMoveDuration(size_t msNumber) const noexcept pre(msNumber < NumMovementSystems) { return rings[msNumber].GetCurrentMoveDuration(); }
+	FilePosition GetCurrentMoveFilePosition(size_t msNumber) const noexcept pre(msNumber < NumMovementSystems) { return rings[msNumber].GetCurrentMoveFilePosition(); }		// Get the file position of the move being executed, or noFilePosition if there is none
+	float GetTotalExtrusionRate(size_t msNumber) const noexcept pre(msNumber < NumMovementSystems) { return rings[msNumber].GetTotalExtrusionRate(); }
 
 	void UpdateLiveMachineCoordinates(float coords[MaxAxes], const Tool *_ecv_null tool) const noexcept;		// Force an update of the live machine coordinates
 
@@ -431,6 +431,8 @@ public:
 	// Filament monitor support
 	int32_t GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noexcept;		// Return and reset the accumulated commanded extrusion amount
 	uint32_t ExtruderPrintingSince(size_t logicalDrive) const noexcept;						// When we started doing normal moves after the most recent extruder-only move
+
+	void ChangeExtrusionFactor(size_t msNumber, unsigned int extruder, float multiplier) noexcept pre(msNumber < NumMovementSystems) { rings[msNumber].ChangeExtrusionFactor(extruder, multiplier); }	// fast extrusion factor change
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept;									// Write settings for resuming the print
