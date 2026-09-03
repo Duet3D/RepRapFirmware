@@ -567,7 +567,7 @@ void RepRap::Init() noexcept
 
 #if HAS_SBC_INTERFACE && !HAS_MASS_STORAGE
 	usingSbcInterface = true;
-	FileWriteBuffer::UsingSbcMode();
+	MassStorage::ConfigureSbcBuffering();
 #endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -597,7 +597,7 @@ void RepRap::Init() noexcept
 		else if (!MassStorage::IsCardDetected(0))		// if we failed to mount the SD card because there was no card in the slot
 		{
 			usingSbcInterface = true;
-			FileWriteBuffer::UsingSbcMode();
+			MassStorage::ConfigureSbcBuffering();
 		}
 # endif
 		else
@@ -1148,6 +1148,10 @@ GCodeResult RepRap::ProcessM111(GCodeBuffer& gb, const StringRef& reply) THROWS(
 	{
 		if (module != Module::numModules)
 		{
+			if (flags != 0)
+			{
+				Platform::EnsureDebugBuffers();
+			}
 			debugMaps[module].SetFromRaw(flags);
 		}
 		else if (flags != 0)
@@ -1219,6 +1223,10 @@ GCodeResult RepRap::ProcessRemoteM111(const CanMessageGeneric& msg, const String
 	{
 		if (module < Module::numModules)
 		{
+			if (flags != 0)
+			{
+				Platform::EnsureDebugBuffers();
+			}
 			debugMaps[module].SetFromRaw(flags);
 		}
 		else if (flags != 0)

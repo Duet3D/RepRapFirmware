@@ -282,7 +282,9 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	// 4. boards[0].accelerometer members
 	{ "orientation",		OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerOrientation()),				ObjectModelEntryFlags::none },
 	{ "points",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerDataPoints()),				ObjectModelEntryFlags::none },
+	{ "resolution",			OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerResolution()),				ObjectModelEntryFlags::none },
 	{ "runs",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerRuns()),						ObjectModelEntryFlags::none },
+	{ "samplingRate",		OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerSamplingRate()),				ObjectModelEntryFlags::none },
 #endif
 };
 
@@ -307,7 +309,7 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 	0,																		// section 3: v12
 #endif
 #if SUPPORT_ACCELEROMETERS
-	3,																		// section 4: boards[0].accelerometer
+	5,																		// section 4: boards[0].accelerometer
 #else
 	0,
 #endif
@@ -336,8 +338,26 @@ size_t Platform::GetNumGpOutputsToReport() const noexcept
 }
 
 bool Platform::deliberateError = false;						// true if we deliberately caused an exception for testing purposes
-String<StringLength256> Platform::genericDebugBuffer;
+String<StringLength256> *_ecv_null Platform::genericDebugBuffer = nullptr;
 bool Platform::hasGenericDebug = false;
+#if SUPPORT_ASYNC_MOVES
+String<StringLength256> *_ecv_null Platform::moveWarningBuffer = nullptr;
+bool Platform::hasMoveWarning = false;
+#endif
+
+void Platform::EnsureDebugBuffers() noexcept
+{
+	if (genericDebugBuffer == nullptr)
+	{
+		genericDebugBuffer = new String<StringLength256>();
+	}
+#if SUPPORT_ASYNC_MOVES
+	if (moveWarningBuffer == nullptr)
+	{
+		moveWarningBuffer = new String<StringLength256>();
+	}
+#endif
+}
 bool Platform::shouldTurnOffHeaters = false;
 SharedSpiDevice *_ecv_null Platform::mainSharedSpiDevice = nullptr;
 
@@ -769,22 +789,9 @@ void Platform::Spin() noexcept
 		return;
 	}
 
-#if SUPPORT_REMOTE_COMMANDS
-	if (CanInterface::InExpansionMode())
-	{
-		// Update status LED
-		if (StepTimer::CheckSynced())
-		{
-			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetMasterTime() & (1u << 19)) != 0);
-		}
-		else
-		{
-			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 17)) != 0);
-		}
-	}
-#endif
-
 #if SUPPORT_CAN_EXPANSION
+	CanInterface::UpdateStatusLed();
+
 	// Turn off the ACT LED if it is time to do so
 	if (millis() - whenLastCanMessageProcessed > ActLedFlashTime)
 	{
@@ -799,13 +806,22 @@ void Platform::Spin() noexcept
 	// Check for generic debug
 	if (hasGenericDebug)
 	{
-		Message(AddError(MessageType::GenericMessage), genericDebugBuffer.c_str());
+		Message(AddError(MessageType::GenericMessage), (genericDebugBuffer != nullptr) ? genericDebugBuffer->c_str() : "step error occurred but no debug buffer was allocated, use M111 to record details\n");
 		if (shouldTurnOffHeaters)
 		{
 			reprap.GetHeat().SwitchOffAll(true);
 		}
 		hasGenericDebug = false;
 	}
+
+#if SUPPORT_ASYNC_MOVES
+	if (hasMoveWarning && moveWarningBuffer != nullptr)
+	{
+		Message(WarningMessage, moveWarningBuffer->c_str());
+		moveWarningBuffer->Clear();
+		hasMoveWarning = false;
+	}
+#endif
 
 	// Check for M111 debug messages stored in the optional buffer
 	while (!isrDebugBuffer.IsEmpty())
@@ -1409,9 +1425,19 @@ void Platform::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 
 #ifdef I2C_IFACE
 		{
+# if SAM4S || SAM4E
 			const TwoWire::ErrorCounts errs = I2C_IFACE.GetErrorCounts(true);
 			reply.lcatf("I2C nak errors %" PRIu32 ", send timeouts %" PRIu32 ", receive timeouts %" PRIu32 ", finishTimeouts %" PRIu32 ", resets %" PRIu32 ", bus recoveries %" PRIu32,
 				errs.naks, errs.sendTimeouts, errs.recvTimeouts, errs.finishTimeouts, errs.resets, errs.recoveries);
+# else
+			if (I2C::sharedI2C != nullptr)
+			{
+				I2cErrors errs;
+				I2C::sharedI2C->GetAndClearErrors(errs);
+				reply.lcatf("I2C bus errors %u, naks %u, contentions %u, other errors %u, bus recoveries %u",
+					errs.busErrors, errs.naks, errs.contentions, errs.otherErrors, errs.recoveries);
+			}
+# endif
 		}
 #endif
 		break;
@@ -2587,7 +2613,10 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 				bValues[i] = (uint8_t)valuesToSend[i];
 			}
 
-			I2C::Init();
+			if (!I2C::Init(reply))
+			{
+				return GCodeResult::error;
+			}
 			const size_t bytesTransferred = I2C::Transfer(address, bValues, numToSend, numToReceive);
 
 			if (bytesTransferred < numToSend)
@@ -2899,7 +2928,10 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 	case -1:
 		{
 			const uint32_t address = gb.GetLimitedUIValue('A', 1u << 10);
-			I2C::Init();
+			if (!I2C::Init(reply))
+			{
+				return GCodeResult::error;
+			}
 			uint8_t bValues[MaxI2cOrModbusValues];
 			const size_t bytesRead = I2C::Transfer(address, bValues, 0, numValues);
 
@@ -3724,7 +3756,7 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3Mini_Unknown:		return "Duet 3 " BOARD_SHORT_NAME " unknown variant";
 	case BoardType::Duet3Mini_WiFi:			return "Duet 3 " BOARD_SHORT_NAME " WiFi 1.02 or earlier";
 	case BoardType::Duet3Mini_Ethernet:		return "Duet 3 " BOARD_SHORT_NAME " Ethernet";
-	case BoardType::Duet3Mini_WiFi_ESP32:	return "Duet 3 " BOARD_SHORT_NAME " WiFi 1.03 or later";
+	case BoardType::Duet3Mini_WiFi_ESP32:	return "Duet 3 " BOARD_SHORT_NAME " WiFi 1.04 or later";
 #elif defined(DUET3_MB6HC)
 	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v1.0 or earlier";
 	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
@@ -4229,15 +4261,6 @@ void Platform::SetDiagLed(bool on) const noexcept
 {
 	digitalWrite(DiagPin, XNor(DiagOnPolarity, on));
 }
-
-#if SUPPORT_MULTICAST_DISCOVERY
-
-void Platform::InvertDiagLed() const noexcept
-{
-	digitalWrite(DiagPin, !digitalRead(DiagPin));
-}
-
-#endif
 
 #if HAS_CPU_TEMP_SENSOR && SAME5x
 

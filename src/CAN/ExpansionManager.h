@@ -39,6 +39,7 @@ struct ExpansionBoardData
 	UniqueId uniqueId;
 	DriverData *_ecv_array _ecv_null driverData;				// an array numDrivers long of objects, or nullptr if numDrivers is zero
 	uint16_t accelerometerRuns;
+	uint16_t accelerometerSamplingRate = 0;
 	uint16_t closedLoopRuns;
 	uint16_t connectionTimeoutSeconds;
 	uint16_t hasMcuTemp : 1,
@@ -52,6 +53,7 @@ struct ExpansionBoardData
 	BoardState state;
 	uint8_t numDrivers;
 	uint8_t accelerometerOrientation = DefaultAccelerometerOrientation;
+	uint8_t accelerometerResolution = 0;
 };
 
 class ExpansionManager INHERIT_OBJECT_MODEL
@@ -77,6 +79,7 @@ public:
 	void AddAccelerometerRun(CanAddress address, unsigned int numDataPoints) noexcept;
 	void AddClosedLoopRun(CanAddress address, unsigned int numDataPoints) noexcept;
 	void SaveAccelerometerOrientation(CanAddress address, uint8_t orientation) noexcept;
+	void SaveAccelerometerConfig(CanAddress address, uint16_t samplingRate, uint8_t resolution) noexcept;
 	bool IsFlashing() const noexcept { return numBoardsFlashing != 0; }
 
 	void Spin() noexcept;

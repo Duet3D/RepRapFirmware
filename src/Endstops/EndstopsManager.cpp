@@ -471,6 +471,8 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 		return GCodeResult::error;
 	}
 
+	const uint32_t zProbeNumber = gb.Seen('K') ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
+
 	if (gb.Seen('P'))					// we use P not C, because C may be an axis
 	{
 		// Setting the port name(s), so there must be just one axis and we must be using switch-type endstops
@@ -524,20 +526,23 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 					// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
 					ReplaceObject(axisEndstops[axis], new StallDetectionEndstop(axis, pos, true));
 					break;
+
+				case EndStopType::motorStallEncoder:
+					// Asking for an encoder endstop, which detects a stall from the encoder position error instead of from StallGuard
+					ReplaceObject(axisEndstops[axis], new StallDetectionEndstop(axis, pos, false, true));
+					break;
 #else
 				case EndStopType::motorStallAny:
 				case EndStopType::motorStallIndividual:
+				case EndStopType::motorStallEncoder:
 					DeleteObject(axisEndstops[axis]);
 					reply.copy("Stall detection not supported by this hardware");
 					return GCodeResult::error;
 #endif
 				case EndStopType::zProbeAsEndstop:
-					{
-						// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
-						const uint32_t zProbeNumber = gb.Seen('K') ? gb.GetUIValue() : 0;
-						ReplaceObject(axisEndstops[axis], new ZProbeEndstop(axis, pos, zProbeNumber));
-						break;
-					}
+					// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
+					ReplaceObject(axisEndstops[axis], new ZProbeEndstop(axis, pos, zProbeNumber));
+					break;
 
 				case EndStopType::inputPin:
 					if (   axisEndstops[axis] == nullptr
@@ -706,6 +711,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 		&& (   probeType == (uint32_t)ZProbeType::e1Switch_obsolete
 			|| probeType == (uint32_t)ZProbeType::endstopSwitch_obsolete
 			|| probeType == (uint32_t)ZProbeType::zSwitch_obsolete
+			|| probeType == (uint32_t)ZProbeType::alternateAnalog_obsolete
 		   )
 	   )
 	{
@@ -777,12 +783,12 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 					return GCodeResult::error;
 				}
 				else if (   probeNumber != 0
-						 && (   probeType == (unsigned int)ZProbeType::analog || probeType == (unsigned int)ZProbeType::alternateAnalog
+						 && (   probeType == (unsigned int)ZProbeType::analog
 							 || probeType == (unsigned int)ZProbeType::dumbModulated || probeType == (unsigned int)ZProbeType::digital
 							)
 						)
 				{
-					reply.copy("Types 1,2,3 and 5 are available for Z probe 0 only");
+					reply.copy("Types 1, 2 and 5 are available for Z probe 0 only");
 					return GCodeResult::error;
 				}
 				else

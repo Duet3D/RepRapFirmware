@@ -82,7 +82,7 @@ constexpr uint16_t MinimumGpinReportInterval = 30;		// Minimum interval in milli
 // Comms defaults
 constexpr uint32_t AUX_BAUD_RATE = 57600;				// Baud rate for auxiliary UART device
 constexpr uint32_t AUX2_BAUD_RATE = 115200;				// Ditto - for second auxiliary UART device
-constexpr uint32_t UsbTimeout = 2000;					// timeout in ms for sending data to the main serial/USB port
+constexpr uint32_t UsbTimeout = 500;					// timeout in ms for sending data to the main serial/USB port
 constexpr uint32_t AuxTimeout = 2000;					// timeout in ms for PanelDue replies
 
 constexpr uint32_t UnsolicitedStatusReportInterval = 2000;	// Interval between sending unsolicited status reports, in milliseconds

@@ -578,6 +578,7 @@ LogicalDrivesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLetter
 		{
 			move.SetLastEndpoints(msNumber, drivesNeeded, lastKnownEndpoints);
 			move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), raw.coords);
+			move.UpdateStartCoordinates(msNumber, raw.coords);			// keep the ring in step with the motor-rounded coordinates, else the next move sees a sub-step delta on every axis
 			move.InverseAxisAndBedTransform(raw.coords, currentTool);
 		}
 	}
@@ -601,6 +602,7 @@ LogicalDrivesBitmap MovementState::AllocateDrives(LogicalDrivesBitmap drivesNeed
 		raw.axesAndExtrudersOwned |= affectedAxes;
 		move.SetLastEndpoints(msNumber, drivesNeeded, lastKnownEndpoints);
 		move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), raw.coords);
+		move.UpdateStartCoordinates(msNumber, raw.coords);
 		move.InverseAxisAndBedTransform(raw.coords, currentTool);
 	}
 	return unavailableDrives;
@@ -630,6 +632,7 @@ void MovementState::UpdateCoordinatesFromLastKnownEndpoints() noexcept
 	Move& move = reprap.GetMove();
 	move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), machinePosition);
 	memcpyf(raw.coords, machinePosition, reprap.GetGCodes().GetTotalAxes());
+	move.UpdateStartCoordinates(msNumber, machinePosition);			// keep the ring in step with the motor-rounded coordinates, else the next move sees a sub-step delta on every axis
 	move.InverseAxisAndBedTransform(raw.coords, currentTool);
 }
 

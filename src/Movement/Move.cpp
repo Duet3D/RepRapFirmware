@@ -184,6 +184,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 #endif
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
 	{ "limitAxes",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().LimitAxes()),										ObjectModelEntryFlags::none },
+	{ "minSpeed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMm(self->MinMovementSpeed(), false), 2),					ObjectModelEntryFlags::none },
 	{ "motionSystems",			OBJECT_MODEL_FUNC_ARRAY(5),																		ObjectModelEntryFlags::liveNotPanelDue },
 	{ "noMovesBeforeHoming",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().NoMovesBeforeHoming()),								ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetCurrentMovementState(context).raw.maxPrintingAcceleration), 1),	ObjectModelEntryFlags::verbose },
@@ -343,7 +344,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 constexpr uint8_t Move::objectModelTableDescriptor[] =
 {
 	16 + SUPPORT_COORDINATE_ROTATION,										// number of sections
-	18 + SUPPORT_COORDINATE_ROTATION + SUPPORT_KEEPOUT_ZONES + 2 * SUPPORT_3RD_ORDER,		// section 0
+	19 + SUPPORT_COORDINATE_ROTATION + SUPPORT_KEEPOUT_ZONES + 2 * SUPPORT_3RD_ORDER,	// section 0
 	2,																		// section 1
 	8 + SUPPORT_LASER,														// section 2
 	3,																		// section 3
@@ -639,6 +640,7 @@ void Move::Init() noexcept
 	{
 		rm = -(1.0/16.0);
 	}
+	phaseStepMovingFast = false;
 	ResetPhaseStepMonitoringVariables();
 #endif
 
@@ -1718,6 +1720,24 @@ static inline motioncalc_t CalcInitialSpeed(uint32_t duration, motioncalc_t dist
 
 #endif
 
+#if CHECK_SEGMENTS
+
+// Check a segment for negative duration or overlap with its successor, dumping the list from it if bad
+static void CheckSegment(unsigned int line, MoveSegment *_ecv_null seg) noexcept
+{
+	if (   seg != nullptr
+		&& (   (int32_t)seg->GetDuration() <= 0
+			|| (seg->GetNext() != nullptr && (int32_t)(seg->GetNext()->GetStartTime() - (seg->GetStartTime() + seg->GetDuration())) < 0)
+		   )
+	   )
+	{
+		debugPrintf("bad seg at %u: ", line);
+		MoveSegment::DebugPrintList(seg);
+	}
+}
+
+#endif
+
 // Add a segment into a segment list, which may be empty.
 // If the list is not empty then the new segment may overlap segments already in the list.
 // The units of the input parameters are steps for distance and step clocks for time.
@@ -1731,8 +1751,11 @@ MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t du
 {
 	if ((int32_t)duration <= 0)
 	{
-		const StringRef& dbgRef = Platform::genericDebugBuffer.GetRef();
-		dbgRef.printf("Adding zero or negative duration segment: d=%3e a=%.3e\n", (double)distance, (double)a);
+		if (Platform::genericDebugBuffer != nullptr)
+		{
+			const StringRef& dbgRef = Platform::genericDebugBuffer->GetRef();
+			dbgRef.printf("Adding zero or negative duration segment: d=%3e a=%.3e\n", (double)distance, (double)a);
+		}
 		Platform::hasGenericDebug = true;
 	}
 
@@ -1985,11 +2008,14 @@ void Move::AddLinearSegments(size_t logicalDrive, uint32_t startTime, const Prep
 				if (tail->GetFlags().executing)
 				{
 					// Error, the segment we are trying to add overlaps an executing one
-					const StringRef& dbgRef = Platform::genericDebugBuffer.GetRef();
-					dbgRef.printf("Code 3 move error: new: start=%" PRIu32 " overlap=%" PRIu32 " time now=%" PRIu32 ", existing: ",
-									startTime, segStartTime + tail->GetDuration() - startTime, StepTimer::GetMovementTimerTicks());
-					tail->AppendDetails(dbgRef);
-					dbgRef.cat('\n');
+					if (Platform::genericDebugBuffer != nullptr)
+					{
+						const StringRef& dbgRef = Platform::genericDebugBuffer->GetRef();
+						dbgRef.printf("Code 3 move error: new: start=%" PRIu32 " overlap=%" PRIu32 " time now=%" PRIu32 ", existing: ",
+										startTime, segStartTime + tail->GetDuration() - startTime, StepTimer::GetMovementTimerTicks());
+						tail->AppendDetails(dbgRef);
+						dbgRef.cat('\n');
+					}
 					Platform::shouldTurnOffHeaters = true;
 					Platform::hasGenericDebug = true;
 					StepErrorHalt();
@@ -2295,7 +2321,7 @@ bool Move::EnableIfIdle(size_t driver) noexcept
 
 #if SUPPORT_PHASE_STEPPING
 
-void Move::ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config)
+GCodeResult Move::ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config, const StringRef& reply) noexcept
 {
 	switch (config)
 	{
@@ -2308,6 +2334,19 @@ void Move::ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepC
 		dms[axisOrExtruder].phaseStepControl.SetKa(value);
 		break;
 	}
+
+#if SUPPORT_CAN_EXPANSION
+	GCodeResult rslt = GCodeResult::ok;
+	IterateRemoteDrivers(axisOrExtruder, [config, value, &rslt, &reply](DriverId driver) noexcept -> void {
+		if (rslt == GCodeResult::ok)
+		{
+			rslt = CanInterface::SetRemotePhaseStepParam(driver, (config == PhaseStepConfig::kv) ? 'V' : 'A', value, reply);
+		}
+	});
+	return rslt;
+#else
+	return GCodeResult::ok;
+#endif
 }
 
 PhaseStepParams Move::GetPhaseStepParams(size_t axisOrExtruder) const noexcept
@@ -2329,14 +2368,41 @@ bool Move::UpdateCurrentMotion(size_t driver, uint32_t when, MotionParameters& m
 
 bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept
 {
-	bool hasRemoteDrivers = false;
+	bool hasRemoteDrivers = false, hasLocalDrivers = false;
 	IterateRemoteDrivers(axisOrExtruder, [&hasRemoteDrivers](DriverId driver) noexcept -> void { hasRemoteDrivers = true; });
+	IterateLocalDrivers(axisOrExtruder, [&hasLocalDrivers](uint8_t driver) noexcept -> void { hasLocalDrivers = true; });
 
-	// Phase stepping does not support remote drivers
+#if SUPPORT_CAN_EXPANSION
+	if (hasRemoteDrivers)
+	{
+		if (mode == StepMode::phase && hasLocalDrivers)
+		{
+			reply.copy("Phase stepping is not supported on axes with both local and remote drivers");
+			return false;
+		}
+		bool remoteOk = true;
+		IterateRemoteDrivers(axisOrExtruder, [mode, &remoteOk, &reply](DriverId driver) noexcept -> void {
+			if (remoteOk && CanInterface::SetRemoteDriverStepMode(driver, (unsigned int)mode, reply) != GCodeResult::ok)
+			{
+				remoteOk = false;
+			}
+		});
+		if (!remoteOk)
+		{
+			return false;
+		}
+		remotePhaseStepDrives.SetOrClearBit(axisOrExtruder, mode == StepMode::phase);
+		if (!hasLocalDrivers)
+		{
+			return true;
+		}
+	}
+#else
 	if (hasRemoteDrivers && mode == StepMode::phase)
 	{
 		return false;
 	}
+#endif
 
 	bool ret = true;
 	DriveMovement* dm = &dms[axisOrExtruder];
@@ -2420,6 +2486,12 @@ StepMode Move::GetStepMode(size_t axisOrExtruder) const noexcept
 	{
 		return StepMode::unknown;
 	}
+#if SUPPORT_CAN_EXPANSION
+	if (remotePhaseStepDrives.IsBitSet(axisOrExtruder))
+	{
+		return StepMode::phase;
+	}
+#endif
 	return dms[axisOrExtruder].GetStepMode();
 }
 
@@ -2441,7 +2513,7 @@ void Move::PrepareLeadscrewAdjustmentDM(size_t localDriver) noexcept
 	}
 }
 
-void Move::PhaseStepControlLoop() noexcept
+bool Move::PhaseStepControlLoop() noexcept
 {
 	// Record the control loop call interval
 	const StepTimer::Ticks loopCallTime = StepTimer::GetTimerTicks();
@@ -2472,6 +2544,7 @@ void Move::PhaseStepControlLoop() noexcept
 	}
 
 	bool inserted = false;
+	float maxSpeed = 0.0;
 	DriveMovement *_ecv_null *dmp = &phaseStepDMs;
 	while (*dmp != nullptr)
 	{
@@ -2499,6 +2572,7 @@ void Move::PhaseStepControlLoop() noexcept
 		}
 		else
 		{
+			maxSpeed = max<float>(maxSpeed, fabsf(dm->phaseStepControl.mParams.speed));
 			dm->phaseStepControl.CalculateCurrentFraction();
 
 			if (dm->drive >= MaxAxesPlusExtruders)
@@ -2542,10 +2616,13 @@ void Move::PhaseStepControlLoop() noexcept
 		}
 	}
 
+	phaseStepMovingFast = maxSpeed > (phaseStepMovingFast ? ResumePollSpeed : DeferPollSpeed);
+
 	// Record how long this has taken to run
 	const StepTimer::Ticks loopRuntime = StepTimer::GetTimerTicks() - loopCallTime;
 	if (loopRuntime < minPSControlLoopRuntime) { minPSControlLoopRuntime = loopRuntime; }
 	if (loopRuntime > maxPSControlLoopRuntime) { maxPSControlLoopRuntime = loopRuntime; }
+	return phaseStepMovingFast;
 }
 
 

@@ -264,6 +264,15 @@ inline void DriveMovement::ClearMovementPending() noexcept
 // Get the current full step interval for this axis or extruder, or zero if no motion in progress
 inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const noexcept
 {
+#if SUPPORT_PHASE_STEPPING
+	if (state == DMState::phaseStepping)
+	{
+		// stepInterval is only maintained by the step and direction path, so under phase stepping it holds a stale value from before the mode was changed.
+		// The commanded speed is already in full steps per step clock, so the full step interval is its reciprocal
+		const float speed = fabsf(phaseStepControl.mParams.speed);
+		return (speed > 0.0) ? (uint32_t)(1.0/speed) : 0;
+	}
+#endif
 	return (segments == nullptr || ((uint32_t)nextStep >> microstepShift) == 0) ? 0
 			: stepInterval << microstepShift;									// return the interval between steps converted to full steps
 }

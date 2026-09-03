@@ -91,7 +91,9 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	// 4. accelerometer members
 	{ "orientation",		OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerOrientation),			ObjectModelEntryFlags::none },
 	{ "points",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerLastRunDataPoints),		ObjectModelEntryFlags::none },
+	{ "resolution",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerResolution),			ObjectModelEntryFlags::none },
 	{ "runs",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerRuns),					ObjectModelEntryFlags::none },
+	{ "samplingRate",		OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerSamplingRate),		ObjectModelEntryFlags::none },
 
 	// 5. closedLoop members
 	{ "points",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).closedLoopLastRunDataPoints),			ObjectModelEntryFlags::none },
@@ -107,7 +109,7 @@ constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 	3,				// section 1: mcuTemp
 	3,				// section 2: vIn
 	3,				// section 3: v12
-	3,				// section 4: accelerometer
+	5,				// section 4: accelerometer
 	2,				// section 5: closed loop
 	0,				// section 6: inductive sensor
 };
@@ -509,6 +511,14 @@ void ExpansionManager::AddClosedLoopRun(CanAddress address, unsigned int numData
 void ExpansionManager::SaveAccelerometerOrientation(CanAddress address, uint8_t orientation) noexcept
 {
 	boards[address].accelerometerOrientation = orientation;
+	reprap.BoardsUpdated();
+}
+
+void ExpansionManager::SaveAccelerometerConfig(CanAddress address, uint16_t samplingRate, uint8_t resolution) noexcept
+{
+	boards[address].accelerometerSamplingRate = samplingRate;
+	boards[address].accelerometerResolution = resolution;
+	reprap.BoardsUpdated();
 }
 
 GCodeResult ExpansionManager::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)

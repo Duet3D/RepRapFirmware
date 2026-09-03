@@ -738,34 +738,20 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 #if SUPPORT_CAN_EXPANSION
 	CanDriversData<float> canDriversToUpdate;
 
-	IterateDrivers(axisOrExtruder,
-							[this, axisOrExtruder, code](uint8_t driver)
-							{
-								if (code == 917)
-								{
-# if HAS_SMART_DRIVERS
-									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
-# endif
-								}
-								else
-								{
-									UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
-								}
-							},
-							[this, axisOrExtruder, code, &canDriversToUpdate](DriverId driver)
-							{
-								if (code == 917)
-								{
-									canDriversToUpdate.AddEntry(driver, standstillCurrentPercent[axisOrExtruder]);
-								}
-								else
-								{
-									canDriversToUpdate.AddEntry(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
-								}
-							}
-						);
 	if (code == 917)
 	{
+		IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder](uint8_t driver)
+							{
+# if HAS_SMART_DRIVERS
+								SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
+# endif
+							},
+							[this, axisOrExtruder, &canDriversToUpdate](DriverId driver)
+							{
+								canDriversToUpdate.AddEntry(driver, standstillCurrentPercent[axisOrExtruder]);
+							}
+						);
 # if SUPPORT_PHASE_STEPPING
 		dms[axisOrExtruder].phaseStepControl.SetStandstillCurrent(standstillCurrentPercent[axisOrExtruder]);
 # endif
@@ -773,26 +759,65 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 	}
 	else
 	{
-		return CanInterface::SetRemoteDriverCurrents(canDriversToUpdate, reply);
+		GCodeResult rslt = GCodeResult::ok;
+		IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder, &rslt, reply](uint8_t driver)
+							{
+# if HAS_SMART_DRIVERS
+								const float actualCurrent = min<float>(motorCurrents[axisOrExtruder], SmartDrivers::GetMaxMotorCurrent(driver));
+								if (actualCurrent < motorCurrents[axisOrExtruder])
+								{
+									reply.lcatf("Driver %u.%u current limited to %umA", CanInterface::GetCanAddress(), driver, (unsigned int)actualCurrent);
+									rslt = GCodeResult::error;
+								}
+# else
+								const float actualCurrent = motorCurrents[axisOrExtruder];
+# endif
+								UpdateMotorCurrent(driver, actualCurrent * motorCurrentFraction[axisOrExtruder]);
+							},
+							[this, axisOrExtruder, &canDriversToUpdate](DriverId driver)
+							{
+								canDriversToUpdate.AddEntry(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
+							}
+						);
+		return max<GCodeResult>(rslt, CanInterface::SetRemoteDriverCurrents(canDriversToUpdate, reply));
 	}
 #else
-	IterateDrivers(axisOrExtruder,
-							[this, axisOrExtruder, code](uint8_t driver)
+	if (code == 917)
+	{
+		IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder](uint8_t driver)
 							{
-								if (code == 917)
-								{
 # if HAS_SMART_DRIVERS
-									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
+								SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
 # endif
-								}
-								else
-								{
-									UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
-								}
 							}
-	);
-	return GCodeResult::ok;
+		);
+		return GCodeResult::ok;
+	}
+	else
+	{
+		GCodeResult rslt = GCodeResult::ok;
+		IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder, &rslt, reply](uint8_t driver)
+							{
+# if HAS_SMART_DRIVERS
+								const float actualCurrent = min<float>(motorCurrents[axisOrExtruder], SmartDrivers::GetMaxMotorCurrent(driver));
+								if (actualCurrent < motorCurrents[axisOrExtruder])
+								{
+									reply.lcatf("Driver %u current limited to %umA", driver, (unsigned int)actualCurrent);
+									rslt = GCodeResult::error;
+								}
+# else
+								const float actualCurrent = motorCurrents[axisOrExtruder];
+# endif
+								rslt = max<GCodeResult>(rslt, UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder], reply));
+							}
+		);
+		return rslt;
+	}
 #endif
+
 }
 
 #ifdef DUET3_MB6XD
@@ -872,10 +897,8 @@ void Move::UpdateMotorCurrent(size_t driver, float current) noexcept
 #if HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
 		{
-			SmartDrivers::SetCurrent(driver, current);
+			return SmartDrivers::SetCurrent(driver, current);
 		}
-#else
-		// otherwise we can't set the motor current
 #endif
 	}
 }
@@ -1036,8 +1059,35 @@ GCodeResult Move::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, 
 		return GCodeResult::error;
 
 #if SUPPORT_TMC22xx || SUPPORT_TMC51xx
-	case 2:			// read/write smart driver register
+	case 2:			// read/write smart driver register, or configure the sine table in step/dir mode
 		{
+# if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
+			if (gb.Seen('S'))
+			{
+				const unsigned int harmonic = gb.GetLimitedUIValue('S', 4, 17);
+				if (harmonic % 4 != 0)
+				{
+					reply.copy("Only harmonics that are multiples of 4 can be represented in the sine table");
+					return GCodeResult::error;
+				}
+				bool seenMagnitude = false, seenPhase = false;
+				float magnitude = 0.0, phase = 0.0;
+				gb.TryGetLimitedFValue('J', magnitude, seenMagnitude, 0.0, 90.0);
+				gb.TryGetLimitedFValue('O', phase, seenPhase, 0.0, 360.0);
+				if (seenPhase && phase != 0.0 && phase != 180.0)
+				{
+					reply.copy("Sine table correction phase must be 0 or 180");
+					return GCodeResult::error;
+				}
+				return SmartDrivers::ConfigureLutCorrection(drive, harmonic, seenMagnitude, magnitude, seenPhase, phase == 180.0, reply);
+			}
+			if (!gb.Seen('R'))
+			{
+				reply.printf("Driver %u waveform correction:", drive);
+				SmartDrivers::AppendLutCorrections(drive, reply);
+				return GCodeResult::ok;
+			}
+# endif
 			gb.MustSee('R');
 			const uint8_t regNum = gb.GetLimitedUIValue('R', 0, 0x80);
 			if (gb.Seen('V'))
@@ -1453,7 +1503,13 @@ GCodeResult Move::EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<floa
 							}
 							else
 							{
-								motorCurrents[driver] = msg.values[count];
+
+								motorCurrents[driver] = min<float>(msg.values[count], SmartDrivers::GetMaxMotorCurrent(driver));
+								if (motorCurrents[driver] < msg.values[count])
+								{
+									reply.lcatf("Driver %u.%u current limited to %umA", CanInterface::GetCanAddress(), driver, (unsigned int)motorCurrents[driver]);
+									rslt = GCodeResult::error;
+								}
 								motorCurrentFraction[driver] = 1.0;
 								UpdateMotorCurrent(driver, msg.values[count]);
 							}
@@ -1697,10 +1753,9 @@ GCodeResult Move::EutProcessM569Point2(const CanMessageGeneric& msg, const Strin
 #if SUPPORT_TMC22xx || SUPPORT_TMC51xx
 	CanMessageGenericParser parser(msg, M569Point2Params);
 	uint8_t drive;
-	uint8_t regNum;
-	if (!parser.GetUintParam('P', drive) || !parser.GetUintParam('R', regNum))
+	if (!parser.GetUintParam('P', drive))
 	{
-		reply.copy("Missing P or R parameter in CAN message");
+		reply.copy("Missing P parameter in CAN message");
 		return GCodeResult::error;
 	}
 
@@ -1708,6 +1763,50 @@ GCodeResult Move::EutProcessM569Point2(const CanMessageGeneric& msg, const Strin
 	{
 		reply.printf("Driver number %u.%u out of range", CanInterface::GetCanAddress(), drive);
 		return GCodeResult::error;
+	}
+
+# if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
+	uint8_t harmonic;
+	if (parser.GetUintParam('S', harmonic))
+	{
+		if (harmonic % 4 != 0)
+		{
+			reply.copy("Only harmonics that are multiples of 4 can be represented in the sine table");
+			return GCodeResult::error;
+		}
+		if (harmonic < 4 || harmonic > 16)
+		{
+			reply.copy("Waveform correction harmonic out of range");
+			return GCodeResult::error;
+		}
+		float magnitude = 0.0, phase = 0.0;
+		const bool seenMagnitude = parser.GetFloatParam('J', magnitude);
+		const bool seenPhase = parser.GetFloatParam('O', phase);
+		if (seenMagnitude && (magnitude < 0.0 || magnitude > 90.0))
+		{
+			reply.copy("Waveform correction magnitude out of range");
+			return GCodeResult::error;
+		}
+		if (seenPhase && phase != 0.0 && phase != 180.0)
+		{
+			reply.copy("Sine table correction phase must be 0 or 180");
+			return GCodeResult::error;
+		}
+		return SmartDrivers::ConfigureLutCorrection(drive, harmonic, seenMagnitude, magnitude, seenPhase, phase == 180.0, reply);
+	}
+# endif
+
+	uint8_t regNum;
+	if (!parser.GetUintParam('R', regNum))
+	{
+# if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
+		reply.printf("Driver %u.%u waveform correction:", CanInterface::GetCanAddress(), drive);
+		SmartDrivers::AppendLutCorrections(drive, reply);
+		return GCodeResult::ok;
+# else
+		reply.copy("Missing R parameter in CAN message");
+		return GCodeResult::error;
+# endif
 	}
 
 	uint32_t regVal;

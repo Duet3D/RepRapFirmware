@@ -136,7 +136,7 @@ public:
 		pre(drive < GetNumActualDirectDrivers());														// Deal with M569.0 for one local driver
 	GCodeResult ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) THROWS(GCodeException)
 		pre(driver < GetNumActualDirectDrivers());
-	GCodeResult SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply) noexcept;
+	GCodeResult SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, int code, const StringRef& reply) noexcept;
 
 	int GetMotorCurrent(size_t axisOrExtruder, int code) const noexcept;
 	void SetIdleCurrentFactor(float f) noexcept;
@@ -455,7 +455,7 @@ public:
 #endif
 
 #if SUPPORT_PHASE_STEPPING
-	void ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config);	// configure Ka & Kv parameters for phase stepping
+	GCodeResult ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config, const StringRef& reply) noexcept;	// configure Ka & Kv parameters for phase stepping
 	PhaseStepParams GetPhaseStepParams(size_t axisOrExtruder) const noexcept;
 	bool UpdateCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
 	bool SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept;
@@ -463,7 +463,7 @@ public:
 	void PrepareLeadscrewAdjustmentDM(size_t localDriver) noexcept;							// set up the DM that adjusts a leadscrew so that it executes the same way as the Z axis
 	void ResetPhaseStepMonitoringVariables() noexcept;
 
-	void PhaseStepControlLoop() noexcept;
+	bool PhaseStepControlLoop() noexcept;					// update the coil currents of the phase stepping drivers, returning true if any of them is moving fast enough to need the higher SPI cadence
 #endif
 
 	void Interrupt() noexcept;
@@ -593,6 +593,7 @@ private:
 	void DisengageBrake(size_t driver) noexcept;
 
 	void UpdateMotorCurrent(size_t driver, float current) noexcept;
+
 	void SetOneDriverDirection(uint8_t driver, bool direction) noexcept pre(driver < GetNumActualDirectDrivers());
 
 	StandardDriverStatus GetLocalDriverStatus(size_t driver) const noexcept;
@@ -646,6 +647,12 @@ private:
 	StepTimer::Ticks maxPSControlLoopRuntime;				// The maximum time the control loop has taken to run
 	StepTimer::Ticks minPSControlLoopCallInterval;			// The minimum interval between the control loop being called
 	StepTimer::Ticks maxPSControlLoopCallInterval;			// The maximum interval between the control loop being called
+
+	bool phaseStepMovingFast;								// Whether any phase stepping driver is above the speed at which we defer the driver status poll
+#endif
+
+#if SUPPORT_PHASE_STEPPING && SUPPORT_CAN_EXPANSION
+	LogicalDrivesBitmap remotePhaseStepDrives;				// logical drives whose remote drivers have been switched to phase stepping
 #endif
 
 #if SUPPORT_ASYNC_MOVES
@@ -813,7 +820,7 @@ inline float Move::NormalAcceleration(size_t drive) const noexcept
 
 inline float Move::Acceleration(size_t drive, bool useReduced) const noexcept
 {
-	return (useReduced) ? min<float>(reducedAccelerations[drive], normalAccelerations[drive]) : normalAccelerations[drive];
+	return (useReduced) ? reducedAccelerations[drive] : normalAccelerations[drive];
 }
 
 inline float Move::MaxFeedrate(size_t drive) const noexcept

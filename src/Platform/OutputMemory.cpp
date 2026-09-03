@@ -388,6 +388,7 @@ bool OutputBuffer::WriteToFile(FileData& f) const noexcept
 		}
 	}
 
+	buf = nullptr;
 	reprap.GetPlatform().LogError(ErrorCode::OutputStarvation);
 	return false;
 }

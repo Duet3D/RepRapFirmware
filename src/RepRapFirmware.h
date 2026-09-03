@@ -105,7 +105,8 @@ enum class PinUsedBy : uint8_t
 	temporaryInput,
 	sensor,
 	led,
-	sdCard
+	sdCard,
+	i2c
 };
 
 #include <Config/Pins.h>
@@ -748,6 +749,7 @@ const NvicPriority NvicPriorityAuxUart = 3;			// UART is highest to avoid charac
 const NvicPriority NvicPriorityWiFiUart = 3;		// UART used to receive debug data from the WiFi module
 #endif
 
+const NvicPriority NvicPriorityI2C = 4;				// the SharedI2CMaster ISR makes FreeRTOS calls, so this must be no higher priority than the FreeRTOS max syscall priority
 const NvicPriority NvicPriorityCan = 4;				// CAN interface
 const NvicPriority NvicPriorityPins = 4;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const NvicPriority NvicPriorityDriversSerialTMC = 4; // USART or UART used to control and monitor the smart drivers

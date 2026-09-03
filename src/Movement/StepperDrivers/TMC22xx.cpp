@@ -561,6 +561,7 @@ public:
 	bool SetDriverMode(unsigned int mode) noexcept;
 	DriverMode GetDriverMode() const noexcept;
 	void SetCurrent(float current) noexcept;
+	float GetMaxCurrent() const noexcept;
 	void Enable(bool en) noexcept;
 #if HAS_STALL_DETECT
 	void SetStallDetectThreshold(int sgThreshold) noexcept;
@@ -1487,13 +1488,18 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 // Set the motor current
 void TmcDriverState::SetCurrent(float current) noexcept
 {
-	motorCurrent = constrain<float>(current, 50.0,
+	motorCurrent = constrain<float>(current, 50.0, GetMaxCurrent());
+	UpdateCurrent();
+}
+
+float TmcDriverState::GetMaxCurrent() const noexcept
+{
+	const float maxCurrent =
 #if SUPPORT_TMC2240 && (SUPPORT_TMC2208 || SUPPORT_TMC2209)
 													(isTmc2240) ? MaximumTmc2240MotorCurrent :
 #endif
-													MaximumMotorCurrent
-									);
-	UpdateCurrent();
+													MaximumMotorCurrent;
+	return maxCurrent;
 }
 
 void TmcDriverState::UpdateCurrent() noexcept
@@ -2367,6 +2373,11 @@ void SmartDrivers::SetCurrent(size_t drive, float current) noexcept
 	{
 		driverStates[drive].SetCurrent(current);
 	}
+}
+
+float SmartDrivers::GetMaxMotorCurrent(size_t driver) noexcept
+{
+	return (driver < GetNumTmcDrivers()) ? driverStates[driver].GetMaxCurrent() : 0.0;
 }
 
 void SmartDrivers::EnableDrive(size_t drive, bool en) noexcept

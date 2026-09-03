@@ -27,11 +27,13 @@
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/CanInterface.h>
+# include <CAN/CanMessageGenericConstructor.h>
+# include <CanMessageGenericTables.h>
 # include <CAN/ExpansionManager.h>
 # include <ClosedLoop/ClosedLoop.h>
 #endif
 
-#ifdef I2C_IFACE
+#if defined(I2C_IFACE) && (SAM4S || SAM4E)
 # include <Wire.h>
 #endif
 
@@ -847,10 +849,39 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 {
 	constexpr int8_t kvSubCommand = 1;
 	constexpr int8_t kaSubCommand = 2;
+	constexpr int8_t correctionSubCommand = 3;
 
 	bool seen = false;
 	Move& move = reprap.GetMove();
 	int8_t commandFraction = gb.GetCommandFraction();
+	if (commandFraction == correctionSubCommand)
+	{
+		// The phase correction is a property of the driver, not the axis
+		gb.MustSee('P');
+		const DriverId id = gb.GetDriverId();
+		if (gb.Seen('S') && !LockAllMovementSystemsAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+		if (id.IsRemote())
+		{
+#if SUPPORT_CAN_EXPANSION
+			CanMessageGenericConstructor cons(M970Point3Params);
+			cons.PopulateFromCommand(gb);
+			return cons.SendAndGetResponse(CanMessageType::m970p3, id.boardAddress, reply);
+#else
+			reply.copy("Phase correction is not supported on remote drivers");
+			return GCodeResult::error;
+#endif
+		}
+		if (id.localDriver >= move.GetNumActualDirectDrivers())
+		{
+			reply.printf("Driver number %u out of range", id.localDriver);
+			return GCodeResult::error;
+		}
+		return PhaseStep::ConfigureCorrection(id.localDriver, gb, reply);
+	}
+
 	for (size_t axis = 0; axis < numTotalAxes; axis++)
 	{
 		if (gb.Seen(axisLetters[axis]))
@@ -869,7 +900,10 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 					const bool ret = move.SetStepMode(axis, mode, reply);
 					if (!ret)
 					{
-						reply.printf("Could not set step mode for axis %c to mode %u", axisLetters[axis], (uint16_t)mode);
+						if (reply.IsEmpty())
+						{
+							reply.printf("Could not set step mode for axis %c to mode %u", axisLetters[axis], (uint16_t)mode);
+						}
 						return GCodeResult::error;
 					}
 					break;
@@ -878,7 +912,11 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 			case kaSubCommand:
 				{
 					const float value = gb.GetLimitedFValue(axisLetters[axis], 0, FLT_MAX);
-					move.ConfigurePhaseStepping(axis, value, commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
+					const GCodeResult rslt = move.ConfigurePhaseStepping(axis, value, commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka, reply);
+					if (rslt != GCodeResult::ok)
+					{
+						return rslt;
+					}
 					break;
 				}
 			}
@@ -911,7 +949,10 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 					const bool ret = move.SetStepMode(ExtruderToLogicalDrive(e), (StepMode)eVals[e], reply);
 					if (!ret)
 					{
-						reply.printf("Could not set step mode for extruder %u to mode %lu", e, eVals[e]);
+						if (reply.IsEmpty())
+						{
+							reply.printf("Could not set step mode for extruder %u to mode %lu", e, eVals[e]);
+						}
 						return GCodeResult::error;
 					}
 				}
@@ -931,7 +972,11 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 						reply.printf("Invalid K%c %f", commandFraction == kvSubCommand ? 'v' : 'a', (double)eVals[e]);
 						return GCodeResult::error;
 					}
-					move.ConfigurePhaseStepping(ExtruderToLogicalDrive(e), eVals[e], commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
+					const GCodeResult rslt = move.ConfigurePhaseStepping(ExtruderToLogicalDrive(e), eVals[e], commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka, reply);
+					if (rslt != GCodeResult::ok)
+					{
+						return rslt;
+					}
 				}
 				break;
 			}
@@ -994,6 +1039,10 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 // Deal with M569
 GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	if (gb.GetCommandFraction() == 2 && gb.Seen('S') && !LockAllMovementSystemsAndWaitForStandstill(gb))
+	{
+		return GCodeResult::notFinished;
+	}
 	gb.MustSee('P');
 	size_t drivesCount = numVisibleAxes;
 	DriverId driverIds[drivesCount];

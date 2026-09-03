@@ -212,6 +212,7 @@ static MovementProfile debugProfile;
 	params.jerk = (motioncalc_t)(djerk * recipMovementRatio);
 	double speed = plannedProfile.startSpeed;
 	double acceleration = plannedProfile.startAcceleration;
+	params.startSpeed = (motioncalc_t)(speed * recipMovementRatio);
 	params.initialAcceleration = (motioncalc_t)(acceleration * recipMovementRatio);
 
 	uint32_t totalClocks = 0;
@@ -447,6 +448,8 @@ static MovementProfile debugProfile;
 		{
 			t6 = MovementProfile::SmallestNonNegativeCubicSolution(djerk, (double)0.0, 6 * plannedProfile.endSpeed, -6 * t6Distance);
 			params.phaseClocks[6] = doubleToU32(t6, __LINE__);
+			speed = plannedProfile.endSpeed;
+			acceleration = (double)0.0;
 		}
 		else
 		{
@@ -465,6 +468,7 @@ static MovementProfile debugProfile;
 	} while (false);
 
 	SetState(planned);
+	params.endSpeed = (motioncalc_t)(speed * recipMovementRatio);
 	--plannedProfile.numberOfMovesCovered;
 	plannedProfile.startSpeed = speed;
 	plannedProfile.startAcceleration = acceleration;

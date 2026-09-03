@@ -228,26 +228,38 @@ void CanInterface::SetStatusLedNormal() noexcept
 
 #endif
 
-// This is called only from the CAN clock loop, so inline
-static inline void UpdateLed(uint32_t stepClocks) noexcept
+// Called frequently from Platform::Spin, so that we change the LED state as close to the step clock transition as the expansion boards do
+void CanInterface::UpdateStatusLed() noexcept
 {
+#if SUPPORT_REMOTE_COMMANDS
+	if (inExpansionMode && !StepTimer::CheckSynced())
+	{
+		// Blink fast to show that we haven't established clock sync with the master
+		reprap.GetPlatform().SetDiagLed((StepTimer::GetTimerTicks() & (1u << 17)) != 0);
+		return;
+	}
+
+	const uint32_t stepClocks = StepTimer::GetMasterTime();
+#else
+	const uint32_t stepClocks = StepTimer::GetTimerTicks();
+#endif
+
 #if SUPPORT_MULTICAST_DISCOVERY
 	if (identifying)
 	{
 		if (identTotalClocks != 0 && stepClocks - identInitialClocks >= identTotalClocks)
 		{
-			identifying = 0;							// stop identifying
+			identifying = false;						// stop identifying
 		}
 		else
 		{
-			// Blink the LED fast. This function gets called every 200ms, so that's the fastest we can blink it without having another task do it.
-			reprap.GetPlatform().InvertDiagLed();
+			reprap.GetPlatform().SetDiagLed((stepClocks & (1u << 17)) != 0);
 			return;
 		}
 	}
 #endif
 
-	// Blink the LED at about 1Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
+	// Blink the LED at about 1Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us
 	reprap.GetPlatform().SetDiagLed((stepClocks & (1u << 19)) != 0);
 }
 
@@ -660,8 +672,6 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		SendCanMessage(TxBufferIndexTimeSync, 0, &buf);
 		++timeSyncMessagesSent;
 
-		UpdateLed(lastTimeSent);
-
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, CanClockIntervalMillis);
 
@@ -1063,7 +1073,10 @@ GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb
 
 	case 2:
 		{
-			gb.MustSee('R');
+			if (gb.Seen('V'))
+			{
+				gb.MustSee('R');
+			}
 			CanMessageGenericConstructor cons(M569Point2Params);
 			cons.PopulateFromCommand(gb);
 			return cons.SendAndGetResponse(CanMessageType::m569p2, driver.boardAddress, reply);
@@ -1198,6 +1211,44 @@ GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb
 	}
 }
 
+#if SUPPORT_PHASE_STEPPING
+
+// Handle M970 for a remote driver
+GCodeResult CanInterface::SetRemoteDriverStepMode(DriverId driver, unsigned int mode, const StringRef& reply) noexcept
+{
+	try
+	{
+		CanMessageGenericConstructor cons(M970Params);
+		cons.AddDriverIdParam('P', driver);
+		cons.AddUParam('S', mode);
+		return cons.SendAndGetResponse(CanMessageType::m970, driver.boardAddress, reply);
+	}
+	catch (const GCodeException& e)
+	{
+		e.GetMessage(reply, nullptr);
+		return GCodeResult::error;
+	}
+}
+
+// Handle M970.1/M970.2 for a remote driver, sending the Kv or Ka value as parameter 'V' or 'A'
+GCodeResult CanInterface::SetRemotePhaseStepParam(DriverId driver, char param, float value, const StringRef& reply) noexcept
+{
+	try
+	{
+		CanMessageGenericConstructor cons(M970Params);
+		cons.AddDriverIdParam('P', driver);
+		cons.AddFParam(param, value);
+		return cons.SendAndGetResponse(CanMessageType::m970, driver.boardAddress, reply);
+	}
+	catch (const GCodeException& e)
+	{
+		e.GetMessage(reply, nullptr);
+		return GCodeResult::error;
+	}
+}
+
+#endif
+
 // Handle M915 for a collection of remote drivers
 GCodeResult CanInterface::GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) THROWS(GCodeException)
 {
@@ -1237,7 +1288,7 @@ GCodeResult CanInterface::GetSetRemoteDriverStallParameters(const CanDriversList
 static String<StringLength100> enableEndstopsReply;
 
 // Enable a stall endstop on a remote board
-void CanInterface::EnableRemoteStallEndstop(DriverId did, float speed) THROWS(GCodeException)
+void CanInterface::EnableRemoteStallEndstop(DriverId did, float speed, bool useEncoder) THROWS(GCodeException)
 {
 	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -1248,6 +1299,7 @@ void CanInterface::EnableRemoteStallEndstop(DriverId did, float speed) THROWS(GC
 	auto msg = buf->SetupRequestMessage<CanMessageEnableStallEndstop>(rid, CanInterface::GetCanAddress(), did.boardAddress);
 	msg->driverNumber = did.localDriver;
 	msg->speed = speed;
+	msg->endstopType = useEncoder ? CanMessageEnableStallEndstop::typeEncoder : CanMessageEnableStallEndstop::typeMotorLoad;
 
 	enableEndstopsReply.Clear();
 	if (CanInterface::SendRequestAndGetStandardReply(buf, rid, enableEndstopsReply.GetRef(), nullptr) != GCodeResult::ok)
