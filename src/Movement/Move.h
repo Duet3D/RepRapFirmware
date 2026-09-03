@@ -379,11 +379,11 @@ public:
 	static constexpr size_t NumStuckDiagnosticWords = 5;									// how many words GetStuckDiagnostics writes
 	void GetStuckDiagnostics(uint32_t *_ecv_array words) const noexcept;					// collect the movement state that explains a stuck task
 
-	bool NoLiveMovement() const noexcept { return rings[0].IsIdle(); }						// Is a move running, or are there any queued?
+	bool NoLiveMovement(size_t msNumber) const noexcept pre(msNumber < NumMovementSystems) { return rings[msNumber].IsIdle(); }		// Is a move running, or are there any queued?
 
-	uint32_t GetScheduledMoves() const noexcept { return rings[0].GetScheduledMoves(); }	// How many moves have been scheduled?
-	uint32_t GetCompletedMoves() const noexcept { return rings[0].GetCompletedMoves(); }	// How many moves have been completed?
-	void ResetMoveCounters() noexcept { rings[0].ResetMoveCounters(); }
+	uint32_t GetScheduledMoves(size_t msNumber) const noexcept pre(msNumber < NumMovementSystems) { return rings[msNumber].GetScheduledMoves(); }	// How many moves have been scheduled?
+	uint32_t GetCompletedMoves(size_t msNumber) const noexcept pre(msNumber < NumMovementSystems) { return rings[msNumber].GetCompletedMoves(); }	// How many moves have been completed?
+	void ResetMoveCounters(size_t msNumber) noexcept pre(msNumber < NumMovementSystems) { rings[msNumber].ResetMoveCounters(); }
 	void UpdateExtrusionPendingLimits(float extrusionPending) noexcept;
 
 	HeightMap& AccessHeightMap() noexcept { return heightMap; }								// Access the bed probing grid
@@ -391,7 +391,7 @@ public:
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool LoadHeightMapFromFile(FileStore *f, const char *_ecv_array fname, const StringRef& r) noexcept;	// Load the height map from a file returning true if an error occurred
-	bool SaveHeightMapToFile(FileStore *f, const char *_ecv_array fname) noexcept;						// Save the height map to a file returning true if an error occurred
+	bool SaveHeightMapToFile(FileStore *f, const char *_ecv_array fname) noexcept;							// Save the height map to a file returning true if an error occurred
 # if SUPPORT_PROBE_POINTS_FILE
 	bool LoadProbePointsFromFile(FileStore *f, const char *_ecv_array fname, const StringRef& r) noexcept;	// Load the probe points map from a file returning true if an error occurred
 	void ClearProbePointsInvalid() noexcept;

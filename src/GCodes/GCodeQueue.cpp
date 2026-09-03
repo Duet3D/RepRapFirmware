@@ -14,7 +14,7 @@
 
 // GCodeQueue class
 
-GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
+GCodeQueue::GCodeQueue(size_t p_msNumber) noexcept : msNumber(p_msNumber), freeItems(nullptr), queuedItems(nullptr)
 {
 	for (size_t i = 0; i < maxQueuedCodes; i++)
 	{
@@ -24,18 +24,18 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 
 // Return true if the GCode in the GCodeBuffer should be queued
 // Caller has already checked that the command does not contain an expression and involves modifying tool temperatures or spindle speed
-/*static*/ bool GCodeQueue::ShouldQueueG10(GCodeBuffer &gb, ParameterLettersBitmap allAxisLetters) noexcept
+bool GCodeQueue::ShouldQueueG10(GCodeBuffer &gb, ParameterLettersBitmap allAxisLetters) const noexcept
 {
-	return reprap.GetMove().GetScheduledMoves() != reprap.GetMove().GetCompletedMoves()
+	return reprap.GetMove().GetScheduledMoves(msNumber) != reprap.GetMove().GetCompletedMoves(msNumber)
 			&& !gb.AllParameters().Intersects(allAxisLetters)					// only queue it if it does not modify tool offsets
 			&& gb.DataLength() <= BufferSizePerQueueItem;						// only queue it if it is short enough to fit in a queue item
 }
 
 // Return true if the MCode in the GCodeBuffer should be queued. Caller has already checked that the command does not contain an expression.
-/*static*/ bool GCodeQueue::ShouldQueueMCode(GCodeBuffer &gb) THROWS(GCodeException)
+bool GCodeQueue::ShouldQueueMCode(GCodeBuffer &gb) const THROWS(GCodeException)
 {
 	// Don't queue anything if no moves are being performed
-	if (reprap.GetMove().GetScheduledMoves() != reprap.GetMove().GetCompletedMoves())
+	if (reprap.GetMove().GetScheduledMoves(msNumber) != reprap.GetMove().GetCompletedMoves(msNumber))
 	{
 		// None of the M codes we queue has a fractional command number
 		if (gb.GetCommandFraction() > 0)
@@ -116,7 +116,7 @@ bool GCodeQueue::QueueCode(const GCodeBuffer &gb) noexcept
 	QueuedCode * const code = _ecv_not_null(freeItems);
 	freeItems = code->next;
 	code->AssignFrom(gb);
-	code->executeAtMove = reprap.GetMove().GetScheduledMoves();
+	code->executeAtMove = reprap.GetMove().GetScheduledMoves(msNumber);
 	code->next = nullptr;
 
 	// Append it to the list of queued codes
@@ -140,7 +140,7 @@ bool GCodeQueue::QueueCode(const GCodeBuffer &gb) noexcept
 bool GCodeQueue::FillBuffer(GCodeBuffer *gb) noexcept
 {
 	// Can this buffer be filled?
-	if (queuedItems == nullptr || queuedItems->executeAtMove > reprap.GetMove().GetCompletedMoves())
+	if (queuedItems == nullptr || queuedItems->executeAtMove > reprap.GetMove().GetCompletedMoves(msNumber))
 	{
 		// No - stop here
 		return false;
@@ -171,7 +171,7 @@ size_t GCodeQueue::BytesCached() const noexcept
 // Return true if there is nothing to do
 bool GCodeQueue::IsIdle() const noexcept
 {
-	return queuedItems == nullptr || queuedItems->executeAtMove > reprap.GetMove().GetCompletedMoves();
+	return queuedItems == nullptr || queuedItems->executeAtMove > reprap.GetMove().GetCompletedMoves(msNumber);
 }
 
 // Because some moves may end before the print is actually paused, we need a method to
@@ -181,7 +181,7 @@ void GCodeQueue::PurgeEntries() noexcept
 	QueuedCode *_ecv_null item = queuedItems, *_ecv_null lastItem = nullptr;
 	while (item != nullptr)
 	{
-		if (item->executeAtMove > reprap.GetMove().GetScheduledMoves())
+		if (item->executeAtMove > reprap.GetMove().GetScheduledMoves(msNumber))
 		{
 			// Release this item
 			QueuedCode *_ecv_null nextItem = item->Next();
