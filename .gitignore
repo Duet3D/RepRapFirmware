@@ -3,7 +3,7 @@
 *.d
 
 # Misc
-/.settings/language.settings.xml
+/.settings/
 
 # Emacs backup and auto-save files
 *~
@@ -31,4 +31,3 @@
 /.clangd
 /.clang-format
 /src/Temp/
-/.settings/
