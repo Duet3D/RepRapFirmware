@@ -221,7 +221,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "directDisplay",		OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetDisplay().IsPresent(), &reprap.GetDisplay()),					ObjectModelEntryFlags::none },
 #endif
 	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(0),																			ObjectModelEntryFlags::liveNotPanelDue },
-	{ "firmwareDate",		OBJECT_MODEL_FUNC_NOSELF(DateText),																	ObjectModelEntryFlags::none },
+	{ "firmwareDate",		OBJECT_MODEL_FUNC_NOSELF(DateTimeText),																	ObjectModelEntryFlags::none },
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),														ObjectModelEntryFlags::none },
 	{ "firmwareName",		OBJECT_MODEL_FUNC_NOSELF(FIRMWARE_NAME),															ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(VERSION),																	ObjectModelEntryFlags::none },
@@ -255,7 +255,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::liveNotPanelDue },
 #endif
 #if HAS_WIFI_NETWORKING
-	{ "wifiFirmwareFileName", OBJECT_MODEL_FUNC_NOSELF(WIFI_FIRMWARE_FILE),														ObjectModelEntryFlags::none },
+	{ "wifiFirmwareFileName", OBJECT_MODEL_FUNC(self->GetDefaultWiFiFirmwareName()),											ObjectModelEntryFlags::none },
 #endif
 #if HAS_CPU_TEMP_SENSOR
 	// 1. boards[0].mcuTemp members
@@ -282,7 +282,9 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	// 4. boards[0].accelerometer members
 	{ "orientation",		OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerOrientation()),				ObjectModelEntryFlags::none },
 	{ "points",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerDataPoints()),				ObjectModelEntryFlags::none },
+	{ "resolution",			OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerResolution()),				ObjectModelEntryFlags::none },
 	{ "runs",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerRuns()),						ObjectModelEntryFlags::none },
+	{ "samplingRate",		OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerSamplingRate()),				ObjectModelEntryFlags::none },
 #endif
 };
 
@@ -307,7 +309,7 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 	0,																		// section 3: v12
 #endif
 #if SUPPORT_ACCELEROMETERS
-	3,																		// section 4: boards[0].accelerometer
+	5,																		// section 4: boards[0].accelerometer
 #else
 	0,
 #endif
@@ -336,8 +338,26 @@ size_t Platform::GetNumGpOutputsToReport() const noexcept
 }
 
 bool Platform::deliberateError = false;						// true if we deliberately caused an exception for testing purposes
-String<StringLength256> Platform::genericDebugBuffer;
+String<StringLength256> *_ecv_null Platform::genericDebugBuffer = nullptr;
 bool Platform::hasGenericDebug = false;
+#if SUPPORT_ASYNC_MOVES
+String<StringLength256> *_ecv_null Platform::moveWarningBuffer = nullptr;
+bool Platform::hasMoveWarning = false;
+#endif
+
+void Platform::EnsureDebugBuffers() noexcept
+{
+	if (genericDebugBuffer == nullptr)
+	{
+		genericDebugBuffer = new String<StringLength256>();
+	}
+#if SUPPORT_ASYNC_MOVES
+	if (moveWarningBuffer == nullptr)
+	{
+		moveWarningBuffer = new String<StringLength256>();
+	}
+#endif
+}
 bool Platform::shouldTurnOffHeaters = false;
 SharedSpiDevice *_ecv_null Platform::mainSharedSpiDevice = nullptr;
 
@@ -412,8 +432,10 @@ void Platform::Init() noexcept
 
 	// Do any board-specific initialisation that needs to be done early and does not depend on the board revision
 
+#if HAS_SMART_DRIVERS
 	// Make sure the on-board drivers are disabled
 	SetPinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
+#endif
 
 	// Make sure any WiFi module is held in reset
 #if defined(DUET_NG)
@@ -650,7 +672,8 @@ void Platform::Init() noexcept
 	v12MonitorAdcChannel = PinToAdcChannel(PowerMonitorV12DetectPin);
 	SetPinMode(PowerMonitorV12DetectPin, AIN);
 	AnalogInEnableChannel(v12MonitorAdcChannel, true);
-	currentV12 = highestV12 = 0;
+	currentV12 = 0;
+	highestV12 = 0;
 	lowestV12 = 9999;
 	numV12UnderVoltageEvents = previousV12UnderVoltageEvents = 0;
 #endif
@@ -673,7 +696,8 @@ void Platform::ResetVoltageMonitors() noexcept
 	highestVin = currentVin;
 
 #if HAS_12V_MONITOR
-	lowestV12 = highestV12 = currentV12;
+	lowestV12 = currentV12;
+	highestV12 = currentV12;
 #endif
 
 	reprap.BoardsUpdated();
@@ -705,30 +729,6 @@ void Platform::SendPanelDueMessage(size_t chan, const char *_ecv_array msg) noex
 	if (!reprap.GetGCodes().IsFlashingPanelDue())
 	{
 		auxDevices[chan - FirstAuxChannel].SendPanelDueMessage(msg);
-	}
-#endif
-}
-
-void Platform::Exit() noexcept
-{
-	StopLogging();
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	MassStorage::CloseAllFiles();
-#endif
-
-	// Stop processing data. Don't try to send a message because it will probably never get there.
-	active = false;
-
-	// Close down USB and serial ports and release output buffers
-	for (UsbDeviceRrf& dev : usbDevices)
-	{
-		dev.Shutdown();
-	}
-
-#if NUM_ASYNC_CHANNELS != 0
-	for (AuxDevice& dev : auxDevices)
-	{
-		dev.Disable();
 	}
 #endif
 }
@@ -789,22 +789,9 @@ void Platform::Spin() noexcept
 		return;
 	}
 
-#if SUPPORT_REMOTE_COMMANDS
-	if (CanInterface::InExpansionMode())
-	{
-		// Update status LED
-		if (StepTimer::CheckSynced())
-		{
-			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetMasterTime() & (1u << 19)) != 0);
-		}
-		else
-		{
-			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 17)) != 0);
-		}
-	}
-#endif
-
 #if SUPPORT_CAN_EXPANSION
+	CanInterface::UpdateStatusLed();
+
 	// Turn off the ACT LED if it is time to do so
 	if (millis() - whenLastCanMessageProcessed > ActLedFlashTime)
 	{
@@ -819,13 +806,22 @@ void Platform::Spin() noexcept
 	// Check for generic debug
 	if (hasGenericDebug)
 	{
-		Message(AddError(MessageType::GenericMessage), genericDebugBuffer.c_str());
+		Message(AddError(MessageType::GenericMessage), (genericDebugBuffer != nullptr) ? genericDebugBuffer->c_str() : "step error occurred but no debug buffer was allocated, use M111 to record details\n");
 		if (shouldTurnOffHeaters)
 		{
 			reprap.GetHeat().SwitchOffAll(true);
 		}
 		hasGenericDebug = false;
 	}
+
+#if SUPPORT_ASYNC_MOVES
+	if (hasMoveWarning && moveWarningBuffer != nullptr)
+	{
+		Message(WarningMessage, moveWarningBuffer->c_str());
+		moveWarningBuffer->Clear();
+		hasMoveWarning = false;
+	}
+#endif
 
 	// Check for M111 debug messages stored in the optional buffer
 	while (!isrDebugBuffer.IsEmpty())
@@ -979,13 +975,13 @@ void Platform::Spin() noexcept
 			if (numVinOverVoltageEvents != previousVinOverVoltageEvents)
 			{
 				MessageF(WarningMessage, "VIN over-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastVinOverVoltageValue));
-				previousVinOverVoltageEvents = numVinOverVoltageEvents;
+				previousVinOverVoltageEvents = numVinOverVoltageEvents.load();
 				reported = true;
 			}
 			if (numVinUnderVoltageEvents != previousVinUnderVoltageEvents)
 			{
 				MessageF(WarningMessage, "VIN under-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastVinUnderVoltageValue));
-				previousVinUnderVoltageEvents = numVinUnderVoltageEvents;
+				previousVinUnderVoltageEvents = numVinUnderVoltageEvents.load();
 				reported = true;
 			}
 #endif
@@ -1386,21 +1382,20 @@ void Platform::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 			reprap.BoardsUpdated();
 # endif
 		}
-
 #endif
 
 #if HAS_VOLTAGE_MONITOR
 		// Show the supply voltage
 		reply.lcatf("Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 ", over voltage events: %" PRIu32 ", power good: %s",
 			(double)AdcReadingToPowerVoltage(lowestVin), (double)AdcReadingToPowerVoltage(currentVin), (double)AdcReadingToPowerVoltage(highestVin),
-					numVinUnderVoltageEvents, numVinOverVoltageEvents,
+					numVinUnderVoltageEvents.load(), numVinOverVoltageEvents.load(),
 					(HasDriverPower()) ? "yes" : "no");
 #endif
 
 #if HAS_12V_MONITOR
 		// Show the 12V rail voltage
 		reply.lcatf("12V rail voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32,
-			(double)AdcReadingToV12Voltage(lowestV12), (double)AdcReadingToV12Voltage(currentV12), (double)AdcReadingToV12Voltage(highestV12), numV12UnderVoltageEvents);
+			(double)AdcReadingToV12Voltage(lowestV12), (double)AdcReadingToV12Voltage(currentV12), (double)AdcReadingToV12Voltage(highestV12), numV12UnderVoltageEvents.load());
 #endif
 		ResetVoltageMonitors();
 		break;
@@ -1430,9 +1425,19 @@ void Platform::Diagnostics(unsigned int part, const StringRef& reply) noexcept
 
 #ifdef I2C_IFACE
 		{
+# if SAM4S || SAM4E
 			const TwoWire::ErrorCounts errs = I2C_IFACE.GetErrorCounts(true);
-			reply.lcatf("I2C nak errors %" PRIu32 ", send timeouts %" PRIu32 ", receive timeouts %" PRIu32 ", finishTimeouts %" PRIu32 ", resets %" PRIu32,
-				errs.naks, errs.sendTimeouts, errs.recvTimeouts, errs.finishTimeouts, errs.resets);
+			reply.lcatf("I2C nak errors %" PRIu32 ", send timeouts %" PRIu32 ", receive timeouts %" PRIu32 ", finishTimeouts %" PRIu32 ", resets %" PRIu32 ", bus recoveries %" PRIu32,
+				errs.naks, errs.sendTimeouts, errs.recvTimeouts, errs.finishTimeouts, errs.resets, errs.recoveries);
+# else
+			if (I2C::sharedI2C != nullptr)
+			{
+				I2cErrors errs;
+				I2C::sharedI2C->GetAndClearErrors(errs);
+				reply.lcatf("I2C bus errors %u, naks %u, contentions %u, other errors %u, bus recoveries %u",
+					errs.busErrors, errs.naks, errs.contentions, errs.otherErrors, errs.recoveries);
+			}
+# endif
 		}
 #endif
 		break;
@@ -1829,7 +1834,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 									(double)((float)(tim3 * (1'000'000/iterations))/SystemCoreClock), (ok3) ? "ok" : "ERROR");
 			}
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 			// Time and check floating point cube root
 			{
 				unsigned int numBad = 0, numBetter = 0, numWorse = 0, numEqual = 0, numSameError = 0;
@@ -1932,7 +1937,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		}
 		break;
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	case (unsigned int)DiagnosticTestType::TimeCubicSolver:		// Show the cubic solver calculation time. Caution: may disable interrupt for several tens of microseconds.
 		{
 			constexpr uint32_t iterations = 100;				// use a value that divides into one million
@@ -2170,6 +2175,10 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 	case (unsigned int)DiagnosticTestType::PrintExpanderStatus:
 		reply.printf("Expander status %04X\n", DuetExpansion::DiagnosticRead());
 		break;
+
+	case (unsigned int)DiagnosticTestType::WedgeI2CBus:
+		DuetExpansion::WedgeI2CBus(reply);
+		break;
 #endif
 
 	default:
@@ -2210,6 +2219,43 @@ bool Platform::WritePlatformParameters(FileStore *f, bool includingG31) const no
 void Platform::AppendUsbReply(size_t usbNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept
 {
 	usbDevices[usbNumber].AppendReply(usbNumber, GetChannelMode(usbNumber), gb, buffer, rawMessage);
+}
+
+void Platform::ShutdownUsbDevice(unsigned int index) noexcept
+{
+	if (index < NumUsbChannels)
+	{
+		usbDevices[index].Shutdown();
+	}
+}
+
+void Platform::ReinitUsbDevice(unsigned int index) noexcept
+{
+	if (index < NumUsbChannels)
+	{
+		usbDevices[index].Reinit();
+	}
+}
+
+// Disconnect the USB device from the host by ending every CDC interface. Callers do this before a
+// reset or firmware update so the host frees all interfaces together and the board re-enumerates on
+// the same ttyACM minors instead of shifting them. On builds with several CDC interfaces sharing one
+// device the detach only fires once the last interface ends, so end them all. If the SBC protocol
+// runs over this USB link, freeze the SBC task first: otherwise it treats the disconnect as a lost
+// connection and re-attaches the device (EndDirectMode + ReinitUsbDevice) before the reset lands
+void Platform::DisconnectUsb() noexcept
+{
+#if HAS_SBC_INTERFACE && SUPPORTS_SBC_OVER_USB
+	if (reprap.UsingSbcInterface() && reprap.GetSbcInterface().GetDataTransfer().GetTransportType() == SbcTransportType::usb)
+	{
+		reprap.GetSbcInterface().Suspend();
+	}
+#endif
+	for (UsbDeviceRrf& dev : usbDevices)
+	{
+		dev.End();
+	}
+	delay(50);								// allow the host to process the disconnect before the bus goes away
 }
 
 // Aux port functions
@@ -2287,6 +2333,14 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 				}
 			}
 #  endif
+			// Serial parity for device/Modbus mode. Always applied so that omitting F restores
+			// the pre-existing behaviour (no parity, 8N1) rather than keeping a previous setting.
+			switch (gb.Seen('F') ? gb.GetLimitedUIValue('F', 3) : 0)
+			{
+			case 1:		dev.SetSerialMode(UartMode::Mode8E1); break;
+			case 2:		dev.SetSerialMode(UartMode::Mode8O1); break;
+			default:	dev.SetSerialMode(UartMode::Mode8N1); break;
+			}
 # endif
 		}
 
@@ -2559,7 +2613,10 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 				bValues[i] = (uint8_t)valuesToSend[i];
 			}
 
-			I2C::Init();
+			if (!I2C::Init(reply))
+			{
+				return GCodeResult::error;
+			}
 			const size_t bytesTransferred = I2C::Transfer(address, bValues, numToSend, numToReceive);
 
 			if (bytesTransferred < numToSend)
@@ -2871,7 +2928,10 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 	case -1:
 		{
 			const uint32_t address = gb.GetLimitedUIValue('A', 1u << 10);
-			I2C::Init();
+			if (!I2C::Init(reply))
+			{
+				return GCodeResult::error;
+			}
 			uint8_t bValues[MaxI2cOrModbusValues];
 			const size_t bytesRead = I2C::Transfer(address, bValues, 0, numValues);
 
@@ -3334,6 +3394,10 @@ void Platform::DebugMessage(const char *_ecv_array fmt, va_list vargs) noexcept
 {
 	MutexLocker lock(usbDevices[0].GetMutex());
 	SerialCDC *usbDev = usbDevices[0].GetDevice();
+	if (usbDev == nullptr)
+	{
+		return;
+	}
 	vuprintf([usbDev](char c) -> bool
 				{
 					if (c != 0)
@@ -3638,9 +3702,10 @@ void Platform::SetBoardType() noexcept
 #if defined(DUET3MINI_V04)
 	// Test whether this is a WiFi or an Ethernet board by testing for a pulldown resistor on Dir1
 	SetPinMode(DIRECTION_PINS[1], INPUT_PULLUP, false);
+	SetPinMode(DIRECTION_PINS[2], INPUT_PULLUP, false);
 	delayMicroseconds(20);									// give the pullup resistor time to work
-	board = (digitalRead(DIRECTION_PINS[1]))				// if SAME54P20A
-				? BoardType::Duet3Mini_WiFi
+	board = (digitalRead(DIRECTION_PINS[1]))
+				? ((digitalRead(DIRECTION_PINS[2])) ? BoardType::Duet3Mini_WiFi : BoardType::Duet3Mini_WiFi_ESP32)
 					: BoardType::Duet3Mini_Ethernet;
 #elif defined(DUET3_MB6HC)
 	board = GetMB6HCBoardType();
@@ -3712,8 +3777,9 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	{
 #if defined(DUET3MINI_V04)
 	case BoardType::Duet3Mini_Unknown:		return "Duet 3 " BOARD_SHORT_NAME " unknown variant";
-	case BoardType::Duet3Mini_WiFi:			return "Duet 3 " BOARD_SHORT_NAME " WiFi";
+	case BoardType::Duet3Mini_WiFi:			return "Duet 3 " BOARD_SHORT_NAME " WiFi 1.02 or earlier";
 	case BoardType::Duet3Mini_Ethernet:		return "Duet 3 " BOARD_SHORT_NAME " Ethernet";
+	case BoardType::Duet3Mini_WiFi_ESP32:	return "Duet 3 " BOARD_SHORT_NAME " WiFi 1.04 or later";
 #elif defined(DUET3_MB6HC)
 	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v1.0 or earlier";
 	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
@@ -3756,6 +3822,7 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 #if defined(DUET3MINI_V04)
 	case BoardType::Duet3Mini_Unknown:		return "duet5lcunknown";
 	case BoardType::Duet3Mini_WiFi:			return "duet5lcwifi";
+	case BoardType::Duet3Mini_WiFi_ESP32:	return "duet5lcwifi32";
 	case BoardType::Duet3Mini_Ethernet:		return "duet5lcethernet";
 #elif defined(DUET3_MB6HC)
 	case BoardType::Duet3_6HC_v06_100:		return "duet3mb6hc100";
@@ -3818,7 +3885,25 @@ const char *_ecv_array Platform::GetBoardShortName() const noexcept
 // Return true if this is a WiFi board, false if it has Ethernet
 bool Platform::IsDuetWiFi() const noexcept
 {
-	return board == BoardType::Duet3Mini_WiFi || board == BoardType::Duet3Mini_Unknown;
+	return board == BoardType::Duet3Mini_WiFi || board == BoardType::Duet3Mini_WiFi_ESP32 || board == BoardType::Duet3Mini_Unknown;
+}
+
+bool Platform::HasESP32() const noexcept
+{
+	return board == BoardType::Duet3Mini_WiFi_ESP32;
+}
+
+#endif
+
+#if HAS_WIFI_NETWORKING
+
+const char *_ecv_array Platform::GetDefaultWiFiFirmwareName() const noexcept
+{
+#ifdef DUET3MINI_V04
+	return (HasESP32()) ? WIFI_FIRMWARE_FILE_ESP32 : WIFI_FIRMWARE_FILE_ESP8266;
+#else
+	return WIFI_FIRMWARE_FILE;
+#endif
 }
 
 #endif
@@ -4199,15 +4284,6 @@ void Platform::SetDiagLed(bool on) const noexcept
 {
 	digitalWrite(DiagPin, XNor(DiagOnPolarity, on));
 }
-
-#if SUPPORT_MULTICAST_DISCOVERY
-
-void Platform::InvertDiagLed() const noexcept
-{
-	digitalWrite(DiagPin, !digitalRead(DiagPin));
-}
-
-#endif
 
 #if HAS_CPU_TEMP_SENSOR && SAME5x
 

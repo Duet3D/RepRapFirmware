@@ -114,9 +114,12 @@ public:
 
 	// Drivers configuration
 	size_t GetNumActualDirectDrivers() const noexcept;
+
 	void SetDriversDirection(size_t axisOrExtruder, bool direction) noexcept;
-	void SetDirectionValue(size_t driver, bool dVal) noexcept;
-	bool GetDirectionValue(size_t driver) const noexcept;
+	void SetDirectionValue(size_t driver, bool dVal) noexcept;				// this is for local drivers only
+	bool GetDirectionValue(size_t driver) const noexcept;					// this version is for local drivers only
+	bool GetDirectionValue(DriverId did) const noexcept;					// this version is for local or remote drivers
+
 	void SetOneDriverAbsoluteDirection(size_t driver, bool dVal) noexcept;
 	void SetEnableValue(size_t driver, int8_t eVal) noexcept;
 	int8_t GetEnableValue(size_t driver) const noexcept;
@@ -133,7 +136,7 @@ public:
 		pre(drive < GetNumActualDirectDrivers());														// Deal with M569.0 for one local driver
 	GCodeResult ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) THROWS(GCodeException)
 		pre(driver < GetNumActualDirectDrivers());
-	GCodeResult SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply) noexcept;
+	GCodeResult SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, int code, const StringRef& reply) noexcept;
 
 	int GetMotorCurrent(size_t axisOrExtruder, int code) const noexcept;
 	void SetIdleCurrentFactor(float f) noexcept;
@@ -162,7 +165,7 @@ public:
 	float Acceleration(size_t axisOrExtruder, bool reduced) const noexcept;
 	const float *_ecv_array Accelerations(bool reduced) const noexcept { return (reduced) ? reducedAccelerations : normalAccelerations; }
 	void SetAcceleration(size_t axisOrExtruder, float value, bool reduced) noexcept;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	const float *_ecv_array Jerks() const noexcept { return jerks; }
 	void SetAccelerationTime(float value) noexcept;
 	float AccelerationTime() const noexcept { return accelerationTime; }
@@ -313,7 +316,7 @@ public:
 	void SetInitialCalibrationDeviation(const Deviation& d) noexcept;
 	void SetLatestMeshDeviation(const Deviation& d) noexcept;
 
-	float PushBabyStepping(MovementSystemNumber msNumber, size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
+	float PushBabyStepping(MovementSystemNumber msNumber, size_t axis, float amount) noexcept;						// Try to push some babystepping through the lookahead queue
 
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);				// process M595
 	GCodeResult ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// process M572
@@ -321,9 +324,9 @@ public:
 	GCodeResult ConfigureNonlinearExtrusion(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// process M592
 
 	ExtruderShaper& GetExtruderShaperForExtruder(size_t extruder) noexcept;
+	const ExtruderShaper& GetExtruderShaperForExtruder(size_t extruder) const noexcept;
 	void ClearExtruderMovementPending(size_t extruder) noexcept;
-	float GetPressureAdvanceClocksForLogicalDrive(size_t drive) const noexcept;
-	float GetPressureAdvanceClocksForExtruder(size_t extruder) const noexcept;
+	float GetPressureAdvanceK0ClocksForLogicalDrive(size_t drive) const noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
@@ -339,7 +342,8 @@ public:
 	void StopDriversFromRemote(uint16_t whichDrives) noexcept;
 	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
 
-	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
+	GCodeResult EutSetRemotePressureAdvanceV1(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
+	GCodeResult EutSetRemotePressureAdvanceV2(const CanMessageMultipleDrivesRequest<ShortPressureAdvanceParameters>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutSetInputShaping(const CanMessageSetInputShapingV1& msg, size_t dataLength, const StringRef& reply) noexcept
 	{
 		return axisShaper.EutSetInputShaping(msg, dataLength, reply);
@@ -417,6 +421,7 @@ public:
 	float GetDecelerationMmPerSecSquared(size_t msNumber) const noexcept { return rings[msNumber].GetDecelerationMmPerSecSquared(); }		// Get the (peak) deceleration for reporting in the object model
 	float GetCurrentMoveDistance(size_t msNumber) const noexcept { return rings[msNumber].GetCurrentMoveDistance(); }
 	float GetCurrentMoveDuration(size_t msNumber) const noexcept { return rings[msNumber].GetCurrentMoveDuration(); }
+	FilePosition GetCurrentMoveFilePosition(size_t msNumber) const noexcept { return rings[msNumber].GetCurrentMoveFilePosition(); }		// Get the file position of the move being executed, or noFilePosition if there is none
 	float GetTotalExtrusionRate(size_t msNumber) const noexcept { return rings[msNumber].GetTotalExtrusionRate(); }
 
 	void UpdateLiveMachineCoordinates(float coords[MaxAxes], const Tool *_ecv_null tool) const noexcept;		// Force an update of the live machine coordinates
@@ -455,14 +460,15 @@ public:
 	}
 
 #if SUPPORT_PHASE_STEPPING
-	void ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config);	// configure Ka & Kv parameters for phase stepping
+	GCodeResult ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config, const StringRef& reply) noexcept;	// configure Ka & Kv parameters for phase stepping
 	PhaseStepParams GetPhaseStepParams(size_t axisOrExtruder) const noexcept;
 	bool UpdateCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
 	bool SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept;
 	StepMode GetStepMode(size_t axisOrExtruder) const noexcept;
+	void PrepareLeadscrewAdjustmentDM(size_t localDriver) noexcept;							// set up the DM that adjusts a leadscrew so that it executes the same way as the Z axis
 	void ResetPhaseStepMonitoringVariables() noexcept;
 
-	void PhaseStepControlLoop() noexcept;
+	bool PhaseStepControlLoop() noexcept;					// update the coil currents of the phase stepping drivers, returning true if any of them is moving fast enough to need the higher SPI cadence
 #endif
 
 	void Interrupt() noexcept;
@@ -540,7 +546,7 @@ private:
 #endif
 
 	MoveSegment *AddSegment(MoveSegment *list, uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a,
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	 	 	 	 	 	 	 motioncalc_t j, MovementFlags moveFlags, motioncalc_t pressureAdvanceClocks
 #else
 							 	 	 	 	 MovementFlags moveFlags, motioncalc_t pressureAdvanceClocksTimesDuration
@@ -567,12 +573,12 @@ private:
 	void PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint32_t now) noexcept SPEED_CRITICAL;
 	void SimulateSteppingDrivers(Platform& p) noexcept;								// For debugging use
 	bool ScheduleNextStepInterrupt() noexcept SPEED_CRITICAL;						// Schedule the next interrupt, returning true if we can't because it is already due
-	bool StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept;		// stop movement of a drive and recalculate the endpoint
+	bool StopAxisOrExtruder(bool executingMove, size_t logicalDrive, uint32_t when) noexcept;		// stop movement of a drive and recalculate the endpoint
 #if SUPPORT_REMOTE_COMMANDS
 	void StopDriveFromRemote(size_t drive) noexcept;
 	int32_t GetLastMoveStepsTaken(size_t drive) const noexcept;						// get the number of steps taken by the last move, if it was an isolated move
 #endif
-	bool StopAllDrivers(bool executingMove) noexcept;								// cancel the current isolated move
+	bool StopAllDrivers(bool executingMove, uint32_t when) noexcept;				// cancel the current isolated move
 	void InsertDM(DriveMovement *dm) noexcept;										// insert a DM into the active list, keeping it in step time order
 	void SetDirection(size_t axisOrExtruder, bool direction) noexcept;				// set the direction of a driver, observing timing requirements
 
@@ -585,7 +591,7 @@ private:
 	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func); }
 #endif
 
-#if SUPPORT_S_CURVE && SUPPORT_CAN_EXPANSION
+#if SUPPORT_3RD_ORDER && SUPPORT_CAN_EXPANSION
 	bool AxisHasLocalDriver(size_t axis) const noexcept;
 	bool ExtruderHasLocalDriver(size_t extruder) const noexcept;
 #endif
@@ -595,6 +601,7 @@ private:
 	void DisengageBrake(size_t driver) noexcept;
 
 	void UpdateMotorCurrent(size_t driver, float current) noexcept;
+
 	void SetOneDriverDirection(uint8_t driver, bool direction) noexcept pre(driver < GetNumActualDirectDrivers());
 
 	StandardDriverStatus GetLocalDriverStatus(size_t driver) const noexcept;
@@ -648,6 +655,12 @@ private:
 	StepTimer::Ticks maxPSControlLoopRuntime;				// The maximum time the control loop has taken to run
 	StepTimer::Ticks minPSControlLoopCallInterval;			// The minimum interval between the control loop being called
 	StepTimer::Ticks maxPSControlLoopCallInterval;			// The maximum interval between the control loop being called
+
+	bool phaseStepMovingFast;								// Whether any phase stepping driver is above the speed at which we defer the driver status poll
+#endif
+
+#if SUPPORT_PHASE_STEPPING && SUPPORT_CAN_EXPANSION
+	LogicalDrivesBitmap remotePhaseStepDrives;				// logical drives whose remote drivers have been switched to phase stepping
 #endif
 
 #if SUPPORT_ASYNC_MOVES
@@ -698,7 +711,7 @@ private:
 #endif
 
 #if HAS_SMART_DRIVERS
-	size_t numSmartDrivers;											// the number of TMC drivers we have, the remaining are simple enable/step/dir drivers
+	size_t numSmartDrivers;									// the number of TMC drivers we have, any remaining drivers are simple enable/step/dir drivers
 	LocalDriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers;
 # if HAS_STALL_DETECT
 	LocalDriversBitmap logOnStallDrivers, eventOnStallDrivers;
@@ -707,7 +720,7 @@ private:
 #endif
 
 	StandardDriverStatus lastEventStatus[NumDirectDrivers];
-	bool directions[NumDirectDrivers];
+	bool directions[NumDirectDrivers];						// the configured driver directions (M569 S parameter): true = forwards (default), false = backwards
 	int8_t enableValues[NumDirectDrivers];
 
 #ifdef DUET3_MB6XD
@@ -739,7 +752,7 @@ private:
 	float printingInstantDvs[MaxAxesPlusExtruders];			// current max jerk in mm per step clock (changed by M205 and M206)
 	float maxInstantDvs[MaxAxesPlusExtruders];				// max instant velocity change in mm per step clock (changed by M206 only)
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	float accelerationTime;									// time taken to each max acceleration in step clocks, single value used for all axes.
 	float jerks[MaxAxesPlusExtruders];						// max rate of change of acceleration, calculated from accelerationTime and normalAccelerations. Only used if accelerationTime > 0.0.
 	bool usingSCurve = false;
@@ -815,7 +828,7 @@ inline float Move::NormalAcceleration(size_t drive) const noexcept
 
 inline float Move::Acceleration(size_t drive, bool useReduced) const noexcept
 {
-	return (useReduced) ? min<float>(reducedAccelerations[drive], normalAccelerations[drive]) : normalAccelerations[drive];
+	return (useReduced) ? reducedAccelerations[drive] : normalAccelerations[drive];
 }
 
 inline float Move::MaxFeedrate(size_t drive) const noexcept
@@ -861,20 +874,7 @@ inline void Move::AdjustNumDrivers(size_t numDriversNotAvailable) noexcept
 
 #endif
 
-inline void Move::SetDirectionValue(size_t drive, bool dVal) noexcept
-{
-#if SUPPORT_PHASE_STEPPING
-	// We must prevent the tmc task loop fetching the current position while we are changing the direction
-	if (directions[drive] != dVal)
-	{
-		TaskCriticalSectionLocker lock;
-		directions[drive] = dVal;
-	}
-#else
-	directions[drive] = dVal;
-#endif
-}
-
+// Get the direction setting for a local driver
 inline bool Move::GetDirectionValue(size_t drive) const noexcept
 {
 	return directions[drive];
@@ -949,14 +949,14 @@ inline ExtruderShaper& Move::GetExtruderShaperForExtruder(size_t extruder) noexc
 	return dms[ExtruderToLogicalDrive(extruder)].extruderShaper;
 }
 
-inline float Move::GetPressureAdvanceClocksForLogicalDrive(size_t drive) const noexcept
+inline const ExtruderShaper& Move::GetExtruderShaperForExtruder(size_t extruder) const noexcept
 {
-	return dms[drive].extruderShaper.GetKclocks();
+	return dms[ExtruderToLogicalDrive(extruder)].extruderShaper;
 }
 
-inline float Move::GetPressureAdvanceClocksForExtruder(size_t extruder) const noexcept
+inline float Move::GetPressureAdvanceK0ClocksForLogicalDrive(size_t drive) const noexcept
 {
-	return (extruder < MaxExtruders) ? GetPressureAdvanceClocksForLogicalDrive(ExtruderToLogicalDrive(extruder)) : 0.0;
+	return dms[drive].extruderShaper.GetK0Clocks();
 }
 
 // Schedule the next interrupt, returning true if we can't because it is already due
@@ -1015,7 +1015,7 @@ inline void Move::InvertCurrentMotorSteps(size_t driver) noexcept
 
 #endif
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 
 // Set the acceleration time
 inline void Move::SetAccelerationTime(float value) noexcept

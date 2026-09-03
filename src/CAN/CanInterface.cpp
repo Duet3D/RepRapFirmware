@@ -75,6 +75,7 @@ static_assert(MaxTimeSyncDelay >= 400 && MaxTimeSyncDelay <= 1000);			// check i
 
 constexpr uint32_t MinBitRate = 15;											// MCP2542 has a minimum bite rate of 14.4kbps
 constexpr uint32_t MaxBitRate = 5000;
+constexpr uint32_t DefaultBitRate = 1000;
 
 constexpr float MinSamplePoint = 0.5;
 constexpr float MaxSamplePoint = 0.95;
@@ -105,7 +106,9 @@ static CanAddress myAddress =
 						CanId::MasterAddress;
 #endif
 
-static uint8_t currentTimeSyncMarker = 0xFF;
+static uint8_t fastDataRate = 0;											// the fast data phase bit rate multiplier minus one. 0 means don't use BRS.
+static uint8_t dTseg1MinusOne = 0;											// the fast data rate sample point minus one
+static uint8_t currentTimeSyncMarker = 0xFF;								// the marker we use to track time sync message transmit events
 
 #if SUPPORT_REMOTE_COMMANDS
 static unsigned int messagesIgnored = 0;
@@ -225,26 +228,38 @@ void CanInterface::SetStatusLedNormal() noexcept
 
 #endif
 
-// This is called only from the CAN clock loop, so inline
-static inline void UpdateLed(uint32_t stepClocks) noexcept
+// Called frequently from Platform::Spin, so that we change the LED state as close to the step clock transition as the expansion boards do
+void CanInterface::UpdateStatusLed() noexcept
 {
+#if SUPPORT_REMOTE_COMMANDS
+	if (inExpansionMode && !StepTimer::CheckSynced())
+	{
+		// Blink fast to show that we haven't established clock sync with the master
+		reprap.GetPlatform().SetDiagLed((StepTimer::GetTimerTicks() & (1u << 17)) != 0);
+		return;
+	}
+
+	const uint32_t stepClocks = StepTimer::GetMasterTime();
+#else
+	const uint32_t stepClocks = StepTimer::GetTimerTicks();
+#endif
+
 #if SUPPORT_MULTICAST_DISCOVERY
 	if (identifying)
 	{
 		if (identTotalClocks != 0 && stepClocks - identInitialClocks >= identTotalClocks)
 		{
-			identifying = 0;							// stop identifying
+			identifying = false;						// stop identifying
 		}
 		else
 		{
-			// Blink the LED fast. This function gets called every 200ms, so that's the fastest we can blink it without having another task do it.
-			reprap.GetPlatform().InvertDiagLed();
+			reprap.GetPlatform().SetDiagLed((stepClocks & (1u << 17)) != 0);
 			return;
 		}
 	}
 #endif
 
-	// Blink the LED at about 1Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
+	// Blink the LED at about 1Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us
 	reprap.GetPlatform().SetDiagLed((stepClocks & (1u << 19)) != 0);
 }
 
@@ -444,7 +459,7 @@ CanMessageBuffer *CanInterface::AllocateBuffer(const GCodeBuffer *_ecv_null gb) 
 	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		throw GCodeException((gb == nullptr) ? -1 : gb->GetLineNumber(), -1, NoCanBufferMessage);
+		throw GCodeException(gb, -1, NoCanBufferMessage);
 	}
 	return _ecv_not_null(buf);
 }
@@ -470,6 +485,20 @@ uint16_t CanInterface::GetTimeStampPeriod() noexcept
 }
 
 #endif
+
+// Convert a 16-bit timestamp in a received message to 32-bits.
+// We expect the time stamp to be up to a few milliseconds old. If that's not the case, ignore the timestamp in the message and return the current master time.
+uint32_t CanInterface::Convert16bitReceivedTimeStampTo32bits(uint16_t ts) noexcept
+{
+	const uint32_t now = StepTimer::GetTimerTicks();
+	const uint16_t delay = (uint16_t)now - ts;
+#if 0	//DEBUG
+	debugPrintf("Delay=%u\n", delay);
+#endif
+	return (delay < MillisToStepClocks(10))					// if the time stamp is less than 10ms old
+		? now - (uint32_t)delay
+			: now;											// time stamp negative or unreliable so ignore it
+}
 
 // Send a message on the CAN FD channel and record any errors
 static void SendCanMessage(CanDevice::TxBufferNumber whichBuffer, uint32_t timeout, CanMessageBuffer *buffer) noexcept
@@ -576,7 +605,8 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 	for (;;)
 	{
 		CanMessageTimeSync * const msg = buf.SetupBroadcastMessage<CanMessageTimeSync>(CanInterface::GetCanAddress());
-		msg->fastDataRate = 0;												// we don't use bit rate switching yet
+		msg->fastDataRate = fastDataRate;
+		msg->tseg1Minus1 = dTseg1MinusOne;
 		msg->lastTimeSent = lastTimeSent;
 		msg->lastTimeAcknowledgeDelay = 0;									// assume we don't have the transmit delay available
 
@@ -642,8 +672,6 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		SendCanMessage(TxBufferIndexTimeSync, 0, &buf);
 		++timeSyncMessagesSent;
 
-		UpdateLed(lastTimeSent);
-
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, CanClockIntervalMillis);
 
@@ -672,6 +700,9 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 
 template<class T> static GCodeResult SetRemoteDriverValues(const CanDriversData<T>& data, const StringRef& reply, CanMessageType mt) noexcept
 {
+	// This code sends only one message per CAN board, so sizeof<T> must be small enough so that the message fits in a single CAN packet
+	static_assert(CanMessageMultipleDrivesRequest<T>::MaxDrivesPerMessage() >= MaxLinearDriversPerCanSlave);
+
 	GCodeResult rslt = GCodeResult::ok;
 	size_t start = 0;
 	for (;;)
@@ -783,13 +814,13 @@ unsigned int CanInterface::GetNumPendingMotionMessages() noexcept
 #endif
 
 // Send a request to an expansion board and append the response to 'reply'
-GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *_ecv_null extra) noexcept
+GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *_ecv_null extra, uint32_t *_ecv_null words) noexcept
 {
-	return SendRequestAndGetCustomReply(buf, rid, reply, extra, CanMessageType::unusedMessageType, [](const CanMessageBuffer*) noexcept->void { });
+	return SendRequestAndGetCustomReply(buf, rid, reply, extra, words, CanMessageType::unusedMessageType, [](const CanMessageBuffer*) noexcept->void { });
 }
 
 // Send a request to an expansion board and append the response to 'reply'. The response may either be a standard reply or 'replyType'.
-GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *_ecv_null extra, CanMessageType replyType, function_ref_noexcept<void(const CanMessageBuffer*) noexcept> callback) noexcept
+GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *_ecv_null extra, uint32_t *_ecv_null words, CanMessageType replyType, function_ref_noexcept<void(const CanMessageBuffer*) noexcept> callback) noexcept
 {
 	if (can0dev == nullptr)
 	{
@@ -835,11 +866,19 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 					const size_t textLength = buf->msg.standardReply.GetTextLength(buf->dataLength);
 					if (textLength != 0)			// avoid concatenating blank lines to existing output
 					{
-						reply.lcatn(buf->msg.standardReply.text, textLength);
+						reply.lcatn(buf->msg.standardReply.GetText(), textLength);
 					}
 					if (extra != nullptr)
 					{
 						*extra = buf->msg.standardReply.extra;
+					}
+					if (words != nullptr)
+					{
+						// Words the reply didn't carry (e.g. older expansion firmware) read as zero
+						for (size_t i = 0; i < CanMessageStandardReply::MaxNumWords; i++)
+						{
+							words[i] = (i < buf->msg.standardReply.numWords) ? buf->msg.standardReply.GetWord(i) : 0;
+						}
 					}
 					uint32_t waitedFor = millis() - whenStartedWaiting;
 					if (waitedFor > longestWaitTime)
@@ -850,7 +889,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 				}
 				else
 				{
-					reply.catn(buf->msg.standardReply.text, buf->msg.standardReply.GetTextLength(buf->dataLength));
+					reply.catn(buf->msg.standardReply.GetText(), buf->msg.standardReply.GetTextLength(buf->dataLength));
 				}
 				if (!buf->msg.standardReply.moreFollows)
 				{
@@ -993,9 +1032,9 @@ GCodeResult CanInterface::SetRemoteDriverStepsPerMmAndMicrostepping(const CanDri
 }
 
 // Set the pressure advance on remote drivers, returning true if successful
-GCodeResult CanInterface::SetRemotePressureAdvance(const CanDriversData<float>& data, const StringRef& reply) noexcept
+GCodeResult CanInterface::SetRemotePressureAdvance(const CanDriversData<ShortPressureAdvanceParameters>& data, const StringRef& reply) noexcept
 {
-	return SetRemoteDriverValues(data, reply, CanMessageType::setPressureAdvance);
+	return SetRemoteDriverValues(data, reply, CanMessageType::setPressureAdvanceV2);
 }
 
 // Handle M569 for a remote driver
@@ -1034,7 +1073,10 @@ GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb
 
 	case 2:
 		{
-			gb.MustSee('R');
+			if (gb.Seen('V'))
+			{
+				gb.MustSee('R');
+			}
 			CanMessageGenericConstructor cons(M569Point2Params);
 			cons.PopulateFromCommand(gb);
 			return cons.SendAndGetResponse(CanMessageType::m569p2, driver.boardAddress, reply);
@@ -1070,9 +1112,36 @@ GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb
 			Kinematics &_ecv_from kin = reprap.GetMove().GetKinematics();
 			if (kin.GetKinematicsType() == KinematicsType::hangprinter)
 			{
+				gb.MustSee('P');
+				size_t drivesCount = reprap.GetGCodes().GetVisibleAxes();
+				DriverId driverIds[drivesCount];
+				gb.GetDriverIdArray(driverIds, drivesCount);
+
 				gb.MustSee('T');
-				const float torque = gb.GetFValue();
-				return ((HangprinterKinematics&)kin).SetODrive3TorqueMode(driver, torque, reply);
+				float forces[drivesCount];
+				size_t forceCount = drivesCount;
+				gb.GetFloatArray(forces, forceCount, true);
+				if (forceCount != drivesCount)
+				{
+					reply.copy("M569.4 requires one T value per P");
+					return GCodeResult::error;
+				}
+
+				size_t driverIndex = drivesCount;
+				for (size_t i = 0; i < drivesCount; ++i)
+				{
+					if (driverIds[i] == driver)
+					{
+						driverIndex = i;
+						break;
+					}
+				}
+				if (driverIndex == drivesCount)
+				{
+					reply.copy("M569.4 driver not found in P list");
+					return GCodeResult::error;
+				}
+				return ((HangprinterKinematics&)kin).SetODrive3TorqueMode(driver, forces[driverIndex], reply);
 			}
 		}
 #endif
@@ -1142,6 +1211,44 @@ GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb
 	}
 }
 
+#if SUPPORT_PHASE_STEPPING
+
+// Handle M970 for a remote driver
+GCodeResult CanInterface::SetRemoteDriverStepMode(DriverId driver, unsigned int mode, const StringRef& reply) noexcept
+{
+	try
+	{
+		CanMessageGenericConstructor cons(M970Params);
+		cons.AddDriverIdParam('P', driver);
+		cons.AddUParam('S', mode);
+		return cons.SendAndGetResponse(CanMessageType::m970, driver.boardAddress, reply);
+	}
+	catch (const GCodeException& e)
+	{
+		e.GetMessage(reply, nullptr);
+		return GCodeResult::error;
+	}
+}
+
+// Handle M970.1/M970.2 for a remote driver, sending the Kv or Ka value as parameter 'V' or 'A'
+GCodeResult CanInterface::SetRemotePhaseStepParam(DriverId driver, char param, float value, const StringRef& reply) noexcept
+{
+	try
+	{
+		CanMessageGenericConstructor cons(M970Params);
+		cons.AddDriverIdParam('P', driver);
+		cons.AddFParam(param, value);
+		return cons.SendAndGetResponse(CanMessageType::m970, driver.boardAddress, reply);
+	}
+	catch (const GCodeException& e)
+	{
+		e.GetMessage(reply, nullptr);
+		return GCodeResult::error;
+	}
+}
+
+#endif
+
 // Handle M915 for a collection of remote drivers
 GCodeResult CanInterface::GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) THROWS(GCodeException)
 {
@@ -1181,7 +1288,7 @@ GCodeResult CanInterface::GetSetRemoteDriverStallParameters(const CanDriversList
 static String<StringLength100> enableEndstopsReply;
 
 // Enable a stall endstop on a remote board
-void CanInterface::EnableRemoteStallEndstop(DriverId did, float speed) THROWS(GCodeException)
+void CanInterface::EnableRemoteStallEndstop(DriverId did, float speed, bool useEncoder) THROWS(GCodeException)
 {
 	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -1192,6 +1299,7 @@ void CanInterface::EnableRemoteStallEndstop(DriverId did, float speed) THROWS(GC
 	auto msg = buf->SetupRequestMessage<CanMessageEnableStallEndstop>(rid, CanInterface::GetCanAddress(), did.boardAddress);
 	msg->driverNumber = did.localDriver;
 	msg->speed = speed;
+	msg->endstopType = useEncoder ? CanMessageEnableStallEndstop::typeEncoder : CanMessageEnableStallEndstop::typeMotorLoad;
 
 	enableEndstopsReply.Clear();
 	if (CanInterface::SendRequestAndGetStandardReply(buf, rid, enableEndstopsReply.GetRef(), nullptr) != GCodeResult::ok)
@@ -1356,7 +1464,7 @@ GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandl
 	return rslt;
 }
 
-static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle h, uint8_t action, uint32_t param, uint8_t *_ecv_null retVal, const StringRef &reply) noexcept
+static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle h, uint8_t action, uint32_t param, uint8_t *_ecv_null retVal, const StringRef &reply, uint32_t *_ecv_null words = nullptr) noexcept
 {
 	if (!h.IsValid())
 	{
@@ -1376,7 +1484,7 @@ static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle
 	msg->action = action;
 	msg->param = param;
 	uint8_t extra;
-	const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, &extra);
+	const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, &extra, words);
 	if (rslt == GCodeResult::ok && retVal != nullptr)
 	{
 		*retVal = extra;
@@ -1455,7 +1563,7 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 	auto msg = buf->SetupRequestMessage<CanMessageReadInputsRequest>(rid, GetCanAddress(), boardAddress);
 	msg->mask = mask;
 	msg->pattern = pattern;
-	const GCodeResult rslt = SendRequestAndGetCustomReply(buf, rid, reply, nullptr, CanMessageType::readInputsReplyV0,
+	const GCodeResult rslt = SendRequestAndGetCustomReply(buf, rid, reply, nullptr, nullptr, CanMessageType::readInputsReplyV0,
 															[callback, param](const CanMessageBuffer *bufp) noexcept -> void
 																{
 																	auto response = bufp->msg.readInputsReplyV0;
@@ -1464,6 +1572,19 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 																		callback(param, response.results[i].handle, LoadLEU32(&response.results[i].reading));
 																	}
 																});
+	return rslt;
+}
+
+// Tare an analog handle and/or change its baseline tracking, returning the baseline that the board latched or holds.
+// Only the board knows the raw reading, so it has to come back in the reply
+GCodeResult CanInterface::TareHandle(CanAddress boardAddress, RemoteInputHandle h, uint32_t mode, int32_t& baseline, const StringRef &reply) noexcept
+{
+	uint32_t words[CanMessageStandardReply::MaxNumWords];
+	const GCodeResult rslt = ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorV1::actionTare, mode, nullptr, reply, words);
+	if (rslt == GCodeResult::ok)
+	{
+		baseline = (int32_t)words[0];
+	}
 	return rslt;
 }
 
@@ -1598,54 +1719,33 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	// Get the new timing details, if provided
 	CanTiming timing;
 	bool changeTiming = false;
-	if (gb.Seen('S'))
+	uint32_t speed;
+	if (gb.TryGetLimitedUIValue('S', speed, changeTiming, MinBitRate, MaxBitRate + 1))
 	{
-		uint32_t speed = gb.GetUIValue();
-		if (speed < MinBitRate || speed > MaxBitRate)
-		{
-			reply.copy("Data rate out of range");
-			return GCodeResult::error;
-		}
 		speed *= 1000;
 		timing.SetDefaults(speed);
 
-		if (gb.Seen('T'))
+		float f;
+		if (gb.TryGetLimitedFValue('T', f, changeTiming, MinSamplePoint, MaxSamplePoint))
 		{
-			const float samplePoint = gb.GetFValue();
-			if (samplePoint < MinSamplePoint || samplePoint > MaxSamplePoint)
-			{
-				reply.copy("Sample point out of range");
-				return GCodeResult::error;
-			}
-			timing.SetSamplePoint(samplePoint);
+			timing.SetNormalSamplePoint(f);
 		}
 
-		if (gb.Seen('J'))
+		if (gb.TryGetLimitedFValue('J', f, changeTiming, MinJumpWidth, MaxJumpWidth))
 		{
-			const float jumpWidth = gb.GetFValue();
-			if (jumpWidth < MinJumpWidth || jumpWidth > MaxJumpWidth)
-			{
-				reply.copy("Jump width out of range");
-				return GCodeResult::error;
-			}
-			timing.SetJumpWidth(jumpWidth);
+			timing.SetNormalJumpWidth(f);
 		}
-		changeTiming = true;
 	}
 
 	if (oldAddress == GetCanAddress())
 	{
 		if (changeTiming)
 		{
-			can0dev->SetLocalCanTiming(timing);
+			can0dev->ChangeLocalCanTiming(timing);
 		}
 		else
 		{
-			can0dev->GetLocalCanTiming(timing);
-			reply.printf("CAN bus speed %.1fkbps, sample point %.2f, jump width %.2f",
-							(double)((float)CanTiming::ClockFrequency/(1000 * timing.period)),
-							(double)((float)(timing.tseg1 + 1)/(float)timing.period),
-							(double)((float)timing.jumpWidth/(float)timing.period));
+			ReportCanTiming(reply);
 		}
 		return GCodeResult::ok;
 	}
@@ -1653,6 +1753,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	CanMessageBufferHandle buf(AllocateBuffer(&gb));
 	const CanRequestId rid = CanInterface::AllocateRequestId((uint8_t)oldAddress, buf.Access());
 	auto msg = buf.Access()->SetupRequestMessage<CanMessageSetAddressAndNormalTiming>(rid, GetCanAddress(), (uint8_t)oldAddress);
+	buf.Access()->useBrs = false;							// this message is used to report on the fast data rate, so disable bit rate switching
 	msg->oldAddress = (uint8_t)oldAddress;
 
 	if (gb.Seen('A'))
@@ -1673,10 +1774,124 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	return CanInterface::SendRequestAndGetStandardReply(buf.HandOver(), rid, reply, nullptr);
 }
 
-GCodeResult CanInterface::ChangeFastTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+// Enable CAN in master board mode and set the fast data rate
+GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	return GCodeResult::errorNotSupported;
+	bool seen = false;
+	GCodeResult ret = GCodeResult::ok;
+
+	// Get the arbitration bit rate
+	uint32_t speed = DefaultBitRate;
+	if (gb.TryGetLimitedUIValue('S', speed, seen, MinBitRate, MaxBitRate + 1))
+	{
+		if (speed != DefaultBitRate && speed != DefaultBitRate/2 && speed != DefaultBitRate/4)
+		{
+			reply.copy("Expansion boards only provide automatic support for bit rates 1000, 500 and 250 kbits/sec");
+			ret = GCodeResult::warning;
+		}
+	}
+
+	CanTiming timing;
+	timing.SetDefaults(speed * 1000);
+
+	float f;
+	if (gb.TryGetLimitedFValue('T', f, seen, MinSamplePoint, MaxSamplePoint))
+	{
+		timing.SetNormalSamplePoint(f);
+	}
+
+	if (gb.TryGetLimitedFValue('J', f, seen, MinJumpWidth, MaxJumpWidth))
+	{
+		timing.SetNormalJumpWidth(f);
+	}
+
+#if SUPPORT_BRS
+	uint32_t bitRateMultiplier;
+	if (gb.TryGetLimitedUIValue('R', bitRateMultiplier, seen, 9))
+	{
+		if (bitRateMultiplier == 0 || bitRateMultiplier == 5 || bitRateMultiplier == 7)
+		{
+			reply.lcatf("Bit rate multiplier must be 1, 2, 3, 4, 6 or 8");
+			return GCodeResult::error;
+		}
+		timing.EnableBrs(bitRateMultiplier);
+		if (gb.TryGetLimitedFValue('U', f, seen, MinSamplePoint, MaxSamplePoint))
+		{
+			timing.SetDataSamplePoint(f);
+		}
+		if (gb.TryGetLimitedFValue('K', f, seen, MinJumpWidth, MaxJumpWidth))
+		{
+			timing.SetDataJumpWidth(f);
+		}
+	}
+#endif
+
+	if (seen)
+	{
+		{
+			AtomicCriticalSectionLocker lock;
+			fastDataRate = 0;															// disable BRS
+			dTseg1MinusOne = 0;
+		}
+		delay(50);																		// allow any existing transactions to complete
+		can0dev->ChangeLocalCanTiming(timing);
+#if SUPPORT_BRS
+		{
+			AtomicCriticalSectionLocker lock;
+			fastDataRate = bitRateMultiplier - 1;
+			dTseg1MinusOne = timing.dTseg1;
+		}
+#endif
+	}
+	else
+	{
+		ReportCanTiming(reply);
+	}
+
+	// TODO here we should enable CAN
+	return ret;
 }
+
+void CanInterface::ReportCanTiming(const StringRef& reply) noexcept
+{
+	CanTiming timing;
+	can0dev->GetLocalCanTiming(timing);
+	reply.printf("CAN arbitration speed %.1fkbps, sample point %.2f, jump width %.2f, ",
+					(double)((float)CanTiming::ClockFrequency/(float)(1000 * timing.period)),
+					(double)((float)(timing.nTseg1 + 1)/(float)timing.period),
+					(double)((float)timing.nJumpWidth/(float)timing.period));
+	if (fastDataRate == 0)
+	{
+		reply.cat("bit rate switching disabled");
+	}
+	else
+	{
+		const uint32_t dataPeriod = timing.period/(fastDataRate + 1);
+		reply.catf("data speed %.1fkbps, sample point %.2f, jump width %.2f",
+					(double)((float)CanTiming::ClockFrequency/(float)(1000 * dataPeriod)),
+					(double)((float)(timing.dTseg1 + 1)/(float)dataPeriod),
+					(double)((float)timing.dJumpWidth/(float)dataPeriod));
+	}
+}
+
+#if SUPPORT_REMOTE_COMMANDS
+
+// Check that the BRS setting we are using matches the one n the time sync message and change it if necessary
+void CanInterface::CheckBrs(const CanMessageTimeSync& msg) noexcept
+{
+	if (msg.fastDataRate != fastDataRate || msg.tseg1Minus1 != dTseg1MinusOne)
+	{
+		CanTiming timing;
+		can0dev->GetLocalCanTiming(timing);
+		timing.EnableBrs(msg.fastDataRate + 1);
+		timing.SetDataSamplePointDirect(msg.tseg1Minus1);
+		can0dev->ChangeLocalCanTiming(timing);
+		fastDataRate = msg.fastDataRate;
+		dTseg1MinusOne = msg.tseg1Minus1;
+	}
+}
+
+#endif
 
 // Create a filament monitor but do not configure it
 GCodeResult CanInterface::CreateFilamentMonitor(DriverId driver, uint8_t type, const GCodeBuffer& gb, const StringRef &reply) noexcept
@@ -1726,7 +1941,7 @@ GCodeResult CanInterface::DeleteFilamentMonitor(DriverId driver, GCodeBuffer* gb
 
 # if SUPPORT_ACCELEROMETERS
 
-GCodeResult CanInterface::StartAccelerometer(DriverId device, uint8_t axes, uint16_t numSamples, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+GCodeResult CanInterface::StartAccelerometer(DriverId device, uint8_t axes, uint32_t numSamples, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	CanMessageBuffer* const buf = AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(device.boardAddress, buf);

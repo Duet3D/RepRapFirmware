@@ -111,6 +111,7 @@ public:
 	bool QueueFileToPrint(const char *_ecv_array fileName, const StringRef& reply) noexcept;	// Open a file of G Codes to run
 #endif
 	void AbortPrint(GCodeBuffer& gb) noexcept;									// Cancel any print in progress
+	void PauseSequenceAborted(GCodeBuffer& gb) noexcept;						// Settle pauseState to paused if a pause sequence is aborted before it commits
 	void HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept;		// Write where we are into a string
 	bool DoingFileMacro() const noexcept;										// Is a macro file being processed by any input channel?
 	bool GetMacroRestarted() const noexcept;									// Return true if the macro being executed by fileGCode was restarted
@@ -221,7 +222,7 @@ public:
 #if SUPPORT_SCANNING_PROBES
 	size_t GetNumScanningProbeReadingsLeftToTake() const noexcept;
 	void TakeScanningProbeReading() noexcept;										// Take and store a reading from a scanning Z probe
-	GCodeResult HandleM558Point1or2or3(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException);	// Calibrate a scanning Z probe
+	GCodeResult HandleM558Subcommand(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException);	// Calibrate a scanning Z probe or tare a load cell probe
 #endif
 
 	// These next two are public because they are used by class SbcInterface
@@ -261,6 +262,9 @@ public:
 	const GCodeBuffer *_ecv_null GetInput(size_t n) const noexcept { return gcodeSources[n]; }
 	const GCodeBuffer *_ecv_null GetInput(GCodeChannel n) const noexcept { return gcodeSources[n.RawValue()]; }
 	GCodeBuffer *_ecv_null GetSerialGCodeBuffer(size_t serialPortNumber) const noexcept;
+#if NUM_ASYNC_CHANNELS != 0
+	static void CommandEmergencyStop(AsyncSerial *p) noexcept;			// called from the serial ISR when the PanelDue halt sequence is received
+#endif
 
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
 
@@ -362,6 +366,7 @@ private:
 	void UnlockMovement(const GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept;	// Unlock a particular movement system, if we own it
 #if SUPPORT_ASYNC_MOVES
 	void UnlockMovementFrom(const GCodeBuffer& gb, MovementSystemNumber firstMsNumber) noexcept;	// Release movement locks greater or equal to than the specified one
+	void UnlockMovementTakenBelow(const GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept;	// Release movement locks below the specified one that were not held when the current macro started
 #endif
 	bool WaitForEndstopOrProbingMoveToFinish(GCodeBuffer& gb) noexcept;			// Wait for movement to stop after performing a move that may terminate early
 
@@ -601,10 +606,9 @@ private:
 # if ALLOW_ARBITRARY_PANELDUE_PORT
 	uint8_t serialChannelForPanelDueFlashing;
 # else
-	static constexpr uint8_t serialChannelForPanelDueFlashing = 1;
+	static constexpr uint8_t serialChannelForPanelDueFlashing = FirstAuxChannel;
 # endif
 	static bool emergencyStopCommanded;
-	static void CommandEmergencyStop(AsyncSerial *p) noexcept;
 #endif
 
 	Platform& platform;													// The RepRap machine
@@ -614,9 +618,9 @@ private:
 	NetworkGCodeInput* telnetInput;										// ...
 #endif
 #if defined(SERIAL_USB_DEVICE) && (!SAME5x || CORE_USES_TINYUSB)
-	BufferedStreamGCodeInput* usbInput;									// USB input with out-of-band urgent command scanning
+	UsbGCodeInput* usbInput;											// USB input with out-of-band urgent command scanning and disconnect reset
 # if defined(SERIAL_USB2_DEVICE)
-	BufferedStreamGCodeInput* usb2Input;								// USB input with out-of-band urgent command scanning
+	UsbGCodeInput* usb2Input;											// USB input with out-of-band urgent command scanning and disconnect reset
 # endif
 #endif
 
@@ -686,6 +690,7 @@ private:
 	ParameterLettersBitmap allAxisLetters;		// Which axis letters are in use
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
 	bool limitAxes;								// Don't think outside the box
+	bool limitAxesRelative;						// Clamp relative moves to the axis limits instead of throwing an error
 	bool noMovesBeforeHoming;					// Don't allow movement prior to homing the associates axes
 
 	AxesBitmap toBeHomed;						// Bitmap of axes still to be homed

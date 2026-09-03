@@ -10,6 +10,7 @@
 #include "Endstop.h"
 #include "SwitchEndstop.h"
 #include "StallDetectionEndstop.h"
+#include "GpInPortEndstop.h"
 #include "ZProbeEndstop.h"
 
 #include "ZProbe.h"
@@ -102,11 +103,16 @@ EndstopsManager::EndstopsManager() noexcept
 #if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 		  extrudersEndstop(nullptr),
 #endif
+		  extruderInputEndstop(nullptr),
 		  isHomingMove(false)
 {
 	for (Endstop *_ecv_from _ecv_null & es : axisEndstops)
 	{
 		es = nullptr;
+	}
+	for (uint8_t& gpinNumber : extruderGpinNumbers)
+	{
+		gpinNumber = NoGpinPort;
 	}
 	for (ZProbe *_ecv_from _ecv_null & zp : zProbes)
 	{
@@ -204,6 +210,10 @@ void EndstopsManager::EnableAxisEndstops(AxesBitmap axes, const float speeds[Max
 			activeEndstops = nullptr;
 			ThrowGCodeException("no endstop configured for axis %u", axis);
 		}
+		if (reprap.GetGCodes().IsSimulating())
+		{
+			continue;															// simulated moves never trigger endstops, and priming a stall endstop would validate driver settings that M569 didn't apply while simulating
+		}
 		try
 		{
 			es->PrimeAxis(kin, reprap.GetMove().GetAxisDriversConfig(axis), speeds[axis]);
@@ -225,19 +235,49 @@ void EndstopsManager::EnableAxisEndstops(AxesBitmap axes, const float speeds[Max
 // Enable extruder endstops. This adds to any existing axis endstops, so if you want to enable axis endstops too then you must call EnableAxisEndstops before calling this.
 void EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders, const float speeds[MaxExtruders], bool& reduceAcceleration) THROWS(GCodeException)
 {
-	if (extruders.IsNonEmpty())
+	reduceAcceleration = false;
+	if (extruders.IsNonEmpty() && !reprap.GetGCodes().IsSimulating())
 	{
-#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
-		if (extrudersEndstop == nullptr)
+		ExtrudersBitmap inputExtruders, stallExtruders;
+		extruders.Iterate([this, &inputExtruders, &stallExtruders](unsigned int extruder, unsigned int) noexcept
+							{
+								if (extruderGpinNumbers[extruder] != NoGpinPort)
+								{
+									inputExtruders.SetBit(extruder);
+								}
+								else
+								{
+									stallExtruders.SetBit(extruder);
+								}
+							});
+		if (inputExtruders.IsNonEmpty())
 		{
-			extrudersEndstop = new StallDetectionEndstop;
+			if (extruderInputEndstop == nullptr)
+			{
+				extruderInputEndstop = new GpInPortEndstop;
+			}
+			extruderInputEndstop->PrimeInputs();
+			// The move stops when the input reaches the state matching the direction of movement, so a positive move stops on filament present and a negative one on filament absent
+			inputExtruders.Iterate([this, speeds](unsigned int extruder, unsigned int) noexcept
+									{
+										extruderInputEndstop->AddInput(extruderGpinNumbers[extruder], speeds[extruder] > 0.0);
+									});
+			AddToActive(*extruderInputEndstop);
 		}
-		extrudersEndstop->PrimeExtruders(extruders, speeds);
-		reduceAcceleration = extrudersEndstop->ShouldReduceAcceleration();
-		AddToActive(*extrudersEndstop);
+		if (stallExtruders.IsNonEmpty())
+		{
+#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
+			if (extrudersEndstop == nullptr)
+			{
+				extrudersEndstop = new StallDetectionEndstop;
+			}
+			extrudersEndstop->PrimeExtruders(stallExtruders, speeds);
+			reduceAcceleration = extrudersEndstop->ShouldReduceAcceleration();
+			AddToActive(*extrudersEndstop);
 #else
-		ThrowGCodeException("extruder endstops not supported by this system");
+			ThrowGCodeException("extruder endstops not supported by this system");
 #endif
+		}
 	}
 }
 
@@ -336,6 +376,44 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 		}
 	}
 
+	// Check for configuring or reporting an extruder filament endstop
+	if (gb.Seen('E'))
+	{
+		if (axesSeen != 0)
+		{
+			reply.copy("Cannot configure axis and extruder endstops in the same command");
+			return GCodeResult::error;
+		}
+		const uint32_t extruder = gb.GetLimitedUIValue('E', reprap.GetGCodes().GetNumExtruders());
+		if (!gb.Seen('P'))
+		{
+			if (extruderGpinNumbers[extruder] == NoGpinPort)
+			{
+				reply.printf("Extruder %" PRIu32 " endstop uses motor stall detection", extruder);
+			}
+			else
+			{
+				reply.printf("Extruder %" PRIu32 " endstop uses input pin %u", extruder, extruderGpinNumbers[extruder]);
+			}
+			return GCodeResult::ok;
+		}
+
+		if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+		activeEndstops = nullptr;
+
+		const int32_t gpinNumber = gb.GetLimitedIValue('P', -1, MaxGpInPorts - 1);		// P-1 reverts to stall detection
+		if (gpinNumber >= 0 && reprap.GetPlatform().GetGpInPort((size_t)gpinNumber).IsUnused())
+		{
+			reply.printf("Input pin %" PRIi32 " is not configured", gpinNumber);
+			return GCodeResult::error;
+		}
+		extruderGpinNumbers[extruder] = (gpinNumber < 0) ? NoGpinPort : (uint8_t)gpinNumber;
+		return GCodeResult::ok;
+	}
+
 	if (axesSeen == 0)
 	{
 		// Report current configuration
@@ -363,6 +441,13 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 				outbuf->cat(reply.c_str());
 			}
 		}
+		for (size_t extruder = 0; extruder < reprap.GetGCodes().GetNumExtruders(); ++extruder)
+		{
+			if (extruderGpinNumbers[extruder] != NoGpinPort)
+			{
+				outbuf->catf("\nE%u: input pin %u", extruder, extruderGpinNumbers[extruder]);
+			}
+		}
 		return GCodeResult::ok;
 	}
 
@@ -385,6 +470,8 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 		reply.copy("endstop type 0 is no longer supported. Use type 1 and invert the input pin instead.");
 		return GCodeResult::error;
 	}
+
+	const uint32_t zProbeNumber = gb.Seen('K') ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
 
 	if (gb.Seen('P'))					// we use P not C, because C may be an axis
 	{
@@ -439,20 +526,23 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 					// Asking for stall detection endstop, so we can delete any existing endstop(s) and create new ones
 					ReplaceObject(axisEndstops[axis], new StallDetectionEndstop(axis, pos, true));
 					break;
+
+				case EndStopType::motorStallEncoder:
+					// Asking for an encoder endstop, which detects a stall from the encoder position error instead of from StallGuard
+					ReplaceObject(axisEndstops[axis], new StallDetectionEndstop(axis, pos, false, true));
+					break;
 #else
 				case EndStopType::motorStallAny:
 				case EndStopType::motorStallIndividual:
+				case EndStopType::motorStallEncoder:
 					DeleteObject(axisEndstops[axis]);
 					reply.copy("Stall detection not supported by this hardware");
 					return GCodeResult::error;
 #endif
 				case EndStopType::zProbeAsEndstop:
-					{
-						// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
-						const uint32_t zProbeNumber = gb.Seen('K') ? gb.GetUIValue() : 0;
-						ReplaceObject(axisEndstops[axis], new ZProbeEndstop(axis, pos, zProbeNumber));
-						break;
-					}
+					// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
+					ReplaceObject(axisEndstops[axis], new ZProbeEndstop(axis, pos, zProbeNumber));
+					break;
 
 				case EndStopType::inputPin:
 					if (   axisEndstops[axis] == nullptr
@@ -597,7 +687,7 @@ bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) con
 
 #endif
 
-// Handle M558, M558.1, M558.2 and M558.3
+// Handle M558 and its subcommands M558.1 to M558.4
 GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
 	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
@@ -605,7 +695,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 #if SUPPORT_SCANNING_PROBES
 	if (gb.GetCommandFraction() > 0)
 	{
-		return reprap.GetGCodes().HandleM558Point1or2or3(gb, reply, probeNumber);
+		return reprap.GetGCodes().HandleM558Subcommand(gb, reply, probeNumber);
 	}
 #endif
 
@@ -621,6 +711,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 		&& (   probeType == (uint32_t)ZProbeType::e1Switch_obsolete
 			|| probeType == (uint32_t)ZProbeType::endstopSwitch_obsolete
 			|| probeType == (uint32_t)ZProbeType::zSwitch_obsolete
+			|| probeType == (uint32_t)ZProbeType::alternateAnalog_obsolete
 		   )
 	   )
 	{
@@ -686,13 +777,18 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 				}
 				else
 #endif
-					if (   probeNumber != 0
-						&& (   probeType == (unsigned int)ZProbeType::analog || probeType == (unsigned int)ZProbeType::alternateAnalog
-							|| probeType == (unsigned int)ZProbeType::dumbModulated || probeType == (unsigned int)ZProbeType::digital
-						   )
-					   )
+					if (probeType == (unsigned int)ZProbeType::loadCell)
 				{
-					reply.copy("Types 1,2,3 and 5 are available for Z probe 0 only");
+					reply.copy("Z probe type 12 is only supported on expansion boards");
+					return GCodeResult::error;
+				}
+				else if (   probeNumber != 0
+						 && (   probeType == (unsigned int)ZProbeType::analog
+							 || probeType == (unsigned int)ZProbeType::dumbModulated || probeType == (unsigned int)ZProbeType::digital
+							)
+						)
+				{
+					reply.copy("Types 1, 2 and 5 are available for Z probe 0 only");
 					return GCodeResult::error;
 				}
 				else
@@ -711,6 +807,10 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 			{
 				Move::CreateLaserTask();					// scanning probes use the Laser task to take readings
 			}
+		}
+		else
+		{
+			delete newProbe;							// the destructor releases any ports and remote handles that Create acquired
 		}
 		return rslt;
 	}
@@ -747,7 +847,7 @@ size_t EndstopsManager::GetNumProbesToReport() const noexcept
 #if SUPPORT_CAN_EXPANSION
 
 // Handle signalling of a remote switch change, when the handle indicates that it is being used as an endstop.
-void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint16_t when, bool state) noexcept
+void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t when, bool state) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(axisEndstops))
 	{
@@ -755,14 +855,13 @@ void EndstopsManager::HandleRemoteEndstopChange(CanAddress src, uint8_t handleMa
 		Endstop * const es = axisEndstops[handleMajor];
 		if (es != nullptr)
 		{
-			//TODO use the 'when' parameter
-			es->HandleRemoteInputChange(src, handleMinor, state);
+			es->HandleRemoteInputChange(src, handleMinor, when, state);
 		}
 	}
 }
 
 // Handle signalling of a remote switch change, when the handle indicates that it is being used as a Z probe.
-void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint16_t when, bool state, int32_t reading) noexcept
+void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t when, bool state, int32_t reading) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
@@ -770,13 +869,12 @@ void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMaj
 		ZProbe * const zp = zProbes[handleMajor];
 		if (zp != nullptr)
 		{
-			//TODO use the 'when' parameter
-			zp->HandleRemoteInputChange(src, handleMinor, state, reading);
+			zp->HandleRemoteInputChange(src, handleMinor, when, state, reading);
 		}
 	}
 }
 
-void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint16_t when, int32_t reading) noexcept
+void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t when, int32_t reading) noexcept
 {
 	if (handleMajor < ARRAY_SIZE(zProbes))
 	{
@@ -784,13 +882,12 @@ void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_
 		ZProbe * const zp = zProbes[handleMajor];
 		if (zp != nullptr)
 		{
-			//TODO use the 'when' parameter
-			zp->UpdateRemoteReading(src, handleMinor, reading);
+			zp->UpdateRemoteReading(src, handleMinor, when, reading);
 		}
 	}
 }
 
-void EndstopsManager::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled, uint16_t when) noexcept
+void EndstopsManager::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalDriversBitmap driversReportedStalled, uint32_t when) noexcept
 {
 	ReadLocker lock(endstopsLock);						// make sure endstops are not changed or deleted while we operate on them
 
@@ -798,14 +895,13 @@ void EndstopsManager::HandleStalledRemoteDrivers(CanAddress boardAddress, LocalD
 	{
 		if (es != nullptr)
 		{
-			//TODO use the 'when' parameter
-			es->HandleStalledRemoteDrivers(boardAddress, driversReportedStalled);
+			es->HandleStalledRemoteDrivers(boardAddress, driversReportedStalled, when);
 		}
 	}
 
 	if (extrudersEndstop != nullptr)
 	{
-		extrudersEndstop->HandleStalledRemoteDrivers(boardAddress, driversReportedStalled);
+		extrudersEndstop->HandleStalledRemoteDrivers(boardAddress, driversReportedStalled, when);
 	}
 }
 

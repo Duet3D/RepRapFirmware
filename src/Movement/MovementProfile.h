@@ -10,7 +10,7 @@
 
 #include <RepRapFirmware.h>
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 
 // Constants that we use in double precision calculations
 constexpr double OneHalfDouble = (double)0.5;

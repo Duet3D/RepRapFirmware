@@ -20,8 +20,6 @@
 # include <CanMessageGenericParser.h>
 #endif
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -40,8 +38,6 @@ constexpr ObjectModelTableEntry GpOutputPort::objectModelTable[] =
 constexpr uint8_t GpOutputPort::objectModelTableDescriptor[] = { 1, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GpOutputPort)
-
-#endif
 
 // Return true if the port is not configured
 bool GpOutputPort::IsUnused() const noexcept

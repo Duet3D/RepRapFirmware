@@ -34,7 +34,7 @@ void Move::SetAcceleration(size_t drive, float value, bool reduced) noexcept
 	}
 }
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 
 // This is called whenever M201 changes normal accelerations or acceleration time, when changing axis/extruder driver assignment (in case new axes/extruders are created), and when changing the step mode.
 // It determines whether we should use S-curve acceleration and if so it recalculates the axis and extruder jerk values in case the accelerations or acceleration time has changed.
@@ -85,7 +85,7 @@ void Move::UpdateSCurveFlagAndJerk() noexcept
 
 #endif
 
-#if SUPPORT_S_CURVE && SUPPORT_CAN_EXPANSION
+#if SUPPORT_3RD_ORDER && SUPPORT_CAN_EXPANSION
 
 bool Move::AxisHasLocalDriver(size_t axis) const noexcept
 {
@@ -234,8 +234,28 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 {
 	if (gb.Seen('S'))
 	{
-		const float advance = gb.GetNonNegativeFValue();
-		if (!reprap.GetGCodes().LockCurrentMovementSystemAndWaitForStandstill(gb))
+		PressureAdvanceParameters params;
+		size_t n = 2;
+		gb.GetFloatArray(params.k, n, false);						// we would call GetNonNegativeFloatArray here if it existed
+		if (params.k[0] < 0.0 || (n == 2 && params.k[1] < 0.0))
+		{
+			reply.copy("pressure advance values must be non-negative");
+			return GCodeResult::error;
+		}
+
+		if (n > 1)
+		{
+			gb.MustSee('L');
+			params.dk = gb.GetNonNegativeFValue();
+		}
+		else
+		{
+			params.k[1] = params.k[0];
+			params.dk = std::numeric_limits<float>::infinity();
+		}
+
+
+		if (!reprap.GetGCodes().LockCurrentMovementSystemAndWaitForStandstill(gb))		// don't apply the new PA to moves already queued
 		{
 			return GCodeResult::notFinished;
 		}
@@ -243,7 +263,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 		GCodeResult rslt = GCodeResult::ok;
 
 #if SUPPORT_CAN_EXPANSION
-		CanDriversData<float> canDriversToUpdate;
+		CanDriversData<ShortPressureAdvanceParameters> canDriversToUpdate;
 #endif
 		if (gb.Seen('D'))
 		{
@@ -259,12 +279,12 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 					rslt = GCodeResult::error;
 					break;
 				}
-				GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
+				GetExtruderShaperForExtruder(extruder).SetParameters(params);
 #if SUPPORT_CAN_EXPANSION
 				const DriverId did = GetExtruderDriver(extruder);
 				if (did.IsRemote())
 				{
-					canDriversToUpdate.AddEntry(did, advance);
+					canDriversToUpdate.AddEntry(did, ShortPressureAdvanceParameters(params));
 				}
 #endif
 			}
@@ -275,25 +295,25 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 			if (ct == nullptr)
 			{
 				reply.copy("No tool selected");
-				rslt = GCodeResult::error;
+				return GCodeResult::error;
 			}
 			else
 			{
 #if SUPPORT_CAN_EXPANSION
-				ct->IterateExtruders([this, advance, &canDriversToUpdate](unsigned int extruder)
+				ct->IterateExtruders([this, &params, &canDriversToUpdate](unsigned int extruder)
 										{
-											GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
+											GetExtruderShaperForExtruder(extruder).SetParameters(params);
 											const DriverId did = GetExtruderDriver(extruder);
 											if (did.IsRemote())
 											{
-												canDriversToUpdate.AddEntry(did, advance);
+												canDriversToUpdate.AddEntry(did, ShortPressureAdvanceParameters(params));
 											}
 										}
 									);
 #else
-				ct->IterateExtruders([this, advance](unsigned int extruder)
+				ct->IterateExtruders([this, &params](unsigned int extruder)
 										{
-											GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
+											GetExtruderShaperForExtruder(extruder).SetParameters(params);
 										}
 									);
 #endif
@@ -309,11 +329,14 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 #endif
 	}
 
+	// Here if we were not given pressure advance parameters
 	reply.copy("Extruder pressure advance");
 	char c = ':';
 	for (size_t i = 0; i < reprap.GetGCodes().GetNumExtruders(); ++i)
 	{
-		reply.catf("%c %.3f", c, (double)GetExtruderShaperForExtruder(i).GetKseconds());
+		reply.cat(c);
+		reply.cat(' ');
+		GetExtruderShaperForExtruder(i).AppendParameters(reply);
 		c = ',';
 	}
 	return GCodeResult::ok;
@@ -715,34 +738,20 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 #if SUPPORT_CAN_EXPANSION
 	CanDriversData<float> canDriversToUpdate;
 
-	IterateDrivers(axisOrExtruder,
-							[this, axisOrExtruder, code](uint8_t driver)
-							{
-								if (code == 917)
-								{
-# if HAS_SMART_DRIVERS
-									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
-# endif
-								}
-								else
-								{
-									UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
-								}
-							},
-							[this, axisOrExtruder, code, &canDriversToUpdate](DriverId driver)
-							{
-								if (code == 917)
-								{
-									canDriversToUpdate.AddEntry(driver, standstillCurrentPercent[axisOrExtruder]);
-								}
-								else
-								{
-									canDriversToUpdate.AddEntry(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
-								}
-							}
-						);
 	if (code == 917)
 	{
+		IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder](uint8_t driver)
+							{
+# if HAS_SMART_DRIVERS
+								SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
+# endif
+							},
+							[this, axisOrExtruder, &canDriversToUpdate](DriverId driver)
+							{
+								canDriversToUpdate.AddEntry(driver, standstillCurrentPercent[axisOrExtruder]);
+							}
+						);
 # if SUPPORT_PHASE_STEPPING
 		dms[axisOrExtruder].phaseStepControl.SetStandstillCurrent(standstillCurrentPercent[axisOrExtruder]);
 # endif
@@ -750,26 +759,65 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 	}
 	else
 	{
-		return CanInterface::SetRemoteDriverCurrents(canDriversToUpdate, reply);
+		GCodeResult rslt = GCodeResult::ok;
+		IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder, &rslt, reply](uint8_t driver)
+							{
+# if HAS_SMART_DRIVERS
+								const float actualCurrent = min<float>(motorCurrents[axisOrExtruder], SmartDrivers::GetMaxMotorCurrent(driver));
+								if (actualCurrent < motorCurrents[axisOrExtruder])
+								{
+									reply.lcatf("Driver %u.%u current limited to %umA", CanInterface::GetCanAddress(), driver, (unsigned int)actualCurrent);
+									rslt = GCodeResult::error;
+								}
+# else
+								const float actualCurrent = motorCurrents[axisOrExtruder];
+# endif
+								UpdateMotorCurrent(driver, actualCurrent * motorCurrentFraction[axisOrExtruder]);
+							},
+							[this, axisOrExtruder, &canDriversToUpdate](DriverId driver)
+							{
+								canDriversToUpdate.AddEntry(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
+							}
+						);
+		return max<GCodeResult>(rslt, CanInterface::SetRemoteDriverCurrents(canDriversToUpdate, reply));
 	}
 #else
-	IterateDrivers(axisOrExtruder,
-							[this, axisOrExtruder, code](uint8_t driver)
+	if (code == 917)
+	{
+		IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder](uint8_t driver)
 							{
-								if (code == 917)
-								{
 # if HAS_SMART_DRIVERS
-									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
+								SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
 # endif
-								}
-								else
-								{
-									UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
-								}
 							}
-	);
-	return GCodeResult::ok;
+		);
+		return GCodeResult::ok;
+	}
+	else
+	{
+		GCodeResult rslt = GCodeResult::ok;
+		IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder, &rslt, reply](uint8_t driver)
+							{
+# if HAS_SMART_DRIVERS
+								const float actualCurrent = min<float>(motorCurrents[axisOrExtruder], SmartDrivers::GetMaxMotorCurrent(driver));
+								if (actualCurrent < motorCurrents[axisOrExtruder])
+								{
+									reply.lcatf("Driver %u current limited to %umA", driver, (unsigned int)actualCurrent);
+									rslt = GCodeResult::error;
+								}
+# else
+								const float actualCurrent = motorCurrents[axisOrExtruder];
+# endif
+								rslt = max<GCodeResult>(rslt, UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder], reply));
+							}
+		);
+		return rslt;
+	}
 #endif
+
 }
 
 #ifdef DUET3_MB6XD
@@ -849,10 +897,8 @@ void Move::UpdateMotorCurrent(size_t driver, float current) noexcept
 #if HAS_SMART_DRIVERS
 		if (driver < numSmartDrivers)
 		{
-			SmartDrivers::SetCurrent(driver, current);
+			return SmartDrivers::SetCurrent(driver, current);
 		}
-#else
-		// otherwise we can't set the motor current
 #endif
 	}
 }
@@ -882,6 +928,16 @@ int Move::GetMotorCurrent(size_t drive, int code) const noexcept
 	}
 
 	return lrintf(rslt);
+}
+
+// Get the direction setting for a local or remote driver
+bool Move::GetDirectionValue(DriverId did) const noexcept
+{
+	return
+#if SUPPORT_CAN_EXPANSION
+		(did.IsRemote()) ? reprap.GetExpansion().GetDriverDirection(did) :
+#endif
+			GetDirectionValue(did.localDriver);
 }
 
 // Set the motor idle current factor
@@ -1003,8 +1059,35 @@ GCodeResult Move::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, 
 		return GCodeResult::error;
 
 #if SUPPORT_TMC22xx || SUPPORT_TMC51xx
-	case 2:			// read/write smart driver register
+	case 2:			// read/write smart driver register, or configure the sine table in step/dir mode
 		{
+# if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
+			if (gb.Seen('S'))
+			{
+				const unsigned int harmonic = gb.GetLimitedUIValue('S', 4, 17);
+				if (harmonic % 4 != 0)
+				{
+					reply.copy("Only harmonics that are multiples of 4 can be represented in the sine table");
+					return GCodeResult::error;
+				}
+				bool seenMagnitude = false, seenPhase = false;
+				float magnitude = 0.0, phase = 0.0;
+				gb.TryGetLimitedFValue('J', magnitude, seenMagnitude, 0.0, 90.0);
+				gb.TryGetLimitedFValue('O', phase, seenPhase, 0.0, 360.0);
+				if (seenPhase && phase != 0.0 && phase != 180.0)
+				{
+					reply.copy("Sine table correction phase must be 0 or 180");
+					return GCodeResult::error;
+				}
+				return SmartDrivers::ConfigureLutCorrection(drive, harmonic, seenMagnitude, magnitude, seenPhase, phase == 180.0, reply);
+			}
+			if (!gb.Seen('R'))
+			{
+				reply.printf("Driver %u waveform correction:", drive);
+				SmartDrivers::AppendLutCorrections(drive, reply);
+				return GCodeResult::ok;
+			}
+# endif
 			gb.MustSee('R');
 			const uint8_t regNum = gb.GetLimitedUIValue('R', 0, 0x80);
 			if (gb.Seen('V'))
@@ -1040,6 +1123,7 @@ GCodeResult Move::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const Str
 	{
 		seen = true;
 		SetDirectionValue(drive, gb.GetIValue() != 0);
+		reprap.BoardsUpdated();
 	}
 	if (gb.Seen('R'))
 	{
@@ -1080,6 +1164,7 @@ GCodeResult Move::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const Str
 				reply.printf("Driver %u does not support mode '%s'", drive, TranslateDriverMode(val));
 				return GCodeResult::error;
 			}
+			reprap.BoardsUpdated();
 		}
 
 		if (gb.TryGetUIValue('C', val, seen))		// set chopper control register
@@ -1187,6 +1272,20 @@ GCodeResult Move::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const Str
 		ReportM569Parameters(drive, reply);
 	}
 	return GCodeResult::ok;
+}
+
+void Move::SetDirectionValue(size_t drive, bool dVal) noexcept
+{
+#if SUPPORT_PHASE_STEPPING
+	// We must prevent the TMC task loop fetching the current position while we are changing the direction
+	if (directions[drive] != dVal)
+	{
+		TaskCriticalSectionLocker lock;
+		directions[drive] = dVal;
+	}
+#else
+	directions[drive] = dVal;
+#endif
 }
 
 // Report the M569 parameters of a drive. Used both in main board mode and in expansion board mode.
@@ -1307,16 +1406,16 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	// Prepare for movement
 	PrepParams params;
 
-#if SUPPORT_S_CURVE
-	params.initialAcceleration = params.peakAcceleration = msg.acceleration;
-	params.initialDeceleration = params.peakDeceleration = -msg.deceleration;
+#if SUPPORT_3RD_ORDER
+	params.initialAcceleration = params.peakAcceleration = (motioncalc_t)msg.acceleration;
+	params.initialDeceleration = params.peakDeceleration = -(motioncalc_t)msg.deceleration;		// the deceleration is passed as a positive number in theCAN  message
 	params.phaseClocks[1] = msg.accelerationClocks;
 	params.phaseClocks[3] = msg.steadyClocks;
 	params.phaseClocks[5] = msg.decelClocks;
 	params.phaseClocks[0] = params.phaseClocks[2] = params.phaseClocks[4] = params.phaseClocks[6] = 0;
 #else
-	params.acceleration = msg.acceleration;
-	params.deceleration = -msg.deceleration;
+	params.acceleration = (motioncalc_t)msg.acceleration;
+	params.deceleration = -(motioncalc_t)msg.deceleration;
 	params.accelClocks = msg.accelerationClocks;
 	params.steadyClocks = msg.steadyClocks;
 	params.decelClocks = msg.decelClocks;
@@ -1326,7 +1425,7 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	// We occasionally receive a message for a very short move with zero clocks needed. This messes up the calculations, so add one steady clock in this case.
 	if (clocksNeeded == 0)
 	{
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		clocksNeeded = params.phaseClocks[3] = 1;
 #else
 		clocksNeeded = params.steadyClocks = 1;
@@ -1335,19 +1434,24 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 
 	// Normalise the move to unit distance
 	params.totalDistance = (motioncalc_t)1.0;
-	const motioncalc_t accelDistanceExTopSpeed = -(motioncalc_t)0.5 * msg.acceleration * msquare((motioncalc_t)msg.accelerationClocks);
-	const motioncalc_t decelDistanceExTopSpeed = (motioncalc_t)0.5 * msg.deceleration * msquare((motioncalc_t)msg.decelClocks);
-	const motioncalc_t topSpeed = (params.totalDistance - (accelDistanceExTopSpeed + decelDistanceExTopSpeed))/clocksNeeded;
+	const motioncalc_t aTimesT = (motioncalc_t)msg.acceleration * (motioncalc_t)msg.accelerationClocks;
+	const motioncalc_t accelDistanceExTopSpeed = -(motioncalc_t)0.5 * aTimesT * (motioncalc_t)msg.accelerationClocks;
+	const motioncalc_t dTimesT = (motioncalc_t)msg.deceleration * (motioncalc_t)msg.decelClocks;
+	const motioncalc_t decelDistanceExTopSpeed = -(motioncalc_t)0.5 * dTimesT * (motioncalc_t)msg.decelClocks;
+	params.topSpeed = (params.totalDistance - (accelDistanceExTopSpeed + decelDistanceExTopSpeed))/clocksNeeded;
+	params.startSpeed = params.topSpeed - aTimesT;
+	params.endSpeed = params.topSpeed - dTimesT;
 
-#if SUPPORT_S_CURVE
-	params.distances[1] = accelDistanceExTopSpeed + topSpeed * msg.accelerationClocks;
-	params.distances[5] = decelDistanceExTopSpeed + topSpeed * msg.decelClocks;
+#if SUPPORT_3RD_ORDER
+	params.speedsCalculated = false;
+	params.distances[1] = accelDistanceExTopSpeed + params.topSpeed * (motioncalc_t)msg.accelerationClocks;
+	params.distances[5] = decelDistanceExTopSpeed + params.topSpeed * (motioncalc_t)msg.decelClocks;
 	params.distances[3] = params.totalDistance - (params.distances[1] + params.distances[5]);
 	params.distances[0] = params.distances[2] = params.distances[4] = params.distances[6] = (motioncalc_t)0.0;
 	params.jerk = (motioncalc_t)0.0;
 #else
-	params.accelDistance = accelDistanceExTopSpeed + topSpeed * msg.accelerationClocks;
-	const motioncalc_t decelDistance = decelDistanceExTopSpeed + topSpeed * msg.decelClocks;
+	params.accelDistance = accelDistanceExTopSpeed + params.topSpeed * (motioncalc_t)msg.accelerationClocks;
+	const motioncalc_t decelDistance = decelDistanceExTopSpeed + params.topSpeed * (motioncalc_t)msg.decelClocks;
 	params.decelStartDistance = params.totalDistance - decelDistance;
 #endif
 
@@ -1399,7 +1503,13 @@ GCodeResult Move::EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<floa
 							}
 							else
 							{
-								motorCurrents[driver] = msg.values[count];
+
+								motorCurrents[driver] = min<float>(msg.values[count], SmartDrivers::GetMaxMotorCurrent(driver));
+								if (motorCurrents[driver] < msg.values[count])
+								{
+									reply.lcatf("Driver %u.%u current limited to %umA", CanInterface::GetCanAddress(), driver, (unsigned int)motorCurrents[driver]);
+									rslt = GCodeResult::error;
+								}
 								motorCurrentFraction[driver] = 1.0;
 								UpdateMotorCurrent(driver, msg.values[count]);
 							}
@@ -1643,10 +1753,9 @@ GCodeResult Move::EutProcessM569Point2(const CanMessageGeneric& msg, const Strin
 #if SUPPORT_TMC22xx || SUPPORT_TMC51xx
 	CanMessageGenericParser parser(msg, M569Point2Params);
 	uint8_t drive;
-	uint8_t regNum;
-	if (!parser.GetUintParam('P', drive) || !parser.GetUintParam('R', regNum))
+	if (!parser.GetUintParam('P', drive))
 	{
-		reply.copy("Missing P or R parameter in CAN message");
+		reply.copy("Missing P parameter in CAN message");
 		return GCodeResult::error;
 	}
 
@@ -1654,6 +1763,50 @@ GCodeResult Move::EutProcessM569Point2(const CanMessageGeneric& msg, const Strin
 	{
 		reply.printf("Driver number %u.%u out of range", CanInterface::GetCanAddress(), drive);
 		return GCodeResult::error;
+	}
+
+# if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
+	uint8_t harmonic;
+	if (parser.GetUintParam('S', harmonic))
+	{
+		if (harmonic % 4 != 0)
+		{
+			reply.copy("Only harmonics that are multiples of 4 can be represented in the sine table");
+			return GCodeResult::error;
+		}
+		if (harmonic < 4 || harmonic > 16)
+		{
+			reply.copy("Waveform correction harmonic out of range");
+			return GCodeResult::error;
+		}
+		float magnitude = 0.0, phase = 0.0;
+		const bool seenMagnitude = parser.GetFloatParam('J', magnitude);
+		const bool seenPhase = parser.GetFloatParam('O', phase);
+		if (seenMagnitude && (magnitude < 0.0 || magnitude > 90.0))
+		{
+			reply.copy("Waveform correction magnitude out of range");
+			return GCodeResult::error;
+		}
+		if (seenPhase && phase != 0.0 && phase != 180.0)
+		{
+			reply.copy("Sine table correction phase must be 0 or 180");
+			return GCodeResult::error;
+		}
+		return SmartDrivers::ConfigureLutCorrection(drive, harmonic, seenMagnitude, magnitude, seenPhase, phase == 180.0, reply);
+	}
+# endif
+
+	uint8_t regNum;
+	if (!parser.GetUintParam('R', regNum))
+	{
+# if SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI
+		reply.printf("Driver %u.%u waveform correction:", CanInterface::GetCanAddress(), drive);
+		SmartDrivers::AppendLutCorrections(drive, reply);
+		return GCodeResult::ok;
+# else
+		reply.copy("Missing R parameter in CAN message");
+		return GCodeResult::error;
+# endif
 	}
 
 	uint32_t regVal;

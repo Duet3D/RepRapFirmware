@@ -126,10 +126,10 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 	totalDistance = dda.totalDistance;
 	// Due to rounding error, for an accelerate-decelerate move we may have accelDistance+decelDistance slightly greater than totalDistance.
 	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	jerk = 0.0;							// this signals that we are not using S-curve acceleration
-	peakAcceleration = dda.maxAcceleration;
-	peakDeceleration = -dda.maxAcceleration;
+	peakAcceleration = initialAcceleration = dda.maxAcceleration;
+	peakDeceleration = initialDeceleration = -dda.maxAcceleration;
 	phaseClocks[0] = phaseClocks[2] = phaseClocks[4] = phaseClocks[6] = 0;
 	phaseClocks[1] = std::lrint((motioncalc_t)(dda.topSpeed - dda.startSpeed)/peakAcceleration);
 	phaseClocks[5] = std::lrint((motioncalc_t)(dda.endSpeed - dda.topSpeed)/peakDeceleration);
@@ -140,6 +140,7 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 	distances[3] = decelStartDistance - distances[1];
 	phaseClocks[3] = (distances[3] <= (motioncalc_t)0.0) ? 0 : std::lrint(distances[3]/(motioncalc_t)dda.topSpeed);
 	dda.clocksNeeded = phaseClocks[1] + phaseClocks[3] + phaseClocks[5];
+	speedsCalculated = false;
 #else
 	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
 	accelDistance = min<motioncalc_t>(dda.beforePrepare.accelDistance, decelStartDistance);
@@ -151,19 +152,38 @@ void PrepParams::SetFromDDA(DDA& dda) noexcept
 	steadyClocks = (steadyDistance <= (motioncalc_t)0.0) ? 0 : std::lrint(steadyDistance/(motioncalc_t)dda.topSpeed);
 	dda.clocksNeeded = accelClocks + steadyClocks + decelClocks;
 #endif
+	startSpeed = dda.startSpeed;
+	topSpeed = dda.topSpeed;
+	endSpeed = dda.endSpeed;
 }
+
+#if SUPPORT_3RD_ORDER
+
+void PrepParams::EnsureSpeedsSet() const noexcept
+{
+	if (!speedsCalculated)
+	{
+		phase1StartSpeed = (phaseClocks[0] == 0) ? startSpeed : startSpeed + (initialAcceleration + (motioncalc_t)0.5 * jerk * (motioncalc_t)phaseClocks[0]) * (motioncalc_t)phaseClocks[0];
+		phase1EndSpeed = phase1StartSpeed + peakAcceleration * (motioncalc_t)phaseClocks[1];
+		phase5StartSpeed = (phaseClocks[4] == 0) ? topSpeed : topSpeed - (motioncalc_t)0.5 * jerk * msquare((motioncalc_t)phaseClocks[4]);
+		phase5EndSpeed = phase5StartSpeed + peakDeceleration * (motioncalc_t)phaseClocks[5];
+		speedsCalculated = true;
+	}
+}
+
+#endif
 
 void PrepParams::DebugPrint() const noexcept
 {
-	debugPrintf("pp: td=%.3g"
-#if SUPPORT_S_CURVE
+	debugPrintf("pp: td=%.3g ss=%.4g ts=%.4g es=%.4g"
+#if SUPPORT_3RD_ORDER
 				" ad=[%.4g %.4g %.4g] sd=%.4g dd=[%.4g %.4g %.4g] a=[%.4g %.4g] d=[%.4g %.4g] ac=[%" PRIu32 " %" PRIu32 " %" PRIu32 "] sc=%" PRIu32 " dc=[%" PRIu32 " %" PRIu32 " %" PRIu32 "]"
 #else
 				" ad=%.4g dsd=%.4g a=%.4g d=%.4g ac=%" PRIu32 " sc=%" PRIu32 " dc=%" PRIu32
 #endif
 				"\n",
-					(double)totalDistance,
-#if SUPPORT_S_CURVE
+					(double)totalDistance, (double)startSpeed, (double)topSpeed, (double)endSpeed,
+#if SUPPORT_3RD_ORDER
 					(double)distances[0], (double)distances[1], (double)distances[2],
 					(double)distances[3],
 					(double)distances[4], (double)distances[5], (double)distances[6],
@@ -242,13 +262,13 @@ void DDA::DebugPrint(const char *_ecv_array tag) const noexcept
 	debugPrintf("%s %u ts=%" PRIu32 " DDA: s=%.4g", tag, (unsigned int)GetState(), afterPrepare.moveStartTime, (double)totalDistance);
 	DebugPrintVector(" vec", directionVector, MaxAxesPlusExtruders);
 	debugPrintf("\n"
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 				"a=[%.4e, %.4e, 0.0] j=%.4e"
 #else
 				"a=%.4e"
 #endif
 				" reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=0x%06" PRIx32 "\n",
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 				(double)startAcceleration, (double)maxAcceleration, (double)jerk,
 #else
 				(double)maxAcceleration,
@@ -260,9 +280,6 @@ void DDA::DebugPrint(const char *_ecv_array tag) const noexcept
 // Either way, return the amount of extrusion we didn't do in the extruder coordinates of nextMove
 MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorMapping) noexcept
 {
-	// 0. If there are more total axes than visible axes, then we must ignore any movement data in nextMove for the invisible axes.
-	// Likewise we must ignore any movement data in nextMove for unowned axes.
-	// The call to CartesianToMotorSteps may adjust the invisible axis endpoints for architectures such as CoreXYU and delta with >3 towers, so set them up here.
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
 	const Move& move = reprap.GetMove();
@@ -279,6 +296,13 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	// Deal with axis movement
 	if (doMotorMapping)
 	{
+		// If there are more total axes than visible axes, then we must ignore any movement data in nextMove for the invisible axes.
+		// The call to CartesianToMotorSteps may adjust the invisible axis endpoints for architectures such as CoreXYU and delta with >3 towers, so set them up here.
+		for (size_t axis = numVisibleAxes; axis < numTotalAxes; ++axis)
+		{
+			endPoint[axis] = prev->DriveCoordinates()[axis];
+		}
+
 		const MovementError err = move.CartesianToMotorSteps(nextMove.coords, endPoint, nextMove.isCoordinated);	// transform the axis coordinates to motor endpoints
 		if (err != MovementError::ok)
 		{
@@ -408,7 +432,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 				}
 				if (flags.xyMoving && nextMove.usePressureAdvance)
 				{
-					const float compensationClocks = move.GetPressureAdvanceClocksForLogicalDrive(drive);
+					const float compensationClocks = move.GetPressureAdvanceK0ClocksForLogicalDrive(drive);
 					if (compensationClocks > 0.0)
 					{
 						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
@@ -443,6 +467,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	// 3. Store some values
 	tool = nextMove.movementTool;
 	filePos = nextMove.filePos;
+	gCommandNumber = nextMove.gCommandNumber;
 	virtualExtruderPosition = nextMove.moveStartVirtualExtruderPosition;
 	proportionDone = nextMove.proportionDone;
 	initialUserC0 = nextMove.initialUserC0;
@@ -488,7 +513,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 		// First do the bed tilt compensation for deltas.
 		directionVector[Z_AXIS] += (directionVector[X_AXIS] * k.GetTiltCorrection(X_AXIS)) + (directionVector[Y_AXIS] * k.GetTiltCorrection(Y_AXIS));
 		totalDistance = NormaliseLinearMotion(move.GetLinearAxes());
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		movementRatio = (extrudersMoving) ? totalExtrusion/totalDistance : 1.0;
 #endif
 	}
@@ -496,7 +521,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	{
 		// Some axes are moving, but not linear axes. Normalise the movement to the vector sum of the axes that are moving.
 		totalDistance = Normalise(directionVector, move.GetRotationalAxes());
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		movementRatio = (extrudersMoving) ? totalExtrusion/totalDistance : 1.0;
 #endif
 	}
@@ -508,7 +533,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 		{
 			Scale(directionVector, 1.0/totalDistance);
 		}
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		movementRatio = 1.0;
 #endif
 	}
@@ -523,7 +548,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 		maxAcceleration = min<float>(maxAcceleration, (flags.isPrintingMove) ? nextMove.maxPrintingAcceleration : nextMove.maxTravelAcceleration);
 	}
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	if (move.IsUsingSCurve())
 	{
 		flags.useScurve = true;
@@ -561,6 +586,13 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	// speed lower than the configured minimum movement speed. We must apply the minimum speed first and then limit it if necessary after that.
 	requestedSpeed = min<float>(max<float>(reqSpeed, move.MinMovementSpeed()),
 								VectorBoxIntersection(normalisedDirectionVector, move.MaxFeedrates()));
+#if SUPPORT_ASYNC_MOVES
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves) && reqSpeed > 1.3 * requestedSpeed)
+	{
+		Platform::moveWarningBuffer->catf("Feed clamp: req=%.1fmm/s allowed=%.1fmm/s dist=%.2fmm it=%u fpos=%" PRIu32 "\n", (double)InverseConvertSpeedToMmPerSec(reqSpeed), (double)InverseConvertSpeedToMmPerSec(requestedSpeed), (double)totalDistance, nextMove.inverseTimeMode ? 1u : 0u, (uint32_t)filePos);
+		Platform::hasMoveWarning = true;
+	}
+#endif
 
 	// On a Cartesian printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
 	// for diagonal moves. On other architectures, this is not OK and any movement in the XY plane should be limited on other ways.
@@ -570,16 +602,17 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	}
 
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
+	const bool sameMoveType =  flags.isPrintingMove == prev->flags.isPrintingMove
+							&& flags.xyMoving == prev->flags.xyMoving
+							&& flags.isNonPrintingExtruderMove == prev->flags.isNonPrintingExtruderMove;	// this is to prevent extruder-only moves being melded with Z-axis moves (issue 990)
 	if (   prev->IsProvisional()													// if previous move is queued but has not started yet
 		&& flags.useScurve == prev->flags.useScurve
-		&& flags.isPrintingMove == prev->flags.isPrintingMove
-		&& flags.xyMoving == prev->flags.xyMoving
-		&& flags.isNonPrintingExtruderMove == prev->flags.isNonPrintingExtruderMove	// this is to prevent extruder-only moves being melded with Z-axis moves (issue 990)
+		&& (move.GetJerkPolicy() != 0 || sameMoveType)									// and melding is allowed
 	   )
 	{
-		// We may be able to meld this move with the previous one
-		if (flags.isPrintingMove)
+		// We may be able to meld this move with the previous one. A jerk policy 1 meld between different move types cannot rely on the extrusion ratio, so use the axis jerk limits only
+		if (flags.isPrintingMove && sameMoveType)
 		{
 			SetSpeedRatioAndMaxJunctionSpeedForPrintingMoves(move);
 		}
@@ -601,7 +634,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	MovementError rslt;																// this will hold the return value
 
 	// See if we can meld this with the end of the previous one (which must currently have the end speed set to zero)
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	if (flags.useScurve)
 	{
 		startSpeed = startAcceleration = 0.0;										// in case there is no previous move
@@ -647,7 +680,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 #endif
 
 		rslt = RecalculateMove(ring);
-		SetState(planned);
+		// Caller must set the state to 'planned' if rslt == MovementError::ok
 	}
 	return rslt;
 }
@@ -716,9 +749,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
 	startSpeed = endSpeed = 0.0;
 
-	RecalculateMove(ring);
-	SetState(planned);
-	return true;
+	return RecalculateMove(ring) == MovementError::ok;
 }
 
 # if SUPPORT_ASYNC_MOVES
@@ -772,9 +803,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 	// Currently we normalise the vector sum of all motor movements to unit length.
 	totalDistance = Normalise(directionVector);
 
-	RecalculateMove(ring);
-	SetState(planned);
-	return true;
+	return RecalculateMove(ring) == MovementError::ok;
 }
 
 #endif
@@ -1125,13 +1154,13 @@ void DDA::GetEndCoordinates(float returnedCoords[MaxAxes]) noexcept
 // Dispatch this DDA to the move segment queue for execution.
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
 void DDA::Prepare(DDARing& ring,
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 					MovementProfile& plannedProfile,
 #endif
 					uint32_t prepareAdvanceTime, SimulationMode simMode) noexcept
 {
 	PrepParams params;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	if (flags.useScurve)
 	{
 		AllocateMoveFromPlan(plannedProfile, params);
@@ -1155,6 +1184,68 @@ void DDA::Prepare(DDARing& ring,
 	// Avoid setting the move start time in the past or with very little time before it starts, because this can lead to us trying to modify a segment that is already executing
 	Move& move = reprap.GetMove();
 	const uint32_t now = StepTimer::GetMovementTimerTicks();
+
+	// 'prepareAdvanceTime' includes lead time for CAN-connected drivers to receive and queue their movement commands before the deadline.
+	// If this move doesn't touch any CAN-connected driver, that lead time is wasted latency (causes M400/G4 stalls under fast host-driven pipelines like OpenPnP);
+	// we still need enough of a margin to avoid the Move task modifying a segment list that the step ISR is already executing, so fall back to
+	// MoveTiming::AbsoluteMinimumPreparedTime, the same value already trusted elsewhere in this function for that exact purpose.
+	// A move that chains directly onto this one (see the 'start this move directly after the previous one' case below) inherits whatever margin
+	// we gave this move, so if this move is short and a CAN-connected move is queued close behind it in the ring, that move could end up with
+	// less than the CAN lead time it needs. So before shortening our own margin, check the ring for a CAN-connected move that's due within
+	// the window we would otherwise be cutting (prepareAdvanceTime - AbsoluteMinimumPreparedTime) and keep the full margin if one is found.
+#if SUPPORT_CAN_EXPANSION
+	auto touchesRemoteDriver = [&move](const DDA& dda) noexcept -> bool
+	{
+		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
+		for (size_t drive = 0; drive < numTotalAxes; ++drive)
+		{
+			if (dda.directionVector[drive] != 0.0)
+			{
+				const AxisDriversConfig& config = move.GetAxisDriversConfig(drive);
+				for (size_t i = 0; i < config.numDrivers; ++i)
+				{
+					if (config.driverNumbers[i].IsRemote())
+					{
+						return true;
+					}
+				}
+			}
+		}
+		const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
+		for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+		{
+			if (dda.directionVector[ExtruderToLogicalDrive(extruder)] != 0.0 && move.GetExtruderDriver(extruder).IsRemote())
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+
+	bool involvesRemoteDriver = touchesRemoteDriver(*this);
+	if (!involvesRemoteDriver)
+	{
+		// Walk forward through the moves currently queued behind this one. Anything beyond the window we are about to cut
+		// (prepareAdvanceTime - AbsoluteMinimumPreparedTime) will get its own fresh margin decision when it's prepared, so we
+		// only need to worry about moves that could inherit a start time within that window via direct chaining.
+		uint32_t clocksScanned = 0;
+		const uint32_t dangerWindow = prepareAdvanceTime - MoveTiming::AbsoluteMinimumPreparedTime;
+		for (const DDA *dda = GetNext(); dda != this && dda->GetState() != DDA::empty && clocksScanned < dangerWindow; dda = dda->GetNext())
+		{
+			if (touchesRemoteDriver(*dda))
+			{
+				involvesRemoteDriver = true;
+				break;
+			}
+			// Underestimate this move's duration (ignore acceleration/deceleration ramps) so that we err on the side of not reducing the margin
+			clocksScanned += (dda->topSpeed > 0.0) ? (uint32_t)(dda->totalDistance / dda->topSpeed) : 0;
+		}
+	}
+	const uint32_t localPrepareAdvanceTime = (involvesRemoteDriver) ? prepareAdvanceTime : min<uint32_t>(prepareAdvanceTime, MoveTiming::AbsoluteMinimumPreparedTime);
+#else
+	const uint32_t localPrepareAdvanceTime = prepareAdvanceTime;
+#endif
+
 	if (prev->GetState() == committed)
 	{
 		uint32_t prevEndTime = prev->afterPrepare.moveStartTime + prev->clocksNeeded;
@@ -1169,18 +1260,54 @@ void DDA::Prepare(DDARing& ring,
 		}
 		else if (startSpeed == 0.0)
 		{
-			afterPrepare.moveStartTime = now + prepareAdvanceTime;
+			afterPrepare.moveStartTime = now + localPrepareAdvanceTime;
 		}
 		else
 		{
 			afterPrepare.moveStartTime = now + MoveTiming::AbsoluteMinimumPreparedTime;
 			move.AddPrepareHiccup();		// move was supposed to follow the previous one directly, so record a hiccup
+#if SUPPORT_ASYNC_MOVES
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+			{
+				Platform::moveWarningBuffer->catf("Late continuation: u=%.1fmm/s late=%" PRIi32 " now=%" PRIu32 "\n", (double)InverseConvertSpeedToMmPerSec(startSpeed), (int32_t)(now + MoveTiming::AbsoluteMinimumPreparedTime - prevEndTime), now);
+				Platform::hasMoveWarning = true;
+			}
+#endif
 		}
 	}
 	else
 	{
-		afterPrepare.moveStartTime = now + prepareAdvanceTime;
+		afterPrepare.moveStartTime = now + localPrepareAdvanceTime;
+#if SUPPORT_ASYNC_MOVES
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves) && startSpeed > 0.0)
+		{
+			Platform::moveWarningBuffer->catf("Orphaned continuation: u=%.1fmm/s prev state %u now=%" PRIu32 "\n", (double)InverseConvertSpeedToMmPerSec(startSpeed), (unsigned int)prev->GetState(), now);
+			Platform::hasMoveWarning = true;
+		}
+#endif
 	}
+
+#if SUPPORT_ASYNC_MOVES
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+	{
+		// Catch moves whose per-drive distance cannot fit in the planned duration - the collapsed-duration failure streams many steps in a tiny window and no other detector sees it.
+		// Only owned drives generate motion; unowned endpoint deltas are stale pinned copies patched later by SetLastEndpoints and must not be flagged
+		const float moveSeconds = (float)clocksNeeded * (1.0f / (float)StepClockRate);
+		for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
+		{
+			if (ownedDrives.IsBitSet(drive))
+			{
+				const float driveMm = (float)labs(endPoint[drive] - prev->endPoint[drive]) / move.DriveStepsPerMm(drive);
+				if (driveMm > 0.01 && driveMm > 1.3 * moveSeconds * InverseConvertSpeedToMmPerSec(move.MaxFeedrate(drive)))
+				{
+					Platform::moveWarningBuffer->catf("Overspeed drive %u: %.2fmm in %.4fs dv=%.4f ep=%" PRIi32 " pep=%" PRIi32 " fpos=%" PRIu32 "\n",
+						drive, (double)driveMm, (double)moveSeconds, (double)directionVector[drive], endPoint[drive], prev->endPoint[drive], (uint32_t)filePos);
+					Platform::hasMoveWarning = true;
+				}
+			}
+		}
+	}
+#endif
 
 	if (simMode < SimulationMode::normal)
 	{
@@ -1222,6 +1349,9 @@ void DDA::Prepare(DDARing& ring,
 						else		// we don't generate segments for leadscrew adjustment moves to remote drivers
 #endif
 						{
+#if SUPPORT_PHASE_STEPPING
+							move.PrepareLeadscrewAdjustmentDM(driver.localDriver);
+#endif
 							move.AddLinearSegments(driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
 						}
 					}

@@ -23,6 +23,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 
 // Storage support
 #define HAS_SBC_INTERFACE		1
+#define SUPPORTS_SBC_OVER_SPI	1
+#define SUPPORTS_SBC_OVER_USB	CORE_USES_TINYUSB
 #define HAS_MASS_STORAGE		1
 #define HAS_HIGH_SPEED_SD		1
 
@@ -37,6 +39,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define HAS_VREF_MONITOR		1
 
 #define SUPPORT_CAN_EXPANSION	1
+#define SUPPORT_BRS				1
 #define DUAL_CAN				1					// support the second CAN interface as simple CAN (not FD)
 #define SUPPORT_LED_STRIPS		1
 #define SUPPORT_DMA_DOTSTAR		1
@@ -49,7 +52,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_ADS131A02		1
 
 #define SUPPORT_ACCELEROMETERS	1
-#define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
 #define SUPPORT_MQTT			1
@@ -138,6 +140,17 @@ constexpr SpiParameters SharedSpiParams =
 };
 
 constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB port
+
+// I2C
+// Hardware I2C runs on the IO2 connector via TWIHS2: SDA on io2.out (PD27), SCL on io2.in (PD28).
+// Using IO2 for I2C requires the 470R bypass jumper on io2.in to be fitted, which is only present on board revision v1.02 and later.
+// Defining I2C_IFACE enables the M260/M261 commands; on this board the bus is driven by a SharedI2CMaster, see CoreN2G.
+#define I2C_IFACE	SharedI2CMaster
+constexpr uint8_t I2CInstanceNumber = 2;					// using TWIHS2
+constexpr Pin I2CSclPin = PortDPin(28);						// io2.in, requires the 470R bypass jumper
+constexpr Pin I2CSdaPin = PortDPin(27);						// io2.out
+constexpr GpioPinFunction I2CPinFunction = GpioPinFunction::C;
+constexpr const char *I2CBusPinNames = "i2c0.clk+i2c0.dat";	// names used to reserve the bus pins so they can't also be allocated as GPIO
 
 // Drivers
 constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin(18), PortCPin(16), PortCPin(28), PortCPin(01), PortCPin(4),  PortCPin(9)  };
@@ -354,8 +367,8 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	ModbusTxPinName			},	// PD24 was SWD_EXT_RST, now RS485 TX/~RX in board revision 1.02 and later
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io0.in,serial0.rx"		},	// PD25 IO0_IN  Serial0 RX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io0.out,serial0.tx"	},	// PD26 IO0_OUT Serial0 TX
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io2.out,i2c0.dat"		},	// PD27 IO2_OUT
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io2.in,i2c0.clk"		},	// PD28 IO2_IN
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io2.out,i2c0.dat"		},	// PD27 IO2_OUT also I2C SDA
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io2.in,i2c0.clk"		},	// PD28 IO2_IN also I2C SCL
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"driver0.err"			},	// PD29 driver 0 err
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_0,	PinCapability::ainr,	"io4.in"				},	// PD30 IO4_IN
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"driver4.err"			},	// PD31 driver 4 err

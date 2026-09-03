@@ -42,12 +42,27 @@ NamedEnum(HeaterStatus, uint8_t, off, standby, active, fault, tuning, offline);
 class Heater INHERIT_OBJECT_MODEL
 {
 public:
+	// Enumeration to describe the heater tuning phases
+	enum class TuningPhase : uint8_t
+	{
+		checking_temperature_is_stable,
+		calibrating_heater,
+		heating_up,
+		settling,
+		measuring,
+#if TUNE_WITH_HALF_FAN
+		measuring_with_50pc_fan,
+#endif
+		measuring_with_fan_on,
+		numPhases
+	};
+
 	explicit Heater(unsigned int num) noexcept;
 	virtual ~Heater() noexcept override;
 	Heater(const Heater &_ecv_from) = delete;
 
 	// Configuration methods
-	virtual GCodeResult ConfigurePortAndSensor(const char *_ecv_array portName, PwmFrequency freq, unsigned int sn, const StringRef& reply) = 0;
+	virtual GCodeResult ConfigurePortAndSensor(const char *_ecv_array portName, PwmFrequency freq, unsigned int sn, int ambientSn, const StringRef& reply) = 0;
 	virtual GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) = 0;
 	virtual GCodeResult ReportDetails(const StringRef& reply) const noexcept = 0;
 
@@ -100,9 +115,6 @@ public:
 	bool IsHeaterEnabled() const noexcept									// Is this heater enabled?
 		{ return model.IsEnabled(); }
 
-	void SetM301PidParameters(const M301PidParameters& params) noexcept
-		{ model.SetM301PidParameters(params); }
-
 	void ClearModelAndMonitors() noexcept;
 
 	HeaterFunction GetFunction() const noexcept { return function; }
@@ -137,25 +149,29 @@ protected:
 	virtual void ApplyExtrusionFeedForward() noexcept = 0;
 
 	int GetSensorNumber() const noexcept { return sensorNumber; }
+	int GetAmbientSensorNumber() const noexcept { return ambientSensorNumber; }
 	void SetSensorNumber(int sn) noexcept;
+	void SetAmbientSensorNumber(int sn) noexcept { ambientSensorNumber = sn; }
 	float GetMaxTemperatureExcursion() const noexcept { return maxTempExcursion; }
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
+	float GetPwmFaultLevel() const noexcept;
+	float GetMaxPwmFaultTime() const noexcept;
 	uint32_t GetMaxBadTemperatureCount() const noexcept { return maxBadTemperatureCount; }
 	float GetTargetTemperature() const noexcept { return (active) ? activeTemperature : standbyTemperature; }
 
 	GCodeResult SetModel(float hr, float bcr, float fcr, float coolingRateExponent, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;
-															// set the process model
-	void ReportTuningUpdate() noexcept;						// tell the user what's happening
-	void CalculateModel(HeaterParameters& params) noexcept;	// calculate G, td and tc from the accumulated readings
+																	// set the process model
+	void ReportTuningUpdate(bool skipping = false) noexcept;		// tell the user what's happening
+	void CalculateModel(HeaterParameters& params) noexcept;			// calculate G, td and tc from the accumulated readings
 	void SetAndReportModelAfterTuning(bool usingFans) noexcept;
 
-	HeaterMonitor monitors[MaxMonitorsPerHeater];			// embedding them in the Heater uses less memory than dynamic allocation
-	volatile float lastFanPwm;								// The fan PWM when we last calculated heater feedforward for the fan
-	volatile float extrusionPwmBoost;						// The value of extrusion PWM boost to apply
-	volatile float extrusionTemperatureBoost;				// the amount of extrusion temperature boost we are currently applying
-	float previousExtrusionPwmBoost;						// The previoius value of extrusion boost we applied
+	HeaterMonitor monitors[MaxMonitorsPerHeater];					// embedding them in the Heater uses less memory than dynamic allocation
+	volatile float lastFanPwm;										// The fan PWM when we last calculated heater feedforward for the fan
+	volatile float extrusionPwmBoost;								// The value of extrusion PWM boost to apply
+	volatile float extrusionTemperatureBoost;						// the amount of extrusion temperature boost we are currently applying
+	float previousExtrusionPwmBoost;								// The previoius value of extrusion boost we applied
 
-	bool tuned;												// true if tuning was successful
+	bool tuned = false;												// true if tuning was successful
 
 	// Constants used during heater tuning
 	static constexpr uint32_t TempSettleTimeout = 20000;			// how long we allow the initial temperature to settle
@@ -170,34 +186,34 @@ protected:
 	static constexpr float MaxTuningHysteresis = 20.0;
 	static constexpr float MinTuningFanPwm = 0.1;
 	static constexpr float DefaultTuningFanPwm = 0.7;
-	static constexpr float TuningPeakTempDrop = 2.0;		// must be well below TuningHysteresis
+	static constexpr float TuningPeakTempDrop = 2.0;				// must be well below TuningHysteresis
 	static constexpr float HeaterSettledCoolingTimeRatio = 0.93;
 
 	// Variables used during heater tuning
-	static float tuningPwm;									// the PWM to use, 0..1
-	static float tuningTargetTemp;							// the target temperature
+	static float tuningPwm;											// the PWM to use, 0..1
+	static float tuningTargetTemp;									// the target temperature
 	static float tuningHysteresis;
 	static float tuningFanPwm;
 
-	static DeviationAccumulator tuningStartTemp;			// the temperature when we turned on the heater
-	static uint32_t tuningBeginTime;						// when we started the tuning process
+	static DeviationAccumulator tuningStartTemp;					// the temperature when we turned on the heater
+	static uint32_t tuningBeginTime;								// when we started the tuning process
 	static DeviationAccumulator dHigh;
 	static DeviationAccumulator dLow;
 	static DeviationAccumulator tOn;
 	static DeviationAccumulator tOff;
 	static DeviationAccumulator heatingRateAcc;
 	static DeviationAccumulator coolingRateAcc;
-	static DeviationAccumulator tuningVoltage;				// sum of the voltage readings we take during the heating phase
+	static DeviationAccumulator tuningVoltage;						// sum of the voltage readings we take during the heating phase
 
 	static uint32_t lastOffTime;
 	static uint32_t lastOnTime;
-	static float peakTemp;									// max or min temperature
-	static uint32_t peakTime;								// the time at which we recorded peakTemp
-	static float afterPeakTemp;								// temperature after max from which we start timing the cooling rate
-	static uint32_t afterPeakTime;							// the time at which we recorded afterPeakTemp
+	static float peakTemp;											// max or min temperature
+	static uint32_t peakTime;										// the time at which we recorded peakTemp
+	static float afterPeakTemp;										// temperature after max from which we start timing the cooling rate
+	static uint32_t afterPeakTime;									// the time at which we recorded afterPeakTemp
 	static float lastCoolingRate;
 	static FansBitmap tuningFans;
-	static unsigned int tuningPhase;
+	static TuningPhase tuningPhase;
 	static uint8_t idleCyclesDone;
 	static bool tuningQuietMode;
 
@@ -206,23 +222,22 @@ protected:
 	static void ClearCounters() noexcept;
 
 	FopDt model;
+	float maxHeatingFaultTime = DefaultMaxHeatingFaultTime;				// how long a heater fault is permitted to persist before a heater fault is raised
 
 private:
-	static const char *_ecv_array const TuningPhaseText[];
-
 	unsigned int heaterNumber;
-	int sensorNumber;								// the sensor number used by this heater
-	float activeTemperature;						// the required active temperature
-	float standbyTemperature;						// the required standby temperature
-	float maxTempExcursion;							// the maximum temperature excursion permitted while maintaining the setpoint
-	float maxHeatingFaultTime;						// how long a heater fault is permitted to persist before a heater fault is raised
-	uint32_t maxBadTemperatureCount;				// the number of consecutive bad sensor readings we allow before raising a fault
+	int sensorNumber = -1;												// the sensor number used by this heater
+	int ambientSensorNumber = -1;										// the ambient sensor number used by this heater, if any
+	float activeTemperature = 0.0;										// the required active temperature
+	float standbyTemperature = 0.0;										// the required standby temperature
+	float maxTempExcursion = DefaultMaxTempExcursion;					// the maximum temperature excursion permitted while maintaining the setpoint
+	uint32_t maxBadTemperatureCount = DefaultMaxBadTemperatureCount;	// the number of consecutive bad sensor readings we allow before raising a fault
 
-	HeaterFunction function;						// what type of heater this is
-	bool active;									// are we active or standby?
-	bool usingFeedForward;							// true if we have ever applied feedforward even if the amounts are zero
-	bool modelSetByUser;
-	bool monitorsSetByUser;
+	HeaterFunction function = HeaterFunction::tool;						// what type of heater this is
+	bool active = false;												// are we active or standby?
+	bool usingFeedForward = false;										// true if we have ever applied feedforward even if the amounts are zero
+	bool modelSetByUser = false;
+	bool monitorsSetByUser = false;
 };
 
 #endif /* SRC_HEATING_HEATER_H_ */

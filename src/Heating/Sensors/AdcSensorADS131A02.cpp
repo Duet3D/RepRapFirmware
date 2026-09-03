@@ -414,7 +414,7 @@ TemperatureError AdcSensorADS131A02Chan0::DoTransaction(ADS131Command command, A
 	// If requested, check that the received response matches the previous command
 	if (rslt == TemperatureError::ok && checkResponse)
 	{
-		const uint16_t expectedResponse = (lastCommand == ADS131Command::nullcmd) ? ADS131Command::rreg | ADS131Register::STAT_1						// a null command returns a status response provided that the device has been unlocked
+		const uint16_t expectedResponse = (lastCommand == ADS131Command::nullcmd) ? (uint16_t)ADS131Command::rreg | (uint16_t)ADS131Register::STAT_1	// a null command returns a status response provided that the device has been unlocked
 										: ((lastCommand & 0xE000) == ADS131Command::wreg) ? lastCommand ^ (ADS131Command::wreg ^ ADS131Command::rreg)	// a write register command returns a read register response
 											: lastCommand;
 		const uint16_t mask = ((lastCommand & 0xE000) == ADS131Command::rreg) ? 0xFF00 : 0xFFFF;

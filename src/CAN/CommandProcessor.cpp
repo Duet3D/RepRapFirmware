@@ -47,6 +47,8 @@ void CommandProcessor::AppendBadMotionStats(const StringRef& reply) noexcept
 }
 
 // Handle a firmware update request
+// 'buf' holds the request
+// 'buf->useBrs' is true if the request used bit rate switching, in which case we use it for the response too
 static void HandleFirmwareBlockRequest(CanMessageBuffer *buf) noexcept
 pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 {
@@ -163,7 +165,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 
 // Handle an input state change message
 // This is the old version, retained for now for compatibility with expansion boards running older firmware. Remove it in due course.
-static void HandleInputStateChangedV1(const CanMessageInputChangedV1& msg, CanAddress src, uint16_t timeStamp) noexcept
+static void HandleInputStateChangedV1(const CanMessageInputChangedV1& msg, CanAddress src) noexcept
 {
 	bool endstopStatesChanged = false;
 	Platform& p = reprap.GetPlatform();
@@ -174,22 +176,23 @@ static void HandleInputStateChangedV1(const CanMessageInputChangedV1& msg, CanAd
 		switch (handle.parts.type)
 		{
 		case RemoteInputHandle::typeEndstop:
-			p.GetEndstops().HandleRemoteEndstopChange(src, handle.parts.major, handle.parts.minor, timeStamp, state);
+			p.GetEndstops().HandleRemoteEndstopChange(src, handle.parts.major, handle.parts.minor, StepTimer::GetTimerTicks(), state);
 			endstopStatesChanged = true;
 			break;
 
 		case RemoteInputHandle::typeZprobe:
-			p.GetEndstops().HandleRemoteZProbeChange(src, handle.parts.major, handle.parts.minor, timeStamp, state, msg.GetEntryReading(i));
+			p.GetEndstops().HandleRemoteZProbeChange(src, handle.parts.major, handle.parts.minor, StepTimer::GetTimerTicks(), state, msg.GetEntryReading(i));
 			endstopStatesChanged = true;
 			break;
 
 		case RemoteInputHandle::typeGpIn:
 			p.HandleRemoteGpInChange(src, handle.parts.major, handle.parts.minor, state);
+			endstopStatesChanged = true;					// the port may be bound to an extruder endstop, see the E parameter of M574
 			break;
 
 		case RemoteInputHandle::typeStallEndstop:
 			// In this case there should be exactly one handle and the 'reading' is a bitmap of stalled drivers
-			p.GetEndstops().HandleStalledRemoteDrivers(src, LocalDriversBitmap((LocalDriversBitmap::BaseType)msg.GetEntryReading(i)), timeStamp);
+			p.GetEndstops().HandleStalledRemoteDrivers(src, LocalDriversBitmap((LocalDriversBitmap::BaseType)msg.GetEntryReading(i)), StepTimer::GetTimerTicks());
 			break;
 
 		default:
@@ -215,22 +218,23 @@ static void HandleInputStateChangedV2(const CanMessageInputChangedV2& msg, CanAd
 		switch (handle.parts.type)
 		{
 		case RemoteInputHandle::typeEndstop:
-			p.GetEndstops().HandleRemoteEndstopChange(src, handle.parts.major, handle.parts.minor, msg.GetWhen(i), state);
+			p.GetEndstops().HandleRemoteEndstopChange(src, handle.parts.major, handle.parts.minor, CanInterface::Convert16bitReceivedTimeStampTo32bits(msg.GetWhen(i)), state);
 			endstopStatesChanged = true;
 			break;
 
 		case RemoteInputHandle::typeZprobe:
-			p.GetEndstops().HandleRemoteZProbeChange(src, handle.parts.major, handle.parts.minor, msg.GetWhen(i), msg.GetEntryReading(i), state);
+			p.GetEndstops().HandleRemoteZProbeChange(src, handle.parts.major, handle.parts.minor, CanInterface::Convert16bitReceivedTimeStampTo32bits(msg.GetWhen(i)), state, msg.GetEntryReading(i));
 			endstopStatesChanged = true;
 			break;
 
 		case RemoteInputHandle::typeGpIn:
 			p.HandleRemoteGpInChange(src, handle.parts.major, handle.parts.minor, state);
+			endstopStatesChanged = true;					// the port may be bound to an extruder endstop, see the E parameter of M574
 			break;
 
 		case RemoteInputHandle::typeStallEndstop:
 			// In this case there should be exactly one handle and the 'reading' is a bitmap of stalled drivers
-			p.GetEndstops().HandleStalledRemoteDrivers(src, LocalDriversBitmap((LocalDriversBitmap::BaseType)msg.GetEntryReading(i)), msg.GetWhen(i));
+			p.GetEndstops().HandleStalledRemoteDrivers(src, LocalDriversBitmap((LocalDriversBitmap::BaseType)msg.GetEntryReading(i)), CanInterface::Convert16bitReceivedTimeStampTo32bits(msg.GetWhen(i)));
 			break;
 
 		default:
@@ -251,7 +255,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 	switch (msg.type)
 	{
 	case CanMessageReturnInfo::typeFirmwareVersion:
-		reply.printf("%s firmware version " VERSION " (%s%s)", reprap.GetPlatform().GetElectronicsString(), DateText, TimeSuffix);
+		reply.printf("%s firmware version " VERSION " (%s)", reprap.GetPlatform().GetElectronicsString(), DateTimeText);
 		break;
 
 	case CanMessageReturnInfo::typeBoardName:
@@ -317,7 +321,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 	if (buf->id.Src() != CanInterface::GetCanAddress())				// I don't think we should receive our own messages, but in case we do...
 	{
 		const CanMessageType id = buf->id.MsgType();
-		if (   buf->id.Dst() != CanId::BroadcastAddress				// ignore broadcast messages e.g. temperature reports
+		if (   buf->id.Dst() != CanId::BroadcastAddress				// don't flash the LED on broadcast messages e.g. temperature reports and time sync
 			&& id != CanMessageType::fansReport						// don't flash whenever we receive a regular status message
 			&& id != CanMessageType::heatersStatusReport
 			&& id != CanMessageType::boardStatusReportV0
@@ -337,11 +341,13 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			GCodeResult rslt;
 			CanRequestId requestId;
 			uint8_t extra = 0;
+			const bool requestUsedBrs = buf->useBrs;
 
 			switch (id)
 			{
 			case CanMessageType::timeSync:
 				StepTimer::ProcessTimeSyncMessage(buf->msg.sync, buf->dataLength, buf->timeStamp);
+				CanInterface::CheckBrs(buf->msg.sync);
 				return;							// no reply needed
 
 			case CanMessageType::emergencyStop:
@@ -530,9 +536,14 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetMove().EutProcessM915(buf->msg.generic, replyRef);
 				break;
 
-			case CanMessageType::setPressureAdvance:
+			case CanMessageType::setPressureAdvanceV1:
 				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
-				rslt = reprap.GetMove().EutSetRemotePressureAdvance(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
+				rslt = reprap.GetMove().EutSetRemotePressureAdvanceV1(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
+				break;
+
+			case CanMessageType::setPressureAdvanceV2:
+				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
+				rslt = reprap.GetMove().EutSetRemotePressureAdvanceV2(buf->msg.multipleDrivesRequestPressureAdvance, buf->dataLength, replyRef);
 				break;
 
 			case CanMessageType::setInputShapingV1:
@@ -626,6 +637,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				// Re-use the message buffer to send a standard reply
 				const CanAddress srcAddress = buf->id.Src();
 				CanMessageStandardReply *msg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
+				buf->useBrs = requestUsedBrs;
 				msg->resultCode = (uint16_t)rslt;
 				msg->extra = extra;
 				const size_t totalLength = reply.strlen();
@@ -633,8 +645,8 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				uint8_t fragmentNumber = 0;
 				for (;;)
 				{
-					const size_t fragmentLength = min<size_t>(totalLength - lengthDone, CanMessageStandardReply::MaxTextLength);
-					memcpy(msg->text, reply.c_str() + lengthDone, fragmentLength);
+					const size_t fragmentLength = min<size_t>(totalLength - lengthDone, msg->GetMaxTextLength());
+					memcpy(msg->GetText(), reply.c_str() + lengthDone, fragmentLength);
 					lengthDone += fragmentLength;
 					buf->dataLength = msg->GetActualDataLength(fragmentLength);
 					msg->fragmentNumber = fragmentNumber;
@@ -647,6 +659,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 					msg->moreFollows = true;
 					CanInterface::SendResponseNoFree(buf);
 					++fragmentNumber;
+					msg->numWords = 0;						// data words go in fragment 0 only
 				}
 			}
 		}
@@ -658,7 +671,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			{
 			case CanMessageType::inputStateChangedV1:
 				//TODO we should preferably handle this one using a separate high-priority queue or buffer
-				HandleInputStateChangedV1(buf->msg.inputChangedV1, buf->id.Src(), buf->timeStamp);
+				HandleInputStateChangedV1(buf->msg.inputChangedV1, buf->id.Src());
 				break;
 
 			case CanMessageType::inputStateChangedV2:
@@ -736,8 +749,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 					// Send a standard response before we switch
 					const CanAddress srcAddress = buf->id.Src();
 					const CanRequestId requestId = buf->msg.enterTestMode.requestId;
+					const bool requestUsedBrs = buf->useBrs;
 
 					CanMessageStandardReply * const msg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
+					buf->useBrs = requestUsedBrs;
 					msg->resultCode = (uint16_t)GCodeResult::ok;
 					msg->text[0] = 0;
 					buf->dataLength = msg->GetActualDataLength(0);

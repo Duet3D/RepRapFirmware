@@ -50,7 +50,6 @@ public:
 	void EmergencyStop() noexcept;
  	void Init() noexcept;
 	void Spin() noexcept;
-	void Exit() noexcept;
 
 	void Diagnostics(MessageType mtype, const StringRef& reply) noexcept;
 	unsigned int GetNumberOfDiagnosticParts() const noexcept;
@@ -96,6 +95,9 @@ public:
 #if HAS_SBC_INTERFACE
  	bool UsingSbcInterface() const noexcept { return usingSbcInterface; }
  	SbcInterface& GetSbcInterface() const noexcept { return *sbcInterface; }
+# if SUPPORTS_SBC_OVER_USB
+	GCodeResult SwitchToUsbSbcMode(GCodeBuffer& gb, const StringRef& reply) noexcept;
+# endif
 #endif
 #if SUPPORT_CAN_EXPANSION
  	ExpansionManager& GetExpansion() const noexcept { return *expansion; }
@@ -148,7 +150,7 @@ public:
 
 	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
 
-	void SaveConfigError(c_string filename, unsigned int lineNumber, c_string errorMessage) noexcept;
+	void SaveConfigError(AutoStringHandle& filename, unsigned int lineNumber, c_string errorMessage) noexcept;
 
 	void BoardsUpdated() noexcept { ++boardsSeq; }
 	void DirectoriesUpdated() noexcept { ++directoriesSeq; }

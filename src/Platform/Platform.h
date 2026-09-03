@@ -112,8 +112,9 @@ enum class BoardType : uint8_t
 	Auto = 0,						// this value is no longer used
 #if defined(DUET3MINI_V04)			// we use the same values for both v0.2 and v0.4
 	Duet3Mini_Unknown,
-	Duet3Mini_WiFi,
+	Duet3Mini_WiFi,					// Duet Mini WiFi with ESP8266 module
 	Duet3Mini_Ethernet,
+	Duet3Mini_WiFi_ESP32,			// Duet Mini WiFi with ESP32 module
 #elif defined(DUET3_MB6HC)
 	Duet3_6HC_v06_100 = 1,
 	Duet3_6HC_v101 = 2,
@@ -164,7 +165,7 @@ enum class DiagnosticTestType : unsigned int
 	TimeCRC32 = 107,				// time how long it takes to calculate CRC32
 	TimeGetTimerTicks = 108,		// time now long it takes to read the step clock
 	UndervoltageEvent = 109,		// pretend an undervoltage condition has occurred
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	TimeCubicSolver = 110,
 	TimeQuarticSolver = 111,
 #endif
@@ -180,7 +181,8 @@ enum class DiagnosticTestType : unsigned int
 	UnalignedMemoryAccess = 1005,	// do an unaligned memory access to test exception handling
 	BusFault = 1006,				// generate a bus fault
 	AccessMemory = 1007,			// read or write  memory
-	MemoryLeak = 1008				// cause an out of memory fault
+	MemoryLeak = 1008,				// cause an out of memory fault
+	WedgeI2CBus = 1009				// leave an I2C slave holding SDA low to test bus recovery
 };
 
 /***************************************************************************************************************/
@@ -237,7 +239,6 @@ public:
 	void Init() noexcept;									// Set the machine up after a restart.  If called subsequently this should set the machine up as if
 															// it has just been restarted; it can do this by executing an actual restart if you like, but beware the loop of death...
 	void Spin() noexcept;									// This gets called in the main loop and should do any housekeeping needed
-	void Exit() noexcept;									// Shut down tidily. Calling Init after calling this should reset to the beginning
 
 	void Diagnostics(unsigned int part, const StringRef& reply) noexcept;
 	static constexpr unsigned int NumPlatformDiagnosticParts = 7;
@@ -274,6 +275,11 @@ public:
 
 #if defined(DUET_NG) || defined(DUET3MINI)
 	bool IsDuetWiFi() const noexcept;
+	bool HasESP32() const noexcept;
+#endif
+
+#if HAS_WIFI_NETWORKING
+	const char *_ecv_array GetDefaultWiFiFirmwareName() const noexcept;
 #endif
 
 #ifdef DUET_NG
@@ -303,6 +309,9 @@ public:
 
   	// Communications and data storage
 	void AppendUsbReply(size_t usbNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept;
+	void ShutdownUsbDevice(unsigned int index) noexcept;
+	void ReinitUsbDevice(unsigned int index) noexcept;
+	void DisconnectUsb() noexcept;							// Disconnect the USB device from the host, ending all CDC interfaces
 	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, bool rawMessage) noexcept;
 	void AppendAuxReply(size_t auxNumber, const GCodeBuffer *_ecv_null gb, const char *_ecv_array msg, bool rawMessage) noexcept;
 
@@ -502,10 +511,6 @@ public:
 
 	void SetDiagLed(bool on) const noexcept;
 
-#if SUPPORT_MULTICAST_DISCOVERY
-	void InvertDiagLed() const noexcept;
-#endif
-
 #if defined(DUET3MINI) && SUPPORT_TMC2240 != 0
 	bool HasTmc2240Expansion() const noexcept { return hasTmc2240Expansion; }
 	const char *_ecv_array null GetExpansionBoardName() const noexcept { return (hasTmc2240Expansion) ? "Duet3 Mini 2+ (TMC2240)" : nullptr; }
@@ -520,9 +525,20 @@ public:
 	// Build up a message in genericDebugBuffer, then set haveGenericDebug to true to indicate it is complete and ready to output.
 	// Optionally set shouldTurnOffHeaters before setting hasGenericDebug.
 	// It will be set false again when the message has been output and the buffer is free again.
-	static String<StringLength256> genericDebugBuffer;
+	static String<StringLength256> *_ecv_null genericDebugBuffer;
 	static bool hasGenericDebug;
 	static bool shouldTurnOffHeaters;
+
+	// Build up a warning in moveWarningBuffer the same way, then set hasMoveWarning. Emitted from Spin because the
+	// producers run on the Move task, whose stack cannot take the logging and output buffer paths of Message.
+	// Both buffers are allocated when debugging is first enabled, before the debug flags become visible, so the
+	// flag-gated producers never see a null pointer and the memory is not wasted in normal use. The step error
+	// producers are not flag-gated and must check for a null buffer; their flags and safety actions do not depend on it
+#if SUPPORT_ASYNC_MOVES
+	static String<StringLength256> *_ecv_null moveWarningBuffer;
+	static bool hasMoveWarning;
+#endif
+	static void EnsureDebugBuffers() noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
@@ -654,8 +670,8 @@ private:
 	volatile uint16_t currentVin, highestVin, lowestVin;
 	uint16_t lastVinUnderVoltageValue, lastVinOverVoltageValue;
 	uint16_t autoPauseReading, autoResumeReading;
-	uint32_t numVinUnderVoltageEvents, previousVinUnderVoltageEvents;
-	volatile uint32_t numVinOverVoltageEvents, previousVinOverVoltageEvents;
+	std::atomic<uint32_t> numVinUnderVoltageEvents, numVinOverVoltageEvents;
+	uint32_t previousVinUnderVoltageEvents, previousVinOverVoltageEvents;
 
 #ifdef DUET3_MB6HC
 	float powerMonitorVoltageRange;
@@ -681,7 +697,8 @@ private:
 	AnalogChannelNumber v12MonitorAdcChannel;
 	volatile uint16_t currentV12, highestV12, lowestV12;
 	uint16_t lastV12UnderVoltageValue;
-	uint32_t numV12UnderVoltageEvents, previousV12UnderVoltageEvents;
+	std::atomic<uint32_t> numV12UnderVoltageEvents;
+	uint32_t previousV12UnderVoltageEvents;
 #endif
 
 	// Event handling

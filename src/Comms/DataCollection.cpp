@@ -56,13 +56,14 @@ namespace DataCollection
 
 	bool AddDataToBuffer(uint8_t val)
 	{
+		TaskCriticalSectionLocker locker;
 		if (bufferLen >= MaxBufferLen - MessageSuffixLen)
 		{
 			return false;
 		}
 
 		buffer[bufferLen] = val;
-		bufferLen++;
+		bufferLen += 1;
 		return true;
 	}
 

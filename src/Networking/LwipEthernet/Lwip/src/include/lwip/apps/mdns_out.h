@@ -64,6 +64,10 @@ extern "C" {
 #define REPLY_HOST_AAAA         0x04
 /* Lookup from hostname -> IPv6 */
 #define REPLY_HOST_PTR_V6       0x08
+/* Negative response for a queried type we do not have. Lives in the host_replies
+   bitmask, which is a separate field from serv_replies, so the value may overlap
+   with the REPLY_SERVICE_* flags below without conflict */
+#define REPLY_HOST_NSEC         0x10
 
 /* Lookup for service types */
 #define REPLY_SERVICE_TYPE_PTR  0x10

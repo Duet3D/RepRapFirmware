@@ -50,14 +50,112 @@
 #  error Cannot support phase stepping with the specified hardware
 # endif
 
+# include <GCodes/GCodeBuffer/GCodeBuffer.h>
 # include <cmath>
 
 # define BASIC_TUNING_DEBUG	0
 
 static uint16_t currentPhase[MaxSmartDrivers] = { 0 };
 static uint16_t phaseOffset[MaxSmartDrivers] = { 0 };			// The amount by which the phase should be offset for each driver
+static PhaseCorrectionHarmonic phaseCorrections[MaxSmartDrivers][MaxPhaseCorrectionHarmonics] = { };
 
-const char* TranslateStepMode(const StepMode mode)
+constexpr float PhaseUnitsPerDegree = 4096.0/360.0;
+
+// Configure the phase correction of a driver via M970.3: S = harmonic of the electrical cycle, J = magnitude in degrees (0 removes the harmonic), O = phase offset in degrees
+GCodeResult PhaseStep::ConfigureCorrection(size_t driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	PhaseCorrectionHarmonic *_ecv_array const corrections = phaseCorrections[driver];
+	if (gb.Seen('S'))
+	{
+		const unsigned int harmonic = gb.GetLimitedUIValue('S', 1, MaxPhaseCorrectionHarmonic + 1);
+		PhaseCorrectionHarmonic *_ecv_null entry = nullptr;
+		for (size_t i = 0; i < MaxPhaseCorrectionHarmonics; i++)
+		{
+			if (corrections[i].harmonic == harmonic)
+			{
+				entry = &corrections[i];
+				break;
+			}
+		}
+
+		if (gb.Seen('J'))
+		{
+			const float magnitude = gb.GetLimitedFValue('J', 0.0, 90.0);
+			if (magnitude == 0.0)
+			{
+				if (entry != nullptr)
+				{
+					entry->harmonic = 0;
+				}
+				return GCodeResult::ok;
+			}
+			if (entry == nullptr)
+			{
+				for (size_t i = 0; i < MaxPhaseCorrectionHarmonics; i++)
+				{
+					if (corrections[i].harmonic == 0)
+					{
+						entry = &corrections[i];
+						entry->phase = 0;
+						break;
+					}
+				}
+				if (entry == nullptr)
+				{
+					reply.printf("Driver %u already has %u correction harmonics", driver, MaxPhaseCorrectionHarmonics);
+					return GCodeResult::error;
+				}
+			}
+			entry->harmonic = harmonic;
+			entry->magnitude = magnitude * PhaseUnitsPerDegree;
+		}
+		else if (entry == nullptr)
+		{
+			reply.printf("Driver %u has no correction for harmonic %u", driver, harmonic);
+			return GCodeResult::error;
+		}
+
+		if (gb.Seen('O'))
+		{
+			entry->phase = (uint16_t)lrintf(gb.GetLimitedFValue('O', 0.0, 360.0) * PhaseUnitsPerDegree) % 4096u;
+		}
+		return GCodeResult::ok;
+	}
+
+	reply.printf("Driver %u waveform correction:", driver);
+	bool any = false;
+	for (size_t i = 0; i < MaxPhaseCorrectionHarmonics; i++)
+	{
+		if (corrections[i].harmonic != 0)
+		{
+			reply.catf("%s S%u J%.3f O%.1f", (any) ? "," : "", corrections[i].harmonic, (double)(corrections[i].magnitude / PhaseUnitsPerDegree), (double)(corrections[i].phase / PhaseUnitsPerDegree));
+			any = true;
+		}
+	}
+	if (!any)
+	{
+		reply.cat(" none");
+	}
+	return GCodeResult::ok;
+}
+
+// Get the correction to add to the electrical angle of a driver, in phase units. The phase may exceed 4096 during tuning
+int32_t PhaseStep::GetCorrection(size_t driver, uint32_t phase) noexcept
+{
+	float correction = 0.0;
+	for (const PhaseCorrectionHarmonic& entry : phaseCorrections[driver])
+	{
+		if (entry.harmonic != 0)
+		{
+			float sine, cosine;
+			Trigonometry::FastSinCos((uint16_t)((entry.harmonic * phase + entry.phase) % 4096u), sine, cosine);
+			correction += entry.magnitude * sine * (1.0/248.0);
+		}
+	}
+	return lrintf(correction);
+}
+
+const char *_ecv_array TranslateStepMode(const StepMode mode) noexcept
 {
 	switch (mode)
 	{
@@ -78,7 +176,7 @@ void PhaseStep::SetMotorPhase(size_t driver, uint16_t phase, float magnitude) no
 {
 	currentPhase[driver] = phase;
 	float sine, cosine;
-	Trigonometry::FastSinCos(phase, sine, cosine);
+	Trigonometry::FastSinCos((uint16_t)((int32_t)phase + GetCorrection(driver, phase)), sine, cosine);
 	coilA = (int16_t)lrintf(cosine * magnitude);
 	coilB = (int16_t)lrintf(sine * magnitude);
 	SmartDrivers::SetMotorPhases(driver, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF);
@@ -118,7 +216,7 @@ void PhaseStep::SetPhaseOffset(size_t driver, uint16_t offset) noexcept
 //	debugPrintf("Set phaseOffset[%u]=%u\n", driver, phaseOffset[driver]);
 }
 
-uint16_t PhaseStep::GetPhaseOffset(size_t driver)
+uint16_t PhaseStep::GetPhaseOffset(size_t driver) noexcept
 {
 	return phaseOffset[driver];
 }

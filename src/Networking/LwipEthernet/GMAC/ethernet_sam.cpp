@@ -59,79 +59,16 @@ extern "C" {
 
 /* lwIP includes */
 #include "lwip/api.h"
-#include "lwip/dhcp.h"
 #include "lwip/dns.h"
 #include "lwip/init.h"
-#include "lwip/ip4_frag.h"
 #include "lwip/memp.h"
-#include "lwip/priv/tcp_priv.h"
 #include "lwip/stats.h"
 #include "lwip/sys.h"
-#include "lwip/tcp.h"
-#include "netif/etharp.h"
 
 /* Global variable containing MAC Config (hw addr, IP, GW, ...) */
 struct netif gs_net_if;
 
-/* Timer for calling lwIP tmr functions without system */
-typedef struct timers_info {
-	uint32_t timer;
-	uint32_t timer_interval;
-	void (*timer_func)(void);
-} timers_info_t;
-
-/* LwIP tmr functions list */
-static timers_info_t gs_timers_table[] = {
-	{0, TCP_TMR_INTERVAL, tcp_tmr},
-	{0, IP_TMR_INTERVAL, ip_reass_tmr},
-#if 0
-	/* LWIP_TCP */
-	{0, TCP_FAST_INTERVAL, tcp_fasttmr},
-	{0, TCP_SLOW_INTERVAL, tcp_slowtmr},
-#endif
-	/* LWIP_ARP */
-	{0, ARP_TMR_INTERVAL, etharp_tmr},
-	/* LWIP_DHCP */
-#if LWIP_DHCP
-	{0, DHCP_COARSE_TIMER_SECS * 1000, dhcp_coarse_tmr},
-	{0, DHCP_FINE_TIMER_MSECS, dhcp_fine_tmr},
-#endif
-};
-
-extern uint32_t millis() noexcept;
-
 }		// end extern "C"
-
-/**
- * \brief Process timing functions.
- */
-void ethernet_timers_update(void) noexcept
-{
-	static uint32_t ul_last_time;
-	uint32_t ul_cur_time, ul_time_diff, ul_idx_timer;
-	timers_info_t *p_tmr_inf;
-
-	ul_cur_time = millis();
-	ul_time_diff = ul_cur_time - ul_last_time;		// we're using unsigned arithmetic, so this handles wrap around
-
-	if (ul_time_diff) {
-		ul_last_time = ul_cur_time;
-		for (ul_idx_timer = 0;
-			 ul_idx_timer < (sizeof(gs_timers_table) / sizeof(timers_info_t));
-			 ul_idx_timer++) {
-			p_tmr_inf = &gs_timers_table[ul_idx_timer];
-			p_tmr_inf->timer += ul_time_diff;
-			if (p_tmr_inf->timer > p_tmr_inf->timer_interval) {
-				if (p_tmr_inf->timer_func) {
-					p_tmr_inf->timer_func();
-				}
-
-				p_tmr_inf->timer -= p_tmr_inf->timer_interval;
-			}
-		}
-	}
-}
-
 
 //************************************************************************************************************
 
@@ -217,18 +154,6 @@ bool ethernet_link_established() noexcept
 		return false;
 	}
 	return true;
-}
-
-/**
- *  \brief Manage the Ethernet packets, if any received process them.
- *  After processing any packets, manage the lwIP timers.
- *
- *  \return Returns true if data has been processed.
- */
-void ethernet_task() noexcept
-{
-	/* Run periodic tasks */
-	ethernet_timers_update();
 }
 
 /*

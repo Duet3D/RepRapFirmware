@@ -12,7 +12,7 @@
 
 #include "DDA.h"
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 # include "MovementProfile.h"
 #endif
 
@@ -54,6 +54,7 @@ public:
 	float GetTotalExtrusionRate() const noexcept;
 	float GetCurrentMoveDistance() const noexcept;
 	float GetCurrentMoveDuration() const noexcept;
+	FilePosition GetCurrentMoveFilePosition() const noexcept;							// Get the file position of the move being executed, or noFilePosition if there is none
 
 	void GetCurrentMachinePosition(float m[MaxAxes]) const noexcept;					// Get the position at the end of the last queued move in untransformed coords
 	void GetLastEndpoints(LogicalDrivesBitmap logicalDrives, int32_t returnedEndpoints[MaxAxesPlusExtruders]) const noexcept;
@@ -88,7 +89,7 @@ protected:
 private:
 	bool IsTimeToPrepareMove(uint32_t prepareAdvanceTime, uint32_t moveTimeLeft) const noexcept;
 	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, SimulationMode simulationMode) noexcept;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	void PlanMoves(DDA *firstUnpreparedMove, bool stopping) noexcept;
 	bool NeedNewPlan(DDA *moveToPrepare) const noexcept;
 #endif
@@ -99,7 +100,7 @@ private:
 	unsigned int numDdasInRing;													// The number of DDAs that this ring contains
 	uint32_t gracePeriod = DefaultGracePeriod;									// The minimum idle time in milliseconds, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	MovementProfile plannedProfile;												// the profile planned for a collection of moves
 #endif
 

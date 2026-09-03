@@ -1,4 +1,5 @@
 #include "RepRap.h"
+#include <General/IapInfo.h>
 
 #include <Devices.h>
 #include <Movement/Move.h>
@@ -355,12 +356,12 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "macroRestarted",			OBJECT_MODEL_FUNC(self->gCodes->GetMacroRestarted()),					ObjectModelEntryFlags::none },
 	{ "messageBox",				OBJECT_MODEL_FUNC_IF_NOSELF(MessageBox::HaveCurrent(), MessageBox::GetCurrent(), 0), ObjectModelEntryFlags::important },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
-	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none | ObjectModelEntryFlags::obsolete },
+	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none | ObjectModelEntryFlags::verbose },
 #if HAS_VOLTAGE_MONITOR
 	{ "powerFailScript",		OBJECT_MODEL_FUNC(self->gCodes->GetPowerFailScript()),					ObjectModelEntryFlags::none },
 #endif
-	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).previousToolNumber),	ObjectModelEntryFlags::none | ObjectModelEntryFlags::obsolete },
-	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(7),												ObjectModelEntryFlags::obsolete },
+	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).previousToolNumber),	ObjectModelEntryFlags::none | ObjectModelEntryFlags::verbose },
+	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(7),												ObjectModelEntryFlags::verbose },
 	{ "startupError",			OBJECT_MODEL_FUNC_IF(!self->configErrorMessage.IsNull(), self, 6),		ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
 	{ "thisActive",
@@ -566,7 +567,7 @@ void RepRap::Init() noexcept
 
 #if HAS_SBC_INTERFACE && !HAS_MASS_STORAGE
 	usingSbcInterface = true;
-	FileWriteBuffer::UsingSbcMode();
+	MassStorage::ConfigureSbcBuffering();
 #endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -596,7 +597,7 @@ void RepRap::Init() noexcept
 		else if (!MassStorage::IsCardDetected(0))		// if we failed to mount the SD card because there was no card in the slot
 		{
 			usingSbcInterface = true;
-			FileWriteBuffer::UsingSbcMode();
+			MassStorage::ConfigureSbcBuffering();
 		}
 # endif
 		else
@@ -659,6 +660,41 @@ void RepRap::Init() noexcept
 	slowLoop = 0;
 }
 
+#if HAS_SBC_INTERFACE && SUPPORTS_SBC_OVER_USB
+
+GCodeResult RepRap::SwitchToUsbSbcMode(GCodeBuffer& gb, const StringRef& reply) noexcept
+{
+	// Determine the SerialCDC device from the GCode channel M576.1 was sent on
+	SerialCDC *usbDev = nullptr;
+	unsigned int usbIndex;
+	switch (gb.GetChannel().ToBaseType())
+	{
+	case GCodeChannel::USB:
+		usbIndex = 0;
+		usbDev = &SERIAL_USB_DEVICE;
+		break;
+#ifdef SERIAL_USB2_DEVICE
+	case GCodeChannel::USB2:
+		usbIndex = 1;
+		usbDev = &SERIAL_USB2_DEVICE;
+		break;
+#endif
+	default:
+		reply.copy("M576.1 must be sent over a USB channel");
+		return GCodeResult::error;
+	}
+
+	// Shut down USB GCode processing for this device
+	platform->ShutdownUsbDevice(usbIndex);
+
+	// Signal SBC task to switch to USB transport
+	sbcInterface->RequestUsbSwitch(usbDev, usbIndex);
+
+	return GCodeResult::ok;
+}
+
+#endif // HAS_SBC_INTERFACE && SUPPORTS_SBC_OVER_USB
+
 // Run a startup file
 bool RepRap::RunStartupFile(c_string filename, bool isMainConfigFile) noexcept
 {
@@ -674,28 +710,6 @@ bool RepRap::RunStartupFile(c_string filename, bool isMainConfigFile) noexcept
 		platform->Message(UsbMessage, "Done!\n");
 	}
 	return rslt;
-}
-
-void RepRap::Exit() noexcept
-{
-#if HAS_HIGH_SPEED_SD && !SAME5x		// SAME5x MCI driver is RTOS-aware so it doesn't need this
-	hsmci_set_idle_func(nullptr);
-#endif
-	active = false;
-	heat->Exit();
-	move->Exit();
-	gCodes->Exit();
-#if SUPPORT_IOBITS
-	portControl->Exit();
-#endif
-#if SUPPORT_DIRECT_LCD
- 	display->Exit();
-#endif
-	network->Exit();
-	platform->Exit();
-#if SUPPORT_ACCELEROMETERS
-	Accelerometers::Exit();
-#endif
 }
 
 void RepRap::Spin() noexcept
@@ -827,7 +841,15 @@ __attribute__((noinline)) void RepRap::GenerateDeferredDiagnostics(MessageType d
 
 void RepRap::Timing(const StringRef& reply) noexcept
 {
-	reply.lcatf("Slowest loop: %.2fms; fastest: %.2fms", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+	// See Network.cpp Diagnostics() - sentinel handling to avoid printing a ~5.7M ms phantom value
+	if (fastLoop == UINT32_MAX)
+	{
+		reply.lcat("Slowest loop: n/a; fastest: n/a");
+	}
+	else
+	{
+		reply.lcatf("Slowest loop: %.2fms; fastest: %.2fms", (double)(slowLoop * StepClocksToMillis), (double)(fastLoop * StepClocksToMillis));
+	}
 	fastLoop = UINT32_MAX;
 	slowLoop = 0;
 }
@@ -863,7 +885,7 @@ void RepRap::GetDiagnosticsPart(unsigned int partNumber, const StringRef& reply)
 			reply.lcatf(
 				// Format string
 				"%s"											// firmware name
-				" version %s (%s%s) running on %s"				// firmware version, date, time, electronics
+				" version %s (%s) running on %s"				// firmware version, date, time, electronics
 #ifdef DUET_NG
 				"%s%s"											// optional DueX expansion board
 #endif
@@ -874,7 +896,7 @@ void RepRap::GetDiagnosticsPart(unsigned int partNumber, const StringRef& reply)
 
 				// Parameters to match format string
 				FIRMWARE_NAME,
-				VERSION, DateText, TimeSuffix, platform->GetElectronicsString()
+				VERSION, DateTimeText, platform->GetElectronicsString()
 #ifdef DUET_NG
 				, ((expansionName == nullptr) ? "" : " + ")
 				, ((expansionName == nullptr) ? "" : expansionName)
@@ -1126,6 +1148,10 @@ GCodeResult RepRap::ProcessM111(GCodeBuffer& gb, const StringRef& reply) THROWS(
 	{
 		if (module != Module::numModules)
 		{
+			if (flags != 0)
+			{
+				Platform::EnsureDebugBuffers();
+			}
 			debugMaps[module].SetFromRaw(flags);
 		}
 		else if (flags != 0)
@@ -1197,6 +1223,10 @@ GCodeResult RepRap::ProcessRemoteM111(const CanMessageGeneric& msg, const String
 	{
 		if (module < Module::numModules)
 		{
+			if (flags != 0)
+			{
+				Platform::EnsureDebugBuffers();
+			}
 			debugMaps[module].SetFromRaw(flags);
 		}
 		else if (flags != 0)
@@ -1915,7 +1945,8 @@ size_t RepRap::GetStatusIndex() const noexcept
 			  	  	)
 			: (gCodes->IsDoingToolChange())								? 10	// Changing tool
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement() ||
-			   gCodes->WaitingForAcknowledgement()) 					? 11	// Busy
+			   gCodes->WaitingForAcknowledgement() ||
+			   heat->IsTuningHeater())									? 11	// Busy
 			:															  12;	// Idle
 
 }
@@ -2073,15 +2104,27 @@ void RepRap::PrepareToLoadIap() noexcept
 
 	// Send this message before we start using RAM that may contain message buffers
 	platform->Message(AuxMessage, "Updating main firmware\n");
-	platform->Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
+#if HAS_SBC_INTERFACE && SUPPORTS_SBC_OVER_USB
+	// Don't send a text message over the USB port when it's being used for the SBC binary protocol
+	if (!usingSbcInterface || sbcInterface->GetDataTransfer().GetTransportType() != SbcTransportType::usb)
+#endif
+	{
+		platform->Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
+	}
 
 	// Allow time for the firmware update message to be sent
+	// When the SBC is on USB, keep this short - DSF is waiting for the next transfer response
+	const uint32_t flushTime =
+#if HAS_SBC_INTERFACE && SUPPORTS_SBC_OVER_USB
+		(usingSbcInterface && sbcInterface->GetDataTransfer().GetTransportType() == SbcTransportType::usb) ? 100 :
+#endif
+		1000;
 	const uint32_t now = millis();
 	do
 	{
-		(void)platform->FlushMessages();	// make sure the USB and aux messages get sent
-		RTOSIface::Yield();					// let the network task have the CPU so that it can fetch the status
-	} while (millis() - now < 1000);
+		(void)platform->FlushMessages();
+		RTOSIface::Yield();
+	} while (millis() - now < flushTime);
 
 	// The machine will be unresponsive for a few seconds, don't risk damaging the heaters.
 	// This also shuts down tasks and interrupts that might make use of the RAM that we are about to load the IAP binary into.
@@ -2104,8 +2147,14 @@ void RepRap::PrepareToLoadIap() noexcept
 	DuetExpansion::Exit();					// stop the DueX polling task
 #endif
 	StopAnalogTask();
-	serialUSB.end();
-	StopUsbTask();
+#if HAS_SBC_INTERFACE && SUPPORTS_SBC_OVER_USB
+	// Don't shut down USB yet if the SBC is connected via USB - ReceiveAndStartIap() still needs it to receive the remaining IAP chunks
+	if (!usingSbcInterface || sbcInterface->GetDataTransfer().GetTransportType() != SbcTransportType::usb)
+#endif
+	{
+		platform->DisconnectUsb();
+		StopUsbTask();
+	}
 
 	Cache::Disable();						// disable the cache because it interferes with flash memory access
 
@@ -2157,25 +2206,43 @@ void RepRap::StartIap(c_string _ecv_null filename) noexcept
 # endif
 #endif
 
-#if HAS_MASS_STORAGE
-	if (filename != nullptr)
+	// Write IapInfo struct above the stack for IAP to read
 	{
-		// Newer versions of IAP reserve space above the stack for us to pass the firmware filename
-		String<MaxFilenameLength> firmwareFileLocation;
-		MassStorage::CombineName(firmwareFileLocation.GetRef(), FIRMWARE_DIRECTORY, filename[0] == 0 ? IAP_FIRMWARE_FILE : filename);
 		const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_IMAGE_START);
-		if (topOfStack + firmwareFileLocation.strlen() + 1 <=
-# if SAME5x
-						HSRAM_ADDR + HSRAM_SIZE
-# else
-						IRAM_ADDR + IRAM_SIZE
-# endif
-		   )
+		IapInfo * const info = reinterpret_cast<IapInfo *>(topOfStack);
+		info->magic = IapInfo::MagicValue;
+
+		// Pass AUX baud rate if AUX is enabled, otherwise 0 (IAP won't init AUX)
+#if NUM_ASYNC_CHANNELS != 0
+		info->auxBaudRate = platform->IsChanEnabled(FirstAuxChannel) ? platform->GetBaudRate(FirstAuxChannel) : 0;
+#else
+		info->auxBaudRate = 0;
+#endif
+
+#if HAS_SBC_INTERFACE
+		if (filename == nullptr)
 		{
-			strcpy(reinterpret_cast<char *_ecv_array>(topOfStack), firmwareFileLocation.c_str());
+			// SBC mode
+# if SUPPORTS_SBC_OVER_USB
+			info->transport = (sbcInterface->GetDataTransfer().GetTransportType() == SbcTransportType::usb)
+								? IapInfo::TransportUsb : IapInfo::TransportSpi;
+# else
+			info->transport = IapInfo::TransportSpi;
+# endif
+			info->firmwareFilename[0] = 0;
+		}
+		else
+#endif
+		{
+#if HAS_MASS_STORAGE
+			// SD mode - include firmware filename
+			info->transport = IapInfo::TransportSd;
+			String<MaxFilenameLength> firmwareFileLocation;
+			MassStorage::CombineName(firmwareFileLocation.GetRef(), FIRMWARE_DIRECTORY, filename[0] == 0 ? IAP_FIRMWARE_FILE : filename);
+			strcpy(info->firmwareFilename, firmwareFileLocation.c_str());
+#endif
 		}
 	}
-#endif
 
 #if defined(DUET_NG) || defined(DUET_M)
 	IoPort::WriteDigital(DiagPin, !DiagOnPolarity);	// turn the DIAG LED off
@@ -2273,7 +2340,7 @@ uint32_t RepRap::SendAlert(MessageType mt, c_string msg, c_string title, int sPa
 
 	platform->MessageF(MessageType::LogInfo, "M291: - %s - %s", (strlen(title) > 0 ? title : "[no title]"), msg);
 
-	mt = (MessageType)((uint32_t)mt & ((uint32_t)UsbMessage | (uint32_t)TelnetMessage | (uint32_t)Aux2Message));
+	mt = (MessageType)((uint32_t)mt & ((uint32_t)UsbMessage | (uint32_t)Usb2Message | (uint32_t)TelnetMessage | (uint32_t)AuxMessage | (uint32_t)Aux2Message));
 	if (mt != NoDestinationMessage)
 	{
 		// Source was USB, Telnet or serial so also send the message back to the sending channel
@@ -2299,12 +2366,12 @@ void RepRap::SendSimpleAlert(MessageType mt, c_string msg, c_string title) noexc
 }
 
 // Save the first error message generated while running config.g
-void RepRap::SaveConfigError(c_string filename, unsigned int lineNumber, c_string errorMessage) noexcept
+void RepRap::SaveConfigError(AutoStringHandle&  filename, unsigned int lineNumber, c_string errorMessage) noexcept
 {
 	if (configErrorMessage.IsNull())
 	{
 		configErrorLine = lineNumber;
-		configErrorFilename.Assign(filename);
+		configErrorFilename = filename;
 		configErrorMessage.Assign(errorMessage);
 		StateUpdated();
 	}

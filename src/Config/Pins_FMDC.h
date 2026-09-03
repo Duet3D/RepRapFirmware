@@ -53,7 +53,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 #define SUPPORT_ILI9488_LCD		1
 #define USE_FONT_CHIP			1
 #define SUPPORT_ACCELEROMETERS	1
-#define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				0
 #define SUPPORT_TELNET			0
 #define SUPPORT_ASYNC_MOVES		0
@@ -158,10 +157,10 @@ constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortBPin(3), PortAPin(27), Po
 
 #if defined(FMDC_V03)
 constexpr Pin DriverDiagPins[NumDirectDrivers] = { PortCPin(28), PortBPin(8), PortCPin(27), PortCPin(21) };
-constexpr Pin GlobalTmc22xxEnablePin = PortBPin(21);	// The pin that drives ENN of all drivers
+constexpr Pin GlobalTmcEnablePin = PortBPin(21);	// The pin that drives ENN of all drivers
 #elif defined(FMDC_V02)
 constexpr Pin DriverDiagPins[NumDirectDrivers] = { PortAPin(10), PortBPin(8), PortCPin(27), PortCPin(21) };
-constexpr Pin GlobalTmc22xxEnablePin = PortCPin(28);	// The pin that drives ENN of all drivers
+constexpr Pin GlobalTmcEnablePin = PortCPin(28);	// The pin that drives ENN of all drivers
 #endif
 
 // CCL inputs that the DIAG inputs use. Bits 0-1 are the CCL LUT number. Bits 8-19 are the value to OR in to the control register for that LUT.

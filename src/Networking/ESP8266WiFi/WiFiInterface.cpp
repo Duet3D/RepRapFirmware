@@ -258,7 +258,7 @@ static const char *_ecv_array GetWiFiAuthFriendlyStr(WiFiAuth auth) noexcept
 
 WiFiInterface::WiFiInterface(Platform& p) noexcept
 	: platform(p), bufferOut(nullptr), bufferIn(nullptr), uploader(nullptr), espWaitingTask(nullptr),
-	  ftpDataPort(0), closeDataPort(false),
+	  ftpDataPort(0), ftpDataPortTls(false), closeDataPort(false),
 	  requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
 	  espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0), serialRunning(false), debugMessageChars(0)
 {
@@ -331,15 +331,36 @@ void WiFiInterface::IfaceStartProtocol(NetworkProtocol protocol) noexcept
 	switch(protocol)
 	{
 	case HttpProtocol:
-		SendListenCommand(portNumbers[protocol], protocol, MaxHttpConnections);
+		if (protocolEnabled[protocol])
+		{
+			SendListenCommand(portNumbers[protocol], protocol, MaxHttpConnections, false);
+		}
+		if (tlsProtocolEnabled[protocol])
+		{
+			SendListenCommand(tlsPortNumbers[protocol], protocol, MaxHttpConnections, true);
+		}
 		break;
 
 	case FtpProtocol:
-		SendListenCommand(portNumbers[protocol], protocol, 1);
+		if (protocolEnabled[protocol])
+		{
+			SendListenCommand(portNumbers[protocol], protocol, 1, false);
+		}
+		if (tlsProtocolEnabled[protocol])
+		{
+			SendListenCommand(tlsPortNumbers[protocol], protocol, 1, true);
+		}
 		break;
 
 	case TelnetProtocol:
-		SendListenCommand(portNumbers[protocol], protocol, 1);
+		if (protocolEnabled[protocol])
+		{
+			SendListenCommand(portNumbers[protocol], protocol, 1, false);
+		}
+		if (tlsProtocolEnabled[protocol])
+		{
+			SendListenCommand(tlsPortNumbers[protocol], protocol, 1, true);
+		}
 		break;
 
 	default:
@@ -355,11 +376,15 @@ void WiFiInterface::IfaceShutdownProtocol(NetworkProtocol protocol, bool permane
 	case HttpProtocol:
 		StopListening(portNumbers[protocol]);
 		TerminateSockets(portNumbers[protocol]);
+		StopListening(tlsPortNumbers[protocol]);
+		TerminateSockets(tlsPortNumbers[protocol]);
 		break;
 
 	case FtpProtocol:
 		StopListening(portNumbers[protocol]);
 		TerminateSockets(portNumbers[protocol]);
+		StopListening(tlsPortNumbers[protocol]);
+		TerminateSockets(tlsPortNumbers[protocol]);
 		if (ftpDataPort != 0)
 		{
 			StopListening(ftpDataPort);
@@ -370,6 +395,8 @@ void WiFiInterface::IfaceShutdownProtocol(NetworkProtocol protocol, bool permane
 	case TelnetProtocol:
 		StopListening(portNumbers[protocol]);
 		TerminateSockets(portNumbers[protocol]);
+		StopListening(tlsPortNumbers[protocol]);
+		TerminateSockets(tlsPortNumbers[protocol]);
 		break;
 
 #if SUPPORT_MQTT
@@ -589,6 +616,7 @@ void WiFiInterface::Stop() noexcept
 
 		SetState(NetworkState::disabled);
 		currentMode = WiFiState::disabled;
+		supportsTls = false;						// ESP is being powered down; any TLS state on the module is gone
 	}
 }
 
@@ -655,6 +683,14 @@ void WiFiInterface::Spin() noexcept
 							reprap.GetPlatform().MessageF(NetworkErrorMessage, "failed to set WiFi hostname: %s\n", TranslateWiFiResponse(rc));
 						}
 
+						// If the user previously enabled TLS via M552 T1 and the WiFi module has since restarted
+						// (M997 reflash, brownout, ...), re-arm the probe so they do not have to re-issue M552 T1
+						if (tlsUserEnabled && !tlsRequested && !tlsClearRequested)
+						{
+							tlsRequested = true;
+						}
+						HandlePendingTlsRequest();
+
 						SetState(NetworkState::idle);
 						espStatusChanged = true;				// make sure we fetch the current state and enable the ESP interrupt
 					}
@@ -690,6 +726,12 @@ void WiFiInterface::Spin() noexcept
 
 	case NetworkState::idle:
 	case NetworkState::active:
+		if (tlsRequested || tlsClearRequested)
+		{
+			// M552 T1 / T-1 was issued while the ESP was already responsive, e.g. on a running interface
+			// or after M552 S0; consume it here so the user doesn't need a full ESP power-cycle
+			HandlePendingTlsRequest();
+		}
 		if (espStatusChanged && digitalRead(EspDataReadyPin))
 		{
 			if (reprap.Debug(Module::WiFi))
@@ -823,6 +865,7 @@ void WiFiInterface::Spin() noexcept
 						actualSsid.c_str(),
 						IP4String(ipAddress).c_str());
 				}
+				HandlePendingTlsRequest();
 				break;
 
 			case WiFiState::idle:
@@ -833,6 +876,7 @@ void WiFiInterface::Spin() noexcept
 				}
 				SetState(NetworkState::idle);
 				platform.MessageF(NetworkInfoMessage, "WiFi module is %s\n", TranslateWiFiState(currentMode));
+				HandlePendingTlsRequest();
 				break;
 			}
 		}
@@ -960,7 +1004,7 @@ void WiFiInterface::Diagnostics(const StringRef& reply) noexcept
 }
 
 // Enable or disable the network
-GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, bool tlsAllowed) noexcept
+GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, int tlsParam) noexcept
 {
 	// Translate enable mode to desired WiFi mode
 	const WiFiState modeRequested = (mode == 0) ? WiFiState::idle
@@ -970,6 +1014,21 @@ GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, cons
 	if (modeRequested == WiFiState::connected)
 	{
 		requestedSsid.copy(ssid.c_str());
+	}
+
+	// Latch the requested TLS state. HandlePendingTlsRequest() consumes the flags from Spin() once the ESP is
+	// responsive (any of starting2, changingMode, or the idle/active polling loop), so M552 returns quickly
+	// tlsParam: -1 = clear stored TLS material on the WiFi module then come up plain
+	//            0 = plain
+	//            1 = enable TLS (probe + auto-import)
+	tlsClearRequested = (tlsParam < 0);
+	tlsRequested = (tlsParam > 0);
+	// tlsUserEnabled is sticky across WiFi module restarts (M997 reflash, brownout, etc.) so the next
+	// startup probe can re-arm tlsRequested automatically. T1 sets it; T0 and T-1 clear it
+	tlsUserEnabled = (tlsParam > 0);
+	if (!tlsRequested || modeRequested == WiFiState::disabled || modeRequested == WiFiState::idle)
+	{
+		supportsTls = false;
 	}
 
 	if (activated)
@@ -1011,6 +1070,176 @@ GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, cons
 		requestedMode = modeRequested;
 	}
 	return GCodeResult::ok;
+}
+
+// Maximum allowed size for a PEM certificate or key file
+static constexpr FilePosition MaxWiFiPemFileSize = 2048;
+
+// Send a single PEM file's contents to the WiFi module under the given command (networkSetTlsCert / networkSetTlsKey)
+// Returns true on success. Typical PEMs fit in one SPI packet (MaxDataLength = 2048)
+bool WiFiInterface::SendPemFile(const char *_ecv_array filename, NetworkCommand cmd, const StringRef& reply) noexcept
+{
+	FileStore *_ecv_null const f = MassStorage::OpenFile(filename, OpenMode::read, 0);
+	if (f == nullptr)
+	{
+		reply.printf("cannot open %s", filename);
+		return false;
+	}
+
+	const FilePosition fileLen = f->Length();
+	if (fileLen == 0 || fileLen > MaxWiFiPemFileSize)
+	{
+		f->Close();
+		reply.printf("%s is empty or larger than %u bytes", filename, (unsigned)MaxWiFiPemFileSize);
+		return false;
+	}
+
+	static_assert(MaxWiFiPemFileSize <= sizeof(bufferOut->data));
+	const int bytesRead = f->Read(reinterpret_cast<char *_ecv_array>(bufferOut->data), fileLen);
+	f->Close();
+	if (bytesRead != (int)fileLen)
+	{
+		reply.printf("failed to read %s", filename);
+		return false;
+	}
+
+	const int32_t rc = SendCommand(cmd, 0, 0, 0, bufferOut->data, (size_t)fileLen, nullptr, 0);
+	if (rc != ResponseEmpty)
+	{
+		reply.printf("WiFi module rejected %s: %s", filename, TranslateWiFiResponse(rc));
+		return false;
+	}
+	return true;
+}
+
+// Chunk /sys/server.crt and /sys/server.key to the ESP, re-issue networkEnableTls to rebuild the SSL config,
+// then securely delete the SD copies. Returns true on full success
+// `reply` carries the user-facing message on both success and failure
+bool WiFiInterface::ImportTlsFromSd(const StringRef& reply) noexcept
+{
+	if (!SendPemFile(TlsCertFile, NetworkCommand::networkSetTlsCert, reply))
+	{
+		return false;
+	}
+	if (!SendPemFile(TlsKeyFile, NetworkCommand::networkSetTlsKey, reply))
+	{
+		return false;
+	}
+
+	// Re-probe to rebuild the mbedTLS config from the freshly-stored cert/key
+	const int32_t rc = SendCommand(NetworkCommand::networkEnableTls, 0, 0, 0, nullptr, 0, nullptr, 0);
+	if (rc != ResponseEmpty)
+	{
+		reply.printf("WiFi module rejected new TLS material: %s", TranslateWiFiResponse(rc));
+		return false;
+	}
+
+	supportsTls = true;
+
+	// Securely delete the SD copies - they now live in ESP flash
+	String<MaxFilenameLength> path;
+	path.copy(TlsCertFile);
+	(void)MassStorage::SecureDelete(path.GetRef(), ErrorMessageMode::messageAlways);
+	path.copy(TlsKeyFile);
+	(void)MassStorage::SecureDelete(path.GetRef(), ErrorMessageMode::messageAlways);
+
+	reply.copy("TLS cert/key imported to WiFi module flash; SD copies wiped and deleted");
+	return true;
+}
+
+// Probe the WiFi firmware for TLS support and (if needed and possible) import cert/key from /sys/
+// Called from Spin() once the ESP is up. Returns ok on success, warning on unsupported / failed-import
+GCodeResult WiFiInterface::TryEnableTls(const StringRef& reply) noexcept
+{
+	const int32_t initialRc = SendCommand(NetworkCommand::networkEnableTls, 0, 0, 0, nullptr, 0, nullptr, 0);
+
+	if (initialRc == ResponseUnknownCommand)
+	{
+		reply.copy("not supported on this WiFi firmware version");
+		supportsTls = false;
+		// Drop the sticky user-intent flag too: the firmware actively reports it cannot do TLS, so
+		// auto-re-arming on every subsequent restart would just retry forever
+		tlsUserEnabled = false;
+		return GCodeResult::warning;
+	}
+
+	const bool sdHasCert = MassStorage::FileExists(TlsCertFile);
+	const bool sdHasKey = MassStorage::FileExists(TlsKeyFile);
+
+	if (sdHasCert && sdHasKey)
+	{
+		// Auto-import / auto-update. SD files always take priority over whatever is on the ESP
+		if (ImportTlsFromSd(reply))
+		{
+			return GCodeResult::ok;
+		}
+		// Import failed. Fall back to whatever the initial probe said about pre-existing state
+		supportsTls = (initialRc == ResponseEmpty);
+		return GCodeResult::warning;
+	}
+
+	if (initialRc == ResponseEmpty)
+	{
+		// Enabled using the cert/key already on the WiFi module - leave reply empty so the caller prints nothing
+		supportsTls = true;
+		return GCodeResult::ok;
+	}
+
+	// initialRc == ResponseNoTlsCert, and SD files not (both) present
+	supportsTls = false;
+	reply.copy("no TLS cert/key on WiFi module flash and none in /sys/ to import");
+	return GCodeResult::warning;
+}
+
+// Thin override of NetworkInterface::LoadTlsCertificates for the WiFi path
+// The actual probe + import work happens asynchronously in Spin() (starting2, changingMode, or the
+// idle/active polling loop), because EnableInterface must return quickly without doing SPI work
+// By the time M586 T1 calls this, HandlePendingTlsRequest has run and the result is in supportsTls
+bool WiFiInterface::LoadTlsCertificates(const StringRef& reply) noexcept
+{
+	if (!supportsTls)
+	{
+		reply.copy("TLS not available on WiFi interface");
+		return false;
+	}
+	return true;
+}
+
+// Apply any TLS state change latched by EnableInterface (M552 T1 / T-1). Safe to call repeatedly;
+// no-op once the flags are clear. The ESP must be responsive to SPI commands at the point of call
+void WiFiInterface::HandlePendingTlsRequest() noexcept
+{
+	// Handle the TLS T-1 path first: wipe stored material on the WiFi module, then come up plain
+	if (tlsClearRequested)
+	{
+		const int32_t clrRc = SendCommand(NetworkCommand::networkClearTls, 0, 0, 0, nullptr, 0, nullptr, 0);
+		platform.MessageF((clrRc == ResponseEmpty) ? NetworkInfoMessage : NetworkErrorMessage,
+			"TLS: %s\n",
+			(clrRc == ResponseEmpty) ? "stored cert/key cleared from WiFi module flash"
+				: (clrRc == ResponseUnknownCommand) ? "clear not supported on this WiFi firmware version"
+					: "WiFi module rejected clear request");
+		tlsClearRequested = false;
+		supportsTls = false;
+	}
+
+	// If the user opted into TLS via M552 T1, probe the WiFi firmware now that it's responsive.
+	// On ResponseNoTlsCert, auto-import from /sys/server.{crt,key} if both exist, then re-probe
+	// and securely delete the SD copies
+	if (tlsRequested)
+	{
+		String<StringLength256> tlsReply;
+		const GCodeResult tlsRes = TryEnableTls(tlsReply.GetRef());
+		if (!tlsReply.IsEmpty())
+		{
+			platform.MessageF((tlsRes == GCodeResult::ok) ? NetworkInfoMessage : NetworkErrorMessage,
+				"TLS: %s\n", tlsReply.c_str());
+		}
+		tlsRequested = false;
+	}
+
+	// If a config.g M586 T1 ran while supportsTls was still false (the common case - M552 T1 latches
+	// the probe and returns before this function runs), the listener bind was deferred. Apply it now
+	ApplyPendingTlsProtocols();
 }
 
 int WiFiInterface::EnableState() const noexcept
@@ -1645,7 +1874,7 @@ void WiFiInterface::InitSockets() noexcept
 
 	for (size_t i = 0; i < NumSelectableProtocols; ++i)
 	{
-		if (protocolEnabled[i])
+		if (protocolEnabled[i] || tlsProtocolEnabled[i])
 		{
 			IfaceStartProtocol(i);
 		}
@@ -1688,7 +1917,6 @@ void WiFiInterface::UpdateSocketStatus(uint16_t connectedSockets, uint16_t other
 // Open the FTP data port
 bool WiFiInterface::OpenDataPort(TcpPort port, bool useTls) noexcept
 {
-	UNUSED(useTls);
 	for (WiFiSocket *s : sockets)
 	{
 		if (s->GetProtocol() == FtpDataProtocol)
@@ -1700,7 +1928,8 @@ bool WiFiInterface::OpenDataPort(TcpPort port, bool useTls) noexcept
 	}
 
 	ftpDataPort = port;
-	SendListenCommand(ftpDataPort, FtpDataProtocol, 1);
+	ftpDataPortTls = useTls;
+	SendListenCommand(ftpDataPort, FtpDataProtocol, 1, useTls);
 	return true;
 }
 
@@ -1721,6 +1950,7 @@ void WiFiInterface::TerminateDataPort() noexcept
 	{
 		StopListening(ftpDataPort);
 		ftpDataPort = 0;
+		ftpDataPortTls = false;
 		return;
 	}
 
@@ -1729,6 +1959,7 @@ void WiFiInterface::TerminateDataPort() noexcept
 		StopListening(ftpDataPort);
 		ftpDataSocket->TerminateAndDisable();
 		ftpDataPort = 0;
+		ftpDataPortTls = false;
 		closeDataPort = false;
 	}
 	else
@@ -2176,7 +2407,9 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	// On factory reset, use the startup timeout, as it involves re-formatting the SPIFFS partition.
 	const uint32_t timeout = (cmd == NetworkCommand::networkFactoryReset) ? WiFiStartupMillis :
 		(cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkAddEnterpriseSsid || cmd == NetworkCommand::networkDeleteSsid ||
-		 cmd == NetworkCommand::networkConfigureAccessPoint || cmd == NetworkCommand::networkRetrieveSsidData
+		 cmd == NetworkCommand::networkConfigureAccessPoint || cmd == NetworkCommand::networkRetrieveSsidData ||
+		 cmd == NetworkCommand::networkSetTlsCert || cmd == NetworkCommand::networkSetTlsKey ||
+		 cmd == NetworkCommand::networkEnableTls || cmd == NetworkCommand::networkClearTls
 			? WiFiSlowResponseTimeoutMillis : WiFiFastResponseTimeoutMillis);
 	do
 	{
@@ -2290,14 +2523,14 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	return response;
 }
 
-void WiFiInterface::SendListenCommand(TcpPort port, NetworkProtocol protocol, unsigned int maxConnections) noexcept
+void WiFiInterface::SendListenCommand(TcpPort port, NetworkProtocol protocol, unsigned int maxConnections, bool tls) noexcept
 {
 	ListenOrConnectData lcb;
 	lcb.port = port;
 	lcb.protocol = protocol;
 	lcb.remoteIp = AnyIp;
 	lcb.maxConnections = maxConnections;
-	SendCommand(NetworkCommand::networkListen, 0, 0, 0, &lcb, sizeof(lcb), nullptr, 0);
+	SendCommand(NetworkCommand::networkListen, 0, tls ? MessageHeaderSamToEsp::FlagTls : 0, 0, &lcb, sizeof(lcb), nullptr, 0);
 }
 
 void WiFiInterface::SendConnectCommand(TcpPort remotePort, NetworkProtocol protocol, uint32_t remoteIp) noexcept
@@ -2313,7 +2546,7 @@ void WiFiInterface::SendConnectCommand(TcpPort remotePort, NetworkProtocol proto
 // Stop listening on a port
 void WiFiInterface::StopListening(TcpPort port) noexcept
 {
-	SendListenCommand(port, AnyProtocol, 0);
+	SendListenCommand(port, AnyProtocol, 0, false);
 }
 
 // This is called when ESP is signalling to us that an error occurred or there was a state change

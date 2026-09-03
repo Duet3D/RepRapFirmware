@@ -3,7 +3,7 @@ description: File a bug report
 title: "[Bug]: "
 labels: [bug]
 assignees:
-- x0rtrunks
+- droftarts
 body:
 - type: markdown
   attributes:

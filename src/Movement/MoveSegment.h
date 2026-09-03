@@ -44,7 +44,7 @@
 
 constexpr motioncalc_t OneHalf = (motioncalc_t)0.5;
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 constexpr motioncalc_t OneSixth = (motioncalc_t)1.0/(motioncalc_t)6.0;
 constexpr motioncalc_t OneTwelfth = (motioncalc_t)1.0/(motioncalc_t)12.0;
 # define J_FORMAL_PARAMETER(_name)	, motioncalc_t _name
@@ -144,7 +144,7 @@ public:
 	// Get the acceleration (the initial acceleration f we are supporting 3rd order motion control)
 	motioncalc_t GetA() const noexcept { return a; }
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	// Get the rate of change of acceleration
 	motioncalc_t GetJ() const noexcept { return j; }
 
@@ -204,6 +204,9 @@ public:
 	// Release all MoveSegments in a chain
 	static void ReleaseAll(MoveSegment *_ecv_null item) noexcept;
 
+	// Ensure the free list is non-empty so that the next Allocate call cannot reach the memory allocator. Must only be called from the Move task with interrupts enabled
+	static void PrimeFreeList() noexcept { if (freeList == nullptr) { Release(Allocate(nullptr)); } }
+
 	// Return the number of MoveSegment objects that have been created
 	static unsigned int NumCreated() noexcept { return numCreated; }
 
@@ -218,9 +221,9 @@ protected:
 	uint32_t startTime;										// when this segment should start, in movement clock ticks
 	uint32_t duration;										// the duration of this segment in movement ticks
 	motioncalc_t distance;									// the number of steps moved
-	motioncalc_t a;											// the acceleration (initial if SUPPORT_S_CURVE) during this segment in steps per movement tick squared
+	motioncalc_t a;											// the acceleration (initial if SUPPORT_3RD_ORDER) during this segment in steps per movement tick squared
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	motioncalc_t j;											// the jerk i.e. rate of change of acceleration
 #endif
 
@@ -238,7 +241,7 @@ inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
 // Get the initial speed
 inline motioncalc_t MoveSegment::CalcU() const noexcept
 {
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	return distance/(motioncalc_t)duration - (OneHalf * a + OneSixth * j * (motioncalc_t)duration) * (motioncalc_t)duration;
 #else
 	return distance/(motioncalc_t)duration - OneHalf * a * (motioncalc_t)duration;
@@ -277,7 +280,7 @@ inline bool MoveSegment::NormaliseAndCheckLinear(motioncalc_t distanceCarriedFor
 		}
 		// The acceleration/deceleration is small enough to cause calculation problems, so change it to a linear move
 		a = (motioncalc_t)0.0;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		j = (motioncalc_t)0.0;
 #endif
 	}
@@ -313,7 +316,7 @@ inline void MoveSegment::SetParameters(uint32_t p_startTime, uint32_t p_duration
 	duration = p_duration;
 	distance = p_distance;
 	a = p_a;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	j = p_j;
 #endif
 	flags = p_flags;
@@ -323,7 +326,7 @@ inline void MoveSegment::SetParameters(uint32_t p_startTime, uint32_t p_duration
 inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 {
 	MoveSegment *const secondSeg = Allocate(next);
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	const motioncalc_t firstDistance = (CalcU() + (OneHalf * a + j * (motioncalc_t)firstDuration * OneSixth) * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
 	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, a + j * (motioncalc_t)firstDuration, j, flags);
 #else
@@ -349,7 +352,7 @@ inline void MoveSegment::Merge(motioncalc_t p_distance, motioncalc_t p_a J_FORMA
 #endif
 	distance += p_distance;
 	a += p_a;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	j += p_j;
 #endif
 	flags |= p_flags;
@@ -358,13 +361,13 @@ inline void MoveSegment::Merge(motioncalc_t p_distance, motioncalc_t p_a J_FORMA
 // Combine the data from a previous short segment with this one. The previous segment ends at the same time that this one begins.
 inline void MoveSegment::CombinePrevious(const MoveSegment *prev) noexcept
 {
-#if 0 //SUPPORT_S_CURVE
+#if 0 //SUPPORT_3RD_ORDER
 	const motioncalc_t finalAcc = a + j * (motioncalc_t)duration;
 #endif
 	duration += prev->duration;
 	startTime = prev->startTime;
 	distance += prev->distance;
-#if 0// SUPPORT_S_CURVE
+#if 0// SUPPORT_3RD_ORDER
 	// Preserve the final acceleration of the segment. The segment that follows it may be temporarily detached, so don't use its starting acceleration.
 	// However, this causes speed changes, so  it's disabled.
 	a = prev->a;

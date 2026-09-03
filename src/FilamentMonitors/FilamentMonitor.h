@@ -55,13 +55,23 @@ public:
 	// Send diagnostics info
 	static void AllDiagnostics(const StringRef& reply) noexcept;
 
-#if SUPPORT_OBJECT_MODEL
 	// Get the number of monitors to report in the OM
 	static size_t GetNumMonitorsToReport() noexcept;
 
 	// Get access to a filament monitor when we already have a read lock
 	static FilamentMonitor *_ecv_from _ecv_null GetMonitorAlreadyLocked(size_t extruder) noexcept { return filamentSensors[extruder]; }
-#endif
+
+	// Get the switch or motion state of a filament monitor for a virtual GpIn port. Lock-free, safe to call from the step ISR
+	static bool GetVirtualInputState(size_t extruder, bool motionNotSwitch) noexcept;
+
+	// Return true if we know whether filament is present in this monitor
+	bool FilamentPresenceKnown() const noexcept;
+
+	// Return true if filament is present, only meaningful if FilamentPresenceKnown returns true
+	bool IsFilamentPresent() const noexcept;
+
+	// Return true if filament movement was detected within the last FilamentMonitorMotionLatchTime
+	bool IsMotionDetected() const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
 	static void UpdateRemoteFilamentStatus(CanAddress src, CanMessageFilamentMonitorsStatusV2& msg) noexcept;
@@ -126,6 +136,12 @@ protected:
 	// Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
 	virtual FilamentSensorStatus Clear() noexcept = 0;
 
+	// Get the filament present state of this monitor if it has one, returning true if it is known
+	virtual bool GetLocalFilamentPresent(bool& present) const noexcept { return false; }
+
+	// Return true if this monitor detected filament movement within the last FilamentMonitorMotionLatchTime
+	virtual bool IsLocalMotionDetected() const noexcept { return false; }
+
 #if SUPPORT_REMOTE_COMMANDS
 	// Configure this sensor, returning an error code and setting 'seen' if we processed any configuration parameters
 	virtual GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept = 0;
@@ -171,6 +187,10 @@ private:
 
 	static FilamentMonitor *_ecv_from _ecv_null filamentSensors[NumFilamentMonitors];
 
+	static constexpr uint8_t LiveInputPresent = 0x01;					// bit set in liveInputStates when filament is known to be present
+	static constexpr uint8_t LiveInputMotion = 0x02;					// bit set in liveInputStates when filament movement was recently detected
+	static volatile uint8_t liveInputStates[MaxExtruders];				// per-extruder input state snapshot updated by Spin so that it can be read from the step ISR
+
 #if SUPPORT_REMOTE_COMMANDS
 	static constexpr uint32_t StatusUpdateInterval = 2000;				// how often we send status reports when there isn't a change
 	static constexpr uint32_t LiveStatusUpdateInterval = 250;			// how often we report live status
@@ -189,9 +209,17 @@ private:
 	bool isrWasPrinting;
 	bool haveIsrStepsCommanded;
 	FilamentSensorStatus lastStatus;
+#if SUPPORT_REMOTE_COMMANDS
+	uint8_t lastReportedLiveBits;										// the presence/motion bits we last sent to the main board
+#endif
 #if SUPPORT_CAN_EXPANSION
+	static constexpr uint32_t RemoteLiveBitsTimeout = 5000;				// how long we trust remote presence/motion data for, longer than twice StatusUpdateInterval
+	uint32_t whenRemoteLiveBitsReceived;								// when we last received presence/motion data from the remote board
 	FilamentSensorStatus lastRemoteStatus;
 	bool hasRemote;
+	bool remotePresenceValid;
+	bool remotePresence;
+	bool remoteMotion;
 #endif
 };
 

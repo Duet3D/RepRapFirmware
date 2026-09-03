@@ -49,6 +49,16 @@ void StringParser::Init() noexcept
 	}
 }
 
+// Throw away any line that we have only partly received. This is called when the input source drops its buffered data,
+// because otherwise the remains of the truncated line would be spliced onto the start of the next one
+void StringParser::DiscardPartialLine() noexcept
+{
+	if (gb.bufferState != GCodeBufferState::parseNotStarted && gb.bufferState != GCodeBufferState::ready)
+	{
+		Init();
+	}
+}
+
 inline void StringParser::AddToChecksum(char c) noexcept
 {
 	// As computing the CRC takes several cycles, we only do it if we had a line number
@@ -1140,6 +1150,24 @@ void StringParser::DecodeCommand() noexcept
 	gb.bufferState = GCodeBufferState::ready;
 }
 
+// Restore the modal G0/G1/G2/G3 motion command after a pause/resume file rewind. A negative value means the modal
+// command is unknown (e.g. the pause was triggered by an M-code that broke the chain) and clears it, so that an
+// implied-command-letter line won't reuse a stale command.
+void StringParser::SetModalGCommand(int num) noexcept
+{
+	if (num < 0)
+	{
+		hasCommandNumber = false;
+		commandNumber = -1;
+	}
+	else
+	{
+		commandLetter = 'G';
+		commandNumber = num;
+		hasCommandNumber = true;
+	}
+}
+
 // Find where the end of the command is. We assume that a G or M not inside quotes or { } and not preceded by ' is the start of a new command.
 // This isn't true if the command has an unquoted string argument, but we deal with that later.
 void StringParser::FindParameters() noexcept
@@ -1510,7 +1538,7 @@ void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength) THRO
 	readPointer = -1;
 }
 
-// Get a :-separated list of strings after a key letter
+// Get an expression after a key letter
 ExpressionValue StringParser::GetExpression() THROWS(GCodeException)
 {
 	if (gb.buffer[readPointer] == '{')
@@ -1654,14 +1682,14 @@ void StringParser::InternalGetQuotedString(const StringRef& str) THROWS(GCodeExc
 }
 
 // Get and copy a string which may or may not be quoted. If it is not quoted, it ends at the first space or control character.
-void StringParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException)
+void StringParser::GetPossiblyQuotedString(const StringRef& str,bool allowEmpty) THROWS(GCodeException)
 {
 	if (readPointer <= 0)
 	{
 		THROW_INTERNAL_ERROR;
 	}
 
-	InternalGetPossiblyQuotedString(str);
+	InternalGetPossiblyQuotedString(str, false);
 	if (!allowEmpty && str.IsEmpty())
 	{
 		throw ConstructParseException("expected a non-empty string");
@@ -1669,7 +1697,8 @@ void StringParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty
 }
 
 // Get and copy a string which may or may not be quoted, starting at readPointer. Return true if successful.
-void StringParser::InternalGetPossiblyQuotedString(const StringRef& str) THROWS(GCodeException)
+// 'stopAtSpace' indicates whether we should consider the first space character the end of the string, or not.
+void StringParser::InternalGetPossiblyQuotedString(const StringRef& str, bool stopAtSpace) THROWS(GCodeException)
 {
 	str.Clear();
 	if (gb.buffer[readPointer] == '"')
@@ -1689,7 +1718,7 @@ void StringParser::InternalGetPossiblyQuotedString(const StringRef& str) THROWS(
 		for (;;)
 		{
 			const char c = gb.buffer[readPointer++];
-			if (c < ' ')
+			if (c < ' ' || (c == ' ' && stopAtSpace))
 			{
 				break;
 			}
@@ -1705,7 +1734,7 @@ void StringParser::InternalGetPossiblyQuotedString(const StringRef& str) THROWS(
 void StringParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException)
 {
 	readPointer = parameterStart;
-	InternalGetPossiblyQuotedString(str);
+	InternalGetPossiblyQuotedString(str, false);
 	if (!allowEmpty && str.IsEmpty())
 	{
 		throw ConstructParseException("expected a non-empty string");
@@ -1760,83 +1789,61 @@ DriverId StringParser::GetDriverId() THROWS(GCodeException)
 // Get an IP address quad after a key letter
 void StringParser::GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException)
 {
-	if (readPointer <= 0)
-	{
-		THROW_INTERNAL_ERROR;
-	}
-
-	const char *_ecv_array p = gb.buffer + readPointer;
+	String<StringLength20> ipStr;
+	InternalGetPossiblyQuotedString(ipStr.GetRef(), true);
+	const char *_ecv_array p = ipStr.c_str();
 	uint8_t ip[4];
-	unsigned int n = 0;
-	for (;;)
+	for (unsigned int n = 0; n < 4; ++n)
 	{
 		const char *_ecv_array pp;
 		const uint32_t v = StrToU32(p, &pp);
-		if (pp == p || v > 255)
-		{
-			readPointer = -1;
-			throw ConstructParseException("invalid IP address");
-		}
+		if (pp == p || v > 255) { break; }
 		ip[n] = (uint8_t)v;
-		++n;
 		p = pp;
+
 		if (*p != '.')
 		{
+			if (n == 3)
+			{
+				returnedIp.SetV4(ip);
+				readPointer = -1;
+				return;
+			}
 			break;
-		}
-		if (n == 4)
-		{
-			readPointer = -1;
-			throw ConstructParseException("invalid IP address");
 		}
 		++p;
 	}
+
+	// Here if we failed to parse the IP address
 	readPointer = -1;
-	if (n != 4)
-	{
-		throw ConstructParseException("invalid IP address");
-	}
-	returnedIp.SetV4(ip);
+	throw ConstructParseException("invalid IP address");
 }
 
 // Get a MAC address sextet after a key letter
 void StringParser::GetMacAddress(MacAddress& mac) THROWS(GCodeException)
 {
-	if (readPointer <= 0)
-	{
-		THROW_INTERNAL_ERROR;
-	}
-
-	const char *_ecv_array p = gb.buffer + readPointer;
-	unsigned int n = 0;
-	for (;;)
+	String<StringLength20> macStr;
+	InternalGetPossiblyQuotedString(macStr.GetRef(), true);
+	const char *_ecv_array p = macStr.c_str();
+	for (unsigned int n = 0; n < 6; ++n)
 	{
 		const char *_ecv_array pp;
 		const unsigned long v = StrHexToU32(p, &pp);
-		if (pp == p || v > 255)
-		{
-			readPointer = -1;
-			throw ConstructParseException("invalid MAC address");
-		}
+		if (pp == p || v > 255) { break; }
 		mac.bytes[n] = (uint8_t)v;
-		++n;
 		p = pp;
 		if (*p != ':')
 		{
+			if (n == 5)
+			{
+				readPointer = -1;
+				return;
+			}
 			break;
-		}
-		if (n == 6)
-		{
-			readPointer = -1;
-			throw ConstructParseException("invalid MAC address");
 		}
 		++p;
 	}
-	readPointer = -1;
-	if (n != 6)
-	{
-		throw ConstructParseException("invalid MAC address");
-	}
+	throw ConstructParseException("invalid MAC address");
 }
 
 // Write the command to a string

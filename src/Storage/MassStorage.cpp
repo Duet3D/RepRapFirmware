@@ -58,8 +58,6 @@ alignas(4) static __nocache uint8_t sectorBuffers[NumLruBuffers][FF_MAX_SS];
 alignas(4) static __nocache uint8_t sectorBuffers[NumSdCards][FF_MAX_SS];
 #  endif
 
-alignas(4) static __nocache char writeBufferStorage[NumFileWriteBuffers][FileWriteBufLen];
-
 # elif FF_LRU
 
 alignas(4) static uint8_t sectorBuffers[NumLruBuffers][FF_MAX_SS];
@@ -160,13 +158,38 @@ static DIR findDir;
 
 #endif	// HAS_MASS_STORAGE
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 static Mutex dirMutex;
+#endif
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 static FileInfoParser infoParser;
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+# if SAME70
+alignas(4) static __nocache char writeBufferStorage[NumFileWriteBuffers * FileWriteBufLen];
+# else
+alignas(4) static char writeBufferStorage[NumFileWriteBuffers * FileWriteBufLen];	// 32-bit aligned for better HSMCI performance
+# endif
+# if HAS_SBC_INTERFACE
+static FileWriteBuffer writeBuffers[NumSbcFileWriteBuffers];
+# else
+static FileWriteBuffer writeBuffers[NumFileWriteBuffers];
+# endif
 static FileWriteBuffer *_ecv_null freeWriteBuffers;
+
+// Carve the write buffer storage into numBuffers buffers of bufLen bytes and put them all on the free list
+static void InitWriteBuffers(size_t numBuffers, size_t bufLen) noexcept
+{
+	TaskCriticalSectionLocker lock;
+	freeWriteBuffers = nullptr;
+	for (size_t i = 0; i < numBuffers; i++)
+	{
+		writeBuffers[i].Init(freeWriteBuffers, writeBufferStorage + i * bufLen);
+		freeWriteBuffers = &writeBuffers[i];
+	}
+}
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
@@ -371,7 +394,7 @@ void MassStorage::Init() noexcept
 {
 	fsMutex.Create("FileSystem");
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	dirMutex.Create("DirSearch");
 #endif
 
@@ -380,15 +403,7 @@ void MassStorage::Init() noexcept
 #endif
 
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	freeWriteBuffers = nullptr;
-	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
-	{
-#  if SAME70
-		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers, writeBufferStorage[i]);
-#  else
-		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers);
-#  endif
-	}
+	InitWriteBuffers(NumFileWriteBuffers, FileWriteBufLen);
 # endif
 
 # if HAS_MASS_STORAGE
@@ -606,9 +621,11 @@ bool MassStorage::DirectoryExists(const StringRef& path) noexcept
 // Static helper functions
 size_t FileWriteBuffer::fileWriteBufLen = FileWriteBufLen;
 
+// The free list is guarded by a critical section rather than fsMutex because in SBC mode the SBC task releases buffers
+// while a task holding fsMutex may be waiting for it
 FileWriteBuffer *_ecv_null MassStorage::AllocateWriteBuffer() noexcept
 {
-	MutexLocker lock(fsMutex);
+	TaskCriticalSectionLocker lock;
 
 	FileWriteBuffer *_ecv_null const buffer = freeWriteBuffers;
 	if (buffer != nullptr)
@@ -622,12 +639,19 @@ FileWriteBuffer *_ecv_null MassStorage::AllocateWriteBuffer() noexcept
 
 void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept
 {
-	MutexLocker lock(fsMutex);
+	TaskCriticalSectionLocker lock;
 	buffer->SetNext(freeWriteBuffers);
 	freeWriteBuffers = buffer;
 }
 
 # if HAS_SBC_INTERFACE
+
+// Called once at startup when SBC mode is detected, before any file has been opened
+void MassStorage::ConfigureSbcBuffering() noexcept
+{
+	FileWriteBuffer::ConfigureSbcBuffering();
+	InitWriteBuffers(NumSbcFileWriteBuffers, SbcFileWriteBufLen);
+}
 
 // Return true if any files are open on the file system
 bool MassStorage::AnyFileOpen() noexcept
@@ -841,9 +865,133 @@ bool MassStorage::Delete(const StringRef& filePath, ErrorMessageMode errorMessag
 # endif
 }
 
+// Overwrite the file contents with zeros, flush to media, then delete
+// One zero-write pass is sufficient for SD/eMMC - wear-leveling makes multi-pass wipes meaningless on flash
+// Returns true if the delete succeeded; a failed overwrite is logged but does not block the delete
+bool MassStorage::SecureDelete(const StringRef& filePath, ErrorMessageMode errorMessageMode) noexcept
+{
+# if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		// Uses the new SecureDeleteFile request opcode (DSF performs zero-overwrite + fsync + unlink)
+		// Older DSF that doesn't know this opcode will not respond, and SbcInterface::SecureDeleteFile
+		// will time out and return false - that's the right signal for a security-sensitive operation
+		if (reprap.GetSbcInterface().SecureDeleteFile(filePath.c_str()))
+		{
+			return true;
+		}
+		if (errorMessageMode != ErrorMessageMode::noMessage)
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to securely delete %s\n", filePath.c_str());
+		}
+		return false;
+	}
+# endif
+
+# if HAS_MASS_STORAGE
+	if (!FileExists(filePath.c_str()))
+	{
+		// Nothing to wipe; let Delete handle the missing-file case per errorMessageMode
+		return Delete(filePath, errorMessageMode, false);
+	}
+
+	// OpenMode::append is intentional here. Despite the name, it is the only FileStore mode that opens
+	// an existing file read-write WITHOUT truncating it - and that is exactly what makes the wipe real:
+	// we seek to 0 and overwrite the file's own clusters in place. OpenMode::write would truncate first,
+	// so the zeros would land on freshly-allocated clusters and leave the original data on the old ones
+	// The FileExists() guard above means append's create-if-missing behaviour never triggers
+	FileStore * const f = OpenFile(filePath.c_str(), OpenMode::append, 0);
+	if (f != nullptr)
+	{
+		const FilePosition len = f->Length();
+		if (len != 0)
+		{
+			bool wipeOk = f->Seek(0);
+			if (wipeOk)
+			{
+				constexpr size_t ZeroChunk = 256;
+				static const uint8_t zeros[ZeroChunk] = { 0 };
+				FilePosition remaining = len;
+				while (wipeOk && remaining != 0)
+				{
+					const size_t toWrite = (remaining > ZeroChunk) ? ZeroChunk : (size_t)remaining;
+					wipeOk = f->Write(zeros, toWrite);
+					remaining -= toWrite;
+				}
+				if (wipeOk)
+				{
+					wipeOk = f->Flush();
+				}
+			}
+			if (!wipeOk && errorMessageMode != ErrorMessageMode::noMessage)
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "SecureDelete failed to overwrite %s\n", filePath.c_str());
+			}
+		}
+		f->Close();
+	}
+	return Delete(filePath, errorMessageMode, false);
+# else
+	return false;
+# endif
+}
+
 #endif
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
+
+#if HAS_SBC_INTERFACE
+
+// In SBC mode directory listings are fetched from DSF in chunks, because sending one request per entry would mean
+// one SPI round trip per entry. Only one search can be active at a time, which dirMutex already guarantees
+constexpr size_t SbcFileListBufferSize = 1024;
+
+alignas(4) static char sbcListBuffer[SbcFileListBufferSize];
+static String<MaxFilenameLength> sbcListDirectory;
+static size_t sbcListBytes, sbcListPos;
+static uint32_t sbcListNextIndex;
+static bool sbcListEnd;
+
+// Return the next entry of the listing being read, fetching another chunk if the current one is exhausted. Call with dirMutex owned
+static bool GetNextSbcListEntry(FileInfo& file_info) noexcept
+{
+	if (sbcListPos == sbcListBytes)
+	{
+		if (sbcListEnd)
+		{
+			return false;
+		}
+		sbcListBytes = reprap.GetSbcInterface().GetFileList(sbcListDirectory.c_str(), sbcListNextIndex, sbcListBuffer, SbcFileListBufferSize, sbcListEnd);
+		sbcListPos = 0;
+		if (sbcListBytes == 0)
+		{
+			return false;
+		}
+	}
+
+	// Give up if the remaining data is too short to hold another entry, which means DSF sent us something we don't understand
+	const size_t nameOffset = sbcListPos + sizeof(FileListEntry);
+	if (nameOffset > sbcListBytes)
+	{
+		return false;
+	}
+
+	const FileListEntry *const entry = reinterpret_cast<const FileListEntry*>(sbcListBuffer + sbcListPos);
+	if (nameOffset + entry->nameLength > sbcListBytes)
+	{
+		return false;
+	}
+
+	file_info.isDirectory = entry->isDirectory;
+	file_info.size = entry->size;
+	file_info.lastModified = (time_t)entry->lastModified;
+	file_info.fileName.copy(sbcListBuffer + nameOffset, entry->nameLength);
+	sbcListPos = nameOffset + ((entry->nameLength + 3) & ~3);
+	sbcListNextIndex++;
+	return true;
+}
+
+#endif
 
 // Open a directory to read a file list. Returns true if it contains any files, false otherwise.
 // If this returns true then the file system mutex is owned. The caller must subsequently release the mutex either
@@ -863,6 +1011,23 @@ bool MassStorage::FindFirst(const char *_ecv_array directory, FileInfo &file_inf
 	{
 		return false;
 	}
+
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		sbcListDirectory.copy(loc.c_str());
+		sbcListNextIndex = 0;
+		sbcListBytes = sbcListPos = 0;
+		sbcListEnd = false;
+		if (GetNextSbcListEntry(file_info))
+		{
+			return true;
+		}
+
+		dirMutex.Release();
+		return false;
+	}
+#endif
 
 #if HAS_MASS_STORAGE
 	if (f_opendir(&findDir, loc.c_str()) == FR_OK)
@@ -903,6 +1068,19 @@ bool MassStorage::FindNext(FileInfo &file_info) noexcept
 		return false;		// error, we don't hold the mutex
 	}
 
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		if (GetNextSbcListEntry(file_info))
+		{
+			return true;
+		}
+
+		dirMutex.Release();
+		return false;
+	}
+#endif
+
 #if HAS_MASS_STORAGE
 	FILINFO entry;
 
@@ -922,7 +1100,6 @@ bool MassStorage::FindNext(FileInfo &file_info) noexcept
 		return true;
 	}
 #endif
-	// TODO implement SBC interface for this
 
 	dirMutex.Release();
 	return false;

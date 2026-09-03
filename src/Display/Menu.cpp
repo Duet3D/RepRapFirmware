@@ -429,7 +429,7 @@ const char *_ecv_array _ecv_null Menu::ParseMenuLine(char *_ecv_array const comm
 		AddItem(newItem, true);
 		column += newItem->GetWidth();
 	}
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	else if (StringEqualsIgnoreCase(commandWord, "files"))		//TODO make sure that fname has been set, it defaults to "main"
 	{
 		const char *_ecv_array const actionString = AppendString(action);

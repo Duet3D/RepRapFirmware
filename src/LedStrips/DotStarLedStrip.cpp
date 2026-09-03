@@ -15,7 +15,7 @@
 #if SUPPORT_LED_STRIPS && SUPPORT_DMA_DOTSTAR
 
 DotStarLedStrip::DotStarLedStrip() noexcept
-	: LocalLedStrip(LedStripType::DotStar, DefaultDotStarSpiClockFrequency, ColorOrder::BGR)
+	: LocalLedStrip(LedStripType::DotStar, DefaultDotStarSpiClockFrequency)
 {
 }
 

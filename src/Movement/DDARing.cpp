@@ -183,6 +183,7 @@ MovementError DDARing::AddStandardMove(const RawMove &nextMove, bool doMotorMapp
 	const MovementError err = addPointer->InitStandardMove(*this, nextMove, doMotorMapping);
 	if (err == MovementError::ok)
 	{
+		addPointer->SetState(DDA::planned);
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
 	}
@@ -194,6 +195,7 @@ bool DDARing::AddSpecialMove(float feedRate, const float coords[MaxDriversPerAxi
 {
 	if (addPointer->InitLeadscrewMove(*this, feedRate, coords))
 	{
+		addPointer->SetState(DDA::planned);
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
 		return true;
@@ -208,6 +210,7 @@ bool DDARing::AddAsyncMove(const AsyncMove& nextMove) noexcept
 {
 	if (addPointer->InitAsyncMove(*this, nextMove))
 	{
+		addPointer->SetState(DDA::planned);
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
 		return true;
@@ -226,16 +229,23 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 	// If we are simulating, simulate completion of the current move
 	if (simulationMode >= SimulationMode::normal)
 	{
-		// Simulate completion of one move
 		if (cdda->IsCommitted())
 		{
-			simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
-			++completedMoves;
-			if (cdda->Free())
+			// Retiring the current move unconditionally would keep the ring nearly empty, so moves would be committed with hardly any lookahead behind them and the simulated time would come out too high
+			if (!CanAddMove() || waitingForRingToEmpty || shouldStartMove || cdda->IsIsolatedMove())
 			{
-				++numLookaheadUnderruns;
+				simulationTime += (float)cdda->GetClocksNeeded() * (1.0 / StepClockRate);
+				++completedMoves;
+				if (cdda->Free())
+				{
+					++numLookaheadUnderruns;
+				}
+				getPointer = cdda = cdda->GetNext();
 			}
-			getPointer = cdda = cdda->GetNext();
+			else
+			{
+				return 1;											// wait for more moves to be added, MoveAvailable() wakes us up earlier
+			}
 		}
 	}
 	else
@@ -308,6 +318,7 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 	if (   shouldStartMove											// if the Move code told us that we should start a move in any case...
 		|| waitingForRingToEmpty									// ...or GCodes is waiting for all moves to finish...
 		|| cdda->IsIsolatedMove()									// ...or checking endstops or another isolated move, so we can't schedule the following move
+		|| (simulationMode >= SimulationMode::normal && !CanAddMove())	// ...or we are simulating with a full ring, so waiting cannot gain any more lookahead
 	   )
 	{
 		const uint32_t ret = PrepareMoves(cdda, prepareAdvanceTime, 0, simulationMode);
@@ -343,7 +354,7 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 				: MoveTiming::StandardMoveWakeupInterval;			// the queue is empty, nothing to do until new moves arrive
 }
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 
 // Return true if we need to create a new plan before we can prepare a move
 inline bool DDARing::NeedNewPlan(DDA *moveToPrepare) const noexcept
@@ -395,7 +406,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 #endif
 		  )
 	{
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		// If the move to prepare is an S-curve move than it may not have been planned yet.
 		// Even if it has been planned, if any moves have been added to the ring then we may need to re-plan it
 		if (firstUnpreparedMove->IsSCurveMove())
@@ -463,7 +474,7 @@ bool DDARing::SetWaitingToEmpty() noexcept
 	if (ret)
 	{
 		waitingForRingToEmpty = false;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		plannedProfile.Invalidate();				// we may be waiting for movement to stop after an asynchronous pause, in which case the planned profile may not have been completed
 #endif
 	}
@@ -569,6 +580,12 @@ float DDARing::GetCurrentMoveDuration() const noexcept
 	return (cdda != nullptr) ? (float)cdda->GetClocksNeeded() * StepClocksToSeconds : 0.0;;
 }
 
+FilePosition DDARing::GetCurrentMoveFilePosition() const noexcept
+{
+	const DDA *_ecv_null const cdda = GetCurrentDDA();
+	return (cdda != nullptr) ? cdda->GetFilePosition() : noFilePosition;
+}
+
 // Pause the print as soon as we can.
 // If we are able to skip any moves, return true and update ms.pauseRestorePoint to the first move we skipped.
 // If we can't skip any moves, update just the coordinates and laser PWM in ms.pauseRestorePoint and return false.
@@ -650,6 +667,7 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 	rp.originalFeedRate = dda->GetOriginalFeedRate();
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
+	rp.gCommandNumber = dda->GetGCommandNumber();
 
 	// Free the DDAs for the moves we are going to skip
 	do
@@ -718,6 +736,7 @@ bool DDARing::LowPowerOrStallPause(MovementState& ms) noexcept
 	rp.originalFeedRate = dda->GetOriginalFeedRate();
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
+	rp.gCommandNumber = dda->GetGCommandNumber();
 	rp.proportionDone = dda->GetProportionDone();		// store how much of the complete multi-segment move's extrusion has been done
 	rp.initialUserC0 = dda->GetInitialUserC0();
 	rp.initialUserC1 = dda->GetInitialUserC1();

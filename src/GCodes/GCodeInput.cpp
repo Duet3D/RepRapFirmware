@@ -11,6 +11,8 @@
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
 
+#include <Devices.h>
+
 const size_t GCodeInputFileReadThreshold = 128;		// How many free bytes must be available before data is read from the file
 const size_t GCodeInputUSBReadThreshold = 128;		// How many free bytes must be available before we read more data from USB
 
@@ -81,7 +83,7 @@ size_t StreamGCodeInput::BytesCached() const noexcept
 // Dynamic G-code input class for caching codes from software-defined sources
 
 RegularGCodeInput::RegularGCodeInput(MessageType mt) noexcept
-	: mtype(mt), state(GCodeInputState::idle), writingPointer(0), readingPointer(0)
+	: mtype(mt), state(GCodeInputState::idle), writingFile(false), writingPointer(0), readingPointer(0)
 {
 }
 
@@ -112,18 +114,21 @@ size_t RegularGCodeInput::BufferSpaceLeft() const noexcept
 }
 
 // Check a character for urgent commands: M112 (emergency stop), M122 (diagnostics) and M108 (cancel wait for temperature).
-// Return true if the character should not be buffered (leading whitespace or urgent command handled)
+// Return true if an urgent command was handled and the buffer was reset
 bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 {
+	if (writingFile)
+	{
+		return false;
+	}
+
 	switch (state)
 	{
 		case GCodeInputState::idle:
-			if (c <= ' ')
+			if (c > ' ')
 			{
-				// ignore whitespaces at the beginning
-				return true;
+				state = (c == 'M' || c == 'm') ? GCodeInputState::doingMCode : GCodeInputState::doingCode;
 			}
-			state = (c == 'M' || c == 'm') ? GCodeInputState::doingMCode : GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingCode:
@@ -199,34 +204,99 @@ bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 }
 
 // BufferedStreamGCodeInput methods
-void BufferedStreamGCodeInput::Reset() noexcept
+
+// How many bytes are ready to be passed to the GCodeBuffer. Any trailing characters that might still be
+// completing an urgent command are held back, and how many that is follows directly from the scanner state
+size_t BufferedStreamGCodeInput::BytesCached() const noexcept
 {
-	RegularGCodeInput::Reset();
-	while (device.available() > 0)
+	const size_t cached = RegularGCodeInput::BytesCached();
+	if (writingFile)
 	{
-		device.read();
+		return cached;					// raw file data is never an urgent command, so none of it is held back
 	}
+
+	// The scanner state encodes how far a potential M112/M122/M108 has been matched, which is exactly how many
+	// trailing characters must stay hidden until we know whether they form an urgent command
+	size_t held;
+	switch (state)
+	{
+	case GCodeInputState::doingMCode:
+		held = 1;
+		break;
+	case GCodeInputState::doingMCode1:
+		held = 2;
+		break;
+	case GCodeInputState::doingMCode10:
+	case GCodeInputState::doingMCode11:
+	case GCodeInputState::doingMCode12:
+		held = 3;
+		break;
+	case GCodeInputState::doingMCode108:
+	case GCodeInputState::doingMCode112:
+	case GCodeInputState::doingMCode122:
+		held = 4;
+		break;
+	default:
+		held = 0;
+		break;
+	}
+	return (cached > held) ? cached - held : 0;
 }
 
-// Read from the device into our ring buffer and scan for urgent commands (M112/M108/M122)
-void BufferedStreamGCodeInput::Spin() noexcept
+// Read from the device into our ring buffer and scan for urgent commands (M112/M108/M122).
+// Whenever we drop buffered data we must also drop any partly-received line in the GCodeBuffer, because the two together
+// form one stream: dropping only our half would splice the remains of a truncated line onto the start of the next one
+void BufferedStreamGCodeInput::Spin(GCodeBuffer& gb) noexcept
 {
+	if (!device.IsConnected())
+	{
+		// The USB host has closed the port. Discard anything we have buffered as well as anything the USB driver has
+		// received since, because it keeps filling its receive FIFO regardless of the DTR state. This way the first
+		// command after the host reconnects starts cleanly instead of being appended to a leftover fragment
+		while (device.available() != 0)
+		{
+			(void)device.read();
+		}
+		if (RegularGCodeInput::BytesCached() != 0)
+		{
+			Reset();
+		}
+		gb.DiscardPartialLine();
+		return;
+	}
+
 	if (device.available() != 0)
 	{
 		const size_t spaceLeft = BufferSpaceLeft();
 		if (spaceLeft >= GCodeInputUSBReadThreshold)
 		{
-			const size_t maxToTransfer = (readingPointer > writingPointer || writingPointer == 0) ? spaceLeft : GCodeInputBufferSize - writingPointer;
-			const size_t bytesRead = device.readBytes(buffer + writingPointer, maxToTransfer);
-			for (size_t i = 0; i < bytesRead; ++i)
+			const size_t maxToTransfer = min<size_t>(spaceLeft, GCodeInputBufferSize - writingPointer);
+			const size_t endPointer = writingPointer + device.readBytes(buffer + writingPointer, maxToTransfer);
+			while (writingPointer != endPointer)
 			{
-				if (CheckForUrgentCommand(buffer[(writingPointer + i) % GCodeInputBufferSize]))
+				const size_t pos = writingPointer;
+				if (CheckForUrgentCommand(buffer[pos]))
 				{
-					// Urgent command handled and buffer was reset, don't update writingPointer
+					// Urgent command handled and buffer was reset (writingPointer is now 0). The GCodeBuffer may already
+					// hold the start of the same line (e.g. the line number in "N12 M122"), so throw that away too
+					gb.DiscardPartialLine();
+
+					// Copy any remaining bytes after the trigger into the buffer so that
+					// following commands (e.g. M999 after M112) can still be processed
+					const size_t remaining = endPointer - pos - 1;
+					if (remaining != 0)
+					{
+						memmove(buffer, buffer + pos + 1, remaining);
+						writingPointer = remaining;
+					}
 					return;
 				}
+				writingPointer++;
 			}
-			writingPointer = (writingPointer + bytesRead) % GCodeInputBufferSize;
+			if (writingPointer == GCodeInputBufferSize)
+			{
+				writingPointer = 0;
+			}
 		}
 	}
 }
@@ -235,6 +305,27 @@ bool BufferedStreamGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept
 {
 	return StandardGCodeInput::FillBuffer(gb);
 }
+
+#if defined(SERIAL_USB_DEVICE)
+
+#include <Devices.h>
+
+UsbGCodeInput::UsbGCodeInput(SerialCDC &_ecv_from dev, MessageType mt) noexcept
+	: BufferedStreamGCodeInput(dev, mt), usbDevice(dev)
+{
+}
+
+void UsbGCodeInput::Spin(GCodeBuffer& gb) noexcept
+{
+	// If the host disconnected, discard any buffered partial data
+	if (!usbDevice.IsConnected() && BytesCached() != 0)
+	{
+		Reset();
+	}
+	BufferedStreamGCodeInput::Spin(gb);
+}
+
+#endif
 
 // NetworkGCodeInput methods
 void NetworkGCodeInput::Put(char c) noexcept

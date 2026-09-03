@@ -45,11 +45,6 @@ GCodeResult LocalZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool
 		access[1] = PinAccess::write1;
 		break;
 
-	case ZProbeType::alternateAnalog:
-		access[0] = PinAccess::readAnalog;
-		access[1] = PinAccess::write0;
-		break;
-
 	default:
 		access[0] = PinAccess::read;
 		access[1] = PinAccess::write0;
@@ -99,7 +94,6 @@ int32_t LocalZProbe::GetRawReading() const noexcept
 	{
 	case ZProbeType::analog:
 	case ZProbeType::dumbModulated:
-	case ZProbeType::alternateAnalog:
 	case ZProbeType::scanningAnalog:
 		return (int32_t)min<uint32_t>(inputPort.ReadAnalog() >> (AdcBits - 10), MaxReading);
 
@@ -117,7 +111,7 @@ bool LocalZProbe::SetProbing(bool isProbing) noexcept
 {
 	// For Z probe types other than 1/2/3 and bltouch we set the modulation pin high at the start of a probing move and low at the end
 	// Don't do this for bltouch because on the Maestro, the MOD pin is normally used as the servo control output
-	if (type > ZProbeType::alternateAnalog && type != ZProbeType::blTouch)
+	if (type > ZProbeType::alternateAnalog_obsolete && type != ZProbeType::blTouch)
 	{
 		modulationPort.WriteDigital(isProbing);
 	}

@@ -17,6 +17,11 @@ constexpr float MaxGoodBacklash = 0.15;					// the maximum backlash in full step
 constexpr unsigned int LinearEncoderIncreaseFactor = 4;	// this should be a power of 2. Allowed backlash is increased by this amount for linear composite encoders.
 constexpr float VelocityLimitGainFactor = 5.0;			// the gain of the P loop when in torque mode
 
+// Speeds in full steps per step clock at which we change the SPI cadence. Above DeferPollSpeed we stop polling the driver registers so that we can update the coil currents twice as often,
+// which halves the commutation step at high speed. The two values differ so that we don't change the cadence repeatedly when running close to the threshold
+constexpr float DeferPollSpeed = 2000.0/StepClockRate;
+constexpr float ResumePollSpeed = 1500.0/StepClockRate;
+
 
 // Struct to pass data back to the ClosedLoop module
 struct MotionParameters
@@ -25,7 +30,7 @@ struct MotionParameters
 	float speed = 0.0;
 	float acceleration = 0.0;
 
-	void Scale(float multiplier)
+	void Scale(float multiplier) noexcept
 	{
 		position *= multiplier;
 		speed *= multiplier;
@@ -52,7 +57,18 @@ struct PhaseStepParams
 	float Ka;
 };
 
-const char* TranslateStepMode(const StepMode mode);
+const char *_ecv_array TranslateStepMode(const StepMode mode) noexcept;
+
+// One term of the phase correction that is added to the electrical angle before the coil currents are computed, see M970.3
+struct PhaseCorrectionHarmonic
+{
+	uint8_t harmonic;			// harmonic of the electrical cycle, 0 = unused entry
+	float magnitude;			// magnitude in phase units, where 4096 is a full electrical cycle
+	uint16_t phase;				// phase offset in phase units
+};
+
+constexpr size_t MaxPhaseCorrectionHarmonics = 4;
+constexpr unsigned int MaxPhaseCorrectionHarmonic = 16;
 
 class PhaseStep
 {
@@ -63,13 +79,17 @@ public:
 	// Phase step public methods
 	void SetStandstillCurrent(float percent) noexcept;
 
+	// Phase correction, shared by all instances because it is a property of the driver
+	static GCodeResult ConfigureCorrection(size_t driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	static int32_t GetCorrection(size_t driver, uint32_t phase) noexcept;
+
 	// Methods called by the motion system
 	void InstanceControlLoop(size_t driver) noexcept;
-	void SetEnabled(bool enable) { enabled = enable; }
+	void SetEnabled(bool enable) noexcept { enabled = enable; }
 	bool IsEnabled() const noexcept { return enabled; }
 	void UpdatePhaseOffset(size_t driver) noexcept;
 	void SetPhaseOffset(size_t driver, uint16_t offset) noexcept;
-	uint16_t GetPhaseOffset(size_t driver);
+	uint16_t GetPhaseOffset(size_t driver) noexcept;
 	float CalculateCurrentFraction() noexcept;
 
 	// Configuration methods

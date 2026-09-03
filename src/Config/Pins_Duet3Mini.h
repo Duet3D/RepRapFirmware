@@ -29,13 +29,16 @@
 #define IAP_CAN_LOADER_FILE		"Duet3_CANiap32_" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20038000;
 
-#define WIFI_FIRMWARE_FILE		"DuetWiFiServer.bin"
+#define WIFI_FIRMWARE_FILE_ESP8266		"DuetWiFiServer.bin"
+#define WIFI_FIRMWARE_FILE_ESP32		"DuetWiFiModule_32S3.bin"
 
 // Features definition
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		1
 #define HAS_W5500_NETWORKING	0
 #define HAS_SBC_INTERFACE		1
+#define SUPPORTS_SBC_OVER_SPI	1
+#define SUPPORTS_SBC_OVER_USB	CORE_USES_TINYUSB
 
 #define HAS_MASS_STORAGE		1
 #define HAS_HIGH_SPEED_SD		1
@@ -63,7 +66,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20038000;
 
 #define SUPPORT_12864_LCD		1					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_ACCELEROMETERS	1
-#define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
 #define SUPPORT_MQTT			1
@@ -373,7 +375,8 @@ Sercom * const SbcSpiSercom = SERCOM0;
 constexpr Pin SbcSSPin = PortAPin(6);
 
 constexpr Pin SbcTfrReadyPin = PortAPin(3);
-constexpr Pin SbcSpiSercomPins[] = { PortAPin(4), PortAPin(5), PortAPin(6), PortAPin(7) };
+constexpr Pin SbcSpiMisoPin = PortAPin(7);
+constexpr Pin SbcSpiSercomPins[] = { PortAPin(4), PortAPin(5), PortAPin(6), SbcSpiMisoPin };
 constexpr GpioPinFunction SbcSpiSercomPinsMode = GpioPinFunction::D;
 constexpr IRQn SbcSpiSercomIRQn = SERCOM0_1_IRQn;			// this is the transfer complete interrupt, the only one we use
 
@@ -382,6 +385,17 @@ constexpr unsigned int CanDeviceNumber = 1;					// we use CAN1
 constexpr Pin CanTxPin = PortBPin(14);
 constexpr Pin CanRxPin = PortBPin(15);
 constexpr GpioPinFunction CanPinsMode = GpioPinFunction::H;
+
+// I2C
+// Hardware I2C runs on the IO2 connector via SERCOM6: SDA on io2.out (PD09 = SERCOM6 PAD0), SCL on io2.in (PD08 = SERCOM6 PAD1).
+// Using IO2 for I2C requires the 470R bypass jumper on io2.in to be fitted, which is only present on board revision v1.01 and later.
+// Defining I2C_IFACE enables the M260/M261 commands; on this board the bus is driven by a SharedI2CMaster, see CoreN2G.
+#define I2C_IFACE	SharedI2CMaster
+constexpr uint8_t I2CSercomNumber = 6;
+constexpr Pin I2CSclPin = PortDPin(8);						// io2.in, requires the 470R bypass jumper
+constexpr Pin I2CSdaPin = PortDPin(9);						// io2.out
+constexpr GpioPinFunction I2CPinFunction = GpioPinFunction::D;
+constexpr const char *I2CBusPinNames = "i2c0.clk+i2c0.dat";	// names used to reserve the bus pins so they can't also be allocated as GPIO
 
 // List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
 // The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
@@ -503,8 +517,8 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PD05 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PD06 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PD07 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::sercom6d,	SercomIo::none,		3,	PinCapability::read,	"io2.in"		},	// PD08 IO2_IN
-	{ TcOutput::none,	TccOutput::tcc0_2F,	AdcInput::none,		SercomIo::none,		SercomIo::sercom6d,	Nx,	PinCapability::write,	"io2.out"		},	// PD09 IO2_OUT
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::sercom6d,	SercomIo::none,		3,	PinCapability::read,	"io2.in,i2c0.clk"	},	// PD08 IO2_IN also I2C SCL
+	{ TcOutput::none,	TccOutput::tcc0_2F,	AdcInput::none,		SercomIo::none,		SercomIo::sercom6d,	Nx,	PinCapability::write,	"io2.out,i2c0.dat"	},	// PD09 IO2_OUT also I2C SDA
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::write,	"io4.out,pson"	},	// PD10 IO4_OUT and PS_ON
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		6,	PinCapability::rw,		"spi.cs1"		},	// PD11 SPI2 CS1
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		7,	PinCapability::read	,	"ate.spi.cd"	},	// PD12 SPI2_CD

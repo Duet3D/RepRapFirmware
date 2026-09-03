@@ -80,7 +80,7 @@ extern DeviceVectors exception_table;
 constexpr unsigned int IdleTaskStackWords = 50;				// currently we don't use the idle task for anything, so this can be quite small
 static Task<IdleTaskStackWords> idleTask;
 
-extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize) noexcept
+extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, configSTACK_DEPTH_TYPE *pulIdleTaskStackSize) noexcept
 {
 	*ppxIdleTaskTCBBuffer = (xSTATIC_TCB *_ecv_from)idleTask.GetTaskMemory();
 	*ppxIdleTaskStackBuffer = (uint32_t*)idleTask.GetStackBase();
@@ -111,6 +111,7 @@ extern "C" void GetMallocMutex() noexcept
 {
 	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)		// don't take mutex if scheduler not started or suspended
 	{
+		configASSERT(__get_BASEPRI() == 0 && __get_PRIMASK() == 0);	// taking the mutex re-enables masked interrupts, so catch callers that allocate while interrupts are masked
 		mallocMutex.Take();
 	}
 }
@@ -174,6 +175,10 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array _ecv_null stk) noexcept
 	SetPinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);		// set up status LED for debugging and turn it off
 #if defined(DUET3MINI) || defined(DUET3_MB6HC) || defined(DUET3_MB6XD)
 	SetPinMode(ActLedPin, (ActOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);		// set up activity LED and turn it off
+#endif
+
+#ifdef INDX
+	SetPinMode(CanBufferDisablePin, OUTPUT_HIGH);							// turn the CAN buffer off, it may interfere with USB on v0.1 boards
 #endif
 
 #if !defined(DEBUG)		// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
@@ -244,7 +249,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array _ecv_null stk) noexcept
 	// We could also trap unaligned memory access, if we change the gcc options to not generate code that uses unaligned memory access.
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
 
-#if !SAME5x
+#if SAME70 || SAM4E || SAM4S
 	// When doing a software reset, we disable the NRST input (User reset) to prevent the negative-going pulse that gets generated on it being held
 	// in the capacitor and changing the reset reason from Software to User. So enable it again here. We hope that the reset signal will have gone away by now.
 # ifndef RSTC_MR_KEY_PASSWD

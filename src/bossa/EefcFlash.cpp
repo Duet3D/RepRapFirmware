@@ -84,8 +84,7 @@ EefcFlash::~EefcFlash()
 {
 }
 
-void
-EefcFlash::eraseAll(uint32_t offset) THROWS(GCodeException)
+void EefcFlash::eraseAll(uint32_t offset) THROWS(GCodeException)
 {
     // Do a full chip erase if the offset is 0
     if (offset == 0)
@@ -274,7 +273,7 @@ void EefcFlash::writePage(uint32_t page) THROWS(GCodeException)
 {
     if (page >= _pages)
 	{
-        throw FlashPageError("EefcFlash::writePage: FlashPageError");
+        throw FlashPageError("writePage: PageErr");
 	}
 
     _wordCopy.setDstAddr(_addr + page * _size);
@@ -296,7 +295,7 @@ void EefcFlash::readPage(uint32_t page, uint8_t *_ecv_array data) THROWS(GCodeEx
 {
     if (page >= _pages)
 	{
-        throw FlashPageError("EefcFlash::readPage: FlashPageError");
+        throw FlashPageError("readPage: PageErr");
 	}
 
     // The SAM3 firmware has a bug where it returns all zeros for reads
@@ -319,11 +318,11 @@ void EefcFlash::waitFSR(int seconds) THROWS(GCodeException)
     	uint32_t fsr0 = _samba.readWord(EEFC0_FSR);
         if ((fsr0 & 0x2) != 0)
 		{
-            throw FlashCmdError("EefcFlash::waitFSR: FlashCmdError 1");
+            throw FlashCmdError("waitFSR: CmdErr 1");
 		}
         if ((fsr0 & 0x4) != 0)
 		{
-            throw FlashLockError("EefcFlash::waitFSR: FlashLockError 1");
+            throw FlashLockError("waitFSR: LockErr 1");
 		}
 
         if (_planes == 2)
@@ -331,11 +330,11 @@ void EefcFlash::waitFSR(int seconds) THROWS(GCodeException)
             fsr1 = _samba.readWord(EEFC1_FSR);
             if ((fsr1 & 0x2) != 0)
 			{
-                throw FlashCmdError("EefcFlash::waitFSR: FlashCmdError 2");
+                throw FlashCmdError("waitFSR: CmdErr 2");
 			}
             if ((fsr1 & 0x4) != 0)
 			{
-                throw FlashLockError("EefcFlash::waitFSR: FlashLockError 2");
+                throw FlashLockError("waitFSR: LockErr 2");
 			}
         }
         if ((fsr0 & fsr1 & 0x1) != 0)
@@ -344,7 +343,7 @@ void EefcFlash::waitFSR(int seconds) THROWS(GCodeException)
     }
     if (tries == 0)
 	{
-        throw FlashTimeoutError("EefcFlash::waitFSR: FlashTimeoutError");
+        throw FlashTimeoutError("waitFSR: TimeoutErr");
 	}
 }
 

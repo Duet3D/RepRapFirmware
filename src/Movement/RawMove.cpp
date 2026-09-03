@@ -128,6 +128,7 @@ void MovementState::SetDefaults(size_t firstDriveToZero) noexcept
 	laserPixelData.Clear();
 #endif
 	raw.filePos = noFilePosition;
+	raw.gCommandNumber = -1;
 	raw.movementTool = nullptr;
 	moveFractionToSkip = 0.0;
 #if 0	// we don't use this yet
@@ -182,6 +183,7 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 	msNumber = p_msNumber;
 	ClearMove();
 	raw.filePos = noFilePosition;
+	raw.gCommandNumber = -1;
 	codeQueue->Clear();
 	currentCoordinateSystem = 0;
 
@@ -190,6 +192,7 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 #endif
 
 	pausedInMacro = false;
+	positionMayBeInaccurate = false;
 
 #if SUPPORT_ASYNC_MOVES
 	raw.axesAndExtrudersOwned.Clear();
@@ -256,13 +259,9 @@ void MovementState::ChangeExtrusionFactor(unsigned int extruder, float multiplie
 // Note, this no longer applies inverse mesh bed compensation or axis skew compensation to the returned machine coordinates, so they are the compensated coordinates!
 float MovementState::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 {
-	if (forceLiveCoordinatesUpdate || millis() - latestLiveCoordinatesFetchedAt > MoveTiming::MachineCoordinateUpdateInterval)
-	{
-		reprap.GetMove().UpdateLiveMachineCoordinates(latestLiveCoordinates, currentTool);
-		forceLiveCoordinatesUpdate = false;
-		latestLiveCoordinatesFetchedAt = millis();
-	}
-	return latestLiveCoordinates[axisOrExtruder];
+	float coords[MaxAxesPlusExtruders];
+	reprap.GetMove().UpdateLiveMachineCoordinates(coords, currentTool);
+	return coords[axisOrExtruder];
 }
 
 void MovementState::Diagnostics(const StringRef& reply) const noexcept
@@ -291,6 +290,9 @@ void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes
 	rp.originalFeedRate = p_feedRate;
 	rp.virtualExtruderPosition = latestVirtualExtruderPosition;
 	rp.filePos = p_filePos;
+	// Restore points saved this way (synchronous pauses via M226/M600/M601, tool changes, G60, simulation) are triggered
+	// by a command that has already overwritten the modal motion command, so mark it unknown rather than saving a stale value
+	rp.gCommandNumber = -1;
 	rp.toolNumber = GetCurrentToolNumber();
 	rp.fanSpeed = virtualFanSpeed;
 
@@ -576,6 +578,7 @@ LogicalDrivesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLetter
 		{
 			move.SetLastEndpoints(msNumber, drivesNeeded, lastKnownEndpoints);
 			move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), raw.coords);
+			move.UpdateStartCoordinates(msNumber, raw.coords);			// keep the ring in step with the motor-rounded coordinates, else the next move sees a sub-step delta on every axis
 			move.InverseAxisAndBedTransform(raw.coords, currentTool);
 		}
 	}
@@ -599,6 +602,7 @@ LogicalDrivesBitmap MovementState::AllocateDrives(LogicalDrivesBitmap drivesNeed
 		raw.axesAndExtrudersOwned |= affectedAxes;
 		move.SetLastEndpoints(msNumber, drivesNeeded, lastKnownEndpoints);
 		move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), raw.coords);
+		move.UpdateStartCoordinates(msNumber, raw.coords);
 		move.InverseAxisAndBedTransform(raw.coords, currentTool);
 	}
 	return unavailableDrives;
@@ -628,6 +632,7 @@ void MovementState::UpdateCoordinatesFromLastKnownEndpoints() noexcept
 	Move& move = reprap.GetMove();
 	move.MotorStepsToCartesian(lastKnownEndpoints, reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), machinePosition);
 	memcpyf(raw.coords, machinePosition, reprap.GetGCodes().GetTotalAxes());
+	move.UpdateStartCoordinates(msNumber, machinePosition);			// keep the ring in step with the motor-rounded coordinates, else the next move sees a sub-step delta on every axis
 	move.InverseAxisAndBedTransform(raw.coords, currentTool);
 }
 

@@ -189,16 +189,21 @@ unsigned int CanMessageGenericConstructor::FindInsertPoint(char c, ParamDescript
 		{
 			// This parameter is present, so skip it
 			const size_t size = d->ItemSize();
-			if (size != 0)
-			{
-				pos += size;
-			}
-			else
+			if (size == 0)
 			{
 				// The only item with size 0 is string, so skip up to and including the null terminator
 				do
 				{
 				} while (msg.data[pos++] != 0);
+			}
+			else if ((d->type & ParamDescriptor::ParamType::isArray) != 0)
+			{
+				const uint8_t numElems = msg.data[pos++];
+				pos += numElems * size;
+			}
+			else
+			{
+				pos += size;
 			}
 		}
 		paramBit <<= 1;
@@ -349,7 +354,7 @@ void CanMessageGenericConstructor::AddFloatArrayParam(char c, const float *_ecv_
 	InsertValue(v, numV * sizeof(float), pos + sizeof(uint8_t));
 }
 
-GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply, uint8_t *_ecv_null extra) const noexcept
+GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply, uint8_t *_ecv_null extra, uint32_t *_ecv_null words) const noexcept
 {
 	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -363,7 +368,7 @@ GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgT
 	CanMessageGeneric *m2 = buf->SetupGenericRequestMessage(rid, CanInterface::GetCanAddress(), dest, msgType, actualMessageLength);
 	memcpy(m2, &msg, actualMessageLength);
 	m2->requestId = rid;
-	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, extra);
+	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, extra, words);
 }
 
 #endif

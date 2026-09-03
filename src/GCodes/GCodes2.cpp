@@ -709,11 +709,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			||  code == 32 || (code >= 36 && code <= 39)
 			|| (code == 98 && gb.Seen('R'))
 			||  code == 112
-			||  code == 121
+# if SUPPORT_ASYNC_MOVES
+			|| (code == 121 && numMotionSystemsUsed > 1)	// DSF only needs this to keep inputs[].active up-to-date for proper MMS sync
+# endif
 			|| (code >= 470 && code <= 472)
 			||  code == 503 || code == 505
 			||  code == 540 || (code >= 550 && code <= 552) || (code >= 586 && code <= 589)
-			||  code == 596 || code == 606
+			||  code == 596 || code == 598 || code == 606
 			||  code == 703
 			||  code == 905 || code == 929 || code == 997 || code == 999
 		   )
@@ -742,7 +744,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_SCANNING_PROBES
 			&& code != 558
 #endif
-			&& code != 569 && code != 581 && code != 586 && code != 587		// these are the only M-codes we implement that can have fractional parts
+			&& code != 569 && code != 576 && code != 581 && code != 586 && code != 587		// these are the only M-codes we implement that can have fractional parts
 #if SUPPORT_PHASE_STEPPING
 			&& code != 970
 #endif
@@ -852,7 +854,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							const uint32_t rpm = gb.GetUIValue();
 							if (ms.currentTool != nullptr && ms.currentTool->GetSpindleNumber() == (int)slot)
 							{
-								ms.currentTool->SetSpindleRpm(rpm, true);
+								ms.currentTool->SetSpindleRpm(gb, rpm, true);
 							}
 							else
 							{
@@ -1238,6 +1240,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								}
 							}
 							StartPrinting(fromStart);
+							if (!fromStart)
+							{
+								// restore the modal G0/G1/G2/G3 context in case the file uses implied command letters
+								FileGCode()->SetModalGCommand(moveStates[0].restartGCommandNumber);
+							}
 						}
 					}
 #endif
@@ -1328,6 +1335,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					const char c1 = (selectedPlane == 0) ? 'Y' : 'Z';
 					ms.restartInitialUserC0 = (gb.Seen(c0)) ? gb.GetFValue() : 0.0;
 					ms.restartInitialUserC1 = (gb.Seen(c1)) ? gb.GetFValue() : 0.0;
+					ms.restartGCommandNumber = (gb.Seen('C')) ? (int8_t)gb.GetIValue() : -1;
 				}
 				break;
 #endif
@@ -1981,7 +1989,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if defined(DUET3_ATE)
 				reply.lcatf("ATE firmware version %s date %s %s", Duet3Ate::GetFirmwareVersionString(), Duet3Ate::GetFirmwareDateString(), Duet3Ate::GetFirmwareTimeString());
 #else
-				reply.catf(" FIRMWARE_DATE: %s%s", DateText, TimeSuffix);
+				reply.catf(" FIRMWARE_DATE: %s", DateTimeText);
 #endif
 				break;
 
@@ -1999,10 +2007,33 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (gb.Seen('P'))
 					{
-						// Wait for the heaters associated with the specified tool to be ready
-						if (!ToolHeatersAtSetTemperatures(Tool::GetLockedTool(gb.GetIValue()).Ptr(), true, tolerance, gb.IsFileChannel()))
+						// Wait for the heaters associated with the specified tool(s) to be ready
+						uint32_t toolNumbers[MaxTools];
+						size_t toolCount = MaxTools;
+						gb.GetUnsignedArray(toolNumbers, toolCount, false);
+
+						if (toolCount == 0)
 						{
-							return false;
+							// If no tool numbers are given, wait for all tools
+							ReadLocker lock(Tool::toolListLock);
+							for (const Tool *_ecv_null tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
+							{
+								if (!ToolHeatersAtSetTemperatures(tool, true, tolerance, gb.IsFileChannel()))
+								{
+									return false;
+								}
+							}
+						}
+						else
+						{
+							for (size_t i = 0; i < toolCount; i++)
+							{
+								ReadLockedPointer<Tool> tool = Tool::GetLockedTool((int)toolNumbers[i]);
+								if (!ToolHeatersAtSetTemperatures(tool.Ptr(), true, tolerance, gb.IsFileChannel()))
+								{
+									return false;
+								}
+							}
 						}
 						seen = true;
 					}
@@ -2067,13 +2098,40 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						seen = true;
 					}
 
-					// Wait for the current tool and slow heaters to be ready
-					if (!seen && (
-							!ToolHeatersAtSetTemperatures(GetMovementState(gb).GetLockedCurrentTool().Ptr(), true, tolerance, gb.IsFileChannel()) ||
-							!reprap.GetHeat().SlowHeatersAtSetTemperatures(tolerance, gb.IsFileChannel())
-						))
+					// Wait for the tools of this motion system, unallocated tools and slow heaters to be ready
+					if (!seen)
 					{
-						return false;
+						{
+#if SUPPORT_ASYNC_MOVES
+							const MovementState& ms = GetMovementState(gb);
+#endif
+							ReadLocker lock(Tool::toolListLock);
+							for (const Tool *_ecv_null tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
+							{
+#if SUPPORT_ASYNC_MOVES
+								bool usedByOtherMotionSystem = false;
+								for (size_t i = 0; i < numMotionSystemsUsed; i++)
+								{
+									if (&moveStates[i] != &ms && moveStates[i].currentTool == tool)
+									{
+										usedByOtherMotionSystem = true;
+									}
+								}
+								if (usedByOtherMotionSystem)
+								{
+									continue;
+								}
+#endif
+								if (!ToolHeatersAtSetTemperatures(tool, true, tolerance, gb.IsFileChannel()))
+								{
+									return false;
+								}
+							}
+						}
+						if (!reprap.GetHeat().SlowHeatersAtSetTemperatures(tolerance, gb.IsFileChannel()))
+						{
+							return false;
+						}
 					}
 				}
 				break;
@@ -2210,6 +2268,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 121:
 				Pop(gb, true);
+#if HAS_SBC_INTERFACE && SUPPORT_ASYNC_MOVES
+				if (gb.IsBinary() && !gb.LatestMachineState().lastCodeFromSbc)
+				{
+					// When we get here M121 was retransmitted from DSF but the old stack level says the
+					// last code came from a text-based input. We must reset that here so that the SBC
+					// gets a response back first. The next code will reset lastCodeFromSbc anyway
+					gb.LatestMachineState().lastCodeFromSbc = true;
+				}
+#endif
 				break;
 
 			case 122:
@@ -2544,7 +2611,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 					if (frac < 1 && gb.Seen('T'))
 					{
 						if (!LockAllMovementSystemsAndWaitForStandstill(gb))
@@ -2557,7 +2624,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 					if (seen)
 					{
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 						if (frac < 1)
 						{
 							move.UpdateSCurveFlagAndJerk();
@@ -2579,7 +2646,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(move.Acceleration(ExtruderToLogicalDrive(extruder), frac == 1)));
 							sep = ':';
 						}
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 						if (frac < 1)
 						{
 							reply.catf(", acceleration time %.2f sec", (double)(move.AccelerationTime() * (1.0/StepClockRate)));
@@ -2587,7 +2654,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 					}
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 					if (frac < 1 && move.AccelerationTime() != 0.0 && !move.IsUsingSCurve())
 					{
 						reply.lcat("Acceleration time (S-curve acceleration) is disabled because phase stepping is not enabled");
@@ -2912,10 +2979,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-			case 301: // Set/report hot end PID values
-				result = reprap.GetHeat().SetPidParameters(1, gb, reply);
-				break;
-
 			case 302: // Allow, deny or report cold extrudes and configure minimum extrusion/retraction temps
 				{
 					bool seen = false;
@@ -2963,10 +3026,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 303: // Run PID tuning
 				result = reprap.GetHeat().TuneHeater(gb, reply);
-				break;
-
-			case 304: // Set/report heated bed PID values
-				result = reprap.GetHeat().SetPidParameters(0, gb, reply);
 				break;
 
 			case 305: // Set/report specific heater parameters
@@ -3162,7 +3221,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			// Support for M408 was withdrawn at version 3.7
 
-#if SUPPORT_OBJECT_MODEL
 			case 409: // Get object model values in JSON format
 				{
 					String<StringLength100> key;
@@ -3216,7 +3274,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
-#endif
 
 			case 425: // Backlash compensation
 				result = reprap.GetMove().ConfigureBacklashCompensation(gb, reply);
@@ -3579,8 +3636,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						seen = true;
 						const int mode = gb.GetIValue();
-						const bool tlsAllowed = gb.Seen('T') && (gb.GetIValue() != 0);	// T1 enabled TLS, default is TLS disabled
-						result = network.EnableInterface(interface, mode, ssid.GetRef(), reply, tlsAllowed);
+						// T1 = enable TLS; T-1 = clear stored TLS material and come up plain; T0 / absent = plain
+						int tlsParam = 0;
+						if (gb.Seen('T'))
+						{
+							const int t = gb.GetIValue();
+							tlsParam = (t < 0) ? -1 : (t > 0) ? 1 : 0;
+						}
+						result = network.EnableInterface(interface, mode, ssid.GetRef(), reply, tlsParam);
 					}
 
 					if (!seen)
@@ -3679,10 +3742,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = DefineGrid(gb, reply);
 				break;
 
-			case 558: // Set or report Z probe type and for which axes it is used; M558.1 calibrate Z probe; M558.2 calibrate scanning Z probe drive strength
+			case 558: // Set or report Z probe type and for which axes it is used; M558.1 calibrate Z probe; M558.2 calibrate scanning Z probe drive strength; M558.4 tare load cell probe
 				result =
 #if SUPPORT_SCANNING_PROBES
-						(gb.GetCommandFraction() > 3) ? TryMacroFile(gb) :
+						(gb.GetCommandFraction() > 4) ? TryMacroFile(gb) :
 #endif
 							platform.GetEndstops().HandleM558(gb, reply);
 				break;
@@ -3760,13 +3823,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						seen = true;
 						noMovesBeforeHoming = (gb.GetIValue() > 0);
 					}
+					if (gb.Seen('R'))
+					{
+						seen = true;
+						limitAxesRelative = (gb.GetIValue() > 0);
+					}
 					if (seen)
 					{
 						reprap.MoveUpdated();
 					}
 					else
 					{
-						reply.printf("Movement outside the bed is %spermitted, movement before homing is %spermitted", (limitAxes) ? "not " : "", (noMovesBeforeHoming) ? "not " : "");
+						reply.printf("Movement outside the bed is %spermitted, movement before homing is %spermitted, relative moves are %sclamped to the axis limits", (limitAxes) ? "not " : "", (noMovesBeforeHoming) ? "not " : "", (limitAxesRelative) ? "" : "not ");
 					}
 				}
 				break;
@@ -4593,8 +4661,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = CanInterface::ChangeAddressAndNormalTiming(gb, reply);
 				break;
 
-			case 953:	// set CAN-FD data rate
-				result = CanInterface::ChangeFastTiming(gb, reply);
+			case 953:	// enable CAN and set fast data rate
+				result = CanInterface::EnableCan(gb, reply);
 				break;
 #endif
 
@@ -4620,6 +4688,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 957:	// raise event
 				result = RaiseEvent(gb, reply);
 				break;
+
+#if SUPPORT_CAN_EXPANSION
+			case 959:	// configure expansion board connection timeout
+				result = reprap.GetExpansion().ConfigureConnectionTimeout(gb, reply);
+				break;
+#endif
 
 #if SUPPORT_PHASE_STEPPING
 			case 970:	// configure step mode (phase stepping)
@@ -4692,6 +4766,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 
 				reprap.EmergencyStop();			// this disables heaters and drives - Duet WiFi pre-production boards need drives disabled here
+				platform.DisconnectUsb();
 				{
 					SoftwareResetReason reason = SoftwareResetReason::user;
 					if (gb.Seen('P'))

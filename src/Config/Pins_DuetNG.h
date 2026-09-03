@@ -41,6 +41,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;	// IAP is loaded into the last 
 # define HAS_WIFI_NETWORKING	0
 # define HAS_W5500_NETWORKING	0
 # define HAS_SBC_INTERFACE		1
+# define SUPPORTS_SBC_OVER_SPI	1
+# define SUPPORTS_SBC_OVER_USB	0
 # define HAS_MASS_STORAGE		0
 #else
 # define HAS_WIFI_NETWORKING	1
@@ -66,7 +68,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;	// IAP is loaded into the last 
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_12864_LCD		1					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_ACCELEROMETERS	1
-#define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_LED_STRIPS		1
 
 #define VARIABLE_NUM_DRIVERS	SUPPORT_12864_LCD	// nonzero means that some pins may only support drivers if not used for other purposes e.g. LCD

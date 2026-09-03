@@ -70,6 +70,7 @@ extern "C" {
 #define DNS_RRTYPE_TXT            16    /* text strings */
 #define DNS_RRTYPE_AAAA           28    /* IPv6 address */
 #define DNS_RRTYPE_SRV            33    /* service location */
+#define DNS_RRTYPE_NSEC          47    /* authenticated denial of existence */
 #define DNS_RRTYPE_ANY            255   /* any type */
 
 /* DNS field CLASS used for "Resource Records" */

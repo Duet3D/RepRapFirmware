@@ -273,11 +273,17 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 	{
 		CanMessageGenericConstructor cons(M955Params);
 		cons.PopulateFromCommand(gb);
-		const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::accelerometerConfig, device.boardAddress, reply);
-		if (rslt <= GCodeResult::warning && gb.Seen('I'))
+		uint32_t words[CanMessageStandardReply::MaxNumWords];
+		const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::accelerometerConfig, device.boardAddress, reply, nullptr, words);
+		if (rslt <= GCodeResult::warning)
 		{
-			const uint8_t remoteOrientation = (uint8_t)gb.GetUIValue();
-			reprap.GetExpansion().SaveAccelerometerOrientation(device.GetBoardAddress(), (uint8_t)remoteOrientation);
+			// Firmware that predates the data words reports zero, which the object model passes on as unknown
+			reprap.GetExpansion().SaveAccelerometerConfig(device.GetBoardAddress(), (uint16_t)words[0], (uint8_t)words[1]);
+			if (gb.Seen('I'))
+			{
+				const uint8_t remoteOrientation = (uint8_t)gb.GetUIValue();
+				reprap.GetExpansion().SaveAccelerometerOrientation(device.GetBoardAddress(), (uint8_t)remoteOrientation);
+			}
 		}
 		return rslt;
 	}
@@ -502,6 +508,8 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 		}
 		return rslt;
 	}
+
+	expectedRemoteBoardAddress = CanId::NoAddress;
 # endif
 
 	successfulStart = false;
@@ -552,6 +560,17 @@ uint8_t Accelerometers::GetLocalAccelerometerOrientation() noexcept
 	return orientation;
 }
 
+// The rate and resolution the accelerometer was actually programmed for, which may be lower than the ones M955 asked for
+uint16_t Accelerometers::GetLocalAccelerometerSamplingRate() noexcept
+{
+	return samplingRate;
+}
+
+uint8_t Accelerometers::GetLocalAccelerometerResolution() noexcept
+{
+	return resolution;
+}
+
 void Accelerometers::Exit() noexcept
 {
 	if (accelerometerTask != nullptr)
@@ -584,7 +603,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			accelerometerFile = nullptr;
 			reprap.GetExpansion().AddAccelerometerRun(src, 0);
 		}
-		else if (msg.axes != expectedRemoteAxes || msg.firstSampleNumber != expectedRemoteSampleNumber || src != expectedRemoteBoardAddress)
+		else if (msg.axes != expectedRemoteAxes || msg.firstSampleNumber != (uint16_t)expectedRemoteSampleNumber || src != expectedRemoteBoardAddress)		// firstSampleNumber is only 16 bits wide in the message
 		{
 			f->Write("Received mismatched data\n");
 			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
@@ -657,9 +676,24 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 				f->Close();
 				accelerometerFile = nullptr;
+				reprap.GetExpansion().SaveAccelerometerConfig(src, (uint16_t)msg.actualSampleRate, (uint8_t)receivedResolution);
 				reprap.GetExpansion().AddAccelerometerRun(src, expectedRemoteSampleNumber);
 			}
 		}
+	}
+}
+
+// Called when an expansion board announces itself after restarting. A collection that was running on it is lost, so finish the file instead of reporting busy forever
+void Accelerometers::RemoteBoardRestarted(CanAddress src) noexcept
+{
+	FileStore * const f = accelerometerFile;
+	if (f != nullptr && src == expectedRemoteBoardAddress)
+	{
+		f->Write("Board restarted before the collection was complete\n");
+		f->Truncate();
+		f->Close();
+		accelerometerFile = nullptr;
+		reprap.GetExpansion().AddAccelerometerRun(src, 0);
 	}
 }
 

@@ -8,7 +8,7 @@
 #ifndef SRC_ENDSTOPS_ENDSTOPDEFS_H_
 #define SRC_ENDSTOPS_ENDSTOPDEFS_H_
 
-#include <General/NamedEnum.h>
+#include <RepRapFirmware.h>
 
 // Forward declarations
 class EndstopOrZProbe;
@@ -27,13 +27,16 @@ enum class EndstopHitAction : uint8_t
 // Struct to return info about what endstop has been triggered and what to do about it
 struct EndstopHitDetails
 {
-	EndstopHitDetails() noexcept : action((uint32_t)EndstopHitAction::none), internalUse(0), axis(NO_AXIS), setAxisLow(false), setAxisHigh(false), isZProbe(false)
+	EndstopHitDetails() noexcept
+		: action((uint32_t)EndstopHitAction::none), internalUse(0), axis(NO_AXIS), setAxisLow(false), setAxisHigh(false), isZProbe(false)
 	{
 	}
 
-	void SetAction(EndstopHitAction a) noexcept { action = (uint32_t)a; }
+	void SetAction(EndstopHitAction a, uint32_t p_whenTriggered, bool p_haveTriggerTime) noexcept;
+
 	EndstopHitAction GetAction() const noexcept { return (EndstopHitAction)action; }
 
+	uint32_t whenTriggered;			// step timer value when the endstop or probe was triggered
 	uint16_t action : 2,			// an EndstopHitAction
 			 internalUse : 4,		// used to pass the port index between CheckTriggered() and Acknowledge()
 			 axis : 6,				// which axis to stop if the action is stopAxis, and which axis to set the position of if setAxisLow or SetAxisHigh is true
@@ -62,6 +65,7 @@ NamedEnum
 	zProbeAsEndstop,
 	motorStallAny,
 	motorStallIndividual,
+	motorStallEncoder,
 	numInputTypes
 );
 
@@ -70,7 +74,7 @@ enum class ZProbeType : uint8_t
 	none = 0,
 	analog = 1,
 	dumbModulated = 2,
-	alternateAnalog = 3,
+	alternateAnalog_obsolete = 3,
 	endstopSwitch_obsolete = 4,
 	digital = 5,
 	e1Switch_obsolete = 6,
@@ -79,7 +83,8 @@ enum class ZProbeType : uint8_t
 	blTouch = 9,
 	zMotorStall = 10,
 	scanningAnalog = 11,
-	numTypes = 12					// must be 1 higher than the last type
+	loadCell = 12,
+	numTypes = 13					// must be 1 higher than the last type
 };
 
 #endif /* SRC_ENDSTOPS_ENDSTOPDEFS_H_ */

@@ -1,5 +1,5 @@
 /*
- * UsbDevice.cpp
+ * UsbDeviceRrf.cpp
  *
  *  Created on: 13 Mar 2026
  *      Author: Christian
@@ -15,6 +15,8 @@
 void UsbDeviceRrf::Init(SerialCDC *p_device, Pin vBusPin, const char *mutexName) noexcept
 {
 	device = p_device;
+	originalDevice = p_device;
+	originalVBusPin = vBusPin;
 	mutex.Create(mutexName);
 #if SAME5x && !CORE_USES_TINYUSB
 	device->Start();
@@ -25,8 +27,32 @@ void UsbDeviceRrf::Init(SerialCDC *p_device, Pin vBusPin, const char *mutexName)
 
 void UsbDeviceRrf::Shutdown() noexcept
 {
-	device->end();
+	MutexLocker lock(mutex);			// wait for any in-progress Flush() to complete
+	device = nullptr;					// prevent any further message output, but keep SerialCDC running for SBC use
 	output.ReleaseAll();
+}
+
+void UsbDeviceRrf::End() noexcept
+{
+	MutexLocker lock(mutex);			// wait for any in-progress Flush() to complete
+	if (originalDevice != nullptr)
+	{
+		originalDevice->end();
+	}
+}
+
+void UsbDeviceRrf::Reinit() noexcept
+{
+	if (originalDevice != nullptr)
+	{
+		device = originalDevice;
+		device->end();
+#if SAME5x && !CORE_USES_TINYUSB
+		device->Start();
+#else
+		device->Start(originalVBusPin);
+#endif
+	}
 }
 
 void UsbDeviceRrf::Reset(Pin vBusPin) noexcept
@@ -55,7 +81,7 @@ bool UsbDeviceRrf::Flush() noexcept
 		{
 			(void)output.Pop();
 		}
-		else if (!device->IsConnected())
+		else if (device == nullptr || !device->IsConnected())
 		{
 			OutputBuffer::ReleaseAll(buf);
 			(void)output.Pop();
@@ -84,7 +110,7 @@ bool UsbDeviceRrf::Flush() noexcept
 
 void UsbDeviceRrf::AppendReply(size_t channel, AuxMode channelMode, const GCodeBuffer *_ecv_null gb, OutputBuffer *buffer, bool rawMessage) noexcept
 {
-	if (!device->IsConnected())
+	if (device == nullptr || !device->IsConnected())
 	{
 		OutputBuffer::ReleaseAll(buffer);
 		seq = 0;
@@ -156,7 +182,7 @@ void UsbDeviceRrf::SendBlockingMessage(const char *_ecv_array message) noexcept
 	MutexLocker lock(mutex);
 	const char *_ecv_array p = message;
 	size_t len = strlen(p);
-	while (device->IsConnected() && len != 0 && !reprap.SpinTimeoutImminent())
+	while (device != nullptr && device->IsConnected() && len != 0 && !reprap.SpinTimeoutImminent())
 	{
 		const size_t written = device->print(p, len);
 		len -= written;

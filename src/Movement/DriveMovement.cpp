@@ -49,7 +49,7 @@ void DriveMovement::Init(size_t drv) noexcept
 	stepMode = StepMode::stepDir;
 #endif
 	u = (motioncalc_t)0.0;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	peakDeltaV = peakDeltaA = (motioncalc_t)0.0;
 	finalSpeed = finalAcc = (motioncalc_t)0.0;
 #endif
@@ -79,7 +79,7 @@ void DriveMovement::DiagnosticHeader(const StringRef& reply) noexcept
 #else
 				"Drive req/act/dcf"
 #endif
-# if SUPPORT_S_CURVE
+# if SUPPORT_3RD_ORDER
 				" deltaV/deltaA"
 # endif
 				":");
@@ -93,7 +93,7 @@ void DriveMovement::Diagnostics(const StringRef& reply) noexcept
 # else
 	reply.lcatf("%2u: %.2f/%" PRIi32 "/%.2f", drive, (double)positionRequested, currentMotorPosition, (double)distanceCarriedForwards);
 # endif
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	reply.catf(" %.2f/%.2f",
 				(double)InverseConvertSpeedToMmPerSec((float)peakDeltaV/reprap.GetMove().DriveStepsPerMm(drive)),
 				(double)InverseConvertAcceleration((float)peakDeltaA/reprap.GetMove().DriveStepsPerMm(drive))
@@ -150,7 +150,7 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 	return false;
 }
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 
 # define DEBUG_DISCONTINUITIES	(1)			// set nonzero to generate debug messages if extruder 0 has discontinuous speed or acceleration
 
@@ -188,7 +188,7 @@ inline void DriveMovement::UpdateSpeedAndAccelerationChange(motioncalc_t newSpee
 
 	peakDeltaA = max<motioncalc_t>(peakDeltaA, std::fabs(newAcc - finalAcc));
 # if DEBUG_DISCONTINUITIES
-	if (isExtruder && std::fabs(newAcc - finalAcc) > MaxAccChange && extruderShaper.GetKclocks() == 0.0 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+	if (isExtruder && std::fabs(newAcc - finalAcc) > MaxAccChange && !extruderShaper.IsActive() && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
 	{
 		debugPrintf("Extruder acc change %.1f to %.1f, retired: ", (double)InverseConvertAcceleration((float)finalAcc), (double)InverseConvertAcceleration((float)newAcc));
 		PrintRetiredSegment();
@@ -214,7 +214,7 @@ inline void DriveMovement::MovementStopped() noexcept
 
 	peakDeltaA = max<motioncalc_t>(peakDeltaA, std::fabs(finalAcc));
 # if DEBUG_DISCONTINUITIES
-	if (isExtruder && std::fabs(finalAcc) > MaxAccChange && extruderShaper.GetKclocks() == 0.0 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+	if (isExtruder && std::fabs(finalAcc) > MaxAccChange && !extruderShaper.IsActive() && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
 	{
 		debugPrintf("Extruder acc change %.1f to standstill, retired: ", (double)InverseConvertAcceleration((float)finalAcc));
 		PrintRetiredSegment();
@@ -242,7 +242,7 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 		{
 			segmentFlags.Init();
 			state = DMState::idle;								// if we have been round this loop already then we will have changed the state, so reset it to idle
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 			MovementStopped();
 #endif
 			return nullptr;
@@ -256,7 +256,7 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 			driversCurrentlyUsed = 0;							// don't generate a step on that interrupt
 			driverEndstopsTriggeredAtStart = 0;					// reset since we will be setting this in DDA::Prepare()
 			nextStepTime = seg->GetStartTime();					// this is when we want the interrupt
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 			MovementStopped();									// say we have stopped. NewSegment will be called again for this segment when the state changes from 'starting' to something else.
 #endif
 			return seg;
@@ -279,7 +279,7 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 		}
 
 		seg->SetExecuting();
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		UpdateSpeedAndAccelerationChange(seg->CalcU(), seg->GetSpeedChange(), seg->GetA(), seg->GetAccChange());
 #else
 		u = seg->CalcU(); // used for GetCurrentPosition()
@@ -455,15 +455,18 @@ static inline motioncalc_t fastLimSqrtm(motioncalc_t f) noexcept
 // Notify a step error. This always returns false so that CalcNextStepTimeFull can tail-chain to it.
 bool DriveMovement::LogStepError(uint8_t type, float info, const MoveSegment *seg) noexcept
 {
-	const StringRef& dbgRef = Platform::genericDebugBuffer.GetRef();
-	const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive]
-															   : (char)('0' + LogicalDriveToExtruder(drive));
-	dbgRef.printf("Code %u move error: dm=%u %c, info=%.3g, seg: ", type, drive, c, (double)info);
-	if (seg != nullptr)
+	if (Platform::genericDebugBuffer != nullptr)
 	{
-		seg->AppendDetails(dbgRef);
+		const StringRef& dbgRef = Platform::genericDebugBuffer->GetRef();
+		const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive]
+																   : (char)('0' + LogicalDriveToExtruder(drive));
+		dbgRef.printf("Code %u move error: dm=%u %c, info=%.3g, seg: ", type, drive, c, (double)info);
+		if (seg != nullptr)
+		{
+			seg->AppendDetails(dbgRef);
+		}
+		dbgRef.cat('\n');
 	}
-	dbgRef.cat('\n');
 	Platform::shouldTurnOffHeaters = true;
 	Platform::hasGenericDebug = true;
 	reprap.GetMove().StepErrorHalt();
@@ -760,7 +763,7 @@ void DriveMovement::TakeStepsAndCalcStepTimeRarely(uint32_t clocksNow) noexcept
 
 // If the logical drive is moving, stop it and update the position.
 // Return true if the drive was moving.
-bool DriveMovement::StopLogicalDrive(int32_t& netStepsTaken) noexcept
+bool DriveMovement::StopLogicalDrive(int32_t& netStepsTaken, uint32_t when) noexcept
 {
 	AtomicCriticalSectionLocker lock;
 
@@ -768,7 +771,7 @@ bool DriveMovement::StopLogicalDrive(int32_t& netStepsTaken) noexcept
 	{
 		state = DMState::idle;
 		reprap.GetMove().DeactivateDM(this);
-		netStepsTaken = GetNetStepsTakenThisMove();
+		netStepsTaken = GetNetStepsTakenThisMove(when);
 		MoveSegment *seg = nullptr;
 		std::swap(seg, const_cast<MoveSegment*&>(segments));
 		MoveSegment::ReleaseAll(seg);
@@ -806,7 +809,7 @@ void DriveMovement::CheckSegment(unsigned int line, MoveSegment *seg) noexcept
 void DriveMovement::StopDriverFromRemote() noexcept
 {
 	int32_t dummy;
-	(void)StopLogicalDrive(dummy);
+	(void)StopLogicalDrive(dummy, StepTimer::GetMovementTimerTicks());
 }
 
 #endif
@@ -830,14 +833,16 @@ bool DriveMovement::SetStepMode(StepMode mode) noexcept
 	return true;
 }
 
-motioncalc_t DriveMovement::GetPhaseStepsTakenThisSegment() const noexcept
+// Return the number of steps taken since the start of this segment. This works when doing normal stepping or phase stepping.
+// It works for CAN-connected drives only if we are generating and retiring segments for them, which we do for moves that have endstops of probes enabled.
+motioncalc_t DriveMovement::GetStepsTakenThisSegment(uint32_t when) const noexcept
 {
 	const MoveSegment *const seg = segments;
 	if (seg == nullptr)
 	{
 		return 0;
 	}
-	int32_t timeSinceStart = (int32_t)(StepTimer::GetMovementTimerTicks() - seg->GetStartTime());
+	int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
 	if (timeSinceStart < 0)
 	{
 		return 0;

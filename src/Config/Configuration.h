@@ -67,8 +67,9 @@ constexpr unsigned int MinVisibleAxes = 2;				// the minimum number of axes that
 
 constexpr unsigned int DefaultBacklashCorrectionDistanceFactor = 10;	// backlash correction is spread over (backlash amount * this) mm
 
-constexpr float MaxCncRadiusErrorMm = 0.002;			// max difference between G2/G3 start and end distances from arc centre when in CNC mm mode, see NIST 3.5.3.2
-constexpr float MaxCncRadiusErrorInches = 0.0002;		// max difference between G2/G3 start and end distances from arc centre when in CNC inches mode, see NIST 3.5.3.2
+// We allow a slightly higher tolerance than the standard NIST values because rounding error may make the apparent radius a little smaller than actual
+constexpr float MaxCncRadiusErrorMm = 0.0022;			// max difference between G2/G3 start and end distances from arc centre when in CNC mm mode, see NIST 3.5.3.2 (NIST standard is 0.002mm)
+constexpr float MaxCncRadiusErrorInches = 0.00022;		// max difference between G2/G3 start and end distances from arc centre when in CNC inches mode, see NIST 3.5.3.2 (NIST standard is 0.0002 inches)
 constexpr float MaxNonCncRadiusError = 0.05;			// max difference between G2/G3 start and end distances from arc centre when not in CNC mode (mm)
 
 constexpr float MaxRelativeBabystepping = 10.0;			// increased from 1.0mm because we have an OEM using 40mm layer height
@@ -81,7 +82,7 @@ constexpr uint16_t MinimumGpinReportInterval = 30;		// Minimum interval in milli
 // Comms defaults
 constexpr uint32_t AUX_BAUD_RATE = 57600;				// Baud rate for auxiliary UART device
 constexpr uint32_t AUX2_BAUD_RATE = 115200;				// Ditto - for second auxiliary UART device
-constexpr uint32_t UsbTimeout = 2000;					// timeout in ms for sending data to the main serial/USB port
+constexpr uint32_t UsbTimeout = 500;					// timeout in ms for sending data to the main serial/USB port
 constexpr uint32_t AuxTimeout = 2000;					// timeout in ms for PanelDue replies
 
 constexpr uint32_t UnsolicitedStatusReportInterval = 2000;	// Interval between sending unsolicited status reports, in milliseconds

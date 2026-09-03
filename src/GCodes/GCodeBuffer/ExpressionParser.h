@@ -68,6 +68,7 @@ private:
 	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *_ecv_array str) const THROWS(GCodeException);
 	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *_ecv_array str, const char *_ecv_array param) const THROWS(GCodeException);
 	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *_ecv_array str, uint32_t param) const THROWS(GCodeException);
+	[[noreturn]] void __attribute__((noinline)) ThrowVariableException(const char *_ecv_array str, const char *_ecv_array name, size_t nameLength) const THROWS(GCodeException);
 
 	void __attribute__((noinline)) ParseInternal(ExpressionValue& val, bool evaluate, uint8_t priority) THROWS(GCodeException);
 	void __attribute__((noinline)) ParseExpectKet(ExpressionValue& rslt, bool evaluate, char expectedKet) THROWS(GCodeException);
@@ -98,16 +99,19 @@ private:
 
 	void CheckStack(uint32_t calledFunctionStackUsage) const THROWS(GCodeException);
 
-	// The following must be declared 'noinline' because its caller is recursive
-	static void __attribute__((noinline)) Concat(ExpressionValue& val, ExpressionValue& val2) THROWS(GCodeException);
-
 	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException);
 	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException);
+
+	// The following must be declared 'noinline' because they allocate a large buffer on the stack and their caller(s) may be recursive
+	void __attribute__((noinline)) Concat(ExpressionValue &val, ExpressionValue &val2) THROWS(GCodeException);
 	void __attribute__((noinline)) EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2, bool evaluate, bool isMax) const THROWS(GCodeException);
+	void __attribute__((noinline)) EvaluateTake(ExpressionValue& rslt, uint32_t arg, bool evaluate) const THROWS(GCodeException);
+	void __attribute__((noinline)) EvaluateDrop(ExpressionValue& rslt, uint32_t arg, bool evaluate) const THROWS(GCodeException);
 	void __attribute__((noinline)) ReadArrayFromFile(ExpressionValue& rslt, unsigned int offset, unsigned int length, char delimiter) const THROWS(GCodeException);
+	void __attribute__((noinline)) ApplyObjectModelArrayIndex(ExpressionValue& rslt, int indexCol, uint32_t indexValue, bool evaluate) THROWS(GCodeException);
+
 	void ReadArrayElementFromFile(ExpressionValue& rslt, LineReader& reader, char delimiter) const THROWS(GCodeException);
 	void GetNextOperand(ExpressionValue& operand, bool evaluate) THROWS(GCodeException);
-	void __attribute__((noinline)) ApplyObjectModelArrayIndex(ExpressionValue& rslt, int indexCol, uint32_t indexValue, bool evaluate) THROWS(GCodeException);
 
 	static bool TypeHasNoLiterals(TypeCode t) noexcept;
 

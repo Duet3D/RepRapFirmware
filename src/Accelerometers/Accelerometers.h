@@ -26,11 +26,14 @@ namespace Accelerometers
 	unsigned int GetLocalAccelerometerRuns() noexcept;
 	unsigned int GetLocalAccelerometerDataPoints() noexcept;
 	uint8_t GetLocalAccelerometerOrientation() noexcept;
+	uint16_t GetLocalAccelerometerSamplingRate() noexcept;
+	uint8_t GetLocalAccelerometerResolution() noexcept;
 	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void Exit() noexcept;
 #if SUPPORT_CAN_EXPANSION
 	void ProcessReceivedData(CanAddress src, const CanMessageAccelerometerData& msg, size_t msgLen) noexcept;
+	void RemoteBoardRestarted(CanAddress src) noexcept;
 #endif
 #if 0	// We don't currently support accelerometers on main boards used as expansion boards
 //#if SUPPORT_REMOTE_COMMANDS

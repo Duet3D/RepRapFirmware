@@ -15,8 +15,6 @@
 # include <CanMessageFormats.h>
 #endif
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -43,16 +41,13 @@ constexpr ObjectModelTableEntry FopDt::objectModelTable[] =
 	// 1. PID members
 	{ "d",					OBJECT_MODEL_FUNC(self->loadChangeParams.tD * self->loadChangeParams.kP, 3),		ObjectModelEntryFlags::none },
 	{ "i",					OBJECT_MODEL_FUNC(self->loadChangeParams.recipTi * self->loadChangeParams.kP, 4),	ObjectModelEntryFlags::none },
-	{ "overridden",			OBJECT_MODEL_FUNC(self->pidParametersOverridden),									ObjectModelEntryFlags::none },
 	{ "p",					OBJECT_MODEL_FUNC(self->loadChangeParams.kP, 5),									ObjectModelEntryFlags::none },
 	{ "used",				OBJECT_MODEL_FUNC((bool)self->basicModel.usePid),									ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t FopDt::objectModelTableDescriptor[] = { 2, 10, 5 };
+constexpr uint8_t FopDt::objectModelTableDescriptor[] = { 2, 10, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(FopDt)
-
-#endif
 
 // The heater model is disabled until the user declares the heater to be a bed, chamber or tool heater
 FopDt::FopDt() noexcept
@@ -111,16 +106,7 @@ bool FopDt::SetParameters(const CanMessageHeaterModelV3& msg, const StringRef& r
 		basicModel = msg.basicModel;
 		maxPwm = msg.maxPwm;
 		inverted = msg.inverted;
-		pidParametersOverridden = msg.pidParametersOverridden;
-
-		if (msg.pidParametersOverridden)
-		{
-			SetRawPidParameters(msg.kP, msg.recipTi, msg.tD);
-		}
-		else
-		{
-			CalcPidConstants(100.0);
-		}
+		CalcPidConstants(100.0);
 		enabled = true;
 		return true;
 	}
@@ -139,8 +125,9 @@ void FopDt::Reset() noexcept
 void FopDt::SetDefaultModel(const HeaterModel& model) noexcept
 {
 	basicModel = model;
+	basicModel.zero = 0;
 	maxPwm = 1.0;
-	inverted = pidParametersOverridden = false;
+	inverted = false;
 	CalcPidConstants(basicModel.typicalTemperature);
 	enabled = true;
 }
@@ -155,20 +142,6 @@ M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const noexcept
 	rslt.kI = pp.recipTi * reportedKp;
 	rslt.kD = pp.tD * reportedKp;
 	return rslt;
-}
-
-// Override the PID parameters. We set both sets to the same parameters.
-void FopDt::SetM301PidParameters(const M301PidParameters& pp) noexcept
-{
-	SetRawPidParameters(pp.kP * (1.0/255.0), pp.kI/pp.kP, pp.kD/pp.kP);
-}
-
-void FopDt::SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcept
-{
-	loadChangeParams.kP = setpointChangeParams.kP = p_kP;
-	loadChangeParams.recipTi = setpointChangeParams.recipTi = p_recipTi;
-	loadChangeParams.tD = setpointChangeParams.tD = p_tD;
-	pidParametersOverridden = true;
 }
 
 // Append a M307 command describing this heater followed by a newline to the string
@@ -194,21 +167,10 @@ void FopDt::AppendM307Command(unsigned int heaterNumber, const StringRef& str, b
 	str.cat('\n');
 }
 
-// If PID parameters are overridden, append a M307 command for this heater followed by a newline to the string
-void FopDt::AppendM301Command(unsigned int heaterNumber, const StringRef& str) const noexcept
-{
-	if (pidParametersOverridden)
-	{
-		const M301PidParameters pp = GetM301PidParameters(false);
-		str.catf("M301 H%u P%.1f I%.3f D%.1f\n", heaterNumber, (double)pp.kP, (double)pp.kI, (double)pp.kD);
-	}
-}
-
 // Append the model parameters to a reply string
 void FopDt::AppendModelParameters(unsigned int heaterNumber, const StringRef& str, bool includeVoltage) const noexcept
 {
 	const char *_ecv_array const mode = (!basicModel.usePid) ? "bang-bang"
-								: (pidParametersOverridden) ? "custom PID"
 									: "PID";
 	str.catf("Heater %u: heating rate %.3f, cooling rate %.3f", heaterNumber, (double)basicModel.heatingRate, (double)basicModel.basicCoolingRate);
 	if (basicModel.fanCoolingRate > 0.0)
@@ -266,65 +228,16 @@ void FopDt::AppendModelParameters(unsigned int heaterNumber, const StringRef& st
 
 void FopDt::CalcPidConstants(float targetTemperature) noexcept
 {
-	if (!pidParametersOverridden)
-	{
-		// Calculate the cooling rate per degC at this temperature. We assume the fan is at 20% speed.
-		const float temperatureRise = max<float>(targetTemperature - NormalAmbientTemperature, 1.0);		// avoid division by zero!
-		const float averageCoolingRatePerDegC = GetCoolingRate(temperatureRise, 0.2)/temperatureRise;
-		loadChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
-		loadChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.25)/(1.14 * powf(basicModel.deadTime, 0.75));		// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
-		loadChangeParams.tD = basicModel.deadTime * 0.7;
+	// Calculate the cooling rate per degC at this temperature. We assume the fan is at 20% speed.
+	const float temperatureRise = max<float>(targetTemperature - NormalAmbientTemperature, 1.0);		// avoid division by zero!
+	const float averageCoolingRatePerDegC = basicModel.GetTotalCoolingRate(temperatureRise, 0.2)/temperatureRise;
+	loadChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
+	loadChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.25)/(1.14 * powf(basicModel.deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
+	loadChangeParams.tD = basicModel.deadTime * 0.7;
 
-		setpointChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
-		setpointChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.5)/powf(basicModel.deadTime, 0.5);			// Ti = timeConstant^0.5 * deadTime^0.5
-		setpointChangeParams.tD = basicModel.deadTime * 0.7;
-	}
-}
-
-// Adjust the actual heater PWM for supply voltage
-float FopDt::CorrectPwmForVoltage(float requiredPwm, float actualVoltage) const noexcept
-{
-	if (requiredPwm < maxPwm && basicModel.standardVoltage >= 10.0 && actualVoltage >= 10.0)
-	{
-		requiredPwm *= fsquare(basicModel.standardVoltage/actualVoltage);
-	}
-	return min<float>(requiredPwm, maxPwm);
-}
-
-float FopDt::GetPwmCorrectionForFan(float temperatureRise, float fanPwmChange) const noexcept
-{
-	return temperatureRise * 0.01 * basicModel.fanCoolingRate * fanPwmChange / basicModel.heatingRate;
-}
-
-// Calculate the expected cooling rate for a given temperature rise above ambient
-float FopDt::GetCoolingRate(float temperatureRise, float fanPwm) const noexcept
-{
-	temperatureRise *= 0.01;
-	// If the temperature rise is negative then we must not try to raise it to a non-integral power!
-	const float adjustedTemperatureRise = (temperatureRise < 0.0) ? -powf(-temperatureRise, basicModel.coolingRateExponent) : powf(temperatureRise, basicModel.coolingRateExponent);
-	return basicModel.basicCoolingRate * adjustedTemperatureRise + temperatureRise * basicModel.fanCoolingRate * fanPwm;
-}
-
-// Get an estimate of the expected heating rate at the specified temperature rise and PWM. The result may be negative.
-float FopDt::GetNetHeatingRate(float temperatureRise, float fanPwm, float heaterPwm) const noexcept
-{
-	return basicModel.heatingRate * heaterPwm - GetCoolingRate(temperatureRise, fanPwm);
-}
-
-// Get an estimate of the heater PWM required to maintain a specified temperature
-float FopDt::EstimateRequiredPwm(float temperatureRise, float fanPwm) const noexcept
-{
-	return GetCoolingRate(temperatureRise, fanPwm)/basicModel.heatingRate;
-}
-
-float FopDt::EstimateMaxTemperatureRise() const noexcept
-{
-	return EstimateMaxTemperatureRise(basicModel.heatingRate, basicModel.basicCoolingRate, basicModel.coolingRateExponent);
-}
-
-/*static*/ float FopDt::EstimateMaxTemperatureRise(float hr, float cr, float cre) noexcept
-{
-	return 100.0 * powf(hr/cr, 1.0/cre);
+	setpointChangeParams.kP = 0.7/(basicModel.heatingRate * basicModel.deadTime);
+	setpointChangeParams.recipTi = fastSqrtf(averageCoolingRatePerDegC/basicModel.deadTime);			// Ti = timeConstant^0.5 * deadTime^0.5
+	setpointChangeParams.tD = basicModel.deadTime * 0.7;
 }
 
 #if SUPPORT_CAN_EXPANSION
@@ -336,11 +249,6 @@ void FopDt::SetupCanMessage(unsigned int heater, CanMessageHeaterModelV3& msg) c
 	msg.maxPwm = maxPwm;
 	msg.enabled = enabled;
 	msg.inverted = inverted;
-	msg.pidParametersOverridden = pidParametersOverridden;
-
-	msg.kP = setpointChangeParams.kP;
-	msg.recipTi = setpointChangeParams.recipTi;
-	msg.tD = setpointChangeParams.tD;
 }
 
 #endif

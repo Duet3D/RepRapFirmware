@@ -146,12 +146,12 @@
 # ifdef MBEDTLS_CONFIG_FILE
 #define MEM_SIZE_WITH_TLS               49152   // 48KiB - LwIP shares its heap with MbedTls
 # endif
-#define MEM_SIZE_WITHOUT_TLS            16384
+#define MEM_SIZE_WITHOUT_TLS            20480
 #else
 # ifdef MBEDTLS_CONFIG_FILE
 #define MEM_SIZE_WITH_TLS               43008   // 42KiB - LwIP shares its heap with MbedTls
 # endif
-#define MEM_SIZE_WITHOUT_TLS            14848
+#define MEM_SIZE_WITHOUT_TLS            16384
 #endif
 
 // MEM_SIZE is set at runtime via lwipHeapSize (see LwipEthernetInterface.cpp).
@@ -279,6 +279,15 @@ extern void *lwipRamHeap;
  * LWIP_DHCP==1: Enable DHCP module.
  */
 #define LWIP_DHCP               1
+
+/**
+ * LWIP_DHCP_DOES_ACD_CHECK==0: Bind the interface as soon as the DHCP ACK arrives.
+ * With ACD enabled, dhcp_bind() is deferred until a full RFC 5227 address conflict detection pass
+ * (probe + announce) completes, which adds several seconds of delay before the interface gets its
+ * IP address on every boot. The DHCP server already owns the lease pool, so conflict detection on
+ * a leased address buys us nothing here - skip it for faster network availability.
+ */
+#define LWIP_DHCP_DOES_ACD_CHECK    0
 #endif
 
 /* --------- IGMP options ---------- */
@@ -432,7 +441,7 @@ extern uint32_t random32(void) noexcept;
 
 #define LWIP_NOASSERT					0
 
-#define LWIP_DEBUG
+//#define LWIP_DEBUG
 #define LWIP_DBG_MIN_LEVEL              LWIP_DBG_LEVEL_ALL
 #define LWIP_DBG_TYPES_ON               LWIP_DBG_ON
 

@@ -113,7 +113,6 @@ DUET3NOSD_DEFINES := \
 	-D__SAME70Q20B__ \
 	-DRTOS \
 	-DDUET3_MB6HC \
-	-D_XOPEN_SOURCE \
 	-DMBEDTLS_CONFIG_FILE='"config-same70.h"'
 
 # Compiler flags - C
@@ -143,7 +142,7 @@ DUET3NOSD_CFLAGS := -c -std=gnu99 \
 	$(DEBUG_FLAGS)
 
 # Compiler flags - C++
-DUET3NOSD_CXXFLAGS := -c -std=gnu++17 \
+DUET3NOSD_CXXFLAGS := -c -std=c++20 \
 	-Wall \
 	-mcpu=cortex-m7 \
 	-mthumb \
@@ -172,6 +171,7 @@ DUET3NOSD_CXXFLAGS := -c -std=gnu++17 \
 	-Wsign-promo \
 	$(DUET3NOSD_INCLUDES) \
 	$(DUET3NOSD_DEFINES) \
+	-D_XOPEN_SOURCE \
 	$(DEBUG_FLAGS)
 
 # Linker flags - split into LDFLAGS1 (before -o) and LDFLAGS2 (after -o)

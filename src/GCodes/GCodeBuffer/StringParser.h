@@ -26,6 +26,7 @@ class StringParser
 public:
 	explicit StringParser(GCodeBuffer& gcodeBuffer) noexcept;
 	void Init() noexcept; 													// Set it up to parse another G-code
+	void DiscardPartialLine() noexcept;										// Throw away any line that we have only partly received
 	bool Put(char c) noexcept SPEED_CRITICAL;								// Add a character to the end
 	void PutCommand(const char *_ecv_array str) noexcept;					// Put a complete command but don't decode it
 	void DecodeCommand() noexcept;											// Decode the next command in the line
@@ -39,6 +40,7 @@ public:
 	char GetCommandLetter() const noexcept { return commandLetter; }
 	bool HasCommandNumber() const noexcept { return hasCommandNumber; }
 	int GetCommandNumber() const noexcept { return commandNumber; }
+	void SetModalGCommand(int num) noexcept;
 	int8_t GetCommandFraction() const noexcept { return commandFraction; }
 	bool IsLastCommand() const noexcept;
 	bool ContainsExpression() const noexcept { return seenExpression; }
@@ -101,7 +103,7 @@ private:
 	bool LineFinished() noexcept;											// Deal with receiving end-of-line and return true if we have a command
 	void InternalGetQuotedString(const StringRef& str) THROWS(GCodeException)
 		pre (readPointer >= 0; gb.buffer[readPointer] == '"'; str.IsEmpty());
-	void InternalGetPossiblyQuotedString(const StringRef& str) THROWS(GCodeException)
+	void InternalGetPossiblyQuotedString(const StringRef& str, bool stopStopAtSpace) THROWS(GCodeException)
 		pre (readPointer >= 0);
 	float ReadFloatValue() THROWS(GCodeException);
 	uint32_t ReadUIValue() THROWS(GCodeException);

@@ -12,7 +12,9 @@
             "cwd": "${workspaceFolder}",
             "MIMode": "gdb",
             "miDebuggerPath": "arm-none-eabi-gdb",
-            "miDebuggerServerAddress": "localhost:3333",
+            "miDebuggerServerAddress": "${input:gdb_server}",
+            "launchCompleteCommand": "exec-continue",
+            "stopAtEntry": false,
             "preLaunchTask": "Build Duet3_MB6HC - Debug",
             "setupCommands": [
                 {
@@ -22,13 +24,19 @@
             ],
             "postRemoteConnectCommands": [
                 {
-                    "text": "monitor reset halt"
+                    "text": "monitor reset"
+                },
+                {
+                    "text": "monitor halt"
                 },
                 {
                     "text": "load"
                 },
                 {
-                    "text": "monitor reset halt"
+                    "text": "monitor reset"
+                },
+                {
+                    "text": "monitor halt"
                 }
             ]
         },
@@ -39,12 +47,21 @@
             "program": "${workspaceFolder}/Duet3_MB6HC/Duet3Firmware_MB6HC.elf",
             "cwd": "${workspaceFolder}",
             "MIMode": "gdb",
-            "miDebuggerPath": "arm-none-eabi-gdb",
-            "miDebuggerServerAddress": "localhost:3333",
+            "miDebuggerPath": "${workspaceFolder}/../arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-gdb",
+            "miDebuggerServerAddress": "${input:gdb_server}",
+            "launchCompleteCommand": "None",
             "setupCommands": [
                 {
                     "text": "-enable-pretty-printing",
                     "ignoreFailures": true
+                }
+            ],
+            "postRemoteConnectCommands": [
+                {
+                    "text": "monitor reset"
+                },
+                {
+                    "text": "monitor halt"
                 }
             ]
         },
@@ -56,7 +73,7 @@
             "cwd": "${workspaceFolder}",
             "MIMode": "gdb",
             "miDebuggerPath": "arm-none-eabi-gdb",
-            "miDebuggerServerAddress": "localhost:3333",
+            "miDebuggerServerAddress": "${input:gdb_server}",
             "preLaunchTask": "Build Duet3_MB6XD - Debug",
             "setupCommands": [
                 {
@@ -66,13 +83,19 @@
             ],
             "postRemoteConnectCommands": [
                 {
-                    "text": "monitor reset halt"
+                    "text": "monitor reset"
+                },
+                {
+                    "text": "monitor halt"
                 },
                 {
                     "text": "load"
                 },
                 {
-                    "text": "monitor reset halt"
+                    "text": "monitor reset"
+                },
+                {
+                    "text": "monitor halt"
                 }
             ]
         },
@@ -84,11 +107,19 @@
             "cwd": "${workspaceFolder}",
             "MIMode": "gdb",
             "miDebuggerPath": "arm-none-eabi-gdb",
-            "miDebuggerServerAddress": "localhost:3333",
+            "miDebuggerServerAddress": "${input:gdb_server}",
             "setupCommands": [
                 {
                     "text": "-enable-pretty-printing",
                     "ignoreFailures": true
+                }
+            ],
+            "postRemoteConnectCommands": [
+                {
+                    "text": "monitor reset"
+                },
+                {
+                    "text": "monitor halt"
                 }
             ]
         },        
@@ -100,7 +131,7 @@
             "cwd": "${workspaceFolder}",
             "MIMode": "gdb",
             "miDebuggerPath": "arm-none-eabi-gdb",
-            "miDebuggerServerAddress": "localhost:3333",
+            "miDebuggerServerAddress": "${input:gdb_server}",
             "preLaunchTask": "Build Duet3Mini5plus - Debug",
             "setupCommands": [
                 {
@@ -110,13 +141,19 @@
             ],
             "postRemoteConnectCommands": [
                 {
-                    "text": "monitor reset halt"
+                    "text": "monitor reset"
+                },
+                {
+                    "text": "monitor halt"
                 },
                 {
                     "text": "load"
                 },
                 {
-                    "text": "monitor reset halt"
+                    "text": "monitor reset"
+                },
+                {
+                    "text": "monitor halt"
                 }
             ]
         },
@@ -128,13 +165,29 @@
             "cwd": "${workspaceFolder}",
             "MIMode": "gdb",
             "miDebuggerPath": "arm-none-eabi-gdb",
-            "miDebuggerServerAddress": "localhost:3333",
+            "miDebuggerServerAddress": "${input:gdb_server}",
             "setupCommands": [
                 {
                     "text": "-enable-pretty-printing",
                     "ignoreFailures": true
                 }
+            ],
+            "postRemoteConnectCommands": [
+                {
+                    "text": "monitor reset"
+                },
+                {
+                    "text": "monitor halt"
+                }
             ]
         },
+    ],
+    "inputs": [
+        {
+            "id": "gdb_server",
+            "type": "promptString",
+            "description": "GDB server host (localhost or host IP, and port)",
+            "default": "localhost:3333"
+        }
     ]
 }

@@ -28,32 +28,37 @@ class MovementProfile;
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
 struct PrepParams
 {
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	uint32_t phaseClocks[7];							// the number of step clocks for each phase
 	motioncalc_t initialAcceleration, peakAcceleration;	// the accelerations, always positive
 	motioncalc_t initialDeceleration, peakDeceleration;	// the decelerations, always negative
     motioncalc_t distances[7];							// the distances of each phase
     motioncalc_t jerk;									// the magnitude of the rate of change of acceleration or deceleration, always positive; or zero if not using S-curve acceleration
-
-	uint32_t SteadyClocks() const noexcept { return phaseClocks[3]; }
 #else
 	uint32_t accelClocks, steadyClocks, decelClocks;
 	motioncalc_t acceleration;							// the acceleration to use, always positive
 	motioncalc_t deceleration;							// the deceleration to use, always negative
 	motioncalc_t accelDistance;
 	motioncalc_t decelStartDistance;
-	uint32_t SteadyClocks() const noexcept { return steadyClocks; }
 #endif
 	motioncalc_t totalDistance;
-	motioncalc_t topSpeed;								// the top speed reached
+	motioncalc_t startSpeed, topSpeed, endSpeed;		// the speeds reached
+#if SUPPORT_3RD_ORDER
+    mutable motioncalc_t phase1StartSpeed, phase1EndSpeed, phase5StartSpeed, phase5EndSpeed;
+	mutable bool speedsCalculated = false;				// true if the previous 4 speeds have been calculated and stored
+#endif
+
 	bool useInputShaping;
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
+	uint32_t SteadyClocks() const noexcept { return phaseClocks[3]; }
 	uint32_t TotalAccelClocks() const noexcept { return phaseClocks[0] + phaseClocks[1] + phaseClocks[2]; }
 	uint32_t TotalDecelClocks() const noexcept { return phaseClocks[4] + phaseClocks[5] + phaseClocks[6]; }
 	motioncalc_t TotalAccelDistance() const noexcept { return distances[0] + distances[1] + distances[2]; }
 	motioncalc_t TotalDecelDistance() const noexcept { return distances[4] + distances[5] + distances[6]; }
+	void EnsureSpeedsSet() const noexcept;
 #else
+	uint32_t SteadyClocks() const noexcept { return steadyClocks; }
 	uint32_t TotalAccelClocks() const noexcept { return accelClocks; }
 	uint32_t TotalDecelClocks() const noexcept { return decelClocks; }
 	motioncalc_t TotalAccelDistance() const noexcept { return accelDistance; }
@@ -68,7 +73,7 @@ struct PrepParams
 	void DebugPrint() const noexcept;
 };
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 struct MultipleMoveParameters;
 #endif
 
@@ -85,7 +90,7 @@ public:
 	enum DDAState : uint8_t
 	{
 		empty,				// empty or being filled in
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		created,			// filled in but not yet planned
 #endif
 		planned,			// ready, but could be subject to modifications
@@ -109,7 +114,7 @@ public:
 	void SetPrevious(DDA *p) noexcept { prev = p; }
 	bool Free() noexcept;
 	void Prepare(DDARing& ring,
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 					MovementProfile& plannedProfile,
 #endif
 					uint32_t prepareAdvanceTime, SimulationMode simMode) noexcept SPEED_CRITICAL;	// Calculate all the values and freeze this DDA
@@ -138,17 +143,18 @@ public:
 	void GetEndCoordinates(float returnedCoords[MaxAxes]) noexcept;					// Calculate the machine axis coordinates (after bed and skew correction) at the end of this move
 
 	FilePosition GetFilePosition() const noexcept { return filePos; }
+	int8_t GetGCommandNumber() const noexcept { return gCommandNumber; }
 	float GetRequestedSpeedMmPerClock() const noexcept { return requestedSpeed; }
 	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(requestedSpeed); }
 	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(topSpeed); }
 	float GetAccelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		{ return InverseConvertAcceleration(afterPrepare.peakAcceleration); }
 #else
 		{ return InverseConvertAcceleration(maxAcceleration); }
 #endif
 	float GetDecelerationMmPerSecSquared() const noexcept							// Get the (peak) acceleration for reporting in the object model
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		{ return InverseConvertAcceleration(afterPrepare.peakDeceleration); }
 #else
 		{ return InverseConvertAcceleration(maxAcceleration); }
@@ -156,7 +162,7 @@ public:
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float GetTotalExtrusionRate() const noexcept;
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	bool IsSCurveMove() const noexcept { return flags.useScurve; }
 	bool IsFullyPlanned() const noexcept { return flags.fullyPlanned; }
 	float GetMovementRatio() const noexcept { return movementRatio; }
@@ -221,7 +227,7 @@ private:
 	MovementError RecalculateMove(DDARing& ring) noexcept SPEED_CRITICAL;
 	static void DoLookahead(DDARing& ring, DDA *laDDA) noexcept SPEED_CRITICAL;	// Try to smooth out moves in the queue
 
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	static void PlanDeceleratingMoves(double distance, double acc, MovementProfile& plannedProfile) noexcept SPEED_CRITICAL;
 	void AllocateMoveFromPlan(MovementProfile& plannedProfile, PrepParams& params) noexcept SPEED_CRITICAL;
 #endif
@@ -283,7 +289,7 @@ private:
 					 doneIoBits : 1,				// set if we have written the IOBITS ports for this move
 					 doneFeedForward : 1,			// set if we have commanded feedforward for this move
 					 doneOutputOnExtrude: 1			// set if we have set/cleared output on extrude for this move
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 					 , useScurve : 1,				// set if this move uses S-curve acceleration
 					 fullyPlanned : 1				// set if this move can't be made to go any faster even if we add more moves to the ring
 #endif
@@ -295,12 +301,13 @@ private:
 	const Tool *_ecv_null tool;						// which tool (if any) is active
 
     FilePosition filePos;							// The position in the SD card file after this move was read, or zero if not read from SD card
+	int8_t gCommandNumber;							// Which of G0/G1/G2/G3 generated this move (0-3), or -1 if not a modal motion command; used to restore the modal context on resume
 
 	int32_t endPoint[MaxAxesPlusExtruders];  		// Machine coordinates of the endpoint
 	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;							// How long is the move in hypercuboid space
     float maxAcceleration;							// The maximum acceleration and deceleration to use, always positive
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	float jerk;										// The magnitude of the rate of change of acceleration or deceleration, always positive
 #endif
     float requestedSpeed;							// The speed that the user asked for
@@ -308,7 +315,7 @@ private:
 
     // These vary depending on how we connect the move with its predecessor and successor, but remain constant while the move is being executed
     float startSpeed, topSpeed, endSpeed;
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
     float startAcceleration;
     float movementRatio;							// for moves with extrusion and axis movement this is the ratio of total extrusion to total distance. For non extruding moves it is 1.0.
 #endif
@@ -329,7 +336,7 @@ private:
 			float accelDistance;
 			float decelDistance;
 			float targetNextSpeed;					// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 			float startSpeedRatio;					// the ratio of start speed of this move to the end speed of the previous move needed to maintain the same extrusion speed across the boundary
 			float maxPrevEndSpeed;					// the maximum end speed we can have for the previous move to remain within the instantaneous speed change limits
 #endif
@@ -362,7 +369,7 @@ inline bool DDA::CanPauseAfter() const noexcept
 
 inline bool DDA::IsProvisional() const noexcept
 {
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 	return GetState() == created || GetState() == planned;
 #else
 	return GetState() == planned;

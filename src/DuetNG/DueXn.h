@@ -33,6 +33,7 @@ namespace DuetExpansion
 	void DigitalWrite(Pin pin, bool high) noexcept;							// Write a pin
 	void AnalogOut(Pin pin, float pwm) noexcept;							// Set the PWM value on this pin
 	uint16_t DiagnosticRead() noexcept;										// Diagnose the SX1509 by setting all pins as inputs and reading them
+	void WedgeI2CBus(const StringRef& reply) noexcept;						// Leave the SX1509 holding SDA low, to test that the bus recovers
 	void Diagnostics(const StringRef& reply) noexcept;						// Print diagnostic data
 }
 

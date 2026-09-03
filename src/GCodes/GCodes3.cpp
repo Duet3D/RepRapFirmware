@@ -27,11 +27,13 @@
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/CanInterface.h>
+# include <CAN/CanMessageGenericConstructor.h>
+# include <CanMessageGenericTables.h>
 # include <CAN/ExpansionManager.h>
 # include <ClosedLoop/ClosedLoop.h>
 #endif
 
-#ifdef I2C_IFACE
+#if defined(I2C_IFACE) && (SAM4S || SAM4E)
 # include <Wire.h>
 #endif
 
@@ -590,7 +592,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	if (seen || seenExtrude)
 	{
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		move.UpdateSCurveFlagAndJerk();
 #endif
 		reprap.MoveUpdated();
@@ -847,10 +849,39 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 {
 	constexpr int8_t kvSubCommand = 1;
 	constexpr int8_t kaSubCommand = 2;
+	constexpr int8_t correctionSubCommand = 3;
 
 	bool seen = false;
 	Move& move = reprap.GetMove();
 	int8_t commandFraction = gb.GetCommandFraction();
+	if (commandFraction == correctionSubCommand)
+	{
+		// The phase correction is a property of the driver, not the axis
+		gb.MustSee('P');
+		const DriverId id = gb.GetDriverId();
+		if (gb.Seen('S') && !LockAllMovementSystemsAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+		if (id.IsRemote())
+		{
+#if SUPPORT_CAN_EXPANSION
+			CanMessageGenericConstructor cons(M970Point3Params);
+			cons.PopulateFromCommand(gb);
+			return cons.SendAndGetResponse(CanMessageType::m970p3, id.boardAddress, reply);
+#else
+			reply.copy("Phase correction is not supported on remote drivers");
+			return GCodeResult::error;
+#endif
+		}
+		if (id.localDriver >= move.GetNumActualDirectDrivers())
+		{
+			reply.printf("Driver number %u out of range", id.localDriver);
+			return GCodeResult::error;
+		}
+		return PhaseStep::ConfigureCorrection(id.localDriver, gb, reply);
+	}
+
 	for (size_t axis = 0; axis < numTotalAxes; axis++)
 	{
 		if (gb.Seen(axisLetters[axis]))
@@ -869,7 +900,10 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 					const bool ret = move.SetStepMode(axis, mode, reply);
 					if (!ret)
 					{
-						reply.printf("Could not set step mode for axis %c to mode %u", axisLetters[axis], (uint16_t)mode);
+						if (reply.IsEmpty())
+						{
+							reply.printf("Could not set step mode for axis %c to mode %u", axisLetters[axis], (uint16_t)mode);
+						}
 						return GCodeResult::error;
 					}
 					break;
@@ -878,7 +912,11 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 			case kaSubCommand:
 				{
 					const float value = gb.GetLimitedFValue(axisLetters[axis], 0, FLT_MAX);
-					move.ConfigurePhaseStepping(axis, value, commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
+					const GCodeResult rslt = move.ConfigurePhaseStepping(axis, value, commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka, reply);
+					if (rslt != GCodeResult::ok)
+					{
+						return rslt;
+					}
 					break;
 				}
 			}
@@ -911,7 +949,10 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 					const bool ret = move.SetStepMode(ExtruderToLogicalDrive(e), (StepMode)eVals[e], reply);
 					if (!ret)
 					{
-						reply.printf("Could not set step mode for extruder %u to mode %lu", e, eVals[e]);
+						if (reply.IsEmpty())
+						{
+							reply.printf("Could not set step mode for extruder %u to mode %lu", e, eVals[e]);
+						}
 						return GCodeResult::error;
 					}
 				}
@@ -931,7 +972,11 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 						reply.printf("Invalid K%c %f", commandFraction == kvSubCommand ? 'v' : 'a', (double)eVals[e]);
 						return GCodeResult::error;
 					}
-					move.ConfigurePhaseStepping(ExtruderToLogicalDrive(e), eVals[e], commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
+					const GCodeResult rslt = move.ConfigurePhaseStepping(ExtruderToLogicalDrive(e), eVals[e], commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka, reply);
+					if (rslt != GCodeResult::ok)
+					{
+						return rslt;
+					}
 				}
 				break;
 			}
@@ -940,7 +985,7 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 
 	if (seen)
 	{
-#if SUPPORT_S_CURVE
+#if SUPPORT_3RD_ORDER
 		move.UpdateSCurveFlagAndJerk();
 #endif
 		reprap.MoveUpdated();
@@ -994,6 +1039,10 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 // Deal with M569
 GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	if (gb.GetCommandFraction() == 2 && gb.Seen('S') && !LockAllMovementSystemsAndWaitForStandstill(gb))
+	{
+		return GCodeResult::notFinished;
+	}
 	gb.MustSee('P');
 	size_t drivesCount = numVisibleAxes;
 	DriverId driverIds[drivesCount];
@@ -1019,6 +1068,27 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 					:
 #endif
 					reprap.GetMove().ConfigureLocalDriver(gb, reply, id.localDriver);
+#if SUPPORT_CAN_EXPANSION
+		// If it's M569 with an S parameter then store the direction setting
+		if (res <= GCodeResult::warning && gb.GetCommandFraction() <= 0 && id.IsRemote())
+		{
+			bool direction;
+			bool seen = false;
+			if (gb.TryGetBValue('S', direction, seen))
+			{
+				reprap.GetExpansion().StoreDriverDirection(id, direction);
+			}
+			uint32_t mode;
+			if (gb.TryGetUIValue('D', mode, seen))
+			{
+				reprap.GetExpansion().StoreDriverMode(id, mode);
+			}
+			if (seen)
+			{
+				reprap.BoardsUpdated();
+			}
+		}
+#endif
 		if (res != GCodeResult::ok || (!isSetOfReadings && gb.GetCommandFraction() != 4))
 		{
 			break;
@@ -1054,39 +1124,44 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		return GCodeResult::error;
 	}
 
-	float angle, centreX, centreY;
-	gb.MustSee('R');
-	angle = gb.GetFValue();
-	gb.MustSee('A', 'X');
-	centreX = gb.GetFValue();
-	gb.MustSee('B', 'Y');
-	centreY = gb.GetFValue();
-
 	MovementState& ms = GetMovementState(gb);
-	ms.g68Centre[0] = centreX + GetWorkplaceOffset(gb, 0);
-	ms.g68Centre[1] = centreY + GetWorkplaceOffset(gb, 1);
-#if SUPPORT_ASYNC_MOVES
-	const float oldG68Angle = ms.g68Angle;
-#endif
-	if (gb.Seen('I'))
+	if (gb.Seen('R'))
 	{
-		ms.g68Angle += angle;
+		const float angle = gb.GetFValue();
+		gb.MustSee('A', 'X');
+		const float centreX = gb.GetFValue();
+		gb.MustSee('B', 'Y');
+		const float centreY = gb.GetFValue();
+
+		ms.g68Centre[0] = centreX + GetWorkplaceOffset(gb, 0);
+		ms.g68Centre[1] = centreY + GetWorkplaceOffset(gb, 1);
+#if SUPPORT_ASYNC_MOVES
+		const float oldG68Angle = ms.g68Angle;
+#endif
+		if (gb.Seen('I'))
+		{
+			ms.g68Angle += angle;
+		}
+		else
+		{
+			ms.g68Angle = angle;
+		}
+#if SUPPORT_ASYNC_MOVES
+		if (ms.g68Angle != 0.0 && oldG68Angle == 0.0)
+		{
+			// We have just started doing coordinate rotation, so if we own axis letter X we need to own Y and vice versa
+			// Simplest is just to say we don't own either in the axis letters bitmap
+			ms.ReleaseAxisLetter('X');
+			ms.ReleaseAxisLetter('Y');
+		}
+#endif
+		UpdateCurrentUserPosition(gb);
+		reprap.MoveUpdated();
 	}
 	else
 	{
-		ms.g68Angle = angle;
+		reply.printf("XY rotation %.2f degrees centred on [%.3f %.3f]", (double)ms.g68Angle, (double)ms.g68Centre[0], (double)ms.g68Centre[1]);
 	}
-#if SUPPORT_ASYNC_MOVES
-	if (ms.g68Angle != 0.0 && oldG68Angle == 0.0)
-	{
-		// We have just started doing coordinate rotation, so if we own axis letter X we need to own Y and vice versa
-		// Simplest is just to say we don't own either in the axis letters bitmap
-		ms.ReleaseAxisLetter('X');
-		ms.ReleaseAxisLetter('Y');
-	}
-#endif
-	UpdateCurrentUserPosition(gb);
-	reprap.MoveUpdated();
 	return GCodeResult::ok;
 }
 
@@ -1355,11 +1430,8 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 	}
 	else
 	{
-		// It's a serious event that causes the print to pause by default, so send an alert
-		if ((mt & LogLevelMask) != 0)
-		{
-			platform.MessageF((MessageType)(mt & (LogLevelMask | ErrorMessageFlag | WarningMessageFlag)), "%s\n", eventText.c_str());	// log the event
-		}
+		// It's a serious event that causes the print to pause by default, so send an alert, also log the message and include it in the DWC console
+		platform.MessageF((MessageType)(HttpMessage | (mt & (LogLevelMask | ErrorMessageFlag | WarningMessageFlag))), "%s\n", eventText.c_str());	// log the event
 		const bool isPrinting = IsReallyPrinting();
 		reprap.SendSimpleAlert(GenericMessage, eventText.c_str(), (isPrinting) ? "Printing paused" : "Event notification");
 		if (IsReallyPrinting())

@@ -15,6 +15,10 @@
 #include <Storage/CRC32.h>
 #include <algorithm>
 
+#if SUPPORTS_SBC_OVER_USB
+# include <Devices.h>
+#endif
+
 #if defined(DUET_NG) && defined(USE_SBC)
 
 // The PDC seems to be too slow to work reliably without getting transmit underruns, so we use the DMAC now.
@@ -104,7 +108,7 @@ static xdmac_channel_config_t xdmac_tx_cfg, xdmac_rx_cfg;
 
 volatile bool dataReceived = false;		// warning: on the SAME5x this just means the transfer has started, not necessarily that it has ended!
 volatile bool transferReadyHigh = false;
-volatile unsigned int spiTxUnderruns = 0, spiRxOverruns = 0;
+std::atomic<unsigned int> spiTxUnderruns = 0, spiRxOverruns = 0;
 
 static void spi_dma_disable() noexcept
 {
@@ -408,20 +412,28 @@ extern "C" void SBC_SPI_HANDLER() noexcept
 // Static data. Note, the startup code we use doesn't make any provision for initialising non-cached memory, other than to zero. So don't specify initial value here
 
 #if SAME70
-__nocache TransferHeader DataTransfer::rxHeader;
-__nocache TransferHeader DataTransfer::txHeader;
+__nocache SpiTransferHeader DataTransfer::rxHeader;
+__nocache SpiTransferHeader DataTransfer::txHeader;
 __nocache uint32_t DataTransfer::rxResponse;
 __nocache uint32_t DataTransfer::txResponse;
+# if SUPPORTS_SBC_OVER_USB
+__nocache UsbTransferHeader DataTransfer::usbRxHeader;
+__nocache UsbTransferHeader DataTransfer::usbTxHeader;
+# endif
 #endif
 
 DataTransfer::DataTransfer() noexcept : state(InternalTransferState::ExchangingData), lastTransferNumber(0), failedTransfers(0), checksumErrors(0),
 #if SAME5x
 	rxBuffer(nullptr), txBuffer(nullptr),
 #endif
-	rxPointer(0), txPointer(0), packetId(0)
+	rxPointer(0), txPointer(0), transportType(SbcTransportType::spi),
+#if SUPPORTS_SBC_OVER_USB
+	usbDevice(nullptr), usbDeviceIndex(0),
+#endif
+	packetId(0)
 {
-	rxResponse = TransferResponse::Success;
-	txResponse = TransferResponse::Success;
+	rxResponse = SpiTransferResponse::Success;
+	txResponse = SpiTransferResponse::Success;
 
 	// Prepare RX header
 	rxHeader.sequenceNumber = 0;
@@ -473,6 +485,7 @@ void DataTransfer::Init() noexcept
 		SetPinFunction(p, SbcSpiSercomPinsMode);
 	}
 
+	SetDriveStrength(SbcSpiMisoPin, 3);
 	Serial::EnableSercomClock(SbcSpiSercomNumber);
 	spi_dma_disable();
 
@@ -489,6 +502,7 @@ void DataTransfer::Init() noexcept
 	SetPinFunction(APIN_SBC_SPI_MISO, SBCPinPeriphMode);
 	SetPinFunction(APIN_SBC_SPI_SCK, SBCPinPeriphMode);
 	SetPinFunction(APIN_SBC_SPI_SS0, SBCPinPeriphMode);
+	SetDriveStrength(APIN_SBC_SPI_MISO, 3);
 
 	spi_enable_clock(SBC_SPI);
 	spi_disable(SBC_SPI);
@@ -524,6 +538,41 @@ void DataTransfer::Init() noexcept
 #endif
 }
 
+#if SUPPORTS_SBC_OVER_SPI
+
+// Re-initialize SPI hardware after it was disabled for USB mode
+void DataTransfer::ReinitSpi() noexcept
+{
+#if SAME5x
+	for (Pin p : SbcSpiSercomPins)
+	{
+		SetPinFunction(p, SbcSpiSercomPinsMode);
+	}
+
+	Serial::EnableSercomClock(SbcSpiSercomNumber);
+	spi_dma_disable();
+
+	SbcSpiSercom->SPI.CTRLA.reg |= SERCOM_SPI_CTRLA_SWRST;
+	while (SbcSpiSercom->SPI.SYNCBUSY.reg & SERCOM_SPI_SYNCBUSY_SWRST) { };
+	SbcSpiSercom->SPI.CTRLA.reg = SERCOM_SPI_CTRLA_DIPO(3) | SERCOM_SPI_CTRLA_DOPO(0) | SERCOM_SPI_CTRLA_MODE(2);
+	SbcSpiSercom->SPI.CTRLB.reg = SERCOM_SPI_CTRLB_RXEN | SERCOM_SPI_CTRLB_SSDE | SERCOM_SPI_CTRLB_PLOADEN;
+	while (SbcSpiSercom->SPI.SYNCBUSY.reg & SERCOM_SPI_SYNCBUSY_MASK) { };
+	SbcSpiSercom->SPI.CTRLC.reg = SERCOM_SPI_CTRLC_DATA32B;
+#else
+	SetPinFunction(APIN_SBC_SPI_MOSI, SBCPinPeriphMode);
+	SetPinFunction(APIN_SBC_SPI_MISO, SBCPinPeriphMode);
+	SetPinFunction(APIN_SBC_SPI_SCK, SBCPinPeriphMode);
+	SetPinFunction(APIN_SBC_SPI_SS0, SBCPinPeriphMode);
+
+	spi_enable_clock(SBC_SPI);
+	spi_disable(SBC_SPI);
+#endif
+
+	dataReceived = false;
+}
+
+#endif // SUPPORTS_SBC_OVER_SPI
+
 void DataTransfer::InitFromTask() noexcept
 {
 	sbcTaskHandle = TaskBase::GetCallerTaskHandle();
@@ -531,14 +580,36 @@ void DataTransfer::InitFromTask() noexcept
 
 void DataTransfer::Diagnostics(const StringRef& reply) noexcept
 {
-	reply.lcatf("Transfer state: %d, failed transfers: %u, checksum errors: %u", (int)state, failedTransfers, checksumErrors);
-	reply.lcatf("RX/TX seq numbers: %d/%d", (int)rxHeader.sequenceNumber, (int)txHeader.sequenceNumber);
-	reply.lcatf("SPI underruns %u, overruns %u", spiTxUnderruns, spiRxOverruns);
+#if SUPPORTS_SBC_OVER_USB
+	if (transportType == SbcTransportType::usb)
+	{
+		reply.lcatf("Connected over USB (channel %u)", usbDeviceIndex);
+	}
+	else
+#endif
+	{
+		reply.lcat("Connected over SPI");
+		reply.lcatf("Transfer state: %d, failed transfers: %u, checksum errors: %u", (int)state, failedTransfers, checksumErrors);
+		reply.lcatf("RX/TX seq numbers: %d/%d", (int)rxHeader.sequenceNumber, (int)txHeader.sequenceNumber);
+		reply.lcatf("SPI underruns %u, overruns %u", spiTxUnderruns.load(), spiRxOverruns.load());
+	}
 }
 
 const PacketHeader *DataTransfer::ReadPacket() noexcept
 {
-	if (rxPointer >= rxHeader.dataLength)
+	size_t rxDataLength;
+#if SUPPORTS_SBC_OVER_USB
+	if (transportType == SbcTransportType::usb)
+	{
+		rxDataLength = usbRxHeader.dataLength;
+	}
+	else
+#endif
+	{
+		rxDataLength = rxHeader.dataLength;
+	}
+
+	if (rxPointer >= rxDataLength)
 	{
 		return nullptr;
 	}
@@ -706,6 +777,31 @@ int DataTransfer::ReadFileData(char *buffer, size_t length) noexcept
 	return bytesToRead;
 }
 
+// Read a chunk of a directory listing. Returns the number of bytes copied into the buffer
+size_t DataTransfer::ReadFileList(char *buffer, size_t length, bool& endOfList) noexcept
+{
+	// Read header
+	const FileListHeader *header = ReadDataHeader<FileListHeader>();
+	endOfList = header->endOfList;
+
+	// Read entry data if applicable. The read pointer must be advanced even if we cannot use the data
+	if (header->dataLength == 0)
+	{
+		return 0;
+	}
+
+	const char *listData = ReadData(header->dataLength);
+	if (header->dataLength > length)
+	{
+		// DSF is told how much room we have, so this means the two sides disagree about the format
+		endOfList = true;
+		return 0;
+	}
+
+	memcpy(buffer, listData, header->dataLength);
+	return header->dataLength;
+}
+
 GCodeChannel DataTransfer::ReadSetLastCodeResult(GCodeResult& result) noexcept
 {
 	// Read header
@@ -720,7 +816,7 @@ void DataTransfer::ExchangeHeader() noexcept
 {
 	Cache::FlushBeforeDMASend(&txHeader, sizeof(txHeader));
 	state = InternalTransferState::ExchangingHeader;
-	setup_spi(&rxHeader, &txHeader, sizeof(TransferHeader));
+	setup_spi(&rxHeader, &txHeader, sizeof(SpiTransferHeader));
 }
 
 void DataTransfer::ExchangeResponse(uint32_t response) noexcept
@@ -752,7 +848,7 @@ void DataTransfer::RestartTransfer(bool ownRequest) noexcept
 		if (rxHeader.dataLength > 0 || txPointer > 0)
 		{
 			// Transfer bad data response and restart the transfer
-			txResponse = TransferResponse::BadResponse;
+			txResponse = SpiTransferResponse::BadResponse;
 			Cache::FlushBeforeDMASend(&txResponse, sizeof(txResponse));
 			state = InternalTransferState::Resetting;
 			setup_spi(&rxResponse, &txResponse, sizeof(uint32_t));
@@ -774,7 +870,7 @@ void DataTransfer::RestartTransfer(bool ownRequest) noexcept
 		else
 		{
 			// Last data response exchange failed, try to perform it again
-			ExchangeResponse(TransferResponse::Success);
+			ExchangeResponse(SpiTransferResponse::Success);
 			state = InternalTransferState::ExchangingDataResponseRetry;
 		}
 	}
@@ -782,6 +878,13 @@ void DataTransfer::RestartTransfer(bool ownRequest) noexcept
 
 TransferState DataTransfer::DoTransfer() noexcept
 {
+#if SUPPORTS_SBC_OVER_USB
+	if (transportType == SbcTransportType::usb)
+	{
+		return DoTransferUsb();
+	}
+#endif
+
 	if (dataReceived)
 	{
 #if SAME5x
@@ -808,7 +911,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 			// (1) Exchanged transfer headers
 			Cache::InvalidateAfterDMAReceive(&rxHeader, sizeof(rxHeader));
 			const uint32_t headerResponse = *reinterpret_cast<const uint32_t*>(&rxHeader);
-			if (headerResponse == TransferResponse::BadResponse)
+			if (headerResponse == SpiTransferResponse::BadResponse)
 			{
 				// SBC received a bad response code. We must have been happy if we got here, else RRF would have complained
 				if (reprap.Debug(Module::SbcInterface))
@@ -819,41 +922,41 @@ TransferState DataTransfer::DoTransfer() noexcept
 				break;
 			}
 
-			const uint32_t checksum = CalcCRC32(reinterpret_cast<const char *>(&rxHeader), sizeof(TransferHeader) - sizeof(uint32_t));
+			const uint32_t checksum = CalcCRC32(reinterpret_cast<const char *>(&rxHeader), sizeof(SpiTransferHeader) - sizeof(uint32_t));
 			if (rxHeader.crcHeader != checksum)
 			{
 				if (reprap.Debug(Module::SbcInterface))
 				{
 					debugPrintf("Bad header CRC (expected %08" PRIx32 ", got %08" PRIx32 ")\n", rxHeader.crcHeader, checksum);
 				}
-				ExchangeResponse(TransferResponse::BadHeaderChecksum);
+				ExchangeResponse(SpiTransferResponse::BadHeaderChecksum);
 				break;
 			}
 
 			if (rxHeader.formatCode != SbcFormatCode)
 			{
-				ExchangeResponse(TransferResponse::BadFormat);
+				ExchangeResponse(SpiTransferResponse::BadFormat);
 				break;
 			}
 			if (rxHeader.protocolVersion != SbcProtocolVersion)
 			{
-				ExchangeResponse(TransferResponse::BadProtocolVersion);
+				ExchangeResponse(SpiTransferResponse::BadProtocolVersion);
 				break;
 			}
 			if (rxHeader.dataLength > SbcTransferBufferSize)
 			{
-				ExchangeResponse(TransferResponse::BadDataLength);
+				ExchangeResponse(SpiTransferResponse::BadDataLength);
 				break;
 			}
 
-			ExchangeResponse(TransferResponse::Success);
+			ExchangeResponse(SpiTransferResponse::Success);
 			break;
 		}
 
 		case InternalTransferState::ExchangingHeaderResponse:
 			// (2) Exchanged response to transfer header
 			Cache::InvalidateAfterDMAReceive(&rxResponse, sizeof(rxResponse));
-			if (rxResponse == TransferResponse::Success && txResponse == TransferResponse::Success)
+			if (rxResponse == SpiTransferResponse::Success && txResponse == SpiTransferResponse::Success)
 			{
 				if (reprap.UsingSbcInterface() && (rxHeader.dataLength != 0 || txHeader.dataLength != 0))
 				{
@@ -869,7 +972,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 					return IsConnectionReset() ? TransferState::connectionReset : TransferState::finished;
 				}
 			}
-			else if (rxResponse == TransferResponse::BadHeaderChecksum || txResponse == TransferResponse::BadHeaderChecksum)
+			else if (rxResponse == SpiTransferResponse::BadHeaderChecksum || txResponse == SpiTransferResponse::BadHeaderChecksum)
 			{
 				// Failed to exchange header, restart the full transfer
 				checksumErrors++;
@@ -878,7 +981,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 			else
 			{
 				// Restart the full transfer
-				RestartTransfer(rxResponse != TransferResponse::BadResponse);
+				RestartTransfer(rxResponse != SpiTransferResponse::BadResponse);
 			}
 			break;
 
@@ -886,7 +989,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 		{
 			// (3) Exchanged data
 			Cache::InvalidateAfterDMAReceive(rxBuffer, rxHeader.dataLength);
-			if (*reinterpret_cast<uint32_t*>(rxBuffer) == TransferResponse::BadResponse)
+			if (*reinterpret_cast<uint32_t*>(rxBuffer) == SpiTransferResponse::BadResponse)
 			{
 				RestartTransfer(false);
 				break;
@@ -899,18 +1002,18 @@ TransferState DataTransfer::DoTransfer() noexcept
 				{
 					debugPrintf("Bad data CRC (expected %08" PRIx32 ", got %08" PRIx32 ")\n", rxHeader.crcData, checksum);
 				}
-				ExchangeResponse(TransferResponse::BadDataChecksum);
+				ExchangeResponse(SpiTransferResponse::BadDataChecksum);
 				break;
 			}
 
-			ExchangeResponse(TransferResponse::Success);
+			ExchangeResponse(SpiTransferResponse::Success);
 			break;
 		}
 
 		case InternalTransferState::ExchangingDataResponse:
 			// (4a) Exchanged response to data transfer
 			Cache::InvalidateAfterDMAReceive(&rxResponse, sizeof(rxResponse));
-			if (rxResponse == TransferResponse::Success && txResponse == TransferResponse::Success)
+			if (rxResponse == SpiTransferResponse::Success && txResponse == SpiTransferResponse::Success)
 			{
 				// Everything OK
 				rxPointer = txPointer = 0;
@@ -919,13 +1022,13 @@ TransferState DataTransfer::DoTransfer() noexcept
 				return IsConnectionReset() ? TransferState::connectionReset : TransferState::finished;
 			}
 
-			if (rxResponse == TransferResponse::BadDataChecksum || txResponse == TransferResponse::BadDataChecksum)
+			if (rxResponse == SpiTransferResponse::BadDataChecksum || txResponse == SpiTransferResponse::BadDataChecksum)
 			{
 				// Resend the data if a checksum error occurred
 				checksumErrors++;
 				ExchangeData();
 			}
-			else if (rxResponse == TransferResponse::BadResponse)
+			else if (rxResponse == SpiTransferResponse::BadResponse)
 			{
 				// Restart the full transfer
 				RestartTransfer(false);
@@ -941,10 +1044,21 @@ TransferState DataTransfer::DoTransfer() noexcept
 		case InternalTransferState::ExchangingDataResponseRetry:
 			// (4b) Exchanged response to data transfer when new transfer is being started (fallback on bad response)
 			Cache::InvalidateAfterDMAReceive(&rxResponse, sizeof(rxResponse));
-			if (rxResponse == TransferResponse::Success && txResponse == TransferResponse::Success)
+			if (rxResponse == SpiTransferResponse::Success && txResponse == SpiTransferResponse::Success)
 			{
 				// Retry succeeded
 				ExchangeHeader();
+			}
+			else if ((rxResponse & 0xFF) == SbcFormatCode)
+			{
+				// The SBC restarted the full transfer and sent a new header instead of a data response.
+				// Most of that header was lost, so report a bad header checksum to make the SBC send it again
+				if (reprap.Debug(Module::SbcInterface))
+				{
+					debugPrintf("Received header instead of data response retry\n");
+				}
+				ExchangeResponse(SpiTransferResponse::BadHeaderChecksum);
+				state = InternalTransferState::ExchangingHeaderResponse;
 			}
 			else
 			{
@@ -964,7 +1078,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 
 		case InternalTransferState::ResettingDataResponse:
 			// Transmitted bad response after data response exchange, attempt to restart the data response exchange
-			ExchangeResponse(TransferResponse::Success);
+			ExchangeResponse(SpiTransferResponse::Success);
 			break;
 
 		default:
@@ -977,8 +1091,92 @@ TransferState DataTransfer::DoTransfer() noexcept
 	return (state == InternalTransferState::ExchangingHeader) ? TransferState::doingFullTransfer : TransferState::doingPartialTransfer;
 }
 
+#if SUPPORTS_SBC_OVER_USB
+
+void DataTransfer::SwitchToUsb(SerialCDC *dev, unsigned int devIndex) noexcept
+{
+	disable_spi();
+	transportType = SbcTransportType::usb;
+	usbDevice = dev;
+	usbDeviceIndex = devIndex;
+	rxPointer = txPointer = 0;
+	packetId = 0;
+	memset(&usbRxHeader, 0, sizeof(usbRxHeader));
+	memset(&usbTxHeader, 0, sizeof(usbTxHeader));
+}
+
+static constexpr uint32_t UsbTimeoutMs = SbcConnectionTimeout;		// must be long enough for DSF to process between transfers
+
+TransferState DataTransfer::DoTransferUsb() noexcept
+{
+	// USB uses request-response protocol with zero-copy direct endpoint access
+	// BeginDirectMode was called during SBC activation, so we use readDirect/writeDirect
+	// DSF writes first, RRF reads then responds
+
+	// 1) Read DSF's header (wait for DSF to initiate the transfer)
+	const size_t hdrBytes = usbDevice->readDirect(reinterpret_cast<uint8_t *>(&usbRxHeader), sizeof(UsbTransferHeader), UsbTimeoutMs);
+	if (hdrBytes != sizeof(UsbTransferHeader))
+	{
+		if (reprap.Debug(Module::SbcInterface))
+		{
+			debugPrintf("USB: readDirect header got %u bytes\n", (unsigned)hdrBytes);
+		}
+		return TransferState::connectionTimeout;
+	}
+
+	// 2) Write our header in response
+	usbTxHeader.numPackets = packetId;
+	usbTxHeader.dataLength = (uint16_t)txPointer;
+	if (!usbDevice->writeDirect(reinterpret_cast<const uint8_t *>(&usbTxHeader), sizeof(UsbTransferHeader), UsbTimeoutMs))
+	{
+		return TransferState::connectionTimeout;
+	}
+
+	// Validate data length
+	if (usbRxHeader.dataLength > SbcTransferBufferSize)
+	{
+		return TransferState::connectionReset;
+	}
+
+	// 3) Read DSF's data body (DSF writes first)
+	if (usbRxHeader.dataLength > 0)
+	{
+		if (usbDevice->readDirect(reinterpret_cast<uint8_t *>(rxBuffer), usbRxHeader.dataLength, UsbTimeoutMs) != usbRxHeader.dataLength)
+		{
+			return TransferState::connectionTimeout;
+		}
+	}
+
+	// 4) Write our data body in response
+	if (txPointer > 0)
+	{
+		if (!usbDevice->writeDirect(reinterpret_cast<const uint8_t *>(txBuffer), txPointer, UsbTimeoutMs))
+		{
+			return TransferState::connectionTimeout;
+		}
+	}
+
+	// Reset pointers for next transfer
+	rxPointer = txPointer = 0;
+	packetId = 0;
+	return TransferState::finished;
+}
+
+#endif // SUPPORTS_SBC_OVER_USB
+
 void DataTransfer::StartNextTransfer() noexcept
 {
+#if SUPPORTS_SBC_OVER_USB
+	if (transportType == SbcTransportType::usb)
+	{
+		// USB: only reset rxPointer. txPointer/packetId are set by ExchangeData
+		// and must be preserved until DoTransferUsb sends them
+		// DoTransferUsb resets txPointer/packetId after sending
+		rxPointer = 0;
+		return;
+	}
+#endif
+
 	lastTransferNumber = rxHeader.sequenceNumber;
 
 	// Reset RX transfer header
@@ -994,7 +1192,7 @@ void DataTransfer::StartNextTransfer() noexcept
 	txHeader.sequenceNumber++;
 	txHeader.dataLength = txPointer;
 	txHeader.crcData = CalcCRC32(txBuffer, txPointer);
-	txHeader.crcHeader = CalcCRC32(reinterpret_cast<const char *>(&txHeader), sizeof(TransferHeader) - sizeof(uint32_t));
+	txHeader.crcHeader = CalcCRC32(reinterpret_cast<const char *>(&txHeader), sizeof(SpiTransferHeader) - sizeof(uint32_t));
 
 	// Begin SPI transfer
 	ExchangeHeader();
@@ -1002,6 +1200,28 @@ void DataTransfer::StartNextTransfer() noexcept
 
 void DataTransfer::ResetConnection(bool fullReset) noexcept
 {
+#if SUPPORTS_SBC_OVER_USB
+	if (transportType == SbcTransportType::usb)
+	{
+		usbDevice = nullptr;
+		rxPointer = txPointer = 0;
+		packetId = 0;
+
+# if SUPPORTS_SBC_OVER_SPI
+		// Fall back to SPI: re-initialize the hardware that was disabled by SwitchToUsb()
+		transportType = SbcTransportType::spi;
+		ReinitSpi();
+# else
+		// USB-only board: just reset and wait for a new M576.1.
+		// A failed transfer may have already read a legitimate new header before the body
+		// exchange failed, so usbRxHeader can still claim packets that rxBuffer never received
+		usbRxHeader.numPackets = 0;
+		usbRxHeader.dataLength = 0;
+		return;
+# endif
+	}
+#endif
+
 	// Clear the remaining data to send
 	disable_spi();
 	dataReceived = false;
@@ -1696,6 +1916,52 @@ bool DataTransfer::WriteDeleteFileOrDirectory(const char *filename, bool recursi
 
 	// Write filename
 	WriteData(filename, filenameLength);
+	return true;
+}
+
+bool DataTransfer::WriteSecureDeleteFile(const char *filename) noexcept
+{
+	// Check if it fits
+	size_t filenameLength = strlen(filename);
+	if (!CanWritePacket(sizeof(StringHeader) + filenameLength))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::SecureDeleteFile, sizeof(StringHeader) + filenameLength);
+
+	// Write header - payload format is identical to DeleteFileOrDirectory; only the opcode differs
+	StringHeader *header = WriteDataHeader<StringHeader>();
+	header->length = filenameLength;
+	header->padding = 0;
+
+	// Write filename
+	WriteData(filename, filenameLength);
+	return true;
+}
+
+bool DataTransfer::WriteGetFileList(const char *directory, uint32_t startIndex, uint32_t maxLength) noexcept
+{
+	// Check if it fits
+	size_t directoryLength = strlen(directory);
+	if (!CanWritePacket(sizeof(GetFileListHeader) + directoryLength))
+	{
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::GetFileList, sizeof(GetFileListHeader) + directoryLength);
+
+	// Write header
+	GetFileListHeader *header = WriteDataHeader<GetFileListHeader>();
+	header->startIndex = startIndex;
+	header->maxLength = maxLength;
+	header->directoryLength = directoryLength;
+	header->padding = 0;
+
+	// Write directory name
+	WriteData(directory, directoryLength);
 	return true;
 }
 

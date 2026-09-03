@@ -152,6 +152,9 @@ struct mdns_outmsg {
   u8_t serv_questions[MDNS_MAX_SERVICES];
   /* Reply bitmask for host information */
   u8_t host_replies;
+  /* Type asked for when REPLY_HOST_NSEC is set, so a legacy reply can echo the
+     original question - the answer's own NSEC type would not match it */
+  u16_t host_nsec_query_type;
   /* Bitmask for which reverse IPv6 hosts to answer */
   u8_t host_reverse_v6_replies;
   /* Reply bitmask per service */

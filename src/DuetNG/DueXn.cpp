@@ -7,6 +7,7 @@
 
 #include "DueXn.h"
 #include "SX1509.h"
+#include "SX1509Registers.h"
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
 #include <Wire.h>
@@ -31,7 +32,7 @@ namespace DuetExpansion
 	static bool additionalIoExpanderPresent = false;
 	static uint16_t additionalIoInputBits = 0;
 
-	static volatile uint32_t dueXnReadCount = 0;
+	static std::atomic<uint32_t> dueXnReadCount = 0;
 	static uint32_t dueXnReadCountResetMillis = 0;
 	static volatile bool taskWaiting = false;
 
@@ -111,7 +112,7 @@ ExpansionBoardType DuetExpansion::DueXnInit() noexcept
 		delay(50);
 		ret = dueXnExpander.begin(DueXnAddress);
 	} while (!ret && attempts < 5);
-	(void)I2C_IFACE.GetErrorCounts(true);				// clear the error counts in case there wasn't a device there or we didn't find it first time
+	I2C_IFACE.ClearTransferErrors();					// clear the error counts in case there wasn't a device there or we didn't find it first time
 
 	if (ret)
 	{
@@ -177,7 +178,7 @@ void DuetExpansion::AdditionalOutputInit() noexcept
 		delay(50);
 		ret = additionalIoExpander.begin(AdditionalIoExpanderAddress);
 	} while (!ret && attempts < 5);
-	(void)I2C_IFACE.GetErrorCounts(true);				// clear the error counts in case there wasn't a device there or we didn't find it first time
+	I2C_IFACE.ClearTransferErrors();					// clear the error counts in case there wasn't a device there or we didn't find it first time
 
 	if (ret)
 	{
@@ -354,6 +355,56 @@ uint16_t DuetExpansion::DiagnosticRead() noexcept
 	const uint16_t retval = dueXnExpander.digitalReadAll();		// read all inputs with pullup resistors on fans
 	DueXnInit();												// back to normal
 	return retval;
+}
+
+// Leave the I2C bus stuck the way a reset in the middle of a read does, to test that we recover from it
+void DuetExpansion::WedgeI2CBus(const StringRef& reply) noexcept
+{
+	constexpr uint32_t HalfClock = 5;							// 100kHz, slow enough for any device
+	auto sclHigh = []() { ::SetPinMode(TWI_CK, INPUT); delayMicroseconds(HalfClock); };
+	auto sclLow  = []() { ::SetPinMode(TWI_CK, OUTPUT_LOW); delayMicroseconds(HalfClock); };
+	auto sdaHigh = []() { ::SetPinMode(TWI_Data, INPUT); delayMicroseconds(HalfClock); };
+	auto sdaLow  = []() { ::SetPinMode(TWI_Data, OUTPUT_LOW); delayMicroseconds(HalfClock); };
+
+	// Send a byte MSB first and return true if the slave acknowledged it
+	auto sendByte = [&](uint8_t b)
+	{
+		for (unsigned int i = 0; i < 8; i++)
+		{
+			if (b & 0x80) { sdaHigh(); } else { sdaLow(); }
+			b <<= 1;
+			sclHigh();
+			sclLow();
+		}
+		sdaHigh();
+		sclHigh();
+		const bool acked = !digitalRead(TWI_Data);
+		sclLow();
+		return acked;
+	};
+
+	I2C::Init();
+	MutexLocker lock(Tasks::GetI2CMutex());
+	sdaHigh();
+	sclHigh();
+	sdaLow();													// start condition
+	sclLow();
+	bool ok = sendByte(DueXnAddress << 1) && sendByte(REG_CLOCK);		// address for writing, then the register number
+	if (ok)
+	{
+		sdaHigh();												// repeated start condition
+		sclHigh();
+		sdaLow();
+		sclLow();
+		ok = sendByte((DueXnAddress << 1) | 1);					// address for reading
+	}
+
+	// The expander is now driving the first data bit, which is zero because the clock register's MSB is never set.
+	// Stopping here with SCL high is exactly what a reset in the middle of a read leaves behind: the slave holds SDA low waiting for the next clock
+	sclHigh();
+	reply.printf("Addressed SX1509 at %02x: %s, SDA is now %s", DueXnAddress, (ok) ? "yes" : "no", (digitalRead(TWI_Data)) ? "high" : "stuck low");
+	SetPinFunction(TWI_CK, TWIPeriphMode);
+	SetPinFunction(TWI_Data, TWIPeriphMode);
 }
 
 void DuetExpansion::Exit() noexcept

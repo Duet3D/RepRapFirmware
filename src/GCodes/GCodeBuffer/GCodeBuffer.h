@@ -35,7 +35,10 @@ enum class GCodeBufferState : uint8_t
 	parsingChecksum,								// parsing the checksum after '*'
 	discarding,										// discarding characters after the checksum or an end-of-line comment
 	ready,											// we have a complete gcode but haven't started executing it
-	executing										// we have a complete gcode and have started executing it
+	executing,										// we have a complete gcode and have started executing it
+#if HAS_SBC_INTERFACE
+	executingOnSbc									// we are executing this code on the SBC
+#endif
 };
 
 // Type of a status report
@@ -56,6 +59,7 @@ public:
 	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *_ecv_null fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
 	void Reset() noexcept;															// Reset it to its state after start-up
 	void Init() noexcept;															// Set it up to parse another G-code
+	void DiscardPartialLine() noexcept;												// Throw away any line that we have only partly received
 	void Disable() noexcept;														// Disable input from the associated port
 	void Enable(uint32_t commsProperties) noexcept;									// Enable input and set the CRC or checksum requirements
 	void Diagnostics(const StringRef& reply) noexcept;								// Write some debug info
@@ -66,7 +70,7 @@ public:
 #endif
 	void PutAndDecode(const char *_ecv_array data, size_t len) noexcept;			// Add an entire G-Code, overwriting any existing content
 	void PutAndDecode(const char *_ecv_array str) noexcept;							// Add a null-terminated string, overwriting any existing content
-	void StartNewFile() noexcept;													// Called when we start a new file
+	void StartNewFile(const char *_ecv_array filename) noexcept;					// Called when we start a new file
 	bool FileEnded() noexcept;														// Called when we reach the end of the file we are reading from
 	void DecodeCommand() noexcept;													// Decode the command in the buffer when it is complete
 	bool HadOverflow() noexcept { return overflowed; }								// Indicates if the previous binary G-code was too long
@@ -79,6 +83,7 @@ public:
 	bool ContainsExpression() const noexcept;
 	void GetCompleteParameters(const StringRef& str) THROWS(GCodeException);		// Get all of the line following the command. Currently called only for the Q0 command.
 	int32_t GetLineNumber() const noexcept { return CurrentFileMachineState().lineNumber; }
+	const AutoStringHandle& GetFileName() const noexcept { return CurrentFileMachineState().fname; }
 	bool HadExplicitLineNumber() const noexcept { return hadExplicitLineNumber; }
 	uint32_t GetExplicitLineNumber() const noexcept { return receivedLineNumber; }
 	void SetExplicitLineNumber(uint32_t ln) noexcept;
@@ -137,6 +142,7 @@ public:
 	bool TryGetLimitedIValue(char c, int32_t& val, bool& seen, int32_t minValue, int32_t maxValue) THROWS(GCodeException);
 	bool TryGetUIValue(char c, uint32_t& val, bool& seen) THROWS(GCodeException);
 	bool TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32_t maxValuePlusOne) THROWS(GCodeException);
+	bool TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException);
 	bool TryGetNonNegativeFValue(char c, float& val, bool& seen) THROWS(GCodeException);
 	bool TryGetPositiveFValue(char c, float& val, bool& seen) THROWS(GCodeException);
 	bool TryGetLimitedFValue(char c, float& val, bool& seen, float minValue, float maxValue) THROWS(GCodeException)
@@ -212,7 +218,7 @@ public:
 	void SetPrintFinished() noexcept;										// Mark the current print file as finished
 
 	bool RequestMacroFile(const char *_ecv_array filename, bool fromCode) noexcept;	// Request execution of a file macro
-	volatile bool IsWaitingForMacro() const noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
+	bool IsWaitingForMacro() const volatile noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
 	bool HasJustStartedMacro() const noexcept { return macroJustStarted; }	// Has this GB just started a new macro file?
 	bool IsMacroRequestPending() const noexcept { return !requestedMacroFile.IsEmpty(); }		// Indicates if a macro file is being requested
 	const char *_ecv_array GetRequestedMacroFile() const noexcept { return requestedMacroFile.c_str(); }	// Return requested macro file or nullptr if none
@@ -222,7 +228,7 @@ public:
 	bool IsMacroEmpty() const noexcept { return macroFileEmpty; }			// Return true if the opened macro file is actually empty
 
 	void MacroFileClosed() noexcept;										// Called to notify the SBC about the file being internally closed on success
-	volatile bool IsMacroFileClosed() const noexcept { return macroFileClosed; }	// Indicates if a file has been closed internally in RRF
+	bool IsMacroFileClosed() const volatile noexcept { return macroFileClosed; }	// Indicates if a file has been closed internally in RRF
 	void MacroFileClosedSent() noexcept { macroFileClosed = false; }		// Called when the SBC has been notified about the internally closed file
 
 	bool IsAbortRequested() const noexcept { return abortFile; }			// Is the cancellation of the current file requested?
@@ -234,11 +240,13 @@ public:
 	bool IsMessageAcknowledged() const noexcept { return messageAcknowledged; }		// Indicates if a message has been acknowledged
 	void MessageAcknowledgementSent() noexcept { messageAcknowledged = false; }		// Called when the SBC has been notified about the message acknowledgement
 
-	bool IsInvalidated() const noexcept { return invalidated; }		// Indicates if the channel is invalidated
-	void Invalidate(bool i = true) noexcept { invalidated = i; }	// Invalidate this channel (or not)
+	bool IsInvalidated() const noexcept { return invalidated; }				// Indicates if the channel is invalidated
+	void Invalidate(bool i = true) noexcept { invalidated = i; }			// Invalidate this channel (or not)
 
-	bool IsSendRequested() const noexcept { return sendToSbc; }	// Is this code supposed to be sent to the SBC
-	void SendToSbc() noexcept { sendToSbc = true; }				// Send this code to the attached SBC
+	bool IsSendRequested() const noexcept { return sendToSbc; }				// Is this code supposed to be sent to the SBC
+	void SendToSbc() noexcept { sendToSbc = true; }							// Send this code to the attached SBC
+	void SentToSbc() noexcept;												// Code has been sent to the SBC, wait for it to finish
+	bool IsExecutingOnSbc() const noexcept { return bufferState == GCodeBufferState::executingOnSbc; }
 #endif
 
 	GCodeState GetState() const noexcept;
@@ -292,6 +300,7 @@ public:
 	bool IsCancelWaitRequested() noexcept;
 
 	void RestartFrom(FilePosition pos) noexcept;
+	void SetModalGCommand(int num) noexcept;
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileGCodeInput *_ecv_null GetFileInput() const noexcept { return fileInput; }
@@ -330,10 +339,10 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-
-#if SUPPORT_OBJECT_MODEL
 	const char *_ecv_array GetStateText() const noexcept;
-#endif
+
+	void SaveInvokingCommand() noexcept;								// remember the current command when pushing a macro frame
+	void RestoreInvokingCommand(const GCodeMachineState& ms) noexcept;	// reinstate it as the reported command when a macro frame is popped
 
 	FilePosition printFilePositionAtMacroStart;			// the saved file position when we started executing a macro
 	GCodeInput *_ecv_from normalInput;					// Our normal input stream, or nullptr if there isn't one
@@ -352,6 +361,15 @@ private:
 
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 	ExpressionValue m291Result;							// the value entered or choice selected in response to a M291 command
+
+	// When a macro returns, the command that invoked it is restored here so that error messages emitted by the resumed state machine (e.g. probing)
+	// are attributed to the invoking command such as G29/G30 rather than to the macro's last command. Applies to both parsers because the command
+	// getters below return these values while restoredCommandValid is set. Cleared as soon as the next command is parsed
+	char restoredCommandLetter;
+	int restoredCommandNumber;
+	int8_t restoredCommandFraction;
+	bool restoredHasCommandNumber;
+	bool restoredCommandValid = false;
 
 	uint32_t receivedLineNumber;						// The line number received explicitly in the N field of the GCode command line
 	uint32_t whenTimerStarted;							// When we started waiting
@@ -415,6 +433,13 @@ inline bool GCodeBuffer::IsFileFinished() const noexcept
 inline bool GCodeBuffer::IsMacroStartedByCode() const noexcept
 {
 	return machineState->macroStartedByCode;
+}
+
+inline void GCodeBuffer::SentToSbc() noexcept
+{
+	sendToSbc = false;
+	stringParser.Init();	// must be called before bufferState is set because Init() overwrites it
+	bufferState = GCodeBufferState::executingOnSbc;
 }
 
 #endif
