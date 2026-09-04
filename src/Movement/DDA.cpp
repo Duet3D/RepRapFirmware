@@ -1697,6 +1697,49 @@ float DDA::GetTotalExtrusionRate() const noexcept
 	return fraction * InverseConvertSpeedToMmPerSec(topSpeed);
 }
 
+// Methods to support fast pause/feed hold
+void DDA::TurnIntoDeceleratingMoveWithStartSpeed(float initialSpeed) noexcept
+{
+#if SUPPORT_3RD_ORDER
+	flags.useScurve = false;
+#endif
+	startSpeed = topSpeed = initialSpeed;
+	endSpeed = fastSqrtf(fsquare(startSpeed) - 2 * maxAcceleration + totalDistance);
+	beforePrepare.accelDistance = 0.0;
+	beforePrepare.decelDistance = totalDistance;
+}
+
+void DDA::TurnIntoSteadySpeedMove(float speed) noexcept
+{
+#if SUPPORT_3RD_ORDER
+	flags.useScurve = false;
+#endif
+	startSpeed = topSpeed = endSpeed = speed;
+	beforePrepare.accelDistance = beforePrepare.decelDistance = 0.0;
+}
+
+void DDA::TurnIntoDeceleratingMoveWithEndSpeed(float finalSpeed) noexcept
+{
+#if SUPPORT_3RD_ORDER
+	flags.useScurve = false;
+#endif
+	endSpeed = finalSpeed;
+	startSpeed = topSpeed = fastSqrtf(fsquare(endSpeed) + 2 * maxAcceleration + totalDistance);
+	beforePrepare.accelDistance = 0.0;
+	beforePrepare.decelDistance = totalDistance;
+}
+
+void DDA::TurnIntoSteadyThenDecelMove(float initialSpeed, float finalSpeed) noexcept
+{
+#if SUPPORT_3RD_ORDER
+	flags.useScurve = false;
+#endif
+	startSpeed = topSpeed = initialSpeed;
+	endSpeed = finalSpeed;
+	beforePrepare.accelDistance = 0.0;
+	beforePrepare.decelDistance = (fsquare(startSpeed) - fsquare(endSpeed))/(2 * maxAcceleration);
+}
+
 #if SUPPORT_LASER
 
 // Manage the laser power. Return the number of ticks until we should be called again, or portMAX_DELAY to be called at the start of the next move.

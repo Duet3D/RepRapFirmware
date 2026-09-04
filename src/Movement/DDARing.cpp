@@ -641,31 +641,46 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 	// We can pause before a move if it is the first segment in that move.
 	// The caller should set up rp.feedrate to the default feed rate for the file gcode source before calling this.
 
-	TaskCriticalSectionLocker lock;							// prevent the Move task changing data while we look at it
+	TaskCriticalSectionLocker lock;								// prevent the Move task changing data while we look at it
 
-	const DDA * const savedDdaRingAddPointer = addPointer;	// capture volatile variable to avoid reloading it every time we read it
-
-	IrqDisable();
-	DDA *dda = getPointer;
-	if (dda != savedDdaRingAddPointer)
+	const DDA * const savedDdaRingAddPointer = addPointer;		// capture volatile variable to avoid reloading it every time we read it
+	DDA *dda;
 	{
-		bool pauseOkHere = dda->CanPauseAfter();
-		dda = dda->GetNext();
-
-		while (dda != savedDdaRingAddPointer)				// while there are queued moves
+		BasePriorityBooster booster(NvicPriorityStep);			// lock out step interrupts
+		dda = getPointer;
+		bool canPauseHere = true;								// if no moves have been committed, we haven't started moving yet
+		while (dda->IsCommitted())
 		{
-			if (pauseOkHere)								// if we can pause before executing the move that dda refers to
+			canPauseHere = dda->CanPauseAfter();				// see if the jerk limits allow us to stop after this move
+			dda = dda->GetNext();								// we can't adjust or cancel moves that are already committed
+		}
+
+		if (dda != addPointer)
+		{
+			if (canPauseHere)
 			{
-				addPointer = dda;
-				dda->Free();								// set the move status to empty so that when we re-enable interrupts the ISR doesn't start executing it
-				break;
+				// Nothing needed here, we can pause before this move
 			}
-			pauseOkHere = dda->CanPauseAfter();
-			dda = dda->GetNext();
+			else if (dda->CanPauseAfter())						// if we can pause after the following move, we don't need to change it
+			{
+				dda = dda->GetNext();							// pause after this move
+			}
+			else
+			{
+				// We can't pause after the last uncommitted move because that would violate instantaneous speed change limits.
+				// We can't pause after the next move without modifying it because that would also violate instantaneous speed change limits.
+				dda = MakeDeceleratingChain(dda, savedDdaRingAddPointer);	// turn the next move or the next few moves into decelerating moves.
+			}
+
+			// 'dda' is now the first move we are not going to execute.
+			addPointer = dda;
+			while (dda != savedDdaRingAddPointer)				// while there are queued moves
+			{
+				dda->Free();									// set the move status to empty so that when we re-enable interrupts the ISR doesn't start executing it
+				dda = dda->GetNext();
+			}
 		}
 	}
-
-	IrqEnable();
 
 	// We may be going to skip some moves. Get the end coordinate of the previous move.
 	DDA * const prevDda = addPointer->GetPrevious();
@@ -703,6 +718,74 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 	while (dda != savedDdaRingAddPointer);
 
 	return true;
+}
+
+// Turn the move 'startDda' and if necessary some preceding moves into decelerating moves.
+// Return the first move we are not going to execute, which may be the same as stopBeforeDda.
+// When pausing we don't try to use 3rd order motion control.
+// This is called with the step interrupt locked out, so keep it fast!
+// This implementation does not leave any move segments partially executed.
+DDA *DDARing::MakeDeceleratingChain(DDA *startDda, const DDA *stopBeforeDda) noexcept
+{
+	DDA *stopAfterDda = startDda;
+	float startSpeed = startDda->GetStartSpeed();
+	bool notEnoughDistance = false;
+	for (;;)
+	{
+		const float minEndSpeedSquared = fsquare(startSpeed) - 2 * stopAfterDda->GetMaxAcceleration();
+		if (minEndSpeedSquared <= 0) { break; }			// ideally we would allow some instantaneous speed change here
+		if (stopAfterDda->GetNext() == stopBeforeDda)
+		{
+			notEnoughDistance = true;
+			break;
+		}
+		startSpeed = fastSqrtf(minEndSpeedSquared);		// make the start speed the end speed of the previous move
+		stopAfterDda = stopAfterDda->GetNext();
+	}
+
+	// Turn the DDA chain from 'startDda' to 'stopAfterDda' (these may be the same) inclusive into a deceleration.
+	if (notEnoughDistance)
+	{
+		// Start decelerating immediately. There will be some instantaneous speed change at the end.
+		startSpeed = startDda->GetStartSpeed();
+		for (;;)
+		{
+			startDda->TurnIntoDeceleratingMoveWithStartSpeed(startSpeed);
+			if (startDda == stopAfterDda) { break; }
+			startSpeed = startDda->GetEndSpeed();
+			startDda = startDda->GetNext();
+		}
+	}
+	else
+	{
+		float endSpeed = 0.0;							// ideally we would allow some instantaneous speed change here
+		DDA *dda2 = stopAfterDda;
+		bool reachedSteadySpeed = false;
+		for (;;)
+		{
+			if (reachedSteadySpeed)
+			{
+				dda2->TurnIntoSteadySpeedMove(startDda->GetStartSpeed());
+			}
+			else
+			{
+				const float potentialStartSpeedSquared = fsquare(endSpeed) + 2 * dda2->GetMaxAcceleration() * dda2->GetTotalDistance();
+				if (potentialStartSpeedSquared <= fsquare(startDda->GetStartSpeed()))
+				{
+					dda2->TurnIntoDeceleratingMoveWithEndSpeed(endSpeed);
+					endSpeed = fastSqrtf(potentialStartSpeedSquared);
+				}
+				else
+				{
+					dda2->TurnIntoSteadyThenDecelMove(startDda->GetStartSpeed(), endSpeed);
+					reachedSteadySpeed = true;
+				}
+			}
+			if (dda2 == startDda) { break; }
+			dda2 = dda2->GetPrevious();
+		}
+	}
+	return stopAfterDda->GetNext();
 }
 
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT

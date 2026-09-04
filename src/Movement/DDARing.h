@@ -91,6 +91,8 @@ protected:
 private:
 	bool IsTimeToPrepareMove(uint32_t prepareAdvanceTime, uint32_t moveTimeLeft) const noexcept;
 	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, SimulationMode simulationMode) noexcept;
+	DDA *MakeDeceleratingChain(DDA *startDda, const DDA *stopBeforeDda) noexcept pre(endDda != stopBeforeDda);
+
 #if SUPPORT_3RD_ORDER
 	void PlanMoves(DDA *firstUnpreparedMove, bool stopping) noexcept;
 	bool NeedNewPlan(DDA *moveToPrepare) const noexcept;
