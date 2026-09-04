@@ -587,10 +587,27 @@ FilePosition DDARing::GetCurrentMoveFilePosition() const noexcept
 }
 
 // Fast change extrusion factor by modifying uncommitted moves already in the queue
-// Note, this may violate the jerk limits. That is acceptable to the OEM who requested it 'multiplier' should be close to 1.0 to avoid that.
+// Note, this may violate the jerk limits. That is acceptable to the OEM who requested it. 'multiplier' should be close to 1.0 to avoid that.
 void DDARing::ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept
 {
-	//TODO
+	const size_t drive = ExtruderToLogicalDrive(extruder);
+	DDA *cdda;
+
+	TaskCriticalSectionLocker lock;					// prevent the Move task committing moves while we process the movement queue
+	{
+		AtomicCriticalSectionLocker lock2;			// shut out the ISR because it can change getPointer
+		cdda = getPointer;
+		while (cdda->IsCommitted())
+		{
+			cdda = cdda->GetNext();
+		}
+	}
+
+	while (cdda != addPointer)
+	{
+		cdda->AdjustExtrusion(drive, multiplier);
+		cdda = cdda->GetNext();
+	}
 }
 
 // Pause the print as soon as we can.
@@ -626,7 +643,7 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 
 	TaskCriticalSectionLocker lock;							// prevent the Move task changing data while we look at it
 
-	const DDA * const savedDdaRingAddPointer = addPointer;
+	const DDA * const savedDdaRingAddPointer = addPointer;	// capture volatile variable to avoid reloading it every time we read it
 
 	IrqDisable();
 	DDA *dda = getPointer;
