@@ -1696,7 +1696,7 @@ void DDA::AdjustExtrusion(size_t drive, float multiplier, float maxDv) noexcept
 	if (!flags.isNonPrintingExtruderMove && directionVector[drive] > 0.0)	// don't change the extrusion factor for extruder-only moves, also eliminate retraction to simplify the calculations
 	{
 		const float previousMoveExtruderEndSpeed = (prev->GetState() == DDA::planned || prev->GetState() == DDA::committed)
-						? prev->endSpeed * directionVector[drive]
+						? prev->endSpeed * prev->directionVector[drive]
 							: 0.0;
 		const float requestedExtruderStartSpeed = startSpeed * (directionVector[drive] * multiplier);
 		if (fabsf(requestedExtruderStartSpeed - previousMoveExtruderEndSpeed) <= maxDv)
