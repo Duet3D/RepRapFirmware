@@ -561,7 +561,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 #endif
 
 	// 6. Set the speed to the smaller of the requested and maximum speed.
-	// Also enforce a minimum speed of 0.5mm/sec. We need a minimum speed to avoid overflow in the movement calculations.
+	// Also enforce the minimum speed. We need a minimum speed to avoid overflow in the movement calculations.
 	float reqSpeed = (nextMove.inverseTimeMode) ? totalDistance/nextMove.feedRate : nextMove.feedRate;
 	if (!doMotorMapping)
 	{
@@ -586,14 +586,6 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	// speed lower than the configured minimum movement speed. We must apply the minimum speed first and then limit it if necessary after that.
 	requestedSpeed = min<float>(max<float>(reqSpeed, move.MinMovementSpeed()),
 								VectorBoxIntersection(normalisedDirectionVector, move.MaxFeedrates()));
-#if SUPPORT_ASYNC_MOVES
-	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves) && reqSpeed > 1.3 * requestedSpeed)
-	{
-		Platform::moveWarningBuffer->catf("Feed clamp: req=%.1fmm/s allowed=%.1fmm/s dist=%.2fmm it=%u fpos=%" PRIu32 "\n", (double)InverseConvertSpeedToMmPerSec(reqSpeed), (double)InverseConvertSpeedToMmPerSec(requestedSpeed), (double)totalDistance, nextMove.inverseTimeMode ? 1u : 0u, (uint32_t)filePos);
-		Platform::hasMoveWarning = true;
-	}
-#endif
-
 	// On a Cartesian printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
 	// for diagonal moves. On other architectures, this is not OK and any movement in the XY plane should be limited on other ways.
 	if (doMotorMapping)
@@ -1183,6 +1175,7 @@ void DDA::Prepare(DDARing& ring,
 	// Decide when this move should start.
 	// Avoid setting the move start time in the past or with very little time before it starts, because this can lead to us trying to modify a segment that is already executing
 	Move& move = reprap.GetMove();
+	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 	const uint32_t now = StepTimer::GetMovementTimerTicks();
 
 	// 'prepareAdvanceTime' includes lead time for CAN-connected drivers to receive and queue their movement commands before the deadline.
@@ -1194,9 +1187,8 @@ void DDA::Prepare(DDARing& ring,
 	// less than the CAN lead time it needs. So before shortening our own margin, check the ring for a CAN-connected move that's due within
 	// the window we would otherwise be cutting (prepareAdvanceTime - AbsoluteMinimumPreparedTime) and keep the full margin if one is found.
 #if SUPPORT_CAN_EXPANSION
-	auto touchesRemoteDriver = [&move](const DDA& dda) noexcept -> bool
+	auto touchesRemoteDriver = [&move, numTotalAxes](const DDA& dda) noexcept -> bool
 	{
-		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 		for (size_t drive = 0; drive < numTotalAxes; ++drive)
 		{
 			if (dda.directionVector[drive] != 0.0)
@@ -1292,8 +1284,9 @@ void DDA::Prepare(DDARing& ring,
 	{
 		// Catch moves whose per-drive distance cannot fit in the planned duration - the collapsed-duration failure streams many steps in a tiny window and no other detector sees it.
 		// Only owned drives generate motion; unowned endpoint deltas are stale pinned copies patched later by SetLastEndpoints and must not be flagged
+		// Endpoints are only valid for axes so we don't check extruders
 		const float moveSeconds = (float)clocksNeeded * (1.0f / (float)StepClockRate);
-		for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
+		for (size_t drive = 0; drive < numTotalAxes; drive++)
 		{
 			if (ownedDrives.IsBitSet(drive))
 			{
@@ -1362,9 +1355,9 @@ void DDA::Prepare(DDARing& ring,
 			if (ownedDrives.IsBitSet(drive))
 #endif
 			{
-				if (drive < reprap.GetGCodes().GetTotalAxes())
+				if (drive < numTotalAxes)
 				{
-					// It's a linear axis
+					// It's an axis
 					int32_t delta = endPoint[drive] - prev->endPoint[drive];
 					if (delta != 0)
 					{
