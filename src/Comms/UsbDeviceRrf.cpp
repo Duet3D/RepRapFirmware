@@ -88,20 +88,23 @@ bool UsbDeviceRrf::Flush() noexcept
 		}
 		else
 		{
-			const size_t bytesToWrite = min<size_t>(device->canWrite(), buf->BytesLeft());
-			if (bytesToWrite != 0)
+			// Keep the transmit FIFO topped up: one buffer per spin makes every host poll return a short packet
+			do
 			{
-				device->print(buf->Read(bytesToWrite), bytesToWrite);
-			}
+				const size_t bytesToWrite = min<size_t>(device->canWrite(), buf->BytesLeft());
+				if (bytesToWrite != 0)
+				{
+					device->print(buf->Read(bytesToWrite), bytesToWrite);
+				}
 
-			if (buf->BytesLeft() == 0)
-			{
+				if (buf->BytesLeft() != 0)
+				{
+					output.ApplyTimeout(UsbTimeout);
+					break;
+				}
 				output.ReleaseFirstItem();
-			}
-			else
-			{
-				output.ApplyTimeout(UsbTimeout);
-			}
+				buf = output.GetFirstItem();
+			} while (buf != nullptr);
 		}
 		hasMore = !output.IsEmpty();
 	}
