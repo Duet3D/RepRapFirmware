@@ -797,21 +797,23 @@ bool Platform::FlushMessages() noexcept
 		}
 		else
 		{
-			// Write as much data as we can...
-			const size_t bytesToWrite = min<size_t>(SERIAL_MAIN_DEVICE.canWrite(), usbOutputBuffer->BytesLeft());
-			if (bytesToWrite != 0)
+			// Keep the transmit FIFO topped up: one buffer per spin makes every host poll return a short packet
+			do
 			{
-				SERIAL_MAIN_DEVICE.print(usbOutputBuffer->Read(bytesToWrite), bytesToWrite);
-			}
+				const size_t bytesToWrite = min<size_t>(SERIAL_MAIN_DEVICE.canWrite(), usbOutputBuffer->BytesLeft());
+				if (bytesToWrite != 0)
+				{
+					SERIAL_MAIN_DEVICE.print(usbOutputBuffer->Read(bytesToWrite), bytesToWrite);
+				}
 
-			if (usbOutputBuffer->BytesLeft() == 0)
-			{
+				if (usbOutputBuffer->BytesLeft() != 0)
+				{
+					usbOutput.ApplyTimeout(UsbTimeout);
+					break;
+				}
 				usbOutput.ReleaseFirstItem();
-			}
-			else
-			{
-				usbOutput.ApplyTimeout(UsbTimeout);
-			}
+				usbOutputBuffer = usbOutput.GetFirstItem();
+			} while (usbOutputBuffer != nullptr);
 		}
 		usbHasMore = !usbOutput.IsEmpty();
 	}
