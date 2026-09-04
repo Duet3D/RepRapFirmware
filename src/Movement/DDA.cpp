@@ -1697,6 +1697,30 @@ float DDA::GetTotalExtrusionRate() const noexcept
 	return fraction * InverseConvertSpeedToMmPerSec(topSpeed);
 }
 
+// Try to adjust the extrusion for a particular extruder, respecting extruder jerk limits
+void DDA::AdjustExtrusion(size_t drive, float multiplier, float maxDv) noexcept
+{
+	if (!flags.isNonPrintingExtruderMove && directionVector[drive] > 0.0)	// don't change the extrusion factor for extruder-only moves, also eliminate retraction to simplify the calculations
+	{
+		const float previousMoveExtruderEndSpeed = (prev->GetState() == DDA::planned || prev->GetState() == DDA::committed)
+						? prev->endSpeed * directionVector[drive]
+							: 0.0;
+		const float requestedExtruderStartSpeed = startSpeed * (directionVector[drive] * multiplier);
+		if (fabsf(requestedExtruderStartSpeed - previousMoveExtruderEndSpeed) <= maxDv)
+		{
+			directionVector[drive] *= multiplier;
+		}
+		else if (requestedExtruderStartSpeed > previousMoveExtruderEndSpeed)
+		{
+			directionVector[drive] = (previousMoveExtruderEndSpeed + maxDv)/startSpeed;
+		}
+		else
+		{
+			directionVector[drive] = (previousMoveExtruderEndSpeed - maxDv)/startSpeed;
+		}
+	}
+}
+
 // Methods to support fast pause/feed hold
 void DDA::TurnIntoDeceleratingMoveWithStartSpeed(float initialSpeed) noexcept
 {

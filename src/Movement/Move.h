@@ -432,7 +432,8 @@ public:
 	int32_t GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noexcept;		// Return and reset the accumulated commanded extrusion amount
 	uint32_t ExtruderPrintingSince(size_t logicalDrive) const noexcept;						// When we started doing normal moves after the most recent extruder-only move
 
-	void ChangeExtrusionFactor(size_t msNumber, unsigned int extruder, float multiplier) noexcept pre(msNumber < NumMovementSystems) { rings[msNumber].ChangeExtrusionFactor(extruder, multiplier); }	// fast extrusion factor change
+	void ChangeExtrusionFactor(size_t msNumber, unsigned int extruder, float multiplier) noexcept	// fast extrusion factor change
+		pre(msNumber < NumMovementSystems);
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept;									// Write settings for resuming the print
@@ -962,6 +963,12 @@ inline __attribute__((always_inline)) bool Move::ScheduleNextStepInterrupt() noe
 		return stepsTimer.ScheduleMovementCallbackFromIsr(activeDMs->nextStepTime);
 	}
 	return false;
+}
+
+inline void Move::ChangeExtrusionFactor(size_t msNumber, unsigned int extruder, float multiplier) noexcept	// fast extrusion factor change
+{
+	const size_t drive = ExtruderToLogicalDrive(extruder);
+	rings[msNumber].ChangeExtrusionFactor(drive, multiplier, maxInstantDvs[drive]);
 }
 
 // Insert the specified drive into the step list, in step time order.

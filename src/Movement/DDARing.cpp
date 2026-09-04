@@ -587,10 +587,8 @@ FilePosition DDARing::GetCurrentMoveFilePosition() const noexcept
 }
 
 // Fast change extrusion factor by modifying uncommitted moves already in the queue
-// Note, this may violate the jerk limits. That is acceptable to the OEM who requested it. 'multiplier' should be close to 1.0 to avoid that.
-void DDARing::ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept
+void DDARing::ChangeExtrusionFactor(size_t drive, float multiplier, float maxDv) noexcept
 {
-	const size_t drive = ExtruderToLogicalDrive(extruder);
 	DDA *cdda;
 
 	TaskCriticalSectionLocker lock;					// prevent the Move task committing moves while we process the movement queue
@@ -605,7 +603,7 @@ void DDARing::ChangeExtrusionFactor(unsigned int extruder, float multiplier) noe
 
 	while (cdda != addPointer)
 	{
-		cdda->AdjustExtrusion(drive, multiplier);
+		cdda->AdjustExtrusion(drive, multiplier, maxDv);
 		cdda = cdda->GetNext();
 	}
 }

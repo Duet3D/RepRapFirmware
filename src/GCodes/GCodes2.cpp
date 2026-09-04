@@ -2795,9 +2795,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						extruder = gb.GetLimitedUIValue('D', numExtruders);
 					}
 
-					// OEM request: option to change extrusion factor with low latency
-					const bool immediate = gb.Seen('F') && gb.GetUIValue() == 1;
-
 					const Tool *_ecv_null const ct = GetMovementState(gb).currentTool;
 					if (!seenD && ct == nullptr)
 					{
@@ -2811,11 +2808,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							if (seenD)
 							{
-								ChangeExtrusionFactor(extruder, extrusionFactor, immediate);
+								ChangeExtrusionFactor(extruder, extrusionFactor);
 							}
 							else
 							{
-								ct->IterateExtruders([this, extrusionFactor, immediate](unsigned int extr) { ChangeExtrusionFactor(extr, extrusionFactor, immediate); });
+								ct->IterateExtruders([this, extrusionFactor](unsigned int extr) { ChangeExtrusionFactor(extr, extrusionFactor); });
 							}
 						}
 					}

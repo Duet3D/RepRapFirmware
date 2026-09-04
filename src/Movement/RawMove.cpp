@@ -243,16 +243,13 @@ void MovementState::ResetLaser() noexcept
 #endif
 }
 
-void MovementState::ChangeExtrusionFactor(unsigned int extruder, float multiplier, bool immediate) noexcept
+void MovementState::ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept
 {
 	if (segmentsLeft != 0 && raw.applyM220M221)
 	{
 		raw.coords[ExtruderToLogicalDrive(extruder)] *= multiplier;		// last move not gone, so update it
 	}
-	if (immediate)
-	{
-		reprap.GetMove().ChangeExtrusionFactor(msNumber, extruder, multiplier);
-	}
+	reprap.GetMove().ChangeExtrusionFactor(msNumber, extruder, multiplier);
 }
 
 // Get a single coordinate for reporting e.g.in the OM

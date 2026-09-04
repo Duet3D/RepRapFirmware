@@ -1177,13 +1177,13 @@ void GCodes::RotateCoordinates(const MovementState& ms, float angleDegrees, floa
 #endif
 
 // Change a live extrusion factor
-void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor, bool immediate) noexcept
+void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept
 {
 	const float multiplier = factor/extrusionFactors[extruder];
 	extrusionFactors[extruder] = factor;
 	for (MovementState& ms : moveStates)
 	{
-		ms.ChangeExtrusionFactor(extruder, multiplier, immediate);
+		ms.ChangeExtrusionFactor(extruder, multiplier);
 	}
 	reprap.MoveUpdated();
 }

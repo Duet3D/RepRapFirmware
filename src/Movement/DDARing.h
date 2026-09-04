@@ -66,7 +66,7 @@ public:
 	void SetStartCoordinate(size_t axis, float pos) noexcept pre(axis < MaxAxes) { startCoordinates[axis] = pos; }
 	void UpdateStartCoordinates(const float coords[MaxAxes]) noexcept;
 
-	void ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept;		// fast change extrusion factor
+	void ChangeExtrusionFactor(size_t drive, float multiplier, float maxDv) noexcept;	// fast change extrusion factor
 
 	bool PauseMoves(MovementState& ms) noexcept;										// Pause the print as soon as we can, returning true if we were able to skip any moves in the queue
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT

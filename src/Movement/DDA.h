@@ -161,8 +161,7 @@ public:
 #endif
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float GetTotalExtrusionRate() const noexcept;
-	void AdjustExtrusion(size_t drive, float  multiplier) noexcept
-		{ if (!flags.isNonPrintingExtruderMove) { directionVector[drive] *= multiplier; } }
+	void AdjustExtrusion(size_t drive, float  multiplier, float maxDv) noexcept;
 
 #if SUPPORT_3RD_ORDER
 	bool IsSCurveMove() const noexcept { return flags.useScurve; }
