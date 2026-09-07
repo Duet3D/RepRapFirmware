@@ -162,18 +162,16 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 	if (gb.Seen('S'))
 	{
 		const float advance = gb.GetNonNegativeFValue();
-		if (!reprap.GetGCodes().LockCurrentMovementSystemAndWaitForStandstill(gb))
-		{
-			return GCodeResult::notFinished;
-		}
-
 		GCodeResult rslt = GCodeResult::ok;
-
-#if SUPPORT_CAN_EXPANSION
-		CanDriversData<float> canDriversToUpdate;
-#endif
+		ToolNumbersBitmap toolsToUpdate;
+		toolsToUpdate.Clear();
 		if (gb.Seen('D'))
 		{
+			bool targetAnyTools = false;
+			bool extruderSelected[MaxExtruders];
+			bool extruderMatchedToTool[MaxExtruders];
+			memset(extruderSelected, 0, sizeof(extruderSelected));
+			memset(extruderMatchedToTool, 0, sizeof(extruderMatchedToTool));
 			uint32_t eDrive[MaxExtruders];
 			size_t eCount = MaxExtruders;
 			gb.GetUnsignedArray(eDrive, eCount, false);
@@ -183,17 +181,63 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 				if (extruder >= reprap.GetGCodes().GetNumExtruders())
 				{
 					reply.printf("Invalid extruder number '%" PRIu32 "'", extruder);
-					rslt = GCodeResult::error;
-					break;
+					return GCodeResult::error;
 				}
-				GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
-#if SUPPORT_CAN_EXPANSION
-				const DriverId did = GetExtruderDriver(extruder);
-				if (did.IsRemote())
+				extruderSelected[extruder] = true;
+			}
+
+			ReadLocker lock(Tool::toolListLock);
+			for (const Tool *_ecv_null tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
+			{
+				bool anySelected = false;
+				bool allSelected = true;
+				tool->IterateExtruders([&extruderSelected, &anySelected, &allSelected](unsigned int extruder) noexcept
+										{
+											if (extruderSelected[extruder])
+											{
+												anySelected = true;
+											}
+											else
+											{
+												allSelected = false;
+											}
+										}
+									);
+				if (anySelected)
 				{
-					canDriversToUpdate.AddEntry(did, advance);
+					tool->IterateExtruders([&extruderSelected, &extruderMatchedToTool](unsigned int extruder) noexcept
+											{
+												if (extruderSelected[extruder])
+												{
+													extruderMatchedToTool[extruder] = true;
+												}
+											}
+										);
+
+					if (!allSelected && tool->DriveCount() > 1)
+					{
+						reply.printf("Extruder list partially targets multi-extruder tool %d; set pressure advance per tool", tool->Number());
+						return GCodeResult::error;
+					}
+					toolsToUpdate.SetBit(tool->Number());
+					targetAnyTools = true;
 				}
-#endif
+			}
+
+			if (!targetAnyTools)
+			{
+				reply.copy("No tool found for specified extruder(s)");
+				return GCodeResult::error;
+			}
+
+			for (size_t i = 0; i < eCount; ++i)
+			{
+				const uint32_t extruder = eDrive[i];
+				if (!extruderMatchedToTool[extruder])
+				{
+					reply.printf("No tool found for specified extruder '%" PRIu32 "'", extruder);
+					return GCodeResult::error;
+				}
 			}
 		}
 		else
@@ -202,23 +246,29 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 			if (ct == nullptr)
 			{
 				reply.copy("No tool selected");
-				rslt = GCodeResult::error;
+				return GCodeResult::error;
 			}
-			else
+			toolsToUpdate.SetBit(ct->Number());
+		}
+
+		{
+			WriteLocker lock(Tool::toolListLock);
+			for (Tool *_ecv_null tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
 			{
+				if (!toolsToUpdate.IsBitSet(tool->Number()))
+				{
+					continue;
+				}
+
+				tool->SetPressureAdvance(advance);
 #if SUPPORT_CAN_EXPANSION
-				ct->IterateExtruders([this, advance, &canDriversToUpdate](unsigned int extruder)
+				tool->IterateExtruders([this, advance](unsigned int extruder)
 										{
 											GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
-											const DriverId did = GetExtruderDriver(extruder);
-											if (did.IsRemote())
-											{
-												canDriversToUpdate.AddEntry(did, advance);
-											}
 										}
 									);
 #else
-				ct->IterateExtruders([this, advance](unsigned int extruder)
+				tool->IterateExtruders([this, advance](unsigned int extruder)
 										{
 											GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
 										}
@@ -228,19 +278,17 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 		}
 
 		reprap.MoveUpdated();
+		reprap.ToolsUpdated();
 
-#if SUPPORT_CAN_EXPANSION
-		return max<GCodeResult>(rslt, CanInterface::SetRemotePressureAdvance(canDriversToUpdate, reply));
-#else
 		return rslt;
-#endif
 	}
 
-	reply.copy("Extruder pressure advance");
+	reply.copy("Tool pressure advance");
 	char c = ':';
-	for (size_t i = 0; i < reprap.GetGCodes().GetNumExtruders(); ++i)
+	ReadLocker lock(Tool::toolListLock);
+	for (const Tool *_ecv_null tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
 	{
-		reply.catf("%c %.3f", c, (double)GetExtruderShaperForExtruder(i).GetKseconds());
+		reply.catf("%c T%d %.4f", c, tool->Number(), (double)tool->GetPressureAdvance());
 		c = ',';
 	}
 	return GCodeResult::ok;
@@ -1270,7 +1318,8 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			if (extrusionRequested != 0.0)
 			{
 				EnableDrivers(drive, false);
-				AddLinearSegments(drive, msg.whenToExecute, params, extrusionRequested, segFlags.AddIsExtruder());
+				const float pressureAdvanceClocks = (msg.usePressureAdvance) ? msg.pressureAdvanceClocks : 0.0;
+				AddLinearSegments(drive, msg.whenToExecute, params, extrusionRequested, segFlags.AddIsExtruder(), pressureAdvanceClocks);
 			}
 		}
 		else
@@ -1279,7 +1328,7 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			if (delta != 0.0)
 			{
 				EnableDrivers(drive, false);
-				AddLinearSegments(drive, msg.whenToExecute, params, delta, segFlags);
+				AddLinearSegments(drive, msg.whenToExecute, params, delta, segFlags, 0.0);
 			}
 		}
 	}

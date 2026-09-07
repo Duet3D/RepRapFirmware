@@ -122,6 +122,7 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 	{ "number",				OBJECT_MODEL_FUNC((int32_t)self->myNumber),												ObjectModelEntryFlags::none },
 	{ "offsets",			OBJECT_MODEL_FUNC_ARRAY(6), 															ObjectModelEntryFlags::none },
 	{ "offsetsProbed",		OBJECT_MODEL_FUNC((int32_t)self->axisOffsetsProbed.GetRaw()),							ObjectModelEntryFlags::none },
+	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->pressureAdvance, 4),												ObjectModelEntryFlags::none },
 	{ "retraction",			OBJECT_MODEL_FUNC(self, 1),																ObjectModelEntryFlags::none },
 	{ "spindle",			OBJECT_MODEL_FUNC((int32_t)self->spindleNumber),										ObjectModelEntryFlags::none },
 	{ "spindleRpm",			OBJECT_MODEL_FUNC((int32_t)self->spindleRpm),											ObjectModelEntryFlags::none },
@@ -136,7 +137,7 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 	{ "zHop",				OBJECT_MODEL_FUNC(self->configuredRetractHop, 2),										ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 21, 5 };
+constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 22, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 
@@ -244,6 +245,7 @@ uint16_t Tool::numToolsToReport = 0;
 		t->drives[drive] = d[drive];
 		t->mix[drive] = (drive == 0) ? 1.0 : 0.0;		// initial mix ratio is 1:0:0
 	}
+	t->pressureAdvance = (t->driveCount != 0) ? reprap.GetMove().GetPressureAdvanceClocksForExtruder(t->drives[0])/(float)StepClockRate : 0.0;
 
 	for (size_t heater = 0; heater < t->heaterCount; heater++)
 	{
@@ -881,6 +883,18 @@ bool Tool::UsesHeater(int8_t heater) const noexcept
 	for (size_t i = 0; i < heaterCount; ++i)
 	{
 		if (heaters[i] == heater)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool Tool::UsesExtruder(unsigned int extruder) const noexcept
+{
+	for (size_t i = 0; i < driveCount; ++i)
+	{
+		if (drives[i] == extruder)
 		{
 			return true;
 		}

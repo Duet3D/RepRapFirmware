@@ -122,6 +122,7 @@ ExpansionBoardData::ExpansionBoardData() noexcept
 	  driverData(nullptr),
 	  accelerometerRuns(0), closedLoopRuns(0),
 	  hasMcuTemp(false), hasVin(false), hasV12(false), hasAccelerometer(false),
+	  supportsMovementPaSnapshot(false),
 	  state(BoardState::unknown), numDrivers(0)
 {
 }
@@ -190,10 +191,12 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 			if (isNewFormat)
 			{
 				boardTypeAndFirmwareVersion.copy(buf->msg.announceNew.boardTypeAndFirmwareVersion, CanMessageAnnounceNew::GetMaxTextLength(buf->dataLength));
+				board.supportsMovementPaSnapshot = buf->msg.announceNew.supportsMovementPaSnapshot;
 			}
 			else
 			{
 				boardTypeAndFirmwareVersion.copy(buf->msg.announceOld.boardTypeAndFirmwareVersion, CanMessageAnnounceOld::GetMaxTextLength(buf->dataLength));
+				board.supportsMovementPaSnapshot = false;
 			}
 			UpdateBoardState(src, BoardState::unknown);
 			if (board.typeName == nullptr || strcmp(board.typeName, boardTypeAndFirmwareVersion.c_str()) != 0)
