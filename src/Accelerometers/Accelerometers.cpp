@@ -30,8 +30,6 @@
 # include <Duet3Ate.h>
 #endif
 
-constexpr uint32_t DefaultAccelerometerSpiFrequency = 2000000;
-
 #if SUPPORT_CAN_EXPANSION
 
 static CanAddress remoteBoardAddress = CanId::NoAddress;
