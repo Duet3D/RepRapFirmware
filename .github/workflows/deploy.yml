@@ -141,9 +141,12 @@ jobs:
         run: |
           if [ -n "$(echo "$VERSION" | tr -d '[:space:]')" ]; then
             sed -i "s/# define MAIN_VERSION.\+/# define MAIN_VERSION \"$VERSION\"/g" ./RepRapFirmware/src/Version.h
+            sed -i "s/#define VERSION\s.\+/#define VERSION \"$VERSION\"/g" ./Duet3Expansion/src/Version.h
+            grep -q "\"$VERSION\"" ./RepRapFirmware/src/Version.h && grep -q "\"$VERSION\"" ./Duet3Expansion/src/Version.h
           else
             echo "No version supplied, leaving Version.h unchanged"
           fi
+          echo "Deploying $(sed -n 's/^# define MAIN_VERSION\s\+"\(.\+\)"$/\1/p' ./RepRapFirmware/src/Version.h)"
 
       - name: "Set up ARM GCC"
         run: |
@@ -171,20 +174,27 @@ jobs:
           rm -f ./upload/Duet3Firmware_Mini5plus.bin
           cp ./RepRapFirmware/*/Duet3Firmware_*.map ./Duet3Expansion/*/Duet3Firmware_*.map ./upload/maps/
 
+      - name: "Bundle binaries and symbols"
+        run: |
+          mkdir bundles
+          (cd ./upload && zip -qj "$GITHUB_WORKSPACE/bundles/Duet3Firmware.zip" *.bin *.uf2)
+          (cd ./upload/maps && zip -qj "$GITHUB_WORKSPACE/bundles/Duet3Firmware-symbols.zip" *.map)
+          unzip -l ./bundles/Duet3Firmware.zip
+          unzip -l ./bundles/Duet3Firmware-symbols.zip
+
       - name: "Attach binaries"
         uses: actions/upload-artifact@v7
         with:
           name: binaries
-          path: |
-            ./upload/*.bin
-            ./upload/*.uf2
+          path: ./bundles/Duet3Firmware.zip
+          compression-level: 0
 
       - name: "Attach symbols"
         uses: actions/upload-artifact@v7
         with:
           name: symbols
-          path: |
-            ./upload/maps/*.map
+          path: ./bundles/Duet3Firmware-symbols.zip
+          compression-level: 0
 
       - name: "Upload files to testing directory"
         uses: Creepios/sftp-action@v1.0.5
