@@ -249,6 +249,7 @@ void MovementState::ChangeExtrusionFactor(unsigned int extruder, float multiplie
 	{
 		raw.coords[ExtruderToLogicalDrive(extruder)] *= multiplier;		// last move not gone, so update it
 	}
+	reprap.GetMove().ChangeExtrusionFactor(msNumber, extruder, multiplier);
 }
 
 // Get a single coordinate for reporting e.g.in the OM

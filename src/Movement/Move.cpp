@@ -2762,7 +2762,7 @@ void Move::CheckEndstops(bool executingMove) noexcept
 #if SUPPORT_CAN_EXPANSION
 			if (StopAllDrivers(executingMove, hitDetails.whenTriggered)) { wakeAsyncSender = true; }
 #else
-			StopAllDrivers(executingMove);
+			StopAllDrivers(executingMove, hitDetails.whenTriggered);
 #endif
 			if (hitDetails.isZProbe)
 			{
@@ -2788,7 +2788,7 @@ void Move::CheckEndstops(bool executingMove) noexcept
 #if SUPPORT_CAN_EXPANSION
 			if (StopAxisOrExtruder(executingMove, hitDetails.axis, hitDetails.whenTriggered)) { wakeAsyncSender = true; }
 #else
-			StopAxisOrExtruder(executingMove, hitDetails.axis);
+			StopAxisOrExtruder(executingMove, hitDetails.axis, hitDetails.whenTriggered);
 #endif
 			reprap.GetGCodes().RecordEndstopTriggered(hitDetails.axis, kinematics->GetHomingMode());
 

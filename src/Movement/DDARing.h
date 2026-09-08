@@ -66,6 +66,8 @@ public:
 	void SetStartCoordinate(size_t axis, float pos) noexcept pre(axis < MaxAxes) { startCoordinates[axis] = pos; }
 	void UpdateStartCoordinates(const float coords[MaxAxes]) noexcept;
 
+	void ChangeExtrusionFactor(size_t drive, float multiplier, float maxDv) noexcept;	// fast change extrusion factor
+
 	bool PauseMoves(MovementState& ms) noexcept;										// Pause the print as soon as we can, returning true if we were able to skip any moves in the queue
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 	bool LowPowerOrStallPause(MovementState& ms) noexcept;								// Pause the print immediately, returning true if we were able to
@@ -89,6 +91,8 @@ protected:
 private:
 	bool IsTimeToPrepareMove(uint32_t prepareAdvanceTime, uint32_t moveTimeLeft) const noexcept;
 	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, SimulationMode simulationMode) noexcept;
+	DDA *MakeDeceleratingChain(DDA *startDda, const DDA *stopBeforeDda) noexcept pre(endDda != stopBeforeDda);
+
 #if SUPPORT_3RD_ORDER
 	void PlanMoves(DDA *firstUnpreparedMove, bool stopping) noexcept;
 	bool NeedNewPlan(DDA *moveToPrepare) const noexcept;

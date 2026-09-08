@@ -326,9 +326,10 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						// Should we queue this code?
 						// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
 						// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
-						if (gb.CanQueueCodes() && GCodeQueue::ShouldQueueG10(gb, allAxisLetters))
+						const MovementState ms = GetMovementState(gb);
+						if (gb.CanQueueCodes() && ms.codeQueue->ShouldQueueG10(gb, allAxisLetters))
 						{
-							if (GetMovementState(gb).segmentsLeft == 0 && GetMovementState(gb).codeQueue->QueueCode(gb))
+							if (ms.segmentsLeft == 0 && ms.codeQueue->QueueCode(gb))
 							{
 								HandleReply(gb, GCodeResult::ok, "");
 								return true;
@@ -684,15 +685,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	// Can we queue this code?
 	// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
 	// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
-	if (gb.CanQueueCodes() && GCodeQueue::ShouldQueueMCode(gb))
+	if (gb.CanQueueCodes())
 	{
-		if (GetMovementState(gb).segmentsLeft == 0 && GetMovementState(gb).codeQueue->QueueCode(gb))
+		const MovementState& ms = GetMovementState(gb);
+		if (ms.codeQueue->ShouldQueueMCode(gb))
 		{
-			HandleReply(gb, GCodeResult::ok, "");
-			return true;
-		}
+			if (ms.segmentsLeft == 0 && ms.codeQueue->QueueCode(gb))
+			{
+				HandleReply(gb, GCodeResult::ok, "");
+				return true;
+			}
 
-		return false;		// we should queue this code but we can't yet, so wait until we can either execute it or queue it
+			return false;		// we should queue this code but we can't yet, so wait until we can either execute it or queue it
+		}
 	}
 
 #if HAS_SBC_INTERFACE
@@ -2801,13 +2806,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						const float extrusionFactor = gb.GetPositiveFValue() * 0.01;
 						if (extrusionFactor >= 0.01)
 						{
+							const bool isFileChannel = gb.IsFileChannel();
 							if (seenD)
 							{
-								ChangeExtrusionFactor(extruder, extrusionFactor);
+								ChangeExtrusionFactor(extruder, extrusionFactor, isFileChannel);
 							}
 							else
 							{
-								ct->IterateExtruders([this, extrusionFactor](unsigned int extr) { ChangeExtrusionFactor(extr, extrusionFactor); });
+								ct->IterateExtruders([this, extrusionFactor, isFileChannel](unsigned int extr) { ChangeExtrusionFactor(extr, extrusionFactor, isFileChannel); });
 							}
 						}
 					}
@@ -2918,7 +2924,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							reprap.MoveUpdated();
 							if (IsAxisHomed(axis))
 							{
-								//TODO find which movement system owns the axis concerned and push the babystepping through that one
+								//TODO find which movement system owns the axis concerned and push the babystepping through that one - currently we assume motion system 0
 								const float amountPushed = reprap.GetMove().PushBabyStepping(0, axis, differences[axis]);
 								ms.initialCoords[axis] += amountPushed;
 
@@ -2932,7 +2938,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							}
 						}
 
-						if (canMove && haveResidual && ms.segmentsLeft == 0 && reprap.GetMove().NoLiveMovement())
+						if (canMove && haveResidual && ms.segmentsLeft == 0 && reprap.GetMove().NoLiveMovement(ms.GetNumber()))
 						{
 							// The pipeline is empty, so execute the babystepping move immediately if it is safe to do
 							SetMoveBufferDefaults(ms);

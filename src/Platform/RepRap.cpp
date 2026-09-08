@@ -1944,7 +1944,7 @@ size_t RepRap::GetStatusIndex() const noexcept
 			  		  : 												  9		// Printing
 			  	  	)
 			: (gCodes->IsDoingToolChange())								? 10	// Changing tool
-			: (gCodes->DoingFileMacro() || !move->NoLiveMovement() ||
+			: (gCodes->DoingFileMacro() || !move->NoLiveMovement(0) ||
 			   gCodes->WaitingForAcknowledgement() ||
 			   heat->IsTuningHeater())									? 11	// Busy
 			:															  12;	// Idle

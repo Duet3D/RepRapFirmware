@@ -251,6 +251,9 @@ constexpr int32_t DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full
 constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command for full power
 constexpr uint32_t LaserPwmIntervalMillis = 5;			// Interval (ms) between adjusting the laser PWM during acceleration or deceleration
 
+// Accelerometer support
+constexpr size_t MaxAccelerometers = 1;					// Maximum number of accelerometers addressable from the main board. We don't yet support multiple accelerometers.
+
 // I2C
 // A note on the i2C clock frequency.
 // On a Duet WiFi attached to a DueX5 through 160mm of ribbon cable, the cable capacitance in combination with the 4K7 pullup resistors slows down the
@@ -259,7 +262,7 @@ constexpr uint32_t LaserPwmIntervalMillis = 5;			// Interval (ms) between adjust
 // in a boot loop caused by the watchdog timer going off.
 // At 100kHz I2C clock frequency, these issues are rare.
 constexpr uint32_t I2cClockFreq = 100000;				// clock frequency in Hz. 100kHz is 10us per bit, so about 90us per byte if there is no clock stretching
-constexpr size_t MaxI2cOrModbusValues = 34;						// max bytes in M260 or M261 command. Increased to 34 for NeoDriver.
+constexpr size_t MaxI2cOrModbusValues = 34;				// max bytes in M260 or M261 command. Increased to 34 for NeoDriver.
 
 // File handling
 #if defined(DUET3) || defined(DUET3MINI)

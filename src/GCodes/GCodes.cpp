@@ -90,7 +90,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	FileGCodeInput * const fileInput = nullptr;
 #endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File)] = new GCodeBuffer(GCodeChannel::File, nullptr, fileInput, GenericMessage);
-	moveStates[0].codeQueue = new GCodeQueue();
+	moveStates[0].codeQueue = new GCodeQueue(0);
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue)] = new GCodeBuffer(GCodeChannel::Queue, moveStates[0].codeQueue, fileInput, GenericMessage);
 
 #if SUPPORT_ASYNC_MOVES
@@ -100,7 +100,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	FileGCodeInput * const file2Input = nullptr;
 # endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)] = new GCodeBuffer(GCodeChannel::File2, nullptr, file2Input, GenericMessage);
-	moveStates[1].codeQueue = new GCodeQueue();
+	moveStates[1].codeQueue = new GCodeQueue(1);
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)] = new GCodeBuffer(GCodeChannel::Queue2, moveStates[1].codeQueue, fileInput, GenericMessage);
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]->SetActiveQueueNumber(1);		// so that all commands read from this queue get executed on queue #1 instead of the default #0
 #else
@@ -3809,9 +3809,8 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	for (MovementState& ms : moveStates)
 	{
 		ms.InitObjectCancellation();
+		reprap.GetMove().ResetMoveCounters(ms.GetNumber());
 	}
-
-	reprap.GetMove().ResetMoveCounters();
 
 	if (fromStart)															// if not resurrecting a print
 	{

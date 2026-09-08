@@ -811,7 +811,7 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 # else
 								const float actualCurrent = motorCurrents[axisOrExtruder];
 # endif
-								rslt = max<GCodeResult>(rslt, UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder], reply));
+								UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
 							}
 		);
 		return rslt;

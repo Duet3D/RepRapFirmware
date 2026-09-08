@@ -161,6 +161,7 @@ public:
 #endif
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float GetTotalExtrusionRate() const noexcept;
+	void AdjustExtrusion(size_t drive, float  multiplier, float maxDv) noexcept;
 
 #if SUPPORT_3RD_ORDER
 	bool IsSCurveMove() const noexcept { return flags.useScurve; }
@@ -198,6 +199,15 @@ public:
 	void SetDoneIoBits() noexcept { flags.doneIoBits = true; }
 	void SetDoneFeedForward() noexcept { flags.doneFeedForward = true; }
 	void SetDoneOutputOnExtrude() noexcept { flags.doneOutputOnExtrude = true; }
+
+	// Methods to support fast pause/feed hold
+	float GetStartSpeed() const noexcept { return startSpeed; }
+	float GetEndSpeed() const noexcept { return endSpeed; }
+	float GetMaxAcceleration() const noexcept { return maxAcceleration; }
+	void TurnIntoDeceleratingMoveWithStartSpeed(float initialSpeed) noexcept;
+	void TurnIntoSteadySpeedMove(float speed) noexcept;
+	void TurnIntoDeceleratingMoveWithEndSpeed(float finalSpeed) noexcept;
+	void TurnIntoSteadyThenDecelMove(float initialSpeed, float finalSpeed) noexcept;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }
@@ -362,9 +372,10 @@ private:
 #endif
 };
 
+// Check whether we can pause after a move, assuming that the following move hasn't been committed yet
 inline bool DDA::CanPauseAfter() const noexcept
 {
-	return flags.canPauseAfter && !next->IsCommitted();		// we can't easily cancel moves that have already been sent to CAN expansion boards
+	return flags.canPauseAfter;
 }
 
 inline bool DDA::IsProvisional() const noexcept
