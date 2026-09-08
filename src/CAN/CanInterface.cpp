@@ -1941,12 +1941,12 @@ GCodeResult CanInterface::DeleteFilamentMonitor(DriverId driver, GCodeBuffer* gb
 
 # if SUPPORT_ACCELEROMETERS
 
-GCodeResult CanInterface::StartAccelerometer(DriverId device, uint8_t axes, uint32_t numSamples, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+GCodeResult CanInterface::StartAccelerometer(CanAddress boardAddress, size_t deviceNumber, uint8_t axes, uint32_t numSamples, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	CanMessageBuffer* const buf = AllocateBuffer(&gb);
-	const CanRequestId rid = CanInterface::AllocateRequestId(device.boardAddress, buf);
-	auto msg = buf->SetupRequestMessage<CanMessageStartAccelerometer>(rid, GetCanAddress(), device.boardAddress);
-	msg->deviceNumber = device.localDriver;
+	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
+	auto msg = buf->SetupRequestMessage<CanMessageStartAccelerometer>(rid, GetCanAddress(), boardAddress);
+	msg->deviceNumber = deviceNumber;
 	msg->axes = axes;
 	msg->numSamples = numSamples;
 	msg->delayedStart = 0;
