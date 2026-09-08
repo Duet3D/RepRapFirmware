@@ -97,6 +97,7 @@ float Heater::lastCoolingRate;
 FansBitmap Heater::tuningFans;
 Heater::TuningPhase Heater::tuningPhase(TuningPhase::checking_temperature_is_stable);
 uint8_t Heater::idleCyclesDone;
+uint8_t Heater::cyclesToSkip;
 bool Heater::tuningQuietMode;
 
 Heater::HeaterParameters Heater::fanOffParams, Heater::fanOnParams;
