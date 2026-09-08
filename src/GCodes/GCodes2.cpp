@@ -2806,13 +2806,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						const float extrusionFactor = gb.GetPositiveFValue() * 0.01;
 						if (extrusionFactor >= 0.01)
 						{
+							const bool isFileChannel = gb.IsFileChannel();
 							if (seenD)
 							{
-								ChangeExtrusionFactor(extruder, extrusionFactor);
+								ChangeExtrusionFactor(extruder, extrusionFactor, isFileChannel);
 							}
 							else
 							{
-								ct->IterateExtruders([this, extrusionFactor](unsigned int extr) { ChangeExtrusionFactor(extr, extrusionFactor); });
+								ct->IterateExtruders([this, extrusionFactor, isFileChannel](unsigned int extr) { ChangeExtrusionFactor(extr, extrusionFactor, isFileChannel); });
 							}
 						}
 					}

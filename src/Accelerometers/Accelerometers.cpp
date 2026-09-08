@@ -30,10 +30,9 @@
 # include <Duet3Ate.h>
 #endif
 
-constexpr uint32_t DefaultAccelerometerSpiFrequency = 2000000;
-
 #if SUPPORT_CAN_EXPANSION
 
+static CanAddress remoteBoardAddress = CanId::NoAddress;
 static unsigned int expectedRemoteSampleNumber = 0;
 static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
 static uint8_t expectedRemoteAxes;
@@ -265,36 +264,6 @@ static bool TranslateOrientation(uint32_t input) noexcept
 // Deal with M955
 GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	gb.MustSee('P');
-	DriverId device = gb.GetDriverId();
-
-# if SUPPORT_CAN_EXPANSION
-	if (device.IsRemote())
-	{
-		CanMessageGenericConstructor cons(M955Params);
-		cons.PopulateFromCommand(gb);
-		uint32_t words[CanMessageStandardReply::MaxNumWords];
-		const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::accelerometerConfig, device.boardAddress, reply, nullptr, words);
-		if (rslt <= GCodeResult::warning)
-		{
-			// Firmware that predates the data words reports zero, which the object model passes on as unknown
-			reprap.GetExpansion().SaveAccelerometerConfig(device.GetBoardAddress(), (uint16_t)words[0], (uint8_t)words[1]);
-			if (gb.Seen('I'))
-			{
-				const uint8_t remoteOrientation = (uint8_t)gb.GetUIValue();
-				reprap.GetExpansion().SaveAccelerometerOrientation(device.GetBoardAddress(), (uint8_t)remoteOrientation);
-			}
-		}
-		return rslt;
-	}
-# endif
-
-	if (device.localDriver != 0)
-	{
-		reply.copy("Only one local accelerometer is supported");
-		return GCodeResult::error;
-	}
-
 	// No need for task lock here because this function and the M956 function are called only by the MAIN task
 	if (accelerometerFile != nullptr)
 	{
@@ -302,19 +271,49 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 		return GCodeResult::error;
 	}
 
-	bool seen = false;
+	// Get the accelerometer number, default 0
+	const bool seenP = gb.Seen('P');
+	const size_t accelerometerNumber = (seenP) ? gb.GetLimitedUIValue('P', MaxAccelerometers) : 0;
+
+	// Get the board number and port names. For accelerometers embedded on tool boards the port name should be "i2c.lis".
 	if (gb.Seen('C'))
 	{
-		seen = true;
+		String<StringLength50> pinNames;
+		gb.GetReducedString(pinNames.GetRef());
 
-		// Creating a new accelerometer. First delete any existing accelerometer.
+#if SUPPORT_CAN_EXPANSION
+		remoteBoardAddress = CanId::NoAddress;
+		const CanAddress boardAddress = IoPort::RemoveBoardAddress(pinNames.GetRef());
+		if (boardAddress != CanInterface::GetCanAddress())
+		{
+			CanMessageGenericConstructor cons(M955Params);
+			cons.PopulateFromCommand(gb);
+			uint32_t words[CanMessageStandardReply::MaxNumWords];
+			const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::accelerometerConfig, boardAddress, reply, nullptr, words);
+			if (rslt <= GCodeResult::warning)
+			{
+				remoteBoardAddress = boardAddress;
+
+				// Firmware that predates the data words reports zero, which the object model passes on as unknown
+				reprap.GetExpansion().SaveAccelerometerConfig(boardAddress, (uint16_t)words[0], (uint8_t)words[1]);
+				if (gb.Seen('I'))
+				{
+					const uint8_t remoteOrientation = (uint8_t)gb.GetUIValue();
+					reprap.GetExpansion().SaveAccelerometerOrientation(boardAddress, (uint8_t)remoteOrientation);
+				}
+			}
+			return rslt;
+		}
+#endif
+
+		// Creating a new local accelerometer. First delete any existing accelerometer.
 		DeleteObject(accelerometer);
 		spiCsPort.Release();
 		irqPort.Release();
 
 		IoPort * const ports[2] = { &spiCsPort, &irqPort };
 		const PinAccess access[2] = { PinAccess::write1, PinAccess::read };
-		if (IoPort::AssignPorts(gb, reply, PinUsedBy::sensor, 2, ports, access) != 2)
+		if (IoPort::AssignPorts(pinNames.c_str(), reply, PinUsedBy::sensor, 2, ports, access) != 2)
 		{
 			spiCsPort.Release();				// in case it was allocated
 			return GCodeResult::error;
@@ -322,72 +321,92 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 
 		const uint32_t spiFrequency = (gb.Seen('Q')) ? gb.GetLimitedUIValue('Q', 500000, 10000001) : DefaultAccelerometerSpiFrequency;
 		auto temp = new LISAccelerometer(Platform::GetSharedSpiDevice(), spiFrequency, spiCsPort.GetPin(), irqPort.GetPin());
-		if (temp->CheckPresent())
-		{
-			accelerometer = temp;
-			if (accelerometerTask == nullptr)
-			{
-				accelerometerTask = new Task<AccelerometerTaskStackWords>;
-				not_null(accelerometerTask)->Create(AccelerometerTaskCode, "ACCEL", nullptr, TaskPriority::Accelerometer);
-			}
-		}
-		else
+		if (!temp->CheckPresent())
 		{
 			delete temp;
 			reply.copy("Accelerometer not found on specified port");
 			return GCodeResult::error;
 		}
-	}
-	else if (accelerometer == nullptr)
-	{
-		reply.copy("Accelerometer not found");
-		return GCodeResult::error;
-	}
 
-	uint32_t temp32;
-	if (gb.TryGetLimitedUIValue('R', temp32, seen, 17))
-	{
-		resolution = temp32;
-	}
+		resolution = DefaultAccelerometerResolution;
+		orientation = 0;
 
-	if (gb.TryGetLimitedUIValue('S', temp32, seen, 10000))
-	{
-		samplingRate = temp32;
-	}
-
-	if (seen)
-	{
-		if (!not_null(accelerometer)->Configure(samplingRate, resolution))
+		uint32_t temp32;
+		bool dummy;
+		if (gb.TryGetLimitedUIValue('R', temp32, dummy, 17))
 		{
+			resolution = temp32;
+		}
+
+		if (gb.TryGetLimitedUIValue('S', temp32, dummy, 10000))
+		{
+			samplingRate = temp32;
+		}
+
+		if (!not_null(temp)->Configure(samplingRate, resolution))
+		{
+			delete temp;
 			reply.copy("Failed to configure accelerometer");
 			return GCodeResult::error;
 		}
-		(void)TranslateOrientation(orientation);
-	}
 
-	if (gb.Seen('I'))
-	{
-		seen = true;
-		const uint32_t localOrientation = gb.GetUIValue();
-		if (TranslateOrientation(localOrientation))
+		if (gb.Seen('I'))
 		{
-			orientation = localOrientation;
+			const uint32_t localOrientation = gb.GetUIValue();
+			if (TranslateOrientation(localOrientation))
+			{
+				orientation = localOrientation;
+			}
+			else
+			{
+				delete temp;
+				reply.copy("Bad orientation parameter");
+				return GCodeResult::error;
+			}
 		}
 		else
 		{
-			reply.copy("Bad orientation parameter");
-			return GCodeResult::error;
+			orientation = DefaultAccelerometerOrientation;
+			(void)TranslateOrientation(orientation);			// need this to set up the axis translation table
+		}
+
+		accelerometer = temp;
+#if SUPPORT_CAN_EXPANSION
+		remoteBoardAddress = CanInterface::GetCanAddress();
+#endif
+		if (accelerometerTask == nullptr)
+		{
+			accelerometerTask = new Task<AccelerometerTaskStackWords>;
+			not_null(accelerometerTask)->Create(AccelerometerTaskCode, "ACCEL", nullptr, TaskPriority::Accelerometer);
 		}
 	}
-
-	if (!seen)
+	else if (
+# if SUPPORT_CAN_EXPANSION
+			 remoteBoardAddress == CanId::NoAddress || (remoteBoardAddress == CanInterface::GetCanAddress() && accelerometer == nullptr)
+# else
+			 accelerometer == nullptr
+# endif
+			)
+	{
+		reply.printf("Accelerometer %u is not configured", accelerometerNumber);
+	}
+#if SUPPORT_CAN_EXPANSION
+	else if (remoteBoardAddress != CanInterface::GetCanAddress())
+	{
+		CanMessageGenericConstructor cons(M955Params);
+		cons.PopulateFromCommand(gb);
+		uint32_t words[CanMessageStandardReply::MaxNumWords];
+		return cons.SendAndGetResponse(CanMessageType::accelerometerConfig, remoteBoardAddress, reply, nullptr, words);
+	}
+#endif
+	else
 	{
 # if SUPPORT_CAN_EXPANSION
-		reply.printf("Accelerometer %u:%u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
-						CanInterface::GetCanAddress(), 0, accelerometer->GetTypeName(), orientation, samplingRate, resolution, accelerometer->GetFrequency());
+		reply.printf("Accelerometer %u on board %u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
+			accelerometerNumber, CanInterface::GetCanAddress(), accelerometer->GetTypeName(), orientation, samplingRate, resolution, accelerometer->GetFrequency());
 # else
 		reply.printf("Accelerometer %u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
-						0, not_null(accelerometer)->GetTypeName(), orientation, samplingRate, resolution, not_null(accelerometer)->GetFrequency());
+						accelerometerNumber, not_null(accelerometer)->GetTypeName(), orientation, samplingRate, resolution, not_null(accelerometer)->GetFrequency());
 # endif
 	}
 	return GCodeResult::ok;
@@ -396,8 +415,10 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 // Deal with M956
 GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	gb.MustSee('P');
-	const DriverId device = gb.GetDriverId();
+	const bool seenP = gb.Seen('P');
+	const size_t accelerometerNumber = (seenP) ? gb.GetLimitedUIValue('P', MaxAccelerometers) : 0;
+	(void)accelerometerNumber;										// currently we support only a single accelerometer at a time so P must be zero
+
 	gb.MustSee('S');
 	const uint32_t numSamples = gb.GetUIValue();
 	gb.MustSee('A');
@@ -416,12 +437,13 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	// Check that we have an accelerometer
 	if (
 # if SUPPORT_CAN_EXPANSION
-		!device.IsRemote() &&
+		remoteBoardAddress == CanId::NoAddress || (remoteBoardAddress == CanInterface::GetCanAddress() && accelerometer == nullptr)
+# else
+		accelerometer == nullptr
 # endif
-		(device.localDriver != 0 || accelerometer == nullptr)
 	   )
 	{
-		reply.copy("Accelerometer not found");
+		reply.printf("Accelerometer %u not configured", accelerometerNumber);
 		return GCodeResult::error;
 	}
 
@@ -455,7 +477,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 		gmtime_r(&currentTime, &timeInfo);
 		accelerometerFileName.printf("0:/sys/accelerometer/%u_%04u-%02u-%02u_%02u.%02u.%02u.csv",
 # if SUPPORT_CAN_EXPANSION
-										(unsigned int)device.boardAddress,
+										(unsigned int)remoteBoardAddress,
 # else
 										0,
 # endif
@@ -466,9 +488,9 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	{
 		reply.copy("Failed to create accelerometer data file");
 # if SUPPORT_CAN_EXPANSION
-		if (device.IsRemote())
+		if (remoteBoardAddress != CanInterface::GetCanAddress())
 		{
-			reprap.GetExpansion().AddAccelerometerRun(device.boardAddress, 0);
+			reprap.GetExpansion().AddAccelerometerRun(remoteBoardAddress, 0);
 		}
 		else
 # endif
@@ -490,21 +512,21 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	}
 
 # if SUPPORT_CAN_EXPANSION
-	if (device.IsRemote())
+	if (remoteBoardAddress != CanInterface::GetCanAddress())
 	{
 		expectedRemoteSampleNumber = 0;
-		expectedRemoteBoardAddress = device.boardAddress;
+		expectedRemoteBoardAddress = remoteBoardAddress;
 		expectedRemoteAxes = axes;
 		numRemoteOverflows = 0;
 
 		accelerometerFile = f;
-		const GCodeResult rslt = CanInterface::StartAccelerometer(device, axes, numSamples, mode, gb, reply);
+		const GCodeResult rslt = CanInterface::StartAccelerometer(remoteBoardAddress, 0, axes, numSamples, mode, gb, reply);
 		if (rslt > GCodeResult::warning)
 		{
 			accelerometerFile->Close();
 			accelerometerFile = nullptr;
 			(void)MassStorage::Delete(accelerometerFileName.GetRef(), ErrorMessageMode::messageAlways);
-			reprap.GetExpansion().AddAccelerometerRun(device.boardAddress, 0);
+			reprap.GetExpansion().AddAccelerometerRun(remoteBoardAddress, 0);
 		}
 		return rslt;
 	}
