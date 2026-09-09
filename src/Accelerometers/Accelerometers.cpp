@@ -30,9 +30,22 @@
 # include <Duet3Ate.h>
 #endif
 
+constexpr size_t ActualMaxAccelerometers = (SUPPORT_CAN_EXPANSION) ? MaxAccelerometers : 1;
+
 #if SUPPORT_CAN_EXPANSION
 
-static CanAddress remoteBoardAddress = CanId::NoAddress;
+struct AccelerometerConfig
+{
+	CanAddress boardAddress;
+	//TODO add configuration info and any other information we want to return in the object model
+
+	AccelerometerConfig() noexcept : boardAddress(CanId::NoAddress) { }
+	bool IsConfigured() const noexcept { return boardAddress != CanId::NoAddress; }
+	bool IsRemote() const noexcept { return boardAddress != CanInterface::GetCanAddress(); }
+};
+
+static AccelerometerConfig configs[MaxAccelerometers];
+
 static unsigned int expectedRemoteSampleNumber = 0;
 static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
 static uint8_t expectedRemoteAxes;
@@ -272,18 +285,53 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 	}
 
 	// Get the accelerometer number, default 0
-	const bool seenP = gb.Seen('P');
-	const size_t accelerometerNumber = (seenP) ? gb.GetLimitedUIValue('P', MaxAccelerometers) : 0;
+	gb.MustSee('P');
+	const size_t accelerometerNumber = gb.GetLimitedUIValue('P', ActualMaxAccelerometers);
+#if SUPPORT_CAN_EXPANSION
+	AccelerometerConfig& config = configs[accelerometerNumber];
+#endif
 
 	// Get the board number and port names. For accelerometers embedded on tool boards the port name should be "i2c.lis".
 	if (gb.Seen('C'))
 	{
+		// Delete the existing accelerometer
+#if SUPPORT_CAN_EXPANSION
+		if (config.IsConfigured())
+		{
+			if (config.IsRemote())
+			{
+				// Currently we don't tear down the remote accelerometer
+			}
+			else
+			{
+				DeleteObject(accelerometer);	// we can have only one local accelerometer and we don't map multiple logical accelerometers to it
+			}
+			config.boardAddress = CanId::NoAddress;
+		}
+#else
+			DeleteObject(accelerometer);
+#endif
 		String<StringLength50> pinNames;
 		gb.GetReducedString(pinNames.GetRef());
+		if (pinNames.Equals("nil"))
+		{
+			return GCodeResult::ok;				// just deleting an existing accelerometer
+		}
 
 #if SUPPORT_CAN_EXPANSION
-		remoteBoardAddress = CanId::NoAddress;
 		const CanAddress boardAddress = IoPort::RemoveBoardAddress(pinNames.GetRef());
+
+		// Check that we don't already have an accelerometer on the specified board
+		// This is to avoid mapping 2 logical accelerometers to the same physical one. We only support a single accelerometer on each board.
+		for (size_t i = 0; i < ARRAY_SIZE(configs); ++i)
+		{
+			if (configs[i].boardAddress == boardAddress)
+			{
+				reply.printf("accelerometer on board %u is already in use as accelerometer %u", boardAddress, i);
+				return GCodeResult::error;
+			}
+		}
+
 		if (boardAddress != CanInterface::GetCanAddress())
 		{
 			CanMessageGenericConstructor cons(M955Params);
@@ -292,7 +340,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 			const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::accelerometerConfig, boardAddress, reply, nullptr, words);
 			if (rslt <= GCodeResult::warning)
 			{
-				remoteBoardAddress = boardAddress;
+				config.boardAddress = boardAddress;
 
 				// Firmware that predates the data words reports zero, which the object model passes on as unknown
 				reprap.GetExpansion().SaveAccelerometerConfig(boardAddress, (uint16_t)words[0], (uint8_t)words[1]);
@@ -372,7 +420,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 
 		accelerometer = temp;
 #if SUPPORT_CAN_EXPANSION
-		remoteBoardAddress = CanInterface::GetCanAddress();
+		config.boardAddress = CanInterface::GetCanAddress();
 #endif
 		if (accelerometerTask == nullptr)
 		{
@@ -382,7 +430,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 	}
 	else if (
 # if SUPPORT_CAN_EXPANSION
-			 remoteBoardAddress == CanId::NoAddress || (remoteBoardAddress == CanInterface::GetCanAddress() && accelerometer == nullptr)
+			 config.boardAddress == CanId::NoAddress || (config.boardAddress == CanInterface::GetCanAddress() && accelerometer == nullptr)
 # else
 			 accelerometer == nullptr
 # endif
@@ -391,19 +439,19 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 		reply.printf("Accelerometer %u is not configured", accelerometerNumber);
 	}
 #if SUPPORT_CAN_EXPANSION
-	else if (remoteBoardAddress != CanInterface::GetCanAddress())
+	else if (config.IsRemote())
 	{
 		CanMessageGenericConstructor cons(M955Params);
 		cons.PopulateFromCommand(gb);
 		uint32_t words[CanMessageStandardReply::MaxNumWords];
-		return cons.SendAndGetResponse(CanMessageType::accelerometerConfig, remoteBoardAddress, reply, nullptr, words);
+		return cons.SendAndGetResponse(CanMessageType::accelerometerConfig, config.boardAddress, reply, nullptr, words);
 	}
 #endif
 	else
 	{
 # if SUPPORT_CAN_EXPANSION
-		reply.printf("Accelerometer %u on board %u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
-			accelerometerNumber, CanInterface::GetCanAddress(), accelerometer->GetTypeName(), orientation, samplingRate, resolution, accelerometer->GetFrequency());
+		reply.printf("Accelerometer %u is on board %u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
+						accelerometerNumber, CanInterface::GetCanAddress(), accelerometer->GetTypeName(), orientation, samplingRate, resolution, accelerometer->GetFrequency());
 # else
 		reply.printf("Accelerometer %u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
 						accelerometerNumber, not_null(accelerometer)->GetTypeName(), orientation, samplingRate, resolution, not_null(accelerometer)->GetFrequency());
@@ -415,9 +463,11 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 // Deal with M956
 GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	const bool seenP = gb.Seen('P');
-	const size_t accelerometerNumber = (seenP) ? gb.GetLimitedUIValue('P', MaxAccelerometers) : 0;
-	(void)accelerometerNumber;										// currently we support only a single accelerometer at a time so P must be zero
+	gb.MustSee('P');
+	const size_t accelerometerNumber = gb.GetLimitedUIValue('P', ActualMaxAccelerometers);
+#if SUPPORT_CAN_EXPANSION
+	AccelerometerConfig& config = configs[accelerometerNumber];
+#endif
 
 	gb.MustSee('S');
 	const uint32_t numSamples = gb.GetUIValue();
@@ -436,21 +486,21 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 
 	// Check that we have an accelerometer
 	if (
-# if SUPPORT_CAN_EXPANSION
-		remoteBoardAddress == CanId::NoAddress || (remoteBoardAddress == CanInterface::GetCanAddress() && accelerometer == nullptr)
-# else
+#if SUPPORT_CAN_EXPANSION
+		config.boardAddress == CanId::NoAddress || (config.boardAddress == CanInterface::GetCanAddress() && accelerometer == nullptr)
+#else
 		accelerometer == nullptr
-# endif
+#endif
 	   )
 	{
-		reply.printf("Accelerometer %u not configured", accelerometerNumber);
+		reply.printf("accelerometer %u not configured", accelerometerNumber);
 		return GCodeResult::error;
 	}
 
 	// No need for task lock here because this function and the M955 function are called only by the MAIN task
 	if (accelerometerFile != nullptr)
 	{
-		reply.copy("Accelerometer is already collecting data");
+		reply.copy("an accelerometer is already collecting data");
 		return GCodeResult::error;
 	}
 
@@ -477,7 +527,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 		gmtime_r(&currentTime, &timeInfo);
 		accelerometerFileName.printf("0:/sys/accelerometer/%u_%04u-%02u-%02u_%02u.%02u.%02u.csv",
 # if SUPPORT_CAN_EXPANSION
-										(unsigned int)remoteBoardAddress,
+										(unsigned int)config.boardAddress,
 # else
 										0,
 # endif
@@ -486,11 +536,11 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	FileStore *_ecv_null const f = MassStorage::OpenFile(accelerometerFileName.c_str(), OpenMode::write, preallocSize);
 	if (f == nullptr)
 	{
-		reply.copy("Failed to create accelerometer data file");
+		reply.copy("failed to create accelerometer data file");
 # if SUPPORT_CAN_EXPANSION
-		if (remoteBoardAddress != CanInterface::GetCanAddress())
+		if (config.IsRemote())
 		{
-			reprap.GetExpansion().AddAccelerometerRun(remoteBoardAddress, 0);
+			reprap.GetExpansion().AddAccelerometerRun(config.boardAddress, 0);
 		}
 		else
 # endif
@@ -512,21 +562,21 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	}
 
 # if SUPPORT_CAN_EXPANSION
-	if (remoteBoardAddress != CanInterface::GetCanAddress())
+	if (config.IsRemote())
 	{
 		expectedRemoteSampleNumber = 0;
-		expectedRemoteBoardAddress = remoteBoardAddress;
+		expectedRemoteBoardAddress = config.boardAddress;
 		expectedRemoteAxes = axes;
 		numRemoteOverflows = 0;
 
 		accelerometerFile = f;
-		const GCodeResult rslt = CanInterface::StartAccelerometer(remoteBoardAddress, 0, axes, numSamples, mode, gb, reply);
+		const GCodeResult rslt = CanInterface::StartAccelerometer(config.boardAddress, accelerometerNumber, axes, numSamples, mode, gb, reply);
 		if (rslt > GCodeResult::warning)
 		{
 			accelerometerFile->Close();
 			accelerometerFile = nullptr;
 			(void)MassStorage::Delete(accelerometerFileName.GetRef(), ErrorMessageMode::messageAlways);
-			reprap.GetExpansion().AddAccelerometerRun(remoteBoardAddress, 0);
+			reprap.GetExpansion().AddAccelerometerRun(config.boardAddress, 0);
 		}
 		return rslt;
 	}
