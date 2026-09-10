@@ -185,7 +185,7 @@ protected:
 	static constexpr float DefaultTuningHysteresis = 5.0;
 	static constexpr float MaxTuningHysteresis = 20.0;
 	static constexpr float MinTuningFanPwm = 0.1;
-	static constexpr float DefaultTuningFanPwm = 0.7;
+	static constexpr float DefaultTuningFanPwm = 0.8;				// changed from 0.7 to 0.8 post 3.7.0-rc.1 to get more accurate results across the PWM range
 	static constexpr float TuningPeakTempDrop = 2.0;				// must be well below TuningHysteresis
 	static constexpr float HeaterSettledCoolingTimeRatio = 0.93;
 
