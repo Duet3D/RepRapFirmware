@@ -663,9 +663,9 @@ void LocalHeater::SetFanFeedForwardPwm(float pwm) noexcept
 }
 
 // Set extrusion feedforward
-void LocalHeater::ApplyExtrusionFeedForward() noexcept
+void LocalHeater::ApplyExtrusionFeedForward(bool isNonPrintingMove) noexcept
 {
-	if (mode == HeaterMode::stable)
+	if (!isNonPrintingMove && mode == HeaterMode::stable)
 	{
 		const float pwmChange = extrusionPwmBoost - previousExtrusionPwmBoost;
 		previousExtrusionPwmBoost = extrusionPwmBoost;

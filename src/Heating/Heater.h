@@ -99,7 +99,7 @@ public:
 
 	const FopDt& GetModel() const noexcept { return model; }				// Get the process model
 	GCodeResult SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-	void SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept;
+	void SetExtrusionFeedForward(float pwmBoost, float tempBoost, bool isNonPrintingMove) noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
 	virtual GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept = 0;
@@ -146,7 +146,7 @@ protected:
 	virtual GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult UpdateHeaterMonitors(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult StartAutoTune(const StringRef& reply, bool seenA, float ambientTemp) noexcept = 0;
-	virtual void ApplyExtrusionFeedForward() noexcept = 0;
+	virtual void ApplyExtrusionFeedForward(bool isNonPrintingMove) noexcept = 0;
 
 	int GetSensorNumber() const noexcept { return sensorNumber; }
 	int GetAmbientSensorNumber() const noexcept { return ambientSensorNumber; }

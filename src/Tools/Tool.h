@@ -142,7 +142,7 @@ public:
 
 	// Heater feedforward support
 	uint32_t GetFeedForwardAdvanceClocks() const noexcept { return feedForwardAdvanceClocks; }
-	void ApplyExtrusionFeedForward(float extrusionSpeed) const noexcept;
+	void ApplyExtrusionFeedForward(float extrusionSpeed, bool isNonPrintingMove) const noexcept;
 	void StopExtrusionFeedForward() const noexcept;
 
 	void Activate() noexcept;

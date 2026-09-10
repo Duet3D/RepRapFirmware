@@ -985,22 +985,22 @@ GCodeResult Tool::GetSetFeedForward(GCodeBuffer& gb, const StringRef& reply) THR
 }
 
 // Apply feedforward to the current tool. Called from the Laser task.
-void Tool::ApplyExtrusionFeedForward(float extrusionSpeed) const noexcept
+void Tool::ApplyExtrusionFeedForward(float extrusionSpeed, bool isNonPrintingMove) const noexcept
 {
 	Heat& heat = reprap.GetHeat();
 	for (size_t i = 0; i < heaterCount; ++i)
 	{
-		heat.SetExtrusionFeedForward(heaters[i], extrusionSpeed * heaterFeedForwardPwm[i], extrusionSpeed * heaterFeedForwardTemp[i]);
+		heat.SetExtrusionFeedForward(heaters[i], extrusionSpeed * heaterFeedForwardPwm[i], extrusionSpeed * heaterFeedForwardTemp[i], isNonPrintingMove);
 	}
 }
 
-// Stop applying feedforward to the current tool. Called from an ISR context or with BASEPRI set high.
+// Stop applying feedforward to the current tool. Called from the Laser task.
 void Tool::StopExtrusionFeedForward() const noexcept
 {
 	Heat& heat = reprap.GetHeat();
 	for (size_t i = 0; i < heaterCount; ++i)
 	{
-		heat.SetExtrusionFeedForward(heaters[i], 0.0, 0.0);
+		heat.SetExtrusionFeedForward(heaters[i], 0.0, 0.0, false);
 	}
 }
 

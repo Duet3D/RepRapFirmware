@@ -884,12 +884,13 @@ void Heat::SetFanFeedForwardPwm(unsigned int heater, float fanPwm) const noexcep
 }
 
 // Update the heater feedforward because of a change in the extrusion rate
-void Heat::SetExtrusionFeedForward(unsigned int heater, float pwmBoost, float tempBoost) const noexcept
+void Heat::SetExtrusionFeedForward(unsigned int heater, float pwmBoost, float tempBoost, bool isNonPrintingMove) const noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
 	{
-		h->SetExtrusionFeedForward(pwmBoost, tempBoost);
+		h->SetExtrusionFeedForward(pwmBoost, tempBoost, isNonPrintingMove);
+		//debugPrintf("FF %u %.2f %.2f\n", heater, (double)pwmBoost, (double)tempBoost);
 	}
 }
 
