@@ -219,6 +219,7 @@ void RemoteHeater::Spin() noexcept
 #else
 							tuningPhase = TuningPhase::measuring_with_fan_on;
 							reprap.GetFansManager().SetFansValue(tuningFans, tuningFanPwm);		// turn fans on at full PWM
+							cyclesToSkip = 2;
 #endif
 							ReportTuningUpdate();
 						}
@@ -561,16 +562,24 @@ void RemoteHeater::UpdateHeaterTuning(CanAddress src, const CanMessageHeaterTuni
 {
 	if (src == boardAddress && tuningState >= TuningState::idleCycles && !newTuningResult)
 	{
-		tOn.Add((float)msg.ton);
-		tOff.Add((float)msg.toff);
-		dHigh.Add((float)msg.dhigh);
-		dLow.Add((float)msg.dlow);
-		heatingRateAcc.Add(msg.heatingRate);
-		coolingRateAcc.Add(msg.coolingRate);
-		tuningVoltage.Add(msg.voltage);
-		currentCoolingRate = msg.coolingRate;
-		tuningCyclesDone = msg.cyclesDone;
-		newTuningResult = true;
+		// The first one or two cycles after turning the fan on may be measured before the fan is up to speed, especially on INDX
+		if (tuningPhase == TuningPhase::measuring_with_fan_on && cyclesToSkip != 0)
+		{
+			--cyclesToSkip;								// give the fan time to reach speed
+		}
+		else
+		{
+			tOn.Add((float)msg.ton);
+			tOff.Add((float)msg.toff);
+			dHigh.Add((float)msg.dhigh);
+			dLow.Add((float)msg.dlow);
+			heatingRateAcc.Add(msg.heatingRate);
+			coolingRateAcc.Add(msg.coolingRate);
+			tuningVoltage.Add(msg.voltage);
+			currentCoolingRate = msg.coolingRate;
+			tuningCyclesDone = msg.cyclesDone;
+			newTuningResult = true;
+		}
 	}
 }
 

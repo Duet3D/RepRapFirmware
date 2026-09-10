@@ -843,11 +843,18 @@ void LocalHeater::DoTuningStep() noexcept
 			// If we have been doing idle cycles, see whether we can switch to collecting data, and turn the heater on.
 			// If we have been collecting data, see if we have enough, and either turn the heater on to start another cycle or finish tuning.
 
-			// Save the data (don't know whether we need it yet)
-			dHigh.Add((float)(peakTime - lastOffTime));
-			tOff.Add((float)(now - lastOffTime));
 			const float currentCoolingRate = (afterPeakTemp - temperature) * SecondsToMillis/(now - afterPeakTime);
-			coolingRateAcc.Add(currentCoolingRate);
+			if (tuningPhase == TuningPhase::measuring_with_fan_on && cyclesToSkip != 0)
+			{
+				--cyclesToSkip;
+			}
+			else
+			{
+				// Save the data (don't know whether we need it yet)
+				dHigh.Add((float)(peakTime - lastOffTime));
+				tOff.Add((float)(now - lastOffTime));
+				coolingRateAcc.Add(currentCoolingRate);
+			}
 
 			// Decide whether to finish this phase
 			if (tuningPhase == TuningPhase::settling)				// if we are doing idle cycles
@@ -894,7 +901,8 @@ void LocalHeater::DoTuningStep() noexcept
 							reprap.GetFansManager().SetFansValue(tuningFans, tuningFanPwm * 0.5);	// turn fans on at half PWM
 #else
 							tuningPhase = TuningPhase::measuring_with_fan_on;
-							reprap.GetFansManager().SetFansValue(tuningFans, tuningFanPwm);		// turn fans on at full PWM
+							reprap.GetFansManager().SetFansValue(tuningFans, tuningFanPwm);		// turn fans on
+							cyclesToSkip = 2;
 #endif
 							ReportTuningUpdate();
 						}
@@ -976,9 +984,12 @@ void LocalHeater::DoTuningStep() noexcept
 		else if (temperature >= tuningTargetTemp)
 		{
 			// We have reached the target temperature, so record a data point and turn the heater off
-			dLow.Add((float)(peakTime - lastOnTime));
-			tOn.Add((float)(now - lastOnTime));
-			heatingRateAcc.Add((temperature - afterPeakTemp) * SecondsToMillis/(now - afterPeakTime));
+			if (tuningPhase != TuningPhase::measuring_with_fan_on || cyclesToSkip == 0)
+			{
+				dLow.Add((float)(peakTime - lastOnTime));
+				tOn.Add((float)(now - lastOnTime));
+				heatingRateAcc.Add((temperature - afterPeakTemp) * SecondsToMillis/(now - afterPeakTime));
+			}
 			lastOffTime = peakTime = afterPeakTime = now;
 			peakTemp = afterPeakTemp = temperature;
 			lastPwm = 0.0;								// turn heater off
