@@ -208,6 +208,7 @@ void LwipSocket::ConnectionClosedGracefully() noexcept
 
 void LwipSocket::ConnectionError(err_t err) noexcept
 {
+	connectionAborted = true;
 	if (reprap.Debug(Module::Network))
 	{
 		debugPrintf("LWIP socket error: proto=%d lport=%u rport=%u state=%d err=%d\n", (int)protocol, localPort, remotePort, (int)state, (int)err);
@@ -259,6 +260,7 @@ void LwipSocket::ReInit() noexcept
 	DiscardReceivedData();
 	whenConnected = whenWritten = whenClosed = 0;
 	responderFound = false;
+	connectionAborted = false;
 	readIndex = unAcked = 0;
 	txShutdownRequested = false;
 }
