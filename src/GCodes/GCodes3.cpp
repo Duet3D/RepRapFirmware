@@ -469,7 +469,6 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 #if SUPPORT_CAN_EXPANSION
 				if (driver.IsRemote())
 				{
-					// Currently we don't have a way of determining how many drivers each board has, but we have a limit of 3 per board
 					const ExpansionBoardData * const data = reprap.GetExpansion().GetBoardDetails(driver.boardAddress);
 					if (data != nullptr && driver.localDriver >= data->numDrivers)
 					{
@@ -529,10 +528,10 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 
 					// Set the initial coordinates of the new drive
 					float initialCoords[MaxAxes];
-					reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numTotalAxes, initialCoords);
+					move.GetKinematics().GetAssumedInitialPosition(numTotalAxes, initialCoords);
 					for (MovementState& ms : moveStates)
 					{
-						ms.raw.coords[drive] = initialCoords[drive];		// user has defined a new axis, so set its position
+						ms.raw.coords[drive] = initialCoords[drive];	// user has defined a new axis, so set its position
 						ToolOffsetInverseTransform(ms);
 					}
 					reprap.MoveUpdated();
@@ -542,7 +541,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 				axesToUpdate.SetBit(drive);
 #endif
 #if SUPPORT_PHASE_STEPPING
-				move.SetStepMode(drive, StepMode::stepDir, reply);
+				(void)move.SetStepMode(drive, StepMode::stepDir, reply);
 #endif
 			}
 		}
@@ -566,7 +565,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 			axesToUpdate.SetBit(drive);
 #endif
 #if SUPPORT_PHASE_STEPPING
-			move.SetStepMode(drive, StepMode::stepDir, reply);
+			(void)move.SetStepMode(drive, StepMode::stepDir, reply);
 #endif
 		}
 		if (FilamentMonitor::CheckDriveAssignments(reply) && rslt == GCodeResult::ok)

@@ -22,7 +22,8 @@ enum class PrintPausedReason : uint8_t
 	filamentError = 6,
 	stall = 7,
 	lowVoltage = 8,
-	driverError = 9
+	driverError = 9,
+	boardOverTemperature = 10
 };
 
 #endif /* SRC_PLATFORM_PRINTPAUSEDREASON_H_ */
