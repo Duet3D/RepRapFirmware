@@ -1486,13 +1486,13 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 GCodeResult Move::EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
 {
 # if HAS_SMART_DRIVERS
-	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
-	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	if (dataLength < msg.GetActualDataLength())
 	{
 		reply.copy("bad data length");
 		return GCodeResult::error;
 	}
 
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
 	GCodeResult rslt = GCodeResult::ok;
 	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) noexcept
 						{
@@ -1524,13 +1524,13 @@ GCodeResult Move::EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<floa
 
 GCodeResult Move::EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrivesRequest<StepsPerUnitAndMicrostepping>& msg, size_t dataLength, const StringRef& reply) noexcept
 {
-	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
-	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	if (dataLength < msg.GetActualDataLength())
 	{
 		reply.copy("bad data length");
 		return GCodeResult::error;
 	}
 
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
 	GCodeResult rslt = GCodeResult::ok;
 	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) noexcept
 						{
@@ -1554,9 +1554,14 @@ GCodeResult Move::EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrive
 	return rslt;
 }
 
-GCodeResult Move::EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, const StringRef& reply) noexcept
+GCodeResult Move::EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, size_t dataLength, const StringRef& reply) noexcept
 {
-	//TODO check message is long enough for the number of drivers specified
+	if (dataLength < msg.GetActualDataLength())
+	{
+		reply.copy("bad data length");
+		return GCodeResult::error;
+	}
+
 	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
 	drivers.Iterate([this, &msg](unsigned int driver, unsigned int count) noexcept
 		{

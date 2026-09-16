@@ -1334,13 +1334,13 @@ bool Move::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limi
 
 GCodeResult Move::EutSetRemotePressureAdvanceV1(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
 {
-	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
-	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	if (dataLength < msg.GetActualDataLength())
 	{
 		reply.copy("bad data length");
 		return GCodeResult::error;
 	}
 
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
 	GCodeResult rslt = GCodeResult::ok;
 	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) noexcept -> void
 						{
@@ -1360,13 +1360,13 @@ GCodeResult Move::EutSetRemotePressureAdvanceV1(const CanMessageMultipleDrivesRe
 
 GCodeResult Move::EutSetRemotePressureAdvanceV2(const CanMessageMultipleDrivesRequest<ShortPressureAdvanceParameters>& msg, size_t dataLength, const StringRef& reply) noexcept
 {
-	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
-	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	if (dataLength < msg.GetActualDataLength())
 	{
 		reply.copy("bad data length");
 		return GCodeResult::error;
 	}
 
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
 	GCodeResult rslt = GCodeResult::ok;
 	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) noexcept -> void
 						{

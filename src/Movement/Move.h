@@ -331,7 +331,7 @@ public:
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrivesRequest<StepsPerUnitAndMicrostepping>& msg, size_t dataLength, const StringRef& reply) noexcept;
-	GCodeResult EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, const StringRef& reply) noexcept;
+	GCodeResult EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutProcessM569(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	GCodeResult EutProcessM569Point2(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	GCodeResult EutProcessM569Point7(const CanMessageGeneric& msg, const StringRef& reply) noexcept;

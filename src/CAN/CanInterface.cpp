@@ -727,7 +727,7 @@ template<class T> static GCodeResult SetRemoteDriverValues(const CanDriversData<
 		{
 			msg->values[i] = data.GetElement(savedStart + i);
 		}
-		buf->dataLength = msg->GetActualDataLength(numDrivers);
+		buf->dataLength = msg->GetActualDataLength();
 		rslt = max(rslt, CanInterface::SendRequestAndGetStandardReply(buf, rid, reply));
 	}
 	return rslt;
@@ -763,7 +763,7 @@ static GCodeResult SetRemoteDriverStates(const CanDriversList& drivers, const St
 		{
 			msg->values[i] = state;
 		}
-		buf->dataLength = msg->GetActualDataLength(numDrivers);
+		buf->dataLength = msg->GetActualDataLength();
 		if (fromMoveTask)
 		{
 			CanInterface::SendMotion(buf);														// if it's coming from the Move task then we must send the command via the fifo

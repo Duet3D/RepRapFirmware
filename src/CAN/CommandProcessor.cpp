@@ -528,7 +528,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 			case CanMessageType::setDriverStates:
 				requestId = buf->msg.multipleDrivesRequestUint16.requestId;
-				rslt = reprap.GetMove().EutHandleSetDriverStates(buf->msg.multipleDrivesRequestDriverState, replyRef);
+				rslt = reprap.GetMove().EutHandleSetDriverStates(buf->msg.multipleDrivesRequestDriverState, buf->dataLength, replyRef);
 				break;
 
 			case CanMessageType::m915:
