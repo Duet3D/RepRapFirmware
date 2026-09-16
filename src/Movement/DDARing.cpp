@@ -655,6 +655,14 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 
 		if (dda != addPointer)
 		{
+#if SUPPORT_3RD_ORDER
+			if (dda != getPointer && dda->IsSCurveMove())
+			{
+				// S-curve moves don't maintain canPauseAfter or a usable start speed until they are planned, so run out the queued moves
+				dda = addPointer;
+			}
+			else
+#endif
 			if (canPauseHere)
 			{
 				// Nothing needed here, we can pause before this move
@@ -718,70 +726,47 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 	return true;
 }
 
-// Turn the move 'startDda' and if necessary some preceding moves into decelerating moves.
+// Make the move 'startDda' and if necessary some following moves decelerate to a stop.
 // Return the first move we are not going to execute, which may be the same as stopBeforeDda.
 // When pausing we don't try to use 3rd order motion control.
 // This is called with the step interrupt locked out, so keep it fast!
 // This implementation does not leave any move segments partially executed.
 DDA *DDARing::MakeDeceleratingChain(DDA *startDda, const DDA *stopBeforeDda) noexcept
 {
+	// Find the first move by the end of which maximum deceleration from the entry speed reaches a standstill.
+	// The last queued move always ends at standstill, so running out of moves can only be due to rounding error.
 	DDA *stopAfterDda = startDda;
-	float startSpeed = startDda->GetStartSpeed();
-	bool notEnoughDistance = false;
+	float speed = startDda->GetStartSpeed();
 	for (;;)
 	{
-		const float minEndSpeedSquared = fsquare(startSpeed) - 2 * stopAfterDda->GetMaxAcceleration();
-		if (minEndSpeedSquared <= 0) { break; }			// ideally we would allow some instantaneous speed change here
-		if (stopAfterDda->GetNext() == stopBeforeDda)
+		const float endSpeedSquared = fsquare(speed) - 2 * stopAfterDda->GetMaxAcceleration() * stopAfterDda->GetTotalDistance();
+		const DDA *const nextDda = stopAfterDda->GetNext();
+		if (endSpeedSquared <= 0.0 || stopAfterDda->GetEndSpeed() <= 0.0 || nextDda == stopBeforeDda)
 		{
-			notEnoughDistance = true;
 			break;
 		}
-		startSpeed = fastSqrtf(minEndSpeedSquared);		// make the start speed the end speed of the previous move
+		speed = min<float>(fastSqrtf(endSpeedSquared), stopAfterDda->GetEndSpeed()) * nextDda->GetStartSpeed() / stopAfterDda->GetEndSpeed();
 		stopAfterDda = stopAfterDda->GetNext();
 	}
 
-	// Turn the DDA chain from 'startDda' to 'stopAfterDda' (these may be the same) inclusive into a deceleration.
-	if (notEnoughDistance)
+	// Working backwards, cap the planned speeds by the envelope that stops at the end of stopAfterDda.
+	// The minimum of two feasible profiles is feasible, so the planned junction speeds keep the jerk limits intact.
+	// Speeds either side of a junction are scaled by the same factor to preserve the start speed ratio needed for extrusion.
+	// The entry speed of startDda is fixed because the previous move has been committed.
+	float endSpeedScale = 0.0;
+	DDA *dda = stopAfterDda;
+	for (;;)
 	{
-		// Start decelerating immediately. There will be some instantaneous speed change at the end.
-		startSpeed = startDda->GetStartSpeed();
-		for (;;)
+		const float newEndSpeed = dda->GetEndSpeed() * endSpeedScale;
+		const float maxStartSpeed = fastSqrtf(fsquare(newEndSpeed) + 2 * dda->GetMaxAcceleration() * dda->GetTotalDistance());
+		const float startSpeedScale = (dda == startDda || dda->GetStartSpeed() <= maxStartSpeed) ? 1.0 : maxStartSpeed / dda->GetStartSpeed();
+		dda->SetPauseSpeeds(*this, dda->GetStartSpeed() * startSpeedScale, newEndSpeed);
+		if (dda == startDda)
 		{
-			startDda->TurnIntoDeceleratingMoveWithStartSpeed(startSpeed);
-			if (startDda == stopAfterDda) { break; }
-			startSpeed = startDda->GetEndSpeed();
-			startDda = startDda->GetNext();
+			break;
 		}
-	}
-	else
-	{
-		float endSpeed = 0.0;							// ideally we would allow some instantaneous speed change here
-		DDA *dda2 = stopAfterDda;
-		bool reachedSteadySpeed = false;
-		for (;;)
-		{
-			if (reachedSteadySpeed)
-			{
-				dda2->TurnIntoSteadySpeedMove(startDda->GetStartSpeed());
-			}
-			else
-			{
-				const float potentialStartSpeedSquared = fsquare(endSpeed) + 2 * dda2->GetMaxAcceleration() * dda2->GetTotalDistance();
-				if (potentialStartSpeedSquared <= fsquare(startDda->GetStartSpeed()))
-				{
-					dda2->TurnIntoDeceleratingMoveWithEndSpeed(endSpeed);
-					endSpeed = fastSqrtf(potentialStartSpeedSquared);
-				}
-				else
-				{
-					dda2->TurnIntoSteadyThenDecelMove(startDda->GetStartSpeed(), endSpeed);
-					reachedSteadySpeed = true;
-				}
-			}
-			if (dda2 == startDda) { break; }
-			dda2 = dda2->GetPrevious();
-		}
+		endSpeedScale = startSpeedScale;
+		dda = dda->GetPrevious();
 	}
 	return stopAfterDda->GetNext();
 }
