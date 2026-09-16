@@ -326,7 +326,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						// Should we queue this code?
 						// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
 						// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
-						const MovementState ms = GetMovementState(gb);
+						const MovementState& ms = GetMovementState(gb);
 						if (gb.CanQueueCodes() && ms.codeQueue->ShouldQueueG10(gb, allAxisLetters))
 						{
 							if (ms.segmentsLeft == 0 && ms.codeQueue->QueueCode(gb))
