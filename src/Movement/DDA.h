@@ -204,10 +204,7 @@ public:
 	float GetStartSpeed() const noexcept { return startSpeed; }
 	float GetEndSpeed() const noexcept { return endSpeed; }
 	float GetMaxAcceleration() const noexcept { return maxAcceleration; }
-	void TurnIntoDeceleratingMoveWithStartSpeed(float initialSpeed) noexcept;
-	void TurnIntoSteadySpeedMove(float speed) noexcept;
-	void TurnIntoDeceleratingMoveWithEndSpeed(float finalSpeed) noexcept;
-	void TurnIntoSteadyThenDecelMove(float initialSpeed, float finalSpeed) noexcept;
+	void SetPauseSpeeds(DDARing& ring, float newStartSpeed, float newEndSpeed) noexcept;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }

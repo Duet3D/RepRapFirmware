@@ -1714,47 +1714,15 @@ void DDA::AdjustExtrusion(size_t drive, float multiplier, float maxDv) noexcept
 	}
 }
 
-// Methods to support fast pause/feed hold
-void DDA::TurnIntoDeceleratingMoveWithStartSpeed(float initialSpeed) noexcept
+// Reduce the start and end speeds of an uncommitted move for fast pause/feed hold and recalculate its speed profile
+void DDA::SetPauseSpeeds(DDARing& ring, float newStartSpeed, float newEndSpeed) noexcept
 {
 #if SUPPORT_3RD_ORDER
 	flags.useScurve = false;
 #endif
-	startSpeed = topSpeed = initialSpeed;
-	endSpeed = fastSqrtf(fsquare(startSpeed) - 2 * maxAcceleration + totalDistance);
-	beforePrepare.accelDistance = 0.0;
-	beforePrepare.decelDistance = totalDistance;
-}
-
-void DDA::TurnIntoSteadySpeedMove(float speed) noexcept
-{
-#if SUPPORT_3RD_ORDER
-	flags.useScurve = false;
-#endif
-	startSpeed = topSpeed = endSpeed = speed;
-	beforePrepare.accelDistance = beforePrepare.decelDistance = 0.0;
-}
-
-void DDA::TurnIntoDeceleratingMoveWithEndSpeed(float finalSpeed) noexcept
-{
-#if SUPPORT_3RD_ORDER
-	flags.useScurve = false;
-#endif
-	endSpeed = finalSpeed;
-	startSpeed = topSpeed = fastSqrtf(fsquare(endSpeed) + 2 * maxAcceleration + totalDistance);
-	beforePrepare.accelDistance = 0.0;
-	beforePrepare.decelDistance = totalDistance;
-}
-
-void DDA::TurnIntoSteadyThenDecelMove(float initialSpeed, float finalSpeed) noexcept
-{
-#if SUPPORT_3RD_ORDER
-	flags.useScurve = false;
-#endif
-	startSpeed = topSpeed = initialSpeed;
-	endSpeed = finalSpeed;
-	beforePrepare.accelDistance = 0.0;
-	beforePrepare.decelDistance = (fsquare(startSpeed) - fsquare(endSpeed))/(2 * maxAcceleration);
+	startSpeed = newStartSpeed;
+	endSpeed = newEndSpeed;
+	(void)RecalculateMove(ring);
 }
 
 #if SUPPORT_LASER
