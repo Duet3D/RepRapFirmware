@@ -136,7 +136,7 @@ public:
 	GCodeResult SetActiveOrStandby(int heater, const Tool *_ecv_null tool, bool active, const StringRef& reply) noexcept;	// Turn a heater on
 	void SwitchOff(int heater) noexcept;								// Turn off a specific heater
 	void SetFanFeedForwardPwm(unsigned int heater, float fanPwm) const noexcept;
-	void SetExtrusionFeedForward(unsigned int heater, float pwmBoost, float tempBoost) const noexcept;
+	void SetExtrusionFeedForward(unsigned int heater, float pwmBoost, float tempBoost, bool isNonPrintingMove) const noexcept;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteModelParameters(FileStore *f) const noexcept;				// Write heater model parameters to file returning true if no error

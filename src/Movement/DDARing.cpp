@@ -934,6 +934,7 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 #endif
 
 	bool setFeedForward = false;
+	bool ffNonPrintingMove = false;
 	uint32_t nextWakeupDelay = StepClockRate;
 	const Tool *_ecv_null feedForwardTool = nullptr;
 	float feedForwardAverageExtrusionSpeed = 0.0;
@@ -952,13 +953,14 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 #if SUPPORT_IOBITS
 			if (bitsLeftToDo & IoBitsBit)
 			{
-				if (timeToMoveStart > (int32_t)pc.GetAdvanceClocks())								// if the move hasn't started yet and we are not within the advance time
+				const int32_t advanceClocks = (int32_t)pc.GetAdvanceClocks();
+				if (timeToMoveStart > advanceClocks)												// if the move hasn't started yet and we are not within the advance time
 				{
 					pc.UpdatePorts(0);																// no move active so turn off all IOBITS ports
-					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveStart - pc.GetAdvanceClocks());	// wake up again when we need to
+					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveStart - advanceClocks);	// wake up again when we need to
 					bitsLeftToDo &= ~IoBitsBit;
 				}
-				else if (timeToMoveStart <= (int32_t)pc.GetAdvanceClocks() && timeToMoveEnd > (int32_t)pc.GetAdvanceClocks())
+				else if (timeToMoveStart <= advanceClocks && timeToMoveEnd > advanceClocks)
 				{
 					// This move is current from the perspective of IOBits
 					if (!cdda->HaveDoneIoBits())
@@ -966,17 +968,21 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 						pc.UpdatePorts(cdda->GetIoBits());
 						cdda->SetDoneIoBits();
 					}
-					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd - pc.GetAdvanceClocks());
+					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd - advanceClocks);
 					bitsLeftToDo &= ~IoBitsBit;
 				}
 			}
 #endif
 			if (bitsLeftToDo & FeedForwardBit)
 			{
-				feedForwardTool = cdda->GetTool();
+				const Tool *_ecv_null ffTool = cdda->GetTool();
 				// Even if there is no current tool we still need to cancel any previous feedforward temperature boost and get ready to wake up when the move ends
-				const int32_t advanceClocks = (feedForwardTool == nullptr) ? 0 : (int32_t)feedForwardTool->GetFeedForwardAdvanceClocks();
-				if (timeToMoveStart < advanceClocks && timeToMoveEnd > advanceClocks)
+				const int32_t advanceClocks = (ffTool == nullptr) ? 0 : (int32_t)ffTool->GetFeedForwardAdvanceClocks();
+				if (timeToMoveStart > advanceClocks)												// if the move hasn't started yet and we are not within the advance time
+				{
+					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveStart - advanceClocks);	// wake up again when we need to
+				}
+				else if (timeToMoveStart < advanceClocks && timeToMoveEnd > advanceClocks)
 				{
 					// This move is current from the perspective of feedforward
 					if (!cdda->HaveDoneFeedForward())
@@ -984,8 +990,10 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 						// Don't set feedforward here because we have set a very high base priority and we may need to send CAN messages. Just record that we need to set it.
 						cdda->SetDoneFeedForward();
 						feedForwardAverageExtrusionSpeed = cdda->GetAverageExtrusionSpeed();
+						ffNonPrintingMove = cdda->IsNonPrintingExtruderMove();
 						setFeedForward = true;
 					}
+					feedForwardTool = ffTool;
 					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd - advanceClocks);
 					bitsLeftToDo &= ~FeedForwardBit;
 				}
@@ -1048,7 +1056,7 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 	{
 		if (feedForwardTool != lastFeedForwardTool || fabsf(feedForwardAverageExtrusionSpeed - lastAverageExtrusionSpeed) > lastAverageExtrusionSpeed * 0.05)
 		{
-			feedForwardTool->ApplyExtrusionFeedForward(feedForwardAverageExtrusionSpeed);
+			feedForwardTool->ApplyExtrusionFeedForward(feedForwardAverageExtrusionSpeed, ffNonPrintingMove);
 			lastFeedForwardTool = feedForwardTool;
 			lastAverageExtrusionSpeed = feedForwardAverageExtrusionSpeed;
 		}

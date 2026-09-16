@@ -252,7 +252,7 @@ constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command f
 constexpr uint32_t LaserPwmIntervalMillis = 5;			// Interval (ms) between adjusting the laser PWM during acceleration or deceleration
 
 // Accelerometer support
-constexpr size_t MaxAccelerometers = 1;					// Maximum number of accelerometers addressable from the main board. We don't yet support multiple accelerometers.
+constexpr size_t MaxAccelerometers = 10;				// Maximum number of accelerometers addressable from the main board
 
 // I2C
 // A note on the i2C clock frequency.

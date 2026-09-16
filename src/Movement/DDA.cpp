@@ -1410,9 +1410,9 @@ void DDA::Prepare(DDARing& ring,
 						{
 							move.EnableDrivers(drive, false);
 
-							if (flags.isPrintingMove && directionVector[drive] > 0.0)
+							if (directionVector[drive] > 0.0)
 							{
-								extrusionFraction += directionVector[drive];					// accumulate the total extrusion fraction
+								extrusionFraction += directionVector[drive];					// accumulate the total extrusion fraction even if it's a non-prinitng move
 							}
 
 #if SUPPORT_NONLINEAR_EXTRUSION
