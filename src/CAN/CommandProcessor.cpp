@@ -622,7 +622,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 			default:
 				// We received a message type that we don't recognise. If it's a broadcast, ignore it. If it's addressed to us, send a reply.
-				if (buf->id.Src() != CanInterface::GetCanAddress())
+				if (buf->id.Dst() != CanInterface::GetCanAddress())
 				{
 					return;
 				}
