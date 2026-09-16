@@ -924,7 +924,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 	}
 
 	CanMessageBuffer::Free(buf);
-	reply.lcatf("CAN response timeout: board %u, req type %u, RID %u", dest, (unsigned int)msgType, (unsigned int)rid);
+	reply.lcatf("Timed out awaiting response from board %u to request type %u", dest, (unsigned int)msgType);
 	return GCodeResult::canResponseTimeout;
 }
 

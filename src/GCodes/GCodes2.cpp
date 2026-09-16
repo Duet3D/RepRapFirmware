@@ -5040,27 +5040,26 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 
 	case GCodeResult::noCanBuffer:
 		reply.lcat(NoCanBufferMessage);
+		rslt = GCodeResult::error;
 		break;
 
 	case GCodeResult::canResponseTimeout:
 		// Usually we have a more detailed message in 'reply' already, but if not then add a standard message
 		if (reply.IsEmpty()) { reply.copy("CAN response timeout"); }
+		rslt = GCodeResult::error;
 		break;
 #endif
 
-	case GCodeResult::error:
-	case GCodeResult::warning:
-		if (!gb.IsDoingLocalFile())
-		{
-			String<StringLength50> scratchString;
-			gb.PrintCommand(scratchString.GetRef());
-			reply.Prepend(": ");
-			reply.Prepend(scratchString.c_str());
-		}
-		break;
-
 	default:
 		break;
+	}
+
+	if ((rslt == GCodeResult::error || rslt == GCodeResult::warning) && !gb.IsDoingLocalFile())
+	{
+		String<StringLength100> scratchString;
+		gb.PrintCommand(scratchString.GetRef());
+		reply.Prepend(": ");
+		reply.Prepend(scratchString.c_str());
 	}
 
 	if (gb.LatestMachineState().GetState() == GCodeState::normal)
