@@ -329,7 +329,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "status",				OBJECT_MODEL_FUNC(self->GetLocalDriverStatus(context.GetLastIndex()).all),									ObjectModelEntryFlags::liveNotPanelDue },
 
 	// 15. boards[0].drivers[].config members
-	{ "direction",			OBJECT_MODEL_FUNC((int32_t)self->directions[context.GetLastIndex()]), 										ObjectModelEntryFlags::none },
+	{ "direction",			OBJECT_MODEL_FUNC(self->directions[context.GetLastIndex()]), 												ObjectModelEntryFlags::none },
 #if HAS_SMART_DRIVERS
 	{ "mode",				OBJECT_MODEL_FUNC_NOSELF((int32_t)SmartDrivers::GetDriverMode(context.GetLastIndex())), 					ObjectModelEntryFlags::none },
 #endif

@@ -35,7 +35,7 @@ constexpr ObjectModelTableEntry DriverData::objectModelTable[] =
 	{ "rms",				OBJECT_MODEL_FUNC((float)self->rmsPositionError, 2), 		ObjectModelEntryFlags::liveNotPanelDue },
 
 	// 4. config members
-	{ "direction",			OBJECT_MODEL_FUNC((int32_t)self->configuredDirection), 		ObjectModelEntryFlags::none },
+	{ "direction",			OBJECT_MODEL_FUNC((bool)self->configuredDirection), 		ObjectModelEntryFlags::none },
 	{ "mode",				OBJECT_MODEL_FUNC((int32_t)self->configuredMode), 			ObjectModelEntryFlags::none },
 };
 
