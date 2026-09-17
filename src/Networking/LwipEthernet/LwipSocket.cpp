@@ -176,7 +176,9 @@ void LwipSocket::DataSent(size_t numBytes) noexcept
 
 void LwipSocket::ConnectionClosedGracefully() noexcept
 {
-	if (connectionPcb != nullptr)
+	// A FIN can arrive before the responder has consumed the last receive buffers.
+	// Keep the PCB until they are consumed so that closing it does not send a reset.
+	if (connectionPcb != nullptr && receivedData == nullptr)
 	{
 		altcp_err(connectionPcb, nullptr);
 		altcp_recv(connectionPcb, nullptr);
@@ -515,7 +517,7 @@ void LwipSocket::Poll() noexcept
 		}
 
 		const bool canFinalize = timeoutExceeded
-			|| (state == SocketState::peerDisconnecting && unAcked == 0)
+			|| (state == SocketState::peerDisconnecting && receivedData == nullptr && unAcked == 0)
 			|| (isTlsConnection && state == SocketState::closing && unAcked == 0);
 		if (canFinalize && connectionPcb != nullptr)
 		{
@@ -547,7 +549,8 @@ void LwipSocket::Poll() noexcept
 			}
 		}
 
-		if (connectionPcb == nullptr)
+		// Closing the TCP connection does not mean the responder has read all its data.
+		if (connectionPcb == nullptr && (receivedData == nullptr || timeoutExceeded))
 		{
 			DiscardReceivedData();
 			state = (localPort == 0 || outgoing) ? SocketState::disabled : SocketState::listening;
