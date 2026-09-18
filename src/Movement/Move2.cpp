@@ -105,6 +105,28 @@ bool Move::ExtruderHasLocalDriver(size_t extruder) const noexcept
 	return extruderDrivers[extruder].IsLocal();
 }
 
+bool Move::AnyDriveHasRemoteDriver() const noexcept
+{
+	for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); axis++)
+	{
+		for (size_t i = 0; i < axisDrivers[axis].numDrivers; i++)
+		{
+			if (axisDrivers[axis].driverNumbers[i].IsRemote())
+			{
+				return true;
+			}
+		}
+	}
+	for (size_t extruder = 0; extruder < reprap.GetGCodes().GetNumExtruders(); extruder++)
+	{
+		if (extruderDrivers[extruder].IsRemote())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 #endif
 
 // Set the microstepping for local drivers, returning true if successful. All drivers for the same axis must use the same microstepping.

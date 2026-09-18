@@ -171,6 +171,9 @@ public:
 	float AccelerationTime() const noexcept { return accelerationTime; }
 	void UpdateSCurveFlagAndJerk() noexcept;
 	bool IsUsingSCurve() const noexcept { return usingSCurve; }
+# if SUPPORT_CAN_EXPANSION
+	bool AnyDriveHasRemoteDriver() const noexcept;
+# endif
 #endif
 
 	float MaxFeedrate(size_t axisOrExtruder) const noexcept;

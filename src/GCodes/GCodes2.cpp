@@ -2655,9 +2655,25 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 
 #if SUPPORT_3RD_ORDER
-					if (frac < 1 && move.AccelerationTime() != 0.0 && !move.IsUsingSCurve())
+					if (frac < 1 && move.AccelerationTime() != 0.0)
 					{
-						reply.lcat("Acceleration time (S-curve acceleration) is disabled because phase stepping is not enabled");
+						if (!move.IsUsingSCurve())
+						{
+							reply.lcat("Acceleration time (S-curve acceleration) is disabled because phase stepping is not enabled");
+							result = GCodeResult::warning;
+						}
+# if SUPPORT_CAN_EXPANSION
+						if (move.AnyDriveHasRemoteDriver())
+						{
+							reply.lcat("S-curve acceleration is not applied to CAN-connected drivers");
+							result = GCodeResult::warning;
+						}
+# endif
+					}
+#else
+					if (frac < 1 && gb.Seen('T'))
+					{
+						reply.lcat("S-curve acceleration (T parameter) is not supported on this board");
 						result = GCodeResult::warning;
 					}
 #endif
