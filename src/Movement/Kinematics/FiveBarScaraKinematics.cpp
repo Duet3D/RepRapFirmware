@@ -45,7 +45,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(FiveBarScaraKinematics, ZLeadscrewKine
 #endif
 
 FiveBarScaraKinematics::FiveBarScaraKinematics() noexcept
-	: ZLeadscrewKinematics(KinematicsType::scara, SegmentationType(true, false, false))
+	: ZLeadscrewKinematics(KinematicsType::fiveBarScara, SegmentationType(true, false, false))
 {
 	Recalc();
 }
@@ -545,12 +545,29 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 {
 	if (mCode == 669)
 	{
-		//TODO this should print the existing values if no parameters are given, instead of insisting that all parameters are present
-		// must be defined: X, Y, P, D
+		const bool seenNonGeometry = TryConfigureSegmentation(gb);
+		if (!gb.SeenAny("XYPDLBACZ"))
+		{
+			if (!seenNonGeometry && !gb.Seen('K'))
+			{
+				Kinematics::Configure(mCode, gb, reply, error);
+				reply.catf(", actuator origins (%.1f, %.1f) and (%.1f, %.1f), proximal arms %.1f:%.1fmm, distal arms %.1f:%.1fmm, cantilevers %.1f:%.1fmm, work mode %d, homing angles %.1f:%.1f"
+							", head angle %.1f to %.1f, proximal-distal angles %.1f to %.1f and %.1f to %.1f, actuator angles %.1f to %.1f and %.1f to %.1f",
+							(double)xOrigL, (double)yOrigL, (double)xOrigR, (double)yOrigR, (double)proximalL, (double)proximalR, (double)distalL, (double)distalR, (double)cantL, (double)cantR,
+							workmode, (double)homingAngleL, (double)homingAngleR, (double)headAngleMin, (double)headAngleMax, (double)proxDistLAngleMin, (double)proxDistLAngleMax,
+							(double)proxDistRAngleMin, (double)proxDistRAngleMax, (double)actuatorAngleLMin, (double)actuatorAngleLMax, (double)actuatorAngleRMin, (double)actuatorAngleRMax);
+				if (printAreaDefined)
+				{
+					reply.catf(", print area (%.1f, %.1f) to (%.1f, %.1f)", (double)printArea[0], (double)printArea[1], (double)printArea[2], (double)printArea[3]);
+				}
+			}
+			return false;
+		}
+
+		// Omitted optional parameters revert to their defaults, so a geometry change must specify the complete geometry
 		gb.MustSee('X');
 		gb.MustSee('Y');
 		gb.MustSee('P');
-		gb.MustSee('D');
 
 		bool seen = false;
 
@@ -571,12 +588,13 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		{
 			int32_t wm = 0L;
 			gb.TryGetIValue('L', wm, seen);
-			workmode = (int)wm;
-			if (!(workmode == 1 || workmode == 2 || workmode == 4))
+			if (!(wm == 1 || wm == 2 || wm == 4))
 			{
+				reply.copy("L parameter must be 1, 2 or 4");
 				error = true;
 				return true;
 			}
+			workmode = (int)wm;
 		}
 		else
 		{
@@ -590,32 +608,21 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		proximalR = proximalLengths[1];
 
 		// distal arm lengths and optional lengths of cantilevered arm
-		bool dseen = false;
+		gb.MustSee('D');
 		float distalLengths[4];
-		//TODO TryGetFloatArray will report an error if the wrong number of values is provided. But we want to allow either 2 or 4.
-		//TODO So this code should call Seen() followed by GetFloatArray() instead, then check the number of returned values.
-		gb.TryGetFloatArray('D', 4, distalLengths, dseen);
-		if (dseen)
+		size_t numDistalLengths = 4;
+		gb.GetFloatArray(distalLengths, numDistalLengths, false);
+		if (numDistalLengths != 2 && numDistalLengths != 4)
 		{
-			distalL = distalLengths[0];
-			distalR = distalLengths[1];
-			cantL = distalLengths[2];
-			cantR = distalLengths[3];
-			seen = true;
+			reply.copy("D parameter must have 2 or 4 values");
+			error = true;
+			return true;
 		}
-		else
-		{
-			dseen = false;
-			gb.TryGetFloatArray('D', 2, distalLengths, dseen);
-			if (dseen)
-			{
-				distalL = distalLengths[0];
-				distalR = distalLengths[1];
-				cantL = 0.0;
-				cantR = 0.0;
-				seen = true;
-			}
-		}
+		distalL = distalLengths[0];
+		distalR = distalLengths[1];
+		cantL = (numDistalLengths == 4) ? distalLengths[2] : 0.0;
+		cantR = (numDistalLengths == 4) ? distalLengths[3] : 0.0;
+		seen = true;
 
 		// angle of the actuator in the home position
 		if (gb.Seen('B'))
@@ -691,11 +698,10 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 
 		// optional rectangle definition of a print area. Must match the workmode reachable area
 		//TODO is this needed? Why not use the M208 limits instead?
-		bool seenNonGeometry = TryConfigureSegmentation(gb);
 		if (gb.Seen('Z'))
 		{
 			float coordinates[4];
-			gb.TryGetFloatArray('Z', 4, coordinates, seenNonGeometry);
+			gb.TryGetFloatArray('Z', 4, coordinates, seen);
 			for (int i=0; i < 4; i++)
 			{
 				printArea[i] = coordinates[i];
@@ -711,13 +717,6 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		{
 			Recalc();
 		}
-		else if (!seenNonGeometry && !gb.Seen('K'))
-		{
-			//TODO print all the parameters here
-			Kinematics::Configure(mCode, gb, reply, error);
-			reply.catf(", documented in https://duet3d.dozuki.com/Guide/Five+Bar+Parallel+SCARA/24?lang=en");
-		}
-
 		return seen;
 	}
 	else
