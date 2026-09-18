@@ -138,6 +138,17 @@ extern "C"
 
 }	// end extern "C"
 
+// Listener pcbs get SOF_REUSEADDR so that binding succeeds while TIME_WAIT pcbs of earlier connections still hold the port
+static tcp_pcb *NewListenerPcb() noexcept
+{
+	tcp_pcb *const pcb = tcp_new();
+	if (pcb != nullptr)
+	{
+		ip_set_option(pcb, SOF_REUSEADDR);
+	}
+	return pcb;
+}
+
 /*-----------------------------------------------------------------------------------*/
 
 LwipEthernetInterface::LwipEthernetInterface(Platform& p) noexcept
@@ -251,14 +262,18 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 #endif
 	   )
 	{
-		tcp_pcb *pcb = tcp_new();
+		tcp_pcb *pcb = NewListenerPcb();
 		if (pcb == nullptr)
 		{
 			platform.Message(ErrorMessage, "unable to allocate a pcb\n");
 		}
+		else if (tcp_bind(pcb, IP_ADDR_ANY, portNumbers[protocol]) != ERR_OK)
+		{
+			platform.Message(ErrorMessage, "tcp_bind call failed\n");
+			tcp_abort(pcb);
+		}
 		else
 		{
-			tcp_bind(pcb, IP_ADDR_ANY, portNumbers[protocol]);
 			pcb = tcp_listen_with_backlog(pcb, ListenBacklog);
 			if (pcb == nullptr)
 			{
@@ -670,14 +685,18 @@ void LwipEthernetInterface::OpenDataPort(TcpPort port) noexcept
 		TerminateDataPort();
 	}
 
-	tcp_pcb *pcb = tcp_new();
+	tcp_pcb *pcb = NewListenerPcb();
 	if (pcb == nullptr)
 	{
 		platform.Message(ErrorMessage, "unable to allocate a pcb\n");
 	}
+	else if (tcp_bind(pcb, IP_ADDR_ANY, port) != ERR_OK)
+	{
+		platform.Message(ErrorMessage, "tcp_bind call failed\n");
+		tcp_abort(pcb);
+	}
 	else
 	{
-		tcp_bind(pcb, IP_ADDR_ANY, port);
 		pcb = tcp_listen_with_backlog(pcb, 0);
 		if (pcb == nullptr)
 		{

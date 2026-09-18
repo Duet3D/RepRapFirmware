@@ -84,6 +84,9 @@
 #define LWIP_NETCONN            	0
 #define LWIP_SOCKET             	0
 
+/* Listeners set SOF_REUSEADDR so that re-binding a port succeeds while TIME_WAIT pcbs of earlier connections still hold it */
+#define SO_REUSE					1
+
 /* Uncomment following line to use DHCP instead of fixed IP */
 #define DHCP_USED
 
