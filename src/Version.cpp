@@ -10,6 +10,5 @@
 
 const char *_ecv_array const DateText = IsoDate;
 const char *_ecv_array const DateTimeText = IsoDateTime;
-const char *_ecv_array const TimeSuffix = DateText + 10;
 
 // End
