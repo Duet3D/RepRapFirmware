@@ -536,12 +536,16 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 					}
 					reprap.MoveUpdated();
 				}
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION
+				if (move.GetStepMode(drive) == StepMode::phase)
+				{
+					// Revert to step/dir while the old drivers are still mapped, else the new drivers get the reset and the old ones stay in phase stepping
+					(void)move.SetStepMode(drive, StepMode::stepDir, reply);
+				}
+#endif
 				move.SetAxisDriversConfig(drive, numValues, drivers);
 #if SUPPORT_CAN_EXPANSION
 				axesToUpdate.SetBit(drive);
-#endif
-#if SUPPORT_PHASE_STEPPING
-				(void)move.SetStepMode(drive, StepMode::stepDir, reply);
 #endif
 			}
 		}
@@ -557,15 +561,19 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 		numExtruders = numValues;
 		for (size_t i = 0; i < numValues; ++i)
 		{
-			move.SetExtruderDriver(i, drivers[i]);
 #if SUPPORT_CAN_EXPANSION || SUPPORT_PHASE_STEPPING
 			const size_t drive = ExtruderToLogicalDrive(i);
 #endif
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION
+			if (move.GetStepMode(drive) == StepMode::phase)
+			{
+				// Revert to step/dir while the old driver is still mapped, else the new driver gets the reset and the old one stays in phase stepping
+				(void)move.SetStepMode(drive, StepMode::stepDir, reply);
+			}
+#endif
+			move.SetExtruderDriver(i, drivers[i]);
 #if SUPPORT_CAN_EXPANSION
 			axesToUpdate.SetBit(drive);
-#endif
-#if SUPPORT_PHASE_STEPPING
-			(void)move.SetStepMode(drive, StepMode::stepDir, reply);
 #endif
 		}
 		if (FilamentMonitor::CheckDriveAssignments(reply) && rslt == GCodeResult::ok)
@@ -841,7 +849,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THRO
 
 #endif
 
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION
 
 // Deal with M970
 GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
@@ -873,12 +881,17 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 			return GCodeResult::error;
 #endif
 		}
+#if SUPPORT_PHASE_STEPPING
 		if (id.localDriver >= move.GetNumActualDirectDrivers())
 		{
 			reply.printf("Driver number %u out of range", id.localDriver);
 			return GCodeResult::error;
 		}
 		return PhaseStep::ConfigureCorrection(id.localDriver, gb, reply);
+#else
+		reply.copy("Local drivers on this board do not support phase stepping");
+		return GCodeResult::error;
+#endif
 	}
 
 	for (size_t axis = 0; axis < numTotalAxes; axis++)

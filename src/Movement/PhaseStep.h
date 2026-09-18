@@ -10,6 +10,35 @@
 
 #include <RepRapFirmware.h>
 
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION
+
+// Types shared with boards that cannot phase-step locally but can configure phase stepping on remote drivers
+enum class StepMode
+{
+	stepDir = 0,
+	phase,
+	unknown
+};
+
+enum class PhaseStepConfig
+{
+	kv = 0,
+	ka,
+};
+
+struct PhaseStepParams
+{
+	float Kv;
+	float Ka;
+};
+
+constexpr float DefaultPhaseStepKv = 1000.0;
+constexpr float DefaultPhaseStepKa = 50000.0;
+
+const char *_ecv_array TranslateStepMode(const StepMode mode) noexcept;
+
+#endif
+
 #if SUPPORT_PHASE_STEPPING
 
 constexpr float MaxSafeBacklash = 0.22;					// the maximum backlash in full steps that we can use - error if there is more
@@ -38,27 +67,6 @@ struct MotionParameters
 	}
 };
 
-enum class StepMode
-{
-	stepDir = 0,
-	phase,
-	unknown
-};
-
-enum class PhaseStepConfig
-{
-	kv = 0,
-	ka,
-};
-
-struct PhaseStepParams
-{
-	float Kv;
-	float Ka;
-};
-
-const char *_ecv_array TranslateStepMode(const StepMode mode) noexcept;
-
 // One term of the phase correction that is added to the electrical angle before the coil currents are computed, see M970.3
 struct PhaseCorrectionHarmonic
 {
@@ -81,6 +89,8 @@ public:
 
 	// Phase correction, shared by all instances because it is a property of the driver
 	static GCodeResult ConfigureCorrection(size_t driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	static GCodeResult ConfigureCorrection(size_t driver, unsigned int harmonic, bool seenMagnitude, float magnitudeDegrees, bool seenPhase, float phaseDegrees, const StringRef& reply) noexcept;
+	static void AppendCorrections(size_t driver, const StringRef& reply) noexcept;
 	static int32_t GetCorrection(size_t driver, uint32_t phase) noexcept;
 
 	// Methods called by the motion system
@@ -110,8 +120,8 @@ public:
 
 	// Holding current, and variables derived from it
 	float holdCurrentFraction = DefaultHoldCurrentFraction; // The minimum holding current when stationary
-	float Kv = 1000.0;										// The velocity feedforward constant
-	float Ka = 50000.0;										// The acceleration feedforward constant
+	float Kv = DefaultPhaseStepKv;							// The velocity feedforward constant
+	float Ka = DefaultPhaseStepKa;							// The acceleration feedforward constant
 
 	// Working variables
 	// These variables are all used to calculate the required motor currents. They are declared here so they can be reported on by the data collection task

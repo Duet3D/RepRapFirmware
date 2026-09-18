@@ -745,7 +745,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			&& code != 558
 #endif
 			&& code != 569 && code != 576 && code != 581 && code != 586 && code != 587		// these are the only M-codes we implement that can have fractional parts
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION
 			&& code != 970
 #endif
 		)
@@ -4712,7 +4712,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION
 			case 970:	// configure step mode (phase stepping)
 				result = ConfigureStepMode(gb, reply);
 				break;

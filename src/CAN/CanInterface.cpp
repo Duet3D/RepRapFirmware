@@ -1211,8 +1211,6 @@ GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb
 	}
 }
 
-#if SUPPORT_PHASE_STEPPING
-
 // Handle M970 for a remote driver
 GCodeResult CanInterface::SetRemoteDriverStepMode(DriverId driver, unsigned int mode, const StringRef& reply) noexcept
 {
@@ -1246,8 +1244,6 @@ GCodeResult CanInterface::SetRemotePhaseStepParam(DriverId driver, char param, f
 		return GCodeResult::error;
 	}
 }
-
-#endif
 
 // Handle M915 for a collection of remote drivers
 GCodeResult CanInterface::GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) THROWS(GCodeException)

@@ -566,6 +566,29 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetMove().EutProcessM569Point7(buf->msg.generic, replyRef);
 				break;
 
+			case CanMessageType::setStandstillCurrentFactor:
+				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
+				rslt = reprap.GetMove().EutSetStandstillCurrentFactor(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
+				break;
+
+			case CanMessageType::m970:
+				requestId = buf->msg.generic.requestId;
+# if SUPPORT_PHASE_STEPPING
+				rslt = reprap.GetMove().EutProcessM970(buf->msg.generic, replyRef);
+# else
+				rslt = GCodeResult::errorNotSupported;
+# endif
+				break;
+
+			case CanMessageType::m970p3:
+				requestId = buf->msg.generic.requestId;
+# if SUPPORT_PHASE_STEPPING
+				rslt = reprap.GetMove().EutProcessM970Point3(buf->msg.generic, replyRef);
+# else
+				rslt = GCodeResult::errorNotSupported;
+# endif
+				break;
+
 			case CanMessageType::createInputMonitorV1:
 				requestId = buf->msg.createInputMonitorV1.requestId;
 				rslt = InputMonitor::Create(buf->msg.createInputMonitorV1, buf->dataLength, replyRef, extra);

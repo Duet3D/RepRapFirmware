@@ -25,7 +25,7 @@
 #include <Hardware/IoPorts.h>
 #include <Endstops/EndstopDefs.h>
 
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION
 #include <Movement/PhaseStep.h>
 #endif
 
@@ -345,6 +345,11 @@ public:
 	void StopDriversFromRemote(uint16_t whichDrives) noexcept;
 	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
 
+	GCodeResult EutSetStandstillCurrentFactor(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
+# if SUPPORT_PHASE_STEPPING
+	GCodeResult EutProcessM970(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+	GCodeResult EutProcessM970Point3(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+# endif
 	GCodeResult EutSetRemotePressureAdvanceV1(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutSetRemotePressureAdvanceV2(const CanMessageMultipleDrivesRequest<ShortPressureAdvanceParameters>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutSetInputShaping(const CanMessageSetInputShapingV1& msg, size_t dataLength, const StringRef& reply) noexcept
@@ -460,12 +465,14 @@ public:
 	void InvertCurrentMotorSteps(size_t driver) noexcept;
 #endif
 
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION
 	GCodeResult ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config, const StringRef& reply) noexcept;	// configure Ka & Kv parameters for phase stepping
 	PhaseStepParams GetPhaseStepParams(size_t axisOrExtruder) const noexcept;
-	bool UpdateCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
 	bool SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept;
 	StepMode GetStepMode(size_t axisOrExtruder) const noexcept;
+#endif
+#if SUPPORT_PHASE_STEPPING
+	bool UpdateCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
 	void PrepareLeadscrewAdjustmentDM(size_t localDriver) noexcept;							// set up the DM that adjusts a leadscrew so that it executes the same way as the Z axis
 	void ResetPhaseStepMonitoringVariables() noexcept;
 
@@ -595,6 +602,9 @@ private:
 #endif
 
 	void InternalDisableDriver(size_t driver) noexcept;
+#if SUPPORT_PHASE_STEPPING
+	bool SetLocalDriverStepMode(DriveMovement& dm, uint8_t driver, StepMode mode, unsigned int microsteps) noexcept;	// switch one local driver between step/dir and phase stepping, keeping MSCNT and the commanded phase in sync
+#endif
 	void EngageBrake(size_t driver) noexcept;
 	void DisengageBrake(size_t driver) noexcept;
 
@@ -657,8 +667,11 @@ private:
 	bool phaseStepMovingFast;								// Whether any phase stepping driver is above the speed at which we defer the driver status poll
 #endif
 
-#if SUPPORT_PHASE_STEPPING && SUPPORT_CAN_EXPANSION
+#if SUPPORT_CAN_EXPANSION
 	LogicalDrivesBitmap remotePhaseStepDrives;				// logical drives whose remote drivers have been switched to phase stepping
+#endif
+#if SUPPORT_CAN_EXPANSION && !SUPPORT_PHASE_STEPPING
+	PhaseStepParams remotePhaseStepParams[MaxAxesPlusExtruders];	// Kv/Ka per logical drive for reporting; boards with local phase stepping keep these in the DMs instead
 #endif
 
 #if SUPPORT_ASYNC_MOVES
