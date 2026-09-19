@@ -610,14 +610,18 @@ GCodeResult ExpansionManager::ConfigureConnectionTimeout(GCodeBuffer& gb, const 
 		if (gb.Seen('T'))
 		{
 			const uint32_t timeout = gb.GetLimitedUIValue('T', MinConnectionTimeoutSeconds, std::numeric_limits<uint16_t>::max() + 1);
-			{
-				WriteLocker lock(boardsLock);
-				boards[address].connectionTimeoutSeconds = (uint16_t)timeout;
-			}
-			reprap.BoardsUpdated();
 			CanMessageGenericConstructor cons(M959Params);
 			cons.PopulateFromCommand(gb);
-			return cons.SendAndGetResponse(CanMessageType::setConnectionTimeout, (CanAddress)address, reply);
+			const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::setConnectionTimeout, (CanAddress)address, reply);
+			if (rslt == GCodeResult::ok)						// only adopt the new timeout if the board did, otherwise the two ends would disagree
+			{
+				{
+					WriteLocker lock(boardsLock);
+					boards[address].connectionTimeoutSeconds = (uint16_t)timeout;
+				}
+				reprap.BoardsUpdated();
+			}
+			return rslt;
 		}
 		reply.printf("Board %u connection timeout %u seconds", (unsigned int)address, boards[address].connectionTimeoutSeconds);
 		return GCodeResult::ok;

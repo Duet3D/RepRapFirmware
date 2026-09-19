@@ -44,6 +44,8 @@ namespace CanInterface
 	void MainBoardAcknowledgedAnnounce() noexcept;
 	void LogIgnoredMovementMessage() noexcept;
 	void CheckBrs(const CanMessageTimeSync& msg) noexcept;
+	void UpdateSyncLockState(bool synced) noexcept;
+	GCodeResult ProcessM959(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 #endif
 
 	CanRequestId AllocateRequestId(CanAddress destination, CanMessageBuffer *buf) noexcept;
