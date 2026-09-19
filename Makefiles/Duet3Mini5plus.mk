@@ -21,53 +21,46 @@ DUET3MINI_MBEDTLS_LIB := $(WORKSPACE)/LibMbedTls/SAME5x/libLibMbedTls.a
 DUET3MINI_SRC_DIR := src
 
 # Find libcpp and libc files first (must be linked first for proper malloc resolution)
-DUET3MINI_LIBCPP_SRCS := $(shell find $(DUET3MINI_SRC_DIR)/libcpp -name '*.cpp' -o -name '*.cc' 2>/dev/null)
-DUET3MINI_LIBC_SRCS := $(shell find $(DUET3MINI_SRC_DIR)/libc -name '*.c' -o -name '*.cpp' 2>/dev/null)
+DUET3MINI_LIBCPP_SRCS := $(call rwildcard,$(DUET3MINI_SRC_DIR)/libcpp,*.cpp *.cc)
+DUET3MINI_LIBC_SRCS := $(call rwildcard,$(DUET3MINI_SRC_DIR)/libc,*.c *.cpp)
 
-# Find all source files (excluding specified directories)
-DUET3MINI_CPP_SRCS := $(shell find $(DUET3MINI_SRC_DIR) -name '*.cpp' \
-	! -path '*/libcpp/*' \
-	! -path '*/libc/*' \
-	! -path '*/Duet3_V06/*' \
-	! -path '*/Hardware/SAME70/*' \
-	! -path '*/Hardware/SAM4E/*' \
-	! -path '*/Hardware/SAM4S/*' \
-	! -path '*/DuetNG/*' \
-	! -path '*/Networking/W5500Ethernet/*' \
-	! -path '*/Pccb/*' \
-	! -path '*/DuetM/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/smtp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/snmp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/tftp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/lwiperf/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/sntp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/http/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/mqtt/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/netif/ppp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/doc/*')
+# Directories excluded from the source scan, mirroring the Eclipse source folder exclusions
+DUET3MINI_EXCLUDE_DIRS := \
+	$(DUET3MINI_SRC_DIR)/libc \
+	$(DUET3MINI_SRC_DIR)/Hardware/SAME70 \
+	$(DUET3MINI_SRC_DIR)/Hardware/SAM4E \
+	$(DUET3MINI_SRC_DIR)/Hardware/SAM4S \
+	$(DUET3MINI_SRC_DIR)/DuetNG \
+	$(DUET3MINI_SRC_DIR)/Pccb \
+	$(DUET3MINI_SRC_DIR)/DuetM \
+	$(DUET3MINI_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/smtp \
+	$(DUET3MINI_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/snmp \
+	$(DUET3MINI_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/tftp \
+	$(DUET3MINI_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/lwiperf \
+	$(DUET3MINI_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/sntp \
+	$(DUET3MINI_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/http \
+	$(DUET3MINI_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/mqtt \
+	$(DUET3MINI_SRC_DIR)/Networking/LwipEthernet/Lwip/src/netif/ppp \
+	$(DUET3MINI_SRC_DIR)/Networking/LwipEthernet/Lwip/doc
 
-DUET3MINI_C_SRCS := $(shell find $(DUET3MINI_SRC_DIR) -name '*.c' \
-	! -path '*/libc/*' \
-	! -path '*/SBC/*' \
-	! -path '*/Hardware/SAME70/*' \
-	! -path '*/Hardware/SAM4E/*' \
-	! -path '*/Hardware/SAM4S/*' \
-	! -path '*/DuetNG/*' \
-	! -path '*/Pccb/*' \
-	! -path '*/DuetM/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/smtp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/snmp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/tftp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/lwiperf/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/sntp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/http/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/mqtt/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/netif/ppp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/test/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/doc/*' \
-	! -path '*/MQTT_C/tests.c' \
-	! -path '*/MQTT_C/examples/*' \
-	! -path '*/MQTT_C/src/mqtt_pal.c')
+DUET3MINI_CPP_EXCLUDE_DIRS := $(DUET3MINI_EXCLUDE_DIRS) \
+	$(DUET3MINI_SRC_DIR)/libcpp \
+	$(DUET3MINI_SRC_DIR)/Duet3_V06 \
+	$(DUET3MINI_SRC_DIR)/Networking/W5500Ethernet
+
+DUET3MINI_C_EXCLUDE_DIRS := $(DUET3MINI_EXCLUDE_DIRS) \
+	$(DUET3MINI_SRC_DIR)/SBC \
+	$(DUET3MINI_SRC_DIR)/Networking/LwipEthernet/Lwip/test \
+	$(DUET3MINI_SRC_DIR)/Networking/MQTT/MQTT_C/examples
+
+DUET3MINI_C_EXCLUDE_FILES := \
+	$(DUET3MINI_SRC_DIR)/Networking/MQTT/MQTT_C/tests.c \
+	$(DUET3MINI_SRC_DIR)/Networking/MQTT/MQTT_C/src/mqtt_pal.c
+
+# Find all source files (excluding the directories and files listed above)
+DUET3MINI_CPP_SRCS := $(filter-out $(addsuffix /%,$(DUET3MINI_CPP_EXCLUDE_DIRS)),$(call rwildcard,$(DUET3MINI_SRC_DIR),*.cpp))
+
+DUET3MINI_C_SRCS := $(filter-out $(DUET3MINI_C_EXCLUDE_FILES) $(addsuffix /%,$(DUET3MINI_C_EXCLUDE_DIRS)),$(call rwildcard,$(DUET3MINI_SRC_DIR),*.c))
 
 # Include paths
 DUET3MINI_INCLUDES := \

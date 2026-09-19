@@ -2,8 +2,36 @@
 # Builds firmware for various Duet boards
 
 # Cross-compiler toolchain (relative to project root)
-#CROSS_COMPILE ?= ../arm-gnu-toolchain-13.2.Rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-
-CROSS_COMPILE ?= ../arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-
+# 3.6.x needs 13.2.Rel1, see the Building RepRapFirmware wiki page
+ARM_GNU_TOOLCHAIN_VERSION ?= 15.2.rel1
+ifeq ($(OS),Windows_NT)
+HOST_ARCH_RAW := $(subst AMD64,x86_64,$(subst ARM64,aarch64,$(PROCESSOR_ARCHITECTURE)))
+else
+HOST_ARCH_RAW := $(shell uname -m)
+HOST_OS_RAW := $(shell uname -s)
+endif
+
+ifeq ($(HOST_ARCH_RAW),aarch64)
+ARM_GNU_TOOLCHAIN_HOST_ARCH := aarch64
+else ifeq ($(HOST_ARCH_RAW),arm64)
+ARM_GNU_TOOLCHAIN_HOST_ARCH := aarch64
+else ifeq ($(HOST_ARCH_RAW),x86_64)
+ARM_GNU_TOOLCHAIN_HOST_ARCH := x86_64
+else ifeq ($(HOST_ARCH_RAW),amd64)
+ARM_GNU_TOOLCHAIN_HOST_ARCH := x86_64
+else
+ARM_GNU_TOOLCHAIN_HOST_ARCH := $(HOST_ARCH_RAW)
+endif
+
+ifeq ($(OS),Windows_NT)
+ARM_GNU_TOOLCHAIN_HOST := mingw-w64-$(ARM_GNU_TOOLCHAIN_HOST_ARCH)
+else ifeq ($(HOST_OS_RAW),Darwin)
+ARM_GNU_TOOLCHAIN_HOST := darwin-$(subst aarch64,arm64,$(ARM_GNU_TOOLCHAIN_HOST_ARCH))
+else
+ARM_GNU_TOOLCHAIN_HOST := $(ARM_GNU_TOOLCHAIN_HOST_ARCH)
+endif
+
+CROSS_COMPILE ?= ../arm-gnu-toolchain-$(ARM_GNU_TOOLCHAIN_VERSION)-$(ARM_GNU_TOOLCHAIN_HOST)-arm-none-eabi/bin/arm-none-eabi-
 export CROSS_COMPILE
 
 # Toolchain programs
@@ -40,6 +68,15 @@ else
 DEBUG_FLAGS :=
 endif
 export DEBUG_FLAGS
+
+# Recursive wildcard: $(call rwildcard,<dir>,<patterns>)
+# Source lists must not shell out to find, which resolves to FIND.EXE on Windows
+rwildcard = $(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
+
+# An empty scan would compile nothing and leave the link failing on missing objects, so stop here instead
+ifeq ($(wildcard src/*),)
+$(error No sources found under src - is the checkout complete?)
+endif
 
 # Default target
 .DEFAULT_GOAL := help

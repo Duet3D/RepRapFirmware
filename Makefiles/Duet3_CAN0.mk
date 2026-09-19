@@ -23,58 +23,47 @@ DUET3CAN0_MBEDTLS_LIB := $(WORKSPACE)/LibMbedTls/SAME70/libLibMbedTls.a
 DUET3CAN0_SRC_DIR := src
 
 # Find libcpp and libc files first (must be linked first for proper malloc resolution)
-DUET3CAN0_LIBCPP_SRCS := $(shell find $(DUET3CAN0_SRC_DIR)/libcpp -name '*.cpp' -o -name '*.cc' 2>/dev/null)
-DUET3CAN0_LIBC_SRCS := $(shell find $(DUET3CAN0_SRC_DIR)/libc -name '*.c' -o -name '*.cpp' 2>/dev/null)
+DUET3CAN0_LIBCPP_SRCS := $(call rwildcard,$(DUET3CAN0_SRC_DIR)/libcpp,*.cpp *.cc)
+DUET3CAN0_LIBC_SRCS := $(call rwildcard,$(DUET3CAN0_SRC_DIR)/libc,*.c *.cpp)
 
-# Find all source files (excluding specified directories)
-DUET3CAN0_CPP_SRCS := $(shell find $(DUET3CAN0_SRC_DIR) -name '*.cpp' \
-	! -path '*/libcpp/*' \
-	! -path '*/libc/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/smtp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/snmp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/httpd/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/test/*' \
-	! -path '*/DuetNG/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/tftp/*' \
-	! -path '*/Networking/W5500Ethernet/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/netif/ppp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/lwiperf/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/sntp/*' \
-	! -path '*/Display/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/http/*' \
-	! -path '*/Duet3Mini/*' \
-	! -path '*/Hardware/SAM4E/*' \
-	! -path '*/Hardware/SAME5x/*' \
-	! -path '*/Pccb/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/mqtt/*' \
-	! -path '*/Hardware/SAM4S/*' \
-	! -path '*/DuetM/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/doc/*')
+# Directories excluded from the source scan, mirroring the Eclipse source folder exclusions
+DUET3CAN0_EXCLUDE_DIRS := \
+	$(DUET3CAN0_SRC_DIR)/libc \
+	$(DUET3CAN0_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/smtp \
+	$(DUET3CAN0_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/snmp \
+	$(DUET3CAN0_SRC_DIR)/Networking/LwipEthernet/Lwip/test \
+	$(DUET3CAN0_SRC_DIR)/DuetNG \
+	$(DUET3CAN0_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/tftp \
+	$(DUET3CAN0_SRC_DIR)/Networking/W5500Ethernet \
+	$(DUET3CAN0_SRC_DIR)/Networking/LwipEthernet/Lwip/src/netif/ppp \
+	$(DUET3CAN0_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/lwiperf \
+	$(DUET3CAN0_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/sntp \
+	$(DUET3CAN0_SRC_DIR)/Display \
+	$(DUET3CAN0_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/http \
+	$(DUET3CAN0_SRC_DIR)/Duet3Mini \
+	$(DUET3CAN0_SRC_DIR)/Hardware/SAM4E \
+	$(DUET3CAN0_SRC_DIR)/Hardware/SAME5x \
+	$(DUET3CAN0_SRC_DIR)/Pccb \
+	$(DUET3CAN0_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/mqtt \
+	$(DUET3CAN0_SRC_DIR)/Hardware/SAM4S \
+	$(DUET3CAN0_SRC_DIR)/DuetM \
+	$(DUET3CAN0_SRC_DIR)/Networking/LwipEthernet/Lwip/doc
 
-DUET3CAN0_C_SRCS := $(shell find $(DUET3CAN0_SRC_DIR) -name '*.c' \
-	! -path '*/libc/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/smtp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/snmp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/test/*' \
-	! -path '*/DuetNG/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/tftp/*' \
-	! -path '*/Networking/W5500Ethernet/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/netif/ppp/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/lwiperf/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/sntp/*' \
-	! -path '*/Display/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/http/*' \
-	! -path '*/Duet3Mini/*' \
-	! -path '*/Hardware/SAM4E/*' \
-	! -path '*/Hardware/SAME5x/*' \
-	! -path '*/Pccb/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/src/apps/mqtt/*' \
-	! -path '*/Hardware/SAM4S/*' \
-	! -path '*/DuetM/*' \
-	! -path '*/Networking/LwipEthernet/Lwip/doc/*' \
-	! -path '*/MQTT_C/tests.c' \
-	! -path '*/MQTT_C/examples/*' \
-	! -path '*/MQTT_C/src/mqtt_pal.c')
+DUET3CAN0_CPP_EXCLUDE_DIRS := $(DUET3CAN0_EXCLUDE_DIRS) \
+	$(DUET3CAN0_SRC_DIR)/libcpp \
+	$(DUET3CAN0_SRC_DIR)/Networking/LwipEthernet/Lwip/src/apps/httpd
+
+DUET3CAN0_C_EXCLUDE_DIRS := $(DUET3CAN0_EXCLUDE_DIRS) \
+	$(DUET3CAN0_SRC_DIR)/Networking/MQTT/MQTT_C/examples
+
+DUET3CAN0_C_EXCLUDE_FILES := \
+	$(DUET3CAN0_SRC_DIR)/Networking/MQTT/MQTT_C/tests.c \
+	$(DUET3CAN0_SRC_DIR)/Networking/MQTT/MQTT_C/src/mqtt_pal.c
+
+# Find all source files (excluding the directories and files listed above)
+DUET3CAN0_CPP_SRCS := $(filter-out $(addsuffix /%,$(DUET3CAN0_CPP_EXCLUDE_DIRS)),$(call rwildcard,$(DUET3CAN0_SRC_DIR),*.cpp))
+
+DUET3CAN0_C_SRCS := $(filter-out $(DUET3CAN0_C_EXCLUDE_FILES) $(addsuffix /%,$(DUET3CAN0_C_EXCLUDE_DIRS)),$(call rwildcard,$(DUET3CAN0_SRC_DIR),*.c))
 
 # Include paths
 DUET3CAN0_INCLUDES := \
