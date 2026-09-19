@@ -242,6 +242,13 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 				}
 				board.driverData = new DriverData[board.numDrivers];
 			}
+			if (isNewFormat && board.driverData != nullptr)
+			{
+				for (size_t driver = 0; driver < board.numDrivers; driver++)
+				{
+					board.driverData[driver].StoreIsSmartDriver(!buf->msg.announceV1.noSmartDrivers);
+				}
+			}
 			UpdateBoardState(src, BoardState::running);
 		}
 
