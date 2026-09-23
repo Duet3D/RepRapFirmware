@@ -769,11 +769,11 @@ static bool DeleteContents(DIR& dir, const StringRef& filePath, ErrorMessageMode
 				DIR dir2;
 				if (f_opendir(&dir2, filePath.c_str()) == FR_OK)
 				{
-					const bool ok2 = DeleteContents(dir, filePath, errorMessageMode);
+					const bool ok2 = DeleteContents(dir2, filePath, errorMessageMode);
 					f_closedir(&dir2);
-					if (!ok2)
+					if (!ok2 || !InternalDelete(filePath.c_str(), errorMessageMode))
 					{
-						return false;
+						ok = false;
 					}
 				}
 				else
@@ -793,7 +793,7 @@ static bool DeleteContents(DIR& dir, const StringRef& filePath, ErrorMessageMode
 	}
 
 	filePath.Truncate(originalPathLength);
-	return true;
+	return ok;
 }
 
 # endif
