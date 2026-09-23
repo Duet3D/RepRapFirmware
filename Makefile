@@ -2,6 +2,7 @@
 # Builds firmware for various Duet boards
 
 # Cross-compiler toolchain (relative to project root)
+# 3.6.x needs 13.2.Rel1, see the Building RepRapFirmware wiki page
 ARM_GNU_TOOLCHAIN_VERSION ?= 15.2.rel1
 HOST_OS_RAW := $(shell uname -s)
 HOST_ARCH_RAW := $(shell uname -m)
@@ -67,6 +68,15 @@ else
 DEBUG_FLAGS :=
 endif
 export DEBUG_FLAGS
+
+# Recursive wildcard: $(call rwildcard,<dir>,<patterns>)
+# Source lists must not shell out to find, which resolves to FIND.EXE on Windows
+rwildcard = $(foreach d,$(wildcard $(1:=/*)),$(call rwildcard,$d,$2) $(filter $(subst *,%,$2),$d))
+
+# An empty scan would compile nothing and leave the link failing on missing objects, so stop here instead
+ifeq ($(wildcard src/*),)
+$(error No sources found under src - is the checkout complete?)
+endif
 
 # Default target
 .DEFAULT_GOAL := help

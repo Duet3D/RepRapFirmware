@@ -150,12 +150,12 @@ void Heater::SetSensorNumber(int sn) noexcept
 	}
 }
 
-void Heater::SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept
+void Heater::SetExtrusionFeedForward(float pwmBoost, float tempBoost, bool isNonPrintingMove) noexcept
 {
 	usingFeedForward = true;
 	extrusionPwmBoost = pwmBoost;
 	extrusionTemperatureBoost = tempBoost;
-	ApplyExtrusionFeedForward();
+	ApplyExtrusionFeedForward(isNonPrintingMove);
 }
 
 GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)

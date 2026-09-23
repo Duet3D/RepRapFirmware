@@ -91,7 +91,7 @@ void SoftwareResetData::Populate(uint16_t reason, const uint32_t *_ecv_array _ec
 	}
 	else
 	{
-		const char *_ecv_array stackLimit = (currentTask == nullptr) ? sysStackLimit : (const char *_ecv_array)currentTask + sizeof(TaskBase);
+		const char *_ecv_array stackLimit = (currentTask == nullptr) ? reinterpret_cast<const char *_ecv_array>(sysStackLimit) : (const char *_ecv_array)currentTask + sizeof(TaskBase);
 		stackOffset = (uint32_t)((const char *_ecv_array)stk - stackLimit) >> 2;
 		stackMarkerValid = stackLimit[0] == 0xA5 && stackLimit[3] == 0xA5;
 		spare = 0;

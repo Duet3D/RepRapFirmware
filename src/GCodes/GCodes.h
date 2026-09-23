@@ -420,7 +420,7 @@ private:
 	GCodeResult FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with a M675
 	GCodeResult SetDateTime(GCodeBuffer& gb,const StringRef& reply) THROWS(GCodeException);								// Deal with a M905
 	GCodeResult SavePosition(GCodeBuffer& gb,const StringRef& reply) THROWS(GCodeException);							// Deal with G60
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION
 	GCodeResult ConfigureStepMode(GCodeBuffer& gb, const StringRef& ref) THROWS(GCodeException);						// Deal with M970
 #endif
 	GCodeResult ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with M569

@@ -66,7 +66,7 @@ protected:
 	GCodeResult UpdateHeaterMonitors(const StringRef& reply) noexcept override { return GCodeResult::ok; }
 	GCodeResult StartAutoTune(const StringRef& reply, bool seenA, float ambientTemp) noexcept override;
 																				// Start an auto tune cycle for this heater
-	void ApplyExtrusionFeedForward() noexcept override;
+	void ApplyExtrusionFeedForward(bool isNonPrintingMove) noexcept override;
 
 private:
 	void SetHeater(float power) const noexcept;					// Power is a fraction in [0,1]

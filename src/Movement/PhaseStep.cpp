@@ -64,71 +64,110 @@ constexpr float PhaseUnitsPerDegree = 4096.0/360.0;
 // Configure the phase correction of a driver via M970.3: S = harmonic of the electrical cycle, J = magnitude in degrees (0 removes the harmonic), O = phase offset in degrees
 GCodeResult PhaseStep::ConfigureCorrection(size_t driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	PhaseCorrectionHarmonic *_ecv_array const corrections = phaseCorrections[driver];
 	if (gb.Seen('S'))
 	{
 		const unsigned int harmonic = gb.GetLimitedUIValue('S', 1, MaxPhaseCorrectionHarmonic + 1);
-		PhaseCorrectionHarmonic *_ecv_null entry = nullptr;
-		for (size_t i = 0; i < MaxPhaseCorrectionHarmonics; i++)
+		float magnitude = 0.0, phase = 0.0;
+		const bool seenMagnitude = gb.Seen('J');
+		if (seenMagnitude)
 		{
-			if (corrections[i].harmonic == harmonic)
-			{
-				entry = &corrections[i];
-				break;
-			}
+			magnitude = gb.GetLimitedFValue('J', 0.0, 90.0);
 		}
-
-		if (gb.Seen('J'))
+		const bool seenPhase = gb.Seen('O');
+		if (seenPhase)
 		{
-			const float magnitude = gb.GetLimitedFValue('J', 0.0, 90.0);
-			if (magnitude == 0.0)
-			{
-				if (entry != nullptr)
-				{
-					entry->harmonic = 0;
-				}
-				return GCodeResult::ok;
-			}
-			if (entry == nullptr)
-			{
-				for (size_t i = 0; i < MaxPhaseCorrectionHarmonics; i++)
-				{
-					if (corrections[i].harmonic == 0)
-					{
-						entry = &corrections[i];
-						entry->phase = 0;
-						break;
-					}
-				}
-				if (entry == nullptr)
-				{
-					reply.printf("Driver %u already has %u correction harmonics", driver, MaxPhaseCorrectionHarmonics);
-					return GCodeResult::error;
-				}
-			}
-			entry->harmonic = harmonic;
-			entry->magnitude = magnitude * PhaseUnitsPerDegree;
+			phase = gb.GetLimitedFValue('O', 0.0, 360.0);
 		}
-		else if (entry == nullptr)
-		{
-			reply.printf("Driver %u has no correction for harmonic %u", driver, harmonic);
-			return GCodeResult::error;
-		}
-
-		if (gb.Seen('O'))
-		{
-			entry->phase = (uint16_t)lrintf(gb.GetLimitedFValue('O', 0.0, 360.0) * PhaseUnitsPerDegree) % 4096u;
-		}
-		return GCodeResult::ok;
+		return ConfigureCorrection(driver, harmonic, seenMagnitude, magnitude, seenPhase, phase, reply);
 	}
 
 	reply.printf("Driver %u waveform correction:", driver);
+	AppendCorrections(driver, reply);
+	return GCodeResult::ok;
+}
+
+// Same semantics with explicit parameters, used for corrections received over CAN which bypass the GCodeBuffer range checks
+GCodeResult PhaseStep::ConfigureCorrection(size_t driver, unsigned int harmonic, bool seenMagnitude, float magnitudeDegrees, bool seenPhase, float phaseDegrees, const StringRef& reply) noexcept
+{
+	if (harmonic < 1 || harmonic > MaxPhaseCorrectionHarmonic)
+	{
+		reply.copy("Phase correction harmonic out of range");
+		return GCodeResult::error;
+	}
+	if (seenMagnitude && (magnitudeDegrees < 0.0 || magnitudeDegrees > 90.0))
+	{
+		reply.copy("Phase correction magnitude out of range");
+		return GCodeResult::error;
+	}
+	if (seenPhase && (phaseDegrees < 0.0 || phaseDegrees > 360.0))
+	{
+		reply.copy("Phase correction phase out of range");
+		return GCodeResult::error;
+	}
+
+	PhaseCorrectionHarmonic *_ecv_array const corrections = phaseCorrections[driver];
+	PhaseCorrectionHarmonic *_ecv_null entry = nullptr;
+	for (size_t i = 0; i < MaxPhaseCorrectionHarmonics; i++)
+	{
+		if (corrections[i].harmonic == harmonic)
+		{
+			entry = &corrections[i];
+			break;
+		}
+	}
+
+	if (seenMagnitude)
+	{
+		if (magnitudeDegrees == 0.0)
+		{
+			if (entry != nullptr)
+			{
+				entry->harmonic = 0;
+			}
+			return GCodeResult::ok;
+		}
+		if (entry == nullptr)
+		{
+			for (size_t i = 0; i < MaxPhaseCorrectionHarmonics; i++)
+			{
+				if (corrections[i].harmonic == 0)
+				{
+					entry = &corrections[i];
+					entry->phase = 0;
+					break;
+				}
+			}
+			if (entry == nullptr)
+			{
+				reply.printf("Driver %u already has %u correction harmonics", driver, MaxPhaseCorrectionHarmonics);
+				return GCodeResult::error;
+			}
+		}
+		entry->harmonic = (uint8_t)harmonic;
+		entry->magnitude = magnitudeDegrees * PhaseUnitsPerDegree;
+	}
+	else if (entry == nullptr)
+	{
+		reply.printf("Driver %u has no correction for harmonic %u", driver, harmonic);
+		return GCodeResult::error;
+	}
+
+	if (seenPhase)
+	{
+		entry->phase = (uint16_t)lrintf(phaseDegrees * PhaseUnitsPerDegree) % 4096u;
+	}
+	return GCodeResult::ok;
+}
+
+void PhaseStep::AppendCorrections(size_t driver, const StringRef& reply) noexcept
+{
+	const PhaseCorrectionHarmonic *_ecv_array const corrections = phaseCorrections[driver];
 	bool any = false;
 	for (size_t i = 0; i < MaxPhaseCorrectionHarmonics; i++)
 	{
 		if (corrections[i].harmonic != 0)
 		{
-			reply.catf("%s S%u J%.3f O%.1f", (any) ? "," : "", corrections[i].harmonic, (double)(corrections[i].magnitude / PhaseUnitsPerDegree), (double)(corrections[i].phase / PhaseUnitsPerDegree));
+			reply.catf("%s S%u J%.3f O%.1f", any ? "," : "", corrections[i].harmonic, (double)(corrections[i].magnitude / PhaseUnitsPerDegree), (double)(corrections[i].phase / PhaseUnitsPerDegree));
 			any = true;
 		}
 	}
@@ -136,7 +175,6 @@ GCodeResult PhaseStep::ConfigureCorrection(size_t driver, GCodeBuffer& gb, const
 	{
 		reply.cat(" none");
 	}
-	return GCodeResult::ok;
 }
 
 // Get the correction to add to the electrical angle of a driver, in phase units. The phase may exceed 4096 during tuning

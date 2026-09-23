@@ -99,7 +99,7 @@ public:
 
 	const FopDt& GetModel() const noexcept { return model; }				// Get the process model
 	GCodeResult SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-	void SetExtrusionFeedForward(float pwmBoost, float tempBoost) noexcept;
+	void SetExtrusionFeedForward(float pwmBoost, float tempBoost, bool isNonPrintingMove) noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
 	virtual GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept = 0;
@@ -146,7 +146,7 @@ protected:
 	virtual GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult UpdateHeaterMonitors(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult StartAutoTune(const StringRef& reply, bool seenA, float ambientTemp) noexcept = 0;
-	virtual void ApplyExtrusionFeedForward() noexcept = 0;
+	virtual void ApplyExtrusionFeedForward(bool isNonPrintingMove) noexcept = 0;
 
 	int GetSensorNumber() const noexcept { return sensorNumber; }
 	int GetAmbientSensorNumber() const noexcept { return ambientSensorNumber; }
@@ -185,7 +185,7 @@ protected:
 	static constexpr float DefaultTuningHysteresis = 5.0;
 	static constexpr float MaxTuningHysteresis = 20.0;
 	static constexpr float MinTuningFanPwm = 0.1;
-	static constexpr float DefaultTuningFanPwm = 0.7;
+	static constexpr float DefaultTuningFanPwm = 0.8;				// changed from 0.7 to 0.8 post 3.7.0-rc.1 to get more accurate results across the PWM range
 	static constexpr float TuningPeakTempDrop = 2.0;				// must be well below TuningHysteresis
 	static constexpr float HeaterSettledCoolingTimeRatio = 0.93;
 

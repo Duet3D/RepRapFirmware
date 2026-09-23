@@ -326,7 +326,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						// Should we queue this code?
 						// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
 						// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
-						const MovementState ms = GetMovementState(gb);
+						const MovementState& ms = GetMovementState(gb);
 						if (gb.CanQueueCodes() && ms.codeQueue->ShouldQueueG10(gb, allAxisLetters))
 						{
 							if (ms.segmentsLeft == 0 && ms.codeQueue->QueueCode(gb))
@@ -745,7 +745,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			&& code != 558
 #endif
 			&& code != 569 && code != 576 && code != 581 && code != 586 && code != 587		// these are the only M-codes we implement that can have fractional parts
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION
 			&& code != 970
 #endif
 		)
@@ -2655,9 +2655,25 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 
 #if SUPPORT_3RD_ORDER
-					if (frac < 1 && move.AccelerationTime() != 0.0 && !move.IsUsingSCurve())
+					if (frac < 1 && move.AccelerationTime() != 0.0)
 					{
-						reply.lcat("Acceleration time (S-curve acceleration) is disabled because phase stepping is not enabled");
+						if (!move.IsUsingSCurve())
+						{
+							reply.lcat("Acceleration time (S-curve acceleration) is disabled because phase stepping is not enabled");
+							result = GCodeResult::warning;
+						}
+# if SUPPORT_CAN_EXPANSION
+						if (move.AnyDriveHasRemoteDriver())
+						{
+							reply.lcat("S-curve acceleration is not applied to CAN-connected drivers");
+							result = GCodeResult::warning;
+						}
+# endif
+					}
+#else
+					if (frac < 1 && gb.Seen('T'))
+					{
+						reply.lcat("S-curve acceleration (T parameter) is not supported on this board");
 						result = GCodeResult::warning;
 					}
 #endif
@@ -4696,7 +4712,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION
 			case 970:	// configure step mode (phase stepping)
 				result = ConfigureStepMode(gb, reply);
 				break;
@@ -5040,27 +5056,26 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 
 	case GCodeResult::noCanBuffer:
 		reply.lcat(NoCanBufferMessage);
+		rslt = GCodeResult::error;
 		break;
 
 	case GCodeResult::canResponseTimeout:
 		// Usually we have a more detailed message in 'reply' already, but if not then add a standard message
 		if (reply.IsEmpty()) { reply.copy("CAN response timeout"); }
+		rslt = GCodeResult::error;
 		break;
 #endif
 
-	case GCodeResult::error:
-	case GCodeResult::warning:
-		if (!gb.IsDoingLocalFile())
-		{
-			String<StringLength50> scratchString;
-			gb.PrintCommand(scratchString.GetRef());
-			reply.Prepend(": ");
-			reply.Prepend(scratchString.c_str());
-		}
-		break;
-
 	default:
 		break;
+	}
+
+	if ((rslt == GCodeResult::error || rslt == GCodeResult::warning) && !gb.IsDoingLocalFile())
+	{
+		String<StringLength100> scratchString;
+		gb.PrintCommand(scratchString.GetRef());
+		reply.Prepend(": ");
+		reply.Prepend(scratchString.c_str());
 	}
 
 	if (gb.LatestMachineState().GetState() == GCodeState::normal)

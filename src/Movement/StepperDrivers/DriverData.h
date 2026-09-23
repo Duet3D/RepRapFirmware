@@ -25,12 +25,13 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 public:
-	DriverData() noexcept { configuredDirection = 1; configuredMode = (uint16_t)DriverMode::spreadCycle; }
+	DriverData() noexcept { configuredDirection = 1; configuredMode = (uint16_t)DriverMode::spreadCycle; isSmartDriver = 1; }
 
 	bool GetDirection() const noexcept { return configuredDirection; }
 	DriverMode GetMode() const noexcept { return (DriverMode)configuredMode; }
 
 	void StoreDirection(bool dir) noexcept { configuredDirection = dir; }
+	void StoreIsSmartDriver(bool isSmart) noexcept { isSmartDriver = isSmart; }
 	void StoreMode(uint32_t mode) noexcept { configuredMode = (uint16_t)mode; }
 	void StoreClosedLoopStatus(const ClosedLoopStatus& clStatus) noexcept;
 	void StoreOpenLoopStatus(const OpenLoopStatus& olStatus) noexcept;
@@ -41,7 +42,8 @@ private:
 
 	// Configured values
 	uint16_t configuredMode : 3,
-			 configuredDirection : 1;
+			 configuredDirection : 1,
+			 isSmartDriver : 1;								// cleared if the board announced that it has no smart drivers, in which case the mode we hold is meaningless
 
 	// Fields for closed loop data collection
 	bool haveClosedLoopData = false;

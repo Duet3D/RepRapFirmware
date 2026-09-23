@@ -111,6 +111,7 @@ public:
 
 	static bool CheckSynced() noexcept;											// check whether we have synced and received a clock sync message recently
 	static bool IsSynced() noexcept;											// check whether we have synced
+	static uint32_t GetWhenLastSynced() noexcept { return whenLastSynced; }		// get the millis tick count when we last received a sync message
 
 	static constexpr uint32_t MinSyncInterval = 2000;							// maximum interval in milliseconds between sync messages for us to remain synced
 																				// increased from 1000 because of workaround we added for bad Tx time stamps on SAME70

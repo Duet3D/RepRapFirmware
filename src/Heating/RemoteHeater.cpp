@@ -391,28 +391,30 @@ void RemoteHeater::SetFanFeedForwardPwm(float pwm) noexcept
 	if (pwm != lastFanPwm)
 	{
 		lastFanPwm = pwm;
-		UpdateFeedForward();
+		UpdateFeedForward(true, false);
 	}
 }
 
-void RemoteHeater::ApplyExtrusionFeedForward() noexcept
+void RemoteHeater::ApplyExtrusionFeedForward(bool isNonPrintingMove) noexcept
 {
 	if (extrusionPwmBoost != previousExtrusionPwmBoost || extrusionTemperatureBoost != previousExtrusionTemperatureBoost)
 	{
 		previousExtrusionPwmBoost = extrusionPwmBoost;
 		previousExtrusionTemperatureBoost = extrusionTemperatureBoost;
-		UpdateFeedForward();
+		UpdateFeedForward(false, isNonPrintingMove);
 	}
 }
 
 // Send a message to the remote heater to update its feedforward parameters
 //TODO: should we change this to a message that doesn't wait for a response?
-void RemoteHeater::UpdateFeedForward() noexcept
+void RemoteHeater::UpdateFeedForward(bool fanOnly, bool nonPrintingExtruderMove) noexcept
 {
 	CanMessageBuffer buf;
 	auto msg = buf.SetupRequestMessageNoRid<CanMessageHeaterFeedForwardV1>(CanInterface::GetCanAddress(), boardAddress);
 	msg->heaterNumber = GetHeaterNumber();
 	msg->fanPwmFraction = lastFanPwm;
+	msg->fanOnly = fanOnly;
+	msg->nonPrintingExtruderMove = nonPrintingExtruderMove;
 	msg->extrusionPwmBoost = extrusionPwmBoost;
 	msg->extrusionTemperatureBoost = extrusionTemperatureBoost;
 	CanInterface::SendMessageNoReplyNoFree(&buf);

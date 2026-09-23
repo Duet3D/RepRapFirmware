@@ -25,6 +25,10 @@
 #include <Heating/Heat.h>
 #include <Heating/Sensors/TemperatureSensor.h>
 
+#if SUPPORT_ACCELEROMETERS
+# include <Accelerometers/Accelerometers.h>
+#endif
+
 #if SUPPORT_CAN_EXPANSION
 # include <CanMessageBuffer.h>
 # include <CAN/CanInterface.h>
@@ -78,7 +82,15 @@ constexpr ObjectModelArrayTableEntry EndstopsManager::objectModelArrayTable[] =
 		&zProbesLock,
 		OBJECT_MODEL_ARRAY_COUNT(self->GetNumProbesToReport()),
 		OBJECT_MODEL_ARRAY_VALUE(self->GetZProbe(context.GetLastIndex()).Ptr())
-	}
+	},
+#if SUPPORT_ACCELEROMETERS
+	// 5. Accelerometers
+	{
+		nullptr,
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(Accelerometers::GetNumAccelerometersToReport()),
+		OBJECT_MODEL_ARRAY_VALUE_NOSELF(Accelerometers::GetAccelerometer(context.GetLastIndex()))
+	},
+#endif
 };
 
 DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(EndstopsManager)
@@ -87,6 +99,9 @@ constexpr ObjectModelTableEntry EndstopsManager::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. sensors members
+#if SUPPORT_ACCELEROMETERS
+	{ "accelerometers",		OBJECT_MODEL_FUNC_ARRAY(5),		ObjectModelEntryFlags::none },
+#endif
 	{ "analog",				OBJECT_MODEL_FUNC_ARRAY(0),		ObjectModelEntryFlags::liveNotPanelDue },
 	{ "endstops",			OBJECT_MODEL_FUNC_ARRAY(1), 	ObjectModelEntryFlags::live },
 	{ "filamentMonitors",	OBJECT_MODEL_FUNC_ARRAY(2),		ObjectModelEntryFlags::liveNotPanelDue },
@@ -94,7 +109,7 @@ constexpr ObjectModelTableEntry EndstopsManager::objectModelTable[] =
 	{ "probes",				OBJECT_MODEL_FUNC_ARRAY(4),		ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t EndstopsManager::objectModelTableDescriptor[] = { 1, 5 };
+constexpr uint8_t EndstopsManager::objectModelTableDescriptor[] = { 1, 5 + SUPPORT_ACCELEROMETERS };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(EndstopsManager)
 

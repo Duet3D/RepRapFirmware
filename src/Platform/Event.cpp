@@ -128,6 +128,9 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 		case EventType::driver_error:
 			return PrintPausedReason::driverError;
 
+		case EventType::board_over_temperature:
+			return PrintPausedReason::boardOverTemperature;
+
 		default:
 			break;
 		}
@@ -175,7 +178,10 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 			str.printf("Driver %u error: ", ep->deviceNumber);
 #endif
 			StandardDriverStatus(ep->param).AppendText(str, 2);
-			str.cat(ep->text.c_str());
+			if (!ep->text.IsEmpty())
+			{
+				str.catf(", %s", ep->text.c_str());
+			}
 			return ErrorMessage;
 
 		case EventType::driver_warning:
@@ -185,7 +191,10 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 			str.printf("Driver %u warning: ", ep->deviceNumber);
 #endif
 			StandardDriverStatus(ep->param).AppendText(str, 1);
-			str.cat(ep->text.c_str());
+			if (!ep->text.IsEmpty())
+			{
+				str.catf(", %s", ep->text.c_str());
+			}
 			return WarningMessage;
 
 		case EventType::driver_stall:
@@ -202,25 +211,41 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 
 		case EventType::mcu_temperature_warning:
 #if SUPPORT_CAN_EXPANSION
-			str.printf("MCU temperature warning from board %u: temperature %.1fC", ep->boardAddress, (double)((float)ep->param/10));
+			str.printf("MCU temperature warning from board %u: temperature %.1fC", ep->boardAddress, (double)((float)ep->param * 0.1));
 #else
-			str.printf("MCU temperature warning: temperature %.1fC", (double)((float)ep->param/10.0));
+			str.printf("MCU temperature warning: temperature %.1fC", (double)((float)ep->param * 0.1));
+#endif
+			return WarningMessage;
+
+		case EventType::board_temperature_warning:
+#if SUPPORT_CAN_EXPANSION
+			str.printf("Board %u temperature warning: temperature %.1fC", ep->boardAddress, (double)((float)ep->param * 0.1));
+#else
+			str.printf("Board temperature warning: temperature %.1fC", (double)((float)ep->param * 0.1));
+#endif
+			return WarningMessage;
+
+		case EventType::board_over_temperature:
+#if SUPPORT_CAN_EXPANSION
+			str.printf("Board %u over temperature: temperature %.1fC, driver(s) disabled", ep->boardAddress, (double)((float)ep->param * 0.1));
+#else
+			str.printf("Board over temperature: temperature %.1fC, driver(s) disabled", (double)((float)ep->param * 0.1));
 #endif
 			return WarningMessage;
 
 		case EventType::overvoltage:
 #if SUPPORT_CAN_EXPANSION
-			str.printf("overvoltage on board %u: voltage %.1fV", ep->boardAddress, (double)((float)ep->param/10));
+			str.printf("Overvoltage on board %u: voltage %.1fV", ep->boardAddress, (double)((float)ep->param * 0.1));
 #else
-			str.printf("overvoltage: voltage %.1fV", (double)((float)ep->param/10.0));
+			str.printf("Overvoltage: voltage %.1fV", (double)((float)ep->param * 0.1));
 #endif
 			return WarningMessage;
 
 		case EventType::undervoltage:
 #if SUPPORT_CAN_EXPANSION
-			str.printf("undervoltage on board %u: voltage %.1fV", ep->boardAddress, (double)((float)ep->param/10));
+			str.printf("Undervoltage on board %u: voltage %.1fV", ep->boardAddress, (double)((float)ep->param * 0.1));
 #else
-			str.printf("undervoltage: voltage %.1fV", (double)((float)ep->param/10.0));
+			str.printf("Undervoltage: voltage %.1fV", (double)((float)ep->param * 0.1));
 #endif
 			return WarningMessage;
 

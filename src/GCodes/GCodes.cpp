@@ -1074,28 +1074,35 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 	{
 		ms.pausedInMacro = false;
 
-		const bool movesSkipped = reprap.GetMove().PausePrint(ms);						// tell Move we wish to pause this queue
 		GCodeBuffer& fgb = *GetFileGCode(ms.GetNumber());
-		if (movesSkipped)
+		bool movesSkipped, waitingMoveSkipped;
 		{
-			// The PausePrint call has filled in the restore point with machine coordinates
-			ToolOffsetInverseTransform(ms, ms.GetPauseRestorePoint().moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
-			ms.ClearMove();
+			// Keep the Move task out until the waiting move has been discarded, else it can add that move to the ring after PausePrint has reset it
+			TaskCriticalSectionLocker lock;
+			movesSkipped = reprap.GetMove().PausePrint(ms);								// tell Move we wish to pause this queue
+			waitingMoveSkipped = !movesSkipped && ms.segmentsLeft != 0;
+			if (movesSkipped)
+			{
+				// The PausePrint call has filled in the restore point with machine coordinates
+				ToolOffsetInverseTransform(ms, ms.GetPauseRestorePoint().moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
+				ms.ClearMove();
+			}
+			else if (waitingMoveSkipped)
+			{
+				// We were not able to skip any moves, however we can skip the move that is waiting
+				ms.GetPauseRestorePoint().virtualExtruderPosition = ms.raw.moveStartVirtualExtruderPosition;
+				ms.GetPauseRestorePoint().filePos = ms.raw.filePos;
+				ms.GetPauseRestorePoint().gCommandNumber = ms.raw.gCommandNumber;
+				ms.GetPauseRestorePoint().originalFeedRate = ms.raw.originalFeedRate;
+				ms.GetPauseRestorePoint().proportionDone = ms.GetProportionDone();
+				ms.GetPauseRestorePoint().initialUserC0 = ms.raw.initialUserC0;
+				ms.GetPauseRestorePoint().initialUserC1 = ms.raw.initialUserC1;
+				ToolOffsetInverseTransform(ms, ms.GetPauseRestorePoint().moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
+				ms.ClearMove();
+			}
 		}
-		else if (ms.segmentsLeft != 0)
-		{
-			// We were not able to skip any moves, however we can skip the move that is waiting
-			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.raw.moveStartVirtualExtruderPosition;
-			ms.GetPauseRestorePoint().filePos = ms.raw.filePos;
-			ms.GetPauseRestorePoint().gCommandNumber = ms.raw.gCommandNumber;
-			ms.GetPauseRestorePoint().originalFeedRate = ms.raw.originalFeedRate;
-			ms.GetPauseRestorePoint().proportionDone = ms.GetProportionDone();
-			ms.GetPauseRestorePoint().initialUserC0 = ms.raw.initialUserC0;
-			ms.GetPauseRestorePoint().initialUserC1 = ms.raw.initialUserC1;
-			ToolOffsetInverseTransform(ms, ms.GetPauseRestorePoint().moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
-			ms.ClearMove();
-		}
-		else
+
+		if (!movesSkipped && !waitingMoveSkipped)
 		{
 			// We were not able to skip any moves, and there is no move waiting
 			ms.GetPauseRestorePoint().originalFeedRate = fgb.LatestMachineState().feedRate;

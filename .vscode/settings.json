@@ -1,0 +1,6 @@
+{
+	"makefile.configurations": [
+		{ "name": "Release", "makeArgs": ["-j16"] },
+		{ "name": "Debug", "makeArgs": ["-j16", "DEBUG=1"] }
+	]
+}

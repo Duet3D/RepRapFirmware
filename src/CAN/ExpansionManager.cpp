@@ -50,9 +50,8 @@ DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(ExpansionManager)
 constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 {
 	// 0. boards[] members
-	{ "accelerometer",		OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasAccelerometer, self, 4),					ObjectModelEntryFlags::none },
 	{ "canAddress",			OBJECT_MODEL_FUNC((int32_t)(&(self->FindIndexedBoard(context.GetLastIndex())) - self->boards)),					ObjectModelEntryFlags::none },
-	{ "closedLoop",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasClosedLoop, self, 5),					ObjectModelEntryFlags::none },
+	{ "closedLoop",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasClosedLoop, self, 4),					ObjectModelEntryFlags::none },
 	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY_IF(self->FindIndexedBoard(context.GetLastIndex()).HasDrivers(), 0),						ObjectModelEntryFlags::liveNotPanelDue },
 	{ "firmwareDate",		OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareDate),		ObjectModelEntryFlags::none },
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName,
@@ -61,7 +60,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 													: ExpansionDetail::firmwareFileNameBin),												ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareVersion),	ObjectModelEntryFlags::none },
 	{ "freeRam",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).neverUsedRam),						ObjectModelEntryFlags::liveNotPanelDue },
-	{ "inductiveSensor",	OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasInductiveSensor, self, 6),				ObjectModelEntryFlags::none },
+	{ "inductiveSensor",	OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasInductiveSensor, self, 5),				ObjectModelEntryFlags::none },
 	{ "maxMotors",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).numDrivers),							ObjectModelEntryFlags::none },
 	{ "mcuTemp",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasMcuTemp, self, 1),						ObjectModelEntryFlags::liveNotPanelDue },
 	{ "name",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::longName),			ObjectModelEntryFlags::none },
@@ -88,40 +87,32 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	{ "max",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.maximum, 1),								ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.minimum, 1),								ObjectModelEntryFlags::none },
 
-	// 4. accelerometer members
-	{ "orientation",		OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerOrientation),			ObjectModelEntryFlags::none },
-	{ "points",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerLastRunDataPoints),		ObjectModelEntryFlags::none },
-	{ "resolution",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerResolution),			ObjectModelEntryFlags::none },
-	{ "runs",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerRuns),					ObjectModelEntryFlags::none },
-	{ "samplingRate",		OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerSamplingRate),		ObjectModelEntryFlags::none },
-
-	// 5. closedLoop members
+	// 4. closedLoop members
 	{ "points",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).closedLoopLastRunDataPoints),			ObjectModelEntryFlags::none },
 	{ "runs",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).closedLoopRuns),						ObjectModelEntryFlags::none },
 
-	// 6. inductiveSensor members (none yet)
+	// 5. inductiveSensor members (none yet)
 };
 
 constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 {
-	7,				// number of sections
-	18,				// section 0: boards[]
+	6,				// number of sections
+	17,				// section 0: boards[]
 	3,				// section 1: mcuTemp
 	3,				// section 2: vIn
 	3,				// section 3: v12
-	5,				// section 4: accelerometer
-	2,				// section 5: closed loop
-	0,				// section 6: inductive sensor
+	2,				// section 4: closed loop
+	0,				// section 5: inductive sensor
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ExpansionManager)
 
 ExpansionBoardData::ExpansionBoardData() noexcept
 	: typeName(nullptr), neverUsedRam(0),
-	  accelerometerLastRunDataPoints(0), closedLoopLastRunDataPoints(0),
+	  closedLoopLastRunDataPoints(0),
 	  whenLastStatusReportReceived(0),
 	  driverData(nullptr),
-	  accelerometerRuns(0), closedLoopRuns(0),
+	  closedLoopRuns(0),
 	  connectionTimeoutSeconds(DefaultConnectionTimeoutSeconds),
 	  hasMcuTemp(false), hasVin(false), hasV12(false), hasAccelerometer(false),
 	  state(BoardState::unknown), numDrivers(0)
@@ -241,6 +232,13 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 					board.uniqueId.Clear();
 				}
 				board.driverData = new DriverData[board.numDrivers];
+			}
+			if (isNewFormat && board.driverData != nullptr)
+			{
+				for (size_t driver = 0; driver < board.numDrivers; driver++)
+				{
+					board.driverData[driver].StoreIsSmartDriver(!buf->msg.announceV1.noSmartDrivers);
+				}
 			}
 			UpdateBoardState(src, BoardState::running);
 		}
@@ -494,30 +492,10 @@ void ExpansionManager::UpdateFailed(CanAddress address) noexcept
 	UpdateBoardState(address, BoardState::flashFailed);
 }
 
-void ExpansionManager::AddAccelerometerRun(CanAddress address, unsigned int numDataPoints) noexcept
-{
-	boards[address].accelerometerLastRunDataPoints = numDataPoints;
-	++boards[address].accelerometerRuns;
-	reprap.BoardsUpdated();
-}
-
 void ExpansionManager::AddClosedLoopRun(CanAddress address, unsigned int numDataPoints) noexcept
 {
 	boards[address].closedLoopLastRunDataPoints = numDataPoints;
 	++boards[address].closedLoopRuns;
-	reprap.BoardsUpdated();
-}
-
-void ExpansionManager::SaveAccelerometerOrientation(CanAddress address, uint8_t orientation) noexcept
-{
-	boards[address].accelerometerOrientation = orientation;
-	reprap.BoardsUpdated();
-}
-
-void ExpansionManager::SaveAccelerometerConfig(CanAddress address, uint16_t samplingRate, uint8_t resolution) noexcept
-{
-	boards[address].accelerometerSamplingRate = samplingRate;
-	boards[address].accelerometerResolution = resolution;
 	reprap.BoardsUpdated();
 }
 
@@ -610,14 +588,18 @@ GCodeResult ExpansionManager::ConfigureConnectionTimeout(GCodeBuffer& gb, const 
 		if (gb.Seen('T'))
 		{
 			const uint32_t timeout = gb.GetLimitedUIValue('T', MinConnectionTimeoutSeconds, std::numeric_limits<uint16_t>::max() + 1);
-			{
-				WriteLocker lock(boardsLock);
-				boards[address].connectionTimeoutSeconds = (uint16_t)timeout;
-			}
-			reprap.BoardsUpdated();
 			CanMessageGenericConstructor cons(M959Params);
 			cons.PopulateFromCommand(gb);
-			return cons.SendAndGetResponse(CanMessageType::setConnectionTimeout, (CanAddress)address, reply);
+			const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::setConnectionTimeout, (CanAddress)address, reply);
+			if (rslt == GCodeResult::ok)						// only adopt the new timeout if the board did, otherwise the two ends would disagree
+			{
+				{
+					WriteLocker lock(boardsLock);
+					boards[address].connectionTimeoutSeconds = (uint16_t)timeout;
+				}
+				reprap.BoardsUpdated();
+			}
+			return rslt;
 		}
 		reply.printf("Board %u connection timeout %u seconds", (unsigned int)address, boards[address].connectionTimeoutSeconds);
 		return GCodeResult::ok;

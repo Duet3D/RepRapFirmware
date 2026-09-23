@@ -191,7 +191,7 @@ public:
 	uint32_t GetMoveStartTime() const noexcept { return afterPrepare.moveStartTime; }
 	uint32_t GetMoveFinishTime() const noexcept { return afterPrepare.moveStartTime + clocksNeeded; }
 
-	float GetAverageExtrusionSpeed() const noexcept pre(IsCommitted()) { return afterPrepare.averageExtrusionSpeed; }
+	float GetAverageExtrusionSpeed() const noexcept pre(IsCommitted()) { return afterPrepare.averageExtrusionSpeed; }	// result is in mm/sec and applies to any forward extrusion, even extruder-only moves
 	bool HasForwardExtrusion() const noexcept { return flags.hasForwardExtrusion; }
 	bool HaveDoneIoBits() const noexcept { return flags.doneIoBits; }
 	bool HaveDoneFeedForward() const noexcept { return flags.doneFeedForward; }
@@ -204,10 +204,7 @@ public:
 	float GetStartSpeed() const noexcept { return startSpeed; }
 	float GetEndSpeed() const noexcept { return endSpeed; }
 	float GetMaxAcceleration() const noexcept { return maxAcceleration; }
-	void TurnIntoDeceleratingMoveWithStartSpeed(float initialSpeed) noexcept;
-	void TurnIntoSteadySpeedMove(float speed) noexcept;
-	void TurnIntoDeceleratingMoveWithEndSpeed(float finalSpeed) noexcept;
-	void TurnIntoSteadyThenDecelMove(float initialSpeed, float finalSpeed) noexcept;
+	void SetPauseSpeeds(DDARing& ring, float newStartSpeed, float newEndSpeed) noexcept;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }

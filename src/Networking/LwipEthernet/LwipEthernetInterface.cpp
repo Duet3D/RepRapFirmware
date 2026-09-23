@@ -48,6 +48,7 @@ extern "C"
 #include "lwip/dhcp.h"
 #include "lwip/tcp.h"
 #include "lwip/altcp.h"
+#include "lwip/altcp_tcp.h"
 #if LWIP_ALTCP_TLS
 #include "lwip/altcp_tls.h"
 #endif
@@ -182,6 +183,17 @@ extern "C"
 	}
 
 }	// end extern "C"
+
+// Listener pcbs get SOF_REUSEADDR so that binding succeeds while TIME_WAIT pcbs of earlier connections still hold the port
+static altcp_pcb *NewListenerPcb() noexcept
+{
+	altcp_pcb *const pcb = altcp_tcp_new();
+	if (pcb != nullptr)
+	{
+		ip_set_option(static_cast<tcp_pcb *>(pcb->state), SOF_REUSEADDR);
+	}
+	return pcb;
+}
 
 /*-----------------------------------------------------------------------------------*/
 
@@ -411,7 +423,7 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 	)
 	{
 		MutexLocker lock(lwipMutex);
-		altcp_pcb *pcb = altcp_new(nullptr);
+		altcp_pcb *pcb = NewListenerPcb();
 		if (pcb == nullptr)
 		{
 			platform.Message(ErrorMessage, "unable to allocate a pcb\n");
@@ -451,7 +463,7 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 		}
 
 		MutexLocker lock(lwipMutex);
-		altcp_pcb *pcb = altcp_tls_new(tlsConfig, IPADDR_TYPE_V4);
+		altcp_pcb *pcb = altcp_tls_wrap(tlsConfig, NewListenerPcb());
 		if (pcb == nullptr)
 		{
 			platform.Message(ErrorMessage, "unable to allocate a TLS pcb\n");
@@ -1020,9 +1032,9 @@ bool LwipEthernetInterface::OpenDataPort(TcpPort port, bool useTls) noexcept
 	MutexLocker lock(lwipMutex);
 
 #if LWIP_ALTCP_TLS
-	altcp_pcb *pcb = useTls ? altcp_tls_new(tlsConfig, IPADDR_TYPE_V4) : altcp_new(nullptr);
+	altcp_pcb *pcb = useTls ? altcp_tls_wrap(tlsConfig, NewListenerPcb()) : NewListenerPcb();
 #else
-	altcp_pcb *pcb = altcp_new(nullptr);
+	altcp_pcb *pcb = NewListenerPcb();
 #endif
 	if (pcb == nullptr)
 	{
@@ -1124,35 +1136,6 @@ void LwipEthernetInterface::TerminateSockets() noexcept
 	{
 		socket->Terminate();
 	}
-
-	// Also drop all listener PCBs so InitSockets() recreates them cleanly.
-	for (altcp_pcb *&pcb : listeningPcbs)
-	{
-		if (pcb != nullptr)
-		{
-			altcp_accept(pcb, nullptr);
-			if (altcp_close(pcb) != ERR_OK)
-			{
-				altcp_abort(pcb);
-			}
-			pcb = nullptr;
-		}
-	}
-
-#if LWIP_ALTCP_TLS
-	for (altcp_pcb *&pcb : tlsListeningPcbs)
-	{
-		if (pcb != nullptr)
-		{
-			altcp_accept(pcb, nullptr);
-			if (altcp_close(pcb) != ERR_OK)
-			{
-				altcp_abort(pcb);
-			}
-			pcb = nullptr;
-		}
-	}
-#endif
 }
 
 void GetServiceTxtEntries(struct mdns_service *service, void *txt_userdata)
