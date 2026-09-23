@@ -45,7 +45,6 @@
 #include <Hardware/I2C.h>
 #include <Hardware/NonVolatileMemory.h>
 #include <Storage/CRC32.h>
-#include <Accelerometers/Accelerometers.h>
 
 #if NUM_ASYNC_PORTS != 0
 # include <AsyncSerial.h>
@@ -211,9 +210,6 @@ DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(Platform)
 constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 {
 	// 0. boards[0] members
-#if SUPPORT_ACCELEROMETERS
-	{ "accelerometer",		OBJECT_MODEL_FUNC_IF(Accelerometers::HasLocalAccelerometer(), self, 4),								ObjectModelEntryFlags::none },
-#endif
 #if SUPPORT_CAN_EXPANSION
 	{ "canAddress",			OBJECT_MODEL_FUNC_NOSELF((int32_t)CanInterface::GetCanAddress()),									ObjectModelEntryFlags::none },
 #endif
@@ -277,21 +273,12 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "max",				OBJECT_MODEL_FUNC(self->GetV12Voltages().maximum, 1),												ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->GetV12Voltages().minimum, 1),												ObjectModelEntryFlags::none },
 #endif
-
-#if SUPPORT_ACCELEROMETERS
-	// 4. boards[0].accelerometer members
-	{ "orientation",		OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerOrientation()),				ObjectModelEntryFlags::none },
-	{ "points",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerDataPoints()),				ObjectModelEntryFlags::none },
-	{ "resolution",			OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerResolution()),				ObjectModelEntryFlags::none },
-	{ "runs",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerRuns()),						ObjectModelEntryFlags::none },
-	{ "samplingRate",		OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerSamplingRate()),				ObjectModelEntryFlags::none },
-#endif
 };
 
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
-	5,																		// number of sections
-	11 + SUPPORT_ACCELEROMETERS + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR
+	4,																		// number of sections
+	11 + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR
 	  + SUPPORT_CAN_EXPANSION + (int)SUPPORT_DIRECT_LCD + MCU_HAS_UNIQUE_ID + HAS_WIFI_NETWORKING,		// section 0: boards[0]
 #if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp
@@ -307,11 +294,6 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 	3,																		// section 3: v12
 #else
 	0,																		// section 3: v12
-#endif
-#if SUPPORT_ACCELEROMETERS
-	5,																		// section 4: boards[0].accelerometer
-#else
-	0,
 #endif
 };
 

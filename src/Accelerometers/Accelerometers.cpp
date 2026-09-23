@@ -9,6 +9,7 @@
 
 #if SUPPORT_ACCELEROMETERS
 
+#include "LISAccelerometer.h"
 #include <Storage/MassStorage.h>
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
@@ -21,7 +22,6 @@
 #if SUPPORT_CAN_EXPANSION
 # include <CanMessageFormats.h>
 # include <CAN/CanInterface.h>
-# include <CAN/ExpansionManager.h>
 # include <CAN/CanMessageGenericConstructor.h>
 # include <CanMessageGenericTables.h>
 #endif
@@ -32,19 +32,110 @@
 
 constexpr size_t ActualMaxAccelerometers = (SUPPORT_CAN_EXPANSION) ? MaxAccelerometers : 1;
 
-#if SUPPORT_CAN_EXPANSION
+static LISAccelerometer *_ecv_null accelerometer = nullptr;		// the local accelerometer, if any
+static size_t localAccelerometerNumber = 0;						// the number it is configured under, valid while accelerometer != nullptr
 
-struct AccelerometerConfig
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(Accelerometer, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry Accelerometer::objectModelTable[] =
 {
-	CanAddress boardAddress;
-	//TODO add configuration info and any other information we want to return in the object model
-
-	AccelerometerConfig() noexcept : boardAddress(CanId::NoAddress) { }
-	bool IsConfigured() const noexcept { return boardAddress != CanId::NoAddress; }
-	bool IsRemote() const noexcept { return boardAddress != CanInterface::GetCanAddress(); }
+	// Within each group, these entries must be in alphabetical order
+	// 0. sensors.accelerometers[] members
+	{ "orientation",	OBJECT_MODEL_FUNC((int32_t)self->orientation),			ObjectModelEntryFlags::none },
+	{ "points",			OBJECT_MODEL_FUNC((int32_t)self->lastRunDataPoints),	ObjectModelEntryFlags::none },
+	{ "port",			OBJECT_MODEL_FUNC(self->port),							ObjectModelEntryFlags::none },
+	{ "resolution",		OBJECT_MODEL_FUNC((int32_t)self->resolution),			ObjectModelEntryFlags::none },
+	{ "runs",			OBJECT_MODEL_FUNC((int32_t)self->runs),					ObjectModelEntryFlags::none },
+	{ "samplingRate",	OBJECT_MODEL_FUNC((int32_t)self->samplingRate),			ObjectModelEntryFlags::none },
 };
 
-static AccelerometerConfig configs[MaxAccelerometers];
+constexpr uint8_t Accelerometer::objectModelTableDescriptor[] = { 1, 6 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(Accelerometer)
+
+Accelerometer::Accelerometer() noexcept
+{
+	Clear();
+}
+
+void Accelerometer::Clear() noexcept
+{
+#if SUPPORT_CAN_EXPANSION
+	boardAddress = CanId::NoAddress;
+#endif
+	port.Delete();
+	lastRunDataPoints = 0;
+	runs = 0;
+	samplingRate = 0;
+	resolution = 0;
+	orientation = DefaultAccelerometerOrientation;
+}
+
+bool Accelerometer::IsConfigured() const noexcept
+{
+#if SUPPORT_CAN_EXPANSION
+	return boardAddress != CanId::NoAddress;
+#else
+	return accelerometer != nullptr;
+#endif
+}
+
+#if SUPPORT_CAN_EXPANSION
+
+bool Accelerometer::IsRemote() const noexcept
+{
+	return boardAddress != CanInterface::GetCanAddress();
+}
+
+#endif
+
+static Accelerometer accelerometers[ActualMaxAccelerometers];
+
+size_t Accelerometers::GetNumAccelerometersToReport() noexcept
+{
+	size_t num = ActualMaxAccelerometers;
+	while (num != 0 && !accelerometers[num - 1].IsConfigured())
+	{
+		num--;
+	}
+	return num;
+}
+
+const Accelerometer *_ecv_null Accelerometers::GetAccelerometer(size_t index) noexcept
+{
+	return (index < ActualMaxAccelerometers && accelerometers[index].IsConfigured()) ? &accelerometers[index] : nullptr;
+}
+
+#if SUPPORT_CAN_EXPANSION
+
+static Accelerometer *_ecv_null FindRemoteAccelerometer(CanAddress boardAddress) noexcept
+{
+	for (Accelerometer& acc : accelerometers)
+	{
+		if (acc.boardAddress == boardAddress)
+		{
+			return &acc;
+		}
+	}
+	return nullptr;
+}
+
+// Record the result of a run on a remote accelerometer, which may have been deleted while it was running
+static void AddRemoteAccelerometerRun(CanAddress boardAddress, unsigned int numDataPoints) noexcept
+{
+	Accelerometer *_ecv_null const acc = FindRemoteAccelerometer(boardAddress);
+	if (acc != nullptr)
+	{
+		acc->lastRunDataPoints = numDataPoints;
+		acc->runs++;
+		reprap.SensorsUpdated();
+	}
+}
 
 static unsigned int expectedRemoteSampleNumber = 0;
 static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
@@ -67,21 +158,12 @@ static unsigned int GetDecimalPlaces(uint8_t dataResolution) noexcept
 
 // Local accelerometer handling
 
-#include "LISAccelerometer.h"
-
 constexpr size_t AccelerometerTaskStackWords = 400;			// big enough to handle printf and file writes
 static Task<AccelerometerTaskStackWords> *_ecv_null accelerometerTask;
 
-static LISAccelerometer *_ecv_null accelerometer = nullptr;
-
-static uint16_t samplingRate = 0;							// 0 means use the default
 static volatile uint32_t numSamplesRequested;
-static uint8_t resolution = DefaultAccelerometerResolution;
-static uint8_t orientation = DefaultAccelerometerOrientation;
 static volatile uint8_t axesRequested;
 static FileStore *_ecv_null volatile accelerometerFile = nullptr;		// this is non-null when the accelerometer is running, null otherwise
-static unsigned int numLocalRunsCompleted = 0;
-static unsigned int lastRunNumSamplesReceived = 0;
 static uint8_t axisLookup[3];
 static bool axisInverted[3];
 static volatile bool successfulStart = false;
@@ -93,9 +175,9 @@ static IoPort irqPort;
 // Add a local accelerometer run
 static void AddLocalAccelerometerRun(unsigned int numDataPoints) noexcept
 {
-	lastRunNumSamplesReceived = numDataPoints;
-	++numLocalRunsCompleted;
-	reprap.BoardsUpdated();
+	accelerometers[localAccelerometerNumber].lastRunDataPoints = numDataPoints;
+	accelerometers[localAccelerometerNumber].runs++;
+	reprap.SensorsUpdated();
 }
 
 static uint8_t TranslateAxes(uint8_t axes) noexcept
@@ -123,6 +205,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 			unsigned int samplesWritten = 0;
 			unsigned int samplesWanted = numSamplesRequested;
 			unsigned int numOverflows = 0;
+			const uint8_t resolution = accelerometers[localAccelerometerNumber].resolution;
 			const uint16_t mask = (1u << resolution) - 1;
 			const int decimalPlaces = GetDecimalPlaces(resolution);
 			bool recordFailedStart = false;
@@ -287,45 +370,40 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 	// Get the accelerometer number, default 0
 	gb.MustSee('P');
 	const size_t accelerometerNumber = gb.GetLimitedUIValue('P', ActualMaxAccelerometers);
-#if SUPPORT_CAN_EXPANSION
-	AccelerometerConfig& config = configs[accelerometerNumber];
-#endif
+	Accelerometer& config = accelerometers[accelerometerNumber];
 
 	// Get the board number and port names. For accelerometers embedded on tool boards the port name should be "i2c.lis".
 	if (gb.Seen('C'))
 	{
 		// Delete the existing accelerometer
-#if SUPPORT_CAN_EXPANSION
 		if (config.IsConfigured())
 		{
-			if (config.IsRemote())
-			{
-				// Currently we don't tear down the remote accelerometer
-			}
-			else
+#if SUPPORT_CAN_EXPANSION
+			// Currently we don't tear down a remote accelerometer
+			if (!config.IsRemote())
+#endif
 			{
 				DeleteObject(accelerometer);	// we can have only one local accelerometer and we don't map multiple logical accelerometers to it
 			}
-			config.boardAddress = CanId::NoAddress;
+			config.Clear();
+			reprap.SensorsUpdated();
 		}
-#else
-			DeleteObject(accelerometer);
-#endif
 		String<StringLength50> pinNames;
 		gb.GetReducedString(pinNames.GetRef());
 		if (pinNames.Equals("nil"))
 		{
 			return GCodeResult::ok;				// just deleting an existing accelerometer
 		}
+		config.port.Assign(pinNames.c_str());	// before the board prefix is stripped, only reported once the entry is configured
 
 #if SUPPORT_CAN_EXPANSION
 		const CanAddress boardAddress = IoPort::RemoveBoardAddress(pinNames.GetRef());
 
 		// Check that we don't already have an accelerometer on the specified board
 		// This is to avoid mapping 2 logical accelerometers to the same physical one. We only support a single accelerometer on each board.
-		for (size_t i = 0; i < ARRAY_SIZE(configs); ++i)
+		for (size_t i = 0; i < ARRAY_SIZE(accelerometers); i++)
 		{
-			if (configs[i].boardAddress == boardAddress)
+			if (accelerometers[i].boardAddress == boardAddress)
 			{
 				reply.printf("accelerometer on board %u is already in use as accelerometer %u", boardAddress, i);
 				return GCodeResult::error;
@@ -343,12 +421,13 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 				config.boardAddress = boardAddress;
 
 				// Firmware that predates the data words reports zero, which the object model passes on as unknown
-				reprap.GetExpansion().SaveAccelerometerConfig(boardAddress, (uint16_t)words[0], (uint8_t)words[1]);
+				config.samplingRate = (uint16_t)words[0];
+				config.resolution = (uint8_t)words[1];
 				if (gb.Seen('I'))
 				{
-					const uint8_t remoteOrientation = (uint8_t)gb.GetUIValue();
-					reprap.GetExpansion().SaveAccelerometerOrientation(boardAddress, (uint8_t)remoteOrientation);
+					config.orientation = (uint8_t)gb.GetUIValue();
 				}
+				reprap.SensorsUpdated();
 			}
 			return rslt;
 		}
@@ -376,8 +455,8 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 			return GCodeResult::error;
 		}
 
-		resolution = DefaultAccelerometerResolution;
-		orientation = 0;
+		uint8_t resolution = DefaultAccelerometerResolution;
+		uint16_t samplingRate = 0;							// 0 means use the default
 
 		uint32_t temp32;
 		bool dummy;
@@ -398,6 +477,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 			return GCodeResult::error;
 		}
 
+		uint8_t orientation = DefaultAccelerometerOrientation;
 		if (gb.Seen('I'))
 		{
 			const uint32_t localOrientation = gb.GetUIValue();
@@ -414,27 +494,25 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 		}
 		else
 		{
-			orientation = DefaultAccelerometerOrientation;
 			(void)TranslateOrientation(orientation);			// need this to set up the axis translation table
 		}
 
 		accelerometer = temp;
+		localAccelerometerNumber = accelerometerNumber;
 #if SUPPORT_CAN_EXPANSION
 		config.boardAddress = CanInterface::GetCanAddress();
 #endif
+		config.samplingRate = samplingRate;
+		config.resolution = resolution;
+		config.orientation = orientation;
+		reprap.SensorsUpdated();
 		if (accelerometerTask == nullptr)
 		{
 			accelerometerTask = new Task<AccelerometerTaskStackWords>;
 			not_null(accelerometerTask)->Create(AccelerometerTaskCode, "ACCEL", nullptr, TaskPriority::Accelerometer);
 		}
 	}
-	else if (
-# if SUPPORT_CAN_EXPANSION
-			 config.boardAddress == CanId::NoAddress || (config.boardAddress == CanInterface::GetCanAddress() && accelerometer == nullptr)
-# else
-			 accelerometer == nullptr
-# endif
-			)
+	else if (!config.IsConfigured())
 	{
 		reply.printf("Accelerometer %u is not configured", accelerometerNumber);
 	}
@@ -444,17 +522,24 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 		CanMessageGenericConstructor cons(M955Params);
 		cons.PopulateFromCommand(gb);
 		uint32_t words[CanMessageStandardReply::MaxNumWords];
-		return cons.SendAndGetResponse(CanMessageType::accelerometerConfig, config.boardAddress, reply, nullptr, words);
+		const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::accelerometerConfig, config.boardAddress, reply, nullptr, words);
+		if (rslt <= GCodeResult::warning)
+		{
+			config.samplingRate = (uint16_t)words[0];
+			config.resolution = (uint8_t)words[1];
+			reprap.SensorsUpdated();
+		}
+		return rslt;
 	}
 #endif
 	else
 	{
 # if SUPPORT_CAN_EXPANSION
 		reply.printf("Accelerometer %u is on board %u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
-						accelerometerNumber, CanInterface::GetCanAddress(), accelerometer->GetTypeName(), orientation, samplingRate, resolution, accelerometer->GetFrequency());
+						accelerometerNumber, CanInterface::GetCanAddress(), not_null(accelerometer)->GetTypeName(), config.orientation, config.samplingRate, config.resolution, not_null(accelerometer)->GetFrequency());
 # else
 		reply.printf("Accelerometer %u type %s with orientation %u samples at %uHz with %u-bit resolution, SPI frequency %" PRIu32,
-						accelerometerNumber, not_null(accelerometer)->GetTypeName(), orientation, samplingRate, resolution, not_null(accelerometer)->GetFrequency());
+						accelerometerNumber, not_null(accelerometer)->GetTypeName(), config.orientation, config.samplingRate, config.resolution, not_null(accelerometer)->GetFrequency());
 # endif
 	}
 	return GCodeResult::ok;
@@ -465,9 +550,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 {
 	gb.MustSee('P');
 	const size_t accelerometerNumber = gb.GetLimitedUIValue('P', ActualMaxAccelerometers);
-#if SUPPORT_CAN_EXPANSION
-	AccelerometerConfig& config = configs[accelerometerNumber];
-#endif
+	Accelerometer& config = accelerometers[accelerometerNumber];
 
 	gb.MustSee('S');
 	const uint32_t numSamples = gb.GetUIValue();
@@ -484,14 +567,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 		axes = 0x07;						// default to all three axes
 	}
 
-	// Check that we have an accelerometer
-	if (
-#if SUPPORT_CAN_EXPANSION
-		config.boardAddress == CanId::NoAddress || (config.boardAddress == CanInterface::GetCanAddress() && accelerometer == nullptr)
-#else
-		accelerometer == nullptr
-#endif
-	   )
+	if (!config.IsConfigured())
 	{
 		reply.printf("accelerometer %u not configured", accelerometerNumber);
 		return GCodeResult::error;
@@ -511,6 +587,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 
 	// Create the file for saving the data. First calculate the approximate file size so that we can preallocate storage to reduce the risk of overflow.
 	const unsigned int numAxes = (axesRequested & 1u) + ((axesRequested >> 1) & 1u) + ((axesRequested >> 2) & 1u);
+	const uint8_t resolution = (config.resolution != 0) ? config.resolution : DefaultAccelerometerResolution;
 	const uint32_t preallocSize = numSamplesRequested * ((numAxes * (3 + GetDecimalPlaces(resolution))) + 4);
 
 	String<MaxFilenameLength> accelerometerFileName;
@@ -540,7 +617,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 # if SUPPORT_CAN_EXPANSION
 		if (config.IsRemote())
 		{
-			reprap.GetExpansion().AddAccelerometerRun(config.boardAddress, 0);
+			AddRemoteAccelerometerRun(config.boardAddress, 0);
 		}
 		else
 # endif
@@ -576,7 +653,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 			accelerometerFile->Close();
 			accelerometerFile = nullptr;
 			(void)MassStorage::Delete(accelerometerFileName.GetRef(), ErrorMessageMode::messageAlways);
-			reprap.GetExpansion().AddAccelerometerRun(config.boardAddress, 0);
+			AddRemoteAccelerometerRun(config.boardAddress, 0);
 		}
 		return rslt;
 	}
@@ -612,37 +689,6 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	return GCodeResult::error;
 }
 
-bool Accelerometers::HasLocalAccelerometer() noexcept
-{
-	return accelerometer != nullptr;
-}
-
-unsigned int Accelerometers::GetLocalAccelerometerDataPoints() noexcept
-{
-	return lastRunNumSamplesReceived;
-}
-
-unsigned int Accelerometers::GetLocalAccelerometerRuns() noexcept
-{
-	return numLocalRunsCompleted;
-}
-
-uint8_t Accelerometers::GetLocalAccelerometerOrientation() noexcept
-{
-	return orientation;
-}
-
-// The rate and resolution the accelerometer was actually programmed for, which may be lower than the ones M955 asked for
-uint16_t Accelerometers::GetLocalAccelerometerSamplingRate() noexcept
-{
-	return samplingRate;
-}
-
-uint8_t Accelerometers::GetLocalAccelerometerResolution() noexcept
-{
-	return resolution;
-}
-
 void Accelerometers::Exit() noexcept
 {
 	if (accelerometerTask != nullptr)
@@ -673,7 +719,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			accelerometerFile = nullptr;
-			reprap.GetExpansion().AddAccelerometerRun(src, 0);
+			AddRemoteAccelerometerRun(src, 0);
 		}
 		else if (msg.axes != expectedRemoteAxes || msg.firstSampleNumber != (uint16_t)expectedRemoteSampleNumber || src != expectedRemoteBoardAddress)		// firstSampleNumber is only 16 bits wide in the message
 		{
@@ -681,7 +727,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			accelerometerFile = nullptr;
-			reprap.GetExpansion().AddAccelerometerRun(src, 0);
+			AddRemoteAccelerometerRun(src, 0);
 		}
 		else
 		{
@@ -748,8 +794,13 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 				f->Close();
 				accelerometerFile = nullptr;
-				reprap.GetExpansion().SaveAccelerometerConfig(src, (uint16_t)msg.actualSampleRate, (uint8_t)receivedResolution);
-				reprap.GetExpansion().AddAccelerometerRun(src, expectedRemoteSampleNumber);
+				Accelerometer *_ecv_null const acc = FindRemoteAccelerometer(src);
+				if (acc != nullptr)
+				{
+					acc->samplingRate = (uint16_t)msg.actualSampleRate;
+					acc->resolution = (uint8_t)receivedResolution;
+				}
+				AddRemoteAccelerometerRun(src, expectedRemoteSampleNumber);
 			}
 		}
 	}
@@ -765,7 +816,7 @@ void Accelerometers::RemoteBoardRestarted(CanAddress src) noexcept
 		f->Truncate();
 		f->Close();
 		accelerometerFile = nullptr;
-		reprap.GetExpansion().AddAccelerometerRun(src, 0);
+		AddRemoteAccelerometerRun(src, 0);
 	}
 }
 
