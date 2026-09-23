@@ -175,7 +175,10 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 			str.printf("Driver %u error: ", ep->deviceNumber);
 #endif
 			StandardDriverStatus(ep->param).AppendText(str, 2);
-			str.cat(ep->text.c_str());
+			if (!ep->text.IsEmpty())
+			{
+				str.catf(", %s", ep->text.c_str());
+			}
 			return ErrorMessage;
 
 		case EventType::driver_warning:
@@ -185,7 +188,10 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 			str.printf("Driver %u warning: ", ep->deviceNumber);
 #endif
 			StandardDriverStatus(ep->param).AppendText(str, 1);
-			str.cat(ep->text.c_str());
+			if (!ep->text.IsEmpty())
+			{
+				str.catf(", %s", ep->text.c_str());
+			}
 			return WarningMessage;
 
 		case EventType::driver_stall:
