@@ -1794,12 +1794,22 @@ GCodeResult Move::EutProcessM569(const CanMessageGeneric& msg, const StringRef& 
 # if SUPPORT_TMC51xx
 		int32_t ival;
 # endif
-		if (parser.GetUintParam('D', val))	// set driver mode
+		if (parser.GetUintParam('D', val))		// set driver mode
 		{
 			seen = true;
 			if (!SmartDrivers::SetDriverMode(drive, val))
 			{
 				reply.printf("Driver %u.%u does not support mode '%s'", CanInterface::GetCanAddress(), drive, TranslateDriverMode(val));
+				return GCodeResult::error;
+			}
+		}
+
+		if (parser.GetUintParam('C', val))		// set chopper control register
+		{
+			seen = true;
+			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::chopperControl, val))
+			{
+				reply.printf("Bad ccr for driver %u", drive);
 				return GCodeResult::error;
 			}
 		}
