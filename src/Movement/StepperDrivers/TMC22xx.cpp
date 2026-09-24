@@ -373,9 +373,17 @@ constexpr uint32_t CHOPCONF_HSTRT_SHIFT = 4;				// hysteresis start
 constexpr uint32_t CHOPCONF_HSTRT_MASK = 0x07 << CHOPCONF_HSTRT_SHIFT;
 constexpr uint32_t CHOPCONF_HEND_SHIFT = 7;					// hysteresis end
 constexpr uint32_t CHOPCONF_HEND_MASK = 0x0F << CHOPCONF_HEND_SHIFT;
+#if SUPPORT_TMC2240
+constexpr uint32_t CHOPCONF_2240_FD3 = 1u << 11;			// MSB of fast decay time setting TFD
+constexpr uint32_t CHOPCONF_2240_DISFDCC = 1u << 12;		// disables fast decay mode when CHM = 1
+#endif
 constexpr uint32_t CHOPCONF_TBL_SHIFT = 15;					// blanking time
 constexpr uint32_t CHOPCONF_TBL_MASK = 0x03 << CHOPCONF_TBL_SHIFT;
 constexpr uint32_t CHOPCONF_VSENSE_HIGH = 1 << 17;			// use high sensitivity current scaling
+#if SUPPORT_TMC2240
+constexpr uint32_t CHOPCONF_2240_TPFD_SHIFT = 20;				// Passive fast decay time, allows dampening of motor mid-range resonances
+constexpr uint32_t CHOPCONF_2240_TPFD_MASK = 0x0F << CHOPCONF_2240_TPFD_SHIFT;
+#endif
 constexpr uint32_t CHOPCONF_MRES_SHIFT = 24;				// microstep resolution
 constexpr uint32_t CHOPCONF_MRES_MASK = 0x0F << CHOPCONF_MRES_SHIFT;
 constexpr uint32_t CHOPCONF_INTPOL = 1 << 28;				// use interpolation
@@ -1435,7 +1443,12 @@ bool TmcDriverState::SetChopConf(uint32_t newVal) noexcept
 	{
 		return false;
 	}
-	const uint32_t userMask = CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK;	// mask of bits the user is allowed to change
+	const uint32_t userMask =
+#if SUPPORT_TMC2240
+							(isTmc2240) ? CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK
+											| CHOPCONF_2240_TPFD_MASK | CHOPCONF_2240_FD3 | CHOPCONF_2240_DISFDCC :
+#endif
+										CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK;	// mask of bits the user is allowed to change
 	configuredChopConfReg = (configuredChopConfReg & ~userMask) | (newVal & userMask);
 	UpdateChopConfRegister();
 	return true;
