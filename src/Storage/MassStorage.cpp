@@ -664,61 +664,78 @@ static bool InternalDelete(const char *_ecv_array filePath, ErrorMessageMode err
 	return true;
 }
 
-// Delete the contents of an open directory returning true if successful
+// Delete the contents of a directory returning true if successful
 // File system must be locked before calling this
-// This is recursive. In order to avoid using large amounts of stack it uses the string referred to by filePath to hold the name of each contained file as it is deleted.
-static bool DeleteContents(DIR& dir, const StringRef& filePath, ErrorMessageMode errorMessageMode) noexcept
+// This is iterative so that the stack usage does not grow with the directory depth, which matters on the network task.
+// It uses the string referred to by filePath to hold the path of the directory being emptied, descends into the first subdirectory it finds,
+// and deletes each directory once it is empty before rescanning its parent.
+static bool DeleteContents(const StringRef& filePath, ErrorMessageMode errorMessageMode) noexcept
 {
-	const size_t originalPathLength = filePath.strlen();
-	size_t pathLength = originalPathLength;
-	if (originalPathLength == 0 || filePath[originalPathLength - 1] != '/')
-	{
-		filePath.cat('/');
-		++pathLength;
-	}
-
+	const size_t rootLength = filePath.strlen();
 	bool ok = true;
 	while (ok)
 	{
-		FILINFO entry;
-		const FRESULT res = f_readdir(&dir, &entry);
-		if (res != FR_OK || entry.fname[0] == 0)
+		DIR dir;
+		if (f_opendir(&dir, filePath.c_str()) != FR_OK)
 		{
+			ok = (filePath.strlen() == rootLength);			// the root may be a plain file, which the caller deletes
 			break;
 		}
-		if (!StringEqualsIgnoreCase(entry.fname, ".") && !StringEqualsIgnoreCase(entry.fname, ".."))
+
+		const size_t dirLength = filePath.strlen();
+		bool foundSubdirectory = false;
+		while (ok)
 		{
-			filePath.cat(entry.fname);
-			if ((entry.fattrib & AM_DIR) != 0)
+			FILINFO entry;
+			const FRESULT res = f_readdir(&dir, &entry);
+			if (res != FR_OK)
 			{
-				DIR dir2;
-				if (f_opendir(&dir2, filePath.c_str()) == FR_OK)
-				{
-					const bool ok2 = DeleteContents(dir, filePath, errorMessageMode);
-					f_closedir(&dir2);
-					if (!ok2)
-					{
-						return false;
-					}
-				}
-				else
-				{
-					ok = false;
-				}
+				ok = false;
 			}
-			else
+			else if (entry.fname[0] == 0)
 			{
+				break;
+			}
+			else if (!StringEqualsIgnoreCase(entry.fname, ".") && !StringEqualsIgnoreCase(entry.fname, ".."))
+			{
+				if (dirLength == 0 || filePath[dirLength - 1] != '/')
+				{
+					filePath.cat('/');
+				}
+				filePath.cat(entry.fname);
+				if ((entry.fattrib & AM_DIR) != 0)
+				{
+					foundSubdirectory = true;
+					break;
+				}
 				if (!InternalDelete(filePath.c_str(), errorMessageMode))
 				{
 					ok = false;
 				}
+				filePath.Truncate(dirLength);
 			}
-			filePath.Truncate(pathLength);
+		}
+		f_closedir(&dir);
+
+		if (ok && !foundSubdirectory)
+		{
+			if (dirLength <= rootLength)
+			{
+				break;
+			}
+
+			// This subdirectory is empty now, so delete it and go back up to its parent
+			if (!InternalDelete(filePath.c_str(), errorMessageMode))
+			{
+				ok = false;
+			}
+			const char *_ecv_array const lastSlash = strrchr(filePath.c_str(), '/');
+			filePath.Truncate(max<size_t>((size_t)(lastSlash - filePath.c_str()), rootLength));
 		}
 	}
 
-	filePath.Truncate(originalPathLength);
-	return true;
+	filePath.Truncate(rootLength);
+	return ok;
 }
 
 # endif
@@ -766,16 +783,10 @@ bool MassStorage::Delete(const StringRef& filePath, ErrorMessageMode errorMessag
 		}
 
 		MutexLocker locker(fsMutex);
-		DIR dir;
-		if (f_opendir(&dir, filePath.c_str()) == FR_OK)
+		if (!DeleteContents(filePath, errorMessageMode))
 		{
-			const bool ok1 = DeleteContents(dir, filePath, errorMessageMode);
-			f_closedir(&dir);
-			if (!ok1)
-			{
-				(void)VolumeUpdated(filePath.c_str());			// in case we deleted any contained files
-				return false;
-			}
+			(void)VolumeUpdated(filePath.c_str());			// in case we deleted any contained files
+			return false;
 		}
 	}
 
