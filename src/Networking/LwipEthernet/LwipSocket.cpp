@@ -183,12 +183,34 @@ void LwipSocket::ConnectionError(err_t err) noexcept
 {
 	DiscardReceivedData();
 	connectionPcb = nullptr;
+	EnterAbortedState();
+}
 
+// A socket still owned by a responder must only be recycled by its owner's Close or Terminate call, else a new connection may be accepted on it and killed by the owner
+void LwipSocket::EnterAbortedState() noexcept
+{
 	state = (localPort == 0 || outgoing)
 				? SocketState::disabled
 				: (responderFound && state != SocketState::closing)
 				  	? SocketState::aborted
 				  	: SocketState::listening;
+}
+
+// Abort the connection on an internal failure, leaving an owned socket to its responder
+void LwipSocket::AbortConnection() noexcept
+{
+	MutexLocker lock(lwipMutex);
+	if (connectionPcb != nullptr)
+	{
+		tcp_err(connectionPcb, nullptr);
+		tcp_recv(connectionPcb, nullptr);
+		tcp_sent(connectionPcb, nullptr);
+		tcp_abort(connectionPcb);
+		connectionPcb = nullptr;
+	}
+
+	DiscardReceivedData();
+	EnterAbortedState();
 }
 
 // Initialise a TCP socket
@@ -399,7 +421,7 @@ void LwipSocket::Poll() noexcept
 			// Are we still waiting for data to be written?
 			if (whenWritten != 0 && millis() - whenWritten >= MaxWriteTime)
 			{
-				Terminate();
+				AbortConnection();
 			}
 		}
 		else
@@ -440,7 +462,8 @@ void LwipSocket::Poll() noexcept
 				connectionPcb = nullptr;
 			}
 
-			if (receivedData == nullptr || timeoutExceeded)
+			// A peerDisconnecting socket keeps its unread data and waits for its responder to release it
+			if (state == SocketState::closing)
 			{
 				DiscardReceivedData();
 				state = (localPort == 0 || outgoing) ? SocketState::disabled : SocketState::listening;
@@ -501,7 +524,7 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 			err = tcp_write(connectionPcb, data, bytesToSend, 0);
 			if (ERR_IS_FATAL(err))
 			{
-				Terminate();
+				AbortConnection();
 				return 0;
 			}
 			else if (err == ERR_MEM)
@@ -520,7 +543,7 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 		// Try to send it now
 		if (ERR_IS_FATAL(tcp_output(connectionPcb)))
 		{
-			Terminate();
+			AbortConnection();
 			return 0;
 		}
 

@@ -237,21 +237,31 @@ void W5500Socket::Poll() noexcept
 			break;
 
 		case SOCK_CLOSE_WAIT:			// A client has asked to disconnect
-			// Check for further incoming packets before this socket is finally closed. This must be done to ensure that FTP uploads are not cut off.
-			if (ReceiveData())
+			if (state == SocketState::connected || state == SocketState::peerDisconnecting)
 			{
+				// Keep receiving so that FTP uploads are not cut off. The responder closes the socket once it has read everything
+				(void)ReceiveData();
 				state = SocketState::peerDisconnecting;
 			}
-			else
+			else if (state != SocketState::aborted)
 			{
-				// Occasionally sockets got stuck in the peerDisconnecting state. Try force-closing the socket if there is no more data.
+				// Nobody owns this socket any more, so it would get stuck unless we close it here
 				ExecCommand(socketNum, Sn_CR_DISCON);
 				state = SocketState::closing;
 			}
 			break;
 
 		case SOCK_CLOSED:
-			ReInit();
+			if (state == SocketState::connected || state == SocketState::peerDisconnecting)
+			{
+				// Connection reset while a responder owns the socket, so leave it to the responder to release it
+				DiscardReceivedData();
+				state = SocketState::aborted;
+			}
+			else if (state != SocketState::aborted)
+			{
+				ReInit();
+			}
 			break;
 
 		default:

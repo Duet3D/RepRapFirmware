@@ -64,6 +64,8 @@ private:
 	};
 
 	void ReInit() noexcept;
+	void EnterAbortedState() noexcept;
+	void AbortConnection() noexcept;
 	void DiscardReceivedData() noexcept;
 	pbuf *GetNextReceivedPbuf() noexcept;
 
