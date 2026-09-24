@@ -50,6 +50,7 @@ constexpr FileInfoParser::ParseTableEntry FileInfoParser::parseTable[] =
 	{	"Layer height",								&FileInfoParser::ProcessLayerHeight,		0 },		// Cura
 	{	"LayerHeight",								&FileInfoParser::ProcessLayerHeight,		0 },		// S3D								";   layerHeight,0.2"
 	{	"LayerThickness",							&FileInfoParser::ProcessLayerHeight,		0 },		// Matter Control
+	{	"Layer_count",								&FileInfoParser::ProcessNumLayers,			0 },		// preFlight						"; layer_count = 60"
 	{	"Layer_height",								&FileInfoParser::ProcessLayerHeight,		0 },		// slic3r, PrusaSlicer, OrcaSlicer	"; layer_height = 0.2"
 	{	"Layer_thickness_mm",						&FileInfoParser::ProcessLayerHeight,		0 },		// Kisslicer
 	{	"Material Length",							&FileInfoParser::ProcessFilamentUsed,		1 },		// S3D v5
