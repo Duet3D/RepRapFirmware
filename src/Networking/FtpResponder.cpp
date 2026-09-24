@@ -379,6 +379,12 @@ void FtpResponder::DoUpload() noexcept
 	// Upload has finished if the connection is closed
 	if (!dataSocket->CanRead())
 	{
+		if (dataSocket->IsConnectionAborted())
+		{
+			uploadError = true;
+			GetPlatform().Message(ErrorMessage, "FTP: upload connection was reset\n");
+		}
+
 		dataSocket = nullptr;
 		responderState = ResponderState::pasvTransferComplete;
 
