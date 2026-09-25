@@ -395,12 +395,12 @@ void RemoteHeater::SetFanFeedForwardPwm(float pwm) noexcept
 	}
 }
 
-void RemoteHeater::ApplyExtrusionFeedForward(bool isNonPrintingMove) noexcept
+void RemoteHeater::ApplyExtrusionFeedForward(float newExtrusionPwmBoost, float newTempBoost, bool isNonPrintingMove) noexcept
 {
-	if (extrusionPwmBoost != previousExtrusionPwmBoost || extrusionTemperatureBoost != previousExtrusionTemperatureBoost)
+	if (newExtrusionPwmBoost != lastExtrusionPwmBoost || newTempBoost != extrusionTemperatureBoost)
 	{
-		previousExtrusionPwmBoost = extrusionPwmBoost;
-		previousExtrusionTemperatureBoost = extrusionTemperatureBoost;
+		lastExtrusionPwmBoost = newExtrusionPwmBoost;
+		extrusionTemperatureBoost = newTempBoost;
 		UpdateFeedForward(false, isNonPrintingMove);
 	}
 }
@@ -415,7 +415,7 @@ void RemoteHeater::UpdateFeedForward(bool fanOnly, bool nonPrintingExtruderMove)
 	msg->fanPwmFraction = lastFanPwm;
 	msg->fanOnly = fanOnly;
 	msg->nonPrintingExtruderMove = nonPrintingExtruderMove;
-	msg->extrusionPwmBoost = extrusionPwmBoost;
+	msg->extrusionPwmBoost = lastExtrusionPwmBoost;
 	msg->extrusionTemperatureBoost = extrusionTemperatureBoost;
 	CanInterface::SendMessageNoReplyNoFree(&buf);
 }
