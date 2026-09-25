@@ -1352,7 +1352,7 @@ void Move::ReportM569Parameters(size_t drive, const StringRef& reply) noexcept
 #endif
 		{
 			// It's a smart driver, so print the parameters common to all modes, except for the position
-			reply.catf(", mode %s, ccr 0x%05" PRIx32 ", toff %" PRIu32 ", tblank %" PRIu32,
+			reply.catf(", mode %s, ccr 0x%06" PRIx32 ", toff %" PRIu32 ", tblank %" PRIu32,
 					TranslateDriverMode(SmartDrivers::GetDriverMode(drive)),
 					SmartDrivers::GetRegister(drive, SmartDriverRegister::chopperControl),
 					SmartDrivers::GetRegister(drive, SmartDriverRegister::toff),
