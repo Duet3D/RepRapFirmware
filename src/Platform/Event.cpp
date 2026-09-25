@@ -231,7 +231,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 #else
 			str.printf("Board over temperature: temperature %.1fC, driver(s) disabled", (double)((float)ep->param * 0.1));
 #endif
-			return WarningMessage;
+			return ErrorMessage;
 
 		case EventType::overvoltage:
 #if SUPPORT_CAN_EXPANSION
