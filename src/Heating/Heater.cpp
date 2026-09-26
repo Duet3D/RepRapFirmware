@@ -130,6 +130,7 @@ Heater::~Heater() noexcept
 void Heater::ResetHeater() noexcept
 {
 	lastExtrusionPwmBoost = 0.0;
+	allowedExtrusionPwmBoost = 0.0;
 	extrusionTemperatureBoost = 0.0;
 	lastFanPwm = 0.0;
 }
@@ -137,6 +138,7 @@ void Heater::ResetHeater() noexcept
 void Heater::SwitchOff() noexcept
 {
 	lastExtrusionPwmBoost = 0.0;
+	allowedExtrusionPwmBoost = 0.0;
 	extrusionTemperatureBoost = 0.0;
 }
 

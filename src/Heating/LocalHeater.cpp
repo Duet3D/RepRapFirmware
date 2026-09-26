@@ -666,15 +666,25 @@ void LocalHeater::SetFanFeedForwardPwm(float pwm) noexcept
 // Set extrusion feedforward
 void LocalHeater::ApplyExtrusionFeedForward(float newExtrusionPwmBoost, float newTempBoost, bool isNonPrintingMove) noexcept
 {
-	// We need to update lastExtrusionPwmBoost and iAccumulator atomically to avoid a race condition
-	const float pwmChange = newExtrusionPwmBoost - lastExtrusionPwmBoost;
-	TaskCriticalSectionLocker lock;
+	// The logic here is similar to the logic in function LocalHeater::ApplyFeedForward except that the fan PWM is handled separately
+	TaskCriticalSectionLocker lock;										// we need to update lastExtrusionPwmBoost and iAccumulator atomically to avoid a race condition
 	allowedExtrusionPwmBoost = newExtrusionPwmBoost;
-	lastExtrusionPwmBoost = newExtrusionPwmBoost;
-	extrusionTemperatureBoost = newTempBoost;
-	if (!isNonPrintingMove && mode == HeaterMode::stable)
+	float requiredPwmBoostChange;
+	if (isNonPrintingMove)
 	{
-		iAccumulator += pwmChange;
+		requiredPwmBoostChange = -lastExtrusionPwmBoost;
+		lastExtrusionPwmBoost = 0.0;
+	}
+	else
+	{
+		requiredPwmBoostChange = newExtrusionPwmBoost - lastExtrusionPwmBoost;
+		lastExtrusionPwmBoost = newExtrusionPwmBoost;
+		extrusionTemperatureBoost = newTempBoost;
+	}
+
+	if (mode == HeaterMode::stable)
+	{
+		iAccumulator += requiredPwmBoostChange;
 	}
 }
 
