@@ -390,7 +390,7 @@ static MovementProfile debugProfile;
 				params.distances[5] = params.distances[6] = 0.0;
 				params.phaseClocks[5] = params.phaseClocks[6] = 0;
 				params.peakDeceleration = (motioncalc_t)(acceleration * recipMovementRatio);
-				afterPrepare.peakDeceleration = (float)params.peakDeceleration;
+				afterPrepare.peakDeceleration = -(float)params.peakDeceleration;
 				lastPhaseNumber = 4;
 				break;
 			}
@@ -404,7 +404,7 @@ static MovementProfile debugProfile;
 		}
 
 		params.peakDeceleration = (motioncalc_t)(acceleration * recipMovementRatio);
-		afterPrepare.peakDeceleration = (float)params.peakDeceleration;
+		afterPrepare.peakDeceleration = -(float)params.peakDeceleration;
 
 		if (plannedProfile.distances[5] > (double)0.0)
 		{
