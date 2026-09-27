@@ -134,6 +134,7 @@ public:
 	void IterateExtruders(function_ref_noexcept<void(unsigned int) noexcept> f) const noexcept;
 	void IterateHeaters(function_ref_noexcept<void(int) noexcept> f) const noexcept;
 	bool UsesHeater(int8_t heater) const noexcept;
+	bool UsesExtruder(unsigned int extruder) const noexcept;
 
 	void SetFansPwm(float f) const noexcept;
 
@@ -144,6 +145,8 @@ public:
 	uint32_t GetFeedForwardAdvanceClocks() const noexcept { return feedForwardAdvanceClocks; }
 	void ApplyExtrusionFeedForward(float extrusionSpeed) const noexcept;
 	void StopExtrusionFeedForward() const noexcept;
+	float GetPressureAdvance() const noexcept { return pressureAdvance; }
+	void SetPressureAdvance(float pa) noexcept { pressureAdvance = pa; }
 
 	void Activate() noexcept;
 	void Standby() noexcept;
@@ -187,6 +190,7 @@ private:
 	float heaterFeedForwardPwm[MaxHeatersPerTool];
 	float heaterFeedForwardTemp[MaxHeatersPerTool];
 	uint32_t feedForwardAdvanceClocks = 0;
+	float pressureAdvance = 0.0;
 
 	// Firmware retraction settings
 	float retractLength, retractExtra;			// retraction length and extra length to un-retract
