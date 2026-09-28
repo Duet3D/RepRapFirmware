@@ -57,7 +57,7 @@ constexpr ObjectModelTableEntry W5500Interface::objectModelTable[] =
 	{ "mac",				OBJECT_MODEL_FUNC(self->macAddress),		ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->GetStateName()),	ObjectModelEntryFlags::none },
 	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),			ObjectModelEntryFlags::none },
-	{ "type",				OBJECT_MODEL_FUNC_NOSELF("ethernet"),		ObjectModelEntryFlags::none },
+	{ "type",				OBJECT_MODEL_FUNC_NOSELF("ethernet"),		ObjectModelEntryFlags::verbose },
 };
 
 constexpr uint8_t W5500Interface::objectModelTableDescriptor[] = { 1, 6 };

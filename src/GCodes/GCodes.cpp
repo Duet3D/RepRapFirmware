@@ -1899,7 +1899,8 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSys
 	gb.MotionStopped();									// must do this after we have finished waiting, so that we don't stop waiting when executing G4
 
 	// Re-read the position from the motors only if the last move could have stopped short of its commanded target
-	// (endstop/probe/stall/raw move). After an ordinary move the commanded coordinates are exact, so reading them
+	// (endstop/probe/stall/raw move) or was a special move that bypassed the user position (probing state machines,
+	// firmware retraction, babystepping). After an ordinary move the commanded coordinates are exact, so reading them
 	// back would replace them with motor-step-rounded values and, in CNC mode, make a following G2/G3 fail the tight
 	// arc radius check.
 	if (ms.positionMayBeInaccurate)
@@ -5378,6 +5379,7 @@ void GCodes::SetMoveBufferDefaults(MovementState& ms) noexcept
 {
 	ms.SetDefaults(numTotalAxes);
 	memcpyf(ms.initialCoords, ms.raw.coords, numVisibleAxes);
+	ms.positionMayBeInaccurate = true;			// special moves bypass the user position, so re-read it at the next standstill
 }
 
 // Resource locking/unlocking
