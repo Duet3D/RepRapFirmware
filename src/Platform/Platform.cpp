@@ -217,16 +217,16 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "directDisplay",		OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetDisplay().IsPresent(), &reprap.GetDisplay()),					ObjectModelEntryFlags::none },
 #endif
 	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(0),																			ObjectModelEntryFlags::liveNotPanelDue },
-	{ "firmwareDate",		OBJECT_MODEL_FUNC_NOSELF(DateTimeText),																	ObjectModelEntryFlags::none },
-	{ "firmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),														ObjectModelEntryFlags::none },
+	{ "firmwareDate",		OBJECT_MODEL_FUNC_NOSELF(DateTimeText),																	ObjectModelEntryFlags::verbose },
+	{ "firmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),														ObjectModelEntryFlags::verbose },
 	{ "firmwareName",		OBJECT_MODEL_FUNC_NOSELF(FIRMWARE_NAME),															ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(VERSION),																	ObjectModelEntryFlags::none },
 	{ "freeRam",			OBJECT_MODEL_FUNC_NOSELF((int32_t)Tasks::GetNeverUsedRam()),										ObjectModelEntryFlags::liveNotPanelDue },
 #if HAS_SBC_INTERFACE
-	{ "iapFileNameSBC",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE_SBC),														ObjectModelEntryFlags::none },
+	{ "iapFileNameSBC",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE_SBC),														ObjectModelEntryFlags::verbose },
 #endif
 #if HAS_MASS_STORAGE
-	{ "iapFileNameSD",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE),															ObjectModelEntryFlags::none },
+	{ "iapFileNameSD",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE),															ObjectModelEntryFlags::verbose },
 #endif
 	{ "maxHeaters",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),														ObjectModelEntryFlags::verbose },
 	{ "maxMotors",			OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),												ObjectModelEntryFlags::verbose },
@@ -242,7 +242,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #endif
 	{ "supportsDirectDisplay", OBJECT_MODEL_FUNC_NOSELF(SUPPORT_DIRECT_LCD ? true : false),										ObjectModelEntryFlags::verbose },
 #if MCU_HAS_UNIQUE_ID
-	{ "uniqueId",			OBJECT_MODEL_FUNC_IF(self->uniqueId.IsValid(), self->uniqueId),										ObjectModelEntryFlags::none },
+	{ "uniqueId",			OBJECT_MODEL_FUNC_IF(self->uniqueId.IsValid(), self->uniqueId),										ObjectModelEntryFlags::verbose },
 #endif
 #if HAS_12V_MONITOR
 	{ "v12",				OBJECT_MODEL_FUNC(self, 3),																			ObjectModelEntryFlags::liveNotPanelDue },
@@ -251,7 +251,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "vIn",				OBJECT_MODEL_FUNC(self, 2),																			ObjectModelEntryFlags::liveNotPanelDue },
 #endif
 #if HAS_WIFI_NETWORKING
-	{ "wifiFirmwareFileName", OBJECT_MODEL_FUNC(self->GetDefaultWiFiFirmwareName()),											ObjectModelEntryFlags::none },
+	{ "wifiFirmwareFileName", OBJECT_MODEL_FUNC(self->GetDefaultWiFiFirmwareName()),											ObjectModelEntryFlags::verbose },
 #endif
 #if HAS_CPU_TEMP_SENSOR
 	// 1. boards[0].mcuTemp members
