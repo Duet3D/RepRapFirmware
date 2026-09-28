@@ -1618,45 +1618,44 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::straightProbe2:
 		// Executing G38. The probe has been deployed and the recovery timer has been started.
+		if (millis() - lastProbedTime >= (uint32_t)(platform.GetZProbeOrDefault(straightProbeSettings.GetZProbeToUse())->GetRecoveryTime() * SecondsToMillis))
 		{
-			if (millis() - lastProbedTime >= (uint32_t)(platform.GetZProbeOrDefault(straightProbeSettings.GetZProbeToUse())->GetRecoveryTime() * SecondsToMillis))
+			// The probe recovery time has elapsed, so we can start the probing  move
+			const auto zp = platform.GetEndstops().GetZProbe(straightProbeSettings.GetZProbeToUse());
+			if (zp.IsNull() || zp->GetProbeType() == ZProbeType::none)
 			{
-				// The probe recovery time has elapsed, so we can start the probing  move
-				const auto zp = platform.GetEndstops().GetZProbe(straightProbeSettings.GetZProbeToUse());
-				if (zp.IsNull() || zp->GetProbeType() == ZProbeType::none)
+				// No Z probe, so we are doing manual 'probing'
+				UnlockAll(gb);															// release the movement lock to allow manual Z moves
+				gb.AdvanceState();														// resume at the next state when the user has finished
+				DoStraightManualProbe(gb, straightProbeSettings);						// call out to separate function because it used a lot of stack
+			}
+			else
+			{
+				const bool probingAway = straightProbeSettings.ProbingAway();
+				const bool atStop = zp->Stopped();
+				if (probingAway != atStop)
 				{
-					// No Z probe, so we are doing manual 'probing'
-					UnlockAll(gb);															// release the movement lock to allow manual Z moves
-					gb.AdvanceState();														// resume at the next state when the user has finished
-					DoStraightManualProbe(gb, straightProbeSettings);						// call out to separate function because it used a lot of stack
+					// Z probe is already in target state at the start of the move, so abandon the probe and signal an error if the type demands so
+					reprap.GetHeat().SuspendHeaters(false);
+					if (straightProbeSettings.SignalError())
+					{
+						gb.LatestMachineState().SetError((probingAway) ? "probe not triggered at start of probing move" : "probe already triggered before probing move started");
+					}
+					gb.SetState(GCodeState::checkError);								// no point in doing anything else
+					RetractZProbe(gb);
 				}
 				else
 				{
-					const bool probingAway = straightProbeSettings.ProbingAway();
-					const bool atStop = zp->Stopped();
-					if (probingAway != atStop)
+					zProbeTriggered = false;
+					SetMoveBufferDefaults(ms);
+					if (!platform.GetEndstops().EnableZProbe(straightProbeSettings.GetZProbeToUse(), probingAway) || !zp->SetProbing(true))
 					{
-						// Z probe is already in target state at the start of the move, so abandon the probe and signal an error if the type demands so
-						reprap.GetHeat().SuspendHeaters(false);
-						if (straightProbeSettings.SignalError())
-						{
-							gb.LatestMachineState().SetError((probingAway) ? "probe not triggered at start of probing move" : "probe already triggered before probing move started");
-						}
-						gb.SetState(GCodeState::checkError);								// no point in doing anything else
+						gb.LatestMachineState().SetError("failed to enable probe");
+						gb.SetState(GCodeState::checkError);
 						RetractZProbe(gb);
 					}
 					else
 					{
-						zProbeTriggered = false;
-						SetMoveBufferDefaults(ms);
-						if (!platform.GetEndstops().EnableZProbe(straightProbeSettings.GetZProbeToUse(), probingAway) || !zp->SetProbing(true))
-						{
-							gb.LatestMachineState().SetError("failed to enable probe");
-							gb.SetState(GCodeState::checkError);
-							RetractZProbe(gb);
-							break;
-						}
-
 						ms.raw.checkEndstops = true;
 						ms.raw.reduceAcceleration = true;
 						straightProbeSettings.SetCoordsToTarget(ms.raw.coords);
@@ -1729,10 +1728,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (reading == 0)
 			{
 				// A reading of zero indicates an error e.g. LDC1612 amplitude error
-				reply.copy("sensor error during calibration");
-				stateMachineResult = GCodeResult::error;
+				zp->SetProbing(false);
 				UpdateUserPositionFromMachinePosition(gb, ms);
-				gb.SetState(GCodeState::normal);
+				gb.LatestMachineState().SetError("sensor error during calibration");
+				gb.SetState(GCodeState::checkError);
+				RetractZProbe(gb);
 			}
 			else
 			{
