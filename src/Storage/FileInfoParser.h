@@ -74,6 +74,7 @@ private:
 	void ProcessThumbnail(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
 	void ProcessFilamentUsed(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
 	void ProcessCustomInfo(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
+	void Ignore(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
 
 	void ProcessFilamentUsedEmbedded(const char *_ecv_array p, const char *_ecv_array s2) noexcept
 		pre(parsedFileInfo.numFilaments < MaxFilaments);

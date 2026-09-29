@@ -30,6 +30,7 @@ constexpr FileInfoParser::ParseTableEntry FileInfoParser::parseTable[] =
 	{	"Estimated Build Time",						&FileInfoParser::ProcessJobTime,			0 },		// KISSlicer						"; Estimated Build Time:   332.83 minutes"
 	{	"Estimated Build Volume",					&FileInfoParser::ProcessFilamentUsed,		3 },		// Kisslicer older versions filament volume
 	{	"Estimated printing time (normal mode)",	&FileInfoParser::ProcessJobTime,			0 },		// PrusaSlicer later versions		"; estimated printing time (normal mode) = 2d 1h 5m 24s"
+	{	"Estimated printing time (silent mode)",	&FileInfoParser::Ignore,					0 },		// PrusaSlicer later versions		"; estimated printing time (silent mode) = 2d 1h 5m 24s"
 	{	"Estimated printing time",					&FileInfoParser::ProcessJobTime,			0 },		// PrusaSlicer older versions		"; estimated printing time = 1h 5m 24s"
 	{	"Extruder",									&FileInfoParser::ProcessFilamentUsed,		5 },		// Fusion 360 						";Extruder 1 material used: 1811mm"
 	{	"Ext",										&FileInfoParser::ProcessFilamentUsed,		2 },		// Kisslicer newer versions filament by extruder
@@ -419,66 +420,64 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 
 				if (isAlpha(c))										// all keywords we are interested in start with a letter
 				{
+					// pStart now points to the line terminator and kStart to the possible start of a key phrase.
+					// There is definitely a line terminator, and as line terminators do not occur in key phrases, it is safe to call StringStartsWith
+					// Do a binary search of the table on the first character
+					size_t low = 0, high = ARRAY_SIZE(parseTable);
+					const char c1 = (char)toupper(c);
 					const char *_ecv_array kStart = pStart;			// save keyword start for later
-
-					// If we are not parsing the header and we can see that there is a G- or M-command after this comment, save time by not parsing the comment.
-					// This saves time by not processing most comments in the GCode file when we haven't yet reached the footer.
-					if (isParsingHeader || pStart == pEnd || (*pEnd != 'G' && *pEnd != 'M'))
+					keep(high <= ARRAY_SIZE(parseTable);
+						low <= high;
+						low == ARRAY_SIZE(parseTable) || c1 >= parseTable[low].key[0];
+						high == ARRAY_SIZE(parseTable) || c1 < parseTable[high].key[0])		// loop invariant
+					do
 					{
-						// pStart now points to the line terminator and kStart to the possible start of a key phrase.
-						// There is definitely a line terminator, and as line terminators do not occur in key phrases, it is safe to call StringStartsWith
-						// Do a binary search of the table on the first character
-						size_t low = 0, high = ARRAY_SIZE(parseTable);
-						const char c1 = (char)toupper(c);
-						do
+						size_t mid = (low + high)/2;
+						if (c1 < parseTable[mid].key[0])
 						{
-							size_t mid = (low + high)/2;
-							if (c1 < parseTable[mid].key[0])
+							high = mid;
+						}
+						else if (c1 > parseTable[mid].key[0])
+						{
+							low = mid + 1;
+						}
+						else
+						{
+							// Found a key phrase that starts with the same letter. Find the first such phrase.
+							while (mid != 0 && parseTable[mid - 1].key[0] == c1)
 							{
-								high = mid;
+								--mid;
 							}
-							else if (c1 > parseTable[mid].key[0])
+							do
 							{
-								low = mid + 1;
-							}
-							else
-							{
-								// Found a key phrase that starts with the same letter. Find the first such phrase.
-								while (mid != 0 && parseTable[mid - 1].key[0] == c1)
+								const ParseTableEntry& pte = parseTable[mid];
+								if (StringStartsWith(kStart + 1, pte.key + 1))
 								{
-									--mid;
-								}
-								do
-								{
-									const ParseTableEntry& pte = parseTable[mid];
-									if (StringStartsWith(kStart + 1, pte.key + 1))
+									// Found the key phrase. Check for a separator or alphabetic character after it unless the key phrase ends with '#'.
+									const char *_ecv_array argStart = kStart + strlen(pte.key);
+									if (*(argStart - 1) != '#')
 									{
-										// Found the key phrase. Check for a separator after it unless the key phrase ends with '#'.
-										const char *_ecv_array argStart = kStart + strlen(pte.key);
-										if (*(argStart - 1) != '#')
+										char c2 = *argStart;
+										if (!isAlpha(c2) && c2 != ' ' && c2 != '\t' && c2 != ':' && c2 != '=' && c2 != ',')
 										{
-											char c2 = *argStart;
-											if (c2 != ' ' && c2 != '\t' && c2 != ':' && c2 != '=' && c2 != ',')
-											{
-												break;
-											}
-
-											// Skip further separators
-											do
-											{
-												++argStart;
-											} while ((c2 = *argStart) == ' ' || c2 == '\t' || c2 == ':' || c2 == '=');
+											break;
 										}
-										(this->*pte.func)(kStart, argStart, lineEnd, pte.param);
-										break;
+
+										// Skip further separators and alphabetic characters
+										do
+										{
+											++argStart;
+										} while (isAlpha(c2 = *argStart) || c2 == ' ' || c2 == '\t' || c2 == ':' || c2 == '=');
 									}
-									++mid;
-								} while (mid < ARRAY_SIZE(parseTable) && c1 == parseTable[mid].key[0]);
-								break;
-							}
-						} while (low + 1 < high);
-						// If we get here then there is no phrase in the table that starts with the first letter of the comment, or we have found one and processed it
-					}
+									(this->*pte.func)(kStart, argStart, lineEnd, pte.param);
+									break;
+								}
+								++mid;
+							} while (mid < ARRAY_SIZE(parseTable) && c1 == parseTable[mid].key[0]);
+							break;
+						}
+					} while (low < high);
+					// If we get here then there is no phrase in the table that starts with the first letter of the comment, or we have found one and processed it
 				}
 			}
 			break;
@@ -925,6 +924,9 @@ void FileInfoParser::ProcessCustomInfo(const char *_ecv_array k, const char *_ec
 		}
 	}
 }
+
+// Ignore this key
+void FileInfoParser::Ignore(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept { }
 
 #endif
 
