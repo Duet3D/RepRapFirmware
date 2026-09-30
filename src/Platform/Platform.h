@@ -116,11 +116,15 @@ enum class BoardType : uint8_t
 	Duet3Mini_Ethernet,
 	Duet3Mini_WiFi_ESP32,			// Duet Mini WiFi with ESP32 module
 #elif defined(DUET3_MB6HC)
+# if defined(__PIC32CZ2051CA70144__)
+	Duet3_6HC_v200 = 1,
+# else
 	Duet3_6HC_v06_100 = 1,
 	Duet3_6HC_v101 = 2,
 	Duet3_6HC_v102 = 3,
 	Duet3_6HC_v102b = 4,
 	Duet3_6HC_v102c = 5,
+# endif
 #elif defined(DUET3_MB6XD)
 	Duet3_6XD_v01 = 1,
 	Duet3_6XD_v100 = 2,

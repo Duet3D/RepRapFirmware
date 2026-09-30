@@ -248,7 +248,11 @@ size_t MassStorage::GetNumVolumes() noexcept { return 1; }
 // Return the number of volumes, which on the 6HC is normally 1 but can be increased to 2
 size_t MassStorage::GetNumVolumes() noexcept
 {
+# if defined(__PIC32CZ2051CA70144__)
+	return 2;
+# else
 	return (reprap.GetPlatform().GetBoardType() >= BoardType::Duet3_6HC_v102 || sd1Ports[0].IsValid()) ? 2 : 1;		// we have 2 slots if the second one has a valid CS pin, else 1
+# endif
 }
 
 // Configure additional SD card slots
