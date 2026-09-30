@@ -62,6 +62,7 @@ constexpr FileInfoParser::ParseTableEntry FileInfoParser::parseTable[] =
 	{	"PRINT.TIME",								&FileInfoParser::ProcessJobTime,			0 },		// Pathio
 	{	"Print Time",								&FileInfoParser::ProcessJobTime,			0 },		// Ideamaker
 	{ 	"Print time",								&FileInfoParser::ProcessJobTime,			0 },		// Fusion 360						";Print time: 40m:36s"
+	{	"Print_height",								&FileInfoParser::ProcessObjectHeight,		0 },		// preFlight						"; print_height = XXX.XXX"
 	{	"Simulated print time",						&FileInfoParser::ProcessSimulatedTime,		0 },		// appended to the file by RRF
 	{	"SliceHeight",								&FileInfoParser::ProcessLayerHeight,		0 },		// kiri:moto
 	{	"Sliced at",								&FileInfoParser::ProcessGeneratedBy,		1 },		// Cura (old) generated-by
