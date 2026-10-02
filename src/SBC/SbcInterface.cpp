@@ -29,8 +29,6 @@
 #include <Platform/TaskPriorities.h>
 #include <AppNotifyIndices.h>
 
-extern char _estack;		// defined by the linker
-
 // This function is not used in this class
 const ObjectModelClassDescriptor *SbcInterface::GetObjectModelClassDescriptor() const noexcept { return nullptr; }
 
@@ -78,7 +76,7 @@ void SbcInterface::Init() noexcept
 	transfer.Init();
 	sbcTask = new Task<SBCTaskStackWords>();
 	sbcTask->Create(SBCTaskStart, "SBC", nullptr, TaskPriority::SbcPriority);
-	iapRamAvailable = (const char*)&_estack - Tasks::GetHeapTop();
+	iapRamAvailable = heapLimit - Tasks::GetHeapTop();
 }
 
 #if SUPPORTS_SBC_OVER_USB
