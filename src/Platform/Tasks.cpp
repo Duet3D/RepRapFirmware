@@ -154,13 +154,6 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array _ecv_null stk) noexcept
 [[noreturn]] void AppMain() noexcept
 {
 #if defined(DUET3_MB6HC)													// for MB6HC the Status and Activity pins and polarity depend on the board version
-# if defined(__PIC32CZ2051CA70144__)
-	const Pin DiagPin = DiagPin102;
-	const Pin ActLedPin = ActLedPin102;
-	const bool DiagOnPolarity = DiagOnPolarity102;
-	SetPinMode(UsbPowerSwitchPin, OUTPUT_LOW);								// turn USB power off
-	SetPinMode(UsbModePin, OUTPUT_LOW);										// USB mode = device/UFP
-# else
 	const BoardType bt = Platform::GetMB6HCBoardType();
 	const Pin DiagPin = (bt >= BoardType::Duet3_6HC_v102) ? DiagPin102 : DiagPinPre102;
 	const Pin ActLedPin = (bt >= BoardType::Duet3_6HC_v102) ? ActLedPin102 : ActLedPinPre102;
@@ -170,7 +163,6 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array _ecv_null stk) noexcept
 		SetPinMode(UsbPowerSwitchPin, OUTPUT_LOW);							// turn USB power off
 		SetPinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
 	}
-# endif
 #endif
 #if defined(DUET3_MB6XD)
 	const BoardType bt = Platform::GetMB6XDBoardType();

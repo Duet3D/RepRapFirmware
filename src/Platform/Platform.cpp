@@ -478,9 +478,7 @@ void Platform::Init() noexcept
 #if defined(DUET3_MB6XD)
 	SetPinMode(ModbusTxPin, OUTPUT_LOW);
 #elif defined(DUET3_MB6HC)
-# if !defined(__PIC32CZ2051CA70144__)
-	if (board == BoardType::Duet3_6HC_v102c)
-# endif
+	if (board >= BoardType::Duet3_6HC_v102c)
 	{
 		SetPinMode(ModbusTxPin, OUTPUT_LOW);
 	}
@@ -2304,9 +2302,9 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			}
 #  if defined(DUET3_MB6XD) || defined(DUET3_MB6HC)
 			else if (chan == FirstAuxChannel + 1
-#   if defined(DUET3_MB6XD) && !defined(__PIC32CZ2051CA70144__)
+#   if defined(DUET3_MB6XD)
 						&& board >= BoardType::Duet3_6XD_v102
-#   elif defined(DUET3_MB6HC) && !defined(__PIC32CZ2051CA70144__)
+#   elif defined(DUET3_MB6HC)
 						&& board >= BoardType::Duet3_6HC_v102c
 #   endif
 					)
@@ -3613,29 +3611,34 @@ void Platform::ResetChannel(size_t chan) noexcept
 // This is safe to call before Platform has been created
 /*static*/ BoardType Platform::GetMB6HCBoardType() noexcept
 {
-# if defined(__PIC32CZ2051CA70144__)
-	return BoardType::Duet3_6HC_v200;
-# else
-	// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 or v1.02 boards
-	// Driver 1 has a pulldown resistor on v0.1 and v1.0 boards, however we don't support v0.1 and we don't care about the difference between v0.6 and v1.0, so we don't need to read it
-	// Driver 2 has a pulldown resistor on v1.10, v1.02, 1.02a, 1.02b, 1.02c
-	// Driver 3 has a pulldown resistor on v1.02c
-	SetPinMode(DIRECTION_PINS[2], INPUT_PULLUP, false);
-	SetPinMode(DIRECTION_PINS[0], INPUT_PULLUP, false);
-	delayMicroseconds(20);									// give the pullup resistor time to work
-	if (digitalRead(DIRECTION_PINS[2]))
+	const uint32_t deviceId = CHIPID->CHIPID_CIDR;
+	constexpr uint32_t ArchAndSramMask = 0x0fff0000;
+	if ((deviceId & ArchAndSramMask) == 0x01AF0000)
 	{
-		return (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
-	}
-	else if (digitalRead(DIRECTION_PINS[0]))
-	{
-		return BoardType::Duet3_6HC_v102;
+		return BoardType::Duet3_6HC_v150;					// it's a PIC32CA2051CA70
 	}
 	else
 	{
-		return (digitalRead(DIRECTION_PINS[3])) ? BoardType::Duet3_6HC_v102b : BoardType::Duet3_6HC_v102c;
+		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 or v1.02 boards
+		// Driver 1 has a pulldown resistor on v0.1 and v1.0 boards, however we don't support v0.1 and we don't care about the difference between v0.6 and v1.0, so we don't need to read it
+		// Driver 2 has a pulldown resistor on v1.10, v1.02, 1.02a, 1.02b, 1.02c
+		// Driver 3 has a pulldown resistor on v1.02c
+		SetPinMode(DIRECTION_PINS[2], INPUT_PULLUP, false);
+		SetPinMode(DIRECTION_PINS[0], INPUT_PULLUP, false);
+		delayMicroseconds(20);									// give the pullup resistor time to work
+		if (digitalRead(DIRECTION_PINS[2]))
+		{
+			return (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
+		}
+		else if (digitalRead(DIRECTION_PINS[0]))
+		{
+			return BoardType::Duet3_6HC_v102;
+		}
+		else
+		{
+			return (digitalRead(DIRECTION_PINS[3])) ? BoardType::Duet3_6HC_v102b : BoardType::Duet3_6HC_v102c;
+		}
 	}
-# endif
 }
 
 #endif
@@ -3674,12 +3677,6 @@ void Platform::SetBoardType() noexcept
 					: BoardType::Duet3Mini_Ethernet;
 #elif defined(DUET3_MB6HC)
 	board = GetMB6HCBoardType();
-# if defined(__PIC32CZ2051CA70144__)
-	powerMonitorVoltageRange = PowerMonitorVoltageRange_v102;
-	DiagPin = DiagPin102;
-	ActLedPin = ActLedPin102;
-	DiagOnPolarity = DiagOnPolarity102;
-# else
 	if (board >= BoardType::Duet3_6HC_v102)
 	{
 		powerMonitorVoltageRange = PowerMonitorVoltageRange_v102;
@@ -3694,7 +3691,6 @@ void Platform::SetBoardType() noexcept
 		ActLedPin = ActLedPinPre102;
 		DiagOnPolarity = DiagOnPolarityPre102;
 	}
-# endif
 	driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);
 	driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);
 #elif defined(DUET3_MB6XD)
@@ -3753,15 +3749,12 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3Mini_Ethernet:		return "Duet 3 " BOARD_SHORT_NAME " Ethernet";
 	case BoardType::Duet3Mini_WiFi_ESP32:	return "Duet 3 " BOARD_SHORT_NAME " WiFi 1.04 or later";
 #elif defined(DUET3_MB6HC)
-# if defined(__PIC32CZ2051CA70144__)
-	case BoardType::Duet3_6HC_v200:			return "Duet 3 " BOARD_SHORT_NAME;
-# else
 	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v1.0 or earlier";
 	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
 	case BoardType::Duet3_6HC_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or 1.02a";
 	case BoardType::Duet3_6HC_v102b:		return "Duet 3 " BOARD_SHORT_NAME " v1.02b";
 	case BoardType::Duet3_6HC_v102c:		return "Duet 3 " BOARD_SHORT_NAME " v1.02c or later";
-# endif
+	case BoardType::Duet3_6HC_v150:			return "Duet 3 " BOARD_SHORT_NAME " v1.50 or later";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "Duet 3 " BOARD_SHORT_NAME " v0.1";
 	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0";
@@ -3801,23 +3794,16 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3Mini_WiFi_ESP32:	return "duet5lcwifi32";
 	case BoardType::Duet3Mini_Ethernet:		return "duet5lcethernet";
 #elif defined(DUET3_MB6HC)
-# if defined(__PIC32CZ2051CA70144__)
-	case BoardType::Duet3_6HC_v200:			return "duet3mb6hc200";
-# else
 	case BoardType::Duet3_6HC_v06_100:		return "duet3mb6hc100";
 	case BoardType::Duet3_6HC_v101:			return "duet3mb6hc101";
 	case BoardType::Duet3_6HC_v102:			return "duet3mb6hc102";
 	case BoardType::Duet3_6HC_v102b:		return "duet3mb6hc102b";
-# endif
+	case BoardType::Duet3_6HC_v150:			return "duet3mb6hc150";
 #elif defined(DUET3_MB6XD)
-# if defined(__PIC32CZ2051CA70144__)
-											return "duet3mb6xd200";
-# else
 	case BoardType::Duet3_6XD_v01:			return "duet3mb6xd001";
 	case BoardType::Duet3_6XD_v100:			return "duet3mb6xd100";
 	case BoardType::Duet3_6XD_v101:			return "duet3mb6xd101";
 	case BoardType::Duet3_6XD_v102:			return "duet3mb6xd102";
-# endif
 #elif defined(FMDC_V03)
 	case BoardType::FMDC:					return "fmdc";
 #elif defined(DUET_NG)

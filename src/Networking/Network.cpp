@@ -218,9 +218,7 @@ void Network::Init() noexcept
 // Create the additional interface. Called after we have established that we are not running in SBC mode but before config.g is run.
 void Network::CreateAdditionalInterface() noexcept
 {
-#if !defined(__PIC32CZ2051CA70144__)
 	if (platform.GetBoardType() >= BoardType::Duet3_6HC_v102)
-#endif
 	{
 		interfaces[1] = new WiFiInterface(platform);
 		numActualNetworkInterfaces = 2;
