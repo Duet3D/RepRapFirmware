@@ -406,7 +406,11 @@ bool GCodes::RunConfigFile(const char *_ecv_array fileName, bool isMainConfigFil
 // Return true if the trigger G-code buffer is busy running config.g or a trigger file
 bool GCodes::IsTriggerBusy() const noexcept
 {
-	return TriggerGCode()->IsDoingFile();
+	return TriggerGCode()->IsDoingFile()
+#if HAS_SBC_INTERFACE
+			|| TriggerGCode()->IsAbortRequested()		// DSF keeps the aborted file on its stack until the abort has been sent
+#endif
+		;
 }
 
 // Copy the feed rate etc. from the channel that was running config.g to the input channels
