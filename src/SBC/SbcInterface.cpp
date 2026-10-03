@@ -1129,13 +1129,17 @@ void SbcInterface::ExchangeData() noexcept
 		// Result of a file read request
 		case SbcRequest::FileReadResult:
 		{
-			int bytesRead = transfer.ReadFileData(fileReadBuffer, fileBufferLength);
 			if (fileOperation == FileOperation::read)
 			{
+				int bytesRead = transfer.ReadFileData(fileReadBuffer, fileBufferLength);
 				fileSuccess = bytesRead >= 0;
 				fileOffset = fileSuccess ? bytesRead : 0;
 				fileOperation = FileOperation::none;
 				fileSemaphore.Give();
+			}
+			else
+			{
+				(void)transfer.ReadData(packet->length);		// late reply to a request that timed out, its buffer may have been released
 			}
 			break;
 		}
@@ -1143,15 +1147,16 @@ void SbcInterface::ExchangeData() noexcept
 		// Result of a directory listing request
 		case SbcRequest::FileListResult:
 		{
-			bool endOfList;
-			const size_t bytesRead = transfer.ReadFileList(fileReadBuffer, fileBufferLength, endOfList);
 			if (fileOperation == FileOperation::getFileList)
 			{
+				fileBufferLength = transfer.ReadFileList(fileReadBuffer, fileBufferLength, fileListEndOfList);
 				fileSuccess = true;
-				fileBufferLength = bytesRead;
-				fileListEndOfList = endOfList;
 				fileOperation = FileOperation::none;
 				fileSemaphore.Give();
+			}
+			else
+			{
+				(void)transfer.ReadData(packet->length);		// late reply to a request that timed out, its buffer may have been released
 			}
 			break;
 		}
