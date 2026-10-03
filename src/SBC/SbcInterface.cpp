@@ -2251,6 +2251,7 @@ bool SbcInterface::DoFileOperation(FileOperation f) noexcept
 	{
 		fileOperation = FileOperation::none;
 		fileOperationPending.store(false, std::memory_order_release);
+		return fileSemaphore.Take(0);		// a reply that came in before fileOperation was cleared still answers this request
 	}
 	return rslt;
 }
