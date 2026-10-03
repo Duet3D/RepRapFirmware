@@ -1249,6 +1249,7 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 	}
 
 	// Request the macro file from the SBC
+	MutexLocker lock(mutex);								// the SBC task reads the request while holding this mutex
 	macroJustStarted = macroFileError = macroFileEmpty = false;
 	machineState->macroStartedByCode = fromCode;
 	requestedMacroFile.copy(filename);
@@ -1259,6 +1260,7 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 	{
 		// Wait for a response (but not forever)
 		isWaitingForMacro = true;
+		lock.Release();										// don't keep a lock of our own while waiting for the SBC
 		reprap.GetSbcInterface().EventOccurred(true);
 		if (!macroSemaphore.Take(SbcMaxRequestTime))
 		{
