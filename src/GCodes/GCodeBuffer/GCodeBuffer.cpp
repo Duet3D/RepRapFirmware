@@ -1204,8 +1204,11 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 		if (!macroSemaphore.Take(SpiMaxRequestTime))
 		{
 			isWaitingForMacro = false;
-			reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while waiting for macro file %s (channel %s)\n", filename, GetChannel().ToString());
-			return false;
+			if (!macroSemaphore.Take(0))		// a reply that came in before the flag was cleared still answers this request
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while waiting for macro file %s (channel %s)\n", filename, GetChannel().ToString());
+				return false;
+			}
 		}
 	}
 
