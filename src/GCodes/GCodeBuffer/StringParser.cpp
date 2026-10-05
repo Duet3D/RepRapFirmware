@@ -2060,23 +2060,43 @@ DriverId StringParser::ReadDriverIdValue() THROWS(GCodeException)
 		// Allow a floating point expression to be converted to a driver ID
 		// We assume that a driver ID only ever has a single fractional digit. This means that e.g. 3.10 will be treated the same as 3.1.
 		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
-		const float val = 10.0 * parser.ParseFloat();
+		ExpressionValue ev = parser.Parse(true);
 		readPointer = parser.GetEndptr() - gb.buffer;
-		const int32_t ival = lrintf(val);
+		switch (ev.GetType())
+		{
+		case TypeCode::DriverId_tc:
+			result = ev.GetDriverIdValue();
+			break;
+
+		case TypeCode::Uint32:
+			result.localDriver = ev.uVal;
 #if SUPPORT_CAN_EXPANSION
-		if (ival >= 0 && fabsf(val - (float)ival) <= 0.002)
-		{
-			result.boardAddress = ival/10;
-			result.localDriver = ival % 10;
-		}
-#else
-		if (ival >= 0 && ival < 10 && fabsf(val - (float)ival) <= 0.002)
-		{
-			result.localDriver = ival % 10;
-		}
+			result.boardAddress = 0;
 #endif
-		else
-		{
+			break;
+
+		case TypeCode::Float:
+			{
+				const float val = 10.0 * ev.fVal;
+				const int32_t ival = lrintf(val);
+#if SUPPORT_CAN_EXPANSION
+				if (ival >= 0 && fabsf(val - (float)ival) <= 0.002)
+				{
+					result.boardAddress = ival/10;
+					result.localDriver = ival % 10;
+					break;
+				}
+#else
+				if (ival >= 0 && ival < 10 && fabsf(val - (float)ival) <= 0.002)
+				{
+					result.localDriver = ival % 10;
+					break;
+				}
+#endif
+			}
+			[[fallthrough]];
+
+		default:
 			throw ConstructParseException("Invalid driver ID expression");
 		}
 	}
