@@ -83,10 +83,8 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		{
 			return GCodeResult::notFinished;
 		}
+		seen = true;
 	}
-
-	gb.TryGetLimitedFValue('F', frequency, seen, MinimumInputShapingFrequency, MaximumInputShapingFrequency);
-	gb.TryGetLimitedFValue('S', zeta, seen, 0.0, 0.99);
 
 	if (gb.Seen('P'))
 	{
@@ -98,13 +96,18 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			reply.printf("Unknown input shaper type '%s'", shaperName.c_str());
 			return GCodeResult::error;
 		}
-		seen = true;
 		type = newType;
 	}
 	else if (seen && type == InputShaperType::none)
 	{
 		type = InputShaperType::zvd;
 	}
+
+	gb.TryGetLimitedFValue('F', frequency, seen, MinimumInputShapingFrequency, MaximumInputShapingFrequency);
+	const float maxZeta = (type == InputShaperType::ei2) ? 0.3
+							: (type == InputShaperType::ei3) ? 0.2
+								: 0.9;
+	gb.TryGetLimitedFValue('S', zeta, seen, 0.0, maxZeta);
 
 	if (seen)
 	{
@@ -127,30 +130,37 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				// Get the coefficients
 				size_t numAmplitudes = MaxImpulses - 1;
 				gb.MustSee('H');
-#if USE_DOUBLE_MOTIONCALC
 				float fCoefficients[MaxImpulses - 1];
 				gb.GetFloatArray(fCoefficients, numAmplitudes, false);
-				for (unsigned int i = 0; i < numAmplitudes; ++i)
-				{
-					coefficients[i] = (motioncalc_t)fCoefficients[i];
-				}
-#else
-				gb.GetFloatArray(coefficients, numAmplitudes, false);
-#endif
+
 				// Get the impulse delays, if provided
 				if (gb.Seen('T'))
 				{
 					float rawDelays[MaxImpulses - 1];
 					size_t numDelays = MaxImpulses - 1;
-					gb.GetFloatArray(rawDelays, numDelays, true);
+					gb.GetFloatArray(rawDelays, numDelays, true);						//TODO delays must be positive and in increasing order
 
 					// Check we have the same number of both
 					if (numDelays != numAmplitudes)
 					{
 						reply.copy("Number of delays must be same as number of amplitudes");
 						type = InputShaperType::none;
+						numImpulses = 1;
 						return GCodeResult::error;
 					}
+
+					// Check that the delays are all positive, distinct and in ascending order
+					for (unsigned int i = 0; i < numAmplitudes; ++i)
+					{
+						if (delays[i] <= 0 || (i != 0 && delays[i] <= delays[i - 1]))
+						{
+							reply.copy("Delays must be positive and in strictly increasing order");
+							type = InputShaperType::none;
+							numImpulses = 1;
+							return GCodeResult::error;
+						}
+					}
+
 					for (unsigned int i = 0; i < numAmplitudes; ++i)
 					{
 						delays[i + 1] = lrintf(rawDelays[i] * StepClockRate);			// convert from seconds to step clocks
@@ -162,6 +172,10 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 					{
 						delays[i] = (dampedPeriod * i)/2;
 					}
+				}
+				for (unsigned int i = 0; i < numAmplitudes; ++i)
+				{
+					coefficients[i] = (motioncalc_t)fCoefficients[i];
 				}
 				numImpulses = numAmplitudes + 1;
 			}
@@ -176,7 +190,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				const float a2 = (sqrtf(2.0) - 1.0) * kMzv;
 				const float a3 = a1 * fsquare(kMzv);
 			    const float sum = (a1 + a2 + a3);
-			    coefficients[0] = a3/sum;
+			    coefficients[0] = a1/sum;
 			    coefficients[1] = a2/sum;
 			}
 			delays[1] = (3 * dampedPeriod)/8;
@@ -245,7 +259,6 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[1] = (0.23698)	+ ( 0.61164)	* zeta + (-2.57850)	* zetaSquared + ( 4.85220)	* zetaCubed;
 				coefficients[2] = (0.30008)	+ (-0.19062)	* zeta + (-2.14560)	* zetaSquared + ( 0.13744)	* zetaCubed;
 				coefficients[3] = (0.23775)	+ (-0.73297)	* zeta + ( 0.46885) * zetaSquared + (-2.08650)	* zetaCubed;
-
 				delays[1] = lrintf((0.49974 + (0.23834)  * zeta + (0.44559)  * zetaSquared + (12.4720) * zetaCubed) * (float)dampedPeriod);
 				delays[2] = lrintf((0.99849 + (0.29808)  * zeta + (-2.36460) * zetaSquared + (23.3990) * zetaCubed) * (float)dampedPeriod);
 				delays[3] = lrintf((1.49870 + (0.10306)  * zeta + (-2.01390) * zetaSquared + (17.0320) * zetaCubed) * (float)dampedPeriod);
@@ -262,7 +275,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		for (size_t i = 0; i + 1 < numImpulses; ++i)
 		{
 			sum += coefficients[i];
-			const uint32_t thisInterval = delays[i + 1] - delays[1];
+			const uint32_t thisInterval = delays[i + 1] - delays[i];
 			if (thisInterval > longestSegment)
 			{
 				longestSegment = thisInterval;
