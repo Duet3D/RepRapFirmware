@@ -3798,6 +3798,7 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3_6HC_v101:			return "duet3mb6hc101";
 	case BoardType::Duet3_6HC_v102:			return "duet3mb6hc102";
 	case BoardType::Duet3_6HC_v102b:		return "duet3mb6hc102b";
+	case BoardType::Duet3_6HC_v102c:		return "duet3mb6hc102c";
 	case BoardType::Duet3_6HC_v150:			return "duet3mb6hc150";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "duet3mb6xd001";

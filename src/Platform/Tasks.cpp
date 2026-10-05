@@ -367,7 +367,7 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 #endif
 		const struct mallinfo mi = mallinfo();
 		reply.lcatf("RAM: static %d, dynamic %d (%d recycled), never used %d, free sys stack %d",
-					(const char *_ecv_array)&_end - ramstart, mi.uordblks, mi.fordblks, GetNeverUsedRam(), GetHandlerFreeStack()/4);
+					(const char *_ecv_array)&_end - ramstart, mi.uordblks, mi.fordblks, GetNeverUsedRam(), GetHandlerFreeStack());
 	}	// end memory stats scope
 
 	const uint64_t timeSinceLastCall = TaskResetRunTimeCounter();
