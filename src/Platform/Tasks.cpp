@@ -296,7 +296,7 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 	}
 }
 
-// Return the amount of free handler stack space. It may be negative if the stack has overflowed into the area reserved for the heap.
+// Return the amount of free handler stack space in words. It may be negative if the stack has overflowed into the area reserved for the heap.
 static ptrdiff_t GetHandlerFreeStack() noexcept
 {
 	const char *_ecv_array const ramend = sysStackTop;
@@ -305,7 +305,7 @@ static ptrdiff_t GetHandlerFreeStack() noexcept
 	{
 		++stack_lwm;
 	}
-	return (stack_lwm - sysStackLimit) >> 4;
+	return (stack_lwm - sysStackLimit) >> 2;
 }
 
 ptrdiff_t Tasks::GetNeverUsedRam() noexcept
