@@ -103,7 +103,7 @@ void SoftwareResetData::Populate(uint16_t reason, const uint32_t *_ecv_array _ec
 				stk += 18;				// skip the FP registers
 			}
 #endif
-			stack[i] = (stk < &_estack) ? *stk++ : 0xFFFFFFFFu;
+			stack[i] = (stk < (const uint32_t*)sysStackTop) ? *stk++ : 0xFFFFFFFFu;
 		}
 	}
 }

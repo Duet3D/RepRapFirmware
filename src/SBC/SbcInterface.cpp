@@ -76,7 +76,6 @@ void SbcInterface::Init() noexcept
 	transfer.Init();
 	sbcTask = new Task<SBCTaskStackWords>();
 	sbcTask->Create(SBCTaskStart, "SBC", nullptr, TaskPriority::SbcPriority);
-	iapRamAvailable = heapLimit - Tasks::GetHeapTop();
 }
 
 #if SUPPORTS_SBC_OVER_USB
@@ -1711,7 +1710,7 @@ void SbcInterface::Diagnostics(const StringRef& reply) noexcept
 	{
 		reply.lcat("Not connected");
 	}
-	reply.lcatf("State: %d, disconnects: %" PRIu32 ", timeouts: %" PRIu32 " total, %" PRIu32 " by SBC, IAP RAM available 0x%05" PRIx32, (int)state, numDisconnects, numTimeouts, numSbcTimeouts, iapRamAvailable);
+	reply.lcatf("State: %d, disconnects: %" PRIu32 ", timeouts: %" PRIu32 " total, %" PRIu32 " by SBC", (int)state, numDisconnects, numTimeouts, numSbcTimeouts);
 	reply.lcatf("Buffer RX/TX: %d/%d-%d, open files: %u", (int)rxPointer, (int)txPointer, (int)txEnd, numOpenFiles);
 #ifdef TRACK_FILE_CODES
 	reply.lcatf("File codes read/handled: %d/%d, file macros open/closing: %d %d", (int)fileCodesRead, (int)fileCodesHandled, (int)fileMacrosRunning, (int)fileMacrosClosing);
