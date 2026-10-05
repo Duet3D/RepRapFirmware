@@ -459,7 +459,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 									if (*(argStart - 1) != '#')
 									{
 										char c2 = *argStart;
-										if (!isAlpha(c2) && c2 != ' ' && c2 != '\t' && c2 != ':' && c2 != '=' && c2 != ',')
+										if (c2 != ' ' && c2 != '\t' && c2 != ':' && c2 != '=' && c2 != ',')
 										{
 											break;
 										}
@@ -468,7 +468,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 										do
 										{
 											++argStart;
-										} while (isAlpha(c2 = *argStart) || c2 == ' ' || c2 == '\t' || c2 == ':' || c2 == '=');
+										} while ((c2 = *argStart) == ' ' || c2 == '\t' || c2 == ':' || c2 == '=');
 									}
 									(this->*pte.func)(kStart, argStart, lineEnd, pte.param);
 									break;
