@@ -95,18 +95,19 @@ bool LISAccelerometer::Configure(uint16_t& samplingRate, uint8_t& resolution) no
 			}
 
 			// Set up the control registers, except set ctrlReg1 to 0 to select power down mode
-			DataBuffer()[0] = 0;											// ctrlReg4: for now select power down mode
-			DataBuffer()[1] = 0;											// ctrlReg1: SM1 disabled
-			DataBuffer()[2] = 0;											// ctrlReg2: SM2 disabled
-			DataBuffer()[3] = (1u << 3) | (1u << 6) | (1u << 5);			// ctrlReg3: interrupt 1 active high, enabled
-			DataBuffer()[4] = 0;											// ctrlReg5: anti-aliasing filter 800Hz, 4-wire SPI interface, full scale +/- 2g
-			DataBuffer()[5] = (1u << 2) | (1u << 4) | (1u << 6);			// ctrlReg6: enable fifo, watermark and watermark interrupt on INT1, address auto increment. Do not set WTM_EN.
+			transferBuffer.data[0] = 0;										// ctrlReg4: for now select power down mode
+			transferBuffer.data[1] = 0;										// ctrlReg1: SM1 disabled
+			transferBuffer.data[2] = 0;										// ctrlReg2: SM2 disabled
+			transferBuffer.data[3] = (1u << 3) | (1u << 6) | (1u << 5);		// ctrlReg3: interrupt 1 active high, enabled
+			transferBuffer.data[4] = 0;										// ctrlReg5: anti-aliasing filter 800Hz, 4-wire SPI interface, full scale +/- 2g
+			transferBuffer.data[5] = (1u << 2) | (1u << 4) | (1u << 6);		// ctrlReg6: enable fifo, watermark and watermark interrupt on INT1, address auto increment. Do not set WTM_EN.
 			ok = WriteRegisters(LisRegister::Ctrl_0x20, 6);
 		}
 		if (ok)
 		{
 			// Set the fifo mode
-			ok = WriteRegister(LisRegister::FifoControl, (2u << 5) | (FifoInterruptLevel - 1));		// FIFO stream mode
+			fifoCtrlReg = (2u << 5) | (FifoInterruptLevel - 1);				// FIFO stream mode
+			ok = ResetFifo();
 		}
 		break;
 
@@ -159,19 +160,20 @@ bool LISAccelerometer::Configure(uint16_t& samplingRate, uint8_t& resolution) no
 			ctrlReg_0x20 |= (odr << 4);
 
 			// Set up the control registers, except set ctrlReg1 to 0 to select power down mode
-			DataBuffer()[0] = 0;											// ctrlReg1: for now select power down mode
-			DataBuffer()[1] = 0;											// ctrlReg2: high pass filter not used
-			DataBuffer()[2] = (1u << 2);									// ctrlReg3: enable fifo watermark interrupt
-			DataBuffer()[3] = ctrlReg_0x23;
-			DataBuffer()[4] = (1u << 6);									// ctrlReg5: enable fifo
-			DataBuffer()[5] = 0;											// ctrlReg6: INT2 disabled, active high interrupts
+			transferBuffer.data[0] = 0;										// ctrlReg1: for now select power down mode
+			transferBuffer.data[1] = 0;										// ctrlReg2: high pass filter not used
+			transferBuffer.data[2] = (1u << 2);								// ctrlReg3: enable fifo watermark interrupt
+			transferBuffer.data[3] = ctrlReg_0x23;
+			transferBuffer.data[4] = (1u << 6);								// ctrlReg5: enable fifo
+			transferBuffer.data[5] = 0;										// ctrlReg6: INT2 disabled, active high interrupts
 		}
 
 		ok = WriteRegisters(LisRegister::Ctrl_0x20, 6);
 		if (ok)
 		{
 			// Set the fifo mode
-			ok = WriteRegister(LisRegister::FifoControl, (2u << 6) | (FifoInterruptLevel - 1));		// FIFO stream mode
+			fifoCtrlReg = (2u << 6) | (FifoInterruptLevel - 1);				// FIFO stream mode
+			ok = ResetFifo();
 		}
 		break;
 
@@ -199,61 +201,49 @@ bool LISAccelerometer::Configure(uint16_t& samplingRate, uint8_t& resolution) no
 			}
 
 			// Set up the control registers, except set ctrlReg1 to 0 to select power down mode
-			DataBuffer()[0] = 0;											// ctrlReg1: for now select power down mode
-			DataBuffer()[1] = (1u << 7) | (1u << 2);						// ctrlReg2: BOOT, address auto increment
-			DataBuffer()[2] = 0;											// ctrlReg3: push-pull interrupt output, interrupt active high
-			DataBuffer()[3] = (1u << 1);									// ctrlReg4: INT1 fifo threshold interrupt enabled
-			DataBuffer()[4] = 0;											// ctrlReg5: INT2 disabled
-			DataBuffer()[5] = (1u << 2);									// ctrlReg6: max bandwidth, low pass filter path, +/-2g full scale, low noise mode
+			transferBuffer.data[0] = 0;										// ctrlReg1: for now select power down mode
+			transferBuffer.data[1] = (1u << 7) | (1u << 2);					// ctrlReg2: BOOT, address auto increment
+			transferBuffer.data[2] = 0;										// ctrlReg3: push-pull interrupt output, interrupt active high
+			transferBuffer.data[3] = (1u << 1);								// ctrlReg4: INT1 fifo threshold interrupt enabled
+			transferBuffer.data[4] = 0;										// ctrlReg5: INT2 disabled
+			transferBuffer.data[5] = (1u << 2);								// ctrlReg6: max bandwidth, low pass filter path, +/-2g full scale, low noise mode
 			ok = WriteRegisters(LisRegister::Ctrl_0x20, 6);
 		}
 		if (ok)
 		{
 			// Set the fifo mode
-			ok = WriteRegister(LisRegister::FifoControl, (6u << 5) | (FifoInterruptLevel - 1));		// FIFO continuous mode
+			fifoCtrlReg = (6u << 5) | (FifoInterruptLevel - 1);				// FIFO continuous mode
+			ok = ResetFifo();
 		}
 		break;
 	}
 	return ok;
 }
 
-void Int1Interrupt(CallbackParameter p) noexcept;						// forward declaration
+// Discard the FIFO contents by switching it to bypass mode and back, which is how the datasheets say to reset it.
+// Draining it by reading instead runs for as long as the chip keeps reporting data, which is unbounded if its FIFO logic is upset
+bool LISAccelerometer::ResetFifo() noexcept
+{
+	return WriteRegister(LisRegister::FifoControl, 0) && WriteRegister(LisRegister::FifoControl, fifoCtrlReg);
+}
+
+void Int1Interrupt(CallbackParameter p) noexcept;							// forward declaration
 
 // Start collecting data, returning true if successful
 bool LISAccelerometer:: StartCollecting(uint8_t axes) noexcept
 {
 	uint8_t ctrlRegValue = ctrlReg_0x20;
 
-	// Clear the fifo
-	switch (accelerometerType.RawValue())
+	// Clear the FIFO with bypass mode, then restore the FIFO mode. Don't read it out: on the LIS3DH in power-down,
+	// reads sometimes don't remove samples, and a read loop then never ends (HeatTaskStuck reset).
+	if (!WriteRegister(LisRegister::FifoControl, 0) || !WriteRegister(LisRegister::FifoControl, fifoCtrlReg))
 	{
-	case AccelerometerType::LIS3DH:
-	case AccelerometerType::LIS3DSH:
-		{
-			uint8_t val;
-			while (ReadRegister(LisRegister::FifoSource, val) && (val & (1u << 5)) == 0)	// while fifo not empty
-			{
-				if (!ReadRegisters(LisRegister::OutXL, 6))
-				{
-					return false;
-				}
-			}
-		}
-		ctrlRegValue |= (axes & 7);
-		break;
+		return false;
+	}
 
-	case AccelerometerType::LIS2DW:
-		{
-			uint8_t val;
-			while (ReadRegister(LisRegister::FifoSource, val) && (val & 0x3F) != 0)			// while fifo not empty
-			{
-				if (!ReadRegisters(LisRegister::OutXL, 6))
-				{
-					return false;
-				}
-			}
-		}
-		break;
+	if (accelerometerType == AccelerometerType::LIS3DH || accelerometerType == AccelerometerType::LIS3DSH)
+	{
+		ctrlRegValue |= (axes & 7);
 	}
 
 	totalNumRead = 0;
@@ -331,7 +321,7 @@ unsigned int LISAccelerometer::CollectData(const uint16_t *_ecv_array *collected
 			return 0;
 		}
 
-		*collectedData = reinterpret_cast<const uint16_t* _ecv_array>(DataBuffer());
+		*collectedData = reinterpret_cast<const uint16_t* _ecv_array>(transferBuffer.data);
 		overflowedOrSpuriousInterrupts = (fifoStatus & 0x40) != 0;
 		const uint32_t interval = lastInterruptTime - firstInterruptTime;
 		dataRate = (totalNumRead == 0 || interval == 0)
@@ -361,8 +351,8 @@ bool LISAccelerometer::ReadRegisters(LisRegister reg, size_t numToRead) noexcept
 	// On the LIS3DH, bit 6 must be set to 1 to auto-increment the address when doing reading multiple registers
 	// On the LIS3DSH and LIS2DW, bit 6 is an extra register address bit, so we must not set it.
 	// So that we can read the WHO_AM_I register of both chips before we know which chip we have, only set bit 6 if we have a LIS3DH and we are reading multiple registers.
-	transferBuffer[1] = (uint8_t)reg | ((numToRead < 2 || accelerometerType != AccelerometerType::LIS3DH) ? 0x80u : 0xC0u);
-	const bool ret = TransceivePacket(transferBuffer + 1, transferBuffer + 1, 1 + numToRead);
+	transferBuffer.reg = (uint8_t)reg | ((numToRead < 2 || accelerometerType != AccelerometerType::LIS3DH) ? 0x80u : 0xC0u);
+	const bool ret = TransceivePacket(&transferBuffer.reg, &transferBuffer.reg, 1 + numToRead);
 	Deselect();
 	return ret;
 }
@@ -378,8 +368,8 @@ bool LISAccelerometer::WriteRegisters(LisRegister reg, size_t numToWrite) noexce
 	{
 		return false;
 	}
-	transferBuffer[1] = (numToWrite < 2 || accelerometerType != AccelerometerType::LIS3DH) ? (uint8_t)reg : (uint8_t)reg | 0x40u;		// set auto increment bit if LIS3DH
-	const bool ret = TransceivePacket(transferBuffer + 1, transferBuffer + 1, 1 + numToWrite);
+	transferBuffer.reg = (numToWrite < 2 || accelerometerType != AccelerometerType::LIS3DH) ? (uint8_t)reg : (uint8_t)reg | 0x40u;		// set auto increment bit if LIS3DH
+	const bool ret = TransceivePacket(&transferBuffer.reg, &transferBuffer.reg, 1 + numToWrite);
 	Deselect();
 	return ret;
 }
@@ -389,14 +379,14 @@ bool LISAccelerometer::ReadRegister(LisRegister reg, uint8_t& val) noexcept
 	const bool ret = ReadRegisters(reg, 1);
 	if (ret)
 	{
-		val = DataBuffer()[0];
+		val = transferBuffer.data[0];
 	}
 	return ret;
 }
 
 bool LISAccelerometer::WriteRegister(LisRegister reg, uint8_t val) noexcept
 {
-	DataBuffer()[0] = val;
+	transferBuffer.data[0] = val;
 	return WriteRegisters(reg, 1);
 }
 

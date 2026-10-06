@@ -63,6 +63,7 @@ private:
 	bool WriteRegisters(LisRegister reg, size_t numToWrite) noexcept;
 	bool ReadRegister(LisRegister reg, uint8_t& val) noexcept;
 	bool WriteRegister(LisRegister reg, uint8_t val) noexcept;
+	bool ResetFifo() noexcept;
 
 	volatile TaskHandle _ecv_null taskWaiting;
 	uint32_t firstInterruptTime;
@@ -74,9 +75,15 @@ private:
 	bool interruptError;
 	uint8_t currentAxis;
 	uint8_t ctrlReg_0x20;
+	uint8_t fifoCtrlReg;										// FIFO_CTRL value written by Configure	Pin int1Pin;
 	Pin int1Pin;
-	alignas(2) uint8_t transferBuffer[2 + (6 * 32)];			// 1 dummy byte for alignment, one register address byte, 192 data bytes to read entire FIFO
-	uint8_t *_ecv_array DataBuffer() noexcept { return transferBuffer + 2; }
+
+	alignas(2) struct
+	{
+		uint8_t dummy;
+		uint8_t reg;
+		uint8_t data[6 * 32];
+	} transferBuffer;
 };
 
 #endif
