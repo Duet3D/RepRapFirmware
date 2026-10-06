@@ -21,6 +21,12 @@
 # include <CanMessageGenericTables.h>
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+# define BOARD0_PREFIX	"0."
+#else
+# define BOARD0_PREFIX
+#endif
+
 void Move::SetAcceleration(size_t drive, float value, bool reduced) noexcept
 {
 	const float val = max<float>(value, ConvertAcceleration(MinimumAcceleration));						// don't allow zero or negative acceleration
@@ -446,7 +452,7 @@ GCodeResult Move::ConfigureNonlinearExtrusion(GCodeBuffer& gb, const StringRef& 
 	else
 	{
 		const NonlinearExtrusion& nl = GetExtrusionCoefficients(extruder);
-		reply.printf("Drive %u nonlinear extrusion coefficients: A=%.3g, B=%.3g, limit=%.2f", extruder, (double)nl.A, (double)nl.B, (double)nl.limit);
+		reply.printf("Extruder %u nonlinear extrusion coefficients: A=%.3g, B=%.3g, limit=%.2f", extruder, (double)nl.A, (double)nl.B, (double)nl.limit);
 	}
 	return GCodeResult::ok;
 }
@@ -721,7 +727,7 @@ GCodeResult Move::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& rep
 
 	if (!seen)
 	{
-		reply.printf("Driver %u uses brake port ", driver);
+		reply.printf("Driver " BOARD0_PREFIX "%u uses brake port ", driver);
 		brakePorts[driver].AppendPinName(reply);
 # if SUPPORT_BRAKE_PWM
 		if (brakeVoltages[driver] < FullyOnBrakeVoltage)
@@ -827,7 +833,7 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 								const float actualCurrent = min<float>(motorCurrents[axisOrExtruder], SmartDrivers::GetMaxMotorCurrent(driver));
 								if (actualCurrent < motorCurrents[axisOrExtruder])
 								{
-									reply.lcatf("Driver %u current limited to %umA", driver, (unsigned int)actualCurrent);
+									reply.lcatf("Driver " BOARD0_PREFIX "%u current limited to %umA", driver, (unsigned int)actualCurrent);
 									rslt = GCodeResult::error;
 								}
 # else
@@ -996,7 +1002,7 @@ bool Move::SetDriversMicrostepping(size_t axisOrExtruder, unsigned int microstep
 					{
 						if (!SetDriverMicrostepping(driver, microsteps, interp))
 						{
-							reply.lcatf("Driver %u does not support x%u microstepping", driver, microsteps);
+							reply.lcatf("Driver " BOARD0_PREFIX "%u does not support x%u microstepping", driver, microsteps);
 							if (interp)
 							{
 								reply.cat(" with interpolation");
@@ -1105,7 +1111,7 @@ GCodeResult Move::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, 
 			}
 			if (!gb.Seen('R'))
 			{
-				reply.printf("Driver %u waveform correction:", drive);
+				reply.printf("Driver " BOARD0_PREFIX "%u waveform correction:", drive);
 				SmartDrivers::AppendLutCorrections(drive, reply);
 				return GCodeResult::ok;
 			}
@@ -1177,13 +1183,13 @@ GCodeResult Move::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const Str
 # if SUPPORT_PHASE_STEPPING
 			if (SmartDrivers::IsPhaseSteppingEnabled(drive))
 			{
-				reply.printf("Can not set driver %u mode while phase stepping is enabled", drive);
+				reply.printf("Can not set driver " BOARD0_PREFIX "%u mode while phase stepping is enabled", drive);
 				return GCodeResult::error;
 			}
 # endif
 			if (!SmartDrivers::SetDriverMode(drive, val))
 			{
-				reply.printf("Driver %u does not support mode '%s'", drive, TranslateDriverMode(val));
+				reply.printf("Driver " BOARD0_PREFIX "%u does not support mode '%s'", drive, TranslateDriverMode(val));
 				return GCodeResult::error;
 			}
 			reprap.BoardsUpdated();
@@ -1193,7 +1199,7 @@ GCodeResult Move::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const Str
 		{
 			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::chopperControl, val))
 			{
-				reply.printf("Bad ccr for driver %u", drive);
+				reply.printf("Bad ccr for driver " BOARD0_PREFIX "%u", drive);
 				return GCodeResult::error;
 			}
 		}
@@ -1202,7 +1208,7 @@ GCodeResult Move::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const Str
 		{
 			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::toff, val))
 			{
-				reply.printf("Bad off time for driver %u", drive);
+				reply.printf("Bad off time for driver " BOARD0_PREFIX "%u", drive);
 				return GCodeResult::error;
 			}
 		}
@@ -1211,7 +1217,7 @@ GCodeResult Move::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const Str
 		{
 			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tblank, val))
 			{
-				reply.printf("Bad blanking time for driver %u", drive);
+				reply.printf("Bad blanking time for driver " BOARD0_PREFIX "%u", drive);
 				return GCodeResult::error;
 			}
 		}
@@ -1220,7 +1226,7 @@ GCodeResult Move::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const Str
 		{
 			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tpwmthrs, val))
 			{
-				reply.printf("Bad mode change microstep interval for driver %u", drive);
+				reply.printf("Bad mode change microstep interval for driver " BOARD0_PREFIX "%u", drive);
 				return GCodeResult::error;
 			}
 		}
@@ -1230,7 +1236,7 @@ GCodeResult Move::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const Str
 		{
 			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::thigh, val))
 			{
-				reply.printf("Bad high speed microstep interval for driver %u", drive);
+				reply.printf("Bad high speed microstep interval for driver " BOARD0_PREFIX "%u", drive);
 				return GCodeResult::error;
 			}
 		}
@@ -1239,12 +1245,12 @@ GCodeResult Move::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const Str
 		{
 			if (!SmartDrivers::SetCurrentScaler(drive, ival))
 			{
-				reply.printf("Bad current scaler for driver %u", drive);
+				reply.printf("Bad current scaler for driver " BOARD0_PREFIX "%u", drive);
 				return GCodeResult::error;
 			}
 			if (ival >= 0 && ival < 16)
 			{
-				reply.printf("Current scaler = %ld for driver %u might result in poor microstep performance. Recommended minimum is 16.", ival, drive);
+				reply.printf("Current scaler = %ld for driver " BOARD0_PREFIX "%u might result in poor microstep performance. Recommended minimum is 16.", ival, drive);
 				warn = true;
 			}
 		}
@@ -1272,7 +1278,7 @@ GCodeResult Move::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const Str
 			}
 			if (!ok)
 			{
-				reply.printf("Bad hysteresis setting for driver %u", drive);
+				reply.printf("Bad hysteresis setting for driver " BOARD0_PREFIX "%u", drive);
 				return GCodeResult::error;
 			}
 		}
@@ -1314,7 +1320,8 @@ void Move::SetDirectionValue(size_t drive, bool dVal) noexcept
 void Move::ReportM569Parameters(size_t drive, const StringRef& reply) noexcept
 {
 	// Print the basic parameters common to all types of driver
-	reply.printf("Drive %u runs %s, active %s enable",
+	reply.printf("Driver %u.%u runs %s, active %s enable",
+					CanInterface::GetCanAddress(),
 					drive,
 					(GetDirectionValue(drive)) ? "forwards" : "in reverse",
 					(GetEnableValue(drive) > 0) ? "high" : "low");
@@ -1809,7 +1816,7 @@ GCodeResult Move::EutProcessM569(const CanMessageGeneric& msg, const StringRef& 
 			seen = true;
 			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::chopperControl, val))
 			{
-				reply.printf("Bad ccr for driver %u", drive);
+				reply.printf("Bad ccr for driver %u%u", CanInterface::GetCanAddress(), drive);
 				return GCodeResult::error;
 			}
 		}
@@ -1819,7 +1826,7 @@ GCodeResult Move::EutProcessM569(const CanMessageGeneric& msg, const StringRef& 
 			seen = true;
 			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::toff, val))
 			{
-				reply.printf("Bad off time for driver %u", drive);
+				reply.printf("Bad off time for driver %u.%u", CanInterface::GetCanAddress(), drive);
 				return GCodeResult::error;
 			}
 		}
@@ -1829,7 +1836,7 @@ GCodeResult Move::EutProcessM569(const CanMessageGeneric& msg, const StringRef& 
 			seen = true;
 			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tblank, val))
 			{
-				reply.printf("Bad blanking time for driver %u", drive);
+				reply.printf("Bad blanking time for driver %u.%u", CanInterface::GetCanAddress(), drive);
 				return GCodeResult::error;
 			}
 		}
@@ -1839,7 +1846,7 @@ GCodeResult Move::EutProcessM569(const CanMessageGeneric& msg, const StringRef& 
 			seen = true;
 			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tpwmthrs, val))
 			{
-				reply.printf("Bad mode change microstep interval for driver %u", drive);
+				reply.printf("Bad mode change microstep interval for driver %u.%u", CanInterface::GetCanAddress(), drive);
 				return GCodeResult::error;
 			}
 		}
@@ -1850,7 +1857,7 @@ GCodeResult Move::EutProcessM569(const CanMessageGeneric& msg, const StringRef& 
 			seen = true;
 			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::thigh, val))
 			{
-				reply.printf("Bad high speed microstep interval for driver %u", drive);
+				reply.printf("Bad high speed microstep interval for driver %u.%u", CanInterface::GetCanAddress(), drive);
 				return GCodeResult::error;
 			}
 		}
@@ -1860,12 +1867,12 @@ GCodeResult Move::EutProcessM569(const CanMessageGeneric& msg, const StringRef& 
 			seen = true;
 			if (!SmartDrivers::SetCurrentScaler(drive, ival))
 			{
-				reply.printf("Bad current scaler for driver %u", drive);
+				reply.printf("Bad current scaler for driver %u.%u", CanInterface::GetCanAddress(), drive);
 				return GCodeResult::error;
 			}
 			if (ival >= 0 && ival < 16)
 			{
-				reply.printf("Current scaler = %ld for driver %u might result in poor microstep performance. Recommended minimum is 16.", ival, drive);
+				reply.printf("Current scaler = %ld for driver %u.%u might result in poor microstep performance. Recommended minimum is 16.", ival, CanInterface::GetCanAddress(), drive);
 				warn = true;
 			}
 		}
@@ -1892,7 +1899,7 @@ GCodeResult Move::EutProcessM569(const CanMessageGeneric& msg, const StringRef& 
 			}
 			if (!ok)
 			{
-				reply.printf("Bad hysteresis setting for driver %u", drive);
+				reply.printf("Bad hysteresis setting for driver %u.%u", CanInterface::GetCanAddress(), drive);
 				return GCodeResult::error;
 			}
 		}
