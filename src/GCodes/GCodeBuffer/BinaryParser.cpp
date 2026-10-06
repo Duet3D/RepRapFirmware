@@ -351,9 +351,8 @@ DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 	case DataType::Expression:
 		{
 			ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
-			const float fval = parser.ParseFloat();
+			value = parser.ParseDriverId();
 			parser.CheckForExtraCharacters();
-			SetDriverIdFromFloat(value, fval);
 		}
 		break;
 
