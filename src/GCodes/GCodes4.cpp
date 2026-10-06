@@ -2012,6 +2012,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #if HAS_SBC_INTERFACE
 	if (reportPause)
 	{
+		// The SBC task keeps the file channels invalidated only while the pause is being reported, so it must see both at once
+		TaskCriticalSectionLocker lock;
 		FileGCode()->Invalidate();
 # if SUPPORT_ASYNC_MOVES
 		File2GCode()->Invalidate();
