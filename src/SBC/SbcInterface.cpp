@@ -1669,7 +1669,7 @@ void SbcInterface::InvalidateResources() noexcept
 		if (gb == nullptr)
 		{
 			// Skip GBs that are not available due to the build configuration
-			break;
+			continue;
 		}
 
 		if (gb->IsExecutingOnSbc())
