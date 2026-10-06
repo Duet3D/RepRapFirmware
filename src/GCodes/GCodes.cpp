@@ -1052,6 +1052,9 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 			}
 		}
 
+		// We may be spinning another channel, and the SBC task pops this channel's macros too (MacroCompleted), so keep it out while we change this channel
+		MutexLocker fileLock(fgb.mutex);
+
 		if (!movesSkipped && !waitingMoveSkipped)
 		{
 			// We were not able to skip any moves, and there is no move waiting
