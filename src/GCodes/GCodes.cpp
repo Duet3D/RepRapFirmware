@@ -5392,6 +5392,8 @@ bool GCodes::LockResource(const GCodeBuffer& gb, Resource r) noexcept
 	{
 		return true;
 	}
+
+	TaskCriticalSectionLocker lock;						// the SBC task locks resources too (LockMovementAndWaitForStandstill), so check and claim in one step
 	if (resourceOwners[r] == nullptr)
 	{
 		resourceOwners[r] = &gb;
