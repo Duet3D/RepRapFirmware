@@ -54,7 +54,7 @@ jobs:
           resolve LibMbedTls master
           resolve Qfplib-M0-full 3.7-dev
           resolve RRFLibraries 3.7-dev
-          resolve WiFiSocketServerRTOS tls_support
+          resolve WiFiSocketServerRTOS master
 
       - name: "Check out CANlib"
         uses: actions/checkout@v6
@@ -147,6 +147,34 @@ jobs:
             echo "No version supplied, leaving Version.h unchanged"
           fi
           echo "Deploying $(sed -n 's/^# define MAIN_VERSION\s\+"\(.\+\)"$/\1/p' ./RepRapFirmware/src/Version.h)"
+
+      # The commit of every source repository that goes into these binaries, as a CycloneDX software BOM.
+      # Checked-out submodules are listed as components of their parent, which today means the tinyusb fork
+      # linked into the firmware; recorded but uninitialised submodules contribute no code and are skipped
+      - name: "Generate software BOM"
+        run: |
+          mkdir -p bundles
+          version=$(sed -n 's/^# define MAIN_VERSION\s\+"\(.\+\)"$/\1/p' ./RepRapFirmware/src/Version.h)
+          for repo in CANlib CoreN2G Duet3Expansion FreeRTOS LibMbedTls LibTinyusb Qfplib-M0-full RepRapFirmware RRFLibraries WiFiSocketServerRTOS; do
+            jq -n --arg name "$repo" --arg ref "$(git -C "./$repo" rev-parse --abbrev-ref HEAD)" --arg sha "$(git -C "./$repo" rev-parse HEAD)" \
+              '{type: "library", name: $name, version: $sha, purl: ("pkg:github/Duet3D/" + $name + "@" + $sha), externalReferences: [{type: "vcs", url: ("https://github.com/Duet3D/" + $name)}], properties: [{name: "duet3d:ref", value: $ref}]}'
+            git -C "./$repo" submodule status --recursive | while read -r sha path _; do
+              case $sha in -*) continue;; esac
+              jq -n --arg parent "$repo" --arg path "${path#*/}" --arg sha "${sha#[+U]}" \
+                '{type: "library", name: ($parent + "/" + $path), version: $sha, properties: [{name: "duet3d:submoduleOf", value: $parent}]}'
+            done
+          done > bundles/components.jsonl
+          jq -n --arg version "$version" --arg toolchain "$ARM_TOOLCHAIN" --slurpfile components bundles/components.jsonl \
+            '{bomFormat: "CycloneDX", specVersion: "1.6", version: 1, metadata: {timestamp: (now | todateiso8601), component: {type: "firmware", name: "RepRapFirmware", version: $version}, tools: {components: [{type: "application", name: "arm-gnu-toolchain", version: ($toolchain | sub("^arm-gnu-toolchain-"; "") | sub("-x86_64-arm-none-eabi$"; ""))}]}}, components: $components}' \
+            > "bundles/Duet3Firmware-$version-sbom.json"
+          rm bundles/components.jsonl
+          jq . "bundles/Duet3Firmware-$version-sbom.json"
+
+      - name: "Attach software BOM"
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: ./bundles/Duet3Firmware-*-sbom.json
 
       - name: "Set up ARM GCC"
         run: |
