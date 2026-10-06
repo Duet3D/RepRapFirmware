@@ -24,25 +24,25 @@
 
 constexpr ObjectModelArrayTableEntry CoreKinematics::objectModelArrayTable[] =
 {
-	// 20. Forward matrix elements in a row
+	// 20. Forward matrix elements in a row (one per axis)
 	{
 		nullptr,					// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetTotalAxes()),
 		OBJECT_MODEL_ARRAY_VALUE(self->forwardMatrix(context.GetIndex(1), context.GetLastIndex()), 3)
 	},
-	// 21. Inverse matrix elements in a row
+	// 21. Inverse matrix elements in a row (one per motor)
 	{
 		nullptr,					// no lock needed
-		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetVisibleAxes()),
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetTotalAxes()),
 		OBJECT_MODEL_ARRAY_VALUE(self->inverseMatrix(context.GetIndex(1), context.GetLastIndex()), 3)
 	},
-	// 22. Forward matrix rows
+	// 22. Forward matrix rows (one per motor)
 	{
 		nullptr,					// no lock needed
-		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetVisibleAxes()),
+		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetTotalAxes()),
 		OBJECT_MODEL_ARRAY_VALUE(self, 20 | (context.GetLastIndex() << 8), true)
 	},
-	// 23. Inverse matrix rows
+	// 23. Inverse matrix rows (one per axis)
 	{
 		nullptr,					// no lock needed
 		OBJECT_MODEL_ARRAY_COUNT_NOSELF(reprap.GetGCodes().GetTotalAxes()),
