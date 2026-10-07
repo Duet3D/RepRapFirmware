@@ -2822,14 +2822,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						const float extrusionFactor = gb.GetPositiveFValue() * 0.01;
 						if (extrusionFactor >= 0.01)
 						{
-							const bool isFileChannel = gb.IsFileChannel();
+							const bool immediate = !gb.IsFileChannel();			// a change from a file must not alter moves queued before it
 							if (seenD)
 							{
-								ChangeExtrusionFactor(extruder, extrusionFactor, isFileChannel);
+								ChangeExtrusionFactor(extruder, extrusionFactor, immediate);
 							}
 							else
 							{
-								ct->IterateExtruders([this, extrusionFactor, isFileChannel](unsigned int extr) { ChangeExtrusionFactor(extr, extrusionFactor, isFileChannel); });
+								ct->IterateExtruders([this, extrusionFactor, immediate](unsigned int extr) { ChangeExtrusionFactor(extr, extrusionFactor, immediate); });
 							}
 						}
 					}
@@ -4990,6 +4990,8 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		return true;
 	}
 
+	// The other results that are converted to errors or warnings below print the command themselves
+	const bool addCommandPrefix = rslt == GCodeResult::error || rslt == GCodeResult::warning || rslt == GCodeResult::noCanBuffer || rslt == GCodeResult::canResponseTimeout;
 	switch (rslt)
 	{
 	case GCodeResult::notFinished:
@@ -5070,7 +5072,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		break;
 	}
 
-	if ((rslt == GCodeResult::error || rslt == GCodeResult::warning) && !gb.IsDoingLocalFile())
+	if (addCommandPrefix && !gb.IsDoingLocalFile())
 	{
 		String<StringLength100> scratchString;
 		gb.PrintCommand(scratchString.GetRef());

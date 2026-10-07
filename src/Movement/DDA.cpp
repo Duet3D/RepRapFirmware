@@ -1161,6 +1161,9 @@ void DDA::Prepare(DDARing& ring,
 #endif
 	{
 		params.SetFromDDA(*this);
+#if SUPPORT_3RD_ORDER
+		afterPrepare.peakAcceleration = afterPrepare.peakDeceleration = maxAcceleration;
+#endif
 	}
 	params.useInputShaping = UsesInputShaping();
 

@@ -10,14 +10,14 @@
 
 enum class DriverMode : unsigned int
 {
+	// The values are reported in the object model, so they must not depend on build options
 	constantOffTime = 0,
-	randomOffTime,
-	spreadCycle,
-	stealthChop,			// includes stealthChop2
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-	direct,					// field-oriented control
-#endif
-	unknown					// must be last!
+	randomOffTime = 1,
+	spreadCycle = 2,
+	stealthChop = 3,		// includes stealthChop2
+	direct = 4,				// field-oriented control
+	assistedOpen = 5,		// direct mode with assisted open loop control, closed loop expansion boards only
+	unknown = 6				// must be last!
 };
 
 const char *_ecv_array TranslateDriverMode(unsigned int mode) noexcept;

@@ -133,10 +133,10 @@ M552 T1 S1        ; enable TLS support and bring up the network interface
 
 `M552 T1` causes RRF to load `server.key` and `server.crt` from the SD card. If those files are missing or invalid, the command will report an error and TLS will not be available.
 
-To disable TLS support (revert to plain-only):
+`T` is only acted on when `S` is given in the same command, so a bare `M552 T1` or `M552 T0` has no effect. To bring the interface up plain again:
 
 ```gcode
-M552 T0           ; disable TLS support (default)
+M552 T0 S1        ; disable TLS support (default) and bring up the network interface
 ```
 
 > **Note:** `M552 T1` only enables the TLS layer. You must still use `M586` with `T1` to enable each individual TLS protocol variant (HTTPS, FTPS, TelnetS).
@@ -145,9 +145,9 @@ M552 T0           ; disable TLS support (default)
 
 - `T0` - TLS disabled (default); `server.key` and `server.crt` are not loaded
 - `T1` - TLS enabled; loads the key and certificate from `/sys/server.key` and `/sys/server.crt` (Ethernet), or imports them into the WiFi module's flash and deletes the SD copies (WiFi)
-- `T-1` - Clear stored TLS material and start the interface in plain mode. On Ethernet, securely deletes `/sys/server.key` and `/sys/server.crt`. On WiFi, sends a clear command that wipes the cert/key from the WiFi module's flash. The interface still comes up; only TLS variants are unavailable.
+- `T-1` - Clear stored TLS material and start the interface in plain mode. On Ethernet, securely deletes `/sys/server.key` and `/sys/server.crt`, and only while the network has not been started yet, which means from `config.g`. On WiFi, sends a clear command that wipes the cert/key from the WiFi module's flash. The interface still comes up; only TLS variants are unavailable.
 
-To change TLS state on a running interface: on WiFi, simply re-issue `M552 T1 S1` (or `T-1`/`T0`) - the WiFi module is probed immediately and the new state takes effect. On Ethernet, first run `M552 S0`, then `M552 T1 S1` - the LwIP TLS heap is sized at `Start()` time and a full Stop/Start cycle is needed to resize it.
+To change TLS state on a running interface: on WiFi, simply re-issue `M552 T1 S1` (or `T-1`/`T0`) - the WiFi module is probed immediately and the new state takes effect. On Ethernet it cannot be changed once the interface has been started, in either direction: the LwIP heap is sized for TLS or for plain operation by the first `M552 S1` after each restart and is never resized, so a later `T1` is ignored if the interface came up plain, and a later `T0` does not remove TLS once the certificate has been loaded. Disabling and re-enabling the interface does not help either. Keep the `T` parameter on the `M552 ... S1` line in `config.g`, and use `M999` if you need to change it on a running board.
 
 > **Note:** Omitting `T` is equivalent to `T0` - the TLS state is **not** remembered across enable cycles. If you re-issue a bare `M552 S1` after TLS was previously enabled (for example to change SSID or IP settings), TLS support is turned off again. Always include `T1` whenever you bring the interface up if you want TLS, e.g. keep a single `M552 ... S1 T1` line in `config.g` rather than a later plain `M552 S1`.
 

@@ -176,7 +176,8 @@ void LwipSocket::DataSent(size_t numBytes) noexcept
 
 void LwipSocket::ConnectionClosedGracefully() noexcept
 {
-	if (connectionPcb != nullptr)
+	// Closing a PCB with unread data sends a reset, so Poll closes it once the responder has read everything
+	if (connectionPcb != nullptr && receivedData == nullptr)
 	{
 		altcp_err(connectionPcb, nullptr);
 		altcp_recv(connectionPcb, nullptr);
@@ -190,16 +191,13 @@ void LwipSocket::ConnectionClosedGracefully() noexcept
 		{
 			altcp_abort(connectionPcb);
 			connectionPcb = nullptr;
-			state = SocketState::aborted;
+			EnterAbortedState();
 			return;
 		}
 	}
 
-	if (connectionPcb == nullptr && state == SocketState::closing && !outgoing)
-	{
-		state = SocketState::listening;
-	}
-	else
+	// A closing socket has already been released by its owner and must stay closing, so that Poll recycles it
+	if (state != SocketState::closing)
 	{
 		state = SocketState::peerDisconnecting;
 		whenClosed = millis();
@@ -216,12 +214,35 @@ void LwipSocket::ConnectionError(err_t err) noexcept
 	DiscardReceivedData();
 	connectionPcb = nullptr;
 	txShutdownRequested = false;
+	EnterAbortedState();
+}
 
-	// For server sockets, always return to listening after an error so new
-	// inbound connections are not rejected in conn_accept.
+// A socket still owned by a responder must only be recycled by its owner's Close or Terminate call, else a new connection may be accepted on it and killed by the owner
+void LwipSocket::EnterAbortedState() noexcept
+{
 	state = (localPort == 0 || outgoing)
 				? SocketState::disabled
-				: SocketState::listening;
+				: (responderFound && state != SocketState::closing)
+					? SocketState::aborted
+					: SocketState::listening;
+}
+
+// Abort the connection on an internal failure, leaving an owned socket to its responder
+void LwipSocket::AbortConnection() noexcept
+{
+	MutexLocker lock(lwipMutex);
+	if (connectionPcb != nullptr)
+	{
+		altcp_err(connectionPcb, nullptr);
+		altcp_recv(connectionPcb, nullptr);
+		altcp_sent(connectionPcb, nullptr);
+		altcp_abort(connectionPcb);
+		connectionPcb = nullptr;
+	}
+
+	DiscardReceivedData();
+	txShutdownRequested = false;
+	EnterAbortedState();
 }
 
 // Initialise a TCP socket
@@ -448,7 +469,7 @@ void LwipSocket::Poll() noexcept
 				{
 					debugPrintf("LWIP write timeout: proto=%d lport=%u rport=%u\n", (int)protocol, localPort, remotePort);
 				}
-				Terminate();
+				AbortConnection();
 			}
 		}
 		else
@@ -515,7 +536,7 @@ void LwipSocket::Poll() noexcept
 		}
 
 		const bool canFinalize = timeoutExceeded
-			|| (state == SocketState::peerDisconnecting && unAcked == 0)
+			|| (state == SocketState::peerDisconnecting && receivedData == nullptr && unAcked == 0)
 			|| (isTlsConnection && state == SocketState::closing && unAcked == 0);
 		if (canFinalize && connectionPcb != nullptr)
 		{
@@ -547,18 +568,14 @@ void LwipSocket::Poll() noexcept
 			}
 		}
 
-		if (connectionPcb == nullptr)
+		// A peerDisconnecting socket keeps its unread data and waits for its responder to release it
+		if (connectionPcb == nullptr && state == SocketState::closing)
 		{
 			DiscardReceivedData();
 			state = (localPort == 0 || outgoing) ? SocketState::disabled : SocketState::listening;
 		}
 		break;
 	}
-
-	case SocketState::aborted:
-		// Keep aborted as a transient state only; recycle passive sockets
-		state = (localPort == 0 || outgoing) ? SocketState::disabled : SocketState::listening;
-		break;
 
 	default:
 		// Nothing to do
@@ -612,7 +629,7 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 			err = altcp_write(connectionPcb, data, bytesToSend, 0);
 			if (ERR_IS_FATAL(err))
 			{
-				Terminate();
+				AbortConnection();
 				return 0;
 			}
 			else if (err == ERR_MEM)
@@ -636,7 +653,7 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 		// Try to send it now
 		if (ERR_IS_FATAL(altcp_output(connectionPcb)))
 		{
-			Terminate();
+			AbortConnection();
 			return 0;
 		}
 

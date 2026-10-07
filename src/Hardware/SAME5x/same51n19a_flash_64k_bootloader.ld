@@ -158,9 +158,9 @@ SECTIONS
     /* .stack_dummy section doesn't contains any symbols. It is only
        used for linker to calculate size of stack sections, and assign
        values to stack symbols later */
-    .stack_dummy :
+    .stack_dummy (NOLOAD):
     {
-        *(.stack*)
+        KEEP(*(.stack*))
     } > ram
 
     .bkupram (NOLOAD):

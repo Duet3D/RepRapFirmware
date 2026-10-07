@@ -141,7 +141,8 @@ void GCodeBuffer::Reset() noexcept
 	requestedMacroFile.Clear();
 	macroFileClosed = false;
 	isWaitingForMacro = false;
-	macroJustStarted = macroFileError = macroFileEmpty = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
+	macroJustStarted = macroFileError = macroFileEmpty = false;
+	abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
 	machineState->lastCodeFromSbc = machineState->macroStartedByCode = false;
 #endif
 	cancelWait = false;
@@ -1248,6 +1249,7 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 	}
 
 	// Request the macro file from the SBC
+	MutexLocker lock(mutex);								// the SBC task reads the request while holding this mutex
 	macroJustStarted = macroFileError = macroFileEmpty = false;
 	machineState->macroStartedByCode = fromCode;
 	requestedMacroFile.copy(filename);
@@ -1258,12 +1260,16 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 	{
 		// Wait for a response (but not forever)
 		isWaitingForMacro = true;
+		lock.Release();										// don't keep a lock of our own while waiting for the SBC
 		reprap.GetSbcInterface().EventOccurred(true);
 		if (!macroSemaphore.Take(SbcMaxRequestTime))
 		{
 			isWaitingForMacro = false;
-			reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while waiting for macro file %s (channel %s)\n", filename, GetChannel().ToString());
-			return false;
+			if (!macroSemaphore.Take(0))		// a reply that came in before the flag was cleared still answers this request
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while waiting for macro file %s (channel %s)\n", filename, GetChannel().ToString());
+				return false;
+			}
 		}
 	}
 

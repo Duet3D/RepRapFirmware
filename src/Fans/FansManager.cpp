@@ -197,10 +197,10 @@ float FansManager::SetFanValue(size_t fanNum, float speed) noexcept
 	auto fan = FindFan(fanNum);
 	if (fan.IsNotNull())
 	{
-		const float oldPwm = fan->GetPwm();
+		const float oldPwm = fan->GetConfiguredPwm();
 		String<1> dummy;
 		(void)fan->SetPwm(speed, dummy.GetRef());
-		return fan->GetPwm() - oldPwm;
+		return fan->GetConfiguredPwm() - oldPwm;
 	}
 	return 0.0;
 }

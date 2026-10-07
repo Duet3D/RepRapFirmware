@@ -392,6 +392,11 @@ constexpr uint32_t CHOPCONF_DISS2G = 1 << 30;				// disable short to ground prot
 constexpr uint32_t CHOPCONF_DISS2VS = 1 << 31;				// disable low side short protection
 
 constexpr uint32_t DefaultChopConfReg = 0x00000053 | CHOPCONF_VSENSE_HIGH;	// this is the reset default + CHOPCONF_VSENSE_HIGH - CHOPCONF_INTPOL. Try it until we find something better.
+constexpr uint32_t UserSettableChopConfBits_2209 = CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK;
+#if SUPPORT_TMC2240
+constexpr uint32_t UserSettableChopConfBits_2240 = CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK
+												| CHOPCONF_2240_TPFD_MASK | CHOPCONF_2240_FD3 | CHOPCONF_2240_DISFDCC;
+#endif
 
 #if RESET_MICROSTEP_COUNTERS_AT_INIT
 constexpr uint32_t ChopConf256mstep = DefaultChopConfReg;	// the default uses x256 microstepping already
@@ -1358,7 +1363,14 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 	switch(reg)
 	{
 	case SmartDriverRegister::chopperControl:
-		return configuredChopConfReg & 0x01FFFF;
+		{
+			const uint32_t userMask =
+#if SUPPORT_TMC2240
+									(isTmc2240) ? UserSettableChopConfBits_2240 :
+#endif
+													UserSettableChopConfBits_2209;
+			return configuredChopConfReg & userMask;
+		}
 
 	case SmartDriverRegister::toff:
 		return (configuredChopConfReg & CHOPCONF_TOFF_MASK) >> CHOPCONF_TOFF_SHIFT;
@@ -1445,10 +1457,9 @@ bool TmcDriverState::SetChopConf(uint32_t newVal) noexcept
 	}
 	const uint32_t userMask =
 #if SUPPORT_TMC2240
-							(isTmc2240) ? CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK
-											| CHOPCONF_2240_TPFD_MASK | CHOPCONF_2240_FD3 | CHOPCONF_2240_DISFDCC :
+							(isTmc2240) ? UserSettableChopConfBits_2240 :
 #endif
-										CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK;	// mask of bits the user is allowed to change
+											UserSettableChopConfBits_2209;
 	configuredChopConfReg = (configuredChopConfReg & ~userMask) | (newVal & userMask);
 	UpdateChopConfRegister();
 	return true;

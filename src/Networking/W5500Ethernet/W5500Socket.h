@@ -29,6 +29,7 @@ public:
 	bool ReadBuffer(const uint8_t *_ecv_array &buffer, size_t &len) noexcept override;
 	void Taken(size_t len) noexcept override;
 	bool CanRead() const noexcept override;
+	bool IsConnectionAborted() const noexcept override { return state == SocketState::aborted; }
 	bool CanSend() const noexcept override;
 	size_t Send(const uint8_t *_ecv_array data, size_t length) noexcept override;
 	void Send() noexcept override;

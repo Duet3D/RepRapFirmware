@@ -79,6 +79,7 @@ constexpr ObjectModelTableEntry MovementState::objectModelTable[] =
 	{ "distance",				OBJECT_MODEL_FUNC(reprap.GetMove().GetCurrentMoveDistance(self->GetNumber()), 2),			ObjectModelEntryFlags::liveNotPanelDue },
 	{ "duration",				OBJECT_MODEL_FUNC(reprap.GetMove().GetCurrentMoveDuration(self->GetNumber()), 2),			ObjectModelEntryFlags::liveNotPanelDue },
 	{ "extrusionRate",			OBJECT_MODEL_FUNC(reprap.GetMove().GetTotalExtrusionRate(self->GetNumber()), 2),			ObjectModelEntryFlags::liveNotPanelDue },
+	{ "filePosition",			OBJECT_MODEL_FUNC_IF(reprap.GetMove().GetCurrentMoveFilePosition(self->GetNumber()) != noFilePosition, reprap.GetMove().GetCurrentMoveFilePosition(self->GetNumber())),	ObjectModelEntryFlags::liveNotPanelDue },
 //# if SUPPORT_LASER
 #if 0		// currently the laser support is global, not per motion system
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetGCodes().GetMachineType() == MachineType::laser,
@@ -98,7 +99,7 @@ constexpr uint8_t MovementState::objectModelTableDescriptor[] =
 {
 	2 + SUPPORT_COORDINATE_ROTATION,
 	12 + SUPPORT_COORDINATE_ROTATION,
-	7,
+	8,
 #if SUPPORT_COORDINATE_ROTATION
 	2
 #endif

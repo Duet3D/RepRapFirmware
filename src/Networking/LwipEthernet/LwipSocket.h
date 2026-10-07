@@ -43,12 +43,13 @@ public:
 	void TerminateAndDisable() noexcept override;
 	void Poll() noexcept override;
 	void Close() noexcept override;
-	bool IsClosing() const noexcept override { return (state == SocketState::closing) || (state == SocketState::peerDisconnecting); }
+	bool IsClosing() const noexcept override { return (state == SocketState::closing); }
 	void Terminate() noexcept override;
 	bool ReadChar(char& c) noexcept override;
 	bool ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept override;
 	void Taken(size_t len) noexcept override;
 	bool CanRead() const noexcept override;
+	bool IsConnectionAborted() const noexcept override { return state == SocketState::aborted; }
 	bool CanSend() const noexcept override;
 	size_t Send(const uint8_t *data, size_t length) noexcept override;
 	void Send() noexcept override { }
@@ -67,6 +68,8 @@ private:
 	};
 
 	void ReInit() noexcept;
+	void EnterAbortedState() noexcept;
+	void AbortConnection() noexcept;
 	void DiscardReceivedData() noexcept;
 	pbuf *GetNextReceivedPbuf() noexcept;
 

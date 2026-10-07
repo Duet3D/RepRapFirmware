@@ -146,7 +146,7 @@ protected:
 	virtual GCodeResult UpdateFaultDetectionParameters(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult UpdateHeaterMonitors(const StringRef& reply) noexcept = 0;
 	virtual GCodeResult StartAutoTune(const StringRef& reply, bool seenA, float ambientTemp) noexcept = 0;
-	virtual void ApplyExtrusionFeedForward(bool isNonPrintingMove) noexcept = 0;
+	virtual void ApplyExtrusionFeedForward(float newExtrusionPwmBoost, float newTempBoost, bool isNonPrintingMove) noexcept = 0;
 
 	int GetSensorNumber() const noexcept { return sensorNumber; }
 	int GetAmbientSensorNumber() const noexcept { return ambientSensorNumber; }
@@ -166,10 +166,11 @@ protected:
 	void SetAndReportModelAfterTuning(bool usingFans) noexcept;
 
 	HeaterMonitor monitors[MaxMonitorsPerHeater];					// embedding them in the Heater uses less memory than dynamic allocation
+
 	volatile float lastFanPwm;										// The fan PWM when we last calculated heater feedforward for the fan
-	volatile float extrusionPwmBoost;								// The value of extrusion PWM boost to apply
+	volatile float lastExtrusionPwmBoost;							// The last value of extrusion boost we applied
+	volatile float allowedExtrusionPwmBoost;						// The maximum extra PWM that we expect to need if extrusion is taking place due to melting filament
 	volatile float extrusionTemperatureBoost;						// the amount of extrusion temperature boost we are currently applying
-	float previousExtrusionPwmBoost;								// The previoius value of extrusion boost we applied
 
 	bool tuned = false;												// true if tuning was successful
 

@@ -299,7 +299,7 @@ constexpr uint32_t CHOPCONF_TBL_MASK = 0x03 << CHOPCONF_TBL_SHIFT;
 constexpr uint32_t CHOPCONF_VHIGHFS = 1u << 18;				// high velocity fullstep selection
 constexpr uint32_t CHOPCONF_VHIGHCHM = 1u << 19;			// high velocity chopper mode
 constexpr uint32_t CHOPCONF_TPFD_SHIFT = 20;				// Passive fast decay time, allows dampening of motor mid-range resonances
-constexpr uint32_t CHOPCONF_TPFD_MASK = 0x0F;
+constexpr uint32_t CHOPCONF_TPFD_MASK = 0x0F << CHOPCONF_TPFD_SHIFT;
 constexpr uint32_t CHOPCONF_MRES_SHIFT = 24;				// microstep resolution
 constexpr uint32_t CHOPCONF_MRES_MASK = 0x0F << CHOPCONF_MRES_SHIFT;
 constexpr uint32_t CHOPCONF_INTPOL = 1u << 28;				// use interpolation
@@ -312,6 +312,9 @@ constexpr uint32_t DefaultChopConfReg = (1 << CHOPCONF_TBL_SHIFT) | (3 << CHOPCO
 #elif TMC_TYPE == 2240
 constexpr uint32_t DefaultChopConfReg = (2 << CHOPCONF_TBL_SHIFT) | (3 << CHOPCONF_TOFF_SHIFT) | (5 << CHOPCONF_HSTRT_SHIFT) | (2 << CHOPCONF_HEND_SHIFT);
 #endif
+
+constexpr uint32_t UserSettableChopConfBits = CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK
+												| CHOPCONF_TPFD_MASK | CHOPCONF_FD3 | CHOPCONF_DISFDCC;
 
 constexpr uint8_t REGNUM_COOLCONF = 0x6D;
 constexpr uint32_t COOLCONF_SGFILT = 1 << 24;				// set to update stallGuard status every 4 full steps instead of every full step
@@ -810,7 +813,7 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 	switch(reg)
 	{
 	case SmartDriverRegister::chopperControl:
-		return configuredChopConfReg & 0x01FFFF;
+		return configuredChopConfReg & UserSettableChopConfBits;
 
 	case SmartDriverRegister::toff:
 		return (configuredChopConfReg & CHOPCONF_TOFF_MASK) >> CHOPCONF_TOFF_SHIFT;
@@ -896,9 +899,7 @@ bool TmcDriverState::SetChopConf(uint32_t newVal) noexcept
 	{
 		return false;
 	}
-	const uint32_t userMask = CHOPCONF_TBL_MASK | CHOPCONF_HSTRT_MASK | CHOPCONF_HEND_MASK | CHOPCONF_TOFF_MASK
-								| CHOPCONF_TPFD_MASK | CHOPCONF_FD3 | CHOPCONF_DISFDCC;		// mask of bits the user is allowed to change
-	configuredChopConfReg = (configuredChopConfReg & ~userMask) | (newVal & userMask);
+	configuredChopConfReg = (configuredChopConfReg & ~UserSettableChopConfBits) | (newVal & UserSettableChopConfBits);
 	UpdateChopConfRegister();
 	return true;
 }

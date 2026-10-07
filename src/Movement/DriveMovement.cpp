@@ -286,7 +286,20 @@ MoveSegment *_ecv_null DriveMovement::NewSegment(uint32_t now) noexcept
 #endif
 
 		// Calculate the movement parameters
-		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
+		const motioncalc_t endPosition = seg->GetLength() + distanceCarriedForwards;
+		netStepsThisSegment = (int32_t)endPosition;
+
+		// An axis that is about to stop must end on a whole step, but the segment lengths carry float rounding error.
+		// This must be corrected here as well as in CalcNextStepTimeFull because the remote drive and zero-step skip paths never get there
+		if (seg->GetNext() == nullptr && !segmentFlags.isExtruder)
+		{
+			const int32_t roundedSteps = std::lrint(endPosition);
+			if (std::fabs(endPosition - (motioncalc_t)roundedSteps) < (motioncalc_t)0.05)
+			{
+				seg->AdjustLength((motioncalc_t)roundedSteps - endPosition);
+				netStepsThisSegment = roundedSteps;
+			}
+		}
 
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		if (IsPhaseStepEnabled())

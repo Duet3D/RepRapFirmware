@@ -334,8 +334,10 @@ void TriggerItem::AppendInputNames(AxesBitmap endstops, InputPortsBitmap inputs,
 
 bool TriggerItem::EvaluateExpression() THROWS(GCodeException)
 {
-	const auto ptr = expr.Get();
-	ExpressionParser parser(nullptr, ptr.Ptr());
+	// Copy the expression out of the heap first: the parser takes the heap write lock for string values, which deadlocks while the read lock from Get() is still held
+	String<StringLength256> expression;
+	expression.copy(expr.Get().Ptr());
+	ExpressionParser parser(nullptr, expression.c_str());
 	const bool ret = parser.ParseBoolean();
 	parser.CheckForExtraCharacters();
 	return ret;

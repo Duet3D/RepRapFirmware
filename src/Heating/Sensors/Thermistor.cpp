@@ -97,7 +97,7 @@ bool Thermistor::ConfigureHParam(int hVal, const StringRef& reply) noexcept
 		if (valid)
 		{
 			int32_t vrefReading = reprap.GetPlatform().GetAdcFilter(VrefFilterIndex).GetSum();
-# ifdef DUET3_MB6HC
+# if defined(DUET3_MB6HC)
 			// Duet 3 MB6HC board revisions 0.6 and 1.0 have the series resistor connected to VrefP, not VrefMon, so extrapolate the VrefMon reading to estimate VrefP.
 			// Version 1.01 and later boards have the series resistors connected to VrefMon.
 			if (reprap.GetPlatform().GetBoardType() == BoardType::Duet3_6HC_v06_100)
@@ -387,7 +387,7 @@ void Thermistor::Poll() noexcept
 		const int32_t rawAveragedVssaReading = vssaFilter.GetSum()/(vssaFilter.NumAveraged() >> AdcOversampleBits);
 		const int32_t rawAveragedVrefReading = vrefFilter.GetSum()/(vrefFilter.NumAveraged() >> AdcOversampleBits);
 		const int32_t averagedVssaReading = rawAveragedVssaReading + (adcLowOffset * (1 << (AdcBits + AdcOversampleBits - 13)));
-# ifdef DUET3_MB6HC
+# if defined(DUET3_MB6HC)
 		// Duet 3 MB6HC board revisions 0.6 and 1.0 have the series resistor connected to VrefP, not VrefMon, so extrapolate the VrefMon reading to estimate VrefP.
 		// Version 1.01 and later boards have the series resistors connected to VrefMon.
 		const int32_t correctedVrefReading = (reprap.GetPlatform().GetBoardType() == BoardType::Duet3_6HC_v06_100)

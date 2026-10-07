@@ -40,7 +40,7 @@
  */
 
 /*------------------------------------------------------------------------------
- *      Linker script for running in internal FLASH on the ATSAME70Q20
+ *      Linker script for running in internal FLASH on the PIC32CZ2071CA70144
  *----------------------------------------------------------------------------*/
 
 OUTPUT_FORMAT("elf32-littlearm", "elf32-littlearm", "elf32-littlearm")
@@ -49,11 +49,12 @@ SEARCH_DIR(.)
 
 /* Memory Spaces Definitions */
 /* We put the non-cached RAM at the start of RAM because the CAN buffers must be within the first 64kb. */
+/* TODO when we have the bootloader, start 'rom' at 8k or 16k from start of flash and reduce its length. */
 MEMORY
 {
-  rom (rx)  : ORIGIN = 0x00400000, LENGTH = 0x00100000
+  rom (rx)  : ORIGIN = 0x00400000, LENGTH = 0x00200000					/* 2Mbytes flash memory */
   ram_not_cached (rw) : ORIGIN = 0x20400000, LENGTH = 0x00012000		/* we currently allocate 72kb of non-cached RAM */
-  ram (rwx) : ORIGIN = 0x20412000, LENGTH = 0x0004E000					/* that leaves 312Kb of cached RAM */
+  ram (rwx) : ORIGIN = 0x20412000, LENGTH = 0x0004E000					/* that leaves 440Kb of cached RAM */
 }
 
 /* Section Definitions */
@@ -167,9 +168,9 @@ SECTIONS
    /* .stack_dummy section doesn't contains any symbols. It is only
        used for linker to calculate size of stack sections, and assign
        values to stack symbols later */
-    .stack_dummy (NOLOAD) :
+    .stack_dummy (NOLOAD):
     {
-       KEEP (*(.stack*))
+        KEEP(*(.stack*))
     } > ram
 
     /* Set stack top to end of ram, and stack limit move down by

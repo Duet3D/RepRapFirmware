@@ -83,40 +83,41 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		{
 			return GCodeResult::notFinished;
 		}
+		seen = true;
 	}
 
-	gb.TryGetLimitedFValue('F', frequency, seen, MinimumInputShapingFrequency, MaximumInputShapingFrequency);
-	gb.TryGetLimitedFValue('S', zeta, seen, 0.0, 0.99);
-
+	InputShaperType newType(type);
 	if (gb.Seen('P'))
 	{
 		String<StringLength20> shaperName;
 		gb.GetReducedString(shaperName.GetRef());
-		const InputShaperType newType(shaperName.c_str());
-		if (!newType.IsValid())
+		const InputShaperType providedType(shaperName.c_str());
+		if (!providedType.IsValid())
 		{
 			reply.printf("Unknown input shaper type '%s'", shaperName.c_str());
 			return GCodeResult::error;
 		}
-		seen = true;
-		type = newType;
+		newType = providedType;
 	}
-	else if (seen && type == InputShaperType::none)
-	{
-		type = InputShaperType::zvd;
-	}
+
+	float newFrequency = frequency;
+	gb.TryGetLimitedFValue('F', newFrequency, seen, MinimumInputShapingFrequency, MaximumInputShapingFrequency);
+	const float maxZeta = (newType == InputShaperType::ei2) ? 0.3
+							: (newType == InputShaperType::ei3) ? 0.2
+								: 0.9;
+	float newZeta = zeta;
+	gb.TryGetLimitedFValue('S', newZeta, seen, 0.0, maxZeta);
 
 	if (seen)
 	{
 		// Calculate the parameters that define the input shaping, which are the number of segments, their amplitudes and their delays
-		const float sqrtOneMinusZetaSquared = fastSqrtf(1.0 - fsquare(zeta));
-		const float dampedFrequency = frequency * sqrtOneMinusZetaSquared;
+		const float sqrtOneMinusZetaSquared = fastSqrtf(1.0 - fsquare(newZeta));
+		const float dampedFrequency = newFrequency * sqrtOneMinusZetaSquared;
 		const uint32_t dampedPeriod = lrintf(StepClockRate/dampedFrequency);
-		const float k = expf(-zeta * Pi/sqrtOneMinusZetaSquared);
+		const float k = expf(-newZeta * Pi/sqrtOneMinusZetaSquared);
 		delays[0] = 0;								// this never changes
-		coefficients[0] = 1.0;						// set this up in case of an early return
 
-		switch (type.RawValue())
+		switch (newType.RawValue())
 		{
 		case InputShaperType::none:
 			numImpulses = 1;
@@ -127,30 +128,33 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				// Get the coefficients
 				size_t numAmplitudes = MaxImpulses - 1;
 				gb.MustSee('H');
-#if USE_DOUBLE_MOTIONCALC
 				float fCoefficients[MaxImpulses - 1];
 				gb.GetFloatArray(fCoefficients, numAmplitudes, false);
-				for (unsigned int i = 0; i < numAmplitudes; ++i)
-				{
-					coefficients[i] = (motioncalc_t)fCoefficients[i];
-				}
-#else
-				gb.GetFloatArray(coefficients, numAmplitudes, false);
-#endif
+
 				// Get the impulse delays, if provided
 				if (gb.Seen('T'))
 				{
 					float rawDelays[MaxImpulses - 1];
 					size_t numDelays = MaxImpulses - 1;
-					gb.GetFloatArray(rawDelays, numDelays, true);
+					gb.GetFloatArray(rawDelays, numDelays, true);						//TODO delays must be positive and in increasing order
 
 					// Check we have the same number of both
 					if (numDelays != numAmplitudes)
 					{
 						reply.copy("Number of delays must be same as number of amplitudes");
-						type = InputShaperType::none;
 						return GCodeResult::error;
 					}
+
+					// Check that the delays are all positive, distinct and in ascending order
+					for (unsigned int i = 0; i < numAmplitudes; ++i)
+					{
+						if (rawDelays[i] <= 0 || (i != 0 && rawDelays[i] <= rawDelays[i - 1]))
+						{
+							reply.copy("Delays must be positive and in strictly increasing order");
+							return GCodeResult::error;
+						}
+					}
+
 					for (unsigned int i = 0; i < numAmplitudes; ++i)
 					{
 						delays[i + 1] = lrintf(rawDelays[i] * StepClockRate);			// convert from seconds to step clocks
@@ -163,6 +167,10 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 						delays[i] = (dampedPeriod * i)/2;
 					}
 				}
+				for (unsigned int i = 0; i < numAmplitudes; ++i)
+				{
+					coefficients[i] = (motioncalc_t)fCoefficients[i];
+				}
 				numImpulses = numAmplitudes + 1;
 			}
 			break;
@@ -171,12 +179,12 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			{
 				// Klipper gives amplitude steps of [a3 = k^2 * (1 - 1/sqrt(2)), a2 = k * (sqrt(2) - 1), a1 = 1 - 1/sqrt(2)] all divided by (a1 + a2 + a3)
 				// Rearrange to: a3 = k^2 * (1 - sqrt(2)/2), a2 = k * (sqrt(2) - 1), a1 = (1 - sqrt(2)/2)
-				const float kMzv = expf(-zeta * 0.75 * Pi/sqrtOneMinusZetaSquared);
+				const float kMzv = expf(-newZeta * 0.75 * Pi/sqrtOneMinusZetaSquared);
 				const float a1 = 1.0 - 0.5 * sqrtf(2.0);
 				const float a2 = (sqrtf(2.0) - 1.0) * kMzv;
 				const float a3 = a1 * fsquare(kMzv);
 			    const float sum = (a1 + a2 + a3);
-			    coefficients[0] = a3/sum;
+			    coefficients[0] = a1/sum;
 			    coefficients[1] = a2/sum;
 			}
 			delays[1] = (3 * dampedPeriod)/8;
@@ -225,35 +233,39 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 
 		case InputShaperType::ei2:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635.
 			{
-				const float zetaSquared = fsquare(zeta);
-				const float zetaCubed = zetaSquared * zeta;
-				coefficients[0] = (0.16054) + ( 0.76699)	* zeta + ( 2.26560)	* zetaSquared + (-1.22750)	* zetaCubed;
-				coefficients[1] = (0.33911) + ( 0.45081)	* zeta + (-2.58080)	* zetaSquared + ( 1.73650)	* zetaCubed;
-				coefficients[2] = (0.34089)	+ (-0.61533)	* zeta + (-0.68765)	* zetaSquared + ( 0.42261)	* zetaCubed;
-				delays[1] = lrintf((0.49890 + ( 0.16270) * zeta + (-0.54262) * zetaSquared + (6.16180) * zetaCubed) * (float)dampedPeriod);
-				delays[2] = lrintf((0.99748 + ( 0.18382) * zeta + (-1.58270) * zetaSquared + (8.17120) * zetaCubed) * (float)dampedPeriod);
-				delays[3] = lrintf((1.49920 + (-0.09297) * zeta + (-0.28338) * zetaSquared + (1.85710) * zetaCubed) * (float)dampedPeriod);
+				const float zetaSquared = fsquare(newZeta);
+				const float zetaCubed = zetaSquared * newZeta;
+				coefficients[0] = (0.16054) + ( 0.76699) * newZeta + ( 2.26560)	* zetaSquared + (-1.22750)	* zetaCubed;
+				coefficients[1] = (0.33911) + ( 0.45081) * newZeta + (-2.58080)	* zetaSquared + ( 1.73650)	* zetaCubed;
+				coefficients[2] = (0.34089)	+ (-0.61533) * newZeta + (-0.68765)	* zetaSquared + ( 0.42261)	* zetaCubed;
+				delays[1] = lrintf((0.49890 + ( 0.16270) * newZeta + (-0.54262) * zetaSquared + (6.16180) * zetaCubed) * (float)dampedPeriod);
+				delays[2] = lrintf((0.99748 + ( 0.18382) * newZeta + (-1.58270) * zetaSquared + (8.17120) * zetaCubed) * (float)dampedPeriod);
+				delays[3] = lrintf((1.49920 + (-0.09297) * newZeta + (-0.28338) * zetaSquared + (1.85710) * zetaCubed) * (float)dampedPeriod);
 			}
 			numImpulses = 4;
 			break;
 
 		case InputShaperType::ei3:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635
 			{
-				const float zetaSquared = fsquare(zeta);
-				const float zetaCubed = zetaSquared * zeta;
-				coefficients[0] = (0.11275)	+ ( 0.76632)	* zeta + ( 3.29160)	* zetaSquared + (-1.44380)	* zetaCubed;
-				coefficients[1] = (0.23698)	+ ( 0.61164)	* zeta + (-2.57850)	* zetaSquared + ( 4.85220)	* zetaCubed;
-				coefficients[2] = (0.30008)	+ (-0.19062)	* zeta + (-2.14560)	* zetaSquared + ( 0.13744)	* zetaCubed;
-				coefficients[3] = (0.23775)	+ (-0.73297)	* zeta + ( 0.46885) * zetaSquared + (-2.08650)	* zetaCubed;
-
-				delays[1] = lrintf((0.49974 + (0.23834)  * zeta + (0.44559)  * zetaSquared + (12.4720) * zetaCubed) * (float)dampedPeriod);
-				delays[2] = lrintf((0.99849 + (0.29808)  * zeta + (-2.36460) * zetaSquared + (23.3990) * zetaCubed) * (float)dampedPeriod);
-				delays[3] = lrintf((1.49870 + (0.10306)  * zeta + (-2.01390) * zetaSquared + (17.0320) * zetaCubed) * (float)dampedPeriod);
-				delays[4] = lrintf((1.99960 + (-0.28231) * zeta + (0.61536)  * zetaSquared + (5.40450) * zetaCubed) * (float)dampedPeriod);
+				const float zetaSquared = fsquare(newZeta);
+				const float zetaCubed = zetaSquared * newZeta;
+				coefficients[0] = (0.11275)	+ ( 0.76632) * newZeta + ( 3.29160)	* zetaSquared + (-1.44380)	* zetaCubed;
+				coefficients[1] = (0.23698)	+ ( 0.61164) * newZeta + (-2.57850)	* zetaSquared + ( 4.85220)	* zetaCubed;
+				coefficients[2] = (0.30008)	+ (-0.19062) * newZeta + (-2.14560)	* zetaSquared + ( 0.13744)	* zetaCubed;
+				coefficients[3] = (0.23775)	+ (-0.73297) * newZeta + ( 0.46885) * zetaSquared + (-2.08650)	* zetaCubed;
+				delays[1] = lrintf((0.49974 + (0.23834)  * newZeta + (0.44559)  * zetaSquared + (12.4720) * zetaCubed) * (float)dampedPeriod);
+				delays[2] = lrintf((0.99849 + (0.29808)  * newZeta + (-2.36460) * zetaSquared + (23.3990) * zetaCubed) * (float)dampedPeriod);
+				delays[3] = lrintf((1.49870 + (0.10306)  * newZeta + (-2.01390) * zetaSquared + (17.0320) * zetaCubed) * (float)dampedPeriod);
+				delays[4] = lrintf((1.99960 + (-0.28231) * newZeta + (0.61536)  * zetaSquared + (5.40450) * zetaCubed) * (float)dampedPeriod);
 			}
 			numImpulses = 5;
 			break;
 		}
+
+		// If we get here then the new input shaping parameters have been accepted
+		type = newType;
+		frequency = newFrequency;
+		zeta = newZeta;
 
 		// The sum of the coefficients must total 1, use this to fill in the last coefficient
 		// Also calculate the longest interval between adjacent impulses
@@ -262,7 +274,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		for (size_t i = 0; i + 1 < numImpulses; ++i)
 		{
 			sum += coefficients[i];
-			const uint32_t thisInterval = delays[i + 1] - delays[1];
+			const uint32_t thisInterval = delays[i + 1] - delays[i];
 			if (thisInterval > longestSegment)
 			{
 				longestSegment = thisInterval;

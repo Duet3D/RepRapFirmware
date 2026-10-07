@@ -57,6 +57,9 @@ const char memPattern = (char)0xA5;		// this must be the same pattern as FreeRTO
 // Define replacement standard library functions
 #include <syscalls.h>
 
+// Define the system stack. The stack doesn't actually live here, instead the linker script uses this section to define the stack start and end symbols.
+uint32_t dummySystemStack[SystemStackSize] __attribute__ ((section (".stack")));
+
 // MAIN task data
 // The main task currently runs GCodes, so it needs to be large enough to hold the matrices used for delta auto calibration.
 // The worst case stack usage points are as follows:
@@ -293,17 +296,16 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 	}
 }
 
-// Return the amount of free handler stack space. It may be negative if the stack has overflowed into the area reserved for the heap.
+// Return the amount of free handler stack space in words. It may be negative if the stack has overflowed into the area reserved for the heap.
 static ptrdiff_t GetHandlerFreeStack() noexcept
 {
-	const char *_ecv_array const ramend = (const char *_ecv_array)&_estack;
-	const char *_ecv_array limit = reinterpret_cast<const char*>(sysStackLimit);
-	const char *_ecv_array stack_lwm = limit;
+	const char *_ecv_array const ramend = sysStackTop;
+	const char *_ecv_array stack_lwm = sysStackLimit;
 	while (stack_lwm < ramend && *stack_lwm == memPattern)
 	{
 		++stack_lwm;
 	}
-	return stack_lwm - limit;
+	return (stack_lwm - sysStackLimit) >> 2;
 }
 
 ptrdiff_t Tasks::GetNeverUsedRam() noexcept
@@ -365,7 +367,7 @@ void Tasks::Diagnostics(const StringRef& reply) noexcept
 #endif
 		const struct mallinfo mi = mallinfo();
 		reply.lcatf("RAM: static %d, dynamic %d (%d recycled), never used %d, free sys stack %d",
-					(const char *_ecv_array)&_end - ramstart, mi.uordblks, mi.fordblks, GetNeverUsedRam(), GetHandlerFreeStack()/4);
+					(const char *_ecv_array)&_end - ramstart, mi.uordblks, mi.fordblks, GetNeverUsedRam(), GetHandlerFreeStack());
 	}	// end memory stats scope
 
 	const uint64_t timeSinceLastCall = TaskResetRunTimeCounter();

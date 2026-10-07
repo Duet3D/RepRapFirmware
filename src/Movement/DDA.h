@@ -353,7 +353,7 @@ private:
 		struct
 		{
 			// These are used for reporting the current move parameters in the object model
-			float peakAcceleration, peakDeceleration;
+			float peakAcceleration, peakDeceleration;	// peak acceleration and deceleration, both positive
 
 			// These are calculated from the above and used in the ISR, so they are set up by Prepare()
 			uint32_t moveStartTime;					// clock count at which the move is due to start (before execution) or was started (during execution)

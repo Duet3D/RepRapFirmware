@@ -5,16 +5,16 @@
 #include <SPI/SpiParameters.h>
 #include <UART/UartParameters.h>
 
-#define BOARD_SHORT_NAME		"MB6HC"
-#define BOARD_NAME				"Duet 3 MB6HC"
-#define DEFAULT_BOARD_TYPE		BoardType::Auto
-#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 MB6HC"
-#define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
+# define BOARD_SHORT_NAME		"MB6HC"
+# define BOARD_NAME				"Duet 3 MB6HC"
+# define DEFAULT_BOARD_TYPE		BoardType::Auto
+# define FIRMWARE_NAME			"RepRapFirmware for Duet 3 MB6HC"
+# define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
+constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM on a SAME70Q20B
 
 #define IAP_UPDATE_FILE			"Duet3_SDiap32_" BOARD_SHORT_NAME ".bin"
 #define IAP_UPDATE_FILE_SBC		"Duet3_SBCiap32_" BOARD_SHORT_NAME ".bin"
 #define IAP_CAN_LOADER_FILE		"Duet3_CANiap32_" BOARD_SHORT_NAME ".bin"
-constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 
 #define WIFI_FIRMWARE_FILE		"DuetWiFiModule_32S3.bin"
 
@@ -440,7 +440,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::tioa9,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"io4.out"			},	// PE00 IO4_OUT
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io8.out"			},	// PE01 IO8_OUT
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PE02 SbcTfrReady
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_10,	PinCapability::read,	"io8.in"			},	// PE03 IO8_IN analog in not usable because it is on the wrong ADC
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io8.in"			},	// PE03 IO8_IN analog in not usable because it is on the wrong ADC
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_4,	PinCapability::none,	nullptr				},	// PE04 V12 detect
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_3,	PinCapability::ainr,	"io3.in"			},	// PE05 IO3_IN
 };

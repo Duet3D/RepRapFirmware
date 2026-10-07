@@ -239,7 +239,7 @@ public:
 	bool xyPlane;													// true if the G17/G18/G19 selected plane of the arc move is XY in the original user coordinates
 	SegmentedMoveState segMoveState;
 	bool pausedInMacro;												// if we are paused then this is true if we paused while fileGCode was executing a macro
-	bool positionMayBeInaccurate;									// set when a move that can stop short of its commanded target (endstop/probe/stall/raw) is queued, so the position is re-read at the next standstill
+	bool positionMayBeInaccurate;									// set when a move that can stop short of its commanded target (endstop/probe/stall/raw) or a special move that bypasses the user position is queued, so the position is re-read at the next standstill
 
 	static void SetInitialMotorPositions(const float initialPosition[MaxAxesPlusExtruders]) noexcept;
 	static void SaveEndpointsBeforeSimulating() noexcept;

@@ -377,7 +377,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::tioa9,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"io4.out"				},	// PE00 IO4_OUT
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io8.out,!io8.out.iso"	},	// PE01 IO8_OUT
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PE02 SbcTfrReady
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_10,	PinCapability::read,	"io8.in,!io8.in.iso"	},	// PE03 IO8_IN analog in not usable because it is on the wrong ADC
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io8.in,!io8.in.iso"	},	// PE03 IO8_IN analog in not usable because it is on the wrong ADC
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_4,	PinCapability::none,	nullptr					},	// PE04 V12 detect
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_3,	PinCapability::ainr,	"io3.in"				},	// PE05 IO3_IN
 };

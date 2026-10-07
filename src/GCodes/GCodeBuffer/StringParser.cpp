@@ -2057,28 +2057,9 @@ DriverId StringParser::ReadDriverIdValue() THROWS(GCodeException)
 	DriverId result;
 	if (gb.buffer[readPointer] == '{')
 	{
-		// Allow a floating point expression to be converted to a driver ID
-		// We assume that a driver ID only ever has a single fractional digit. This means that e.g. 3.10 will be treated the same as 3.1.
 		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + gb.bufferLength, (int)commandIndent + readPointer);
-		const float val = 10.0 * parser.ParseFloat();
+		result = parser.ParseDriverId();
 		readPointer = parser.GetEndptr() - gb.buffer;
-		const int32_t ival = lrintf(val);
-#if SUPPORT_CAN_EXPANSION
-		if (ival >= 0 && fabsf(val - (float)ival) <= 0.002)
-		{
-			result.boardAddress = ival/10;
-			result.localDriver = ival % 10;
-		}
-#else
-		if (ival >= 0 && ival < 10 && fabsf(val - (float)ival) <= 0.002)
-		{
-			result.localDriver = ival % 10;
-		}
-#endif
-		else
-		{
-			throw ConstructParseException("Invalid driver ID expression");
-		}
 	}
 	else
 	{
