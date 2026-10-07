@@ -1155,7 +1155,7 @@ GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb
 	case 3:			// read driver encoder via secondary CAN
 		{
 			Kinematics &_ecv_from kin = reprap.GetMove().GetKinematics();
-			if (kin.GetKinematicsType() == KinematicsType::hangprinter)
+			if (kin.GetLegacyType() == KinematicsType::hangprinter)
 			{
 				return ((HangprinterKinematics&)kin).ReadODrive3Encoder(driver, gb, reply);
 			}
@@ -1179,7 +1179,7 @@ GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb
 #if DUAL_CAN
 		{
 			Kinematics &_ecv_from kin = reprap.GetMove().GetKinematics();
-			if (kin.GetKinematicsType() == KinematicsType::hangprinter)
+			if (kin.GetLegacyType() == KinematicsType::hangprinter)
 			{
 				gb.MustSee('P');
 				size_t drivesCount = reprap.GetGCodes().GetVisibleAxes();
@@ -1267,7 +1267,7 @@ GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb
 	case 8:			// read axis force via secondary CAN
 		{
 			Kinematics &_ecv_from kin = reprap.GetMove().GetKinematics();
-			if (kin.GetKinematicsType() == KinematicsType::hangprinter)
+			if (kin.GetLegacyType() == KinematicsType::hangprinter)
 			{
 				return ((HangprinterKinematics&)kin).ReadODrive3AxisForce(driver, reply);
 			}

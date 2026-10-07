@@ -59,7 +59,6 @@ constexpr ObjectModelTableEntry ScaraKinematics::objectModelTable[] =
 	{ "crosstalk",		OBJECT_MODEL_FUNC_ARRAY(22),					ObjectModelEntryFlags::none },
 	{ "distalLength",	OBJECT_MODEL_FUNC(self->distalArmLength, 2),	ObjectModelEntryFlags::none },
 	{ "minRadius",		OBJECT_MODEL_FUNC(self->requestedMinRadius, 1),	ObjectModelEntryFlags::none },
-	{ "name",			OBJECT_MODEL_FUNC(self->GetName(true)), 		ObjectModelEntryFlags::none },
 	{ "proximalLength",	OBJECT_MODEL_FUNC(self->proximalArmLength, 2),	ObjectModelEntryFlags::none },
 	{ "psiLimits",		OBJECT_MODEL_FUNC_ARRAY(21),					ObjectModelEntryFlags::none },
 	{ "thetaLimits",	OBJECT_MODEL_FUNC_ARRAY(20),					ObjectModelEntryFlags::none },
@@ -67,9 +66,20 @@ constexpr ObjectModelTableEntry ScaraKinematics::objectModelTable[] =
 	{ "yOffset",		OBJECT_MODEL_FUNC(self->yOffset, 1),			ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t ScaraKinematics::objectModelTableDescriptor[] = { 1, 9 };
+constexpr uint8_t ScaraKinematics::objectModelTableDescriptor[] = { 1, 8 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(ScaraKinematics, ZLeadscrewKinematics)
+
+Kinematics::KinematicsTypeDescriptor scaraKinematicsDescriptor(ScaraKinematics::Create);
+
+/*static*/ Kinematics *_ecv_from _ecv_null ScaraKinematics::Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept
+{
+	if (MatchesLegacyType(name, legacyNumber, KinematicsType::scara))
+	{
+		return new ScaraKinematics();
+	}
+	return nullptr;
+}
 
 ScaraKinematics::ScaraKinematics() noexcept
 	: ZLeadscrewKinematics(KinematicsType::scara, SegmentationType(true, false, false)),
@@ -81,12 +91,6 @@ ScaraKinematics::ScaraKinematics() noexcept
 	psiLimits[1] = DefaultMaxPsi;
 	crosstalk[0] = crosstalk[1] = crosstalk[2] = requestedMinRadius = 0.0;
 	Recalc();
-}
-
-// Return the name of the current kinematics
-const char *_ecv_array ScaraKinematics::GetName(bool forStatusReport) const noexcept
-{
-	return "Scara";
 }
 
 // Calculate theta, psi and the new arm mode from a target position.
@@ -250,7 +254,7 @@ bool ScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 			Kinematics::Configure(mCode, gb, reply, error);
 			reply.catf(", proximal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL
 							"%s, distal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL "%s, crosstalk %.1f:%.1f:%.1f, bed origin (%.1f, %.1f)",
-							(double)proximalArmLength, (double)thetaLimits[0], (double)thetaLimits[1], (supportsContinuousRotation[0]) ? " (continuous)" : "",
+							(double)proximalArmLength, (double)thetaLimits[0], (double)thetaLimits[1], supportsContinuousRotation[0] ? " (continuous)" : "",
 							(double)distalArmLength, (double)psiLimits[0], (double)psiLimits[1], supportsContinuousRotation[1] ? " (continuous)" : "",
 							(double)crosstalk[0], (double)crosstalk[1], (double)crosstalk[2],
 							(double)xOffset, (double)yOffset);

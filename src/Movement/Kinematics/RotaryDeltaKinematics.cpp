@@ -30,12 +30,23 @@ constexpr ObjectModelTableEntry RotaryDeltaKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "name",	OBJECT_MODEL_FUNC(self->GetName(true)), 	ObjectModelEntryFlags::none },
+	{ "dummy",	OBJECT_MODEL_FUNC_NOSELF(false), 	ObjectModelEntryFlags::none },			// placeholder
 };
 
 constexpr uint8_t RotaryDeltaKinematics::objectModelTableDescriptor[] = { 1, 1 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(RotaryDeltaKinematics, RoundBedKinematics)
+
+Kinematics::KinematicsTypeDescriptor rotaryDeltaKinematicsDescriptor(RotaryDeltaKinematics::Create);
+
+/*static*/ Kinematics *_ecv_from _ecv_null RotaryDeltaKinematics::Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept
+{
+	if (MatchesLegacyType(name, legacyNumber, KinematicsType::rotaryDelta))
+	{
+		return new RotaryDeltaKinematics();
+	}
+	return nullptr;
+}
 
 // Constructor
 RotaryDeltaKinematics::RotaryDeltaKinematics() noexcept : RoundBedKinematics(KinematicsType::rotaryDelta, SegmentationType(true, true, true))
@@ -77,14 +88,6 @@ void RotaryDeltaKinematics::Recalc() noexcept
 		rodSquared[axis] = fsquare(rodLengths[axis]);
 		rodSquaredMinusArmSquared[axis] = rodSquared[axis] - fsquare(armLengths[axis]);
 	}
-}
-
-// Return the name of the current kinematics.
-// If 'forStatusReport' is true then the string must be the one for that kinematics expected by DuetWebControl and PanelDue.
-// Otherwise it should be in a format suitable for printing.
-const char *RotaryDeltaKinematics::GetName(bool forStatusReport) const noexcept
-{
-	return "Rotary delta";
 }
 
 // Set or report the parameters from a M665, M666 or M669 command

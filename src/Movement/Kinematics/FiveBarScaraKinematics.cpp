@@ -32,7 +32,7 @@ constexpr ObjectModelTableEntry FiveBarScaraKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "name",	OBJECT_MODEL_FUNC(self->GetName(true)), 	ObjectModelEntryFlags::none },
+	{ "dummy",	OBJECT_MODEL_FUNC_NOSELF(false), 	ObjectModelEntryFlags::none },		// this is just a placeholder
 	//TODO lots more to be added here
 };
 
@@ -40,16 +40,21 @@ constexpr uint8_t FiveBarScaraKinematics::objectModelTableDescriptor[] = { 1, 1 
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(FiveBarScaraKinematics, ZLeadscrewKinematics)
 
+Kinematics::KinematicsTypeDescriptor fiveBarScaraKinematicsDescriptor(FiveBarScaraKinematics::Create);
+
+/*static*/ Kinematics *_ecv_from _ecv_null FiveBarScaraKinematics::Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept
+{
+	if (MatchesLegacyType(name, legacyNumber, KinematicsType::fiveBarScara))
+	{
+		return new FiveBarScaraKinematics();
+	}
+	return nullptr;
+}
+
 FiveBarScaraKinematics::FiveBarScaraKinematics() noexcept
 	: ZLeadscrewKinematics(KinematicsType::fiveBarScara, SegmentationType(true, false, false))
 {
 	Recalc();
-}
-
-// Return the name of the current kinematics
-const char *FiveBarScaraKinematics::GetName(bool forStatusReport) const noexcept
-{
-	return "FiveBarScara";
 }
 
 //////////////////////// private functions /////////////////////////

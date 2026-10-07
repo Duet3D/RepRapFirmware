@@ -24,11 +24,9 @@
 class ScaraKinematics : public ZLeadscrewKinematics
 {
 public:
-	// Constructors
-	ScaraKinematics() noexcept;
+	static Kinematics *_ecv_from _ecv_null Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept;
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
-	const char *_ecv_array GetName(bool forStatusReport) const noexcept override;
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException) override;
 	MovementError CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
@@ -47,6 +45,8 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
+	static KinematicsTypeDescriptor scaraKinematicsDescriptor;
+
 	static constexpr float DefaultProximalArmLength = 100.0;
 	static constexpr float DefaultDistalArmLength = 100.0;
 	static constexpr float DefaultMinTheta = -90.0;					// minimum proximal joint angle
@@ -56,6 +56,9 @@ private:
 
 	static constexpr const char *_ecv_array HomeProximalFileName = "homeproximal.g";
 	static constexpr const char *_ecv_array HomeDistalFileName = "homedistal.g";
+
+	// Constructors
+	ScaraKinematics() noexcept;
 
 	void Recalc() noexcept;
 	bool CalculateThetaAndPsi(const float machinePos[], bool isCoordinated, float& theta, float& psi, bool& armMode) const noexcept;
