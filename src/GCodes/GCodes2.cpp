@@ -2822,14 +2822,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						const float extrusionFactor = gb.GetPositiveFValue() * 0.01;
 						if (extrusionFactor >= 0.01)
 						{
-							const bool isFileChannel = gb.IsFileChannel();
+							const bool immediate = !gb.IsFileChannel();			// a change from a file must not alter moves queued before it
 							if (seenD)
 							{
-								ChangeExtrusionFactor(extruder, extrusionFactor, isFileChannel);
+								ChangeExtrusionFactor(extruder, extrusionFactor, immediate);
 							}
 							else
 							{
-								ct->IterateExtruders([this, extrusionFactor, isFileChannel](unsigned int extr) { ChangeExtrusionFactor(extr, extrusionFactor, isFileChannel); });
+								ct->IterateExtruders([this, extrusionFactor, immediate](unsigned int extr) { ChangeExtrusionFactor(extr, extrusionFactor, immediate); });
 							}
 						}
 					}
