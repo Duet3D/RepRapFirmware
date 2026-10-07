@@ -153,7 +153,7 @@ jobs:
       # linked into the firmware; recorded but uninitialised submodules contribute no code and are skipped
       - name: "Generate software BOM"
         run: |
-          mkdir -p bundles
+          mkdir -p sbom
           version=$(sed -n 's/^# define MAIN_VERSION\s\+"\(.\+\)"$/\1/p' ./RepRapFirmware/src/Version.h)
           for repo in CANlib CoreN2G Duet3Expansion FreeRTOS LibMbedTls LibTinyusb Qfplib-M0-full RepRapFirmware RRFLibraries WiFiSocketServerRTOS; do
             jq -n --arg name "$repo" --arg ref "$(git -C "./$repo" rev-parse --abbrev-ref HEAD)" --arg sha "$(git -C "./$repo" rev-parse HEAD)" \
@@ -163,18 +163,18 @@ jobs:
               jq -n --arg parent "$repo" --arg path "${path#*/}" --arg sha "${sha#[+U]}" \
                 '{type: "library", name: ($parent + "/" + $path), version: $sha, properties: [{name: "duet3d:submoduleOf", value: $parent}]}'
             done
-          done > bundles/components.jsonl
-          jq -n --arg version "$version" --arg toolchain "$ARM_TOOLCHAIN" --slurpfile components bundles/components.jsonl \
+          done > sbom/components.jsonl
+          jq -n --arg version "$version" --arg toolchain "$ARM_TOOLCHAIN" --slurpfile components sbom/components.jsonl \
             '{bomFormat: "CycloneDX", specVersion: "1.6", version: 1, metadata: {timestamp: (now | todateiso8601), component: {type: "firmware", name: "RepRapFirmware", version: $version}, tools: {components: [{type: "application", name: "arm-gnu-toolchain", version: ($toolchain | sub("^arm-gnu-toolchain-"; "") | sub("-x86_64-arm-none-eabi$"; ""))}]}}, components: $components}' \
-            > "bundles/Duet3Firmware-$version-sbom.json"
-          rm bundles/components.jsonl
-          jq . "bundles/Duet3Firmware-$version-sbom.json"
+            > "sbom/Duet3Firmware-$version-sbom.json"
+          rm sbom/components.jsonl
+          jq . "sbom/Duet3Firmware-$version-sbom.json"
 
       - name: "Attach software BOM"
         uses: actions/upload-artifact@v7
         with:
           name: sbom
-          path: ./bundles/Duet3Firmware-*-sbom.json
+          path: ./sbom/Duet3Firmware-*-sbom.json
 
       - name: "Set up ARM GCC"
         run: |
