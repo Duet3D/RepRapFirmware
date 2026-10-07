@@ -441,6 +441,13 @@ void GCodes::Spin() noexcept
 		return;
 	}
 
+	// Keep the reported machine coordinates up to date here, so that object model and status requests served by other tasks
+	// never run the kinematics transform on their own stacks
+	for (MovementState& ms : moveStates)
+	{
+		ms.RefreshMachineCoordinates();
+	}
+
 #if NUM_ASYNC_CHANNELS != 0
 	if (emergencyStopCommanded)
 	{
@@ -1901,6 +1908,7 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSys
 	}
 
 	gb.MotionStopped();									// must do this after we have finished waiting, so that we don't stop waiting when executing G4
+	ms.RefreshMachineCoordinates(true);					// the coordinates reported at standstill must be exact, not up to MachineCoordinateRefreshMillis old
 
 	// Re-read the position from the motors only if the last move could have stopped short of its commanded target
 	// (endstop/probe/stall/raw move) or was a special move that bypassed the user position (probing state machines,

@@ -15,6 +15,10 @@
 #include <Movement/Kinematics/Kinematics.h>
 #include <PrintMonitor/PrintMonitor.h>
 
+// Minimum interval between fetching the machine coordinates from the motors. DWC and PanelDue poll a few times a second,
+// so this bounds the kinematics transform to once per movement system per interval instead of once per axis reported
+constexpr uint32_t MachineCoordinateRefreshMillis = 50;
+
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -205,6 +209,7 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 	raw.maxTravelAcceleration = ConvertAcceleration(DefaultTravelAcceleration);
 
 	raw.movementTool = currentTool = nullptr;
+	whenMachineCoordinatesFetched = millis() - MachineCoordinateRefreshMillis;		// so that the first refresh fetches them; SetInitialMachineCoordinates seeds the array
 	latestVirtualExtruderPosition = raw.moveStartVirtualExtruderPosition = 0.0;
 	virtualFanSpeed = 0.0;
 	speedFactor = 1.0;
@@ -230,6 +235,8 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 void MovementState::SetInitialMachineCoordinates(const float initialPosition[MaxAxesPlusExtruders]) noexcept
 {
 	memcpyf(raw.coords, initialPosition, MaxAxesPlusExtruders);
+	memcpyf(latestMachineCoordinates, initialPosition, MaxAxesPlusExtruders);		// report the new position immediately, this also runs after a kinematics change
+	whenMachineCoordinatesFetched = millis() - MachineCoordinateRefreshMillis;		// and let the next Spin re-fetch it from the motors
 	reprap.GetMove().SetLastEndpoints(msNumber, RawMove::allLogicalDrives, lastKnownEndpoints);
 }
 
@@ -255,15 +262,27 @@ void MovementState::ChangeExtrusionFactor(unsigned int extruder, float multiplie
 
 // Get a single coordinate for reporting e.g.in the OM
 // Return the current machine axis and extruder coordinates. They are needed only to service status requests from DWC, PanelDue, M114.
-// Transforming the machine motor coordinates to Cartesian coordinates is quite expensive, and a status request or object model request will call this for each axis.
-// So we cache the latest coordinates and only update them if it is some time since we last did, or if we have just waited for movement to stop.
-// Interrupts are assumed enabled on entry
+// This must not transform motor positions to Cartesian coordinates, because a status request or object model request calls it for each axis
+// and the transform runs the kinematics, which for some kinematics means an iterative solver with a stack frame far larger than the
+// network task can accommodate. RefreshMachineCoordinates does the transform instead, on the task that owns this movement system.
 // Note, this no longer applies inverse mesh bed compensation or axis skew compensation to the returned machine coordinates, so they are the compensated coordinates!
 float MovementState::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 {
-	float coords[MaxAxesPlusExtruders];
-	reprap.GetMove().UpdateLiveMachineCoordinates(coords, currentTool);
-	return coords[axisOrExtruder];
+	return latestMachineCoordinates[axisOrExtruder];
+}
+
+// Re-fetch the machine coordinates from the motors, no more often than every MachineCoordinateRefreshMillis unless forced.
+// Callers must force a refresh after waiting for movement to stop, because the coordinates reported at standstill are
+// expected to be exact, whereas a sample taken mid-move is only ever approximate.
+// Interrupts are assumed enabled on entry
+void MovementState::RefreshMachineCoordinates(bool forced) noexcept
+{
+	const uint32_t now = millis();
+	if (forced || now - whenMachineCoordinatesFetched >= MachineCoordinateRefreshMillis)
+	{
+		whenMachineCoordinatesFetched = now;
+		reprap.GetMove().UpdateLiveMachineCoordinates(latestMachineCoordinates, currentTool);
+	}
 }
 
 void MovementState::Diagnostics(const StringRef& reply) const noexcept
