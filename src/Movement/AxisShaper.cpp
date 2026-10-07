@@ -142,9 +142,6 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 					if (numDelays != numAmplitudes)
 					{
 						reply.copy("Number of delays must be same as number of amplitudes");
-						type = InputShaperType::none;
-						numImpulses = 1;
-						coefficients[0] = 1.0;						// set this up in case of an early return
 						return GCodeResult::error;
 					}
 
@@ -154,9 +151,6 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 						if (rawDelays[i] <= 0 || (i != 0 && rawDelays[i] <= rawDelays[i - 1]))
 						{
 							reply.copy("Delays must be positive and in strictly increasing order");
-							type = InputShaperType::none;
-							numImpulses = 1;
-							coefficients[0] = 1.0;						// set this up in case of an early return
 							return GCodeResult::error;
 						}
 					}
