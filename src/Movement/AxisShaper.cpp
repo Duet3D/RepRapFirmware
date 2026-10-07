@@ -18,6 +18,10 @@
 # include <CAN/CanInterface.h>
 #endif
 
+constexpr float MaxZeta = 0.9;
+constexpr float MaxZetaEI2 = 0.3;
+constexpr float MaxZetaEI3 = 0.2;
+
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
@@ -102,9 +106,9 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 
 	float newFrequency = frequency;
 	gb.TryGetLimitedFValue('F', newFrequency, seen, MinimumInputShapingFrequency, MaximumInputShapingFrequency);
-	const float maxZeta = (newType == InputShaperType::ei2) ? 0.3
-							: (newType == InputShaperType::ei3) ? 0.2
-								: 0.9;
+	const float maxZeta = (newType == InputShaperType::ei2) ? MaxZetaEI2
+							: (newType == InputShaperType::ei3) ? MaxZetaEI3
+								: MaxZeta;
 	float newZeta = zeta;
 	gb.TryGetLimitedFValue('S', newZeta, seen, 0.0, maxZeta);
 
@@ -233,6 +237,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 
 		case InputShaperType::ei2:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635.
 			{
+				if (newZeta > MaxZetaEI2) { newZeta = MaxZetaEI2; }
 				const float zetaSquared = fsquare(newZeta);
 				const float zetaCubed = zetaSquared * newZeta;
 				coefficients[0] = (0.16054) + ( 0.76699) * newZeta + ( 2.26560)	* zetaSquared + (-1.22750)	* zetaCubed;
@@ -247,6 +252,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 
 		case InputShaperType::ei3:		// see http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.465.1337&rep=rep1&type=pdf. United States patent #4,916,635
 			{
+				if (newZeta > MaxZetaEI3) { newZeta = MaxZetaEI3; }
 				const float zetaSquared = fsquare(newZeta);
 				const float zetaCubed = zetaSquared * newZeta;
 				coefficients[0] = (0.11275)	+ ( 0.76632) * newZeta + ( 3.29160)	* zetaSquared + (-1.44380)	* zetaCubed;
