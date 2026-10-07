@@ -61,7 +61,7 @@
 #if defined(DEBUG)
 constexpr size_t NetworkStackWords = 1000;				// needs to be enough to support rr_model
 #else
-constexpr size_t NetworkStackWords = 600;				// needs to be enough to support rr_model
+constexpr size_t NetworkStackWords = 740;				// needs to be enough to support rr_model. For Hangprinter in 3.7.0 we need at least 669 words.
 #endif
 
 static Task<NetworkStackWords> networkTask;
