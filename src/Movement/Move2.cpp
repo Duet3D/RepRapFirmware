@@ -1816,7 +1816,7 @@ GCodeResult Move::EutProcessM569(const CanMessageGeneric& msg, const StringRef& 
 			seen = true;
 			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::chopperControl, val))
 			{
-				reply.printf("Bad ccr for driver %u%u", CanInterface::GetCanAddress(), drive);
+				reply.printf("Bad ccr for driver %u.%u", CanInterface::GetCanAddress(), drive);
 				return GCodeResult::error;
 			}
 		}
