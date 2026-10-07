@@ -57,15 +57,25 @@ constexpr ObjectModelTableEntry HangprinterKinematics::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
 	{ "anchors",		OBJECT_MODEL_FUNC_ARRAY(NumArrayTableEntriesInParents + 1), ObjectModelEntryFlags::none },
-	{ "name",			OBJECT_MODEL_FUNC(self->GetName(true)), 					ObjectModelEntryFlags::none },
 	{ "printRadius",	OBJECT_MODEL_FUNC(self->printRadius, 1), 					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t HangprinterKinematics::objectModelTableDescriptor[] = { 1, 3 };
+constexpr uint8_t HangprinterKinematics::objectModelTableDescriptor[] = { 1, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(HangprinterKinematics, RoundBedKinematics)
 
 // Constructor
+Kinematics::KinematicsTypeDescriptor hangprinterKinematicsDescriptor(HangprinterKinematics::Create);
+
+/*static*/ Kinematics *_ecv_from _ecv_null HangprinterKinematics::Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept
+{
+	if (MatchesLegacyType(name, legacyNumber, KinematicsType::hangprinter))
+	{
+		return new HangprinterKinematics();
+	}
+	return nullptr;
+}
+
 HangprinterKinematics::HangprinterKinematics() noexcept
 	: RoundBedKinematics(KinematicsType::hangprinter, SegmentationType(true, true, true))
 {
@@ -192,11 +202,6 @@ void HangprinterKinematics::Recalc() noexcept
 	ReadODrive3AxisForce({}, StringRef(nullptr, 0), torqueConstants, mechanicalAdvantage, spoolGearTeeth, motorGearTeeth, spoolRadii);
 	SetODrive3TorqueMode({}, 0.0F, StringRef(nullptr, 0), mechanicalAdvantage, spoolGearTeeth, motorGearTeeth, spoolRadii);
 #endif
-}
-
-const char *_ecv_array HangprinterKinematics::GetName(bool forStatusReport) const noexcept
-{
-    return "Hangprinter";
 }
 
 // Set the parameters from a M665, M666 or M669 command

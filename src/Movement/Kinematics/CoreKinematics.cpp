@@ -58,12 +58,26 @@ constexpr ObjectModelTableEntry CoreKinematics::objectModelTable[] =
 	// 0. kinematics members
 	{ "forwardMatrix",		OBJECT_MODEL_FUNC_ARRAY(22), 									ObjectModelEntryFlags::none },
 	{ "inverseMatrix",		OBJECT_MODEL_FUNC_ARRAY(23), 									ObjectModelEntryFlags::none },
-	{ "name",				OBJECT_MODEL_FUNC(self->GetName(true)), 						ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t CoreKinematics::objectModelTableDescriptor[] = { 1, 3 };
+constexpr uint8_t CoreKinematics::objectModelTableDescriptor[] = { 1, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(CoreKinematics, ZLeadscrewKinematics)
+
+Kinematics::KinematicsTypeDescriptor coreKinematicsDescriptor(CoreKinematics::Create);
+
+/*static*/ Kinematics *_ecv_from _ecv_null CoreKinematics::Create(const char *_ecv_array _ecv_null name, int legacyNumber) noexcept
+{
+	const KinematicsType::RawType supportedTypes[] = { KinematicsType::cartesian, KinematicsType::coreXY, KinematicsType::coreXYU, KinematicsType::coreXYUV, KinematicsType::coreXZ, KinematicsType::markForged };
+	for (KinematicsType::RawType t : supportedTypes)
+	{
+		if (MatchesLegacyType(name, legacyNumber, t))
+		{
+			return new CoreKinematics(t);
+		}
+	}
+	return nullptr;
+}
 
 // Recalculate internal variables following a configuration change
 void CoreKinematics::Recalc() noexcept
@@ -185,7 +199,7 @@ CoreKinematics::CoreKinematics(KinematicsType k) noexcept : ZLeadscrewKinematics
 		inverseMatrix(i, i) = 1.0;
 	}
 
-	switch (k)
+	switch (k.RawValue())
 	{
 	case KinematicsType::cartesian:
 	default:
@@ -230,36 +244,6 @@ CoreKinematics::CoreKinematics(KinematicsType k) noexcept : ZLeadscrewKinematics
 	}
 
 	Recalc();
-}
-
-// Return the name of the current kinematics
-const char *_ecv_array CoreKinematics::GetName(bool forStatusReport) const noexcept
-{
-	// This reports the original kinematics that was requested. It doesn't allow for the matrix having been patched to change the kinematics.
-	switch (GetKinematicsType())
-	{
-	case KinematicsType::cartesian:
-		return (forStatusReport) ? "cartesian" : "Cartesian";
-
-	case KinematicsType::coreXY:
-		return (forStatusReport) ? "coreXY" : "CoreXY";
-
-	case KinematicsType::coreXYU:
-		return (forStatusReport) ? "coreXYU" : "CoreXYU";
-
-	case KinematicsType::coreXYUV:
-		return (forStatusReport) ? "coreXYUV" : "CoreXYUV";
-		break;
-
-	case KinematicsType::coreXZ:
-		return (forStatusReport) ? "coreXZ" : "CoreXZ";
-
-	case KinematicsType::markForged:
-		return "markForged";
-
-	default:
-		return "unknown";
-	}
 }
 
 // Set the parameters from a M665, M666, M667 or M669 command
