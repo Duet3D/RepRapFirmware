@@ -1672,17 +1672,16 @@ void SbcInterface::InvalidateResources() noexcept
 			continue;
 		}
 
-		if (gb->IsExecutingOnSbc())
-		{
-			gb->SetFinished(true);
-		}
-
 		if (gb->IsWaitingForMacro())
 		{
 			gb->ResolveMacroRequest(true, false);
 		}
 
 		MutexLocker locker(gb->mutex);
+		if (gb->IsExecutingOnSbc())
+		{
+			gb->SetFinished(true);		// only under the mutex, because the main task may be spinning this channel
+		}
 		if (gb->IsMacroRequestPending())
 		{
 			gb->MacroRequestSent();
