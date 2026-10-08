@@ -33,3 +33,7 @@
 /src/Temp/
 /Duet3_MB6HC_v2/
 /Duet_MB6HC_v2/
+
+# clang-tidy output (Scripts/run-clang-tidy.sh)
+/clang-tidy-out/
+/compile_commands.json

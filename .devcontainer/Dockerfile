@@ -12,7 +12,7 @@ COPY ./install-arm-gcc.sh /tmp/
 
 RUN apt-get update \
     && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends ca-certificates curl default-jre tar xz-utils \
+    && apt-get -y install --no-install-recommends ca-certificates curl default-jre tar xz-utils bear clang-tidy \
     && rm -rf /var/lib/apt/lists/*
 
 RUN echo "Installing Eclipse ${ECLIPSE_RELEASE}..." \
