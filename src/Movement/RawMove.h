@@ -118,6 +118,7 @@ public:
 	void ChangeSingleEndpointAfterHoming(size_t drive, int32_t ep) noexcept;
 	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;			// adjust the endpoints following delta calibration
 	float LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept;				// Get a single coordinate for reporting e.g.in the OM
+	void RefreshMachineCoordinates(bool forced = false) noexcept;							// Re-fetch the machine coordinates from the motors, rate-limited unless forced
 	void UpdateOwnedDriveEndpointsFromMotors() noexcept;									// fetch lastKnownEndpoints from the motors for our owned drives and update the endpoints in our DDA ring
 	void UpdateOwnedDriveLastEndpoints(const int32_t endPoints[MaxAxes]) noexcept;			// update lastKnownEndpoints for our owned drives
 
@@ -167,6 +168,8 @@ public:
 	// We have chosen this approach because it allows us to switch workplace coordinates systems or turn off applying workplace offsets without having to update currentUserPosition.
 	float currentUserPosition[MaxAxes];								// the current position of the axes as commanded by the input gcode, after accounting for workplace offset,
 																	// before accounting for tool offset and Z hop
+	float latestMachineCoordinates[MaxAxesPlusExtruders];			// the machine coordinates last fetched from the motors, reported by the object model and M114
+	uint32_t whenMachineCoordinatesFetched;							// when we last fetched them, used to rate-limit the kinematics transform
 	float latestVirtualExtruderPosition;							// the virtual extruder position of this movement system after completing pending moves
 	float virtualFanSpeed;											// the last speed given in a M106 command with no fan number
 	float initialCoords[MaxAxes];									// the initial positions of the axes

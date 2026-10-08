@@ -1454,7 +1454,7 @@ void Move::GetLiveMachineCoordinates(float coords[MaxAxes]) const noexcept
 }
 
 // Fetch the machine coordinates. We need to pass a tool context because that affects the inverse bed transform.
-void Move::UpdateLiveMachineCoordinates(float coords[MaxAxes], const Tool *_ecv_null tool) const noexcept
+void Move::UpdateLiveMachineCoordinates(float coords[MaxAxesPlusExtruders], const Tool *_ecv_null tool) const noexcept
 {
 	GetLiveMachineCoordinates(coords);
 	InverseAxisAndBedTransform(coords, tool);
