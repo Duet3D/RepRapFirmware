@@ -83,7 +83,8 @@ Kinematics::KinematicsTypeDescriptor scaraKinematicsDescriptor(ScaraKinematics::
 
 ScaraKinematics::ScaraKinematics() noexcept
 	: ZLeadscrewKinematics(KinematicsType::scara, SegmentationType(true, false, false)),
-	  proximalArmLength(DefaultProximalArmLength), distalArmLength(DefaultDistalArmLength), xOffset(0.0), yOffset(0.0)
+	  proximalArmLength(DefaultProximalArmLength), distalArmLength(DefaultDistalArmLength), xOffset(0.0), yOffset(0.0),
+	  currentArmMode(true), cachedArmMode(true)					// true selects positive psi, which is what zero distal motor position gives
 {
 	thetaLimits[0] = DefaultMinTheta;
 	thetaLimits[1] = DefaultMaxTheta;
