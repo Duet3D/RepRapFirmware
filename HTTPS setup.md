@@ -10,7 +10,7 @@ RRF supports TLS-encrypted protocols on boards with an Ethernet interface (e.g. 
 
 You need to provide a private key and a certificate in PEM format on the SD card before enabling any TLS variant.
 
-> **Ethernet** Note there is a bug with all Chromium browsers that prevents large transfers working over TLS to memory constrained devices - **use Firefox**.
+> **Ethernet:** Note there is a bug with all Chromium browsers that prevents large transfers working over TLS to memory constrained devices - **use Firefox**.
 
 > **WiFi support:** TLS on WiFi requires an ESP32-family module **and** WiFi firmware version 2.4.0 or later. The ESP8266-based WiFi module used on Duet 2 WiFi, FMDC and the original Duet 3 Mini 5+ WiFi cannot host a TLS server - its limited heap (~38 KiB free) cannot accommodate an mbedTLS handshake. On the WiFi path, cert/key are uploaded once to the WiFi module's flash and the SD copies are auto-deleted (see [Section 2](#2-install-the-files-on-the-sd-card) below).
 
