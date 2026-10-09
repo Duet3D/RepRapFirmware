@@ -53,6 +53,11 @@ void ExtruderShaper::SetParametersSimple(float f) noexcept
 	dk = vk = std::numeric_limits<motioncalc_t>::infinity();
 }
 
+void ExtruderShaper::UpdateStepsPerMm(float stepsPerMm) noexcept
+{
+	mmPerStep = (motioncalc_t)1.0/(motioncalc_t)stepsPerMm;
+}
+
 #if SUPPORT_REMOTE_COMMANDS
 
 // Set the pressure advance parameters
@@ -82,10 +87,10 @@ motioncalc_t ExtruderShaper::GetPressureAdvanceDistance(motioncalc_t speed) cons
 }
 
 // Get the average number of pressure advance clocks for a move segment that changes speed. Must have lowSpeed <= highSpeed.
-motioncalc_t ExtruderShaper::GetAverageAdvanceClocks(motioncalc_t lowSpeed, motioncalc_t highSpeed, motioncalc_t steps) const noexcept
+motioncalc_t ExtruderShaper::GetAverageAdvanceClocks(motioncalc_t lowSpeed, motioncalc_t highSpeed, motioncalc_t stepsPerMmMovement) const noexcept
 {
-	const motioncalc_t actualLowSpeed = lowSpeed * steps;
-	const motioncalc_t actualHighSpeed = highSpeed * steps;
+	const motioncalc_t actualLowSpeed = lowSpeed * stepsPerMmMovement * mmPerStep;
+	const motioncalc_t actualHighSpeed = highSpeed * stepsPerMmMovement * mmPerStep;
 
 	// Optimisation for when the speed change doesn't cross the knee
 	if (actualHighSpeed <= vk)

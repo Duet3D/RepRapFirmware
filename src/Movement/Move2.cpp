@@ -173,6 +173,7 @@ float Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t requ
 	value = max<float>(value, MinimumStepsPerMm);					// don't allow zero or negative
 	const float ret = value/driveStepsPerMm[axisOrExtruder];
 	driveStepsPerMm[axisOrExtruder] = value;
+	dms[axisOrExtruder].extruderShaper.UpdateStepsPerMm(value);
 	reprap.MoveUpdated();
 	return ret;
 }
