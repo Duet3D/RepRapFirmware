@@ -632,8 +632,11 @@ bool DriveMovement::StopLogicalDrive(int32_t& netStepsTaken) noexcept
 
 	if (state != DMState::idle)
 	{
-		state = DMState::idle;
+		// DeactivateDM chooses the list to unlink from by looking at the state, so it must still be the motion
+		// state here. Clearing it first leaves a phase stepping DM to be searched for in activeDMs, where it is
+		// not, so it stays linked into phaseStepDMs for ever.
 		reprap.GetMove().DeactivateDM(this);
+		state = DMState::idle;
 		netStepsTaken = GetNetStepsTakenThisMove();
 		MoveSegment *seg = nullptr;
 		std::swap(seg, const_cast<MoveSegment*&>(segments));

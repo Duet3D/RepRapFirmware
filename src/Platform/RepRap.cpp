@@ -1257,7 +1257,9 @@ void RepRap::Tick() noexcept
 				// Save the stack of the stuck task when we get stuck in a spin loop
 				const uint32_t *_ecv_array relevantStackPtr;
 
-				// When a task gets stuck, sometimes we want the stack of that task and sometimes we want the stack of the running task instead
+				// When a task gets stuck, sometimes we want the stack of that task and sometimes we want the stack of the running task instead.
+				// If this is ever switched to the stuck task, move the GetStuckDiagnostics call below to relevantStackPtr + 8: that branch
+				// leaves the pointer at r0, so writing at + 3 would overwrite r3, r12, the link register, the program counter and xPSR.
 #if 1
 				// Record the stack of the running task
 				const TaskHandle relevantTask = RTOSIface::GetCurrentTask();
@@ -1296,7 +1298,13 @@ void RepRap::Tick() noexcept
 					relevantStackPtr += 8;										// skip r4-r11
 #endif
 				}
-				SoftwareReset((heatTaskStuck) ? SoftwareResetReason::heaterWatchdog : SoftwareResetReason::stuckInSpin, relevantStackPtr);
+				// Record why movement stopped making progress, over the floating point registers that follow the
+				// link register, program counter and xPSR in the exception frame. The reset record keeps words 0 to 7
+				// and then skips 18, so writing here costs us s0 to s4 and keeps the return address trail in words 8
+				// to 26, plus a true stack pointer. We never return to this task, so overwriting its frame is safe.
+				static_assert(3 + Move::NumStuckDiagnosticWords <= 8);			// anything past word 7 would be skipped
+				move->GetStuckDiagnostics(const_cast<uint32_t *_ecv_array>(relevantStackPtr) + 3);
+				SoftwareReset(heatTaskStuck ? SoftwareResetReason::heaterWatchdog : SoftwareResetReason::stuckInSpin, relevantStackPtr);
 			}
 		}
 	}

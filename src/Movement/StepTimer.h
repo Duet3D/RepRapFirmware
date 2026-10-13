@@ -78,7 +78,8 @@ public:
 
 #if SUPPORT_CAN_EXPANSION
 	// Handle a request for movement delay received from an expansion board
-	static void ProcessMovementDelayRequest(uint32_t delayRequested) noexcept;
+	static uint32_t ProcessMovementDelayRequest(uint32_t delayRequested) noexcept;	// returns the resulting total delay
+	static constexpr uint32_t MaxPlausibleMovementDelay = StepClockRate;			// a total movement delay above this is worth telling the user about, 1 second
 
 	// Check whether the movement delay has increased since we last called this. If yes, return the movement delay; else return zero.
 	static Ticks CheckMovementDelayIncreased() noexcept;

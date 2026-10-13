@@ -256,7 +256,19 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 	const CanMessageBoardStatus& msg = buf->msg.boardStatus;
 	if (msg.hasMovementDelay)
 	{
-		StepTimer::ProcessMovementDelayRequest(msg.movementDelay);
+		// Motion has slipped by the whole delay and it is never given back, but otherwise that shows up only as
+		// a number in the M122 hiccup line, which nobody reads until a print has already failed. Report it at
+		// 1s, 2s, 4s and so on, so that a slow leak leaves a growth trail without being able to spam.
+		const uint32_t totalDelay = StepTimer::ProcessMovementDelayRequest(msg.movementDelay);
+		static uint32_t nextMovementDelayToReport = StepTimer::MaxPlausibleMovementDelay;
+		if (totalDelay > nextMovementDelayToReport)
+		{
+			while (totalDelay > nextMovementDelayToReport)					// a single large jump must not warn again on each later report
+			{
+				nextMovementDelayToReport *= 2;
+			}
+			reprap.GetPlatform().MessageF(WarningMessage, "Movement delay has reached %.1fs, last requested by board %u\n", (double)totalDelay / (double)StepTimer::GetTickRate(), address);
+		}
 	}
 	else
 	{
