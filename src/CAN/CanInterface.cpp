@@ -1872,7 +1872,7 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 	}
 
 #if SUPPORT_BRS
-	uint32_t bitRateMultiplier;
+	uint32_t bitRateMultiplier = fastDataRate + 1;
 	if (gb.TryGetLimitedUIValue('R', bitRateMultiplier, seen, 9))
 	{
 		if (bitRateMultiplier == 0 || bitRateMultiplier == 5 || bitRateMultiplier == 7)
