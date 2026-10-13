@@ -853,7 +853,7 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) 
 
 	// Get the feed rate, backoff distance, and axis
 	m675Settings.axisNumber = FindAxisLetter(gb);
-	const bool rotational = reprap.GetMove().IsAxisLinear(m675Settings.axisNumber);
+	const bool rotational = reprap.GetMove().IsAxisRotational(m675Settings.axisNumber);
 	gb.MustSee(feedrateLetter);
 	m675Settings.feedRate = gb.LatestMachineState().feedRate = gb.ConvertSpeed(gb.GetFValue(), !rotational);		// don't apply the speed factor to homing and other special moves
 	m675Settings.backoffDistance = gb.Seen('R') ? ((rotational) ? gb.GetFValue() : gb.GetDistance()) : 5.0;
