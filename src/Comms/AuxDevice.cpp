@@ -535,6 +535,7 @@ GCodeResult AuxDevice::ReadUartData(uint8_t *_ecv_array data, size_t bytesToRead
 	if (bytesToRead == 0)
 	{
 		uart->ClearReceiveBuffer();
+		mutex.Release();
 		return GCodeResult::ok;
 	}
 
