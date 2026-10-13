@@ -121,10 +121,6 @@ constexpr uint32_t TransferTimeout = 3;						// any transfer should complete wit
 // GCONF register (0x00, RW)
 constexpr uint8_t REGNUM_GCONF = 0x00;
 
-constexpr uint32_t GCONF_5130_USE_VREF = 1 << 0;			// use external VRef
-constexpr uint32_t GCONF_5130_INT_RSENSE = 1 << 1;			// use internal sense resistors
-constexpr uint32_t GCONF_5130_END_COMMUTATION = 1 << 3;		// Enable commutation by full step encoder (DCIN_CFG5 = ENC_A, DCEN_CFG4 = ENC_B)
-
 constexpr uint32_t GCONF_5160_RECAL = 1 << 0;				// Zero crossing recalibration during driver disable (via ENN or via TOFF setting)
 constexpr uint32_t GCONF_FASTSTANDSTILL = 1 << 1;			// Timeout for step execution until standstill detection: 1: Short time: 2^18 clocks, 0: Normal time: 2^20 clocks
 constexpr uint32_t GCONF_STEALTHCHOP = 1 << 2;				// use stealthchop mode (else spread cycle mode)
