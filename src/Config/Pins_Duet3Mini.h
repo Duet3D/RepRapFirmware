@@ -11,6 +11,7 @@
 #include <PinDescription.h>
 #include <SPI/SpiParameters.h>
 #include <UART/UartParameters.h>
+#include <CanParameters.h>
 
 #define DEFAULT_BOARD_TYPE		 BoardType::Duet3Mini_Unknown
 
@@ -381,10 +382,13 @@ constexpr GpioPinFunction SbcSpiSercomPinsMode = GpioPinFunction::D;
 constexpr IRQn SbcSpiSercomIRQn = SERCOM0_1_IRQn;			// this is the transfer complete interrupt, the only one we use
 
 // CAN
-constexpr unsigned int CanDeviceNumber = 1;					// we use CAN1
-constexpr Pin CanTxPin = PortBPin(14);
-constexpr Pin CanRxPin = PortBPin(15);
-constexpr GpioPinFunction CanPinsMode = GpioPinFunction::H;
+constexpr CanParameters PrimaryCanParams =
+{
+	.instanceNumber = 1,
+	.txPin = PortBPin(14),
+	.rxPin = PortBPin(15),
+	.pinsFunction = GpioPinFunction::H
+};
 
 // I2C
 // Hardware I2C runs on the IO2 connector via SERCOM6: SDA on io2.out (PD09 = SERCOM6 PAD0), SCL on io2.in (PD08 = SERCOM6 PAD1).

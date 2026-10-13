@@ -4,6 +4,7 @@
 #include <PinDescription.h>
 #include <SPI/SpiParameters.h>
 #include <UART/UartParameters.h>
+#include <CanParameters.h>
 
 #define BOARD_SHORT_NAME		"MB6XD"
 #define BOARD_NAME				"Duet 3 MB6XD"
@@ -407,19 +408,27 @@ constexpr Pin APIN_SBC_SPI_SS0 = PortCPin(25);
 constexpr GpioPinFunction SBCPinPeriphMode = GpioPinFunction::C;
 
 // CAN
-constexpr Pin APIN_CAN0_RX = PortBPin(3);
-constexpr Pin APIN_CAN0_TX = PortBPin(2);
-constexpr GpioPinFunction CAN0PinPeriphMode = GpioPinFunction::A;
-
-constexpr Pin APIN_CAN1_RX = PortCPin(12);
-constexpr GpioPinFunction CAN1RXPinPeriphMode = GpioPinFunction::C;
-constexpr Pin APIN_CAN1_TX = PortDPin(12);
-constexpr GpioPinFunction CAN1TXPinPeriphMode = GpioPinFunction::B;
-
-constexpr unsigned int CanDeviceNumber = 1;				// CAN-FD device number
+constexpr CanParameters PrimaryCanParams =
+{
+	.instanceNumber = 1,
+	.txPin = PortDPin(12),
+	.rxPin = PortCPin(12),
+	.txPinFunction = GpioPinFunction::B,
+	.rxPinFunction = GpioPinFunction::C
+};
 
 #if defined(DUAL_CAN) && DUAL_CAN
-constexpr unsigned int SecondaryCanDeviceNumber = 0;	// plan CAN device number
+
+constexpr CanParameters SecondaryCanParams =
+{
+	.instanceNumber = 0,
+	.txPin = PortBPin(2),
+	.rxPin = PortBPin(3),
+	.txPinFunction = GpioPinFunction::A,
+	.rxPinFunction = GpioPinFunction::A
+
+};
+
 #endif
 
 constexpr Pin SbcTfrReadyPin = PortEPin(2);
