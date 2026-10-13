@@ -376,7 +376,7 @@ public:
 	bool CancelStepping(DDA *abandonedMove) noexcept;										// Stop generating steps, returning true if a remote driver was told to stop
 #endif
 
-	static constexpr size_t NumStuckDiagnosticWords = 5;
+	static constexpr size_t NumStuckDiagnosticWords = 5;									// how many words GetStuckDiagnostics writes
 	void GetStuckDiagnostics(uint32_t *_ecv_array words) const noexcept;					// collect the movement state that explains a stuck task
 
 	bool NoLiveMovement() const noexcept { return rings[0].IsIdle(); }						// Is a move running, or are there any queued?

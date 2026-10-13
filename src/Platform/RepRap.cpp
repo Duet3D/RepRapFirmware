@@ -1303,6 +1303,13 @@ void RepRap::Tick() noexcept
 				// and then skips 18, so writing here costs us s0 to s4 and keeps the return address trail in words 8
 				// to 26, plus a true stack pointer. We never return to this task, so overwriting its frame is safe.
 				static_assert(3 + Move::NumStuckDiagnosticWords <= 8);			// anything past word 7 would be skipped
+
+				// Exception entry only reserves the floating point registers, the core writes them when the handler first
+				// uses the FPU, and the FreeRTOS port enables that lazy mode. Were it still pending it would overwrite
+				// these words from behind, so complete it here while the slots still hold nothing we want.
+#if __FPU_USED && !defined(__ECV__)
+				__asm volatile("vmov.f32 s0, s0" ::: "memory");
+#endif
 				move->GetStuckDiagnostics(const_cast<uint32_t *_ecv_array>(relevantStackPtr) + 3);
 				SoftwareReset(heatTaskStuck ? SoftwareResetReason::heaterWatchdog : SoftwareResetReason::stuckInSpin, relevantStackPtr);
 			}

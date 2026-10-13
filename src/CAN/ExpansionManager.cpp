@@ -265,9 +265,15 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 		{
 			while (totalDelay > nextMovementDelayToReport)					// a single large jump must not warn again on each later report
 			{
+				if (nextMovementDelayToReport > std::numeric_limits<uint32_t>::max()/2)
+				{
+					nextMovementDelayToReport = std::numeric_limits<uint32_t>::max();	// doubling again would wrap to zero and spin here for ever
+					break;
+				}
 				nextMovementDelayToReport *= 2;
 			}
-			reprap.GetPlatform().MessageF(WarningMessage, "Movement delay has reached %.1fs, last requested by board %u\n", (double)totalDelay / (double)StepTimer::GetTickRate(), address);
+			// The total includes our own hiccups, so name the request as well, otherwise this sends the reader after a board that only asked for a few ms
+			reprap.GetPlatform().MessageF(WarningMessage, "Movement delay has reached %.1fs, board %u asked for %.1fs\n", (double)totalDelay / (double)StepTimer::GetTickRate(), address, (double)msg.movementDelay / (double)StepTimer::GetTickRate());
 		}
 	}
 	else

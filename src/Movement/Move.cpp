@@ -939,6 +939,7 @@ void Move::GetStuckDiagnostics(uint32_t *_ecv_array words) const noexcept
 	// drivesMoving. Record those only once they mean something, otherwise the decode shows stale values
 	const DDA *const cdda = rings[0].GetHeadDDA();
 	const DDA::DDAState cddaState = cdda->GetState();
+	static_assert(DDA::NumStateBits <= 4);						// the state occupies bits 1 to 4 of word 3
 	words[0] = drivesWithSegments;
 	words[1] = drivesNotIdle;
 	words[2] = cdda->IsCommitted() ? cdda->afterPrepare.drivesMoving.GetRaw() : 0;
@@ -975,7 +976,7 @@ bool Move::CancelStepping(DDA *abandonedMove) noexcept
 
 	// Move the endpoints of the abandoned move to where the motors actually stopped. Without this the caller
 	// stores a restore point taken from that move's original endpoint, so a resume after power loss starts from
-	// where the move was going rather than where it got to. 3.5 did this in DDA::StopDrive and 3.6 lost it.
+	// where the move was going rather than where it got to.
 	// Local motors stopped where they are, but the remote ones keep going: CanMotion::FinishMovement runs in
 	// DDA::Prepare, so the remote boards already hold the segments of every committed move after this one and
 	// no stop list exists unless the move checks endstops, so they run on to the last of those.
@@ -2441,7 +2442,7 @@ void Move::Interrupt() noexcept
 						// want when the Move task is there to notice and stop the print. In expansion mode the Move
 						// task only terminates itself, so halting would leave this board unable to step again.
 #if SUPPORT_REMOTE_COMMANDS
-						if (!CanInterface::InExpansionMode())					// Move::inExpansionMode is never set, see SwitchToExpansionMode
+						if (!CanInterface::InExpansionMode())
 #endif
 						{
 							StepErrorHalt();

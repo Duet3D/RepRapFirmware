@@ -64,6 +64,8 @@ public:
 		committed			// has been converted into move segments already
 	};
 
+	static constexpr unsigned int NumStateBits = 3;										// how many bits of the flags word the state takes, see Move::GetStuckDiagnostics
+
 	explicit DDA(DDA *_ecv_null n) noexcept;
 
 	void* operator new(size_t count) { return Tasks::AllocPermanent(count); }
@@ -206,7 +208,7 @@ private:
 		struct
 		{
 			// Flag bits. The first 4 or 5 are copied from similar flag bits in RawMove, so keep them together and in the same order so that the compiler can copy them using a ubfx instruction.
-			uint32_t stateBits : 3,					// What state this DDA is in
+			uint32_t stateBits : NumStateBits,		// What state this DDA is in
 					 canPauseAfter : 1,				// True if we can pause at the end of this move
 			 	 	 checkEndstops : 1,				// True if this move monitors endstops or Z probe
 					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
