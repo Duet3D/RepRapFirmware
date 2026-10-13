@@ -2137,7 +2137,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 				endClocks = StepTimer::GetTimerTicksWhenInterruptsDisabled();
 				endTimeStamp = CanInterface::GetTimeStampCounter();
 			}
-# if SAME70
+# if EXTERNAL_CAN_TIMESTAMP_COUNTER
 			const uint32_t tsDiff = (endTimeStamp - startTimeStamp) & 0xFFFF;
 # else
 			const uint32_t tsDiff = (((endTimeStamp - startTimeStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;

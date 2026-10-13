@@ -66,7 +66,7 @@ namespace CanInterface
 	bool ReceivePlainMessage(CanMessageBuffer *null buf, uint32_t timeout = UsualResponseTimeout) noexcept;
 #endif
 
-#if !SAME70
+#if !EXTERNAL_CAN_TIMESTAMP_COUNTER
 	uint16_t GetTimeStampPeriod() noexcept;					// return the period of the time stamp counter in units of 48MHz CAN clocks
 #endif
 

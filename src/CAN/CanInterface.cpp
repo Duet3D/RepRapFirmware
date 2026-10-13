@@ -552,7 +552,7 @@ uint16_t CanInterface::GetTimeStampCounter() noexcept
 	return can0dev->ReadTimeStampCounter();
 }
 
-#if !SAME70
+#if !EXTERNAL_CAN_TIMESTAMP_COUNTER
 
 uint16_t CanInterface::GetTimeStampPeriod() noexcept
 {
