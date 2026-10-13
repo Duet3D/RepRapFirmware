@@ -963,6 +963,63 @@ bool Move::IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) co
 	return kinematics->IsReachable(axesCoords, axes);
 }
 
+// Collect the state that tells us why a task got stuck, to be stored in the software reset record.
+// Called from the tick ISR once movement has been stopped, so it must take no locks: DDARing::GetCurrentDDA
+// would assert from an ISR, and it returns nothing once a move is past its nominal duration, which is the very
+// case we are trying to record. The only known way for DDARing::Spin to return zero for ever is a committed
+// move that checks endstops whose drivesMoving still hold segments with nothing on the active list to step them.
+void Move::GetStuckDiagnostics(uint32_t *_ecv_array words) const noexcept
+{
+	static_assert(MaxAxesPlusExtruders <= 32);					// one bit per drive in the bitmaps below
+	uint32_t drivesWithSegments = 0;
+	uint32_t drivesNotIdle = 0;
+	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
+	{
+		if (dms[drive].MotionPending())
+		{
+			drivesWithSegments |= 1u << drive;
+		}
+		if (dms[drive].state != DMState::idle)
+		{
+			drivesNotIdle |= 1u << drive;
+		}
+	}
+
+	// With async moves the Move task spins every ring, so find the one that is wedged rather than assuming ring 0.
+	// A committed move that is past its finish time but has not expired is a move the retire loop will not take and
+	// that makes Spin return zero for ever. Only a move that checks endstops can be in that state, because for any
+	// other move HasExpired is the same comparison.
+	static_assert(NumMovementSystems <= 2);						// only one bit of the word below records which ring
+	size_t stuckRing = 0;
+	bool foundStuckRing = false;
+	for (size_t ring = 0; ring < NumMovementSystems; ring++)
+	{
+		const DDA *const head = rings[ring].GetHeadDDA();
+		if (head->IsCommitted() && (int32_t)(head->GetMoveFinishTime() - StepTimer::GetMovementTimerTicks()) < 0 && !head->HasExpired())
+		{
+			stuckRing = ring;
+			foundStuckRing = true;
+			break;
+		}
+	}
+
+	// DDA::Free only marks the slot empty, so an unused DDA still holds the previous occupant's flags and
+	// drivesMoving. Record those only once they mean something, otherwise the decode shows stale values
+	const DDA *const cdda = rings[stuckRing].GetHeadDDA();
+	const DDA::DDAState cddaState = cdda->GetState();
+	static_assert(DDA::NumStateBits <= 4);						// the state occupies bits 1 to 4 of word 3
+	words[0] = drivesWithSegments;
+	words[1] = drivesNotIdle;
+	words[2] = cdda->IsCommitted() ? cdda->afterPrepare.drivesMoving.GetRaw() : 0;
+	words[3] = ((activeDMs != nullptr) ? 1u : 0u)
+				| ((uint32_t)cddaState << 1)
+				| ((cddaState == DDA::empty) ? 0u : ((uint32_t)cdda->IsCheckingEndstops() << 5) | ((uint32_t)cdda->IsIsolatedMove() << 6))
+				| (hadStepError ? 1u << 7 : 0u)
+				| ((uint32_t)stuckRing << 8)
+				| (foundStuckRing ? 1u << 9 : 0u);				// without this bit the ring number is just the fallback
+	words[4] = StepTimer::GetMovementDelay();
+}
+
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating ms.pauseRestorePoint to the first move we skipped.
 bool Move::PausePrint(MovementState& ms) noexcept
 {
@@ -977,10 +1034,52 @@ bool Move::LowPowerOrStallPause(MovementState& ms) noexcept
 	return rings[ms.GetNumber()].LowPowerOrStallPause(ms);
 }
 
-// Stop generating steps
-void Move::CancelStepping() noexcept
+// Stop generating steps, returning true if a remote driver was told to stop and the CAN async sender needs waking.
+// Only a move that checks endstops has a stop list, so for a printing move no remote driver is told anything
+bool Move::CancelStepping(DDA *abandonedMove) noexcept
 {
 	StepTimer::DisableTimerInterrupt();
+
+	// Disabling the interrupt alone would leave the drives holding the segments of the abandoned move with
+	// nothing left to re-arm the timer, so every later wait for standstill would block for ever
+	const bool wakeAsyncSender = StopAllDrivers(true, StepTimer::GetTimerTicks());
+
+	// Move the endpoints of the abandoned move to where the motors actually stopped. Without this the caller
+	// stores a restore point taken from that move's original endpoint, so a resume after power loss starts from
+	// where the move was going rather than where it got to.
+	// Local motors stopped where they are, but the remote ones keep going: CanMotion::FinishMovement runs in
+	// DDA::Prepare, so the remote boards already hold the segments of every committed move after this one and
+	// no stop list exists unless the move checks endstops, so they run on to the last of those.
+	// An axis is either all local or all remote, mixing them is not supported, so one local driver is enough to tell.
+	if (abandonedMove != nullptr)
+	{
+#if SUPPORT_CAN_EXPANSION
+		const DDA *lastCommitted = abandonedMove;
+		while (lastCommitted->GetNext()->IsCommitted())
+		{
+			lastCommitted = lastCommitted->GetNext();
+		}
+#endif
+		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
+		for (size_t drive = 0; drive < numTotalAxes; drive++)
+		{
+#if SUPPORT_CAN_EXPANSION
+			bool hasLocalDriver = false;
+			IterateDrivers(drive,
+							[&hasLocalDriver](uint8_t) noexcept -> void { hasLocalDriver = true; },
+							[](DriverId) noexcept -> void { }
+						  );
+			if (!hasLocalDriver)
+			{
+				abandonedMove->endPoint[drive] = lastCommitted->endPoint[drive];
+				continue;
+			}
+#endif
+			abandonedMove->endPoint[drive] = dms[drive].currentMotorPosition - GetCurrentBacklashSteps(drive);
+		}
+	}
+
+	return wakeAsyncSender;
 }
 
 #endif
@@ -2719,14 +2818,43 @@ void Move::Interrupt() noexcept
 			{
 				// Force a break by updating the move start time.
 				++numInterruptHiccups;
-#if SUPPORT_CAN_EXPANSION
 				uint32_t hiccupTimeInserted = 0;
-#endif
 				for (uint32_t hiccupTime = MoveTiming::HiccupTime; ; hiccupTime += MoveTiming::HiccupIncrement)
 				{
-#if SUPPORT_CAN_EXPANSION
-					hiccupTimeInserted += hiccupTime;
+					if (hiccupTimeInserted + hiccupTime > MoveTiming::MaxHiccupTimePerInterrupt)
+					{
+						// A step due this far in the past is a defect, not a transient overload. Movement delay is never
+						// given back, and we broadcast it, so slipping further would move every board's timebase for good
+						if (Platform::genericDebugBuffer != nullptr)
+						{
+							Platform::genericDebugBuffer->GetRef().printf("Code 8 move error: hiccup=%" PRIu32 ", time now=%" PRIu32 "\n", hiccupTimeInserted, now);
+						}
+						Platform::shouldTurnOffHeaters = true;
+						Platform::hasGenericDebug = true;
+
+						// hadStepError makes this interrupt break without rescheduling from now on, which is what we
+						// want when the Move task is there to notice and stop the print. In expansion mode the Move
+						// task only terminates itself, so halting would leave this board unable to step again.
+#if SUPPORT_REMOTE_COMMANDS
+						if (!CanInterface::InExpansionMode())
 #endif
+						{
+							StepErrorHalt();
+						}
+
+						// Release the drives either way: AddLinearSegments only re-arms a drive that is idle, so
+						// leaving them in a motion state would leak every segment sent to us afterwards.
+						// StopAllDrivers takes the local time at which motion stopped, not the movement time in 'now'
+#if SUPPORT_CAN_EXPANSION
+						if (StopAllDrivers(true, StepTimer::GetTimerTicks())) { CanInterface::WakeAsyncSender(); }
+#else
+						(void)StopAllDrivers(true, StepTimer::GetTimerTicks());
+#endif
+						WakeMoveTask();						// nothing is scheduled now, so the Move task must be woken to act on the error
+						return;
+					}
+
+					hiccupTimeInserted += hiccupTime;
 					StepTimer::IncreaseMovementDelay(hiccupTime);
 
 					// Reschedule the next step interrupt. This time it should succeed if the hiccup time was long enough.

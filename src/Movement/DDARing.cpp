@@ -19,6 +19,7 @@
 #include <Tools/Tool.h>
 
 #if SUPPORT_CAN_EXPANSION
+# include <CAN/CanInterface.h>
 # include "CAN/CanMotion.h"
 #endif
 
@@ -780,13 +781,14 @@ bool DDARing::LowPowerOrStallPause(MovementState& ms) noexcept
 
 	const DDA * const savedDdaRingAddPointer = addPointer;
 	bool abortedMove = false;
+	bool wakeAsyncSender = false;
 
 	IrqDisable();
 	DDA *_ecv_null dda = GetCurrentDDA();
 	if (dda != nullptr && dda->GetFilePosition() != noFilePosition)
 	{
 		// We are executing a move that has a file address, so we can interrupt it
-		reprap.GetMove().CancelStepping();
+		wakeAsyncSender = reprap.GetMove().CancelStepping(dda);
 		abortedMove = true;
 #if SUPPORT_LASER
 		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
@@ -814,6 +816,17 @@ bool DDARing::LowPowerOrStallPause(MovementState& ms) noexcept
 	}
 
 	IrqEnable();
+
+#if SUPPORT_CAN_EXPANSION
+	if (wakeAsyncSender)
+	{
+		// The sender waits with no timeout, so without this the stop commands for the remote drivers sit in
+		// the queue until some other motion message happens to wake it
+		CanInterface::WakeAsyncSender();
+	}
+#else
+	(void)wakeAsyncSender;
+#endif
 
 	if (dda == savedDdaRingAddPointer)
 	{

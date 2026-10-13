@@ -32,6 +32,7 @@ namespace MoveTiming
 	constexpr uint32_t MinInterruptInterval = (6 * StepClockRate)/1000000;			// Minimum interval between step timer interrupts, in step clocks; about 6us. See StepTimer::ScheduleTimerInterrupt.
 	constexpr uint32_t MaxStepInterruptTime = 10 * MinInterruptInterval;			// the maximum time we spend looping in the ISR, in step clocks
 	constexpr uint32_t HiccupIncrement = HiccupTime/2;								// how much we increase the hiccup time by on each attempt
+	constexpr uint32_t MaxHiccupTimePerInterrupt = StepClockRate;					// the most movement delay we insert in a single step interrupt, 1 second
 
 	constexpr uint32_t UsualMinimumPreparedTime = StepClockRate/20;					// 50ms
 	constexpr uint32_t AbsoluteMinimumPreparedTime = StepClockRate/40;				// 25ms

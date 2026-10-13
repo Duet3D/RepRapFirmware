@@ -1286,7 +1286,10 @@ void RepRap::Tick() noexcept
 				// Save the stack of the stuck task when we get stuck in a spin loop
 				const uint32_t *_ecv_array relevantStackPtr;
 
-				// When a task gets stuck, sometimes we want the stack of that task and sometimes we want the stack of the running task instead
+				// When a task gets stuck, sometimes we want the stack of that task and sometimes we want the stack of the running task instead.
+				// If this is ever switched to the stuck task, move the GetStuckDiagnostics call below to relevantStackPtr + 0: that branch
+				// leaves the pointer at r0, so writing at + 3 would overwrite the link register, the program counter and xPSR, while
+				// anything from + 8 lands in the floating point registers that the reset record skips and would be lost.
 #if 1
 				// Record the stack of the running task
 				const TaskHandle relevantTask = RTOSIface::GetCurrentTask();
@@ -1326,7 +1329,21 @@ void RepRap::Tick() noexcept
 					relevantStackPtr += 8;										// skip r4-r11
 #endif
 				}
-				SoftwareReset((heatTaskStuck) ? SoftwareResetReason::heaterWatchdog : SoftwareResetReason::stuckInSpin, relevantStackPtr);
+				// Record why movement stopped making progress, over the floating point registers that follow the
+				// link register, program counter and xPSR in the exception frame. The reset record keeps words 0 to 7
+				// and then skips 18, so writing here keeps the return address trail in words 8 to 26 plus a true stack
+				// pointer, and costs us s0 to s4, or five words of the task's own stack if the frame is a basic one.
+				// We never return to this task, so overwriting its frame is safe.
+				static_assert(3 + Move::NumStuckDiagnosticWords <= 8);			// anything past word 7 would be skipped
+
+				// Exception entry only reserves the floating point registers, the core writes them when the handler first
+				// uses the FPU, and the FreeRTOS port enables that lazy mode. Were it still pending it would overwrite
+				// these words from behind, so complete it here while the slots still hold nothing we want.
+#if __FPU_USED && !defined(__ECV__)
+				__asm volatile("vmov.f32 s0, s0" ::: "memory");
+#endif
+				move->GetStuckDiagnostics(const_cast<uint32_t *_ecv_array>(relevantStackPtr) + 3);
+				SoftwareReset(heatTaskStuck ? SoftwareResetReason::heaterWatchdog : SoftwareResetReason::stuckInSpin, relevantStackPtr);
 			}
 		}
 	}
