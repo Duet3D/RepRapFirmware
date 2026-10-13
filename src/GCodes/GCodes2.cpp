@@ -4777,10 +4777,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_PANELDUE_FLASH
 				if (gb.Seen('A'))
 				{
-					const uint32_t serialChannel = gb.GetLimitedUIValue('A', 1, NumSerialChannels);
+					const uint32_t serialChannel = gb.GetLimitedUIValue('A', FirstAuxChannel, NumSerialChannels);
 					if (platform.IsChanEnabled(serialChannel))
 					{
-						const uint32_t auxChannel = serialChannel - 1;
+						const uint32_t auxChannel = serialChannel - FirstAuxChannel;
 						if (gb.Seen('P'))
 						{
 							String<StringLength20> eraseString;
