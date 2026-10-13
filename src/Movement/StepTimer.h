@@ -105,6 +105,11 @@ public:
 	static float TicksToFloatMicroseconds(uint32_t n) noexcept { return (float)n * (1000000.0f/(float)StepClockRate); }
 
 #if SUPPORT_REMOTE_COMMANDS
+
+# if !EXTERNAL_CAN_TIMESTAMP_COUNTER
+	static void CanTimingMessageReceived(uint16_t messageTime, uint16_t currentTime) noexcept;
+# endif
+
 	static void ProcessTimeSyncMessage(const CanMessageTimeSync& msg, size_t msgLen, uint16_t timeStamp) noexcept;
 	static uint32_t ConvertToMasterTime(uint32_t localTime) noexcept { return localTime - localTimeOffset; }
 	static uint32_t GetMasterTime() noexcept { return ConvertToMasterTime(GetTimerTicks()); }
@@ -141,11 +146,19 @@ private:
 	static uint32_t prevMasterTime;												// the previous master time received
 	static uint32_t prevLocalTime;												// the previous local time when the master time was received, corrected for receive processing delay
 	static int32_t peakPosJitter, peakNegJitter;								// the max and min corrections we made to local time offset while synced
-	static int32_t errorAccumulator;												// the average time sync error
+	static int32_t errorAccumulator;											// the average time sync error
 	static bool gotJitter;														// true if we have recorded the jitter
-	static uint32_t peakReceiveDelay;											// the maximum receive delay we measured by using the receive time stamp
+	static uint32_t maxReceiveDelay;											// the maximum receive delay we measured by using the receive time stamp
+	static uint32_t minReceiveDelay;											// the minimum receive delay we measured by using the receive time stamp
 	static volatile unsigned int syncCount;										// the number of messages we have received since starting sync
 	static unsigned int numJitterResyncs, numTimeoutResyncs;
+
+#if !EXTERNAL_CAN_TIMESTAMP_COUNTER
+	// Values captured when the most recent message was received into dedicated receive buffer 0
+	static uint16_t lastTimeSyncMessageStamp;
+	static uint16_t lastCurrentTimeStamp;
+	static uint32_t lastStepTime;
+#endif
 
 	static constexpr uint32_t MaxSyncJitter = StepClockRate/100;				// 10ms
 	static constexpr unsigned int MaxSyncCount = 10;

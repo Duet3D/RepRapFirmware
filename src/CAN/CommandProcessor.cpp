@@ -66,6 +66,10 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 		uint32_t fileOffset = msg.fileOffset, fileLength = 0;
 		uint32_t lreq = msg.lengthRequested;
 
+		// Some bootloaders inadvertently set the BRS bit in the request even though bootloaders shouldn't use BRS.
+		// Clear the BRS bit to ensure that the response is sent without using BRS.
+		buf->useBrs = 0;
+
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 		// Fetch the firmware file from the local SD card or SBC
 		FileStore *_ecv_null const f = reprap.GetPlatform().OpenFile(FIRMWARE_DIRECTORY, fname.c_str(), OpenMode::read);

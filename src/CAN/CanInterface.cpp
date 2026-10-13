@@ -346,7 +346,13 @@ void CanInterface::Init() noexcept
 	// Initialise the CAN hardware
 	CanTiming timing;
 	timing.SetDefaults(CanTiming::DefaultCanBitRate);
-	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing, nullptr);
+	can0dev = CanDevice::Init(0, CanDeviceNumber, Can0Config, can0Memory, timing, nullptr,
+#if EXTERNAL_CAN_TIMESTAMP_COUNTER
+								nullptr
+#else
+								StepTimer::CanTimingMessageReceived
+#endif
+							 );
 	InitReceiveFilters();
 	can0dev->Enable();
 
@@ -359,7 +365,7 @@ void CanInterface::Init() noexcept
 
 #if DUAL_CAN
 	timing.SetDefaults(250'000);
-	can1dev = CanDevice::Init(1, SecondaryCanDeviceNumber, Can1Config, can1Memory, timing, nullptr);
+	can1dev = CanDevice::Init(1, SecondaryCanDeviceNumber, Can1Config, can1Memory, timing, nullptr, nullptr);
 	can1dev->SetShortFilterElement(0, CanDevice::RxBufferNumber::fifo0, 0, 0);			// set up a filter to receive all messages in FIFO 0
 	can1dev->SetExtendedFilterElement(0, CanDevice::RxBufferNumber::fifo0, 0, 0);
 	can1dev->Enable();
@@ -1942,7 +1948,7 @@ void CanInterface::ReportCanTiming(const StringRef& reply) noexcept
 
 #if SUPPORT_REMOTE_COMMANDS
 
-// Check that the BRS setting we are using matches the one n the time sync message and change it if necessary
+// Check that the BRS setting we are using matches the one in the time sync message and change it if necessary
 void CanInterface::CheckBrs(const CanMessageTimeSync& msg) noexcept
 {
 	if (msg.fastDataRate != fastDataRate || msg.tseg1Minus1 != dTseg1MinusOne)
