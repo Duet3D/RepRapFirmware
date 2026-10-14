@@ -2050,9 +2050,11 @@ bool GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(G
 								rawExtruderTotalByDrive[extruder] += extrusionAmount;
 								rawExtruderTotal += extrusionAmount;
 							}
-							ms.coords[ExtruderToLogicalDrive(extruder)] = (ms.applyM220M221)
-																			? extrusionAmount * extrusionFactors[extruder]
-																			: extrusionAmount;
+							const float cookedExtrusionAmount = (ms.applyM220M221)
+																? extrusionAmount * extrusionFactors[extruder]
+																: extrusionAmount;
+							ms.coords[ExtruderToLogicalDrive(extruder)] = cookedExtrusionAmount;
+							cookedTotalExtrusion += cookedExtrusionAmount;
 							extrudersMoving.SetBit(extruder);
 #if SUPPORT_ASYNC_MOVES && !PREALLOCATE_TOOL_AXES
 							logicalDrivesMoving.SetBit(ExtruderToLogicalDrive(extruder));
@@ -2070,7 +2072,7 @@ bool GCodes::LoadExtrusionFromGCode(GCodeBuffer& gb, MovementState& ms) THROWS(G
 #if SUPPORT_ASYNC_MOVES && !PREALLOCATE_TOOL_AXES
 		AllocateAxes(gb, ms, logicalDrivesMoving, ParameterLettersBitmap());
 #endif
-		if (ms.moveType == 1 || ms.moveType == 4)
+		if ((ms.moveType == 1 || ms.moveType == 4) && cookedTotalExtrusion != 0.0)
 		{
 			// Enable extruder endstops for the extruders moving
 			// First calculate the extruder speeds so that stall detection endstops can be validated.
