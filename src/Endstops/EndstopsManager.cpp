@@ -711,6 +711,10 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 				Move::CreateLaserTask();					// scanning probes use the Laser task to take readings
 			}
 		}
+		else
+		{
+			delete newProbe;							// the destructor releases any ports and remote handles that Create acquired
+		}
 		return rslt;
 	}
 
