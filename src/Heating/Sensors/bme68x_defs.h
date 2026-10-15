@@ -215,6 +215,7 @@
 
 /* High Gas variant */
 #define BME68X_VARIANT_GAS_HIGH                   UINT8_C(0x01)
+#define BME690_VARIANT_GAS_HIGH                   UINT8_C(0x02)
 
 /* Oversampling setting macros */
 
@@ -451,6 +452,35 @@
 
 /* Coefficient range switching error position */
 #define BME68X_IDX_RANGE_SW_ERR                   (41)
+
+/* BME690 coefficient index macros. The BME690 pressure and humidity coefficients sit at different positions and there is
+ * no par_h7; the temperature, gas and heater coefficients are where the BME68X_IDX_T*, BME68X_IDX_GH* and
+ * BME68X_IDX_RES_HEAT* macros say, see the compensation tables in the BME690 datasheet
+ */
+#define BME690_IDX_P1_LSB                         (10)
+#define BME690_IDX_P1_MSB                         (11)
+#define BME690_IDX_P2_LSB                         (12)
+#define BME690_IDX_P2_MSB                         (13)
+#define BME690_IDX_P3                             (14)
+#define BME690_IDX_P4                             (15)
+#define BME690_IDX_P5_LSB                         (4)
+#define BME690_IDX_P5_MSB                         (5)
+#define BME690_IDX_P6_LSB                         (6)
+#define BME690_IDX_P6_MSB                         (7)
+#define BME690_IDX_P7                             (8)
+#define BME690_IDX_P8                             (9)
+#define BME690_IDX_P9_LSB                         (18)
+#define BME690_IDX_P9_MSB                         (19)
+#define BME690_IDX_P10                            (20)
+#define BME690_IDX_P11                            (21)
+#define BME690_IDX_H1_LSB                         (24)
+#define BME690_IDX_H1_MSB                         (25)
+#define BME690_IDX_H2                             (26)
+#define BME690_IDX_H3                             (28)
+#define BME690_IDX_H4                             (27)
+#define BME690_IDX_H5_LSB                         (24)
+#define BME690_IDX_H5_MSB                         (23)
+#define BME690_IDX_H6                             (29)
 
 /* Gas measurement macros */
 
@@ -856,6 +886,36 @@ struct bme68x_calib_data
 
     /*! Gas resistance range switching error coefficient */
     int8_t range_sw_err;
+};
+
+/*
+ * @brief BME690 calibration coefficients. The gas and heater coefficients are shared with the BME680 and BME688 and
+ * are held in struct bme68x_calib_data.
+ */
+struct bme690_calib_data
+{
+    uint16_t par_t1;
+    uint16_t par_t2;
+    int8_t par_t3;
+
+    uint16_t par_p1;
+    uint16_t par_p2;
+    int8_t par_p3;
+    int8_t par_p4;
+    int16_t par_p5;
+    int16_t par_p6;
+    int8_t par_p7;
+    int8_t par_p8;
+    int16_t par_p9;
+    int8_t par_p10;
+    int8_t par_p11;
+
+    int16_t par_h1;
+    int8_t par_h2;
+    uint8_t par_h3;
+    int8_t par_h4;
+    int16_t par_h5;
+    uint8_t par_h6;
 };
 
 /*

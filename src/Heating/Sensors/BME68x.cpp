@@ -183,6 +183,11 @@ TemperatureError BME68xTemperatureSensor::bme68x_init() noexcept
 				rslt = bme68x_get_regs(BME68X_REG_VARIANT_ID, &var_id, 1);
 				if (rslt == TemperatureError::ok)
 				{
+					if (var_id != BME68X_VARIANT_GAS_LOW && var_id != BME68X_VARIANT_GAS_HIGH && var_id != BME690_VARIANT_GAS_HIGH)
+					{
+						return TemperatureError::unknownSensor;			// a variant we have no calibration map or compensation formulas for
+					}
+
 					variant_id = var_id;
 					return get_calib_data();
 				}
@@ -225,10 +230,34 @@ TemperatureError BME68xTemperatureSensor::get_calib_data() noexcept
 	rslt = bme68x_get_regs(BME68X_REG_COEFF3, &coeff_array[BME68X_LEN_COEFF1 + BME68X_LEN_COEFF2], BME68X_LEN_COEFF3);
 	if (rslt == TemperatureError::ok)
 	{
-		parse_calib_data(coeff_array);
+		parse_gas_calib_data(coeff_array);
+		if (IsBme690())
+		{
+			parse_calib_data_690(coeff_array);
+		}
+		else
+		{
+			parse_calib_data(coeff_array);
+		}
 	}
 
 	return rslt;
+}
+
+/*!
+ * @brief This API parses the gas and heater calibration data, which is the same on all BME68x variants.
+ */
+void BME68xTemperatureSensor::parse_gas_calib_data(const uint8_t *_ecv_array coeff) noexcept
+{
+	/* Gas calibration */
+	calib.par_gh1 = (int8_t)coeff[BME68X_IDX_GH1];
+	calib.par_gh2 = (int16_t)BME68X_CONCAT_BYTES(coeff[BME68X_IDX_GH2_MSB], coeff[BME68X_IDX_GH2_LSB]);
+	calib.par_gh3 = (int8_t)coeff[BME68X_IDX_GH3];
+
+	/* Heater calibration */
+	calib.res_heat_range = (coeff[BME68X_IDX_RES_HEAT_RANGE] & BME68X_RHRANGE_MSK) >> 4;
+	calib.res_heat_val = (int8_t)coeff[BME68X_IDX_RES_HEAT_VAL];
+	calib.range_sw_err = (int8_t)(coeff[BME68X_IDX_RANGE_SW_ERR] & BME68X_RSERROR_MSK) >> 4;
 }
 
 /*!
@@ -261,16 +290,40 @@ void BME68xTemperatureSensor::parse_calib_data(const uint8_t *_ecv_array coeff) 
 	calib.par_h5 = (int8_t)coeff[BME68X_IDX_H5];
 	calib.par_h6 = coeff[BME68X_IDX_H6];
 	calib.par_h7 = (int8_t)coeff[BME68X_IDX_H7];
+}
 
-	/* Gas calibration */
-	calib.par_gh1 = (int8_t)coeff[BME68X_IDX_GH1];
-	calib.par_gh2 = (int16_t)BME68X_CONCAT_BYTES(coeff[BME68X_IDX_GH2_MSB], coeff[BME68X_IDX_GH2_LSB]);
-	calib.par_gh3 = (int8_t)coeff[BME68X_IDX_GH3];
+/*!
+ * @brief This API parses the BME690 temperature, pressure and humidity calibration data.
+ */
+void BME68xTemperatureSensor::parse_calib_data_690(const uint8_t *_ecv_array coeff) noexcept
+{
+	/* Temperature calibration */
+	calib690.par_t1 = BME68X_CONCAT_BYTES(coeff[BME68X_IDX_T1_MSB], coeff[BME68X_IDX_T1_LSB]);
+	calib690.par_t2 = BME68X_CONCAT_BYTES(coeff[BME68X_IDX_T2_MSB], coeff[BME68X_IDX_T2_LSB]);
+	calib690.par_t3 = (int8_t)coeff[BME68X_IDX_T3];
 
-	/* Heater calibration */
-	calib.res_heat_range = (coeff[BME68X_IDX_RES_HEAT_RANGE] & BME68X_RHRANGE_MSK) >> 4;
-	calib.res_heat_val = (int8_t)coeff[BME68X_IDX_RES_HEAT_VAL];
-	calib.range_sw_err = (int8_t)(coeff[BME68X_IDX_RANGE_SW_ERR] & BME68X_RSERROR_MSK) >> 4;
+	/* Pressure calibration */
+	calib690.par_p1 = BME68X_CONCAT_BYTES(coeff[BME690_IDX_P1_MSB], coeff[BME690_IDX_P1_LSB]);
+	calib690.par_p2 = BME68X_CONCAT_BYTES(coeff[BME690_IDX_P2_MSB], coeff[BME690_IDX_P2_LSB]);
+	calib690.par_p3 = (int8_t)coeff[BME690_IDX_P3];
+	calib690.par_p4 = (int8_t)coeff[BME690_IDX_P4];
+	calib690.par_p5 = (int16_t)BME68X_CONCAT_BYTES(coeff[BME690_IDX_P5_MSB], coeff[BME690_IDX_P5_LSB]);
+	calib690.par_p6 = (int16_t)BME68X_CONCAT_BYTES(coeff[BME690_IDX_P6_MSB], coeff[BME690_IDX_P6_LSB]);
+	calib690.par_p7 = (int8_t)coeff[BME690_IDX_P7];
+	calib690.par_p8 = (int8_t)coeff[BME690_IDX_P8];
+	calib690.par_p9 = (int16_t)BME68X_CONCAT_BYTES(coeff[BME690_IDX_P9_MSB], coeff[BME690_IDX_P9_LSB]);
+	calib690.par_p10 = (int8_t)coeff[BME690_IDX_P10];
+	calib690.par_p11 = (int8_t)coeff[BME690_IDX_P11];
+
+	/* Humidity calibration, par_h1 and par_h5 are 12-bit two's complement values */
+	const int16_t h1 = (int16_t)(((uint16_t)coeff[BME690_IDX_H1_MSB] << 4) | (coeff[BME690_IDX_H1_LSB] & BME68X_BIT_H1_DATA_MSK));
+	calib690.par_h1 = (h1 > 2047) ? (int16_t)(h1 - 4096) : h1;
+	const int16_t h5 = (int16_t)(((uint16_t)coeff[BME690_IDX_H5_MSB] << 4) | (coeff[BME690_IDX_H5_LSB] >> 4));
+	calib690.par_h5 = (h5 > 2047) ? (int16_t)(h5 - 4096) : h5;
+	calib690.par_h2 = (int8_t)coeff[BME690_IDX_H2];
+	calib690.par_h3 = coeff[BME690_IDX_H3];
+	calib690.par_h4 = (int8_t)coeff[BME690_IDX_H4];
+	calib690.par_h6 = coeff[BME690_IDX_H6];
 }
 
 /*!
@@ -357,7 +410,7 @@ TemperatureError BME68xTemperatureSensor::set_gas_config(uint16_t targetTemp, ui
 		return rslt;
 	}
 
-	const uint8_t run_gas = (variant_id == BME68X_VARIANT_GAS_HIGH) ? BME68X_ENABLE_GAS_MEAS_H : BME68X_ENABLE_GAS_MEAS_L;
+	const uint8_t run_gas = IsHighGasVariant() ? BME68X_ENABLE_GAS_MEAS_H : BME68X_ENABLE_GAS_MEAS_L;
 	reg_data = BME68X_SET_BITS(reg_data, BME68X_RUN_GAS, run_gas);
 	reg_data = BME68X_SET_BITS_POS_0(reg_data, BME68X_NBCONV, 0);	// heater profile 0
 	rslt = bme68x_set_reg(BME68X_REG_CTRL_GAS_1, reg_data);
@@ -418,9 +471,7 @@ TemperatureError BME68xTemperatureSensor::bme68x_get_sensor_data() noexcept
  *   [2..4] = pressure ADC (MSB, LSB, XLSB)
  *   [5..7] = temperature ADC (MSB, LSB, XLSB)
  *   [8..9] = humidity ADC (MSB, LSB)
- *   [10]   = sub_meas_index
- *   [11]   = idac_heat
- *   [12]   = res_heat
+ *   [10..12] = not used
  *   [13..14] = gas_r low variant (MSB, LSB[7:6] | gas_valid[5] | heat_stab[4] | gas_range[3:0])
  *   [15..16] = gas_r high variant (MSB, LSB[7:6] | gas_valid[5] | heat_stab[4] | gas_range[3:0])
  */
@@ -441,20 +492,30 @@ void BME68xTemperatureSensor::parse_field_data(const uint8_t *_ecv_array reg_dat
 	/* Extract raw ADC data for humidity */
 	const uint16_t hum_adc = (uint16_t)(((uint32_t)reg_data[8] << 8) | (uint32_t)reg_data[9]);
 
-	/* Extract gas resistance ADC and range: bytes 13-14 for BME680 (low variant), 15-16 for BME688 (high variant) */
-	const uint8_t gas_lsb_idx = (variant_id == BME68X_VARIANT_GAS_HIGH) ? 16 : 14;
+	/* Extract gas resistance ADC and range: bytes 13-14 for BME680 (low variant), 15-16 for BME688 and BME690 (high variant) */
+	const uint8_t gas_lsb_idx = IsHighGasVariant() ? 16 : 14;
 	const uint16_t gas_res_adc = (uint16_t)(((uint32_t)reg_data[gas_lsb_idx - 1] << 2) | (reg_data[gas_lsb_idx] >> 6));
 	const uint8_t gas_range = reg_data[gas_lsb_idx] & BME68X_GAS_RANGE_MSK;
 	gasValid = (reg_data[gas_lsb_idx] & BME68X_GASM_VALID_MSK) != 0;
 
-	/* Compensate: temperature must be first (sets t_fine) */
-	compTemperature = compensate_temperature(temp_adc);
-	compPressure = compensate_pressure(pres_adc);
-	compHumidity = compensate_humidity(hum_adc);
+	/* Compensate: temperature must be first because pressure and humidity are compensated against it */
+	if (IsBme690())
+	{
+		const float tLin = compensate_temperature_690(temp_adc);
+		compTemperature = constrain<float>(tLin, -40.0f, 85.0f);
+		compPressure = compensate_pressure_690(pres_adc, tLin);
+		compHumidity = compensate_humidity_690(hum_adc, tLin);
+	}
+	else
+	{
+		compTemperature = compensate_temperature(temp_adc);
+		compPressure = compensate_pressure(pres_adc);
+		compHumidity = compensate_humidity(hum_adc);
+	}
 
 	if (gasValid)
 	{
-		if (variant_id == BME68X_VARIANT_GAS_HIGH)
+		if (IsHighGasVariant())
 		{
 			compGasResistance = calc_gas_resistance_high(gas_res_adc, gas_range);
 		}
@@ -526,6 +587,52 @@ float BME68xTemperatureSensor::compensate_humidity(uint16_t hum_adc) const noexc
 	float humidity = var2 + ((var3 + (var4 * temp_comp)) * var2 * var2);
 	humidity = constrain<float>(humidity, 0.0f, 100.0f);
 	return humidity;
+}
+
+/*!
+ * @brief Compensate raw BME690 temperature data.
+ * @note The BME690 formulas take the ADC value scaled to 24 bits and do not use t_fine.
+ */
+float BME68xTemperatureSensor::compensate_temperature_690(uint32_t temp_adc) const noexcept
+{
+	const float cf = (float)(temp_adc << 4) - ((float)calib690.par_t1 * 256.0f);
+	return (cf * ((float)calib690.par_t2 / (float)(1ull << 30))) + (cf * cf * ((float)calib690.par_t3 / (float)(1ull << 48)));
+}
+
+/*!
+ * @brief Compensate raw BME690 pressure data. Returns pressure in hPa.
+ */
+float BME68xTemperatureSensor::compensate_pressure_690(uint32_t pres_adc, float tLin) const noexcept
+{
+	const float adc = (float)(pres_adc << 4);
+	const float offset = ((float)calib690.par_p1 * 8.0f)
+						+ (((float)calib690.par_p2 / (float)(1ull << 6)) * tLin)
+						+ (((float)calib690.par_p3 / (float)(1ull << 8)) * tLin * tLin)
+						+ (((float)calib690.par_p4 / (float)(1ull << 15)) * tLin * tLin * tLin);
+	const float sensitivity = ((float)(calib690.par_p5 - (1 << 14)) / (float)(1ull << 20))
+						+ (((float)(calib690.par_p6 - (1 << 14)) / (float)(1ull << 29)) * tLin)
+						+ (((float)calib690.par_p7 / (float)(1ull << 32)) * tLin * tLin)
+						+ (((float)calib690.par_p8 / (float)(1ull << 37)) * tLin * tLin * tLin);
+	const float nonLinear = adc * adc * (((float)calib690.par_p9 / (float)(1ull << 48)) + (((float)calib690.par_p10 / (float)(1ull << 48)) * tLin));
+
+	/* 1ull << 65 is undefined, so the 2^65 scaling factor is split into two shifts */
+	const float nonLinear3 = adc * adc * adc * ((float)calib690.par_p11 / ((float)(1ull << 35) * (float)(1ull << 30)));
+	return (offset + (adc * sensitivity) + nonLinear + nonLinear3) * 0.01f;			// convert Pa to hPa
+}
+
+/*!
+ * @brief Compensate raw BME690 humidity data. Returns humidity in %RH.
+ * @note The two temperature corrections are nested, matching the integer listing in the datasheet, Bosch's SensorAPI
+ * and the identical BME280 formula. The float listing in the datasheet distributes them into a product, which is wrong.
+ */
+float BME68xTemperatureSensor::compensate_humidity_690(uint16_t hum_adc, float tLin) const noexcept
+{
+	const float tComp = (tLin * 5120.0f) - 76800.0f;
+	const float offset = ((float)calib690.par_h1 * 64.0f) + (((float)calib690.par_h2 / (float)(1ull << 14)) * tComp);
+	const float tempCorrection = 1.0f + (((float)calib690.par_h4 / (float)(1ull << 26)) * tComp * (1.0f + (((float)calib690.par_h3 / (float)(1ull << 26)) * tComp)));
+	const float hSens = ((float)hum_adc - offset) * ((float)calib690.par_h5 / (float)(1ull << 16)) * tempCorrection;
+	const float humidity = hSens * (1.0f - (((float)calib690.par_h6 / (float)(1ull << 19)) * hSens));
+	return constrain<float>(humidity, 0.0f, 100.0f);
 }
 
 /*!
@@ -606,6 +713,7 @@ BME68xTemperatureSensor::BME68xTemperatureSensor(unsigned int sensorNum) noexcep
 	  compGasResistance(0.0f), gasValid(false)
 {
 	memset(&calib, 0, sizeof(calib));
+	memset(&calib690, 0, sizeof(calib690));
 }
 
 GCodeResult BME68xTemperatureSensor::Configure(GCodeBuffer &gb, const StringRef &reply, bool &changed)

@@ -49,20 +49,31 @@ private:
 	TemperatureError set_gas_config(uint16_t targetTemp, uint16_t duration) noexcept;
 	TemperatureError start_forced_measurement() noexcept;
 	TemperatureError bme68x_get_sensor_data() noexcept;
+	void parse_gas_calib_data(const uint8_t *_ecv_array coeff) noexcept
+		pre(coeff.lim >= BME68X_LEN_COEFF_ALL);
 	void parse_calib_data(const uint8_t *_ecv_array coeff) noexcept
+		pre(coeff.lim >= BME68X_LEN_COEFF_ALL);
+	void parse_calib_data_690(const uint8_t *_ecv_array coeff) noexcept
 		pre(coeff.lim >= BME68X_LEN_COEFF_ALL);
 	void parse_field_data(const uint8_t *_ecv_array reg_data) noexcept
 		pre(reg_data.lim >= BME68X_LEN_FIELD);
 	float compensate_temperature(uint32_t temp_adc) noexcept;
 	float compensate_pressure(uint32_t pres_adc) const noexcept;
 	float compensate_humidity(uint16_t hum_adc) const noexcept;
+	float compensate_temperature_690(uint32_t temp_adc) const noexcept;
+	float compensate_pressure_690(uint32_t pres_adc, float tLin) const noexcept;
+	float compensate_humidity_690(uint16_t hum_adc, float tLin) const noexcept;
 	float calc_gas_resistance_low(uint16_t gas_res_adc, uint8_t gas_range) const noexcept;
 	float calc_gas_resistance_high(uint16_t gas_res_adc, uint8_t gas_range) const noexcept;
 	uint8_t calc_res_heat(uint16_t temp) const noexcept;
 	static uint8_t calc_gas_wait(uint16_t dur) noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
 
+	bool IsBme690() const noexcept { return variant_id == BME690_VARIANT_GAS_HIGH; }
+	bool IsHighGasVariant() const noexcept { return variant_id != BME68X_VARIANT_GAS_LOW; }
+
 	bme68x_calib_data calib;
+	bme690_calib_data calib690;
 	uint32_t variant_id;
 	uint8_t mem_page;
 	float compTemperature;			/*< Compensated temperature */
