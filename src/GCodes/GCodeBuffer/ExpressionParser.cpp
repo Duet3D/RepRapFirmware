@@ -2402,7 +2402,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 					// End of the expression
 					if (context.WantExists())
 					{
-						rslt.SetBool(!context.WantArrayLength() || elem.CanIndex());
+						rslt.SetBool(!context.WantArrayLength() || elem.CanIndexOrCountBits());
 					}
 					else
 					{
@@ -2447,7 +2447,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 		const Variable *_ecv_null const var = vars->Lookup(name, strlen(name), isParameter);
 		if (context.WantExists())
 		{
-			rslt.SetBool(var != nullptr && (!context.WantArrayLength() || var->GetValue().CanIndex()));
+			rslt.SetBool(var != nullptr && (!context.WantArrayLength() || var->GetValue().CanIndexOrCountBits()));
 			return;
 		}
 
