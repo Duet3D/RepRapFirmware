@@ -137,7 +137,14 @@ struct ExpressionValue final
 	TypeCode GetType() const noexcept { return (TypeCode)type; }
 	bool IsStringType() const noexcept { return type == (uint32_t)TypeCode::CString || type == (uint32_t)TypeCode::HeapString; }
 	bool IsHeapStringArrayType() const noexcept;
-	bool CanIndex() const noexcept { return IsStringType() || type == (uint32_t)TypeCode::HeapArray || type == (uint32_t)TypeCode::ObjectModelArray || type == (uint32_t)TypeCode::HeapArray; }
+	bool CanIndexOrCountBits() const noexcept { return IsStringType()
+												|| type == (uint32_t)TypeCode::HeapArray || type == (uint32_t)TypeCode::ObjectModelArray || type == (uint32_t)TypeCode::HeapArray
+												|| type == (uint32_t)TypeCode::Bitmap16 || type == (uint32_t)TypeCode::Bitmap32
+#if SUPPORT_BITMAP64
+												|| type == (uint32_t)TypeCode::Bitmap64
+#endif
+												;
+											  }
 
 	void SetBool(bool b) noexcept;
 	void SetInt(int32_t i) noexcept;
