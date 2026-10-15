@@ -2402,7 +2402,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 					// End of the expression
 					if (context.WantExists())
 					{
-						rslt.SetBool(true);
+						rslt.SetBool(!context.WantArrayLength() || elem.CanIndex());
 					}
 					else
 					{
@@ -2430,7 +2430,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 			// If we get here then we are trying to index into a variable of non-array type
 			if (context.WantExists())
 			{
-				rslt.SetBool(var != nullptr);
+				rslt.SetBool(false);
 				return;
 			}
 			ThrowVariableException("Cannot index into variable or parameter '%s' of non-array type", name, nameLength);
@@ -2447,7 +2447,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 		const Variable *_ecv_null const var = vars->Lookup(name, strlen(name), isParameter);
 		if (context.WantExists())
 		{
-			rslt.SetBool(var != nullptr);
+			rslt.SetBool(var != nullptr && (!context.WantArrayLength() || var->GetValue().CanIndex()));
 			return;
 		}
 
