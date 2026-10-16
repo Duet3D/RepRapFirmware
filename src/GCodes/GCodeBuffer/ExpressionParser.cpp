@@ -684,6 +684,10 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 								bResult = (strcmp(val.shVal.Get().Ptr(), (val2.GetType() == TypeCode::HeapString) ? val2.shVal.Get().Ptr() : val2.sVal) == 0);
 								break;
 
+							case TypeCode::Char:
+								bResult = (val.cVal == val2.cVal);
+								break;
+
 							default:
 								if (evaluate)
 								{
