@@ -325,8 +325,9 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 
 		case TypeCode::HeapArray:
 			{
-				ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
-				if (!val.ahVal.GetElement(indexValue, val))		// if index was out of bounds
+				ReadLocker lock(Heap::heapLock);					// must have a read lock on heapLock when calling GetNumElements or GetElement
+				ExpressionValue elem;
+				if (!val.ahVal.GetElement(indexValue, elem))		// if index was out of bounds
 				{
 					if (evaluate)
 					{
@@ -336,6 +337,10 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 					{
 						val.SetNull(nullptr);
 					}
+				}
+				else
+				{
+					val = elem;
 				}
 			}
 			break;
@@ -677,6 +682,10 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 
 							case TypeCode::HeapString:
 								bResult = (strcmp(val.shVal.Get().Ptr(), (val2.GetType() == TypeCode::HeapString) ? val2.shVal.Get().Ptr() : val2.sVal) == 0);
+								break;
+
+							case TypeCode::Char:
+								bResult = (val.cVal == val2.cVal);
 								break;
 
 							default:
