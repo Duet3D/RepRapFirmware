@@ -284,8 +284,9 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 
 		case TypeCode::HeapArray:
 			{
-				ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
-				if (!val.ahVal.GetElement(indexValue, val))		// if index was out of bounds
+				ReadLocker lock(Heap::heapLock);					// must have a read lock on heapLock when calling GetNumElements or GetElement
+				ExpressionValue elem;
+				if (!val.ahVal.GetElement(indexValue, elem))		// if index was out of bounds
 				{
 					if (evaluate)
 					{
@@ -295,6 +296,10 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 					{
 						val.SetNull(nullptr);
 					}
+				}
+				else
+				{
+					val = elem;
 				}
 			}
 			break;
@@ -1489,39 +1494,53 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 	NamedConstant whichConstant(id.c_str());
 	if (whichConstant.IsValid())
 	{
+#if 1		// for now we don't allow 'exists' to be applied to named constants
 		if (context.WantExists())
 		{
 			ThrowParseException(InvalidExistsMessage);
 		}
+#endif
 
 		switch (whichConstant.RawValue())
 		{
 		case NamedConstant::_true:
 			rslt.SetBool(true);
-			return;
+			break;
 
 		case NamedConstant::_false:
 			rslt.SetBool(false);
-			return;
+			break;
 
 		case NamedConstant::_null:
+			if (context.WantExists())
+			{
+				rslt.SetBool(false);
+				return;
+			}
 			rslt.SetNull(nullptr);
-			return;
+			break;
 
 		case NamedConstant::pi:
 			rslt.SetFloat(Pi);
-			return;
+			break;
 
 		case NamedConstant::iterations:
 			{
 				int32_t v;
 				if (gb == nullptr || (v = gb->CurrentFileMachineState().GetIterations()) < 0)
 				{
+#if 0	// only needed if in future we allow 'exists' to be applied to named constants
+					if (applyExists && !applyLengthOperator)
+					{
+						rslt.SetBool(false);
+						return;
+					}
+#endif
 					ThrowParseException("'iterations' used when not inside a loop");
 				}
 				rslt.SetInt(v);
 			}
-			return;
+			break;
 
 		case NamedConstant::_result:
 			{
@@ -1554,11 +1573,11 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					rslt.SetInt(res);
 				}
 			}
-			return;
+			break;
 
 		case NamedConstant::line:
 			rslt.SetInt(gb != nullptr ? (int32_t)gb->GetLineNumber() : 0);
-			return;
+			break;
 
 		case NamedConstant::input:
 			if (gb != nullptr)
@@ -1569,11 +1588,18 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 			{
 				rslt.SetNull(nullptr);
 			}
-			return;
+			break;
 
 		default:
 			THROW_INTERNAL_ERROR;
 		}
+
+		// Currently we don't have any named constants with array or string or bitmap type, but in case this changes in future we check here
+		if (applyLengthOperator)
+		{
+			ApplyLengthOperator(rslt, evaluate);
+		}
+		return;
 	}
 
 	// Check whether it is a function call
@@ -2146,6 +2172,11 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 			ThrowParseException("expected ')'");
 		}
 		AdvancePointer();
+
+		if (applyLengthOperator)
+		{
+			ApplyLengthOperator(rslt, evaluate);
+		}
 		return;
 	}
 
