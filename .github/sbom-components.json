@@ -1,0 +1,264 @@
+{
+	"repos": [
+		"CANlib",
+		"CoreN2G",
+		"Duet3Expansion",
+		"FreeRTOS",
+		"LibMbedTls",
+		"LibTinyusb",
+		"Qfplib-M0-full",
+		"RepRapFirmware",
+		"RRFLibraries",
+		"WiFiSocketServerRTOS"
+	],
+
+	"forks": {
+		"CoreN2G": {
+			"license": "GPL-3.0-only",
+			"notes": "The GPL does not cover commercial use of the partial ISO CAN-FD implementation for the RP2040; on SAMC21 and SAME5x the CAN-FD licence is paid for by Microchip, see LICENSE"
+		},
+		"Duet3Expansion": {
+			"license": "GPL-3.0-only"
+		},
+		"FreeRTOS": {
+			"license": "MIT",
+			"ancestor": {
+				"name": "FreeRTOS-Kernel",
+				"purl": "pkg:generic/freertos-kernel@{version}",
+				"vcs": "https://github.com/FreeRTOS/FreeRTOS-Kernel",
+				"license": "MIT",
+				"version": {
+					"file": "src/include/task.h",
+					"patterns": [".*tskKERNEL_VERSION_NUMBER[[:space:]]+\"V([0-9.]+)\".*"]
+				}
+			}
+		},
+		"LibMbedTls": {
+			"licenseExpression": "Apache-2.0 OR GPL-2.0-or-later",
+			"ancestor": {
+				"name": "Mbed TLS",
+				"purl": "pkg:generic/mbedtls@{version}",
+				"vcs": "https://github.com/Mbed-TLS/mbedtls",
+				"licenseExpression": "Apache-2.0 OR GPL-2.0-or-later",
+				"version": {
+					"file": "include/mbedtls/build_info.h",
+					"patterns": [".*MBEDTLS_VERSION_STRING[[:space:]]+\"([0-9.]+)\".*"]
+				}
+			}
+		},
+		"LibTinyusb": {
+			"license": "MIT",
+			"notes": "Duet3D build wrapper; the USB stack itself is the tinyusb submodule listed separately"
+		},
+		"Qfplib-M0-full": {
+			"license": "GPL-2.0-only",
+			"ancestor": {
+				"name": "Qfplib-M0-full",
+				"purl": "pkg:generic/qfplib-m0-full",
+				"vcs": "https://www.quinapalus.com/qfplib-m0-full.html",
+				"license": "GPL-2.0-only"
+			}
+		},
+		"RepRapFirmware": {
+			"license": "GPL-3.0-only"
+		},
+		"RRFLibraries": {
+			"license": "GPL-3.0-only"
+		},
+		"WiFiSocketServerRTOS": {
+			"license": "GPL-3.0-only",
+			"notes": "Checked out for the shared WiFi interface headers only; the WiFi module firmware is built and released from this repository separately"
+		}
+	},
+
+	"submodules": {
+		"LibTinyusb/tinyusb": {
+			"license": "MIT",
+			"ancestor": {
+				"name": "TinyUSB",
+				"purl": "pkg:generic/tinyusb@{version}",
+				"vcs": "https://github.com/hathach/tinyusb",
+				"license": "MIT",
+				"version": {
+					"file": "src/tusb_option.h",
+					"patterns": [
+						".*TUSB_VERSION_MAJOR[[:space:]]+([0-9]+).*",
+						".*TUSB_VERSION_MINOR[[:space:]]+([0-9]+).*",
+						".*TUSB_VERSION_REVISION[[:space:]]+([0-9]+).*"
+					]
+				}
+			}
+		}
+	},
+
+	"vendored": [
+		{
+			"name": "lwIP",
+			"repo": "RepRapFirmware",
+			"paths": ["src/Networking/LwipEthernet/Lwip"],
+			"purl": "pkg:generic/lwip@{version}",
+			"vcs": "https://git.savannah.nongnu.org/git/lwip.git",
+			"license": "BSD-3-Clause",
+			"notes": "Modified: runtime heap sizing in mem.c, mbedTLS 3.x and TLS 1.3 port of altcp_tls_mbedtls.c, deferred backlog accept, checksum and mDNS NSEC changes, eCv annotations throughout, all listed in the component's LOCAL_CHANGES.md",
+			"version": {
+				"file": "src/Networking/LwipEthernet/Lwip/src/include/lwip/init.h",
+				"patterns": [
+					".*LWIP_VERSION_MAJOR[[:space:]]+([0-9]+).*",
+					".*LWIP_VERSION_MINOR[[:space:]]+([0-9]+).*",
+					".*LWIP_VERSION_REVISION[[:space:]]+([0-9]+).*"
+				]
+			}
+		},
+		{
+			"name": "MQTT-C",
+			"repo": "RepRapFirmware",
+			"paths": ["src/Networking/MQTT/MQTT_C"],
+			"purl": "pkg:generic/mqtt-c@{version}",
+			"vcs": "https://github.com/LiamBindle/MQTT-C",
+			"license": "MIT",
+			"notes": "The platform abstraction is supplied by RepRapFirmware; the upstream mqtt_pal.c and the examples are not compiled",
+			"version": {
+				"file": "src/Networking/MQTT/MQTT_C/CMakeLists.txt",
+				"patterns": [".*project\\(MQTT-C VERSION ([0-9.]+).*"]
+			}
+		},
+		{
+			"name": "FatFs",
+			"repo": "RepRapFirmware",
+			"paths": ["src/Libraries/Fatfs"],
+			"purl": "pkg:generic/fatfs@{version}",
+			"vcs": "http://elm-chan.org/fsw/ff/",
+			"licenseName": "FatFs License (one-clause BSD style)",
+			"notes": "diskio.cpp and fattime_rtc.cpp are the Microchip ASF and Duet3D glue layer, not upstream FatFs",
+			"version": {
+				"file": "src/Libraries/Fatfs/ff.h",
+				"patterns": [".*FatFs - Generic FAT Filesystem module[[:space:]]+R([0-9.]+).*"]
+			}
+		},
+		{
+			"name": "Microchip Advanced Software Framework",
+			"repo": "RepRapFirmware",
+			"paths": [
+				"src/Libraries/sd_mmc",
+				"src/Networking/LwipEthernet/GMAC",
+				"src/Hardware/SAME70/Ethernet/ksz8081rna",
+				"src/Libraries/Fatfs/diskio.cpp",
+				"src/Libraries/Fatfs/fattime_rtc.cpp"
+			],
+			"vcs": "https://www.microchip.com/en-us/tools-resources/develop/libraries/advanced-software-framework",
+			"licenseName": "Microchip ASF License (three-clause BSD with a Microchip-device restriction)",
+			"notes": "SD/MMC stack, GMAC driver and KSZ8081 PHY driver taken from ASF 3; the upstream ASF release is not recorded in the tree",
+			"version": {"literal": "3"}
+		},
+		{
+			"name": "BOSSA",
+			"repo": "RepRapFirmware",
+			"paths": ["src/bossa"],
+			"vcs": "https://github.com/shumatech/BOSSA",
+			"license": "BSD-3-Clause",
+			"notes": "Flash programming applets and device tables used to update expansion boards; upstream release not recorded in the tree, the files carry copyright 2011-2018"
+		},
+		{
+			"name": "SHA-1 by Paul E. Jones",
+			"repo": "RepRapFirmware",
+			"paths": ["src/Libraries/sha1"],
+			"vcs": "https://www.packetizer.com/security/sha1/",
+			"licenseName": "No licence grant in the source files",
+			"version": {
+				"file": "src/Libraries/sha1/sha1.c",
+				"patterns": [".*\\$Id: sha1\\.c [0-9]+ ([0-9-]+) .*"]
+			}
+		},
+		{
+			"name": "Bosch Sensortec BME280 Sensor API",
+			"repo": "RepRapFirmware",
+			"paths": ["src/Heating/Sensors/bme280_defs.h"],
+			"purl": "pkg:generic/bme280-sensor-api@{version}",
+			"vcs": "https://github.com/boschsensortec/BME280_SensorAPI",
+			"license": "BSD-3-Clause",
+			"notes": "Only the register and calibration definitions are used; Duet3Expansion carries the same copy",
+			"version": {
+				"file": "src/Heating/Sensors/bme280_defs.h",
+				"patterns": [".*@version[[:space:]]+v([0-9.]+).*"]
+			}
+		},
+		{
+			"name": "Bosch Sensortec BME68x Sensor API",
+			"repo": "RepRapFirmware",
+			"paths": ["src/Heating/Sensors/bme68x_defs.h"],
+			"purl": "pkg:generic/bme68x-sensor-api@{version}",
+			"vcs": "https://github.com/boschsensortec/BME68x_SensorAPI",
+			"license": "BSD-3-Clause",
+			"notes": "Only the register and calibration definitions are used; Duet3Expansion carries the same copy",
+			"version": {
+				"file": "src/Heating/Sensors/bme68x_defs.h",
+				"patterns": [".*@version[[:space:]]+v([0-9.]+).*"]
+			}
+		},
+		{
+			"name": "CMSIS",
+			"repo": "CoreN2G",
+			"paths": ["src/arm/CMSIS"],
+			"purl": "pkg:generic/cmsis@{version}",
+			"vcs": "https://github.com/ARM-software/CMSIS_5",
+			"license": "Apache-2.0",
+			"version": {"dir": "src/arm/CMSIS"}
+		},
+		{
+			"name": "Microchip Advanced Software Framework",
+			"repo": "CoreN2G",
+			"paths": ["src/SAM4S_4E_E70/asf"],
+			"vcs": "https://www.microchip.com/en-us/tools-resources/develop/libraries/advanced-software-framework",
+			"licenseName": "Microchip ASF License (three-clause BSD with a Microchip-device restriction)",
+			"notes": "Clock, SD/MMC, USART and peripheral services for SAM4S, SAM4E and SAME70; the upstream ASF release is not recorded in the tree",
+			"version": {"literal": "3"}
+		},
+		{
+			"name": "Microchip SAMC21 Device Family Pack",
+			"repo": "CoreN2G",
+			"paths": ["src/atmel/SAMC21_DFP"],
+			"vcs": "https://packs.download.microchip.com/",
+			"license": "Apache-2.0",
+			"version": {"dir": "src/atmel/SAMC21_DFP"}
+		},
+		{
+			"name": "Microchip SAMD51 Device Family Pack",
+			"repo": "CoreN2G",
+			"paths": ["src/atmel/SAMD51_DFP"],
+			"vcs": "https://packs.download.microchip.com/",
+			"license": "Apache-2.0",
+			"version": {"dir": "src/atmel/SAMD51_DFP"}
+		},
+		{
+			"name": "Microchip SAME51 Device Family Pack",
+			"repo": "CoreN2G",
+			"paths": ["src/atmel/SAME51_DFP"],
+			"vcs": "https://packs.download.microchip.com/",
+			"license": "Apache-2.0",
+			"version": {"dir": "src/atmel/SAME51_DFP"}
+		},
+		{
+			"name": "Microchip SAME54 Device Family Pack",
+			"repo": "CoreN2G",
+			"paths": ["src/atmel/SAME54_DFP"],
+			"vcs": "https://packs.download.microchip.com/",
+			"license": "Apache-2.0",
+			"version": {"dir": "src/atmel/SAME54_DFP"}
+		},
+		{
+			"name": "Arduino SAM core",
+			"repo": "CoreN2G",
+			"paths": [
+				"src/SAM4S_4E_E70/AnalogIn.cpp",
+				"src/SAM4S_4E_E70/AsyncSerial.cpp",
+				"src/SAM4S_4E_E70/Interrupts.cpp",
+				"src/SAM4S_4E_E70/Reset.cpp",
+				"src/SAM4S_4E_E70/Wire.cpp",
+				"src/Print.h"
+			],
+			"vcs": "https://github.com/arduino/ArduinoCore-sam",
+			"license": "LGPL-2.1-or-later",
+			"notes": "Individual files derived from the Arduino SAM core and rewritten for RepRapFirmware; upstream release not recorded in the tree"
+		}
+	]
+}
