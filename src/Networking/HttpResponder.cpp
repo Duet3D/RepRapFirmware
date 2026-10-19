@@ -566,7 +566,11 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 			response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
 		}
 	}
-#if HAS_MASS_STORAGE
+// An embedded filesystem can be read and listed - EmbeddedFiles.cpp implements the MassStorage
+// FileExists/DirectoryExists/FindFirst/FindNext used below - it just cannot be written to. Gating the
+// whole file API on HAS_MASS_STORAGE therefore hid working functionality: rr_filelist answered {err:1}
+// on an embedded-files build, so DWC and AxisControl showed an empty, broken file browser.
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	else if (StringEqualsIgnoreCase(request, "fileinfo"))
 	{
 		const char *_ecv_array _ecv_null const nameVal = GetKeyValue("name");
@@ -608,6 +612,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		const int maxItems = (maxVal == nullptr) ? -1 : StrToI32(maxVal, nullptr);
 		response = reprap.GetFilesResponse(nullptr, dir, startAt, maxItems, flagDirs);			// this may return nullptr
 	}
+#if HAS_MASS_STORAGE
 	else if (StringEqualsIgnoreCase(request, "upload"))
 	{
 		response->printf("{\"err\":%d}", (uploadError) ? 1 : 0);
@@ -643,6 +648,8 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
+	// thumbnail stays mass-storage only: it calls RepRap::GetFileFragment, which is not compiled
+	// for an embedded filesystem, and enabling it produced a link failure rather than a clean error.
 	else if (StringEqualsIgnoreCase(request, "thumbnail"))
 	{
 		const char *_ecv_array _ecv_null const nameVal = GetKeyValue("name");
@@ -658,6 +665,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 			response->copy("{\"err\":1}");
 		}
 	}
+#endif
 #else
 	else if (	StringEqualsIgnoreCase(request, "fileinfo")
 			 || StringEqualsIgnoreCase(request, "upload")
@@ -669,7 +677,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 			 || StringEqualsIgnoreCase(request, "thumbnail")
 			)
 	{
-		response->copy("{err:1}");
+		response->copy("{\"err\":1}");
 	}
 #endif
 
