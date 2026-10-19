@@ -296,6 +296,7 @@ extern void *lwipRamHeap;
 /* --------- IGMP options ---------- */
 #define LWIP_IGMP                   1
 #define LWIP_MDNS_RESPONDER         1
+#define LWIP_MDNS_SEARCH            0		// defaults to 1; we never search, and the client response parser has the overflow of CVE-2026-112062
 #define LWIP_NUM_NETIF_CLIENT_DATA  (LWIP_MDNS_RESPONDER)
 
 extern uint32_t random32(void) noexcept;
