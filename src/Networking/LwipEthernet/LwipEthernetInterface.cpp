@@ -864,6 +864,7 @@ void LwipEthernetInterface::Diagnostics(const StringRef& reply) noexcept
 GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ssid, const StringRef& reply, int tlsParam) noexcept
 {
 #if LWIP_ALTCP_TLS
+# if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	// Handle T-1 first: securely wipe and delete the SD-resident cert/key. Subsequent bring-up is plain.
 	// Only honoured while the interface is down, matching the documented rule
 	if (tlsParam < 0 && !activated)
@@ -885,6 +886,7 @@ GCodeResult LwipEthernetInterface::EnableInterface(int mode, const StringRef& ss
 			platform.Message(NetworkInfoMessage, "TLS: stored cert/key wiped and deleted from /sys/\n");
 		}
 	}
+# endif
 	const bool tlsAllowedParam = (tlsParam > 0);
 #else
 	(void)tlsParam;

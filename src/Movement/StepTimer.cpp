@@ -152,7 +152,7 @@ void StepTimer::Init() noexcept
 	NVIC_EnableIRQ(STEP_TC_IRQN);
 #endif
 
-#if SUPPORT_CAN_EXPANSION
+#if SUPPORT_REMOTE_COMMANDS
 	minReceiveDelay = 0xFFFFFFFF;
 #endif
 }
