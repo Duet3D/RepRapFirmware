@@ -34,6 +34,10 @@ endif
 CROSS_COMPILE ?= ../arm-gnu-toolchain-$(ARM_GNU_TOOLCHAIN_VERSION)-$(ARM_GNU_TOOLCHAIN_HOST)-arm-none-eabi/bin/arm-none-eabi-
 export CROSS_COMPILE
 
+# CRC appender, taken from PATH unless overridden
+CRC_APPENDER ?= CrcAppender
+export CRC_APPENDER
+
 # Toolchain programs
 CC  := $(CROSS_COMPILE)gcc
 CXX := $(CROSS_COMPILE)g++

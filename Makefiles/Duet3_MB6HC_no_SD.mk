@@ -237,10 +237,8 @@ $(DUET3NOSD_TARGET_ELF): $(DUET3NOSD_OBJS) $(DUET3NOSD_CANLIB_LIB) $(DUET3NOSD_C
 $(DUET3NOSD_TARGET_BIN): $(DUET3NOSD_TARGET_ELF)
 	$(Q)echo "  OBJCOPY $@"
 	$(Q)$(OBJCOPY) -O binary $< $@
-	$(Q)if command -v CrcAppender >/dev/null 2>&1; then \
-		echo "  CRC     $@"; \
-		CrcAppender $@ PccbEmbeddedFiles; \
-	fi
+	$(Q)echo "  CRC     $@"
+	$(Q)$(CRC_APPENDER) $@ PccbEmbeddedFiles
 
 # Compile C++ files
 $(DUET3NOSD_BUILD_DIR)/%.o: %.cpp
