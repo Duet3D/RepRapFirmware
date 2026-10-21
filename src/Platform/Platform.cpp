@@ -3342,7 +3342,13 @@ void Platform::StopLogging() noexcept
 GCodeResult Platform::SetBuzzerPort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	StopBeep();		// Stop beeping before touching the buzzer port assignment
-	return buzzerPort.AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::pwm) ? GCodeResult::ok : GCodeResult::error;
+	if (!buzzerPort.AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::pwm))
+	{
+		return GCodeResult::error;
+	}
+
+	buzzerPort.WriteAnalog(0.0);			// SetPinMode doesn't handle the PWM pin modes, so the pin stays undriven until the first write
+	return GCodeResult::ok;
 }
 
 bool Platform::Beep(unsigned int freq, unsigned int ms) noexcept
