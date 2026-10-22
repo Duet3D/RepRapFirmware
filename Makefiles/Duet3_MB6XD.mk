@@ -232,10 +232,8 @@ $(DUET3MB6XD_TARGET_ELF): $(DUET3MB6XD_OBJS) $(DUET3MB6XD_CANLIB_LIB) $(DUET3MB6
 $(DUET3MB6XD_TARGET_BIN): $(DUET3MB6XD_TARGET_ELF)
 	$(Q)echo "  OBJCOPY $@"
 	$(Q)$(OBJCOPY) -O binary $< $@
-	$(Q)if command -v CrcAppender >/dev/null 2>&1; then \
-		echo "  CRC     $@"; \
-		CrcAppender $@; \
-	fi
+	$(Q)echo "  CRC     $@"
+	$(Q)$(CRC_APPENDER) $@
 
 # Compile C++ files
 $(DUET3MB6XD_BUILD_DIR)/%.o: %.cpp
