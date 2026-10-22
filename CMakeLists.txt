@@ -71,6 +71,20 @@ target_compile_definitions(${DUET_BOARD} PRIVATE
     $<$<COMPILE_LANGUAGE:C>:noexcept=>
     $<$<COMPILE_LANGUAGE:CXX>:_XOPEN_SOURCE>)
 
+set(_c_options
+    -Werror=implicit
+    -Wwrite-strings)
+set(_cxx_options
+    -fno-threadsafe-statics
+    -fno-rtti
+    -fexceptions
+    -Wfloat-conversion
+    -Wsuggest-override
+    -Wnoexcept
+    -Wshadow
+    -Wsign-promo
+    -fstack-usage)
+
 target_compile_options(${DUET_BOARD} PRIVATE
     -fno-math-errno
     -fsingle-precision-constant
@@ -79,8 +93,8 @@ target_compile_options(${DUET_BOARD} PRIVATE
     -Wdouble-promotion
     -Werror=return-type
     -Werror
-    $<$<COMPILE_LANGUAGE:C>:-Werror=implicit;-Wwrite-strings>
-    $<$<COMPILE_LANGUAGE:CXX>:-fno-threadsafe-statics;-fno-rtti;-fexceptions;-Wfloat-conversion;-Wsuggest-override;-Wnoexcept;-Wshadow;-Wsign-promo;-fstack-usage>)
+    "$<$<COMPILE_LANGUAGE:C>:${_c_options}>"
+    "$<$<COMPILE_LANGUAGE:CXX>:${_cxx_options}>")
 
 target_link_options(${DUET_BOARD} PRIVATE
     --specs=nosys.specs
