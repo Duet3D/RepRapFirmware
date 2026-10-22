@@ -157,7 +157,8 @@ DUET3MB6XD_CXXFLAGS := -c -std=c++20 \
 	-Wsign-promo \
 	$(DUET3MB6XD_INCLUDES) \
 	$(DUET3MB6XD_DEFINES) \
-	-D_XOPEN_SOURCE
+	-D_XOPEN_SOURCE \
+	$(DEBUG_FLAGS)
 
 # Linker flags - split into LDFLAGS1 (before -o) and LDFLAGS2 (after -o)
 DUET3MB6XD_LDFLAGS1 := --specs=nosys.specs \

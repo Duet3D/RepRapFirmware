@@ -99,6 +99,7 @@ DUET3CAN0_DEFINES := \
 	-D__SAME70Q20B__ \
 	-DRTOS \
 	-DDUET3_MB6HC \
+	-DUSE_CAN0 \
 	-DMBEDTLS_CONFIG_FILE='"config-same70.h"'
 
 # Compiler flags - C

@@ -99,6 +99,7 @@ DUET3NOSD_DEFINES := \
 	-D__SAME70Q20B__ \
 	-DRTOS \
 	-DDUET3_MB6HC \
+	-DUSE_EMBEDDED_FILES \
 	-DMBEDTLS_CONFIG_FILE='"config-same70.h"'
 
 # Compiler flags - C
@@ -234,7 +235,7 @@ $(DUET3NOSD_TARGET_BIN): $(DUET3NOSD_TARGET_ELF)
 	$(Q)echo "  OBJCOPY $@"
 	$(Q)$(OBJCOPY) -O binary $< $@
 	$(Q)echo "  CRC     $@"
-	$(Q)$(CRC_APPENDER) $@
+	$(Q)$(CRC_APPENDER) $@ PccbEmbeddedFiles
 
 # Compile C++ files
 $(DUET3NOSD_BUILD_DIR)/%.o: %.cpp
