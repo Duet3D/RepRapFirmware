@@ -3,6 +3,7 @@
 # because it also sets the options they are built with.
 #
 # Library configuration:
+#   DUET_LIBRARIES    the libraries to build
 #   DUET_PART_DEFINE  macro naming the MCU part
 #   DUET_RTOS, COREN2G_CAN, COREN2G_USB, COREN2G_SDHC
 #
@@ -20,6 +21,9 @@
 #   RRF_UF2            also produce a .uf2 image for the board's USB bootloader
 #   RRF_FILES          directory, under the project root, of files to embed after the image as its
 #                      filesystem, for boards without mass storage
+
+set(DUET_LIBRARIES
+    FreeRTOS RRFLibraries CANlib CoreN2G LibTinyusb LibMbedTls WiFiSocketServerRTOS)
 
 # Every RepRapFirmware board runs FreeRTOS and has CAN, USB and SD card support in CoreN2G
 set(DUET_RTOS ON)
