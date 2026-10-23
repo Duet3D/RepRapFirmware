@@ -49,7 +49,7 @@ public:
               bool canBrownout) THROWS(GCodeException);
     virtual ~EefcFlash() override;
 
-    void eraseAll(uint32_t offset) THROWS(GCodeException) override;
+    void eraseAll() THROWS(GCodeException) override;
     void eraseAuto(bool enable) noexcept override;
 
     Bitmap<uint32_t> getLockRegions() THROWS(GCodeException) override;
