@@ -1632,7 +1632,7 @@ void ExpressionParser::ApplyLengthOperator(ExpressionValue& val, bool evaluate) 
 	default:
 		if (evaluate)
 		{
-			ThrowParseException("expected object model value or string after '#");
+			ThrowParseException("operand of # is not an array or string");
 		}
 		val.SetInt(0);
 		break;
@@ -1643,7 +1643,7 @@ void ExpressionParser::CheckForExtraCharacters() THROWS(GCodeException)
 {
 	if (SkipWhiteSpace() != 0)
 	{
-		ThrowParseException("Unexpected characters after expression");
+		ThrowParseException("unexpected characters after expression");
 	}
 }
 
