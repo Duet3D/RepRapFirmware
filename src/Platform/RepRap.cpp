@@ -347,7 +347,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF(self->gCodes->GetMachineType() == MachineType::laser, self->gCodes->GetLaserPwm(), 2),	ObjectModelEntryFlags::live },
 #endif
 #if HAS_MASS_STORAGE
-	{ "logFile",				OBJECT_MODEL_FUNC(self->platform->GetLogFileName()),					ObjectModelEntryFlags::none },
+	{ "logFile",				OBJECT_MODEL_FUNC_IF(self->platform->GetLogFileName() != nullptr, self->platform->GetLogFileName()),	ObjectModelEntryFlags::none },
 #else
 	{ "logFile",				OBJECT_MODEL_FUNC_NOSELF(nullptr),										ObjectModelEntryFlags::none },
 #endif
