@@ -84,46 +84,19 @@ EefcFlash::~EefcFlash()
 {
 }
 
-void EefcFlash::eraseAll(uint32_t offset) THROWS(GCodeException)
+void EefcFlash::eraseAll() THROWS(GCodeException)
 {
-    // Do a full chip erase if the offset is 0
-    if (offset == 0)
-    {
-        waitFSR();
-        writeFCR0(EEFC_FCMD_EA, 0);
-        if (_planes == 2)
-        {
-            waitFSR();
-            writeFCR1(EEFC_FCMD_EA, 0);
-        }
+    // Do a full chip erase
+	waitFSR();
+	writeFCR0(EEFC_FCMD_EA, 0);
+	if (_planes == 2)
+	{
+		waitFSR();
+		writeFCR1(EEFC_FCMD_EA, 0);
+	}
 
-        // Erase all can take an exceptionally long time on some devices so wait on FSR for up to 30 seconds
-        waitFSR(30);
-    }
-    // Else we must do it by pages
-    else
-    {
-        // Offset must be on an erase page boundary
-        if (offset % (_size * PagesPerErase) != 0)
-		{
-            throw FlashEraseError("Flash erase error");
-		}
-
-        // Erase each PagesPerErase set of pages
-        for (uint32_t pageNum = offset / _size; pageNum < _pages; pageNum += PagesPerErase)
-        {
-            if (_planes == 1 || pageNum < _pages / 2)
-            {
-                waitFSR();
-                writeFCR0(EEFC_FCMD_EPA, pageNum | 0x1);
-            }
-            else
-            {
-                waitFSR();
-                writeFCR1(EEFC_FCMD_EPA, (pageNum % (_pages / 2)) | 0x1);
-            }
-        }
-    }
+	// Erase all can take an exceptionally long time on some devices so wait on FSR for up to 30 seconds
+	waitFSR(30);
 }
 
 void EefcFlash::eraseAuto(bool enable) noexcept

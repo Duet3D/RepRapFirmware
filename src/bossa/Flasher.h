@@ -57,7 +57,7 @@ public:
     {}
     virtual ~Flasher() {}
 
-    void erase(uint32_t foffset) THROWS(GCodeException);
+    void erase() THROWS(GCodeException);
     bool write(FileStore *infile, uint32_t& foffset) THROWS(GCodeException);
     bool verify(FileStore *infile, uint32_t& pageErrors, uint32_t& totalErrors, uint32_t& foffset) THROWS(GCodeException);
     void lock(/* std::string& regionArg, */ bool enable) THROWS(GCodeException);
