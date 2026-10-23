@@ -4239,6 +4239,13 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	// Deal with replies to the SBC
 	if (gb.LatestMachineState().lastCodeFromSbc)
 	{
+		if (reply[0] == 0 && gb.IsAbortRequested() && !gb.IsAbortAllRequested())
+		{
+			// The SBC resolves the code that requested a single file abort itself, so this reply is surplus. It may also overtake
+			// the abort request, in which case it completes the code that started the macro being aborted
+			return;
+		}
+
 		MessageType type = gb.GetResponseMessageType();
 		if (rslt == GCodeResult::notFinished || gb.HasJustStartedMacro() ||
 			(gb.LatestMachineState().waitingForAcknowledgement && gb.IsMessagePromptPending()))
