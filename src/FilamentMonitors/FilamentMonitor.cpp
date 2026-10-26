@@ -586,7 +586,8 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 	for (size_t i = 0; i < NumFilamentMonitors; ++i)
 	{
 		FilamentMonitor * const fs = filamentSensors[i];
-		if (fs != nullptr)
+		// A remote monitor's object here is never fed sensor data, so M122 B<n> reports it instead
+		if (fs != nullptr && fs->IsLocal())
 		{
 			if (first)
 			{
