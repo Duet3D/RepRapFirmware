@@ -57,7 +57,7 @@ struct ExpressionValue final
 		float fVal;
 		int32_t iVal;
 		uint32_t uVal;								// used for enumerations, bitmaps and IP addresses (not for integers, we always use int32_t for those)
-		const char *_ecv_array sVal;
+		const char *_ecv_array _ecv_null sVal;
 		const ObjectModel *_ecv_from _ecv_null omVal;	// object of some class derived from ObjectModel. Object model arrays may include null objects, so allow nullptr here.
 		StringHandle shVal;
 		ArrayHandle ahVal;
@@ -88,7 +88,7 @@ struct ExpressionValue final
 	explicit constexpr ExpressionValue(const ObjectModel *_ecv_from _ecv_null om) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(0), omVal(om) { }
 	constexpr ExpressionValue(const ObjectModel *_ecv_from _ecv_null om, uint8_t tableNumber) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(tableNumber), omVal(om) { }
 	constexpr ExpressionValue(const ObjectModel *_ecv_from om, uint8_t arrayNumber, bool dummy) noexcept : type((uint32_t)TypeCode::ObjectModelArray), param(arrayNumber), omVal(om) { }
-	explicit constexpr ExpressionValue(const char *_ecv_array s) noexcept : type((uint32_t)TypeCode::CString), param(0), sVal(s) { }
+	explicit constexpr ExpressionValue(const char *_ecv_array _ecv_null s) noexcept : type((s == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::CString), param(0), sVal(s) { }
 	explicit constexpr ExpressionValue(IPAddress ip) noexcept : type((uint32_t)TypeCode::IPAddress_tc), param(0), uVal(ip.GetV4LittleEndian()) { }
 	explicit constexpr ExpressionValue(std::nullptr_t dummy) noexcept : type((uint32_t)TypeCode::None), param(0), uVal(0) { }
 	explicit ExpressionValue(DateTime t) noexcept : type((t.tim == 0) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::DateTime_tc) { Set56BitValue(t.tim); }

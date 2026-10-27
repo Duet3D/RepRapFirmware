@@ -39,12 +39,12 @@
 # include <SBC/SbcInterface.h>
 #endif
 
-void Flasher::erase(uint32_t foffset) THROWS(GCodeException)
+void Flasher::erase() THROWS(GCodeException)
 {
 #if ORIGINAL_BOSSA_CODE
     _observer.onStatus("Erase flash\n");
 #endif
-    _flash->eraseAll(foffset);
+    _flash->eraseAll();
     _flash->eraseAuto(false);
 }
 
@@ -71,7 +71,7 @@ bool Flasher::write(FileStore *infile, uint32_t& foffset) THROWS(GCodeException)
 	{
 		if (numPages > _flash->numPages())
 		{
-			throw FileSizeError("Flasher::write: FileSizeError");
+			throw FileSizeError("Firmware file is too large");
 		}
 
 		_observer.onStatus("Writing %ld bytes to PanelDue flash memory\n", infile->Length());

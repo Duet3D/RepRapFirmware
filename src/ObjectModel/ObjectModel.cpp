@@ -1022,7 +1022,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 
 			case TypeCode::Duration:
 				{
-					unsigned int hours = val.uVal/3600,
+					const unsigned int hours = val.uVal/3600,
 						minutes = (val.uVal / 60) % 60,
 						seconds = val.uVal % 60;
 					buf->catf("%u:%02u:%02u", hours, minutes, seconds);
@@ -1588,8 +1588,9 @@ decrease(strlen(idString))	// recursion variant
 		break;
 
 	case TypeCode::None:
-		if (*idString == 0 && !context.WantArrayLength())
+		if (*idString == 0)
 		{
+			if (context.WantArrayLength()) { break; }
 			return val;
 		}
 

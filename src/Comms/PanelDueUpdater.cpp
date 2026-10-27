@@ -214,7 +214,7 @@ void PanelDueUpdater::Spin() noexcept
 
 		case FlashState::bossaErase:
 			reprap.GetPlatform().Message(GenericMessage, "Erasing PanelDue flash memory\n");
-			flasher->erase(0);
+			flasher->erase();
 			state = FlashState::bossaWrite;
 			break;
 

@@ -82,7 +82,7 @@ public:
     uint32_t totalSize() const noexcept { return _size * _pages; }
     uint32_t getNumLockRegions() const noexcept { return _numLockRegions; }
 
-    virtual void eraseAll(uint32_t offset) THROWS(GCodeException) = 0;
+    virtual void eraseAll() THROWS(GCodeException) = 0;
     virtual void eraseAuto(bool enable) noexcept = 0;
 
     virtual Bitmap<uint32_t> getLockRegions() THROWS(GCodeException) = 0;

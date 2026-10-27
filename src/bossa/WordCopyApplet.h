@@ -35,12 +35,21 @@
 class WordCopyApplet : public Applet
 {
 public:
-    WordCopyApplet(Samba& samba, uint32_t p_addr) THROWS(GCodeException);
-    ~WordCopyApplet() override;
+	WordCopyApplet(Samba& samba, uint32_t addr) THROWS(GCodeException)
+	    : Applet(samba,
+	             addr,
+	             applet.code,
+	             sizeof(applet.code),
+	             addr + applet.start,
+	             addr + applet.stack,
+	             addr + applet.reset)
+	{
+	}
+    ~WordCopyApplet() override { }
 
-    void setDstAddr(uint32_t dstAddr) THROWS(GCodeException);
-    void setSrcAddr(uint32_t srcAddr) THROWS(GCodeException);
-    void setWords(uint32_t words) THROWS(GCodeException);
+    void setDstAddr(uint32_t dstAddr) THROWS(GCodeException) { _samba.writeWord(_addr + applet.dst_addr, dstAddr); }
+    void setSrcAddr(uint32_t srcAddr) THROWS(GCodeException) { _samba.writeWord(_addr + applet.src_addr, srcAddr); }
+    void setWords(uint32_t words) THROWS(GCodeException) { _samba.writeWord(_addr + applet.words, words); }
 
 private:
     static const WordCopyArm applet;
