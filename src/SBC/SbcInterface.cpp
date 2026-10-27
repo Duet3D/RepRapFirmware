@@ -280,6 +280,24 @@ static void SendUsbInitMessage(SerialCDC *dev) noexcept
 	}
 }
 
+void SbcInterface::WriteQueuedCodeReplies() noexcept
+{
+	if (!gcodeReply.IsEmpty())
+	{
+		MutexLocker lock(gcodeReplyMutex);
+		while (!gcodeReply.IsEmpty())
+		{
+			const MessageType type = gcodeReply.GetFirstItemType();
+			OutputBuffer *buffer = gcodeReply.GetFirstItem();			// this may be null
+			if (!transfer.WriteCodeReply(type, buffer))					// this handles the null case too
+			{
+				break;
+			}
+			gcodeReply.SetFirstItem(buffer);							// this does a pop if buffer is null
+		}
+	}
+}
+
 void SbcInterface::ExchangeData() noexcept
 {
 	// Process incoming packets
@@ -1311,20 +1329,7 @@ void SbcInterface::ExchangeData() noexcept
 	}
 
 	// Send code replies and generic messages
-	if (!gcodeReply.IsEmpty())
-	{
-		MutexLocker lock(gcodeReplyMutex);
-		while (!gcodeReply.IsEmpty())
-		{
-			const MessageType type = gcodeReply.GetFirstItemType();
-			OutputBuffer *buffer = gcodeReply.GetFirstItem();			// this may be null
-			if (!transfer.WriteCodeReply(type, buffer))					// this handles the null case too
-			{
-				break;
-			}
-			gcodeReply.SetFirstItem(buffer);							// this does a pop if buffer is null
-		}
-	}
+	WriteQueuedCodeReplies();
 
 	// Notify DSF about the available buffer space
 	DefragmentBufferedCodes();
@@ -1476,41 +1481,55 @@ void SbcInterface::ExchangeData() noexcept
 				}
 
 				// Handle file abort requests
-				if (gb->IsAbortRequested() && transfer.WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
+				if (gb->IsAbortRequested())
 				{
+					// The SBC attributes a single file abort to the first code it has buffered for this channel, so every queued
+					// reply must go out before it. Aborting all files is an error path, so that request is never held back
+					if (!gb->IsAbortAllRequested())
+					{
+						WriteQueuedCodeReplies();
+					}
+					if ((gb->IsAbortAllRequested() || gcodeReply.IsEmpty()) && transfer.WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
+					{
 #ifdef TRACK_FILE_CODES
-					if (gb->IsFileChannel())
-					{
-						if (gb->IsAbortAllRequested())
+						if (gb->IsFileChannel())
 						{
-							fileCodesRead = fileCodesHandled = fileMacrosRunning = fileMacrosClosing = 0;
+							if (gb->IsAbortAllRequested())
+							{
+								fileCodesRead = fileCodesHandled = fileMacrosRunning = fileMacrosClosing = 0;
+							}
+							else
+							{
+								fileMacrosClosing++;
+							}
 						}
-						else
-						{
-							fileMacrosClosing++;
-						}
-					}
 #endif
-					// Send back a final code reply for codes that started the last macros, else the corresponding code will never finish
-					if (!gb->IsAbortAllRequested() && gb->GetState() == GCodeState::normal && (!gb->LatestMachineState().lastCodeFromSbc || gb->LatestMachineState().macroStartedByCode))
-					{
-						OutputBuffer *dummy = nullptr;
-						if (!transfer.WriteCodeReply(gb->GetResponseMessageType(), dummy))
+						// Send back a final code reply for codes that started the last macros, else the corresponding code will never finish
+						if (!gb->IsAbortAllRequested() && gb->GetState() == GCodeState::normal && (!gb->LatestMachineState().lastCodeFromSbc || gb->LatestMachineState().macroStartedByCode))
 						{
-							// Cannot send an empty code reply now, do it later
-							HandleGCodeReply(gb->GetResponseMessageType(), dummy);
+							OutputBuffer *dummy = nullptr;
+							if (!transfer.WriteCodeReply(gb->GetResponseMessageType(), dummy))
+							{
+								// Cannot send an empty code reply now, do it later
+								HandleGCodeReply(gb->GetResponseMessageType(), dummy);
+							}
 						}
+						gb->FileAbortSent();
+						gb->Invalidate();
 					}
-					gb->FileAbortSent();
-					gb->Invalidate();
 				}
 
 				// Handle blocking messages and their results
-				if (gb->LatestMachineState().waitingForAcknowledgement && gb->IsMessagePromptPending() &&
-					transfer.WriteWaitForAcknowledgement(channel))
+				if (gb->LatestMachineState().waitingForAcknowledgement && gb->IsMessagePromptPending())
 				{
-					gb->MessagePromptSent();
-					gb->Invalidate();
+					// The SBC attributes this request to the first code it has buffered for this channel, so every queued reply
+					// must go out before it. Holding gb->mutex stops the GCodes task from adding more while we write them
+					WriteQueuedCodeReplies();
+					if (gcodeReply.IsEmpty() && transfer.WriteWaitForAcknowledgement(channel))
+					{
+						gb->MessagePromptSent();
+						gb->Invalidate();
+					}
 				}
 				else if (gb->IsMessageAcknowledged() && transfer.WriteMessageAcknowledged(channel))
 				{
