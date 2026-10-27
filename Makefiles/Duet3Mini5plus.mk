@@ -120,6 +120,7 @@ DUET3MINI_CFLAGS := -c -std=gnu99 \
 	-O2 \
 	-Werror \
 	-Wwrite-strings \
+	-fstack-usage \
 	$(DUET3MINI_INCLUDES) \
 	$(DUET3MINI_DEFINES) \
 	-Dnoexcept= \
@@ -188,12 +189,12 @@ DUET3MINI_LDLIBS := \
 	-L$(LIBRARIES_DIR)/CANlib/SAME51_RTOS \
 	-L$(LIBRARIES_DIR)/LibTinyusb/SAME5x \
 	-L$(LIBRARIES_DIR)/LibMbedTls/SAME5x \
-	-lCoreN2G \
 	-lLibMbedTls \
+	-lLibTinyusb \
 	-lCANlib \
+	-lCoreN2G \
 	-lRRFLibraries \
 	-lFreeRTOS \
-	-lLibTinyusb \
 	-lsupc++
 
 DUET3MINI_LDLIBS_POST := -Wl,--end-group -lm

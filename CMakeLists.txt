@@ -73,7 +73,8 @@ target_compile_definitions(${DUET_BOARD} PRIVATE
 
 set(_c_options
     -Werror=implicit
-    -Wwrite-strings)
+    -Wwrite-strings
+    -fstack-usage)
 set(_cxx_options
     -fno-threadsafe-statics
     -fno-rtti

@@ -41,7 +41,7 @@ if(DUET_BOARD MATCHES "^(Duet3_MB6HC|Duet3_MB6XD|Duet3_CAN0|Duet3_MB6HC_no_SD)$"
     set(DUET_PART_DEFINE __SAME70Q20B__)
     set(RRF_LINKER_SCRIPT Hardware/SAME70/same70q20b_flash.ld)
     set(RRF_LINK_ORDER
-        Duet::LibTinyusb Duet::LibMbedTls Duet::CoreN2G Duet::RRFLibraries Duet::FreeRTOS Duet::CANlib)
+        Duet::LibMbedTls Duet::LibTinyusb Duet::CoreN2G Duet::RRFLibraries Duet::FreeRTOS Duet::CANlib)
     if(DUET_BOARD STREQUAL "Duet3_MB6HC")
         set(RRF_OUTPUT Duet3Firmware_MB6HC)
         set(RRF_DEFINES DUET3_MB6HC)
@@ -65,7 +65,7 @@ elseif(DUET_BOARD STREQUAL "Duet3Mini5plus")
     set(RRF_DEFINES DUET3MINI_V04)
     set(RRF_LINKER_SCRIPT Hardware/SAME5x/same54p20a_flash_16k_bootloader.ld)
     set(RRF_LINK_ORDER
-        Duet::CoreN2G Duet::LibMbedTls Duet::CANlib Duet::RRFLibraries Duet::FreeRTOS Duet::LibTinyusb)
+        Duet::LibMbedTls Duet::LibTinyusb Duet::CANlib Duet::CoreN2G Duet::RRFLibraries Duet::FreeRTOS)
     set(RRF_INCLUDES Duet3Mini Hardware/SAME5x/Ethernet)
     set(RRF_DISPLAY ON)
     set(RRF_UF2 ON)

@@ -123,6 +123,7 @@ DUET3CAN0_CFLAGS := -c -std=gnu99 \
 	-O2 \
 	-Werror \
 	-Wwrite-strings \
+	-fstack-usage \
 	$(DUET3CAN0_INCLUDES) \
 	$(DUET3CAN0_DEFINES) \
 	-Dnoexcept= \
@@ -192,8 +193,8 @@ DUET3CAN0_LDLIBS := \
 	-L$(LIBRARIES_DIR)/CANlib/SAME70_RTOS \
 	-L$(LIBRARIES_DIR)/LibTinyusb/SAME70 \
 	-L$(LIBRARIES_DIR)/LibMbedTls/SAME70 \
-	-lLibTinyusb \
 	-lLibMbedTls \
+	-lLibTinyusb \
 	-lCoreN2G \
 	-lRRFLibraries \
 	-lFreeRTOS \
