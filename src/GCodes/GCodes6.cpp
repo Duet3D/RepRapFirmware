@@ -166,6 +166,7 @@ void GCodes::DoManualBedProbe(GCodeBuffer& gb) noexcept
 void GCodes::InitialiseTaps(bool fastThenSlow) noexcept
 {
 	tapsDone = (fastThenSlow) ? -1 : 0;
+	g30zHeightError = 0.0;
 	g30zHeightErrorSum = 0.0;
 	g30zHeightErrorLowestDiff = 1000.0;
 }
