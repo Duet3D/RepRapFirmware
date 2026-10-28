@@ -13,9 +13,6 @@
 #   RRF_DEFINES        board macro, which selects the board's configuration headers, and any
 #                      macros that select a variant of it
 #   RRF_LINKER_SCRIPT  linker script, under src/
-#   RRF_LINK_ORDER     the order the linker scans the libraries in. It decides which archive
-#                      members are loaded first and so the layout of the image, which is why it is
-#                      given per board.
 #   RRF_INCLUDES       extra include directories, under src/
 #   RRF_DISPLAY        build the direct-connect LCD support in src/Display
 #   RRF_UF2            also produce a .uf2 image for the board's USB bootloader
@@ -40,8 +37,6 @@ if(DUET_BOARD MATCHES "^(Duet3_MB6HC|Duet3_MB6XD|Duet3_CAN0|Duet3_MB6HC_no_SD)$"
     set(RRF_MCU SAME70)
     set(DUET_PART_DEFINE __SAME70Q20B__)
     set(RRF_LINKER_SCRIPT Hardware/SAME70/same70q20b_flash.ld)
-    set(RRF_LINK_ORDER
-        Duet::LibMbedTls Duet::LibTinyusb Duet::CoreN2G Duet::RRFLibraries Duet::FreeRTOS Duet::CANlib)
     if(DUET_BOARD STREQUAL "Duet3_MB6HC")
         set(RRF_OUTPUT Duet3Firmware_MB6HC)
         set(RRF_DEFINES DUET3_MB6HC)
@@ -64,8 +59,6 @@ elseif(DUET_BOARD STREQUAL "Duet3Mini5plus")
     set(RRF_OUTPUT Duet3Firmware_Mini5plus)
     set(RRF_DEFINES DUET3MINI_V04)
     set(RRF_LINKER_SCRIPT Hardware/SAME5x/same54p20a_flash_16k_bootloader.ld)
-    set(RRF_LINK_ORDER
-        Duet::LibMbedTls Duet::LibTinyusb Duet::CANlib Duet::CoreN2G Duet::RRFLibraries Duet::FreeRTOS)
     set(RRF_INCLUDES Duet3Mini Hardware/SAME5x/Ethernet)
     set(RRF_DISPLAY ON)
     set(RRF_UF2 ON)

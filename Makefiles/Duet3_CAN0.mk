@@ -195,13 +195,12 @@ DUET3CAN0_LDLIBS := \
 	-L$(LIBRARIES_DIR)/LibMbedTls/SAME70 \
 	-lLibMbedTls \
 	-lLibTinyusb \
+	-lCANlib \
 	-lCoreN2G \
 	-lRRFLibraries \
 	-lFreeRTOS \
-	-lCANlib \
-	-lsupc++
-
-DUET3CAN0_LDLIBS_POST := -Wl,--end-group -lm
+	-lsupc++ \
+	-lm
 
 # Object files - libcpp and libc first for proper symbol resolution
 DUET3CAN0_LIBCPP_OBJS := $(DUET3CAN0_LIBCPP_SRCS:%.cpp=$(DUET3CAN0_BUILD_DIR)/%.o)
@@ -229,7 +228,7 @@ Duet3_CAN0: $(DUET3CAN0_TARGET_BIN)
 $(DUET3CAN0_TARGET_ELF): $(DUET3CAN0_OBJS) $(DUET3CAN0_CANLIB_LIB) $(DUET3CAN0_COREN2G_LIB) $(DUET3CAN0_RRFLIBS_LIB) $(DUET3CAN0_FREERTOS_LIB) $(DUET3CAN0_LIBTINYUSB_LIB) $(DUET3CAN0_MBEDTLS_LIB)
 	$(Q)echo "  LD      $@"
 	$(Q)mkdir -p $(@D)
-	$(Q)$(LD) $(DUET3CAN0_LDFLAGS1) -o $@ $(DUET3CAN0_LDFLAGS2) -Wl,--start-group $(DUET3CAN0_OBJS) $(DUET3CAN0_LDLIBS) $(DUET3CAN0_LDLIBS_POST)
+	$(Q)$(LD) $(DUET3CAN0_LDFLAGS1) -o $@ $(DUET3CAN0_LDFLAGS2) $(DUET3CAN0_OBJS) -Wl,--start-group $(DUET3CAN0_LDLIBS) -Wl,--end-group
 
 # Generate binary file
 $(DUET3CAN0_TARGET_BIN): $(DUET3CAN0_TARGET_ELF)

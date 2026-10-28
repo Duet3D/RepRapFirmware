@@ -106,11 +106,7 @@ target_link_options(${DUET_BOARD} PRIVATE
     LINKER:--warn-section-align
     LINKER:--warn-unresolved-symbols)
 
-list(JOIN RRF_LINK_ORDER "," _group)
-target_link_libraries(${DUET_BOARD} PRIVATE
-    "$<LINK_GROUP:RESCAN,${_group},supc++>"
-    m
-    Duet::WiFiSocketServerRTOS)
+duet_link_libraries(${DUET_BOARD} supc++ m)
 
 set(_files)
 if(RRF_FILES)

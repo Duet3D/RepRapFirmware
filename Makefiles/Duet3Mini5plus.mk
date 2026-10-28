@@ -195,9 +195,8 @@ DUET3MINI_LDLIBS := \
 	-lCoreN2G \
 	-lRRFLibraries \
 	-lFreeRTOS \
-	-lsupc++
-
-DUET3MINI_LDLIBS_POST := -Wl,--end-group -lm
+	-lsupc++ \
+	-lm
 
 # Object files - libcpp and libc first for proper symbol resolution
 DUET3MINI_LIBCPP_OBJS := $(DUET3MINI_LIBCPP_SRCS:%.cpp=$(DUET3MINI_BUILD_DIR)/%.o)
@@ -226,7 +225,7 @@ Duet3Mini5plus: $(DUET3MINI_TARGET_UF2)
 $(DUET3MINI_TARGET_ELF): $(DUET3MINI_OBJS) $(DUET3MINI_COREN2G_LIB) $(DUET3MINI_RRFLIBS_LIB) $(DUET3MINI_FREERTOS_LIB) $(DUET3MINI_LIBTINYUSB_LIB) $(DUET3MINI_CANLIB_LIB) $(DUET3MINI_MBEDTLS_LIB)
 	$(Q)echo "  LD      $@"
 	$(Q)mkdir -p $(@D)
-	$(Q)$(LD) $(DUET3MINI_LDFLAGS1) -o $@ $(DUET3MINI_LDFLAGS2) -Wl,--start-group $(DUET3MINI_OBJS) $(DUET3MINI_LDLIBS) $(DUET3MINI_LDLIBS_POST)
+	$(Q)$(LD) $(DUET3MINI_LDFLAGS1) -o $@ $(DUET3MINI_LDFLAGS2) $(DUET3MINI_OBJS) -Wl,--start-group $(DUET3MINI_LDLIBS) -Wl,--end-group
 
 # Generate binary file
 $(DUET3MINI_TARGET_BIN): $(DUET3MINI_TARGET_ELF)
