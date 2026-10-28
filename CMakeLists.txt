@@ -109,8 +109,8 @@ target_link_options(${DUET_BOARD} PRIVATE
 duet_link_libraries(${DUET_BOARD} supc++ m)
 
 set(_files)
-if(RRF_FILES)
-    set(_files FILES "${CMAKE_CURRENT_SOURCE_DIR}/${RRF_FILES}")
+if(RRF_EMBEDDED_FILES)
+    set(_files FILES "${CMAKE_CURRENT_SOURCE_DIR}/${RRF_EMBEDDED_FILES}")
 endif()
 duet_firmware_images(${DUET_BOARD} CRC ${_files})
 if(RRF_UF2)
