@@ -170,6 +170,8 @@ protected:
 
 #if SUPPORT_CAN_EXPANSION
 	bool IsLocal() const noexcept { return !hasRemote; }
+#else
+	bool IsLocal() const noexcept { return true; }
 #endif
 
 private:

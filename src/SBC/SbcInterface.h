@@ -160,6 +160,7 @@ private:
 #endif
 
 	void ExchangeData() noexcept;											// Exchange data between RRF and the SBC
+	void WriteQueuedCodeReplies() noexcept;									// Write as many queued code replies and generic messages as the current transfer can hold
 	[[noreturn]] void ReceiveAndStartIap(const char *iapChunk, size_t length) noexcept;	// Receive and start the IAP binary
 	void InvalidateResources() noexcept;									// Invalidate local resources on connection errors
 	void DefragmentBufferedCodes() noexcept;								// Attempt to defragment the code buffer ring to avoid stalls
