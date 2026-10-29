@@ -2357,7 +2357,18 @@ uint32_t RepRap::SendAlert(MessageType mt, c_string msg, c_string title, int sPa
 
 	platform->MessageF(MessageType::LogInfo, "M291: - %s - %s", (strlen(title) > 0 ? title : "[no title]"), msg);
 
-	mt = (MessageType)((uint32_t)mt & ((uint32_t)UsbMessage | (uint32_t)Usb2Message | (uint32_t)TelnetMessage | (uint32_t)AuxMessage | (uint32_t)Aux2Message));
+	// A PanelDue displays the message box itself, so don't echo the text to it
+	uint32_t textDestinations = (uint32_t)UsbMessage | (uint32_t)Usb2Message | (uint32_t)TelnetMessage;
+	if (!platform->IsAuxPanelDue(0))
+	{
+		textDestinations |= (uint32_t)AuxMessage;
+	}
+	if (!platform->IsAuxPanelDue(1))
+	{
+		textDestinations |= (uint32_t)Aux2Message;
+	}
+
+	mt = (MessageType)((uint32_t)mt & textDestinations);
 	if (mt != NoDestinationMessage)
 	{
 		// Source was USB, Telnet or serial so also send the message back to the sending channel

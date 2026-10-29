@@ -317,6 +317,7 @@ public:
 	void ResetChannel(size_t chan) noexcept;						// Re-initialise a serial channel
 	bool IsChanEnabled(size_t chan) const noexcept;					// Any device on the serial line?
     bool IsChanRaw(size_t chan) const noexcept;						// Is the serial line in raw mode?
+	bool IsAuxPanelDue(size_t auxNumber) const noexcept;			// Is a PanelDue connected to this aux channel?
 
 #if NUM_ASYNC_PORTS != 0
     AsyncSerial *GetAsyncPort(size_t auxNumber) pre(auxNumber < NUM_ASYNC_PORTS) noexcept { return asyncPorts[auxNumber]; }

@@ -2453,6 +2453,15 @@ bool Platform::IsChanRaw(size_t chan) const noexcept
 #endif
 }
 
+bool Platform::IsAuxPanelDue(size_t auxNumber) const noexcept
+{
+#if NUM_ASYNC_CHANNELS != 0
+	return (auxNumber < NumAuxChannels) && (auxDevices[auxNumber].GetMode() == AuxMode::panelDue);
+#else
+	return false;
+#endif
+}
+
 # if NUM_ASYNC_CHANNELS != 0 && !defined(DUET_NG)			// we don't support this on Duet 2 because we are running low on flash memory space
 
 /**
