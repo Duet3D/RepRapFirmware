@@ -3792,7 +3792,9 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 							reprap.GetPrintMonitor().GetPrintingFilename());
 	if (fromStart)
 	{
-		DoFileMacro(*FileGCode(), START_G, false, AsyncSystemMacroCode);		// get fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
+		// Get fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context.
+		// When a job file starts another print, M32 is still executing on this channel and owns the macro, else the SBC resends it
+		DoFileMacro(*FileGCode(), START_G, false, FileGCode()->IsExecuting() ? SystemHelperMacroCode : AsyncSystemMacroCode);
 	}
 	else
 	{
