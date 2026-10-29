@@ -8,16 +8,13 @@ DUET3MB6HC_TARGET_ELF := $(DUET3MB6HC_BUILD_DIR)/$(DUET3MB6HC_TARGET_NAME).elf
 DUET3MB6HC_TARGET_BIN := $(DUET3MB6HC_BUILD_DIR)/$(DUET3MB6HC_TARGET_NAME).bin
 DUET3MB6HC_TARGET_MAP := $(DUET3MB6HC_BUILD_DIR)/$(DUET3MB6HC_TARGET_NAME).map
 
-# Workspace root
-WORKSPACE := ..
-
 # Library dependencies
-DUET3MB6HC_FREERTOS_LIB := $(WORKSPACE)/FreeRTOS/SAME70/libFreeRTOS.a
-DUET3MB6HC_COREN2G_LIB := $(WORKSPACE)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS/libCoreN2G.a
-DUET3MB6HC_RRFLIBS_LIB := $(WORKSPACE)/RRFLibraries/SAME70_RTOS/libRRFLibraries.a
-DUET3MB6HC_CANLIB_LIB := $(WORKSPACE)/CANlib/SAME70_RTOS/libCANlib.a
-DUET3MB6HC_LIBTINYUSB_LIB := $(WORKSPACE)/LibTinyusb/SAME70/libLibTinyusb.a
-DUET3MB6HC_MBEDTLS_LIB := $(WORKSPACE)/LibMbedTls/SAME70/libLibMbedTls.a
+DUET3MB6HC_FREERTOS_LIB := $(LIBRARIES_DIR)/FreeRTOS/SAME70/libFreeRTOS.a
+DUET3MB6HC_COREN2G_LIB := $(LIBRARIES_DIR)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS/libCoreN2G.a
+DUET3MB6HC_RRFLIBS_LIB := $(LIBRARIES_DIR)/RRFLibraries/SAME70_RTOS/libRRFLibraries.a
+DUET3MB6HC_CANLIB_LIB := $(LIBRARIES_DIR)/CANlib/SAME70_RTOS/libCANlib.a
+DUET3MB6HC_LIBTINYUSB_LIB := $(LIBRARIES_DIR)/LibTinyusb/SAME70/libLibTinyusb.a
+DUET3MB6HC_MBEDTLS_LIB := $(LIBRARIES_DIR)/LibMbedTls/SAME70/libLibMbedTls.a
 
 # Source directories
 DUET3MB6HC_SRC_DIR := src
@@ -67,28 +64,28 @@ DUET3MB6HC_C_SRCS := $(filter-out $(DUET3MB6HC_C_EXCLUDE_FILES) $(addsuffix /%,$
 
 # Include paths
 DUET3MB6HC_INCLUDES := \
-	-I$(WORKSPACE)/LibMbedTls/include \
-	-I$(WORKSPACE)/LibMbedTls/library \
-	-I$(WORKSPACE)/LibMbedTls/configs \
-	-I$(WORKSPACE)/LibTinyusb \
-	-I$(WORKSPACE)/CoreN2G \
-	-I$(WORKSPACE)/CoreN2G/src \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70 \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/asf \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/asf/sam/drivers \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/asf/common/utils \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/preprocessor \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/header_files \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/cmsis/same70/include \
-	-I$(WORKSPACE)/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include \
-	-I$(WORKSPACE)/CoreN2G/src/SAM4S_4E_E70/SAME70 \
-	-I$(WORKSPACE)/FreeRTOS \
-	-I$(WORKSPACE)/FreeRTOS/src/include \
-	-I$(WORKSPACE)/FreeRTOS/src/portable/GCC/ARM_CM7/r0p1 \
-	-I$(WORKSPACE)/RRFLibraries/src \
-	-I$(WORKSPACE)/CANlib/src \
-	-I$(WORKSPACE)/WiFiSocketServerRTOS/src/include \
+	-I$(LIBRARIES_DIR)/LibMbedTls/include \
+	-I$(LIBRARIES_DIR)/LibMbedTls/library \
+	-I$(LIBRARIES_DIR)/LibMbedTls/configs \
+	-I$(LIBRARIES_DIR)/LibTinyusb \
+	-I$(LIBRARIES_DIR)/CoreN2G \
+	-I$(LIBRARIES_DIR)/CoreN2G/src \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70 \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/asf \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/asf/sam/drivers \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/asf/common/utils \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/preprocessor \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/header_files \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/asf/sam/utils/cmsis/same70/include \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAM4S_4E_E70/SAME70 \
+	-I$(LIBRARIES_DIR)/FreeRTOS \
+	-I$(LIBRARIES_DIR)/FreeRTOS/src/include \
+	-I$(LIBRARIES_DIR)/FreeRTOS/src/portable/GCC/ARM_CM7/r0p1 \
+	-I$(LIBRARIES_DIR)/RRFLibraries/src \
+	-I$(LIBRARIES_DIR)/CANlib/src \
+	-I$(LIBRARIES_DIR)/WiFiSocketServerRTOS/src/include \
 	-I$(DUET3MB6HC_SRC_DIR) \
 	-I$(DUET3MB6HC_SRC_DIR)/Hardware/SAME70 \
 	-I$(DUET3MB6HC_SRC_DIR)/Networking \
@@ -125,6 +122,7 @@ DUET3MB6HC_CFLAGS := -c -std=gnu99 \
 	-O2 \
 	-Werror \
 	-Wwrite-strings \
+	-fstack-usage \
 	$(DUET3MB6HC_INCLUDES) \
 	$(DUET3MB6HC_DEFINES) \
 	-Dnoexcept= \
@@ -188,21 +186,20 @@ DUET3MB6HC_LDFLAGS2 := \
 
 # Library search paths
 DUET3MB6HC_LDLIBS := \
-	-L$(WORKSPACE)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS \
-	-L$(WORKSPACE)/RRFLibraries/SAME70_RTOS \
-	-L$(WORKSPACE)/FreeRTOS/SAME70 \
-	-L$(WORKSPACE)/CANlib/SAME70_RTOS \
-	-L$(WORKSPACE)/LibTinyusb/SAME70 \
-	-L$(WORKSPACE)/LibMbedTls/SAME70 \
-	-lLibTinyusb \
+	-L$(LIBRARIES_DIR)/CoreN2G/SAME70_CAN_SDHC_USB_RTOS \
+	-L$(LIBRARIES_DIR)/RRFLibraries/SAME70_RTOS \
+	-L$(LIBRARIES_DIR)/FreeRTOS/SAME70 \
+	-L$(LIBRARIES_DIR)/CANlib/SAME70_RTOS \
+	-L$(LIBRARIES_DIR)/LibTinyusb/SAME70 \
+	-L$(LIBRARIES_DIR)/LibMbedTls/SAME70 \
 	-lLibMbedTls \
+	-lLibTinyusb \
+	-lCANlib \
 	-lCoreN2G \
 	-lRRFLibraries \
 	-lFreeRTOS \
-	-lCANlib \
-	-lsupc++
-
-DUET3MB6HC_LDLIBS_POST := -Wl,--end-group -lm
+	-lsupc++ \
+	-lm
 
 # Object files - libcpp and libc first for proper symbol resolution
 DUET3MB6HC_LIBCPP_OBJS := $(DUET3MB6HC_LIBCPP_SRCS:%.cpp=$(DUET3MB6HC_BUILD_DIR)/%.o)
@@ -230,7 +227,7 @@ Duet3_MB6HC: $(DUET3MB6HC_TARGET_BIN)
 $(DUET3MB6HC_TARGET_ELF): $(DUET3MB6HC_OBJS) $(DUET3MB6HC_CANLIB_LIB) $(DUET3MB6HC_COREN2G_LIB) $(DUET3MB6HC_RRFLIBS_LIB) $(DUET3MB6HC_FREERTOS_LIB) $(DUET3MB6HC_LIBTINYUSB_LIB) $(DUET3MB6HC_MBEDTLS_LIB)
 	$(Q)echo "  LD      $@"
 	$(Q)mkdir -p $(@D)
-	$(Q)$(LD) $(DUET3MB6HC_LDFLAGS1) -o $@ $(DUET3MB6HC_LDFLAGS2) -Wl,--start-group $(DUET3MB6HC_OBJS) $(DUET3MB6HC_LDLIBS) $(DUET3MB6HC_LDLIBS_POST)
+	$(Q)$(LD) $(DUET3MB6HC_LDFLAGS1) -o $@ $(DUET3MB6HC_LDFLAGS2) $(DUET3MB6HC_OBJS) -Wl,--start-group $(DUET3MB6HC_LDLIBS) -Wl,--end-group
 
 # Generate binary file
 $(DUET3MB6HC_TARGET_BIN): $(DUET3MB6HC_TARGET_ELF)
