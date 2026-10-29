@@ -159,17 +159,6 @@
 			"notes": "Flash programming applets and device tables used to update expansion boards; upstream release not recorded in the tree, the files carry copyright 2011-2018"
 		},
 		{
-			"name": "SHA-1 by Paul E. Jones",
-			"repo": "RepRapFirmware",
-			"paths": ["src/Libraries/sha1"],
-			"vcs": "https://www.packetizer.com/security/sha1/",
-			"licenseName": "No licence grant in the source files",
-			"version": {
-				"file": "src/Libraries/sha1/sha1.c",
-				"patterns": [".*\\$Id: sha1\\.c [0-9]+ ([0-9-]+) .*"]
-			}
-		},
-		{
 			"name": "Bosch Sensortec BME280 Sensor API",
 			"repo": "RepRapFirmware",
 			"paths": ["src/Heating/Sensors/bme280_defs.h"],

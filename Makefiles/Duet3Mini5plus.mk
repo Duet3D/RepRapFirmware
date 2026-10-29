@@ -8,15 +8,13 @@ DUET3MINI_TARGET_BIN := $(DUET3MINI_BUILD_DIR)/$(DUET3MINI_TARGET_NAME).bin
 DUET3MINI_TARGET_UF2 := $(DUET3MINI_BUILD_DIR)/$(DUET3MINI_TARGET_NAME).uf2
 DUET3MINI_TARGET_MAP := $(DUET3MINI_BUILD_DIR)/$(DUET3MINI_TARGET_NAME).map
 
-WORKSPACE := ..
-
 # Library dependencies
-DUET3MINI_FREERTOS_LIB := $(WORKSPACE)/FreeRTOS/SAME51/libFreeRTOS.a
-DUET3MINI_COREN2G_LIB := $(WORKSPACE)/CoreN2G/SAME5x_CAN_SDHC_USB_RTOS/libCoreN2G.a
-DUET3MINI_RRFLIBS_LIB := $(WORKSPACE)/RRFLibraries/SAME51_RTOS/libRRFLibraries.a
-DUET3MINI_CANLIB_LIB := $(WORKSPACE)/CANlib/SAME51_RTOS/libCANlib.a
-DUET3MINI_LIBTINYUSB_LIB := $(WORKSPACE)/LibTinyusb/SAME5x/libLibTinyusb.a
-DUET3MINI_MBEDTLS_LIB := $(WORKSPACE)/LibMbedTls/SAME5x/libLibMbedTls.a
+DUET3MINI_FREERTOS_LIB := $(LIBRARIES_DIR)/FreeRTOS/SAME51/libFreeRTOS.a
+DUET3MINI_COREN2G_LIB := $(LIBRARIES_DIR)/CoreN2G/SAME5x_CAN_SDHC_USB_RTOS/libCoreN2G.a
+DUET3MINI_RRFLIBS_LIB := $(LIBRARIES_DIR)/RRFLibraries/SAME51_RTOS/libRRFLibraries.a
+DUET3MINI_CANLIB_LIB := $(LIBRARIES_DIR)/CANlib/SAME51_RTOS/libCANlib.a
+DUET3MINI_LIBTINYUSB_LIB := $(LIBRARIES_DIR)/LibTinyusb/SAME5x/libLibTinyusb.a
+DUET3MINI_MBEDTLS_LIB := $(LIBRARIES_DIR)/LibMbedTls/SAME5x/libLibMbedTls.a
 
 DUET3MINI_SRC_DIR := src
 
@@ -64,26 +62,26 @@ DUET3MINI_C_SRCS := $(filter-out $(DUET3MINI_C_EXCLUDE_FILES) $(addsuffix /%,$(D
 
 # Include paths
 DUET3MINI_INCLUDES := \
-	-I$(WORKSPACE)/LibMbedTls/include \
-	-I$(WORKSPACE)/LibMbedTls/library \
-	-I$(WORKSPACE)/LibMbedTls/configs \
-	-I$(WORKSPACE)/CoreN2G \
-	-I$(WORKSPACE)/CoreN2G/src \
-	-I$(WORKSPACE)/CoreN2G/src/SAME5x_C21 \
-	-I$(WORKSPACE)/CoreN2G/src/SAME5x_C21/SAME5x \
-	-I$(WORKSPACE)/CoreN2G/src/SAME5x_C21/SAME5x/hal/include \
-	-I$(WORKSPACE)/CoreN2G/src/SAME5x_C21/SAME5x/hal/utils/include \
-	-I$(WORKSPACE)/CoreN2G/src/SAME5x_C21/SAME5x/hri \
-	-I$(WORKSPACE)/CoreN2G/src/SAME5x_C21/SAME5x/Config \
-	-I$(WORKSPACE)/CoreN2G/src/atmel/SAME54_DFP/1.1.134/include \
-	-I$(WORKSPACE)/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include \
-	-I$(WORKSPACE)/FreeRTOS \
-	-I$(WORKSPACE)/FreeRTOS/src/include \
-	-I$(WORKSPACE)/FreeRTOS/src/portable/GCC/ARM_CM4F \
-	-I$(WORKSPACE)/RRFLibraries/src \
-	-I$(WORKSPACE)/LibTinyusb/src \
-	-I$(WORKSPACE)/CANlib/src \
-	-I$(WORKSPACE)/WiFiSocketServerRTOS/src/include \
+	-I$(LIBRARIES_DIR)/LibMbedTls/include \
+	-I$(LIBRARIES_DIR)/LibMbedTls/library \
+	-I$(LIBRARIES_DIR)/LibMbedTls/configs \
+	-I$(LIBRARIES_DIR)/CoreN2G \
+	-I$(LIBRARIES_DIR)/CoreN2G/src \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAME5x_C21 \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAME5x_C21/SAME5x \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAME5x_C21/SAME5x/hal/include \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAME5x_C21/SAME5x/hal/utils/include \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAME5x_C21/SAME5x/hri \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/SAME5x_C21/SAME5x/Config \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/atmel/SAME54_DFP/1.1.134/include \
+	-I$(LIBRARIES_DIR)/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include \
+	-I$(LIBRARIES_DIR)/FreeRTOS \
+	-I$(LIBRARIES_DIR)/FreeRTOS/src/include \
+	-I$(LIBRARIES_DIR)/FreeRTOS/src/portable/GCC/ARM_CM4F \
+	-I$(LIBRARIES_DIR)/RRFLibraries/src \
+	-I$(LIBRARIES_DIR)/LibTinyusb/src \
+	-I$(LIBRARIES_DIR)/CANlib/src \
+	-I$(LIBRARIES_DIR)/WiFiSocketServerRTOS/src/include \
 	-I$(DUET3MINI_SRC_DIR) \
 	-I$(DUET3MINI_SRC_DIR)/Hardware/SAME5x \
 	-I$(DUET3MINI_SRC_DIR)/Duet3Mini \
@@ -122,6 +120,7 @@ DUET3MINI_CFLAGS := -c -std=gnu99 \
 	-O2 \
 	-Werror \
 	-Wwrite-strings \
+	-fstack-usage \
 	$(DUET3MINI_INCLUDES) \
 	$(DUET3MINI_DEFINES) \
 	-Dnoexcept= \
@@ -184,21 +183,20 @@ DUET3MINI_LDFLAGS2 := \
 
 # Library search paths
 DUET3MINI_LDLIBS := \
-	-L$(WORKSPACE)/CoreN2G/SAME5x_CAN_SDHC_USB_RTOS \
-	-L$(WORKSPACE)/RRFLibraries/SAME51_RTOS \
-	-L$(WORKSPACE)/FreeRTOS/SAME51 \
-	-L$(WORKSPACE)/CANlib/SAME51_RTOS \
-	-L$(WORKSPACE)/LibTinyusb/SAME5x \
-	-L$(WORKSPACE)/LibMbedTls/SAME5x \
-	-lCoreN2G \
+	-L$(LIBRARIES_DIR)/CoreN2G/SAME5x_CAN_SDHC_USB_RTOS \
+	-L$(LIBRARIES_DIR)/RRFLibraries/SAME51_RTOS \
+	-L$(LIBRARIES_DIR)/FreeRTOS/SAME51 \
+	-L$(LIBRARIES_DIR)/CANlib/SAME51_RTOS \
+	-L$(LIBRARIES_DIR)/LibTinyusb/SAME5x \
+	-L$(LIBRARIES_DIR)/LibMbedTls/SAME5x \
 	-lLibMbedTls \
+	-lLibTinyusb \
 	-lCANlib \
+	-lCoreN2G \
 	-lRRFLibraries \
 	-lFreeRTOS \
-	-lLibTinyusb \
-	-lsupc++
-
-DUET3MINI_LDLIBS_POST := -Wl,--end-group -lm
+	-lsupc++ \
+	-lm
 
 # Object files - libcpp and libc first for proper symbol resolution
 DUET3MINI_LIBCPP_OBJS := $(DUET3MINI_LIBCPP_SRCS:%.cpp=$(DUET3MINI_BUILD_DIR)/%.o)
@@ -227,7 +225,7 @@ Duet3Mini5plus: $(DUET3MINI_TARGET_UF2)
 $(DUET3MINI_TARGET_ELF): $(DUET3MINI_OBJS) $(DUET3MINI_COREN2G_LIB) $(DUET3MINI_RRFLIBS_LIB) $(DUET3MINI_FREERTOS_LIB) $(DUET3MINI_LIBTINYUSB_LIB) $(DUET3MINI_CANLIB_LIB) $(DUET3MINI_MBEDTLS_LIB)
 	$(Q)echo "  LD      $@"
 	$(Q)mkdir -p $(@D)
-	$(Q)$(LD) $(DUET3MINI_LDFLAGS1) -o $@ $(DUET3MINI_LDFLAGS2) -Wl,--start-group $(DUET3MINI_OBJS) $(DUET3MINI_LDLIBS) $(DUET3MINI_LDLIBS_POST)
+	$(Q)$(LD) $(DUET3MINI_LDFLAGS1) -o $@ $(DUET3MINI_LDFLAGS2) $(DUET3MINI_OBJS) -Wl,--start-group $(DUET3MINI_LDLIBS) -Wl,--end-group
 
 # Generate binary file
 $(DUET3MINI_TARGET_BIN): $(DUET3MINI_TARGET_ELF)
