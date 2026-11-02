@@ -32,7 +32,7 @@ namespace CanInterface
 	void Shutdown() noexcept;
 	inline CanAddress GetCurrentMasterAddress() noexcept { return CanId::MasterAddress; }		// currently fixed, but might change in future
 
-	void ReportCanTiming(const StringRef& reply) noexcept;
+	void ReportCanTiming(size_t port, const StringRef& reply) noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
 	bool InExpansionMode() noexcept;
@@ -62,6 +62,7 @@ namespace CanInterface
 	uint32_t Convert16bitReceivedTimeStampTo32bits(uint16_t ts) noexcept;
 
 #if DUAL_CAN
+	CanAddress GetSplitAddress() noexcept;								// lowest address served by CAN0, 0 if CAN0 has no boards assigned
 	uint32_t SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout = UsualSendTimeout) noexcept;
 	bool ReceivePlainMessage(CanMessageBuffer *null buf, uint32_t timeout = UsualResponseTimeout) noexcept;
 #endif
