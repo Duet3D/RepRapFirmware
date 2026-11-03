@@ -541,6 +541,12 @@ bool StepTimer::ScheduleCallback(Ticks when) noexcept
 	return ScheduleCallbackFromIsr(when);
 }
 
+bool StepTimer::ScheduleMovementCallback(Ticks when) noexcept
+{
+	BasePriorityBooster booster(NvicPriorityStep);
+	return ScheduleMovementCallbackFromIsr(when);
+}
+
 // Cancel any scheduled callback for this timer. Harmless if there is no callback scheduled.
 void StepTimer::CancelCallbackFromIsr() noexcept
 {
