@@ -1619,7 +1619,7 @@ void Move::SetupNextScanningProbeReading() noexcept
 		}
 //		debugPrintf("nr=%u, wt=%" PRIu32 ", dec=%.3e\n", probeControl.nextReadingNeeded, wakeupTime, (double)probeControl.deceleration);
 		++probeControl.nextReadingNeeded;
-		if (probeControl.timer.ScheduleMovementCallbackFromIsr(wakeupTime + probeControl.startTime))
+		if (probeControl.timer.ScheduleMovementCallback(wakeupTime + probeControl.startTime))
 		{
 			ScanningProbeTimerCallback();
 		}
@@ -2365,7 +2365,7 @@ void Move::PhaseStepControlLoop() noexcept
 	if (inserted)
 	{
 		BasePriorityBooster booster(NvicPriorityStep);					// shut out the step interrupt
-		if (!ScheduleNextStepInterrupt())
+		if (ScheduleNextStepInterrupt())
 		{
 			Interrupt();
 		}

@@ -34,6 +34,9 @@ public:
 	// As ScheduleCallback but base priority >= NvicPriorityStep when called. Can be called from within a callback.
 	bool ScheduleCallbackFromIsr(Ticks when) noexcept SPEED_CRITICAL;
 
+	// As ScheduleCallback but add the movement delay
+	bool ScheduleMovementCallback(Ticks when) noexcept;
+
 	// As ScheduleCallback but add the movement delay, and must have base priority >= NvicPriorityStep when called. Can be called from within a callback.
 	bool ScheduleMovementCallbackFromIsr(Ticks when) noexcept SPEED_CRITICAL;
 
