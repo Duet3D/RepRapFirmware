@@ -628,7 +628,8 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		bool success = false;
 		if (oldVal != nullptr && newVal != nullptr)
 		{
-			const bool deleteExisting = StringEqualsIgnoreCase(GetKeyValue("deleteexisting"), "yes");
+			const char *_ecv_array _ecv_null const deleteExistingVal = GetKeyValue("deleteexisting");
+			const bool deleteExisting = (deleteExistingVal != nullptr && StringEqualsIgnoreCase(deleteExistingVal, "yes"));
 			success = MassStorage::Rename(oldVal, newVal, deleteExisting, false);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
