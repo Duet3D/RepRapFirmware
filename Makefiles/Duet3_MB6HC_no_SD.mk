@@ -164,7 +164,7 @@ DUET3NOSD_CXXFLAGS := -c -std=c++20 \
 
 # Linker flags - split into LDFLAGS1 (before -o) and LDFLAGS2 (after -o)
 DUET3NOSD_LDFLAGS1 := --specs=nosys.specs \
-	-Os \
+	-O2 \
 	-Wl,--gc-sections \
 	-Wl,--fatal-warnings \
 	-Wl,--no-warn-rwx-segment \
