@@ -48,7 +48,7 @@ public:
     uint32_t GetSize() noexcept { return _size; }
     uint32_t GetAddr() noexcept { return _addr; }
 
-    void setStack(uint32_t stack) THROWS(GCodeException);
+    void setStack(uint32_t stack) THROWS(GCodeException) { _samba.writeWord(_stack, stack); }
 
     void runv() THROWS(GCodeException); // To be used for Thumb-2 based devices (Cortex-Mx)
 
