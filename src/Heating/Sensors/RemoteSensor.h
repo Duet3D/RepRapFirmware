@@ -20,7 +20,7 @@ public:
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException) override;
 	CanAddress GetBoardAddress() const noexcept override { return boardAddress; }
-	void Poll() noexcept override { }				// nothing to do here because reception of CAN messages update the reading
+	void Poll() noexcept override;
 	void UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report) noexcept override;
 	const char *GetShortSensorType() const noexcept override { return "remote"; }	// TODO save the actual type
 

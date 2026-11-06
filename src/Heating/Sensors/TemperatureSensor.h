@@ -130,6 +130,7 @@ protected:
 	void CopyBasicDetails(const StringRef& reply) const noexcept;							// copy the common details to the reply buffer - not called for remote sensors
 	void SetResult(float t, TemperatureError rslt) noexcept;
 	void SetResult(TemperatureError rslt) noexcept;
+	void CheckTimeout() noexcept;															// check for timeout
 
 #if SUPPORT_CAN_EXPANSION
 	void ClearAdjustments() noexcept { offsetAdjustment = slopeAdjustment = 0.0; }			// clear the adjustment parameters
