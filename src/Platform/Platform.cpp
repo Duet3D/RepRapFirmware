@@ -228,7 +228,6 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #if HAS_MASS_STORAGE
 	{ "iapFileNameSD",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE),															ObjectModelEntryFlags::verbose },
 #endif
-	{ "maxHeaters",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),														ObjectModelEntryFlags::verbose },
 	{ "maxMotors",			OBJECT_MODEL_FUNC_NOSELF((int32_t)NumDirectDrivers),												ObjectModelEntryFlags::verbose },
 #if HAS_CPU_TEMP_SENSOR
 	{ "mcuTemp",			OBJECT_MODEL_FUNC(self, 1),																			ObjectModelEntryFlags::liveNotPanelDue },
@@ -278,7 +277,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
 	4,																		// number of sections
-	11 + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR
+	10 + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR
 	  + SUPPORT_CAN_EXPANSION + (int)SUPPORT_DIRECT_LCD + MCU_HAS_UNIQUE_ID + HAS_WIFI_NETWORKING,		// section 0: boards[0]
 #if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp
