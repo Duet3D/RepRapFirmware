@@ -49,8 +49,8 @@ TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *_ecv_ar
 	: next(nullptr), sensorNumber(sensorNum), sensorType(t),
 	  lastTemperature(0.0), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::ok) {}
 
-// Return the latest temperature reading
-TemperatureError TemperatureSensor::GetLatestTemperature(float& t) noexcept
+// Check for timeout
+void TemperatureSensor::CheckTimeout() noexcept
 {
 	// We must read whenLastRead *before* we call millis(). Otherwise, a task switch to the heater task could occur after we call millis and before we read whenLastRead,
 	// so that when we read whenLastRead its value is greater than the result from millis().
@@ -60,6 +60,12 @@ TemperatureError TemperatureSensor::GetLatestTemperature(float& t) noexcept
 		lastTemperature = BadErrorTemperature;
 		lastResult = TemperatureError::timeout;
 	}
+}
+
+// Return the latest temperature reading and error state
+TemperatureError TemperatureSensor::GetLatestTemperature(float& t) noexcept
+{
+	CheckTimeout();
 	t = lastTemperature;
 	return lastResult;
 }
