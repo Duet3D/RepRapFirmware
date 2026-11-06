@@ -860,6 +860,7 @@ void WiFiInterface::Spin() noexcept
 					if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) >= (int32_t)MinimumStatusResponseLength)
 					{
 						ipAddress.SetV4LittleEndian(status.Value().ipAddress);
+						macAddress.SetFromBytes(status.Value().macAddress);
 						actualSsid.copy(status.Value().ssid);
 					}
 					InitSockets();
