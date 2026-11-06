@@ -10,17 +10,7 @@
 # define BOARD_NAME				"Duet 3 MB6HC"
 # define DEFAULT_BOARD_TYPE		BoardType::Auto
 # define FIRMWARE_NAME			"RepRapFirmware for Duet 3 MB6HC"
-#ifdef USE_CAN0
-# define FIRMWARE_CAN_SUFFIX		"_CAN0"
-#else
-# define FIRMWARE_CAN_SUFFIX		""
-#endif
-#ifdef USE_EMBEDDED_FILES
-# define FIRMWARE_STORAGE_SUFFIX	"_no_SD"
-#else
-# define FIRMWARE_STORAGE_SUFFIX	""
-#endif
-# define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME FIRMWARE_CAN_SUFFIX FIRMWARE_STORAGE_SUFFIX ".bin"
+# define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM on a SAME70Q20B
 
 #define IAP_UPDATE_FILE			"Duet3_SDiap32_" BOARD_SHORT_NAME ".bin"
