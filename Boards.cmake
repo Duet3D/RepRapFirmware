@@ -57,6 +57,7 @@ else()
 endif()
 
 if(RRF_EMBEDDED_FILES)
+    string(APPEND RRF_OUTPUT _no_SD)
     list(APPEND RRF_DEFINES USE_EMBEDDED_FILES)
 endif()
 

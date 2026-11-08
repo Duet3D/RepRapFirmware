@@ -134,6 +134,11 @@ void PanelDueUpdater::Start(const StringRef& filenameRef, const uint32_t serialC
 			reprap.GetPlatform().MessageF(ErrorMessage, "Can't open file %s\n", filename);
 			state = FlashState::done;
 		}
+		else if (firmwareFile->Length() == 0)
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Firmware file %s is empty\n", filename);
+			state = FlashState::done;
+		}
 		else if (firmwareFile->Length() > 256u * 1024u)
 		{
 			reprap.GetPlatform().MessageF(ErrorMessage, "Firmware file %s is too large\n", filename);

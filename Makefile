@@ -120,7 +120,7 @@ help:
 	$(Q)echo ""
 
 # Build all configurations
-# Excluded from 'all' (still buildable as an explicit target): Duet3_MB6HC_no_SD (duplicate MB6HC binary name)
+# Excluded from 'all' (still buildable as an explicit target): Duet3_MB6HC_no_SD
 .PHONY: all
 all: $(filter-out Duet3_MB6HC_no_SD,$(CONFIGS))
 

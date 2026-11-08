@@ -57,23 +57,11 @@ bool Flasher::write(FileStore *infile, uint32_t& foffset) THROWS(GCodeException)
     if (foffset == 0)
     {
     	pageNum = 0;
-    	Platform& platform = reprap.GetPlatform();
-		if (infile->Length() == 0)
-		{
-			infile->Close();
-			platform.MessageF(ErrorMessage, "Firmware file is empty\n");
-			throw GCodeException(nullptr);
-		}
     }
 
 	numPages = (infile->Length() + pageSize - 1) / pageSize;
 	if (foffset == 0)
 	{
-		if (numPages > _flash->numPages())
-		{
-			throw FileSizeError("Firmware file is too large");
-		}
-
 		_observer.onStatus("Writing %ld bytes to PanelDue flash memory\n", infile->Length());
 	}
 

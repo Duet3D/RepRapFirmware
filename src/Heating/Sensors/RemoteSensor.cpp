@@ -64,6 +64,13 @@ void RemoteSensor::UpdateRemoteTemperature(CanAddress src, const CanSensorReport
 	}
 }
 
+// The reading gets updated when CAN messages arrive from the remote board.
+// We need to check for timeout here, otherwise the reading won't time out if it is only read for the object model, not for a heater fo thermostatic fan.
+void RemoteSensor::Poll() noexcept
+{
+	CheckTimeout();
+}
+
 #endif
 
 // End
