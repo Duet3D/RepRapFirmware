@@ -854,6 +854,9 @@ void SbcInterface::ExchangeData() noexcept
 
 				if (gb->IsWaitingForMacro())
 				{
+					// A request that has not gone out yet is void as well, as in GCodeBuffer::Reset. Clear it before the main task
+					// wakes up, so that a new request it makes after waking up stays
+					gb->MacroRequestSent();
 					gb->ResolveMacroRequest(true, false);
 				}
 
