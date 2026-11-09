@@ -430,6 +430,10 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 				{
 					flags.hasForwardExtrusion = true;
 				}
+				else
+				{
+					flags.hasReverseExtrusion = true;
+				}
 				if (flags.xyMoving && nextMove.usePressureAdvance)
 				{
 					const float compensationClocks = move.GetPressureAdvanceK0ClocksForLogicalDrive(drive);
@@ -1324,6 +1328,7 @@ void DDA::Prepare(DDARing& ring,
 		segFlags.checkEndstops = flags.checkEndstops;
 		segFlags.noShaping = !params.useInputShaping;
 		segFlags.nonPrintingMove = !flags.isPrintingMove;
+		flags.hasForwardExtrusion = flags.hasReverseExtrusion = false;		// set again below for the extruders that are allowed to move, M571 must not switch for a cold extruder
 		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 		{
 			if (flags.isLeadscrewAdjustmentMove)
@@ -1416,6 +1421,11 @@ void DDA::Prepare(DDARing& ring,
 							if (directionVector[drive] > 0.0)
 							{
 								extrusionFraction += directionVector[drive];					// accumulate the total extrusion fraction even if it's a non-prinitng move
+								flags.hasForwardExtrusion = true;
+							}
+							else
+							{
+								flags.hasReverseExtrusion = true;
 							}
 
 #if SUPPORT_NONLINEAR_EXTRUSION

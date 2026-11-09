@@ -948,7 +948,7 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 
 	bool setFeedForward = false;
 	bool ffNonPrintingMove = false;
-	bool setOutputOnExtrude = false, outputOnExtrudeOn = false;
+	bool setOutputOnExtrude = false, outputOnExtrudeForward = false, outputOnExtrudeReverse = false;
 	uint32_t nextWakeupDelay = StepClockRate;
 	const Tool *_ecv_null feedForwardTool = nullptr;
 	float feedForwardAverageExtrusionSpeed = 0.0;
@@ -1028,7 +1028,8 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 					{
 						cdda->SetDoneOutputOnExtrude();
 						setOutputOnExtrude = true;
-						outputOnExtrudeOn = cdda->HasForwardExtrusion();
+						outputOnExtrudeForward = cdda->HasForwardExtrusion();
+						outputOnExtrudeReverse = cdda->HasReverseExtrusion();
 					}
 					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd);		// wake up when the move ends, in case no move follows it
 					bitsLeftToDo &= ~OutputOnExtrudeBit;
@@ -1054,14 +1055,7 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 	// DueX ports are written over I2C, which cannot be done with the base priority boosted
 	if (setOutputOnExtrude)
 	{
-		if (outputOnExtrudeOn)
-		{
-			platform.ExtrudeOn();
-		}
-		else
-		{
-			platform.ExtrudeOff();
-		}
+		platform.SetOutputsOnExtrude(outputOnExtrudeForward, outputOnExtrudeReverse);
 	}
 
 	// Check if we need to cancel previous feedforward because of a tool change or running out of moves
