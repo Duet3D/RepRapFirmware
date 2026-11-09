@@ -40,6 +40,7 @@ namespace SmartDrivers
 	uint16_t GetMicrostepPosition(size_t driver) noexcept;
 	void SetTmcExternalClock(uint32_t frequency) noexcept;
 	bool SetMotorPhases(size_t driver, uint32_t regVal) noexcept;
+	void LimitStandstillCurrent(size_t driver, float speed, float& currentFraction) noexcept;
 #endif
 
 	bool SetDriverMode(size_t driver, unsigned int mode) noexcept;

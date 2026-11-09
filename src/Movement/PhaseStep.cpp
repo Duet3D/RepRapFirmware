@@ -235,7 +235,14 @@ void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 	}
 
 	const uint16_t commandedStepPhase = CalculateStepPhase(driver);
-	SetMotorPhase(driver, commandedStepPhase, currentFraction);
+	float thisDriverCurrentFraction = currentFraction;
+#if 1
+	// When doing open loop phase stepping, we increase the current above the standstill current factor only when there is a significant
+	// velocity or acceleration component. Therefore we should not need to do a check for stanstill current limiting.
+#else
+	SmartDrivers::LimitStandstillCurrent(driver, mParams.speed, thisDriverCurrentFraction);
+#endif
+	SetMotorPhase(driver, commandedStepPhase, thisDriverCurrentFraction);
 }
 
 void PhaseStep::UpdatePhaseOffset(size_t driver) noexcept
@@ -267,10 +274,10 @@ uint16_t PhaseStep::CalculateStepPhase(size_t driver) noexcept
 }
 
 // Control the motor phase currents, returning the fraction of maximum current that we commanded
-float PhaseStep::CalculateCurrentFraction() noexcept
+void PhaseStep::CalculateCurrentFraction() noexcept
 {
 	// Driver is in assisted open loop mode
-	// In this mode the PID terms are not used and the A and V terms are independent of the loop time.
+	// In this mode the PID error terms are not used and the A and V terms are independent of the loop time.
 	constexpr float scalingFactor = 100.0;
 	constexpr float scalingFactorSqr = scalingFactor * scalingFactor;
 	PIDVTerm = mParams.speed * Kv * scalingFactor;
@@ -282,7 +289,6 @@ float PhaseStep::CalculateCurrentFraction() noexcept
 	{
 		debugPrintf("v=%f, a=%f, cf=%f\n", (double)(mParams.speed * scalingFactor), (double)(mParams.acceleration * scalingFactorSqr), (double)currentFraction);
 	}
-	return currentFraction;
 }
 
 #endif

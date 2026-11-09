@@ -76,6 +76,15 @@ constexpr uint32_t LowestTmcClockSpeed =  11500000;			// the lowest speed at whi
 constexpr uint32_t NominalTmcClockSpeed = 12000000;			// the nominal speed at which the TMC driver is clocked internally
 constexpr uint32_t HighestTmcClockSpeed = 12600000;			// the highest speed at which the TMC driver is clocked internally
 
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+// Define the speed in full steps per step clock below which we apply software standstill current reduction when in phase stepping or closed loop mode.
+// The TMC2160A/5160A implement standstill current reduction after receiving no step pulses for 2^20 clocks, or 2^18 clocks if fast standstill is selected.
+// 2^20 clocks is about 10^6 clocks, so at x16 microstepping and the nominal clock speed of 12MHz this is equivalent to about 3/4 of a full step per second.
+// Our main aim in limiting current at slow speeds is to avoid dissipating all the power in just one set of output mosfets, so we choose to apply standstill current
+// limitation at speeds below 2 full steps/second.
+constexpr float StandstillCutoffSpeed = 2.0/(float)StepClockRate;
+#endif
+
 #if SUPPORT_CLOSED_LOOP
 constexpr size_t TmcTaskStackWords = 430;					// we need extra stack to handle closed loop tuning and writing to NVM
 #elif SUPPORT_PHASE_STEPPING
@@ -406,6 +415,9 @@ static LocalDriversBitmap stallEndstopsEnabled;
 std::atomic<uint16_t> SmartDrivers::driverStallsToNotify(0);
 #endif
 
+// The following define makes the code match more closely the version in Duet3Expansion
+#define tmcSercom			SERCOM_TMC
+
 //----------------------------------------------------------------------------------------------------------------------------------
 // Private types and methods
 
@@ -424,8 +436,7 @@ public:
 	bool SetXdirect(uint32_t regVal) noexcept;
 	uint32_t GetPhaseToSet() const noexcept { return phaseToSet; }
 	float GetCurrent() const noexcept { return (float)motorCurrent; }
-#endif
-#if SUPPORT_PHASE_STEPPING
+	float GetMaxStandstillCurrentFraction() const noexcept { return maxStandstillCurrentFraction; }
 	bool EnablePhaseStepping(bool enable) noexcept;
 	bool IsPhaseSteppingEnabled() const noexcept { return phaseStepEnabled; }
 #endif
@@ -486,6 +497,13 @@ private:
 		minSgLoadRegister = InvalidSgLoadRegister;			// value InvalidSgLoadRegister indicates that it hasn't been read
 	}
 
+#if SUPPORT_CLOSED_LOOP || SUPPORT_PHASE_STEPPING
+	bool IsInDirectMode() const noexcept					// return true if this driver is in direct mode
+	{
+		return (writeRegisters[WriteGConf] & GCONF_DIRECT_MODE) != 0;
+	}
+#endif
+
 	// Write register numbers are in priority order, most urgent first, in same order as WriteRegNumbers
 	static constexpr unsigned int WriteGConf = 0;			// microstepping and direct mode
 	static constexpr unsigned int WriteIholdIrun = 1;		// current setting
@@ -544,6 +562,7 @@ private:
 	float motorCurrent;										// the configured motor current in mA
 
 #if SUPPORT_CLOSED_LOOP || SUPPORT_PHASE_STEPPING
+	float maxStandstillCurrentFraction;						// the maximum standstill current fraction we allow, which varies with motorCurrent
 	uint32_t phaseToSet;									// phase value to be written to the XDIRECT register, only read/written by the TMC task
 #endif
 
@@ -624,11 +643,12 @@ pre(!driversPowered)
 	specialReadRegisterNumber = 0xFF;
 	specialWriteRegisterNumber = 0xFF;
 	motorCurrent = 0.0;
-	standstillCurrentFraction = (uint16_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 256);
 
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	maxStandstillCurrentFraction = 1.0;
 	currentMode = DriverMode::spreadCycle;
 #endif
+	standstillCurrentFraction = (uint16_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 256);
 
 	// Set default values for all registers and flag them to be updated
 	UpdateRegister(WriteGConf, DefaultGConfReg);
@@ -939,7 +959,7 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 {
 	return
 #if TMC_TYPE == 5160 && (SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP)
-		  ((writeRegisters[WriteGConf] & GCONF_DIRECT_MODE) != 0) ? DriverMode::direct :
+		  (IsInDirectMode()) ? DriverMode::direct :
 #endif
 		  ((writeRegisters[WriteGConf] & GCONF_STEALTHCHOP) != 0) ? DriverMode::stealthChop
 		: ((configuredChopConfReg & CHOPCONF_CHM) == 0) ? DriverMode::spreadCycle
@@ -1168,6 +1188,9 @@ void TmcDriverState::AppendLutCorrections(const StringRef& reply) const noexcept
 void TmcDriverState::SetCurrent(float current) noexcept
 {
 	motorCurrent = constrain<float>(current, MinimumMotorCurrent, MaxMotorCurrent);
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	maxStandstillCurrentFraction = (current <= MaxStandstillCurrent) ? 1.0 : MaxStandstillCurrent/current;
+#endif
 	UpdateCurrent();
 }
 
@@ -1200,19 +1223,24 @@ void TmcDriverState::UpdateCurrent() noexcept
 	}
 
 	// At high motor currents, limit the standstill current fraction to avoid overheating particular pairs of mosfets. Avoid dividing by zero if motorCurrent is zero.
-	const uint32_t desiredStandstillCurrentFraction =
-#if SUPPORT_PHASE_STEPPING
-				(phaseStepEnabled) ? 256 : standstillCurrentFraction;
-#else
-				standstillCurrentFraction;
+	uint32_t iHoldCsBits;
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	// In closed loop and assisted open loop mode the TMC driver IC can't do standstill current reduction so we have to do it in software.
+	// The driver uses the IHOLD setting to set the peak current, so we must set it the same as IRUN to get the full current.
+	if (IsInDirectMode())			// if the driver is in direct mode
+	{
+		iHoldCsBits = iRun;
+	}
+	else
 #endif
-
-	constexpr float MaxStandstillCurrentTimes256 = 256 * MaxStandstillCurrent;
-	const float limitedStandstillCurrentFraction = ((uint32_t)motorCurrent * desiredStandstillCurrentFraction <= MaxStandstillCurrentTimes256)
-														? desiredStandstillCurrentFraction
-															: MaxStandstillCurrentTimes256/(uint32_t)motorCurrent;
-	const float idealIHoldCs = (float)iRun * limitedStandstillCurrentFraction * (1.0/256.0);
-	const uint32_t iHoldCsBits = constrain<uint32_t>((unsigned int)(idealIHoldCs + 0.2), 1, 32) - 1;
+	{
+		constexpr float MaxStandstillCurrentTimes256 = 256 * MaxStandstillCurrent;
+		const float limitedStandstillCurrentFraction = ((uint32_t)motorCurrent * standstillCurrentFraction <= MaxStandstillCurrentTimes256)
+															? standstillCurrentFraction
+																: MaxStandstillCurrentTimes256/(uint32_t)motorCurrent;
+		const float idealIHoldCs = (float)iRun * limitedStandstillCurrentFraction * (1.0/256.0);
+		iHoldCsBits = constrain<uint32_t>((unsigned int)(idealIHoldCs + 0.2), 1, 32) - 1;
+	}
 	UpdateRegister(WriteIholdIrun, (writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHoldCsBits << IHOLDIRUN_IHOLD_SHIFT));
 	UpdateRegister(WriteGlobalScaler, globalScaler);
 }
@@ -1459,8 +1487,8 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 
 	// Deal with the stall status. Note that the TCoolThrs setting prevents us getting a DIAG output at low speeds, but it doesn't seem to affect the stall status
 	if (   (rcvDataBlock[0] & (1u << 2)) != 0							// if the status indicates stalled
-#if SUPPORT_PHASE_STEPPING
-		&& !phaseStepEnabled											// SG_RESULT is only updated on a full step, and direct mode doesn't use the sequencer, so the stall status is frozen at its last step/dir value
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		&& !IsInDirectMode()											// SG_RESULT is only updated on a full step, and direct mode doesn't use the step sequencer, so the stall status is frozen at its last step/dir value
 #endif
 		&& interval != 0
 		&& interval <= maxStallStepInterval								// if the motor speed is high enough to get a reliable stall indication
@@ -1695,8 +1723,8 @@ static inline void DisableDma() noexcept
 static inline void ResetSpi() noexcept
 {
 #if TMC_USES_SERCOM
-	SERCOM_TMC->SPI.CTRLA.bit.ENABLE = 0;			// warning: this makes SCLK float!
-	while (SERCOM_TMC->SPI.SYNCBUSY.bit.ENABLE) { }
+	tmcSercom->SPI.CTRLA.bit.ENABLE = 0;			// warning: this makes SCLK float!
+	while (tmcSercom->SPI.SYNCBUSY.bit.ENABLE) { }
 #elif TMC_USES_USART
 	USART_TMC->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
 #else
@@ -1708,10 +1736,10 @@ static inline void ResetSpi() noexcept
 static inline void EnableSpi() noexcept
 {
 #if TMC_USES_SERCOM
-	SERCOM_TMC->SPI.CTRLB.bit.RXEN = 1;
-	while (SERCOM_TMC->SPI.SYNCBUSY.bit.CTRLB) { }
-	SERCOM_TMC->SPI.CTRLA.bit.ENABLE = 1;
-	while (SERCOM_TMC->SPI.SYNCBUSY.bit.ENABLE) { }
+	tmcSercom->SPI.CTRLB.bit.RXEN = 1;
+	while (tmcSercom->SPI.SYNCBUSY.bit.CTRLB) { }
+	tmcSercom->SPI.CTRLA.bit.ENABLE = 1;
+	while (tmcSercom->SPI.SYNCBUSY.bit.ENABLE) { }
 #elif TMC_USES_USART
 	USART_TMC->US_CR = US_CR_RXEN | US_CR_TXEN;		// enable transmitter and receiver
 #else
@@ -1757,11 +1785,11 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 	// When in phase stepping or closed loop mode we send the coil currents if any have changes since last time we sent them.
 	// Send a "normal" read or write request after the coil currents have been set.
 	// We don't care about the response from setting the motor currents so that is written to tmcAltRcvData so as to not overwrite tmcRcvData
-	if (setCoilCurrents && sendNormalCommand)			// if we just wrote the coil currents and we have something to send or read
+	if (setCoilCurrents && sendNormalCommand)		// if we just wrote the coil currents and we have something to send or read
 	{
 		setCoilCurrents = false;
-		const uint32_t start = GetCurrentCycles();		// get the time now so we can time the CS high signal
-		SetupDMA(tmcSendData, tmcAltRcvData);			// set up the PDC or DMAC
+		const uint32_t start = GetCurrentCycles();	// get the time now so we can time the CS high signal
+		SetupDMA(tmcSendData, tmcAltRcvData);		// set up the PDC or DMAC
 		dmaFinishedReason = DmaCallbackReason::none;
 		EnableEndOfTransferInterrupt();
 		DelayCycles(start, 2 * SystemCoreClockFreq/DriversSpiClockFrequency);	// keep CS high for 2 SPI clock cycles between transactions
@@ -2020,45 +2048,45 @@ void SmartDrivers::Init() noexcept
 	const uint32_t regCtrlC = 0;											// not 32-bit mode
 # endif
 
-	if (!hri_sercomspi_is_syncing(SERCOM_TMC, SERCOM_SPI_SYNCBUSY_SWRST))
+	if (!hri_sercomspi_is_syncing(tmcSercom, SERCOM_SPI_SYNCBUSY_SWRST))
 	{
 		uint32_t mode = regCtrlA & SERCOM_SPI_CTRLA_MODE_Msk;
-		if (hri_sercomspi_get_CTRLA_reg(SERCOM_TMC, SERCOM_SPI_CTRLA_ENABLE))
+		if (hri_sercomspi_get_CTRLA_reg(tmcSercom, SERCOM_SPI_CTRLA_ENABLE))
 		{
-			hri_sercomspi_clear_CTRLA_ENABLE_bit(SERCOM_TMC);
-			hri_sercomspi_wait_for_sync(SERCOM_TMC, SERCOM_SPI_SYNCBUSY_ENABLE);
+			hri_sercomspi_clear_CTRLA_ENABLE_bit(tmcSercom);
+			hri_sercomspi_wait_for_sync(tmcSercom, SERCOM_SPI_SYNCBUSY_ENABLE);
 		}
-		hri_sercomspi_write_CTRLA_reg(SERCOM_TMC, SERCOM_SPI_CTRLA_SWRST | mode);
+		hri_sercomspi_write_CTRLA_reg(tmcSercom, SERCOM_SPI_CTRLA_SWRST | mode);
 	}
-	hri_sercomspi_wait_for_sync(SERCOM_TMC, SERCOM_SPI_SYNCBUSY_SWRST);
+	hri_sercomspi_wait_for_sync(tmcSercom, SERCOM_SPI_SYNCBUSY_SWRST);
 
-	hri_sercomspi_write_CTRLA_reg(SERCOM_TMC, regCtrlA);
-	hri_sercomspi_write_CTRLB_reg(SERCOM_TMC, regCtrlB);
+	hri_sercomspi_write_CTRLA_reg(tmcSercom, regCtrlA);
+	hri_sercomspi_write_CTRLB_reg(tmcSercom, regCtrlB);
 # if !SAMC21
-	hri_sercomspi_write_CTRLC_reg(SERCOM_TMC, regCtrlC);
+	hri_sercomspi_write_CTRLC_reg(tmcSercom, regCtrlC);
 # endif
 #if SAME70
-	hri_sercomspi_write_BAUD_reg(SERCOM_TMC, SERCOM_SPI_BAUD_BAUD(SystemPeripheralClock/(2 * DriversSpiClockFrequency) - 1));
+	hri_sercomspi_write_BAUD_reg(tmcSercom, SERCOM_SPI_BAUD_BAUD(SystemPeripheralClock/(2 * DriversSpiClockFrequency) - 1));
 #else
-	hri_sercomspi_write_BAUD_reg(SERCOM_TMC, SERCOM_SPI_BAUD_BAUD(Serial::SercomFastGclkFreq/(2 * DriversSpiClockFrequency) - 1));
+	hri_sercomspi_write_BAUD_reg(tmcSercom, SERCOM_SPI_BAUD_BAUD(Serial::SercomFastGclkFreq/(2 * DriversSpiClockFrequency) - 1));
 #endif
-	hri_sercomspi_write_DBGCTRL_reg(SERCOM_TMC, SERCOM_I2CM_DBGCTRL_DBGSTOP);			// baud rate generator is stopped when CPU halted by debugger
+	hri_sercomspi_write_DBGCTRL_reg(tmcSercom, SERCOM_I2CM_DBGCTRL_DBGSTOP);			// baud rate generator is stopped when CPU halted by debugger
 
 	// Set up the DMA descriptors
 	// We use separate write-back descriptors, so we only need to set this up once
 	DmacManager::SetBtctrl(DmacChanTmcRx, DMAC_BTCTRL_VALID | DMAC_BTCTRL_EVOSEL_DISABLE | DMAC_BTCTRL_BLOCKACT_INT | DMAC_BTCTRL_BEATSIZE_BYTE
 								| DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_STEPSIZE_X1);
-	DmacManager::SetSourceAddress(DmacChanTmcRx, &(SERCOM_TMC->SPI.DATA.reg));
+	DmacManager::SetSourceAddress(DmacChanTmcRx, &(tmcSercom->SPI.DATA.reg));
 	DmacManager::SetTriggerSourceSercomRx(DmacChanTmcRx, TmcSercomNumber);
 
 	DmacManager::SetBtctrl(DmacChanTmcTx, DMAC_BTCTRL_VALID | DMAC_BTCTRL_EVOSEL_DISABLE | DMAC_BTCTRL_BLOCKACT_INT | DMAC_BTCTRL_BEATSIZE_BYTE
 								| DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_STEPSIZE_X1);
-	DmacManager::SetDestinationAddress(DmacChanTmcTx, &(SERCOM_TMC->SPI.DATA.reg));
+	DmacManager::SetDestinationAddress(DmacChanTmcTx, &(tmcSercom->SPI.DATA.reg));
 	DmacManager::SetTriggerSourceSercomTx(DmacChanTmcTx, TmcSercomNumber);
 
 	DmacManager::SetInterruptCallback(DmacChanTmcRx, RxDmaCompleteCallback, CallbackParameter(0U));
 
-	SERCOM_TMC->SPI.CTRLA.bit.ENABLE = 1;		// keep the SPI enabled all the time so that the SPCLK line is driven
+	tmcSercom->SPI.CTRLA.bit.ENABLE = 1;		// keep the SPI enabled all the time so that the SPCLK line is driven
 
 #elif TMC_USES_USART
 	// Set USART_EXT_DRV in SPI mode, with data changing on the falling edge of the clock and captured on the rising edge
@@ -2258,6 +2286,19 @@ bool SmartDrivers::SetMotorPhases(size_t driver, uint32_t regVal) noexcept
 	return driverStates[driver].SetXdirect(regVal);
 }
 
+// Implement standstill current limit
+void SmartDrivers::LimitStandstillCurrent(size_t driver, float speed, float& currentFraction) noexcept
+{
+	if (speed < StandstillCutoffSpeed && driver < numTmcDrivers)
+	{
+		const float maxHoldCurrentFraction = driverStates[driver].GetMaxStandstillCurrentFraction();
+		if (currentFraction > maxHoldCurrentFraction)
+		{
+			currentFraction = maxHoldCurrentFraction;
+		}
+	}
+}
+
 #endif
 
 bool SmartDrivers::SetDriverMode(size_t driver, unsigned int mode) noexcept
@@ -2266,7 +2307,7 @@ bool SmartDrivers::SetDriverMode(size_t driver, unsigned int mode) noexcept
 	{
 		return false;
 	}
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	if (driverStates[driver].IsPhaseSteppingEnabled())
 	{
 		return false;
@@ -2304,7 +2345,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 // This is called from the tick ISR, possibly while Spin (with powered either true or false) is being executed
 void SmartDrivers::TurnDriversOff() noexcept
 {
-	digitalWrite(GlobalTmcEnablePin, true);				// disable the drivers
+	fastDigitalWriteHigh(GlobalTmcEnablePin);				// disable the drivers
 	driversState = DriversState::noPower;
 }
 
