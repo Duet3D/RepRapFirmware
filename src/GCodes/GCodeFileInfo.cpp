@@ -7,6 +7,8 @@
 
 #include "GCodeFileInfo.h"
 
+GCodeFileInfo& GCodeFileInfo::operator=(const GCodeFileInfo& other) noexcept = default;
+
 void GCodeFileInfo::Init() noexcept
 {
 	isValid = false;

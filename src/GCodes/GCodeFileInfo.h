@@ -27,6 +27,7 @@ struct GCodeFileInfo
 	};
 
 	GCodeFileInfo() noexcept { Init(); }
+	GCodeFileInfo& operator=(const GCodeFileInfo& other) noexcept;		// out of line, else every translation unit that copies one gets its own copy of it
 	void Init() noexcept;
 
 	FilePosition fileSize;

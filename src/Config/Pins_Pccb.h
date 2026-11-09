@@ -254,7 +254,7 @@ constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 #define USART_SSPI		USART0
 #define ID_SSPI			ID_USART0
 
-constexpr PinDescription PinTable[] =
+inline constexpr PinDescription PinTable[] =
 {	//	TC					PWM					ADC				Capability				PinNames
 	// Port A
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	nullptr				},	// PA00 PS_ON

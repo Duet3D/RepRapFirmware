@@ -287,7 +287,7 @@ constexpr SpiParameters SharedSpiParams =
 // Aliases are separate by the , character.
 // If a pin name is prefixed by ! then this means the pin is hardware inverted. The same pin may have names for both the inverted and non-inverted cases,
 // for example the inverted heater pins on the expansion connector are available as non-inverted servo pins on a DueX.
-constexpr PinDescription PinTable[] =
+inline constexpr PinDescription PinTable[] =
 {	//	TC					PWM					ADC				Capability				PinNames
 	// Port A
 	{ TcOutput::tioa0,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"fan2"										},	// PA00 Fan 2
