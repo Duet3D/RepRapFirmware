@@ -238,9 +238,9 @@ void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 	float thisDriverCurrentFraction = currentFraction;
 #if 1
 	// When doing open loop phase stepping, we increase the current above the standstill current factor only when there is a significant
-	// velocity or acceleration component. Therefore we should not need to do a check for stanstill current limiting.
+	// velocity or acceleration component. Therefore we should not need to do a check for standstill current limiting.
 #else
-	SmartDrivers::LimitStandstillCurrent(driver, mParams.speed, thisDriverCurrentFraction);
+	SmartDrivers::LimitStandstillCurrent(driver, fabsf(mParams.speed), thisDriverCurrentFraction);
 #endif
 	SetMotorPhase(driver, commandedStepPhase, thisDriverCurrentFraction);
 }
