@@ -4067,36 +4067,41 @@ void Platform::OnProcessingCanMessage() noexcept
 // Configure the ancillary PWM
 GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	int32_t tempPort;
-	bool seen = gb.TryGetLimitedIValue('P', tempPort, seen, -1, MaxGpOutPorts - 1);
-	if (seen)
+	bool seenPort = false, seenPwm = false;
+	int32_t port = extrusionAncilliaryPwmGpOutNumber;
+	gb.TryGetLimitedIValue('P', port, seenPort, -1, MaxGpOutPorts - 1);
+	if (seenPort && (port >= 0))
 	{
-		if (tempPort >= 0)
+		if (GetGpOutPort(port).IsUnused())
 		{
-			if (GetGpOutPort(tempPort).IsUnused())
-			{
-				reply.printf("GpOut port %" PRIu32 " has not been created", tempPort);
-				return GCodeResult::error;
-			}
-#if SUPPORT_CAN_EXPANSION
-			if (!GetGpOutPort(tempPort).IsLocal())
-			{
-				reply.printf("Remote GpOut port %" PRIu32 " not allowed here", tempPort);
-				return GCodeResult::error;
-			}
-#endif
+			reply.printf("GpOut port %" PRIu32 " has not been created", port);
+			return GCodeResult::error;
 		}
-
-		extrusionAncilliaryPwmGpOutNumber = tempPort;
-		Move::CreateLaserTask();									// we use the laser task to manage ancillary PWM
+#if SUPPORT_CAN_EXPANSION
+		if (!GetGpOutPort(port).IsLocal())
+		{
+			reply.printf("Remote GpOut port %" PRIu32 " not allowed here", port);
+			return GCodeResult::error;
+		}
+#endif
 	}
+
+	float pwm = extrusionAncilliaryPwmValue;
 	if (gb.Seen('S'))
 	{
-		extrusionAncilliaryPwmValue = min<float>(gb.GetFValue(), 1.0);		// negative values are OK, they mean don't set the output
-		seen = true;
+		pwm = min<float>(gb.GetFValue(), 1.0);						// negative values are OK, they mean don't set the output
+		seenPwm = true;
 	}
 
-	if (!seen)
+	if (seenPort || seenPwm)
+	{
+		ReconfigureOutputOnExtrude(port, pwm);
+		if (seenPort)
+		{
+			Move::CreateLaserTask();								// we use the laser task to manage ancillary PWM
+		}
+	}
+	else
 	{
 		if (extrusionAncilliaryPwmGpOutNumber < 0)
 		{
@@ -4108,6 +4113,30 @@ GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply
 		}
 	}
 	return GCodeResult::ok;
+}
+
+// Change the output on extrude port and PWM. Must not be called by the Laser task.
+// The Laser task only writes the configured port if its PWM is positive, so the old port is switched off here.
+// That write happens outside the lock because DueX ports are written over I2C, which may block.
+// Returns the port that was switched off, or -1 if none was.
+int32_t Platform::ReconfigureOutputOnExtrude(int32_t port, float pwm) noexcept
+{
+	int32_t oldPort;
+	float oldPwm;
+	{
+		TaskCriticalSectionLocker lock;							// the Laser task must never see one value changed but not the other
+		oldPort = extrusionAncilliaryPwmGpOutNumber;
+		oldPwm = extrusionAncilliaryPwmValue;
+		extrusionAncilliaryPwmGpOutNumber = port;
+		extrusionAncilliaryPwmValue = pwm;
+	}
+
+	if ((oldPort >= 0) && (oldPwm > 0.0) && ((oldPort != port) || (pwm <= 0.0)))
+	{
+		GetGpOutPort(oldPort).WriteAnalog(0.0);
+		return oldPort;
+	}
+	return -1;
 }
 
 #if MCU_HAS_UNIQUE_ID

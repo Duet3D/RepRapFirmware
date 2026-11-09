@@ -142,6 +142,12 @@ public:
 	void SetDoneIoBits() noexcept { flags.doneIoBits = true; }
 	void SetDoneFeedForward() noexcept { flags.doneFeedForward = true; }
 	void SetDoneOutputOnExtrude() noexcept { flags.doneOutputOnExtrude = true; }
+	void CancelOutputs() noexcept								// for an aborted move, so that the Laser task turns the laser and output on extrude off
+	{
+		flags.controlLaserOrIoBits = false;
+		flags.hasForwardExtrusion = false;
+		flags.doneOutputOnExtrude = false;
+	}
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }

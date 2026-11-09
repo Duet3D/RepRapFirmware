@@ -252,15 +252,24 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 	else
 	{
 		// See if we can retire any completed moves
+		bool retiredEndstopMove = false;
 		while (cdda->IsCommitted() && cdda->HasExpired())
 		{
 			++completedMoves;
 			//debugPrintf("Retiring move: now=%" PRIu32 " start=%" PRIu32 " dur=%" PRIu32 "\n", StepTimer::GetMovementTimerTicks(), cdda->GetMoveStartTime(), cdda->GetClocksNeeded());
+			if (cdda->IsCheckingEndstops())
+			{
+				retiredEndstopMove = true;
+			}
 			if (cdda->Free())
 			{
 				++numLookaheadUnderruns;
 			}
 			getPointer = cdda = cdda->GetNext();
+		}
+		if (retiredEndstopMove)
+		{
+			reprap.GetMove().WakeLaserTask();						// an endstop may have stopped the move before the end time the Laser task waits for
 		}
 	}
 
@@ -620,6 +629,7 @@ bool DDARing::LowPowerOrStallPause(MovementState& ms) noexcept
 	{
 		// We are executing a move that has a file address, so we can interrupt it
 		wakeAsyncSender = reprap.GetMove().CancelStepping(dda);
+		dda->CancelOutputs();
 		abortedMove = true;
 #if SUPPORT_LASER
 		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
@@ -647,6 +657,11 @@ bool DDARing::LowPowerOrStallPause(MovementState& ms) noexcept
 	}
 
 	IrqEnable();
+
+	if (abortedMove)
+	{
+		reprap.GetMove().WakeLaserTask();				// the aborted move stays current until its planned end, so make the Laser task act on it now
+	}
 
 #if SUPPORT_CAN_EXPANSION
 	if (wakeAsyncSender)
@@ -762,6 +777,7 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 #endif
 
 	bool setFeedForward = false;
+	bool setOutputOnExtrude = false, outputOnExtrudeOn = false;
 	uint32_t nextWakeupDelay = StepClockRate;
 	const Tool *_ecv_null feedForwardTool = nullptr;
 	float feedForwardAverageExtrusionSpeed = 0.0;
@@ -823,6 +839,7 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 			{
 				if (timeToMoveStart > 0)								// if the move hasn't started yet
 				{
+					setOutputOnExtrude = true;							// no move active so turn off output on extrude
 					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveStart);	// wake up again when we need to
 					bitsLeftToDo &= ~OutputOnExtrudeBit;
 				}
@@ -832,15 +849,10 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 					if (!cdda->HaveDoneOutputOnExtrude())
 					{
 						cdda->SetDoneOutputOnExtrude();
-						if (cdda->HasForwardExtrusion())
-						{
-							platform.ExtrudeOn();
-						}
-						else
-						{
-							platform.ExtrudeOff();
-						}
+						setOutputOnExtrude = true;
+						outputOnExtrudeOn = cdda->HasForwardExtrusion();
 					}
+					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd);		// wake up when the move ends, in case no move follows it
 					bitsLeftToDo &= ~OutputOnExtrudeBit;
 				}
 			}
@@ -857,9 +869,22 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 #endif
 		if (bitsLeftToDo & OutputOnExtrudeBit)
 		{
-			platform.ExtrudeOff();													// no move active so turn off output on extrude
+			setOutputOnExtrude = true;												// no move active so turn off output on extrude
 		}
 	}																				// end base priority boosted scope
+
+	// DueX ports are written over I2C, which cannot be done with the base priority boosted
+	if (setOutputOnExtrude)
+	{
+		if (outputOnExtrudeOn)
+		{
+			platform.ExtrudeOn();
+		}
+		else
+		{
+			platform.ExtrudeOff();
+		}
+	}
 
 	// Check if we need to cancel previous feedforward because of a tool change or running out of moves
 	if (   lastFeedForwardTool != nullptr
