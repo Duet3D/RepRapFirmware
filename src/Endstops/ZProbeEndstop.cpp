@@ -29,7 +29,9 @@ void ZProbeEndstop::PrimeAxis(const Kinematics &_ecv_from kin, const AxisDrivers
 {
 	// Decide whether we stop just the driver, just the axis, or everything
 	stopAll = kin.GetControllingDrives(GetAxis(), true).Intersects(~LogicalDrivesBitmap::MakeFromBits(GetAxis()));
+#if SUPPORT_CAN_EXPANSION
 	haveTriggerTime = false;
+#endif
 	//TODO if the Z probe is remote, check that the expansion board knows about it
 }
 
@@ -41,7 +43,11 @@ EndstopHitDetails ZProbeEndstop::CheckTriggered() noexcept
 	if (zp != nullptr && zp->Stopped())
 	{
 		const auto action = (stopAll) ? EndstopHitAction::stopAll : EndstopHitAction::stopAxis;
-		rslt.SetAction(action, whenTriggered, haveTriggerTime);
+		rslt.SetAction(action
+#if SUPPORT_CAN_EXPANSION
+			, whenTriggered, haveTriggerTime
+#endif
+			);
 		rslt.axis = GetAxis();
 		if (GetAtHighEnd())
 		{

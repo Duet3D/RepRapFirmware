@@ -32,7 +32,11 @@ struct EndstopHitDetails
 	{
 	}
 
+#if SUPPORT_CAN_EXPANSION
 	void SetAction(EndstopHitAction a, uint32_t p_whenTriggered, bool p_haveTriggerTime) noexcept;
+#else
+	void SetAction(EndstopHitAction a) noexcept;
+#endif
 
 	EndstopHitAction GetAction() const noexcept { return (EndstopHitAction)action; }
 

@@ -49,7 +49,11 @@ EndstopHitDetails GpInPortEndstop::CheckTriggered() noexcept
 	EndstopHitDetails rslt;
 	if (Stopped())
 	{
-		rslt.SetAction(EndstopHitAction::stopAll, 0, false);
+		rslt.SetAction(EndstopHitAction::stopAll
+#if SUPPORT_CAN_EXPANSION
+			, 0, false
+#endif
+			);
 	}
 	return rslt;
 }

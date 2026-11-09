@@ -173,7 +173,11 @@ EndstopHitDetails SwitchEndstop::CheckTriggered() noexcept
 				rslt.axis = GetAxis();
 				if (stopAll)
 				{
-					rslt.SetAction(EndstopHitAction::stopAll, whenTriggered, haveTriggerTime);
+					rslt.SetAction(EndstopHitAction::stopAll
+#if SUPPORT_CAN_EXPANSION
+						, whenTriggered, haveTriggerTime
+#endif
+						);
 					if (GetAtHighEnd())
 					{
 						rslt.setAxisHigh = true;
@@ -185,7 +189,11 @@ EndstopHitDetails SwitchEndstop::CheckTriggered() noexcept
 				}
 				else if (numPortsLeftToTrigger == 1)
 				{
-					rslt.SetAction(EndstopHitAction::stopAxis, whenTriggered, haveTriggerTime);
+					rslt.SetAction(EndstopHitAction::stopAxis
+#if SUPPORT_CAN_EXPANSION
+						, whenTriggered, haveTriggerTime
+#endif
+						);
 					if (GetAtHighEnd())
 					{
 						rslt.setAxisHigh = true;
@@ -197,7 +205,11 @@ EndstopHitDetails SwitchEndstop::CheckTriggered() noexcept
 				}
 				else
 				{
-					rslt.SetAction(EndstopHitAction::stopDriver, whenTriggered, haveTriggerTime);
+					rslt.SetAction(EndstopHitAction::stopDriver
+#if SUPPORT_CAN_EXPANSION
+						, whenTriggered, haveTriggerTime
+#endif
+						);
 					rslt.internalUse = i;			// remember which port it is, for the call to Acknowledge
 					rslt.driver = reprap.GetMove().GetAxisDriversConfig(GetAxis()).driverNumbers[i];
 				}

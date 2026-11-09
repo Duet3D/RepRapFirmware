@@ -40,10 +40,22 @@ Endstop::Endstop(uint8_t p_axis, EndStopPosition pos) noexcept
 {
 }
 
+#if SUPPORT_CAN_EXPANSION
+
 void EndstopHitDetails::SetAction(EndstopHitAction a, uint32_t p_whenTriggered, bool p_haveTriggerTime) noexcept
 {
 	action = (uint32_t)a;
 	whenTriggered = (p_haveTriggerTime) ? p_whenTriggered : StepTimer::GetTimerTicks();
 }
+
+#else
+
+void EndstopHitDetails::SetAction(EndstopHitAction a) noexcept
+{
+	action = (uint32_t)a;
+	whenTriggered =StepTimer::GetTimerTicks();
+}
+
+#endif
 
 // End
