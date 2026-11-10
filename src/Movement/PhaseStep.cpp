@@ -53,8 +53,6 @@
 # include <GCodes/GCodeBuffer/GCodeBuffer.h>
 # include <cmath>
 
-# define BASIC_TUNING_DEBUG	0
-
 static uint16_t currentPhase[MaxSmartDrivers] = { 0 };
 static uint16_t phaseOffset[MaxSmartDrivers] = { 0 };			// The amount by which the phase should be offset for each driver
 static PhaseCorrectionHarmonic phaseCorrections[MaxSmartDrivers][MaxPhaseCorrectionHarmonics] = { };

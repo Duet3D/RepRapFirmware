@@ -51,7 +51,6 @@ constexpr float VelocityLimitGainFactor = 5.0;			// the gain of the P loop when 
 constexpr float DeferPollSpeed = 2000.0/StepClockRate;
 constexpr float ResumePollSpeed = 1500.0/StepClockRate;
 
-
 // Struct to pass data back to the ClosedLoop module
 struct MotionParameters
 {
