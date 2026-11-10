@@ -8,6 +8,7 @@
 #include "GCodeInput.h"
 
 #include <Platform/RepRap.h>
+#include <Movement/Move.h>
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
 
@@ -113,7 +114,7 @@ size_t RegularGCodeInput::BufferSpaceLeft() const noexcept
 	return (readingPointer - writingPointer - 1u) % GCodeInputBufferSize;
 }
 
-// Check a character for urgent commands: M112 (emergency stop), M122 (diagnostics) and M108 (cancel wait for temperature).
+// Check a character for urgent commands: M112 (emergency stop), M122 (diagnostics), M108 (cancel wait for temperature), M25.1 (feed hold) and M24 (feed hold release).
 // Return true if an urgent command was handled and the buffer was reset
 bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 {
@@ -139,7 +140,9 @@ bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 			break;
 
 		case GCodeInputState::doingMCode:
-			state = (c == '1') ? GCodeInputState::doingMCode1 : GCodeInputState::doingCode;
+			state = (c == '1') ? GCodeInputState::doingMCode1
+				  : (c == '2') ? GCodeInputState::doingMCode2
+				  : GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingMCode1:
@@ -147,6 +150,61 @@ bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 				  : (c == '1') ? GCodeInputState::doingMCode11
 				  : (c == '2') ? GCodeInputState::doingMCode12
 				  : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode2:
+			state = (c == '4') ? GCodeInputState::doingMCode24
+				  : (c == '5') ? GCodeInputState::doingMCode25
+				  : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode24:
+			// A plain M24 while a feed hold is active and no print is paused only has to release the hold. Do it here and swallow the command,
+			// because the channel it arrived on may be the one whose macro the hold has stopped, in which case the queued copy would never run
+			if ((c < ' ' || c == ';') && reprap.GetMove().IsFeedHoldActive() && reprap.GetGCodes().GetPauseState() != PauseState::paused)
+			{
+				reprap.GetMove().ReleaseFeedHold();
+				Reset();
+				return true;
+			}
+			state = GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode25:
+			state = (c == '.') ? GCodeInputState::doingMCode25dot : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode25dot:
+			state = (c == '1') ? GCodeInputState::doingMCode251 : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode251:
+			if (c <= ' ' || c == ';')
+			{
+				// Feed hold requested, with or without parameters. Stop the motion now because the GCodeBuffer may be blocked by a move,
+				// and let the command execute again from the queue, which repeats the hold harmlessly or performs the S1 stop-and-abort
+				reprap.GetMove().FeedHold();
+			}
+			state = (c == ' ') ? GCodeInputState::doingMCode251space : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode251space:
+			state = (c == 'S') ? GCodeInputState::doingMCode251S : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode251S:
+			state = (c == '1') ? GCodeInputState::doingMCode251S1 : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode251S1:
+			if (c < ' ' || c == ';')
+			{
+				// Stop-and-abort requested. The channel may be the one whose macro is to be aborted, so the queued copy would never run; hand it to the main task instead
+				reprap.GetGCodes().RequestStopAndAbort();
+				Reset();
+				return true;
+			}
+			state = GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingMCode10:
@@ -215,7 +273,7 @@ size_t BufferedStreamGCodeInput::BytesCached() const noexcept
 		return cached;					// raw file data is never an urgent command, so none of it is held back
 	}
 
-	// The scanner state encodes how far a potential M112/M122/M108 has been matched, which is exactly how many
+	// The scanner state encodes how far a potential M112/M122/M108/M25.1 has been matched, which is exactly how many
 	// trailing characters must stay hidden until we know whether they form an urgent command
 	size_t held;
 	switch (state)
@@ -224,17 +282,33 @@ size_t BufferedStreamGCodeInput::BytesCached() const noexcept
 		held = 1;
 		break;
 	case GCodeInputState::doingMCode1:
+	case GCodeInputState::doingMCode2:
 		held = 2;
 		break;
 	case GCodeInputState::doingMCode10:
 	case GCodeInputState::doingMCode11:
 	case GCodeInputState::doingMCode12:
+	case GCodeInputState::doingMCode24:
+	case GCodeInputState::doingMCode25:
 		held = 3;
 		break;
 	case GCodeInputState::doingMCode108:
 	case GCodeInputState::doingMCode112:
 	case GCodeInputState::doingMCode122:
+	case GCodeInputState::doingMCode25dot:
 		held = 4;
+		break;
+	case GCodeInputState::doingMCode251:
+		held = 5;
+		break;
+	case GCodeInputState::doingMCode251space:
+		held = 6;
+		break;
+	case GCodeInputState::doingMCode251S:
+		held = 7;
+		break;
+	case GCodeInputState::doingMCode251S1:
+		held = 8;
 		break;
 	default:
 		held = 0;

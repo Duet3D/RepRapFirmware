@@ -63,12 +63,20 @@ enum class GCodeInputState
 	doingCode,
 	doingMCode,
 	doingMCode1,
+	doingMCode2,
 	doingMCode10,
 	doingMCode11,
 	doingMCode12,
+	doingMCode24,
+	doingMCode25,
 	doingMCode108,
 	doingMCode112,
-	doingMCode122
+	doingMCode122,
+	doingMCode25dot,
+	doingMCode251,
+	doingMCode251space,
+	doingMCode251S,
+	doingMCode251S1
 };
 
 // This class allows caching of dynamic content (from web-based sources) and implements a simple ring buffer.

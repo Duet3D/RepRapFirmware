@@ -394,6 +394,10 @@ public:
 	bool LowPowerOrStallPause(MovementState& ms) noexcept;									// Pause the print immediately, returning true if we were able to
 	bool CancelStepping(DDA *abandonedMove) noexcept;										// Stop generating steps, returning true if a remote driver was told to stop
 #endif
+	void FeedHold() noexcept;																// Stop all rings as soon as we can and keep their queued moves for ReleaseFeedHold
+	void ReleaseFeedHold() noexcept;														// Carry on with the moves kept back by FeedHold
+	bool IsFeedHoldActive() const noexcept { return rings[0].IsHeld(); }					// all rings are held and released together
+	void StopMoves(MovementState& ms, float stopCoords[MaxAxes]) noexcept;					// Stop as soon as we can and discard the queued moves of this motion system, ending any feed hold, returning where it will stop
 
 	static constexpr size_t NumStuckDiagnosticWords = 5;									// how many words GetStuckDiagnostics writes
 	void GetStuckDiagnostics(uint32_t *_ecv_array words) const noexcept;					// collect the movement state that explains a stuck task

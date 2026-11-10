@@ -73,6 +73,10 @@ public:
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 	bool LowPowerOrStallPause(MovementState& ms) noexcept;								// Pause the print immediately, returning true if we were able to
 #endif
+	void Hold() noexcept;																// Feed hold: stop as soon as we can and keep the remaining moves for ReleaseHold
+	void ReleaseHold() noexcept;														// Carry on with the moves kept back by Hold
+	bool IsHeld() const noexcept { return holdBarrier != nullptr; }
+	void StopMoves(MovementState& ms, float stopCoords[MaxAxes]) noexcept;				// Stop as soon as we can and discard the remaining moves, ending any feed hold, returning where we will stop
 
 #if SUPPORT_LASER
 	uint32_t ManageLaserPower(Platform& platform) noexcept;								// Manage the laser power
@@ -93,6 +97,9 @@ private:
 	bool IsTimeToPrepareMove(uint32_t prepareAdvanceTime, uint32_t moveTimeLeft) const noexcept;
 	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, SimulationMode simulationMode) noexcept;
 	DDA *MakeDeceleratingChain(DDA *startDda, const DDA *stopBeforeDda) noexcept pre(startDda != stopBeforeDda);
+	DDA *FindStopPoint() noexcept;
+	DDA *_ecv_null CancelHomingMoveInFlight(bool& wakeAsyncSender) noexcept;
+	void CutHomingMove(DDA *cdda) noexcept;
 
 #if SUPPORT_3RD_ORDER
 	void PlanMoves(DDA *firstUnpreparedMove, bool stopping) noexcept;
@@ -101,6 +108,11 @@ private:
 
 	DDA* addPointer;															// Pointer to the next DDA that we can use to add a new move, if this DDA is free
 	DDA* volatile getPointer;													// Pointer to the oldest committed or provisional move, if not equal to addPointer
+	DDA *_ecv_null volatile holdBarrier = nullptr;								// The first move that must not be prepared while a feed hold is active, or nullptr if there is none
+	RawMove lastHomingMove;														// Copy of the last G1 H1 homing move added, so that a feed hold can cut it and re-issue the remainder
+	DDA *_ecv_null lastHomingMoveDda = nullptr;									// The DDA that lastHomingMove went into, or nullptr if the last move added was not a homing move
+	bool lastHomingMoveMotorMapping = false;									// The motor mapping flag lastHomingMove was added with
+	LogicalDrivesBitmap homingAxesStopped;										// Axes of a cut homing move that had already stopped on their endstop, so the remainder must not move them
 
 	unsigned int numDdasInRing;													// The number of DDAs that this ring contains
 	uint32_t gracePeriod = DefaultGracePeriod;									// The minimum idle time in milliseconds, before we should start a move. Better to have a few moves in the queue so that we can do lookahead

@@ -699,9 +699,9 @@ void Move::Exit() noexcept
 
 		bool moveRead = false;
 
-		// See if we can add another move to ring 0
+		// See if we can add another move to ring 0. A held ring takes no new moves, else they would meld with the moves kept back by the hold
 		const bool canAddRing0Move = rings[0].CanAddMove();
-		if (canAddRing0Move)
+		if (canAddRing0Move && !rings[0].IsHeld())
 		{
 			// OK to add another move. First check if a special move is available.
 			if (bedLevellingMoveAvailable)
@@ -775,7 +775,7 @@ void Move::Exit() noexcept
 
 #if SUPPORT_ASYNC_MOVES
 		const bool canAddRing1Move = rings[1].CanAddMove();
-		if (canAddRing1Move)
+		if (canAddRing1Move && !rings[1].IsHeld())
 		{
 			if (auxMoveAvailable)
 			{
@@ -853,6 +853,7 @@ void Move::Exit() noexcept
 		{
 			if (   moveState == MoveState::executing
 				&& reprap.GetGCodes().GetPauseState() == PauseState::notPaused	// for now we don't go into idle hold when we are paused (is this sensible?)
+				&& !IsFeedHoldActive()
 			   )
 			{
 				whenIdleTimerStarted = millis();				// record when we first noticed that the machine was idle
@@ -1024,6 +1025,45 @@ void Move::GetStuckDiagnostics(uint32_t *_ecv_array words) const noexcept
 bool Move::PausePrint(MovementState& ms) noexcept
 {
 	return rings[ms.GetNumber()].PauseMoves(ms);
+}
+
+// Feed hold: stop all rings as soon as their jerk limits allow and keep the queued moves. The rings are always held together, so one flag describes the whole machine.
+// A simulation has no motion to hold and would only stall, so the request is ignored then; this can be reached from the urgent command scanner, not just from M25.1
+void Move::FeedHold() noexcept
+{
+	if (simulationMode == SimulationMode::off)
+	{
+		for (DDARing& ring : rings)
+		{
+			ring.Hold();
+		}
+		reprap.StateUpdated();
+	}
+}
+
+void Move::ReleaseFeedHold() noexcept
+{
+	if (IsFeedHoldActive())
+	{
+		for (DDARing& ring : rings)
+		{
+			ring.ReleaseHold();
+		}
+		reprap.StateUpdated();
+		MoveAvailable();										// the Move task may be sleeping on the held ring
+	}
+}
+
+// Stop one motion system as soon as its jerk limits allow and discard its queued moves, ending any feed hold.
+// The caller holds a task critical section, so no RTOS call is allowed here; the Move task wakes up by itself when the next move arrives
+void Move::StopMoves(MovementState& ms, float stopCoords[MaxAxes]) noexcept
+{
+	const bool wasHeld = IsFeedHoldActive();
+	rings[ms.GetNumber()].StopMoves(ms, stopCoords);
+	if (wasHeld)
+	{
+		reprap.StateUpdated();
+	}
 }
 
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT

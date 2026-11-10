@@ -1965,26 +1965,27 @@ size_t RepRap::GetStatusIndex() const noexcept
 #if HAS_VOLTAGE_MONITOR
 			: (!platform->HasDriverPower() && !gCodes->IsSimulating())	? 3		// Off i.e. powered down
 #endif
-			: (gCodes->GetPauseState() == PauseState::pausing)			? 4		// Pausing
-			: (gCodes->GetPauseState() == PauseState::resuming)			? 5		// Resuming
-			: (gCodes->GetPauseState() == PauseState::paused)			? 6		// Paused
-			: (gCodes->IsCancellingPrint())								? 7		// Cancelling
+			: move->IsFeedHoldActive()									? 4		// Feed hold, which overrides the pause and print states because it stops their motion too
+			: (gCodes->GetPauseState() == PauseState::pausing)			? 5		// Pausing
+			: (gCodes->GetPauseState() == PauseState::resuming)			? 6		// Resuming
+			: (gCodes->GetPauseState() == PauseState::paused)			? 7		// Paused
+			: (gCodes->IsCancellingPrint())								? 8		// Cancelling
 			: (printMonitor->IsPrinting())
-			  	  ? ((gCodes->IsSimulating())							? 8		// Simulating
-			  		  : 												  9		// Printing
+			  	  ? ((gCodes->IsSimulating())							? 9		// Simulating
+			  		  : 												  10	// Printing
 			  	  	)
-			: (gCodes->IsDoingToolChange())								? 10	// Changing tool
+			: (gCodes->IsDoingToolChange())								? 11	// Changing tool
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement(0) ||
 			   gCodes->WaitingForAcknowledgement() ||
-			   heat->IsTuningHeater())									? 11	// Busy
-			:															  12;	// Idle
+			   heat->IsTuningHeater())									? 12	// Busy
+			:															  13;	// Idle
 
 }
 
 // Get the status character for the new-style status response
 char RepRap::GetStatusCharacter() const noexcept
 {
-	return "CFHODRSAMPTBI"[GetStatusIndex()];
+	return "CFHOLDRSAMPTBI"[GetStatusIndex()];
 }
 
 c_string RepRap::GetStatusString() const noexcept
@@ -1995,6 +1996,7 @@ c_string RepRap::GetStatusString() const noexcept
 		"updating",
 		"halted",
 		"off",
+		"held",
 		"pausing",
 		"resuming",
 		"paused",

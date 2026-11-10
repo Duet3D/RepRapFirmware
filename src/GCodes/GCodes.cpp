@@ -448,6 +448,11 @@ void GCodes::Spin() noexcept
 		ms.RefreshMachineCoordinates();
 	}
 
+	if (stopAndAbortRequested.exchange(false))
+	{
+		StopAndAbortMotion(*AutoPauseGCode());		// no channel of a user is the requester, so every macro goes
+	}
+
 #if NUM_ASYNC_CHANNELS != 0
 	if (emergencyStopCommanded)
 	{
