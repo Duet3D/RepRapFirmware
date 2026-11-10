@@ -70,9 +70,9 @@ struct MotionParameters
 // One term of the phase correction that is added to the electrical angle before the coil currents are computed, see M970.3
 struct PhaseCorrectionHarmonic
 {
-	uint8_t harmonic;			// harmonic of the electrical cycle, 0 = unused entry
 	float magnitude;			// magnitude in phase units, where 4096 is a full electrical cycle
 	uint16_t phase;				// phase offset in phase units
+	uint8_t harmonic;			// harmonic of the electrical cycle, 0 = unused entry
 };
 
 constexpr size_t MaxPhaseCorrectionHarmonics = 4;
