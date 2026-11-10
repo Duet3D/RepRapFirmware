@@ -756,7 +756,13 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 
 #if HAS_SMART_DRIVERS || SUPPORT_CAN_EXPANSION
 	case 917:
-		standstillCurrentPercent[axisOrExtruder] = constrain<float>(currentOrPercent, 0.0, 100.0);
+		{
+			const float sscPercent = constrain<float>(currentOrPercent, 0.0, 100.0);
+			standstillCurrentPercent[axisOrExtruder] = sscPercent;
+# if SUPPORT_PHASE_STEPPING
+			dms[axisOrExtruder].phaseStepControl.SetStandstillCurrentPercent(sscPercent);
+# endif
+		}
 		break;
 #endif
 

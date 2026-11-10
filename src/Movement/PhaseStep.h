@@ -107,6 +107,7 @@ public:
 	void SetKa(float newKa) noexcept { Ka = newKa; }
 	float GetKv() const noexcept { return Kv; }
 	float GetKa() const noexcept { return Ka; }
+	void SetStandstillCurrentPercent(float percent) noexcept;
 
   private:
 	// Constants private to this module
