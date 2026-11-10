@@ -33,6 +33,7 @@ public:
 
 	double CalculateAccelerationParameters() noexcept;
 	double CalculateDecelerationParameters() noexcept;
+	double CalculateStopDistance() noexcept;		// set up the quickest stop from startSpeed and startAcceleration within the limits and return the distance it needs
 	void CalculateSimpleSCurvePlan(double distance) noexcept
 		pre(startSpeed == 0.0; endSpeed == 0.0; topSpeed > 0.0; startAcceleration == 0.0; peakAcceleration > 0.0; peakDeceleration == -peakAcceleration);
 	void CalculateSimpleFivePhasePlan(double distance) noexcept

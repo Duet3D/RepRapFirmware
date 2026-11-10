@@ -453,6 +453,16 @@ void GCodes::Spin() noexcept
 		StopAndAbortMotion(*AutoPauseGCode());		// no channel of a user is the requester, so every macro goes
 	}
 
+	if (reprap.GetMove().IsFeedHoldActive())
+	{
+		SaveHoldRestorePoints();
+	}
+	else
+	{
+		holdRestorePointSaved = false;
+		RestoreReadAheadPositions();				// covers a release by the urgent command scanner, which runs outside this task
+	}
+
 #if NUM_ASYNC_CHANNELS != 0
 	if (emergencyStopCommanded)
 	{
@@ -600,9 +610,11 @@ bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	// - if the pause state is paused or resuming, don't execute
 	// - if the state is pausing then don't execute, unless we are executing a macro (because it could be the pause macro or filament change macro)
 	// - if there is a deferred pause pending, don't execute once we have finished the current macro
+	// - while a feed hold is active, don't execute at all, so that the move slot stays free for jogs and the held stream cannot read ahead any further
 	if (   gb.IsFileChannel()
 		&& (   pauseState > PauseState::pausing				// paused or resuming
 			|| (!gb.IsDoingFileMacro() && (deferredPauseCommandPending != nullptr || pauseState == PauseState::pausing))
+			|| reprap.GetMove().IsFeedHoldActive()
 		   )
 	   )
 	{
@@ -1096,6 +1108,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 			// Keep the Move task out until the waiting move has been discarded, else it can add that move to the ring after PausePrint has reset it
 			TaskCriticalSectionLocker lock;
 			movesSkipped = reprap.GetMove().PausePrint(ms);								// tell Move we wish to pause this queue
+			ms.jogReadAheadSaved = false;												// the restore point is the position to come back to now, not the read-ahead of the held stream
 			waitingMoveSkipped = !movesSkipped && ms.segmentsLeft != 0;
 			if (movesSkipped)
 			{
@@ -2231,6 +2244,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	ms.raw.usePressureAdvance = false;
 	ms.raw.linearAxesMentioned = false;
 	ms.raw.rotationalAxesMentioned = false;
+	ms.raw.isHoldJog = (!gb.IsFileChannel() && reprap.GetMove().IsFeedHoldActive()) ? 1 : 0;	// AllowJogWhileHeld has let this move through, so it runs ahead of the held moves
 
 #if SUPPORT_SCANNING_PROBES
 	ms.raw.scanningProbeMove = false;

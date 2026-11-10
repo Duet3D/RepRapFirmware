@@ -74,8 +74,13 @@ public:
 	bool LowPowerOrStallPause(MovementState& ms) noexcept;								// Pause the print immediately, returning true if we were able to
 #endif
 	void Hold() noexcept;																// Feed hold: stop as soon as we can and keep the remaining moves for ReleaseHold
-	void ReleaseHold() noexcept;														// Carry on with the moves kept back by Hold
+	void ReleaseHold(bool returnToHeldPosition) noexcept;								// Carry on with the moves kept back by Hold, first moving back to the held position if we jogged away from it
 	bool IsHeld() const noexcept { return holdBarrier != nullptr; }
+	bool IsReturningToHeldPosition() const noexcept { return returnMoveDda != nullptr; }	// Is the move back to the held position still outstanding after a release?
+	bool MeldingAllowed() const noexcept { return holdBarrier == nullptr; }				// While held every new move must start from standstill, so that nothing can raise the speed at which the hold stops
+	MovementError AddHoldJog(const RawMove& nextMove, bool doMotorMapping) noexcept;	// Add a jog to run ahead of the held moves
+	bool CanAddHoldJog() const noexcept;												// Is there room for a jog and for the move that may still be waiting to be read?
+	void GetHeldCoordinates(float coords[MaxAxes]) const noexcept { memcpyf(coords, heldCoords, MaxAxes); }	// Where the hold stopped the machine, in machine coordinates
 	void StopMoves(MovementState& ms, float stopCoords[MaxAxes]) noexcept;				// Stop as soon as we can and discard the remaining moves, ending any feed hold, returning where we will stop
 
 #if SUPPORT_LASER
@@ -100,6 +105,7 @@ private:
 	DDA *FindStopPoint() noexcept;
 	DDA *_ecv_null CancelHomingMoveInFlight(bool& wakeAsyncSender) noexcept;
 	void CutHomingMove(DDA *cdda) noexcept;
+	MovementError InsertBeforeBarrier(const RawMove& nextMove, bool doMotorMapping) noexcept;
 
 #if SUPPORT_3RD_ORDER
 	void PlanMoves(DDA *firstUnpreparedMove, bool stopping) noexcept;
@@ -113,6 +119,12 @@ private:
 	DDA *_ecv_null lastHomingMoveDda = nullptr;									// The DDA that lastHomingMove went into, or nullptr if the last move added was not a homing move
 	bool lastHomingMoveMotorMapping = false;									// The motor mapping flag lastHomingMove was added with
 	LogicalDrivesBitmap homingAxesStopped;										// Axes of a cut homing move that had already stopped on their endstop, so the remainder must not move them
+	float heldCoords[MaxAxes];													// Machine coordinates at which the current feed hold stopped the machine
+	float jogCoords[MaxAxes];													// Machine coordinates the jogs made during the current feed hold have reached
+	RawMove lastJog;															// The last jog made during the current feed hold, the template for the move back to heldCoords
+	bool lastJogMotorMapping = false;											// The motor mapping flag lastJog was added with
+	bool jogged = false;														// True if any jog ran during the current feed hold
+	DDA *_ecv_null volatile returnMoveDda = nullptr;							// The move back to the held position spliced in by ReleaseHold, until it has been executed or discarded
 
 	unsigned int numDdasInRing;													// The number of DDAs that this ring contains
 	uint32_t gracePeriod = DefaultGracePeriod;									// The minimum idle time in milliseconds, before we should start a move. Better to have a few moves in the queue so that we can do lookahead

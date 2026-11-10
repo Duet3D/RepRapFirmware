@@ -395,8 +395,11 @@ public:
 	bool CancelStepping(DDA *abandonedMove) noexcept;										// Stop generating steps, returning true if a remote driver was told to stop
 #endif
 	void FeedHold() noexcept;																// Stop all rings as soon as we can and keep their queued moves for ReleaseFeedHold
-	void ReleaseFeedHold() noexcept;														// Carry on with the moves kept back by FeedHold
+	void ReleaseFeedHold() noexcept;														// Carry on with the moves kept back by FeedHold, returning to the held position first if we jogged away from it
 	bool IsFeedHoldActive() const noexcept { return rings[0].IsHeld(); }					// all rings are held and released together
+	bool IsReturningToHeldPosition() const noexcept;										// Is any ring still on its way back to where the last feed hold stopped it?
+	void GetHeldPosition(const MovementState& ms, float coords[MaxAxes]) const noexcept;	// Where the feed hold stopped this motion system, in machine coordinates
+	bool CanJogWhileHeld(const MovementState& ms) const noexcept { return rings[ms.GetNumber()].CanAddHoldJog(); }	// Is there room in the held ring for a jog?
 	void StopMoves(MovementState& ms, float stopCoords[MaxAxes]) noexcept;					// Stop as soon as we can and discard the queued moves of this motion system, ending any feed hold, returning where it will stop
 
 	static constexpr size_t NumStuckDiagnosticWords = 5;									// how many words GetStuckDiagnostics writes

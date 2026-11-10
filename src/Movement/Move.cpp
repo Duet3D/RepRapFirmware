@@ -699,9 +699,9 @@ void Move::Exit() noexcept
 
 		bool moveRead = false;
 
-		// See if we can add another move to ring 0. A held ring takes no new moves, else they would meld with the moves kept back by the hold
+		// See if we can add another move to ring 0
 		const bool canAddRing0Move = rings[0].CanAddMove();
-		if (canAddRing0Move && !rings[0].IsHeld())
+		if (canAddRing0Move)
 		{
 			// OK to add another move. First check if a special move is available.
 			if (bedLevellingMoveAvailable)
@@ -744,7 +744,9 @@ void Move::Exit() noexcept
 													);
 						}
 
-						const MovementError err = rings[0].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType));
+						const MovementError err = (nextMove.isHoldJog != 0)
+													? rings[0].AddHoldJog(nextMove, !IsRawMotorMove(nextMove.moveType))
+														: rings[0].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType));
 						if (err == MovementError::ok)
 						{
 							const uint32_t now = millis();
@@ -775,7 +777,7 @@ void Move::Exit() noexcept
 
 #if SUPPORT_ASYNC_MOVES
 		const bool canAddRing1Move = rings[1].CanAddMove();
-		if (canAddRing1Move && !rings[1].IsHeld())
+		if (canAddRing1Move)
 		{
 			if (auxMoveAvailable)
 			{
@@ -808,7 +810,9 @@ void Move::Exit() noexcept
 							AxisAndBedTransform(nextMove.coords, nextMove.movementTool, true);
 						}
 
-						const MovementError err = rings[1].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType));
+						const MovementError err = (nextMove.isHoldJog != 0)
+													? rings[1].AddHoldJog(nextMove, !IsRawMotorMove(nextMove.moveType))
+														: rings[1].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType));
 						if (err == MovementError::ok)
 						{
 							const uint32_t now = millis();
@@ -1047,11 +1051,28 @@ void Move::ReleaseFeedHold() noexcept
 	{
 		for (DDARing& ring : rings)
 		{
-			ring.ReleaseHold();
+			ring.ReleaseHold(true);
 		}
 		reprap.StateUpdated();
 		MoveAvailable();										// the Move task may be sleeping on the held ring
 	}
+}
+
+bool Move::IsReturningToHeldPosition() const noexcept
+{
+	for (const DDARing& ring : rings)
+	{
+		if (ring.IsReturningToHeldPosition())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void Move::GetHeldPosition(const MovementState& ms, float coords[MaxAxes]) const noexcept
+{
+	rings[ms.GetNumber()].GetHeldCoordinates(coords);
 }
 
 // Stop one motion system as soon as its jerk limits allow and discard its queued moves, ending any feed hold.

@@ -194,6 +194,15 @@ double MovementProfile::CalculateDecelerationParameters() noexcept
 	}
 }
 
+// Set up the quickest stop from the start speed and acceleration: let the acceleration jerk down to zero if it is positive, then decelerate to standstill.
+// Return the distance covered. The caller must have set jerk, peakAcceleration and peakDeceleration
+double MovementProfile::CalculateStopDistance() noexcept
+{
+	endSpeed = (double)0.0;
+	topSpeed = (startAcceleration > (double)0.0) ? startSpeed + OneHalfDouble * dsquare(startAcceleration)/jerk : startSpeed;
+	return CalculateAccelerationParameters() + CalculateDecelerationParameters();
+}
+
 // Calculate a 5-phase profile when the start speed and acceleration and the end speed and acceleration are all zero and the maximum deceleration is equal to minus the maximum acceleration.
 // This assumes that can reach the requested top speed without exceeding the acceleration limit, i.e. dsquare(peakAcceleration) > topSpeed * jerk, and that the total distance isn;t exceeded.
 // The caller must ensure this.

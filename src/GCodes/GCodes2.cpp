@@ -227,7 +227,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 0: // Rapid move
 		case 1: // Ordinary move
 			BREAK_IF_NOT_EXECUTING
-			if (!CheckMovementNotHeld(gb, reply, result))
+			if (!AllowJogWhileHeld(gb, reply, result))
 			{
 				break;
 			}
@@ -811,6 +811,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						DiscardQueuedMotion();
 						DiscardJobReadAhead();
+						pauseState = PauseState::paused;				// the hold has gone with the moves, so this keeps the job from reading on and brings us back here while we wait for standstill
 					}
 					if (!LockAllMovementSystemsAndWaitForStandstill(gb))	// make sure everything has stopped
 					{
@@ -1201,6 +1202,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					// This must come before any wait for standstill, because the held ring never reaches it.
 					// If the print is paused as well, carry on and resume it too, else releasing the hold is all there is to do
 					reprap.GetMove().ReleaseFeedHold();
+					RestoreReadAheadPositions();
 					if (pauseState != PauseState::paused)
 					{
 						break;

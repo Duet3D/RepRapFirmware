@@ -603,6 +603,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 							&& flags.xyMoving == prev->flags.xyMoving
 							&& flags.isNonPrintingExtruderMove == prev->flags.isNonPrintingExtruderMove;	// this is to prevent extruder-only moves being melded with Z-axis moves (issue 990)
 	if (   prev->IsProvisional()													// if previous move is queued but has not started yet
+		&& ring.MeldingAllowed()														// and a feed hold does not require every new move to start from standstill
 		&& flags.useScurve == prev->flags.useScurve
 		&& (move.GetJerkPolicy() != 0 || sameMoveType)									// and melding is allowed
 	   )
@@ -655,6 +656,7 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 #else
 	{
 		if (   prev->IsProvisional()													// if previous move has not started yet
+			&& ring.MeldingAllowed()														// and a feed hold does not require every new move to start from standstill
 			&& (   move.GetJerkPolicy() != 0											// and melding is allowed
 				|| (   flags.isPrintingMove == prev->flags.isPrintingMove
 					&& flags.xyMoving == prev->flags.xyMoving

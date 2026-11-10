@@ -1402,6 +1402,7 @@ void GCodes::DiscardQueuedMotion() noexcept
 		float stopCoords[MaxAxes];
 		reprap.GetMove().StopMoves(ms, stopCoords);
 		ToolOffsetInverseTransform(ms, stopCoords, ms.currentUserPosition);	// the user position holds the target of the last move we read, which may be one we have just discarded
+		ms.jogReadAheadSaved = false;
 		ms.ClearMove();
 		ms.positionMayBeInaccurate = true;			// the move in flight may still stop short of its planned end, so re-read the position at the next standstill as well
 	}
@@ -1427,6 +1428,93 @@ void GCodes::DiscardJobReadAhead() noexcept
 #endif
 		fgb.Init();
 		UnlockAll(fgb);
+	}
+}
+
+// Decide what to do with a G0/G1 while a feed hold is active. The job stream is suspended and macros wait. An interactive move becomes a jog that runs
+// ahead of the held moves, so the user position switches from where the held stream had got to in its read-ahead to where the machine actually stands;
+// GCodes::Spin restores the read-ahead position when the hold is released, by which time the machine is on its way back to the held position
+bool GCodes::AllowJogWhileHeld(GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) noexcept
+{
+	if (gb.IsFileChannel() || !reprap.GetMove().IsFeedHoldActive())
+	{
+		return true;
+	}
+	if (gb.IsDoingFileMacro())
+	{
+		result = GCodeResult::notFinished;
+		return false;
+	}
+#if SUPPORT_3RD_ORDER
+	if (reprap.GetMove().IsUsingSCurve())
+	{
+		reply.copy("Jogging while a feed hold is active is not supported with S-curve acceleration");
+		result = GCodeResult::error;
+		return false;
+	}
+#endif
+	if (gb.Seen(extrudeLetter))
+	{
+		reply.copy("Extrusion is not allowed while a feed hold is active");
+		result = GCodeResult::error;
+		return false;
+	}
+
+	MovementState& ms = GetMovementState(gb);
+	if (!reprap.GetMove().CanJogWhileHeld(ms))
+	{
+		reply.copy("Cannot jog while the feed hold queue is full");
+		result = GCodeResult::error;
+		return false;
+	}
+	if (!ms.jogReadAheadSaved)
+	{
+		memcpyf(ms.readAheadPosition, ms.currentUserPosition, MaxAxes);
+		GetHeldUserPosition(ms, ms.currentUserPosition);
+		ms.jogReadAheadSaved = true;
+	}
+	return true;
+}
+
+void GCodes::GetHeldUserPosition(const MovementState& ms, float coords[MaxAxes]) const noexcept
+{
+	float machineCoords[MaxAxes];
+	reprap.GetMove().GetHeldPosition(ms, machineCoords);
+	reprap.GetMove().InverseAxisAndBedTransform(machineCoords, ms.currentTool);
+	ToolOffsetInverseTransform(ms, machineCoords, coords);
+}
+
+// The pause restore point doubles as the feed hold position, so that G1 R1 and the object model show where the hold stopped.
+// A pause in progress or a paused job keeps its own restore point, because M24 must still return to where the job paused
+void GCodes::SaveHoldRestorePoints() noexcept
+{
+	if (!holdRestorePointSaved)
+	{
+		if (pauseState == PauseState::notPaused)
+		{
+			for (MovementState& ms : moveStates)
+			{
+				RestorePoint& rp = ms.GetPauseRestorePoint();
+				ms.SavePosition(PauseRestorePointNumber, numVisibleAxes, rp.originalFeedRate, noFilePosition);		// no single channel owns a hold, so the feed rate stays as it was
+				GetHeldUserPosition(ms, rp.moveCoords);
+			}
+			reprap.MoveUpdated();
+		}
+		holdRestorePointSaved = true;
+	}
+}
+
+// After a feed hold during which jogs ran, the machine is on its way back to the held position, so the held streams carry on from where their read-ahead had got to.
+// Must run before the job channel executes again, which is why the M24 handler calls it directly rather than leaving it to the next Spin
+void GCodes::RestoreReadAheadPositions() noexcept
+{
+	for (MovementState& ms : moveStates)
+	{
+		if (ms.jogReadAheadSaved)
+		{
+			memcpyf(ms.currentUserPosition, ms.readAheadPosition, MaxAxes);
+			ms.jogReadAheadSaved = false;
+		}
 	}
 }
 

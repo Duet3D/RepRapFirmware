@@ -173,7 +173,7 @@ public:
 	void SetSpeedRatioAndMaxJunctionSpeedForNonPrintingMoves(const Move& move) noexcept;
 	void SetStartSpeedAndAcceleration(float speed, float acceleration) noexcept { startSpeed = speed; startAcceleration = acceleration; }
 
-	static void PlanMoves(DDA *firstUnpreparedMove, MovementProfile& plannedProfile, bool stopping) noexcept;
+	static DDA *_ecv_null PlanMoves(DDA *firstUnpreparedMove, MovementProfile& plannedProfile, bool stopping) noexcept;	// Returns the first move the plan does not cover, or nullptr if a requested stop does not fit
 #endif
 
 	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcept;	// Try to push babystepping earlier in the move queue

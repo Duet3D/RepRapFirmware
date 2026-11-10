@@ -126,6 +126,7 @@ void MovementState::SetDefaults(size_t firstDriveToZero) noexcept
 	raw.inverseTimeMode = false;
 	raw.linearAxesMentioned = false;
 	raw.rotationalAxesMentioned = false;
+	raw.isHoldJog = 0;
 #if SUPPORT_SCANNING_PROBES
 	raw.scanningProbeMove = false;
 #endif
@@ -198,6 +199,7 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 
 	pausedInMacro = false;
 	positionMayBeInaccurate = false;
+	jogReadAheadSaved = false;
 
 #if SUPPORT_ASYNC_MOVES
 	raw.axesAndExtrudersOwned.Clear();

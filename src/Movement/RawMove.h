@@ -65,8 +65,8 @@ struct RawMove
 #endif
 
 	// Depending on configuration, this point may be an odd multiple of 2 bytes from the start.
-	// Add 2 bytes of padding so that the amount to be copied is always a multiple of 4 bytes, so that we can use our optimised assignment operator.
-	uint16_t padding;
+	// This field doubles as the 2 bytes of padding that keep the amount to be copied a multiple of 4 bytes, so that we can use our optimised assignment operator
+	uint16_t isHoldJog;												// nonzero if this is a jog commanded while a feed hold is active, which the Move task runs ahead of the held moves
 
 	// GCC normally calls memcpy to assign objects of this class. We can do better because we know they must be 32-bit aligned.
 	RawMove &_ecv_from operator=(const RawMove& arg) noexcept
@@ -243,6 +243,8 @@ public:
 	SegmentedMoveState segMoveState;
 	bool pausedInMacro;												// if we are paused then this is true if we paused while fileGCode was executing a macro
 	bool positionMayBeInaccurate;									// set when a move that can stop short of its commanded target (endstop/probe/stall/raw) or a special move that bypasses the user position is queued, so the position is re-read at the next standstill
+	bool jogReadAheadSaved;											// true while jogging during a feed hold: readAheadPosition holds the user position the held stream had reached, to be restored on release
+	float readAheadPosition[MaxAxes];								// the user position the held stream had reached when the first jog of a feed hold was accepted
 
 	static void SetInitialMotorPositions(const float initialPosition[MaxAxesPlusExtruders]) noexcept;
 	static void SaveEndpointsBeforeSimulating() noexcept;

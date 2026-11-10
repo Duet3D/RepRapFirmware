@@ -133,10 +133,6 @@ bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 			break;
 
 		case GCodeInputState::doingCode:
-			if (c == 0 || c == '\r' || c == '\n')
-			{
-				state = GCodeInputState::idle;
-			}
 			break;
 
 		case GCodeInputState::doingMCode:
@@ -257,6 +253,12 @@ bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 			}
 			state = GCodeInputState::doingCode;
 			break;
+	}
+
+	// A line end finishes the command in every state, including the ones that matched part of an urgent command, or the scanner would miss the next command
+	if (c == 0 || c == '\r' || c == '\n')
+	{
+		state = GCodeInputState::idle;
 	}
 	return false;
 }

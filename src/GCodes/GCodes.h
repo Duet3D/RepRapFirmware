@@ -143,6 +143,7 @@ public:
 
 	bool CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) noexcept;
 	bool CheckMovementNotHeld(const GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) const noexcept;	// While a feed hold is active, make macro movement wait and reject interactive movement
+	bool AllowJogWhileHeld(GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) noexcept;				// While a feed hold is active, make macro G0/G1 wait and turn interactive ones into jogs from the held position
 #if HAS_NETWORKING
 	NetworkGCodeInput *GetHTTPInput() const noexcept { return httpInput; }
 	NetworkGCodeInput *GetTelnetInput() const noexcept { return telnetInput; }
@@ -499,6 +500,9 @@ private:
 	GCodeResult DoFeedHold(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Handle M25.1: feed hold, or with S1 stop and abort the print and all macros
 	void StopAndAbortMotion(const GCodeBuffer& requester) noexcept;							// M25.1 S1: stop, drop the queued moves, abort the print and the macros on all channels but the requester's
 	void DiscardQueuedMotion() noexcept;													// Stop as soon as the jerk limits allow and drop all queued moves, ending any feed hold
+	void RestoreReadAheadPositions() noexcept;												// After a feed hold with jogs, give the held streams their read-ahead user positions back
+	void GetHeldUserPosition(const MovementState& ms, float coords[MaxAxes]) const noexcept;	// Where the feed hold stopped this motion system, in user coordinates
+	void SaveHoldRestorePoints() noexcept;													// Once per feed hold, put the held position into the pause restore point unless a pause owns it
 	void DiscardJobReadAhead() noexcept;													// Drop what the job channels have read beyond the moves just discarded, as a pause does
 	bool DoSynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept;	// Pause the print due to a command in the file itself
 	bool DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept;	// Pause the print returning true if successful, false if we can't yet
@@ -756,6 +760,7 @@ private:
 	Bitmap<uint8_t> firmwareUpdateModuleMap;	// Bitmap of firmware modules to be updated
 	bool isFlashing;							// Is a new firmware binary going to be flashed?
 	std::atomic<bool> stopAndAbortRequested = false;	// Set by an input task when it swallowed an urgent M25.1 S1 that the Main task must carry out
+	bool holdRestorePointSaved = false;			// True once the current feed hold has been offered to the pause restore point
 #if SUPPORT_PANELDUE_FLASH
 	bool isFlashingPanelDue;					// Are we in the process of flashing PanelDue?
 #endif

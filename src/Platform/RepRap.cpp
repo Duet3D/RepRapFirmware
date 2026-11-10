@@ -1966,6 +1966,7 @@ size_t RepRap::GetStatusIndex() const noexcept
 			: (!platform->HasDriverPower() && !gCodes->IsSimulating())	? 3		// Off i.e. powered down
 #endif
 			: move->IsFeedHoldActive()									? 4		// Feed hold, which overrides the pause and print states because it stops their motion too
+			: move->IsReturningToHeldPosition()							? 6		// Resuming, on the way back to where the feed hold stopped after jogging
 			: (gCodes->GetPauseState() == PauseState::pausing)			? 5		// Pausing
 			: (gCodes->GetPauseState() == PauseState::resuming)			? 6		// Resuming
 			: (gCodes->GetPauseState() == PauseState::paused)			? 7		// Paused
