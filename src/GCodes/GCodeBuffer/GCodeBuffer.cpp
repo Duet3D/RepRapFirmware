@@ -1158,6 +1158,7 @@ void GCodeBuffer::AbortFile(bool abortAll) noexcept
 		{
 			abortAllFiles = abortAll;		// set this one first, because the SBC task acts on abortFile as soon as it is set
 			abortFile = true;
+			macroJustStarted = false;		// a macro that has just been started is closed too, so the next reply of the code below it is not a push message
 		}
 #endif
 	}
