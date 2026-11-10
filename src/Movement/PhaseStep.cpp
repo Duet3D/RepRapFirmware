@@ -222,9 +222,9 @@ void PhaseStep::SetMotorPhase(size_t driver, uint16_t phase, float magnitude) no
 }
 
 // Set the standstill current fraction for this drive.
-void PhaseStep::SetStandstillCurrent(float percent) noexcept
+void PhaseStep::SetStandstillCurrentPercent(float percent) noexcept
 {
-	holdCurrentFraction = percent * 0.01;
+	holdCurrentFraction = min<float>(percent * 0.01, 0.7);
 }
 
 void PhaseStep::InstanceControlLoop(size_t driver) noexcept
@@ -289,12 +289,6 @@ void PhaseStep::CalculateCurrentFraction() noexcept
 	{
 		debugPrintf("v=%f, a=%f, cf=%f\n", (double)(mParams.speed * scalingFactor), (double)(mParams.acceleration * scalingFactorSqr), (double)currentFraction);
 	}
-}
-
-// Set the standstill current percentage for this axis or extruder. We limit the standstill current factor to 0.7 to avoid overheating the driver mosfets at standstill.
-void PhaseStep::SetStandstillCurrentPercent(float percent) noexcept
-{
-	holdCurrentFraction = min<float>(percent * 0.01, 0.7);
 }
 
 #endif

@@ -85,7 +85,7 @@ public:
 	friend class DriveMovement;
 
 	// Phase step public methods
-	void SetStandstillCurrent(float percent) noexcept;
+	void SetStandstillCurrentPercent(float percent) noexcept;
 
 	// Phase correction, shared by all instances because it is a property of the driver
 	static GCodeResult ConfigureCorrection(size_t driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
@@ -107,7 +107,6 @@ public:
 	void SetKa(float newKa) noexcept { Ka = newKa; }
 	float GetKv() const noexcept { return Kv; }
 	float GetKa() const noexcept { return Ka; }
-	void SetStandstillCurrentPercent(float percent) noexcept;
 
   private:
 	// Constants private to this module
