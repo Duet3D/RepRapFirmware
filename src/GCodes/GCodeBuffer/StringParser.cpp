@@ -48,10 +48,11 @@ void StringParser::Init() noexcept
 }
 
 // Throw away any line that we have only partly received. This is called when the input source drops its buffered data,
-// because otherwise the remains of the truncated line would be spliced onto the start of the next one
+// because otherwise the remains of the truncated line would be spliced onto the start of the next one.
+// A complete line is left alone, in particular one that is being executed, so every state from 'ready' onwards is excluded.
 void StringParser::DiscardPartialLine() noexcept
 {
-	if (gb.bufferState != GCodeBufferState::parseNotStarted && gb.bufferState != GCodeBufferState::ready)
+	if (gb.bufferState != GCodeBufferState::parseNotStarted && gb.bufferState < GCodeBufferState::ready)
 	{
 		Init();
 	}
