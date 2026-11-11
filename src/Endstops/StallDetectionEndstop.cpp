@@ -162,11 +162,19 @@ EndstopHitDetails StallDetectionEndstop::GetResult(
 	rslt.axis = GetAxis();
 	if (rslt.axis == NO_AXIS)
 	{
-		rslt.SetAction(EndstopHitAction::stopAll, whenTriggered, haveTriggerTime);
+		rslt.SetAction(EndstopHitAction::stopAll
+#if SUPPORT_CAN_EXPANSION
+			, whenTriggered, haveTriggerTime
+#endif
+			);
 	}
 	else if (stopAll)
 	{
-		rslt.SetAction(EndstopHitAction::stopAll, whenTriggered, haveTriggerTime);
+		rslt.SetAction(EndstopHitAction::stopAll
+#if SUPPORT_CAN_EXPANSION
+			, whenTriggered, haveTriggerTime
+#endif
+			);
 		if (GetAtHighEnd())
 		{
 			rslt.setAxisHigh = true;
@@ -178,15 +186,21 @@ EndstopHitDetails StallDetectionEndstop::GetResult(
 	}
 	else if (individualMotors && numDriversLeft > 1)
 	{
-		rslt.SetAction(EndstopHitAction::stopDriver, whenTriggered, haveTriggerTime);
 #if SUPPORT_CAN_EXPANSION
+		rslt.SetAction(EndstopHitAction::stopDriver, whenTriggered, haveTriggerTime);
 		rslt.driver.boardAddress = boardAddress;
+#else
+		rslt.SetAction(EndstopHitAction::stopDriver);
 #endif
 		rslt.driver.localDriver = driverWithinBoard;
 	}
 	else
 	{
-		rslt.SetAction(EndstopHitAction::stopAxis, whenTriggered, haveTriggerTime);
+		rslt.SetAction(EndstopHitAction::stopAxis
+#if SUPPORT_CAN_EXPANSION
+			, whenTriggered, haveTriggerTime
+#endif
+			);
 		if (GetAtHighEnd())
 		{
 			rslt.setAxisHigh = true;

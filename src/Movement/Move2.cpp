@@ -756,7 +756,13 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 
 #if HAS_SMART_DRIVERS || SUPPORT_CAN_EXPANSION
 	case 917:
-		standstillCurrentPercent[axisOrExtruder] = constrain<float>(currentOrPercent, 0.0, 100.0);
+		{
+			const float sscPercent = constrain<float>(currentOrPercent, 0.0, 100.0);
+			standstillCurrentPercent[axisOrExtruder] = sscPercent;
+# if SUPPORT_PHASE_STEPPING
+			dms[axisOrExtruder].phaseStepControl.SetStandstillCurrentPercent(sscPercent);
+# endif
+		}
 		break;
 #endif
 
@@ -781,9 +787,6 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 								canDriversToUpdate.AddEntry(driver, standstillCurrentPercent[axisOrExtruder]);
 							}
 						);
-# if SUPPORT_PHASE_STEPPING
-		dms[axisOrExtruder].phaseStepControl.SetStandstillCurrent(standstillCurrentPercent[axisOrExtruder]);
-# endif
 		return CanInterface::SetRemoteStandstillCurrentPercent(canDriversToUpdate, reply);
 	}
 	else
@@ -818,7 +821,7 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 							[this, axisOrExtruder](uint8_t driver)
 							{
 # if HAS_SMART_DRIVERS
-								SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
+								SmartDrivers::SetStandstillCurrent(driver, standstillCurrentPercent[axisOrExtruder]);
 # endif
 							}
 		);
@@ -1535,7 +1538,7 @@ GCodeResult Move::EutSetStandstillCurrentFactor(const CanMessageMultipleDrivesRe
 							{
 								SmartDrivers::SetStandstillCurrentPercent(driver, msg.values[count]);
 # if SUPPORT_PHASE_STEPPING
-								dms[driver].phaseStepControl.SetStandstillCurrent(msg.values[count]);
+								dms[driver].phaseStepControl.SetStandstillCurrentPercent(msg.values[count]);
 # endif
 							}
 						}
@@ -1580,7 +1583,6 @@ GCodeResult Move::EutProcessM970(const CanMessageGeneric& msg, const StringRef& 
 			if ((StepMode)mode == StepMode::phase)
 			{
 				delay(10);													// let the TMC task read the microstep counter after the last movement
-				dm.phaseStepControl.SetStandstillCurrent(SmartDrivers::GetStandstillCurrentPercent(drive));
 			}
 			bool interpolation;
 			const unsigned int microsteps = GetMicrostepping(drive, interpolation);

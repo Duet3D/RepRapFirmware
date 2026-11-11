@@ -7,7 +7,7 @@
 
 /*
  * Some observations on closed loop control of motors:
- * 1. We can generate steps in a step ISR as we do in open loop ode, then add each microstep to the desired position.
+ * 1. We can generate steps in a step ISR as we do in open loop mode, then add each microstep to the desired position.
  *    But it is probably better to calculate the position directly from the move parameters.
  *    We can calculate the current velocity and acceleration as well, which should enable more accurate positioning.
  * 2. Currently we allow the user to set microstepping as usual, because that works in both open and closed loop mode.
@@ -52,8 +52,6 @@
 
 # include <GCodes/GCodeBuffer/GCodeBuffer.h>
 # include <cmath>
-
-# define BASIC_TUNING_DEBUG	0
 
 static uint16_t currentPhase[MaxSmartDrivers] = { 0 };
 static uint16_t phaseOffset[MaxSmartDrivers] = { 0 };			// The amount by which the phase should be offset for each driver
@@ -222,9 +220,9 @@ void PhaseStep::SetMotorPhase(size_t driver, uint16_t phase, float magnitude) no
 }
 
 // Set the standstill current fraction for this drive.
-void PhaseStep::SetStandstillCurrent(float percent) noexcept
+void PhaseStep::SetStandstillCurrentPercent(float percent) noexcept
 {
-	holdCurrentFraction = percent * 0.01;
+	holdCurrentFraction = min<float>(percent * 0.01, 0.7);
 }
 
 void PhaseStep::InstanceControlLoop(size_t driver) noexcept

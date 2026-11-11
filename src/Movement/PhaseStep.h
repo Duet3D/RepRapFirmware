@@ -51,7 +51,6 @@ constexpr float VelocityLimitGainFactor = 5.0;			// the gain of the P loop when 
 constexpr float DeferPollSpeed = 2000.0/StepClockRate;
 constexpr float ResumePollSpeed = 1500.0/StepClockRate;
 
-
 // Struct to pass data back to the ClosedLoop module
 struct MotionParameters
 {
@@ -70,9 +69,9 @@ struct MotionParameters
 // One term of the phase correction that is added to the electrical angle before the coil currents are computed, see M970.3
 struct PhaseCorrectionHarmonic
 {
-	uint8_t harmonic;			// harmonic of the electrical cycle, 0 = unused entry
 	float magnitude;			// magnitude in phase units, where 4096 is a full electrical cycle
 	uint16_t phase;				// phase offset in phase units
+	uint8_t harmonic;			// harmonic of the electrical cycle, 0 = unused entry
 };
 
 constexpr size_t MaxPhaseCorrectionHarmonics = 4;
@@ -85,7 +84,7 @@ public:
 	friend class DriveMovement;
 
 	// Phase step public methods
-	void SetStandstillCurrent(float percent) noexcept;
+	void SetStandstillCurrentPercent(float percent) noexcept;
 
 	// Phase correction, shared by all instances because it is a property of the driver
 	static GCodeResult ConfigureCorrection(size_t driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
