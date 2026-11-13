@@ -296,6 +296,7 @@ int32_t ZProbe::GetReading() const noexcept
 			case ZProbeType::unfilteredDigital:		// Switch connected to Z probe input, no filtering
 			case ZProbeType::blTouch:				// blTouch is now unfiltered too
 			case ZProbeType::scanningAnalog:		// scanning analog probes are unfiltered for speed
+			case ZProbeType::top3dBedTouch:			// TOP3D / Think3Dim strain gauge module
 				zProbeVal = GetRawReading();
 				break;
 
