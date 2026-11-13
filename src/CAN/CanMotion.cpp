@@ -39,15 +39,22 @@ namespace CanMotion
 
 	static CanMessageBuffer urgentMessageBuffer;
 	static CanMessageBuffer *_ecv_null movementBufferList = nullptr;
-	static DriversStopList *_ecv_null volatile stopList = nullptr;
+	// Each movement system has its own stop list, because one of them may prepare moves while the other executes a move that checks endstops
+	struct StopListState
+	{
+		DriversStopList *_ecv_null volatile stopList = nullptr;
+		volatile bool revertAll = false;
+		volatile bool revertedAll = false;
+		volatile uint32_t whenRevertedAll;
+	};
+
+	static StopListState stopListStates[NumMovementSystems];
 	static uint32_t currentMoveClocks;
-	static volatile bool revertAll = false;
-	static volatile bool revertedAll = false;
-	static volatile uint32_t whenRevertedAll;
 	static Mutex stopListMutex;
 	static uint8_t nextSeq[CanId::MaxCanAddress + 1] = { 0 };
 
 	static CanMessageBuffer *_ecv_null GetBuffer(const PrepParams& params, DriverId canDriver) noexcept;
+	static CanMessageBuffer *_ecv_null GetUrgentMessage(StopListState& state) noexcept;
 	static void FreeMovementBuffers() noexcept;
 }
 
@@ -72,23 +79,24 @@ void CanMotion::FreeMovementBuffers() noexcept
 }
 
 // This is called by DDA::Prepare at the start of preparing a movement
-void CanMotion::StartMovement() noexcept
+void CanMotion::StartMovement(MovementSystemNumber msNumber) noexcept
 {
 	FreeMovementBuffers();					// there shouldn't be any movement buffers in the list, but free any that there may be
 
-	// Free up any stop list items left over from the previous move
+	// Free up any stop list items left over from the previous move of this movement system
 	MutexLocker lock(stopListMutex);
 
-	revertedAll = false;
-	revertAll = false;
+	StopListState& state = stopListStates[msNumber];
+	state.revertedAll = false;
+	state.revertAll = false;
 	for (;;)
 	{
-		DriversStopList *_ecv_null p = stopList;
+		DriversStopList *_ecv_null p = state.stopList;
 		if (p == nullptr)
 		{
 			break;
 		}
-		stopList = p->next;
+		state.stopList = p->next;
 		delete p;
 	}
 }
@@ -199,7 +207,7 @@ void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver
 }
 
 // This is called by DDA::Prepare when all DMs for CAN drives have been processed. Return the calculated move time in steps, or 0 if there are no CAN moves
-uint32_t CanMotion::FinishMovement(const DDA& dda, uint32_t moveStartTime, bool simulating) noexcept
+uint32_t CanMotion::FinishMovement(const DDA& dda, MovementSystemNumber msNumber, uint32_t moveStartTime, bool simulating) noexcept
 {
 	uint32_t clocks = 0;
 	if (simulating)
@@ -226,14 +234,15 @@ uint32_t CanMotion::FinishMovement(const DDA& dda, uint32_t moveStartTime, bool 
 					if (dda.IsCheckingEndstops())
 					{
 						// Set up the stop list
-						DriversStopList * const sl = new DriversStopList(stopList, buf->id.Dst());
+						StopListState& state = stopListStates[msNumber];
+						DriversStopList * const sl = new DriversStopList(state.stopList, buf->id.Dst());
 						const size_t nd = msg.numDrivers;
 						sl->numDrivers = (uint8_t)nd;
 						for (size_t i = 0; i < nd; ++i)
 						{
 							sl->stopStates[i] = (msg.perDrive[i].steps != 0) ? DriverStopState::active : DriverStopState::inactive;
 						}
-						stopList = sl;
+						state.stopList = sl;
 					}
 					CanInterface::SendMotion(buf);								// queues the buffer for sending and frees it when done
 					clocks = currentMoveClocks;
@@ -260,14 +269,28 @@ bool CanMotion::CanPrepareMove() noexcept
 // The only urgent messages we may have currently are messages to stop drivers, or to tell them that all drivers have now been stopped and they need to revert to the requested stop position.
 CanMessageBuffer *_ecv_null CanMotion::GetUrgentMessage() noexcept
 {
-	if (!revertedAll)
+	for (StopListState& state : stopListStates)
+	{
+		CanMessageBuffer *_ecv_null const buf = GetUrgentMessage(state);
+		if (buf != nullptr)
+		{
+			return buf;
+		}
+	}
+	return nullptr;
+}
+
+// Get the next urgent message for the drivers that one movement system is stopping or reverting
+CanMessageBuffer *_ecv_null CanMotion::GetUrgentMessage(StopListState& state) noexcept
+{
+	if (!state.revertedAll)
 	{
 		MutexLocker lock(stopListMutex);					// make sure the list isn't being changed while we traverse it
 
 		// We have to be careful of race conditions here. The stop list links won't change while we are scanning it because we hold the mutex,
 		// but ISR may change the stop states to StopRequested up until the time at which it changes revertAll from false to true.
-		const bool revertingAll = revertAll;
-		for (DriversStopList *_ecv_null sl = stopList; sl != nullptr; sl = sl->next)
+		const bool revertingAll = state.revertAll;
+		for (DriversStopList *_ecv_null sl = state.stopList; sl != nullptr; sl = sl->next)
 		{
 			if (!sl->sentRevertRequest)						// if we've already reverted the drivers on this board, no more to do
 			{
@@ -315,8 +338,8 @@ CanMessageBuffer *_ecv_null CanMotion::GetUrgentMessage() noexcept
 		if (revertingAll)
 		{
 			// All drivers have been stopped and reverted where requested
-			whenRevertedAll = millis();
-			revertedAll = true;
+			state.whenRevertedAll = millis();
+			state.revertedAll = true;
 		}
 	}
 	return nullptr;
@@ -345,34 +368,39 @@ void CanMotion::StopDriverWhenProvisional(DriverId driver) noexcept
 // Return true if we found it, we hadn't already requested a stop, and now we have.
 bool CanMotion::StopDriverWhenExecuting(DriverId driver, int32_t netStepsTaken) noexcept
 {
-	DriversStopList *_ecv_null sl = stopList;
-	while (sl != nullptr)
+	// A driver is moved by one movement system at a time, so search the stop lists of all of them
+	for (const StopListState& state : stopListStates)
 	{
-		if (sl->boardAddress == driver.boardAddress)
+		DriversStopList *_ecv_null sl = state.stopList;
+		while (sl != nullptr)
 		{
-			if (driver.localDriver < sl->numDrivers && sl->stopStates[driver.localDriver] == DriverStopState::active)			// if active and stop not yet requested
+			if (sl->boardAddress == driver.boardAddress)
 			{
-				sl->stopSteps[driver.localDriver] = netStepsTaken;						// must assign this one first
-				sl->stopStates[driver.localDriver] = DriverStopState::stopRequested;
-				return true;
+				if (driver.localDriver < sl->numDrivers && sl->stopStates[driver.localDriver] == DriverStopState::active)		// if active and stop not yet requested
+				{
+					sl->stopSteps[driver.localDriver] = netStepsTaken;					// must assign this one first
+					sl->stopStates[driver.localDriver] = DriverStopState::stopRequested;
+					return true;
+				}
+				break;																	// we found the right board in this list, no point in searching it further
 			}
-			break;																		// we found the right board, no point in searching further
+			sl = sl->next;
 		}
-		sl = sl->next;
 	}
 	return false;
 }
 
 // Revert any stopped drivers that we haven't already and return true when there are no drivers to revert
-bool CanMotion::RevertStoppedDrivers() noexcept
+bool CanMotion::RevertStoppedDrivers(MovementSystemNumber msNumber) noexcept
 {
-	if (!revertAll && !revertedAll)							// if not started reverting yet
+	StopListState& state = stopListStates[msNumber];
+	if (!state.revertAll && !state.revertedAll)				// if not started reverting yet
 	{
-		revertAll = true;
+		state.revertAll = true;
 		CanInterface::WakeAsyncSender();
 		return false;
 	}
-	return !revertAll || (revertedAll && millis() - whenRevertedAll >= TotalDriverPositionRevertMillis);
+	return !state.revertAll || (state.revertedAll && millis() - state.whenRevertedAll >= TotalDriverPositionRevertMillis);
 }
 
 #endif

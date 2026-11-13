@@ -173,7 +173,8 @@ static void HandleInputStateChangedV1(const CanMessageInputChangedV1& msg, CanAd
 {
 	bool endstopStatesChanged = false;
 	Platform& p = reprap.GetPlatform();
-	for (unsigned int i = 0; i < msg.numHandles; ++i)
+	const unsigned int numHandles = min<unsigned int>(msg.numHandles, ARRAY_SIZE(msg.results));
+	for (unsigned int i = 0; i < numHandles; i++)
 	{
 		const RemoteInputHandle handle(msg.GetEntryHandle(i));
 		const bool state = (msg.states & (1u << i)) != 0;
@@ -215,7 +216,8 @@ static void HandleInputStateChangedV2(const CanMessageInputChangedV2& msg, CanAd
 {
 	bool endstopStatesChanged = false;
 	Platform& p = reprap.GetPlatform();
-	for (unsigned int i = 0; i < msg.numHandles; ++i)
+	const unsigned int numHandles = min<unsigned int>(msg.numHandles, ARRAY_SIZE(msg.results));
+	for (unsigned int i = 0; i < numHandles; i++)
 	{
 		const RemoteInputHandle handle(msg.GetEntryHandle(i));
 		const bool state = (msg.states & (1u << i)) != 0;

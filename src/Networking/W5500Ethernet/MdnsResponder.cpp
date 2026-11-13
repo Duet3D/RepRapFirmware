@@ -70,6 +70,11 @@ void MdnsResponder::ProcessPacket(const uint8_t *_ecv_array packet, size_t lengt
 	{
 		for (uint16_t query = 0; query < numQueries; query++)
 		{
+			if (bytesProcessed + sizeof(uint16_t) > length)
+			{
+				break;
+			}
+
 			bool nameMatches = false;
 			if (packet[bytesProcessed] == 0xC0)
 			{

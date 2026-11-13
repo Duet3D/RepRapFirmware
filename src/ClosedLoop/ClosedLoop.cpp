@@ -214,7 +214,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopData& msg, size_t msgLen) noexcept
 {
 	FileStore *_ecv_null const f = closedLoopFile.load();
-	if (f != nullptr)
+	if (f != nullptr && src == expectedRemoteBoardAddress)
 	{
 		whenDataLastReceived.store(millis());
 		if (msg.firstSampleNumber != expectedRemoteSampleNumber)

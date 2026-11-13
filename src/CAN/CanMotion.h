@@ -19,10 +19,10 @@ class CanMessageBuffer;
 namespace CanMotion
 {
 	void Init() noexcept;
-	void StartMovement() noexcept;
+	void StartMovement(MovementSystemNumber msNumber) noexcept;
 	void AddAxisMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept;
 	void AddExtruderMovement(const PrepParams& params, DriverId canDriver, float extrusion, bool usePressureAdvance) noexcept;
-	uint32_t FinishMovement(const DDA& dda, uint32_t moveStartTime, bool simulating) noexcept;
+	uint32_t FinishMovement(const DDA& dda, MovementSystemNumber msNumber, uint32_t moveStartTime, bool simulating) noexcept;
 	bool CanPrepareMove() noexcept;
 	CanMessageBuffer *_ecv_null GetUrgentMessage() noexcept;
 
@@ -32,7 +32,7 @@ namespace CanMotion
 	bool StopDriverWhenExecuting(DriverId driver, int32_t netStepsTaken) noexcept
 		pre(driver.IsRemote());
 	void FinishedStoppingDrivers() noexcept;
-	bool RevertStoppedDrivers() noexcept;
+	bool RevertStoppedDrivers(MovementSystemNumber msNumber) noexcept;
 }
 
 #endif

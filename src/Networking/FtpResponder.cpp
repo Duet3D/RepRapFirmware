@@ -899,7 +899,7 @@ void FtpResponder::ProcessLine() noexcept
 			Commit(responderState);
 		}
 		// abort current transfer
-		if (StringEqualsIgnoreCase(clientMessage, "ABOR"))
+		else if (StringEqualsIgnoreCase(clientMessage, "ABOR"))
 		{
 			CancelUpload();
 			CloseDataPort();
@@ -1042,6 +1042,12 @@ void FtpResponder::CloseDataPort() noexcept
 	{
 		fileBeingSent->Close();
 		fileBeingSent = nullptr;
+	}
+
+	if (fileBuffer != nullptr)
+	{
+		fileBuffer->Release();
+		fileBuffer = nullptr;
 	}
 }
 

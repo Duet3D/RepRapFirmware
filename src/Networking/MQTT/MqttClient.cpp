@@ -119,11 +119,11 @@ bool MqttClient::Spin() noexcept
 					if (client.error == MQTT_ERROR_SUBSCRIBE_FAILED)
 					{
 						subscribing = false; // Skip the topic
-						prevSub = nullptr;
-						if (reprap.Debug(Module::Webserver))
+						if (prevSub != nullptr && reprap.Debug(Module::Webserver))
 						{
 							debugPrintf("MQTT subscribe to topic %s failed, skipped\n", prevSub->topic);
 						}
+						prevSub = nullptr;
 						res = true;
 					}
 
@@ -319,7 +319,7 @@ void MqttClient::ConnectionLost() noexcept
 	{
 		if (field)
 		{
-			delete field;
+			delete[] field;
 			field = nullptr;
 		}
 	};

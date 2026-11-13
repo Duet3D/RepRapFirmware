@@ -274,8 +274,8 @@ bool Kinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 // many types of kinematics, but not for Cartesian.
 void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *_ecv_array normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
 {
-	const float dx = normalisedDirectionVector[X_AXIS];
-	const float dy = normalisedDirectionVector[Y_AXIS];
+	const float dx = fabsf(normalisedDirectionVector[X_AXIS]);
+	const float dy = fabsf(normalisedDirectionVector[Y_AXIS]);
 	const float xySum = dx + dy;
 	if (xySum > 0.05)
 	{

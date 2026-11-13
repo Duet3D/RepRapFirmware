@@ -187,9 +187,17 @@ void Display::InitDisplay(GCodeBuffer& gb, Lcd *_ecv_from newLcd, Pin csPin, Pin
 {
 	// ST7567-based displays need a resistor ratio setting and a contrast setting
 	// For now we always pass these as parameters toLcd::Init(). If we get any more, consider passing the GCodeBuffer and letting the display pick the parameters instead.
-	const uint32_t contrast = (gb.Seen('C')) ? gb.GetUIValue() : DefaultDisplayContrastRatio;
-	const uint32_t resistorRatio = (gb.Seen('R')) ? gb.GetUIValue() : DefaultDisplayResistorRatio;
-	newLcd->Init(csPin, a0Pin, defaultCsPolarity, (gb.Seen('F')) ? gb.GetUIValue() : LcdSpiClockFrequency, contrast, resistorRatio);
+	try
+	{
+		const uint32_t contrast = gb.Seen('C') ? gb.GetUIValue() : DefaultDisplayContrastRatio;
+		const uint32_t resistorRatio = gb.Seen('R') ? gb.GetUIValue() : DefaultDisplayResistorRatio;
+		newLcd->Init(csPin, a0Pin, defaultCsPolarity, gb.Seen('F') ? gb.GetUIValue() : LcdSpiClockFrequency, contrast, resistorRatio);
+	}
+	catch (const GCodeException&)
+	{
+		delete newLcd;
+		throw;
+	}
 	StopBeep();													// this serves to initialise the pins
 
 	newLcd->SetFont(SmallFontNumber);

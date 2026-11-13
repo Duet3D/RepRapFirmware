@@ -144,13 +144,16 @@ bool StringParser::Put(char c) noexcept
 
 			case ' ':
 				AddToChecksum(c);
-				++commandIndent;
+				if (commandIndent != MaxIndent)
+				{
+					commandIndent++;
+				}
 				seenLeadingSpace = true;
 				break;
 
 			case '\t':
 				AddToChecksum(c);
-				commandIndent = (commandIndent + 4) & ~3;	// move on at least 1 to next multiple of 4
+				commandIndent = min<unsigned int>((commandIndent + 4) & ~3, MaxIndent);	// move on at least 1 to next multiple of 4
 				seenLeadingTab = true;
 				break;
 
@@ -386,6 +389,11 @@ bool StringParser::CheckMetaCommand(const StringRef& reply) THROWS(GCodeExceptio
 	if (gb.overflowed)
 	{
 		throw GCodeException(&gb, gb.bufferLength + commandIndent - 1, "GCode command too long");
+	}
+
+	if (commandIndent == MaxIndent)
+	{
+		throw GCodeException(&gb, commandIndent, "Indentation too big");
 	}
 
 	const bool doingFile = gb.IsDoingFile();

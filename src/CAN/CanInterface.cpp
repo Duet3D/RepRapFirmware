@@ -636,11 +636,8 @@ GCodeResult CanInterface::ProcessM959(const CanMessageGeneric& msg, const String
 // The message buffer is provided so that if the board is not known, we can use the buffer to send a message to it to announce ourselves, but this is not yet implemented
 CanRequestId CanInterface::AllocateRequestId(CanAddress destination, CanMessageBuffer *buf) noexcept
 {
-	static uint16_t rid = 0;
-
-	CanRequestId rslt = rid & CanRequestIdMask;
-	++rid;
-	return rslt;
+	static std::atomic<uint16_t> rid = 0;
+	return rid.fetch_add(1) & CanRequestIdMask;
 }
 
 // Allocate a CAN message buffer, throw if failed
@@ -1853,7 +1850,7 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 															[callback, param](const CanMessageBuffer *bufp) noexcept -> void
 																{
 																	auto response = bufp->msg.readInputsReplyV0;
-																	for (unsigned int i = 0; i < response.numReported; ++i)
+																	for (unsigned int i = 0; i < min<unsigned int>(response.numReported, ARRAY_SIZE(response.results)) && sizeof(uint32_t) + (i + 1) * sizeof(response.results[0]) <= bufp->dataLength; i++)
 																	{
 																		callback(param, response.results[i].handle, LoadLEU32(&response.results[i].reading));
 																	}

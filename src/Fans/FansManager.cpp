@@ -275,7 +275,7 @@ void FansManager::ProcessRemoteFanRpms(CanAddress src, const CanMessageFansRepor
 {
 	size_t numFansProcessed = 0;
 	uint64_t whichFans = msg.whichFans;
-	while (whichFans != 0)
+	while (whichFans != 0 && numFansProcessed < ARRAY_SIZE(msg.fanReports))
 	{
 		const unsigned int fanNum = LowestSetBit(whichFans);
 		auto fan = FindFan(fanNum);
@@ -379,6 +379,10 @@ unsigned int FansManager::PopulateFansReport(CanMessageFansReport& msg) noexcept
 	{
 		if (f != nullptr && f->IsLocal())
 		{
+			if (numReported == ARRAY_SIZE(msg.fanReports))
+			{
+				break;
+			}
 			msg.fanReports[numReported].actualPwm = (uint16_t)(f->GetPwm() * 65535);
 			msg.fanReports[numReported].rpm = f->GetRPM();
 			msg.whichFans |= (uint64_t)1 << f->GetNumber();

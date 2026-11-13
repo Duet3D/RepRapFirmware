@@ -499,8 +499,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 
 		WriteLocker lock(endstopsLock);
 
-		delete axisEndstops[lastAxisSeen];
-		axisEndstops[lastAxisSeen] = nullptr;
+		DeleteObject(axisEndstops[lastAxisSeen]);		// this clears the pointer before it deletes the endstop, which the CAN receive task relies on
 		SwitchEndstop * const sw = new SwitchEndstop(lastAxisSeen, lastPosSeen);
 		const GCodeResult rslt = sw->Configure(gb, reply);
 		if (rslt == GCodeResult::ok)
@@ -627,7 +626,10 @@ const char *_ecv_array EndstopsManager::TranslateEndStopResult(bool hit, bool at
 
 void EndstopsManager::SetZProbeDefaults() noexcept
 {
-	zProbes[0]->SetDefaults();
+	if (zProbes[0] != nullptr)
+	{
+		zProbes[0]->SetDefaults();
+	}
 	for (size_t i = 0; i < MaxZProbes; ++i)
 	{
 		DeleteObject(zProbes[i]);
@@ -732,6 +734,12 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 	{
 		reply.printf("Invalid Z probe type %" PRIu32, probeType);
 		return GCodeResult::error;
+	}
+
+	// A probe that gets replaced may be in use by a probing move, including in the step interrupt, so wait for all movement to stop first
+	if ((seenType || gb.Seen('C')) && !reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
+	{
+		return GCodeResult::notFinished;
 	}
 
 	WriteLocker lock(zProbesLock);

@@ -609,7 +609,7 @@ const PacketHeader *DataTransfer::ReadPacket() noexcept
 		rxDataLength = rxHeader.dataLength;
 	}
 
-	if (rxPointer >= rxDataLength)
+	if (rxPointer + sizeof(PacketHeader) > rxDataLength)
 	{
 		return nullptr;
 	}
@@ -643,7 +643,7 @@ void DataTransfer::ReadGetObjectModel(size_t packetLength, const StringRef &key,
 {
 	// Read header
 	const GetObjectModelHeader *header = ReadDataHeader<GetObjectModelHeader>();
-	const char *data = ReadData(packetLength - sizeof(GetObjectModelHeader));
+	const char *data = ReadData((packetLength > sizeof(GetObjectModelHeader)) ? packetLength - sizeof(GetObjectModelHeader) : 0);
 
 	// Read key
 	key.copy(data, header->keyLength);
@@ -658,7 +658,7 @@ void DataTransfer::ReadPrintStartedInfo(size_t packetLength, const StringRef& fi
 	// Read header
 	const PrintStartedHeader *header = ReadDataHeader<PrintStartedHeader>();
 	info.Init();
-	info.numFilaments = header->numFilaments;
+	info.numFilaments = min<size_t>(header->numFilaments, ARRAY_SIZE(info.filamentNeeded));
 	info.numLayers = header->numLayers;
 	info.lastModifiedTime = header->lastModifiedTime;
 	info.fileSize = header->fileSize;
@@ -670,8 +670,8 @@ void DataTransfer::ReadPrintStartedInfo(size_t packetLength, const StringRef& fi
 
 	// Read filaments
 	memset(info.filamentNeeded, 0, ARRAY_SIZE(info.filamentNeeded) * sizeof(float));
-	const char *data = ReadData(packetLength - sizeof(PrintStartedHeader));
-	size_t filamentsSize = info.numFilaments * sizeof(float);
+	const char *data = ReadData((packetLength > sizeof(PrintStartedHeader)) ? packetLength - sizeof(PrintStartedHeader) : 0);
+	size_t filamentsSize = header->numFilaments * sizeof(float);
 	memcpyf(info.filamentNeeded, reinterpret_cast<const float *>(data), info.numFilaments);
 	data += filamentsSize;
 
@@ -708,7 +708,7 @@ GCodeChannel DataTransfer::ReadEvaluateExpression(size_t packetLength, const Str
 	const CodeChannelHeader *header = ReadDataHeader<CodeChannelHeader>();
 
 	// Read expression
-	size_t expressionLength = packetLength - sizeof(CodeChannelHeader);
+	size_t expressionLength = (packetLength > sizeof(CodeChannelHeader)) ? packetLength - sizeof(CodeChannelHeader) : 0;
 	const char *expressionData = ReadData(expressionLength);
 	expression.copy(expressionData, expressionLength);
 

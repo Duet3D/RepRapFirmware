@@ -1489,6 +1489,7 @@ void Move::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 #endif
 
 	MovementFlags segFlags;
+	segFlags.Clear();
 	segFlags.nonPrintingMove = !msg.usePressureAdvance;
 	segFlags.noShaping = !msg.useLateInputShaping;
 

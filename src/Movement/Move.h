@@ -264,6 +264,7 @@ public:
 #endif
 
 	// Various functions called from GCodes module
+	MovementSystemNumber GetMsNumber(const DDARing& ring) const noexcept { return (MovementSystemNumber)(&ring - rings); }	// Get the number of the movement system that owns this ring
 	void GetCurrentMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber) const noexcept // Get the current position in untransformed coords
 		pre(msNumber < NumMovementSystems);
 	void GetLastEndpoints(MovementSystemNumber msNumber, LogicalDrivesBitmap logicalDrives, int32_t returnedEndpoints[MaxAxesPlusExtruders]) const noexcept

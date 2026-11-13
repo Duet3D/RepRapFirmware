@@ -60,7 +60,8 @@ bool FopDt::SetParameters(float phr, float pbcr, float pfcr, float pcrExponent, 
 {
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
 	const char *_ecv_array _ecv_null const err =
-		  (phr/pbcr < 0.1) ? "estimated temperature rise too small"					// minimum 10C temperature rise (same as with earlier heater model)
+		  (pbcr == 0.0) ? "cooling rate must not be zero"
+		: (phr/pbcr < 0.1) ? "estimated temperature rise too small"					// minimum 10C temperature rise (same as with earlier heater model)
 		: (pfcr < 0.0) ? "fan reduces cooling rate"
 		: (pcrExponent < 1.0 || pcrExponent > 1.6) ? "cooling rate exponent out of range"
 		: (pdt <= 0.0099) ? "dead time too small"
@@ -94,7 +95,8 @@ bool FopDt::SetParameters(const CanMessageHeaterModelV3& msg, const StringRef& r
 {
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
 	const char *_ecv_array _ecv_null const err =
-		  (msg.basicModel.heatingRate/msg.basicModel.basicCoolingRate < 0.1) ? "estimated temperature rise too small"					// minimum 10C temperature rise (same as with earlier heater model)
+		  (msg.basicModel.basicCoolingRate == 0.0) ? "cooling rate must not be zero"
+		: (msg.basicModel.heatingRate/msg.basicModel.basicCoolingRate < 0.1) ? "estimated temperature rise too small"					// minimum 10C temperature rise (same as with earlier heater model)
 		: (msg.basicModel.fanCoolingRate < 0.0) ? "fan reduces cooling rate"
 		: (msg.basicModel.coolingRateExponent < 1.0 || msg.basicModel.coolingRateExponent > 1.6) ? "cooling rate exponent out of range"
 		: (msg.basicModel.deadTime <= 0.0099) ? "dead time too small"

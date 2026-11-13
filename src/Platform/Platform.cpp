@@ -2827,7 +2827,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 			return rslt;
 		}
 
-		uint8_t data[MaxI2cOrModbusValues] = {0};
+		uint8_t data[MaxI2cOrModbusValues + 6] = {0};		// STX, 2 length chars, 2 checksum chars, ETX
 		uint8_t numBytesAsciiHex[2] = {0};
 		ConvertHexToAsciiHex(numToSend, numBytesAsciiHex);
 
@@ -2916,7 +2916,7 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 	size_t auxChannel = 0;
 	if (gb.GetCommandFraction() > 0)
 	{
-		auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - FirstAuxChannel;
+		auxChannel = gb.GetLimitedUIValue('P', FirstAuxChannel, NumSerialChannels) - FirstAuxChannel;
 		if (auxDevices[auxChannel].GetMode() != AuxMode::device)
 		{
 			reply.copy("Port has not been set to device mode");

@@ -163,7 +163,8 @@ private:
 	bool hasCommandNumber;
 	char commandLetter;
 	char characterSeen;									// The character we looked for in the last successful call to function Seen
-	uint8_t commandIndent;								// Number of whitespace characters before the line number or the first command starts
+	uint8_t commandIndent;								// Number of whitespace characters before the line number or the first command starts, or MaxIndent if there are too many
+	static constexpr uint8_t MaxIndent = 0xFF;			// a line indented this far or further is rejected
 	bool seenLeadingSpace;
 	bool seenLeadingTab;
 	bool seenMetaCommand;

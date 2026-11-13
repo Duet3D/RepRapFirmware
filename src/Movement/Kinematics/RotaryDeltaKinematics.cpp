@@ -734,12 +734,12 @@ void RotaryDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float
 	const float angleB = Hb * DegreesToRadians;
 	const float posBX = (radius + (armLengths[DELTA_B_AXIS] * cosf(angleB))) * armAngleCosines[DELTA_B_AXIS];
 	const float posBY = (radius + (armLengths[DELTA_B_AXIS] * cosf(angleB))) * armAngleSines[DELTA_B_AXIS];
-	const float posBZ = bearingHeights[DELTA_B_AXIS] + (armLengths[DELTA_A_AXIS] * sinf(angleB));
+	const float posBZ = bearingHeights[DELTA_B_AXIS] + (armLengths[DELTA_B_AXIS] * sinf(angleB));
 
 	const float angleC = Hc * DegreesToRadians;
 	const float posCX = (radius + (armLengths[DELTA_C_AXIS] * cosf(angleC))) * armAngleCosines[DELTA_C_AXIS];
 	const float posCY = (radius + (armLengths[DELTA_C_AXIS] * cosf(angleC))) * armAngleSines[DELTA_C_AXIS];
-	const float posCZ = bearingHeights[DELTA_C_AXIS] + (armLengths[DELTA_A_AXIS] * sinf(angleC));
+	const float posCZ = bearingHeights[DELTA_C_AXIS] + (armLengths[DELTA_C_AXIS] * sinf(angleC));
 
 	// Calculate some intermediate values that we will use more than once
 	const float Da2 = fsquare(posAX) + fsquare(posAY) + fsquare(posAZ);
