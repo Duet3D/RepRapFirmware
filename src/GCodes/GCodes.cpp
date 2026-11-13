@@ -1527,7 +1527,7 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 		if (ms.currentTool->GetSpindleNumber() >= 0)
 		{
 			// Set the spindle RPM
-			const Spindle& spindle = platform.AccessSpindle(ms.currentTool->GetSpindleNumber() >= 0);
+			const Spindle& spindle = platform.AccessSpindle(ms.currentTool->GetSpindleNumber());
 			switch (spindle.GetState().RawValue())
 			{
 			case SpindleState::stopped:
@@ -2456,8 +2456,11 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			float maxDistance = 0.0;
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
-				speeds[axis] -= ms.initialCoords[axis];									// convert to movement amount
-				if (speeds[axis] > maxDistance) { maxDistance = speeds[axis]; }
+				speeds[axis] = ms.coords[axis] - ms.initialCoords[axis];					// get movement amount
+				if (fabsf(speeds[axis]) > maxDistance)
+				{
+					maxDistance = fabsf(speeds[axis]);
+				}
 			}
 			const float speedFactor = ms.feedRate/maxDistance;
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)

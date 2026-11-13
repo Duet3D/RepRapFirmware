@@ -618,10 +618,11 @@ float HeightMap::GetInterpolatedHeightError(float axis0, float axis1) const noex
 
 	// Clamp to rectangle so InterpolateXY will always have valid parameters
 	const float fEPSILON = 0.01;
-	if (axis0 < def.mins[0]) { axis0 = def.mins[0]; }
-	if (axis1 < def.mins[1]) { axis1 = def.mins[1]; }
+	// Apply the lower limits last, so that an axis with a single grid point ends up at that point instead of just below it
 	if (axis0 > xLast -fEPSILON) { axis0 = xLast -fEPSILON; }
 	if (axis1 > yLast -fEPSILON) { axis1 = yLast -fEPSILON; }
+	if (axis0 < def.mins[0]) { axis0 = def.mins[0]; }
+	if (axis1 < def.mins[1]) { axis1 = def.mins[1]; }
 
 
 	const float xf = (axis0 - def.mins[0]) * def.recipAxisSpacings[0];
@@ -637,9 +638,11 @@ float HeightMap::GetInterpolatedHeightError(float axis0, float axis1) const noex
 float HeightMap::InterpolateAxis0Axis1(size_t axis0Index, size_t axis1Index, float axis0Frac, float axis1Frac) const noexcept
 {
 	const uint32_t indexX0Y0 = GetMapIndex(axis0Index, axis1Index);	// (X0,Y0)
-	const uint32_t indexX1Y0 = indexX0Y0 + 1;						// (X1,Y0)
-	const uint32_t indexX0Y1 = indexX0Y0 + def.nums[0];				// (X0 Y1)
-	const uint32_t indexX1Y1 = indexX0Y1 + 1;						// (X1,Y1)
+	// An axis with a single grid point has no neighbour, so use the same point again. Its fraction is always zero
+	const uint32_t axis0Step = (def.nums[0] > 1) ? 1 : 0;
+	const uint32_t indexX1Y0 = indexX0Y0 + axis0Step;									// (X1,Y0)
+	const uint32_t indexX0Y1 = indexX0Y0 + ((def.nums[1] > 1) ? def.nums[0] : 0);		// (X0 Y1)
+	const uint32_t indexX1Y1 = indexX0Y1 + axis0Step;									// (X1,Y1)
 
 	const float xyFrac = axis0Frac * axis1Frac;
 	return (gridHeights[indexX0Y0] * (1.0 - axis0Frac - axis1Frac + xyFrac))

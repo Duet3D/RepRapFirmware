@@ -168,6 +168,7 @@ public:
 
 	// Limit the speed and acceleration of a move to values that the mechanics can handle.
 	// The speeds along individual Cartesian axes have already been limited before this is called.
+	// The direction vector has unit length and keeps its signs, which kinematics with shared motors need.
 	// The default implementation in this class just limits the combined XY speed to the lower of the individual X and Y limits. This is appropriate for
 	// many types of kinematics, but not for Cartesian.
 	virtual void LimitSpeedAndAcceleration(DDA& dda, const float *_ecv_array normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept;

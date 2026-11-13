@@ -785,6 +785,7 @@ private:
 	uint8_t readIfCountCRC;									// CRC of the message needed to read the IFCNT register
 #endif
 	volatile uint8_t specialReadRegisterNumber;				// the special register number we are reading
+	uint8_t specialReadRequestedNumber;						// the special register number that was last requested
 	volatile uint8_t specialWriteRegisterNumber;			// the special register number we are writing
 	bool enabled;											// true if driver is enabled
 #if SUPPORT_TMC2240 && (SUPPORT_TMC2208 || SUPPORT_TMC2209)
@@ -1392,13 +1393,18 @@ GCodeResult TmcDriverState::GetAnyRegister(const StringRef& reply, uint8_t regNu
 {
 	if (specialReadRegisterNumber == 0xFE)
 	{
-		reply.printf("Register 0x%02x value 0x%08" PRIx32, regNum, readRegisters[ReadSpecial]);
 		specialReadRegisterNumber = 0xFF;
-		return GCodeResult::ok;
+		if (specialReadRequestedNumber == regNum)
+		{
+			reply.printf("Register 0x%02x value 0x%08" PRIx32, regNum, readRegisters[ReadSpecial]);
+			return GCodeResult::ok;
+		}
+		// else the value belongs to an earlier request that the caller gave up waiting for, so discard it
 	}
 
 	if (specialReadRegisterNumber == 0xFF)
 	{
+		specialReadRequestedNumber = regNum;
 		specialReadRegisterNumber = regNum;
 	}
 	return GCodeResult::notFinished;

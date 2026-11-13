@@ -374,10 +374,11 @@ bool FilesMenuItem::Select(const StringRef& cmd) noexcept
 
 				// TODO: do this on the way in and it might be less work...
 				//   On the other hand, this only occurs when an item is selected so it's O(1) vs. O(n)
-				nReplacementIndex = cmd.Contains("menu");
-				if (nReplacementIndex != -1)
+				// Search the unsubstituted command so that a file or directory name containing "menu" does not match
+				const int menuIndex = StringContains(command, "menu");
+				if (menuIndex != -1)
 				{
-					cmd.Truncate(nReplacementIndex);
+					cmd.Truncate((nReplacementIndex != -1 && menuIndex > nReplacementIndex) ? (size_t)menuIndex + cmd.strlen() - strlen(command) : (size_t)menuIndex);
 					cmd.cat(m_acFile);
 				}
 

@@ -936,6 +936,12 @@ void FtpResponder::CloseDataPort() noexcept
 		fileBeingSent->Close();
 		fileBeingSent = nullptr;
 	}
+
+	if (fileBuffer != nullptr)
+	{
+		fileBuffer->Release();
+		fileBuffer = nullptr;
+	}
 }
 
 /*static*/ void FtpResponder::InitStatic() noexcept

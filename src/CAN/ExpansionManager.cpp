@@ -134,6 +134,10 @@ ExpansionManager::ExpansionManager() noexcept : numExpansionBoards(0), numBoards
 // Update the state of a board. Caller should have a write lock on boardsLock before calling this.
 void ExpansionManager::UpdateBoardState(CanAddress address, BoardState newState) noexcept
 {
+	if (address >= ARRAY_SIZE(boards))
+	{
+		return;
+	}
 	ExpansionBoardData& board = boards[address];
 	TaskCriticalSectionLocker lock;
 
@@ -245,6 +249,10 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noexcept
 {
 	const CanAddress address = buf->id.Src();
+	if (address >= ARRAY_SIZE(boards))
+	{
+		return;
+	}
 	ExpansionBoardData& board = boards[address];
 	board.whenLastStatusReportReceived = millis();
 	if (board.state != BoardState::running && board.state != BoardState::flashing)
@@ -304,7 +312,7 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 	board.hasInductiveSensor = msg.hasInductiveSensor;
 
 	size_t offset = msg.GetAnalogHandlesOffset();
-	for (unsigned int i = 0; i < msg.numAnalogHandles && offset + sizeof(AnalogHandleData) < buf->dataLength; ++i)
+	for (unsigned int i = 0; i < msg.numAnalogHandles && offset + sizeof(AnalogHandleData) <= buf->dataLength; i++)
 	{
 		AnalogHandleData data;
 		memcpy(&data, (const uint8_t*)&msg + offset, sizeof(AnalogHandleData));
@@ -321,11 +329,16 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 void ExpansionManager::ProcessDriveStatusReport(const CanMessageBuffer *buf) noexcept
 {
 	const CanAddress address = buf->id.Src();
+	if (address >= ARRAY_SIZE(boards))
+	{
+		return;
+	}
 	ExpansionBoardData& board = boards[address];
 	if (board.HasDrivers())
 	{
 		const CanMessageDriversStatus& msg = buf->msg.driversStatus;
-		for (size_t driver = 0; driver < min<size_t>(board.numDrivers, msg.numDriversReported); ++driver)
+		const size_t maxDrivers = msg.hasClosedLoopData ? ARRAY_SIZE(msg.closedLoopData) : ARRAY_SIZE(msg.openLoopData);
+		for (size_t driver = 0; driver < min<size_t>(min<size_t>(board.numDrivers, msg.numDriversReported), maxDrivers); driver++)
 		{
 			DriverData& dd = board.driverData[driver];
 			if (msg.hasClosedLoopData)

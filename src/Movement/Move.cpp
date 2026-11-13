@@ -2332,6 +2332,19 @@ void Move::PhaseStepControlLoop() noexcept
 
 		if (dm->state != DMState::phaseStepping)
 		{
+			// Shut out the step interrupt and the tasks that insert DMs while we move this DM between the lists.
+			// A DM may have been inserted ahead of this one since we followed the link to it, so find the link again
+			BasePriorityBooster booster(NvicPriorityStep);
+			dmp = &phaseStepDMs;
+			while (*dmp != dm && *dmp != nullptr)
+			{
+				dmp = &((*dmp)->nextDM);
+			}
+			if (*dmp == nullptr)
+			{
+				break;
+			}
+
 			*dmp = dm->nextDM;
 			if (dm->state >= DMState::firstMotionState)
 			{

@@ -366,7 +366,7 @@ void PrintMonitor::SetLayerNumber(uint32_t layerNumber) noexcept
 	{
 		currentLayer = layerNumber;
 		lastLayerChangeTime = millis64();
-		lastLayerChangeNonPrintingTime = (uint64_t)(GetWarmUpDuration() + GetPauseDuration());
+		lastLayerChangeNonPrintingTime = (uint64_t)((GetWarmUpDuration() + GetPauseDuration()) * SecondsToMillis);
 	}
 }
 
@@ -382,7 +382,7 @@ void PrintMonitor::LayerChange() noexcept
 {
 	++currentLayer;
 	lastLayerChangeTime = millis64();
-	lastLayerChangeNonPrintingTime = (uint64_t)(GetWarmUpDuration() + GetPauseDuration());
+	lastLayerChangeNonPrintingTime = (uint64_t)((GetWarmUpDuration() + GetPauseDuration()) * SecondsToMillis);
 }
 
 float PrintMonitor::FractionOfFilePrinted() const noexcept
@@ -501,7 +501,7 @@ float PrintMonitor::GetPrintDuration() const noexcept
 // Get the time since starting the current layer in seconds
 float PrintMonitor::GetCurrentLayerTime() const noexcept
 {
-	return (float)(millis64() - lastLayerChangeTime + lastLayerChangeNonPrintingTime - (GetWarmUpDuration() + GetPauseDuration())) * MillisToSeconds;
+	return (float)(millis64() - lastLayerChangeTime + lastLayerChangeNonPrintingTime) * MillisToSeconds - (GetWarmUpDuration() + GetPauseDuration());
 }
 
 // End

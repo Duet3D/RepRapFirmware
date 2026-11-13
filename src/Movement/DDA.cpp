@@ -531,7 +531,8 @@ MovementError DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool
 	// for diagonal moves. On other architectures, this is not OK and any movement in the XY plane should be limited on other ways.
 	if (doMotorMapping)
 	{
-		k.LimitSpeedAndAcceleration(*this, normalisedDirectionVector, numVisibleAxes, flags.continuousRotationShortcut);	// give the kinematics the chance to further restrict the speed and acceleration
+		// Pass the signed direction vector, because the kinematics needs the signs to work out how far each shared motor moves
+		k.LimitSpeedAndAcceleration(*this, directionVector, numVisibleAxes, flags.continuousRotationShortcut);	// give the kinematics the chance to further restrict the speed and acceleration
 	}
 
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
@@ -1276,7 +1277,7 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 			move.EnableDrivers(drive, false);
 		}
 
-		afterPrepare.averageExtrusionSpeed = (extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded;
+		afterPrepare.averageExtrusionSpeed = (clocksNeeded == 0) ? 0.0 : (extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded;
 
 		SetState(committed);															// must do this before we call CheckEndstops
 #if SUPPORT_SCANNING_PROBES

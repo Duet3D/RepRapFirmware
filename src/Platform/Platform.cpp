@@ -2669,7 +2669,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 			return rslt;
 		}
 
-		uint8_t data[MaxI2cOrModbusValues] = {0};
+		uint8_t data[MaxI2cOrModbusValues + 6] = {0};		// STX, 2 length chars, 2 checksum chars, ETX
 		uint8_t numBytesAsciiHex[2] = {0};
 		ConvertHexToAsciiHex(numToSend, numBytesAsciiHex);
 

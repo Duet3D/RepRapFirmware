@@ -193,7 +193,7 @@ void MonoLcd::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, co
 {
 	if (left + width > numCols)
 	{
-		width = numCols - left;										// avoid overflowing the buffer
+		width = (left < numCols) ? numCols - left : 0;				// avoid overflowing the buffer
 	}
 
 	if (width != 0 && top < numRows)									// avoid possible arithmetic underflow or overflowing the buffer

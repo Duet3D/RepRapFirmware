@@ -743,7 +743,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 
 	// Get the feed rate and axis
 	m585Settings.axisNumber = FindAxisLetter(gb);
-	const bool rotational = reprap.GetMove().IsAxisLinear(m585Settings.axisNumber);
+	const bool rotational = reprap.GetMove().IsAxisRotational(m585Settings.axisNumber);
 	m585Settings.offset = (rotational) ? gb.GetFValue() : gb.GetDistance();
 
 	gb.MustSee(feedrateLetter);
@@ -859,7 +859,7 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) 
 	m675Settings.backoffDistance = gb.Seen('R') ? ((rotational) ? gb.GetFValue() : gb.GetDistance()) : 5.0;
 
 #if SUPPORT_ASYNC_MOVES
-	AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(m585Settings.axisNumber), ParameterLettersBitmap());
+	AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(m675Settings.axisNumber), ParameterLettersBitmap());
 #endif
 
 	// Get the probe number from the K or P parameter

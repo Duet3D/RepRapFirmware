@@ -1374,6 +1374,11 @@ void SbcInterface::ExchangeData() noexcept
 		for (size_t i = 0; i < transfer.PacketsToRead(); i++)
 		{
 			const PacketHeader * const packet = transfer.ReadPacket();
+			if (packet == nullptr)
+			{
+				break;
+			}
+
 			switch ((SbcRequest)packet->request)
 			{
 			case SbcRequest::WriteIap:	// Write another IAP chunk. It's always bound on a 4-byte boundary

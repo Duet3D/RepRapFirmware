@@ -450,7 +450,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 	size_t slotIndex = 0;
 
 	ReadLocker lock(filamentMonitorsLock);
-	while (!drivers.IsEmpty())
+	while (!drivers.IsEmpty() && slotIndex < ARRAY_SIZE(msg.data))
 	{
 		const unsigned int driverNumber = drivers.LowestSetBit();
 

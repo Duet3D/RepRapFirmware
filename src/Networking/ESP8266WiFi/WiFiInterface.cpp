@@ -1433,7 +1433,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						longReply->copy((jsonFormat) ? "{\"rememberedNetworks\":[" : "Remembered networks:");
 						size_t offset = (jsonFormat) ? 0 : ReducedWirelessConfigurationDataSize;		// skip own SSID details unless reporting in JSON format
 						bool found = false;
-						while (offset + ReducedWirelessConfigurationDataSize <= (size_t)rslt)
+						while (offset + ReducedWirelessConfigurationDataSize <= min<size_t>((size_t)rslt, declaredBufferLength))
 						{
 							WirelessConfigurationData * const wp = reinterpret_cast<WirelessConfigurationData *>(reinterpret_cast<char *_ecv_array>(buffer) + offset);
 							if (wp->ssid[0] != 0 || (offset == 0 && jsonFormat))
@@ -1496,13 +1496,14 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						longReply->copy((jsonFormat) ? "{\"networkScanResults\":[" : "Network Scan Results:");
 						WiFiScanData *_ecv_array data = reinterpret_cast<WiFiScanData *_ecv_array>(buffer);
 
-						for (size_t i = 0; i < rslt/sizeof(WiFiScanData); i++)
+						for (size_t i = 0; i < min<size_t>((size_t)rslt, sizeof(buffer)) / sizeof(WiFiScanData); i++)
 						{
 							if (jsonFormat && found)
 							{
 								longReply->cat(',');
 							}
-							const WiFiScanData& rec = data[i];
+							WiFiScanData& rec = data[i];
+							rec.ssid[ARRAY_UPB(rec.ssid)] = 0;
 							longReply->catf((jsonFormat)
 											? "{\"ssid\":\"%s\",\"chan\":%u,\"rssi\":%d,\"phymode\":\"%s\",\"auth\":\"%s\",\"mac\":\"%02x:%02x:%02x:%02x:%02x:%02x\"}"
 											: "\nssid=%s chan=%u rssi=%d phymode=%s auth=%s mac=%02x:%02x:%02x:%02x:%02x:%02x",
