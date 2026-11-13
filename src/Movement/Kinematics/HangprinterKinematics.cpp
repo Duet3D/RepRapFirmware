@@ -1078,6 +1078,11 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 	CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, reply);
 	if (buf == nullptr)
 	{
+		if (newOne)
+		{
+			seenDrives[thisDriveIdx] = 0;
+			numSeenDrives--;
+		}
 		return {};
 	}
 
@@ -1261,7 +1266,7 @@ GCodeResult HangprinterKinematics::SetODrive3TorqueModeInner(DriverId const driv
 	CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, reply);
 	if (buf == nullptr)
 	{
-		return GCodeResult::noCanBuffer;
+		return GCodeResult::error;
 	}
 
 	// Set the right target torque
@@ -1294,7 +1299,7 @@ GCodeResult HangprinterKinematics::SetODrive3PosMode(DriverId const driver, cons
 		CanMessageBuffer* buf = CanInterface::ODrive::PrepareSimpleMessage(driver, reply);
 		if (buf == nullptr)
 		{
-			return GCodeResult::noCanBuffer;
+			return GCodeResult::error;
 		}
 		buf->id = CanInterface::ODrive::ArbitrationId(driver, CANSimple::MSG_SET_INPUT_POS);
 		buf->dataLength = 8;
