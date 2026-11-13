@@ -88,7 +88,8 @@ enum class ZProbeType : uint8_t
 	zMotorStall = 10,
 	scanningAnalog = 11,
 	loadCell = 12,
-	numTypes = 13					// must be 1 higher than the last type
+	top3dBedTouch = 13,
+	numTypes = 14					// must be 1 higher than the last type
 };
 
 #endif /* SRC_ENDSTOPS_ENDSTOPDEFS_H_ */
