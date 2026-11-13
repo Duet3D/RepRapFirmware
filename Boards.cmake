@@ -3,6 +3,7 @@
 # because it also sets the options they are built with.
 #
 # Variants of a board, which its presets set:
+#   RRF_CAN0            use the MCU's CAN0 rather than CAN1 for CAN-FD
 #   RRF_EMBEDDED_FILES  directory, under the project root, of files to embed after the image as its
 #                       filesystem, in place of the SD card
 #
@@ -30,6 +31,7 @@ set(COREN2G_CAN ON)
 set(COREN2G_USB ON)
 set(COREN2G_SDHC ON)
 
+option(RRF_CAN0 "Use CAN0 rather than CAN1 for CAN-FD" OFF)
 set(RRF_EMBEDDED_FILES "" CACHE STRING
     "Directory, under the project root, of files to embed as the filesystem in place of the SD card")
 
@@ -56,6 +58,10 @@ else()
     message(FATAL_ERROR "Unknown DUET_BOARD '${DUET_BOARD}': configure with a board's preset (cmake --list-presets)")
 endif()
 
+if(RRF_CAN0)
+    string(APPEND RRF_OUTPUT _CAN0)
+    list(APPEND RRF_DEFINES USE_CAN0)
+endif()
 if(RRF_EMBEDDED_FILES)
     string(APPEND RRF_OUTPUT _no_SD)
     list(APPEND RRF_DEFINES USE_EMBEDDED_FILES)

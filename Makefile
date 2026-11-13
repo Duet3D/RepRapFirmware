@@ -85,7 +85,7 @@ endif
 .DEFAULT_GOAL := help
 
 # Available build configurations
-CONFIGS := Duet3_MB6HC Duet3_MB6XD Duet3Mini5plus Duet3_MB6HC_no_SD
+CONFIGS := Duet3_MB6HC Duet3_MB6XD Duet3_CAN0 Duet3Mini5plus Duet3_MB6HC_no_SD
 
 # Print available targets
 .PHONY: help
@@ -97,6 +97,7 @@ help:
 	$(Q)echo "Build targets:"
 	$(Q)echo "  Duet3_MB6HC         - Duet 3 MB6HC (SAME70)"
 	$(Q)echo "  Duet3_MB6XD         - Duet 3 MB6XD expansion (SAME70)"
+	$(Q)echo "  Duet3_CAN0          - Duet 3 CAN expansion (SAME70)"
 	$(Q)echo "  Duet3Mini5plus      - Duet 3 Mini 5+ (SAME51)"
 	$(Q)echo "  Duet3_MB6HC_no_SD   - Duet 3 MB6HC without SD card support"
 	$(Q)echo ""
@@ -120,9 +121,9 @@ help:
 	$(Q)echo ""
 
 # Build all configurations
-# Excluded from 'all' (still buildable as an explicit target): Duet3_MB6HC_no_SD
+# Excluded from 'all' (still buildable as explicit targets): Duet3_MB6HC_no_SD, Duet3_CAN0
 .PHONY: all
-all: $(filter-out Duet3_MB6HC_no_SD,$(CONFIGS))
+all: $(filter-out Duet3_MB6HC_no_SD Duet3_CAN0,$(CONFIGS))
 
 # Verify toolchain
 .PHONY: test-toolchain
@@ -237,6 +238,7 @@ $(LIBRARIES_DIR)/CANlib/SAM4S_RTOS/libCANlib.a:
 # Include dependency makefiles
 -include Makefiles/Duet3_MB6HC.mk
 -include Makefiles/Duet3_MB6XD.mk
+-include Makefiles/Duet3_CAN0.mk
 -include Makefiles/Duet3Mini5plus.mk
 -include Makefiles/Duet3_MB6HC_no_SD.mk
 
