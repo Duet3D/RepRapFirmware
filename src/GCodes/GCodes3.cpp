@@ -748,7 +748,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THRO
 #if SUPPORT_CAN_EXPANSION
 	if (gb.Seen('B'))
 	{
-		const uint32_t boardNumber = gb.GetUIValue();
+		const uint32_t boardNumber = gb.GetCanAddress('B', true, true);
 		if (boardNumber != CanInterface::GetCanAddress())
 		{
 			return reprap.GetExpansion().UpdateRemoteFirmware(boardNumber, gb, reply);
@@ -1387,7 +1387,12 @@ GCodeResult GCodes::RaiseEvent(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 
 	const unsigned int devNum = gb.GetLimitedUIValue('D', 256);
 	const unsigned int param = (gb.Seen('P')) ? gb.GetUIValue() : 0;
-	const unsigned int boardAddress = (gb.Seen('B')) ? gb.GetUIValue() : CanInterface::GetCanAddress();
+	const CanAddress boardAddress =
+#if SUPPORT_CAN_EXPANSION
+		(gb.Seen('B')) ? gb.GetCanAddress('B', true, true) : CanInterface::GetCanAddress();
+#else
+		0;
+#endif
 	temp.Clear();
 	if (gb.Seen('S'))
 	{

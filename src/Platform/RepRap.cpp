@@ -1112,7 +1112,7 @@ GCodeResult RepRap::ProcessM111(GCodeBuffer& gb, const StringRef& reply) THROWS(
 #if SUPPORT_CAN_EXPANSION
 	if (gb.Seen('B'))
 	{
-		const uint32_t board = gb.GetUIValue();
+		const uint32_t board = gb.GetCanAddress('B', false, true);
 		if (board != CanInterface::GetCanAddress())
 		{
 			return CanInterface::HandleM111(board, gb, reply);

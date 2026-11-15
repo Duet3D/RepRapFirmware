@@ -1955,7 +1955,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_CAN_EXPANSION
 				if (gb.Seen('B'))
 				{
-					const uint32_t board = gb.GetUIValue();
+					const uint32_t board = gb.GetCanAddress('B', true, true);
 					if (board != CanInterface::GetCanAddress())
 					{
 						result = CanInterface::GetRemoteFirmwareDetails(board, gb, reply);
@@ -2296,7 +2296,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					// If
 #if SUPPORT_CAN_EXPANSION
-					const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : CanInterface::GetCanAddress();
+					const uint32_t board = (gb.Seen('B')) ? gb.GetCanAddress('B', true, true) : CanInterface::GetCanAddress();
 					if (board != CanInterface::GetCanAddress())
 					{
 						result = CanInterface::RemoteDiagnostics(mt, board, type, gb, reply);
@@ -4766,7 +4766,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_CAN_EXPANSION
 				if (gb.Seen('B'))
 				{
-					const uint32_t address = gb.GetUIValue();
+					const uint32_t address = gb.GetCanAddress('B', true, true);
 					if (address != CanInterface::GetCanAddress())
 					{
 						result = reprap.GetExpansion().ResetRemote(address, gb, reply);

@@ -737,7 +737,22 @@ void GCodeBuffer::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeE
 	PARSER_OPERATION(GetDriverIdArray(arr, length));
 }
 
-// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
+#if SUPPORT_CAN_EXPANSION
+
+// Get a CAN address.
+CanAddress GCodeBuffer::GetCanAddress(char c, bool allowOwnAddress, bool allowFirmareUpdateAdress) THROWS(GCodeException)
+{
+	const uint32_t addr = GetLimitedUIValue(c, (allowFirmareUpdateAdress) ? CanId::MaxCanAddress + 1 : CanId::Exp3HCFirmwareUpdateAddress);
+	if (!allowOwnAddress && addr == CanInterface::GetCanAddress())
+	{
+		throw GCodeException(this, -1, "parameter '%c' may not be own CAN address", (uint32_t)c);
+	}
+	return (CanAddress)addr;;
+}
+
+#endif
+
+	// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
 bool GCodeBuffer::TryGetFValue(char c, float& val, bool& seen) THROWS(GCodeException)
 {
 	const bool ret = Seen(c);
