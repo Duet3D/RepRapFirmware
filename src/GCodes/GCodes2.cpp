@@ -4546,9 +4546,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						reply.copy(	(code == 913) ? "Motor current % of normal - "
 #if HAS_SMART_DRIVERS || SUPPORT_CAN_EXPANSION
-									: (code == 917) ? "Motor standstill current % of normal - "
+									: (code == 917) ? "Configured motor standstill current % of normal - "
 #endif
-											: "Motor current (mA) - "
+											: "Configured motor current (mA) - "
 								);
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
