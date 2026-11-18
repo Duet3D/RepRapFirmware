@@ -519,8 +519,6 @@ constexpr CanParameters CanBusParams[NUM_CAN_PORTS] =
 // bus 0 (can0dev, task CanRecv1) is the main bus on interface MCAN1, labelled CAN1,
 // and bus 1 (can1dev, task CanRecv0) is interface MCAN0, labelled CAN0 or AUX_CAN.
 // M953 I, messages to the user and the object model use the CAN interface numbers.
-// This function translates from interface number to bus number.
-inline constexpr uint8_t GetCanBusNumberFromInterfaceNumber(uint8_t interfaceNumber) noexcept { return interfaceNumber ^ 1u; }
 
 // Timer allocation
 // Step timer is timer 0 aka TC0 channel 0. Also used as the CAN timestamp counter.

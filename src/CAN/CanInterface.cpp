@@ -173,16 +173,19 @@ static uint32_t can0Memory[CanBusConfig.GetMemorySize()] __attribute__ ((section
 
 static CanDevice *_ecv_null canDevices[NUM_CAN_PORTS] = { 0 };
 
-#if NUM_CAN_PORTS > 1
-
-// Internal port numbers are not the CAN numbers on 6HC and 6XD boards: port 0 (can0dev, task CanRecv1) is the main bus on MCAN1, labelled CAN1,
-// and port 1 (can1dev, task CanRecv0) is MCAN0, labelled CAN0. M953 P and all messages to the user use the CAN numbers
-
 enum class CanBusMode : uint8_t { unused = 0, rrfCanFD, classic };
 
-CanBusMode canBusModes[NUM_CAN_PORTS] = { CanBusMode::unused, CanBusMode::unused };
-static bool usingMultipleRrfCanFD = false;
+CanBusMode canBusModes[NUM_CAN_PORTS] =
+{
+	CanBusMode::unused,
+#if NUM_CAN_PORTS > 1
+	CanBusMode::unused,
+#endif
+};
 
+#if NUM_CAN_PORTS > 1
+
+static bool usingMultipleRRFCanFD = false;
 
 // CAN buffer memory must be in the first 64Kb of RAM (SAME5x) or in non-cached RAM (SAME70), so put it in its own segment
 static uint32_t can1Memory[CanBusConfig.GetMemorySize()] __attribute__ ((section (".CanMessage")));
@@ -193,6 +196,20 @@ static uint32_t whenLastWrongBusWarning = 0u - WrongBusWarningIntervalMillis;		/
 static unsigned int wrongBusMessages = 0;
 
 #endif
+
+// This function translates from interface number to bus number.
+// Returns -1 if the interface number is not supported.
+constexpr int GetCanBusNumberFromInterfaceNumber(uint32_t interfaceNumber) noexcept
+{
+	for (int bus = 0; bus < NUM_CAN_PORTS; ++bus)
+	{
+		if (CanInterface::GetCanInterfaceNumberFromBusNumber(bus) == interfaceNumber)
+		{
+			return bus;
+		}
+	}
+	return -1;
+}
 
 // Return the port that messages to and from the specified board address must use
 static size_t GetBusNumberPlusOneForAddress(CanAddress address) noexcept
@@ -321,36 +338,60 @@ static void InitReceiveFilters(CanDevice *dev) noexcept
 # endif
 }
 
-#if NUM_CAN_PORTS > 1
-
 // Set up an additional CAN bus either as an expansion bus or as a classic CAN bus. Classic messages go to receive FIFO 1, which is not read by the CanReceiver task.
-static void InitAdditionalBus(size_t bus, bool classic, const CanTiming& timing) noexcept
+static void InitBus(size_t bus, CanBusMode mode, const CanTiming& timing) noexcept
 {
 	CanDevice *const candev = canDevices[bus];
 	candev->Disable();														// this discards pending transmissions, see the MCAN Software Initialization section of the SAME70 datasheet
 	busStates[bus].gotTxTimeStamp = false;
-	if (classic)
+	if (mode != CanBusMode::rrfCanFD)
 	{
 		for (unsigned int i = 0; i < CanBusConfig.numExtendedFilterElements; i++)
 		{
 			candev->DisableExtendedFilterElement(i);
 		}
-		candev->SetShortFilterElement(0, CanDevice::RxBufferNumber::fifo1, 0, 0);
 	}
-	else
+	if (mode != CanBusMode::classic)
 	{
 		for (unsigned int i = 0; i < CanBusConfig.numShortFilterElements; i++)
 		{
 			candev->DisableShortFilterElement(i);
 		}
+	}
+
+	if (mode == CanBusMode::rrfCanFD)
+	{
 		InitReceiveFilters(candev);
 	}
-	canBusModes[bus] = (classic) ? CanBusMode::classic : CanBusMode::rrfCanFD;
-	fastDataRates[1] = dTseg1MinusOnes[1] = 0;
-	candev->ChangeLocalCanTiming(timing);
-}
+	else if (mode == CanBusMode::classic)
+	{
+		candev->SetShortFilterElement(0, CanDevice::RxBufferNumber::fifo1, 0, 0);
+	}
 
+	canBusModes[bus] = mode;
+	fastDataRates[bus] = dTseg1MinusOnes[bus] = 0;
+	candev->ChangeLocalCanTiming(timing);
+
+	if (mode != CanBusMode::unused)
+	{
+		candev->Enable();
+	}
+
+	if (mode == CanBusMode::rrfCanFD)
+	{
+#if NUM_CAN_PORTS > 1
+		if (bus != 0)
+		{
+			usingMultipleRRFCanFD = true;
+		}
 #endif
+		if (canReceiverTasks[bus] == nullptr)
+		{
+			canReceiverTasks[bus] = new Task<CanReceiverTaskStackWords>;
+			canReceiverTasks[bus]->Create(CanReceiverLoop, (bus == 0) ? "CanRcv0" : "CanRcvAux", (void *)bus, TaskPriority::CanReceiverPriority);
+		}
+	}
+}
 
 // This is the function called by the transmit event handler when the message marker is nonzero
 template<size_t Bus> static void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
@@ -373,57 +414,49 @@ void CanInterface::Init() noexcept
 	CanMessageBuffer::Init(NumCanBuffers);
 	pendingMotionBuffers = nullptr;
 
-	busStates[0].transactionMutex.Create("Can0Trans");
-
 #if SAME70
-	SetPinFunction(CanBusParams[0].txPin, CanBusParams[0].txPinFunction);
-	SetPinFunction(CanBusParams[0].rxPin, CanBusParams[0].rxPinFunction);
 	pmc_enable_upll_clock();			// configure_mcan sets up PCLK5 to be the UPLL divided by something, so make sure the UPLL is running
-#else
-	SetPinFunction(CanBusParams[0].txPin, CanBusParams[0].pinsFunction);
-	SetPinFunction(CanBusParams[0].rxPin, CanBusParams[0].pinsFunction);
 #endif
 
-	// Initialise the CAN hardware
 	CanTiming timing;
 	timing.SetDefaults(CanTiming::DefaultCanBitRate);
-	canDevices[0] = CanDevice::Init(0, CanBusParams[0].instanceNumber, CanBusConfig, can0Memory, timing, nullptr,
-#if EXTERNAL_CAN_TIMESTAMP_COUNTER || !SUPPORT_REMOTE_COMMANDS
-								nullptr
+
+	// Initialise each CAN bus
+	for (size_t bus = 0; bus < NUM_CAN_PORTS; ++bus)
+	{
+		busStates[bus].transactionMutex.Create((bus == 0) ? "Can0Trans" : "CanAuxTrans");		//TODO if we handle > 2 CAN buses, generalise this
+
+		// Initialise the ports
+#if SAME70
+		SetPinFunction(CanBusParams[bus].txPin, CanBusParams[bus].txPinFunction);
+		SetPinFunction(CanBusParams[bus].rxPin, CanBusParams[bus].rxPinFunction);
 #else
-								StepTimer::CanTimingMessageReceived
+		SetPinFunction(CanBusParams[bus].txPin, CanBusParams[bus].pinsFunction);
+		SetPinFunction(CanBusParams[bus].rxPin, CanBusParams[bus].pinsFunction);
+#endif
+
+		// Initialise the CAN hardware
+		canDevices[bus] = CanDevice::Init(bus, CanBusParams[bus].instanceNumber, CanBusConfig,
+#if NUM_CAN_PORTS > 1
+											(bus == 0) ? can0Memory : can1Memory,
+#else
+											can0Memory,
+#endif
+											timing, nullptr,
+#if SUPPORT_REMOTE_COMMANDS && !EXTERNAL_CAN_TIMESTAMP_COUNTER
+											(bus == 0) ? StepTimer::CanTimingMessageReceived : nullptr
+#else
+											nullptr
 #endif
 							 );
-	InitReceiveFilters(canDevices[0]);
-	canDevices[0]->Enable();
-
-#if NUM_CAN_PORTS > 1
-	canBusModes[0] = CanBusMode::rrfCanFD;
-
-	//TODO if we handle 3 can buses on STM32 devices, generalise this to >2 buses
-	busStates[1].transactionMutex.Create("Can1Trans");
-# if SAME70
-	SetPinFunction(CanBusParams[1].txPin, CanBusParams[1].txPinFunction);
-	SetPinFunction(CanBusParams[1].rxPin, CanBusParams[1].rxPinFunction);
-# else
-	SetPinFunction(CanBusParams[1].txPin, CanBusParams[1].pinsFunction);
-	SetPinFunction(CanBusParams[1].rxPin, CanBusParams[1].pinsFunction);
-# endif
-	canDevices[1] = CanDevice::Init(1, CanBusParams[1].instanceNumber, CanBusConfig, can1Memory, timing, nullptr, nullptr);
-#endif
+		InitBus(0, (bus == 0) ? CanBusMode::rrfCanFD : CanBusMode::unused, timing);
+	}
 
 	CanMotion::Init();
 
-	// Create the task that sends CAN messages
+	// Create the task that sends CAN messages and the task that sends time sync messages
 	canClockTask.Create(CanClockLoop, "CanClock", nullptr, TaskPriority::CanClockPriority);
 	canSenderTask.Create(CanSenderLoop, "CanSender", nullptr, TaskPriority::CanSenderPriority);
-	canReceiverTasks[0] = new Task<CanReceiverTaskStackWords>;
-	canReceiverTasks[0]->Create(CanReceiverLoop, "CanRecv0", (void *)0, TaskPriority::CanReceiverPriority);			// task names are cut to 9 characters
-#if NUM_CAN_PORTS > 1
-	//TODO only create this task if we enable the second CAN port
-	//TODO if we handle 3 can buses on STM32 devices, generalise this to >2 buses
-	canReceiverTasks[1]->Create(CanReceiverLoop, "CanRecv1", (void *)1, TaskPriority::CanReceiverPriority);
-#endif
 }
 
 void CanInterface::Shutdown() noexcept
@@ -662,7 +695,7 @@ static bool SendCanMessage(CanDevice::TxBufferNumber whichBuffer, uint32_t timeo
 {
 #if NUM_CAN_PORTS > 1
 	const CanAddress dst = buffer->id.Dst();
-	if (usingMultipleRrfCanFD)
+	if (usingMultipleRRFCanFD)
 	{
 		if (dst == CanId::BroadcastAddress)
 		{
@@ -2014,46 +2047,59 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	return CanInterface::SendRequestAndGetStandardReply(buf.HandOver(), rid, reply, nullptr);
 }
 
-// Enable CAN in master board mode and set the fast data rate
+// Enable CAN in master board mode and set the fast data rate (M953)
 GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	bool seen = false;
 	GCodeResult ret = GCodeResult::ok;
 
-	// P is the CAN number on the board, see the note at NumCanPorts
-	uint32_t canInterfaceNumber = CanBusParams[0].instanceNumber;
+	// The I parameter is the CAN interface number on the board
+	uint32_t canInterfaceNumber = CanBusParams[0].instanceNumber;							// default to the primary CAN interface
 	bool dummySeen;
-	(void)gb.TryGetLimitedUIValue('I', canInterfaceNumber, dummySeen, NUM_CAN_PORTS);
-
-#if NUM_CAN_PORTS > 1
-	const size_t bus = GetCanBusNumberFromInterfaceNumber(canInterfaceNumber);
-	bool classic = false;
-	bool seenPortSetting = false;
-	if (bus >= 1)
+	(void)gb.TryGetLimitedUIValue('I', canInterfaceNumber, dummySeen, NUM_CAN_PORTS);		// this assumes that interface numbers are always less than NUM_CAN_PORTS
+	const int bus = GetCanBusNumberFromInterfaceNumber(canInterfaceNumber);
+	if (bus < 0)
 	{
-		if (canDevices[bus] == nullptr)
-		{
-			reply.printf("CAN%" PRIu32 " is disabled", canInterfaceNumber);
-			return GCodeResult::error;
-		}
-		classic = canBusModes[bus] == CanBusMode::classic;
-		gb.TryGetBValue('C', classic, seenPortSetting);
-	}
-	else if (gb.Seen('C'))
-	{
-		reply.printf("Parameter C is only supported for CAN%u", GetCanInterfaceNumberFromBusNumber(bus));
+		reply.printf("CAN%" PRIu32 " not found", canInterfaceNumber);
 		return GCodeResult::error;
 	}
+
+	if (canDevices[bus] == nullptr)
+	{
+		reply.printf("CAN%" PRIu32 " is disabled", canInterfaceNumber);
+		return GCodeResult::error;
+	}
+
+	bool seen = false;
+
+#if NUM_CAN_PORTS == 1
+	const CanBusMode mode = CanBusMode::rrfCanFD;
 #else
-	const size_t bus = 0;
-	const bool classic = false;
+	CanBusMode mode = canBusModes[bus];
 #endif
 
+	if (gb.Seen('C'))
+	{
+#if NUM_CAN_PORTS > 1
+		if (bus >= 1)
+		{
+			seen = true;
+			uint32_t imode = (uint32_t)mode;
+			gb.GetLimitedUIValue('C', imode, 3);
+			mode = (CanBusMode)imode;
+		}
+		else
+#endif
+		{
+			reply.printf("Parameter C is not supported for CAN%" PRIu32, canInterfaceNumber);
+			return GCodeResult::error;
+		}
+	}
+
 	// Get the arbitration bit rate
-	uint32_t speed = classic ? DefaultClassicBitRate : DefaultBitRate;
+	uint32_t speed = (mode == CanBusMode::classic) ? DefaultClassicBitRate : DefaultBitRate;
 	if (gb.TryGetLimitedUIValue('S', speed, seen, MinBitRate, MaxBitRate + 1))
 	{
-		if (!classic && (speed != DefaultBitRate) && (speed != DefaultBitRate / 2) && (speed != DefaultBitRate / 4))
+		if (mode == CanBusMode::rrfCanFD && speed != DefaultBitRate && speed != DefaultBitRate / 2 && speed != DefaultBitRate / 4)
 		{
 			reply.copy("Expansion boards only provide automatic support for bit rates 1000, 500 and 250 kbits/sec");
 			ret = GCodeResult::warning;
@@ -2066,91 +2112,75 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 	float f;
 	if (gb.TryGetLimitedFValue('T', f, seen, MinSamplePoint, MaxSamplePoint))
 	{
+		seen = true;
 		timing.SetNormalSamplePoint(f);
 	}
 
 	if (gb.TryGetLimitedFValue('J', f, seen, MinJumpWidth, MaxJumpWidth))
 	{
+		seen = true;
 		timing.SetNormalJumpWidth(f);
 	}
 
 #if SUPPORT_BRS
 	uint32_t bitRateMultiplier = fastDataRates[bus] + 1;
-	if (gb.TryGetLimitedUIValue('R', bitRateMultiplier, seen, 9))
+	if (mode == CanBusMode::rrfCanFD)
 	{
-		if (classic)
+		if (gb.TryGetLimitedUIValue('R', bitRateMultiplier, seen, 9))
 		{
-			reply.copy("Bit rate switching is not supported in classic mode");
-			return GCodeResult::error;
-		}
-		if (bitRateMultiplier == 0 || bitRateMultiplier == 5 || bitRateMultiplier == 7)
-		{
-			reply.lcatf("Bit rate multiplier must be 1, 2, 3, 4, 6 or 8");
-			return GCodeResult::error;
-		}
-		timing.EnableBrs(bitRateMultiplier);
-		if (gb.TryGetLimitedFValue('U', f, seen, MinSamplePoint, MaxSamplePoint))
-		{
-			timing.SetDataSamplePoint(f);
-		}
-		if (gb.TryGetLimitedFValue('K', f, seen, MinJumpWidth, MaxJumpWidth))
-		{
-			timing.SetDataJumpWidth(f);
-		}
-	}
-#endif
-
-#if NUM_CAN_PORTS > 1
-	if (bus >= 1)
-	{
-		if (seen || seenPortSetting)
-		{
-			MutexLocker transactionLock(busStates[bus].transactionMutex);
-			if (seen || classic != (canBusModes[bus] == CanBusMode::classic))
+			seen = true;
+			if (bitRateMultiplier == 0 || bitRateMultiplier == 5 || bitRateMultiplier == 7)
 			{
-				InitAdditionalBus(bus, classic, timing);
-# if SUPPORT_BRS
-				if (!classic)
-				{
-					fastDataRates[1] = bitRateMultiplier - 1;
-					dTseg1MinusOnes[1] = timing.dTseg1;
-					usingMultipleRrfCanFD = true;
-				}
-# endif
+				reply.lcatf("Bit rate multiplier must be 1, 2, 3, 4, 6 or 8");
+				return GCodeResult::error;
 			}
-			reprap.BoardsUpdated();
+			timing.EnableBrs(bitRateMultiplier);
+			if (gb.TryGetLimitedFValue('U', f, seen, MinSamplePoint, MaxSamplePoint))
+			{
+				timing.SetDataSamplePoint(f);
+			}
+			if (gb.TryGetLimitedFValue('K', f, seen, MinJumpWidth, MaxJumpWidth))
+			{
+				timing.SetDataJumpWidth(f);
+			}
+
+			AtomicCriticalSectionLocker lock;
+			fastDataRates[bus] = bitRateMultiplier - 1;
+			dTseg1MinusOnes[bus] = timing.dTseg1;
 		}
 		else
 		{
-			ReportCanTiming(bus, reply);
+			timing.EnableBrs(bitRateMultiplier);
 		}
-		return ret;
 	}
 #endif
 
 	if (seen)
 	{
-		{
-			AtomicCriticalSectionLocker lock;
-			fastDataRates[0] = 0;														// disable BRS
-			dTseg1MinusOnes[0] = 0;
-		}
+		MutexLocker transactionLock(busStates[bus].transactionMutex);
 		delay(50);																		// allow any existing transactions to complete
-		canDevices[0]->ChangeLocalCanTiming(timing);
-#if SUPPORT_BRS
+		InitBus(bus, mode, timing);
+		if (mode == CanBusMode::rrfCanFD)
 		{
-			AtomicCriticalSectionLocker lock;
-			fastDataRates[0] = bitRateMultiplier - 1;
-			dTseg1MinusOnes[0] = timing.dTseg1;
-		}
+#if NUM_CAN_PORTS > 1
+			if (bus != 0)
+			{
+				usingMultipleRRFCanFD = true;
+			}
 #endif
+			// Send a startup message
+			CanMessageBuffer buf;
+			buf.SetupBroadcastMessage<CanMessageStartup>(myAddress);
+			buf.bus = bus;
+			SendMessageNoReplyNoFree(&buf);
+		}
+		reprap.BoardsUpdated();
 	}
 	else
 	{
 		ReportCanTiming(bus, reply);
 	}
 
-	// TODO here we should send a startup message if the mode is CAN-FD
 	return ret;
 }
 
