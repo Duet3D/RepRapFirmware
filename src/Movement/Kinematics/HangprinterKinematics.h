@@ -12,6 +12,8 @@
 
 #if SUPPORT_HANGPRINTER
 
+#define HANGPRINTER_DUAL_CAN		(NUM_CAN_PORTS > 1)
+
 // Different modes can be configured for different tradeoffs in terms of printing volumes and speeds
 enum class HangprinterAnchorMode {
 	None, // All is reacheable in None anchor mode as printing volume
@@ -47,7 +49,7 @@ public:
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif
-#if DUAL_CAN
+#if HANGPRINTER_DUAL_CAN
 	GCodeResult ReadODrive3AxisForce(DriverId driver, const StringRef& reply,
 																					float setTorqueConstants[] _ecv_null = nullptr, uint32_t setMechanicalAdvantage[] _ecv_null = nullptr,
 																					uint32_t setSpoolGearTeeth[] _ecv_null = nullptr, uint32_t setMotorGearTeeth[] _ecv_null = nullptr,
@@ -183,7 +185,7 @@ private:
 	                         size_t halleyIters,
 	                         size_t maxIters) const noexcept;
 
-#if DUAL_CAN
+#if HANGPRINTER_DUAL_CAN
 	// Some CAN helpers
 	struct ODriveAnswer {
 		bool valid = false;

@@ -207,25 +207,11 @@ constexpr ObjectModelArrayTableEntry Platform::objectModelArrayTable[] =
 
 DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(Platform)
 
-#if DUAL_CAN
-
-// Read the split address only once, so that a concurrent M953 can't make it report 0 instead of null
-static ExpressionValue GetCanSplitAddressValue() noexcept
-{
-	const CanAddress splitAddress = CanInterface::GetSplitAddress();
-	return (splitAddress != 0) ? ExpressionValue((int32_t)splitAddress) : ExpressionValue(nullptr);
-}
-
-#endif
-
 constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 {
 	// 0. boards[0] members
 #if SUPPORT_CAN_EXPANSION
 	{ "canAddress",			OBJECT_MODEL_FUNC_NOSELF((int32_t)CanInterface::GetCanAddress()),									ObjectModelEntryFlags::none },
-#endif
-#if DUAL_CAN
-	{ "canSplitAddress",	OBJECT_MODEL_FUNC_NOSELF(GetCanSplitAddressValue()),												ObjectModelEntryFlags::none },
 #endif
 #if SUPPORT_DIRECT_LCD
 	{ "directDisplay",		OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetDisplay().IsPresent(), &reprap.GetDisplay()),					ObjectModelEntryFlags::none },
@@ -292,7 +278,7 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
 	4,																		// number of sections
 	10 + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR
-	  + SUPPORT_CAN_EXPANSION + DUAL_CAN + (int)SUPPORT_DIRECT_LCD + MCU_HAS_UNIQUE_ID + HAS_WIFI_NETWORKING,		// section 0: boards[0]
+	  + SUPPORT_CAN_EXPANSION + (int)SUPPORT_DIRECT_LCD + MCU_HAS_UNIQUE_ID + HAS_WIFI_NETWORKING,		// section 0: boards[0]
 #if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp
 #else
@@ -2142,18 +2128,18 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			{
 				AtomicCriticalSectionLocker lock;
 				startClocks = StepTimer::GetTimerTicksWhenInterruptsDisabled();
-				startTimeStamp = CanInterface::GetTimeStampCounter();
+				startTimeStamp = CanInterface::GetTimeStampCounter(0);
 			}
 			delay(2);
 			{
 				AtomicCriticalSectionLocker lock;
 				endClocks = StepTimer::GetTimerTicksWhenInterruptsDisabled();
-				endTimeStamp = CanInterface::GetTimeStampCounter();
+				endTimeStamp = CanInterface::GetTimeStampCounter(0);
 			}
 # if EXTERNAL_CAN_TIMESTAMP_COUNTER
 			const uint32_t tsDiff = (endTimeStamp - startTimeStamp) & 0xFFFF;
 # else
-			const uint32_t tsDiff = (((endTimeStamp - startTimeStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
+			const uint32_t tsDiff = (((endTimeStamp - startTimeStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod(0)) >> 6;
 # endif
 			reply.lcatf("Clock diff %" PRIu32 ", ts diff %" PRIu32, endClocks - startClocks, tsDiff);
 		}

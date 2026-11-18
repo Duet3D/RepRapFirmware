@@ -61,6 +61,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareVersion),	ObjectModelEntryFlags::none },
 	{ "freeRam",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).neverUsedRam),						ObjectModelEntryFlags::liveNotPanelDue },
 	{ "inductiveSensor",	OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasInductiveSensor, self, 5),				ObjectModelEntryFlags::none },
+	{ "interface",			OBJECT_MODEL_FUNC((int32_t)CanInterface::GetCanInterfaceNumberFromBusNumber((self->FindIndexedBoard(context.GetLastIndex()).busPlusOne - 1))),	ObjectModelEntryFlags::none },
 	{ "maxMotors",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).numDrivers),							ObjectModelEntryFlags::none },
 	{ "mcuTemp",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasMcuTemp, self, 1),						ObjectModelEntryFlags::liveNotPanelDue },
 	{ "name",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::longName),			ObjectModelEntryFlags::none },
@@ -97,7 +98,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 {
 	6,				// number of sections
-	17,				// section 0: boards[]
+	18,				// section 0: boards[]
 	3,				// section 1: mcuTemp
 	3,				// section 2: vIn
 	3,				// section 3: v12
@@ -114,7 +115,7 @@ ExpansionBoardData::ExpansionBoardData() noexcept
 	  driverData(nullptr),
 	  closedLoopRuns(0),
 	  connectionTimeoutSeconds(DefaultConnectionTimeoutSeconds),
-	  hasMcuTemp(false), hasVin(false), hasV12(false), hasAccelerometer(false),
+	  busPlusOne(0), hasMcuTemp(false), hasVin(false), hasV12(false), hasAccelerometer(false),
 	  state(BoardState::unknown), numDrivers(0)
 {
 }
@@ -169,6 +170,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 		{
 			WriteLocker lock(boardsLock);
 
+			board.busPlusOne = buf->bus + 1;
 			board.neverUsedRam = 0;
 			board.whenLastStatusReportReceived = millis();
 			if (isNewFormat && buf->msg.announceV1.isReconnect)
@@ -439,9 +441,14 @@ DriverMode ExpansionManager::GetDriverMode(DriverId did) const noexcept
 }
 
 // Return a pointer to the expansion board, if it is present
-const ExpansionBoardData *_ecv_null ExpansionManager::GetBoardDetails(uint8_t address) const noexcept
+const ExpansionBoardData *_ecv_null ExpansionManager::GetBoardDetails(CanAddress address) const noexcept
 {
 	return (address < ARRAY_SIZE(boards) && boards[address].state == BoardState::running) ? &boards[address] : nullptr;
+}
+
+size_t ExpansionManager::GetBusNumberPlusOneFor(CanAddress address) const noexcept
+{
+	return (address < ARRAY_SIZE(boards)) ? boards[address].busPlusOne : 0;
 }
 
 // Tell an expansion board to update

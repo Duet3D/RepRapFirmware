@@ -151,8 +151,8 @@ constexpr size_t NumAuxChannels = NumSerialChannels - FirstAuxChannel;
 # define SUPPORT_BRS			0
 #endif
 
-#ifndef DUAL_CAN
-# define DUAL_CAN				0
+#if SUPPORT_CAN_EXPANSION && !defined(NUM_CAN_PORTS)
+# define NUM_CAN_PORTS			1
 #endif
 
 #define HAS_SMART_DRIVERS		(SUPPORT_TMC2660 || SUPPORT_TMC22xx || SUPPORT_TMC51xx || SUPPORT_TMC2240_SPI)

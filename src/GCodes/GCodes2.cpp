@@ -5013,7 +5013,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 	}
 
 	// The other results that are converted to errors or warnings below print the command themselves
-	const bool addCommandPrefix = rslt == GCodeResult::error || rslt == GCodeResult::warning || rslt == GCodeResult::noCanBuffer || rslt == GCodeResult::canResponseTimeout;
+	const bool addCommandPrefix = rslt == GCodeResult::error || rslt == GCodeResult::warning || rslt == GCodeResult::noCanBuffer || rslt == GCodeResult::canResponseTimeout || rslt == GCodeResult::unknownCanBoard;
 	switch (rslt)
 	{
 	case GCodeResult::notFinished:
@@ -5086,6 +5086,12 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 	case GCodeResult::canResponseTimeout:
 		// Usually we have a more detailed message in 'reply' already, but if not then add a standard message
 		if (reply.IsEmpty()) { reply.copy("CAN response timeout"); }
+		rslt = GCodeResult::error;
+		break;
+
+	case GCodeResult::unknownCanBoard:
+		// We may have a more detailed message in 'reply' already, but if not then add a standard message
+		if (reply.IsEmpty()) { reply.copy("unknown CAN expansion board"); }
 		rslt = GCodeResult::error;
 		break;
 #endif
