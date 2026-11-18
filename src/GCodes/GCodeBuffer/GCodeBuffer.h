@@ -136,6 +136,9 @@ public:
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);	// Get a :-separated list of drivers after a key letter
 	ExpressionValue GetExpression() THROWS(GCodeException);							// Get a general expression enclosed in { } after a key letter
 	bool GetStringOrUIValue(uint32_t& ival, const StringRef& str) THROWS(GCodeException);	// Get an unsigned integer or nonempty string after a key letter
+#if SUPPORT_CAN_EXPANSION
+	CanAddress GetCanAddress(char c, bool allowOwnAddress, bool allowFirmareUpdateAdress) THROWS(GCodeException);	// Get a CAN address
+#endif
 
 	bool TryGetFValue(char c, float& val, bool& seen) THROWS(GCodeException);
 	bool TryGetIValue(char c, int32_t& val, bool& seen) THROWS(GCodeException);

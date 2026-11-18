@@ -651,14 +651,6 @@ CanMessageBuffer *CanInterface::AllocateBuffer(const GCodeBuffer *_ecv_null gb) 
 	return _ecv_not_null(buf);
 }
 
-void CanInterface::CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THROWS(GCodeException)
-{
-	if (address == 0 || address > CanId::MaxCanAddress)
-	{
-		throw GCodeException(&gb, -1, "CAN address out of range");
-	}
-}
-
 uint16_t CanInterface::GetTimeStampCounter() noexcept
 {
 	return can0dev->ReadTimeStampCounter();
@@ -1608,9 +1600,8 @@ void CanInterface::DisableRemoteStallEndstops(CanAddress boardId) noexcept
 }
 
 static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_t param, GCodeBuffer& gb, const StringRef& reply, uint8_t *_ecv_null extra = nullptr) THROWS(GCodeException)
+			pre(IsExpansionBoardAddress(boardAddress))
 {
-	CanInterface::CheckCanAddress(boardAddress, gb);
-
 	CanMessageBuffer *_ecv_null const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
@@ -1627,8 +1618,6 @@ static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_
 // Get diagnostics from an expansion board
 GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	CanInterface::CheckCanAddress(boardAddress, gb);
-
 	if (type == 0)
 	{
 		Platform& p = reprap.GetPlatform();
@@ -1877,7 +1866,7 @@ GCodeResult CanInterface::ProcessM655(GCodeBuffer& gb, const StringRef& reply) T
 	CanAddress addr;
 	if (gb.Seen('B'))
 	{
-		addr = gb.GetUIValue();
+		addr = gb.GetCanAddress('B', false, false);
 	}
 	else if (gb.Seen('C'))
 	{
@@ -1888,12 +1877,6 @@ GCodeResult CanInterface::ProcessM655(GCodeBuffer& gb, const StringRef& reply) T
 	else
 	{
 		reply.copy("B or C parameter must be provided");
-		return GCodeResult::error;
-	}
-
-	if (addr == GetCanAddress())
-	{
-		reply.copy("Not implemented on main board");
 		return GCodeResult::error;
 	}
 
@@ -2025,12 +2008,7 @@ GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber,
 GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	// Get the address of the board whose parameters we are changing
-	gb.MustSee('B');
-	const uint32_t oldAddress = gb.GetUIValue();
-	if (oldAddress != 0)							// we must allow address 0 but CheckCanAddress doesn't allow it
-	{
-		CheckCanAddress(oldAddress, gb);
-	}
+	const uint32_t oldAddress = gb.GetCanAddress('B', true, false);
 
 	// Get the new timing details, if provided
 	CanTiming timing;
@@ -2074,8 +2052,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 
 	if (gb.Seen('A'))
 	{
-		const uint32_t newAddress = gb.GetUIValue();
-		CheckCanAddress(newAddress, gb);
+		const uint32_t newAddress = gb.GetCanAddress('A', false, false);
 		msg->newAddress = (uint8_t)newAddress;
 		msg->newAddressInverted = (uint8_t)~newAddress;
 	}
