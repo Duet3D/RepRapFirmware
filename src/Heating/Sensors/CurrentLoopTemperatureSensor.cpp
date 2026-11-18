@@ -7,7 +7,10 @@
 
 #include "CurrentLoopTemperatureSensor.h"
 
-#if SUPPORT_SPI_SENSORS
+// DC 2026-11-16: Disabled this code because it won't work on expansion boards unless we use different parameters, and it is no longer required.
+// See comments in CurrentLoopTemperatureSensor::Configure in Duet3Expansion.
+
+#if 0	//#if SUPPORT_SPI_SENSORS
 
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>

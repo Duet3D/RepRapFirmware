@@ -64,8 +64,10 @@ public:
 	void ProcessDriveStatusReport(const CanMessageBuffer *buf) noexcept;
 
 	// Firmware update and related functions
-	GCodeResult ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-	GCodeResult UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+		pre(CanInterface::IsExpansionBoardAddress(boardAddress));
+	GCodeResult UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+		pre(CanInterface::IsExpansionBoardAddress(boardAddress));
 
 	GCodeResult ConfigureConnectionTimeout(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M959
 

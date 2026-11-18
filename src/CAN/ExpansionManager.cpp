@@ -460,8 +460,6 @@ const ExpansionBoardData *_ecv_null ExpansionManager::GetBoardDetails(uint8_t ad
 // Tell an expansion board to update
 GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	CanInterface::CheckCanAddress(boardAddress, gb);
-
 	const unsigned int moduleNumber = (gb.Seen('S')) ? gb.GetLimitedUIValue('S', 4) : 0;
 	if (moduleNumber != (unsigned int)FirmwareModule::main && moduleNumber != (unsigned int)FirmwareModule::bootloader)
 	{
@@ -538,7 +536,6 @@ void ExpansionManager::AddClosedLoopRun(CanAddress address, unsigned int numData
 
 GCodeResult ExpansionManager::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	CanInterface::CheckCanAddress(boardAddress, gb);
 	CanMessageBuffer * const buf = CanInterface::AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
 	buf->SetupRequestMessage<CanMessageReset>(rid, CanInterface::GetCanAddress(), (uint8_t)boardAddress);
@@ -621,7 +618,7 @@ GCodeResult ExpansionManager::ConfigureConnectionTimeout(GCodeBuffer& gb, const 
 {
 	if (gb.Seen('B'))
 	{
-		const uint32_t address = gb.GetLimitedUIValue('B', 1, CanId::MaxCanAddress + 1);
+		const uint32_t address = gb.GetCanAddress('B', false, true);
 		if (gb.Seen('T'))
 		{
 			const uint32_t timeout = gb.GetLimitedUIValue('T', MinConnectionTimeoutSeconds, std::numeric_limits<uint16_t>::max() + 1);
