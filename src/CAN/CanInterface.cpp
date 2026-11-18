@@ -449,7 +449,7 @@ void CanInterface::Init() noexcept
 											nullptr
 #endif
 							 );
-		InitBus(0, (bus == 0) ? CanBusMode::rrfCanFD : CanBusMode::unused, timing);
+		InitBus(bus, (bus == 0) ? CanBusMode::rrfCanFD : CanBusMode::unused, timing);
 	}
 
 	CanMotion::Init();
@@ -2160,6 +2160,8 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 		MutexLocker transactionLock(busStates[bus].transactionMutex);
 		delay(50);																		// allow any existing transactions to complete
 		InitBus(bus, mode, timing);
+		reprap.BoardsUpdated();
+
 		if (mode == CanBusMode::rrfCanFD)
 		{
 #if NUM_CAN_PORTS > 1
@@ -2168,13 +2170,13 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 				usingMultipleRRFCanFD = true;
 			}
 #endif
-			// Send a startup message
+			// Send a startup message. Ideally we would wait a little while first
 			CanMessageBuffer buf;
 			buf.SetupBroadcastMessage<CanMessageStartup>(myAddress);
 			buf.bus = bus;
 			SendMessageNoReplyNoFree(&buf);
+			// Here we should wait a while for boards to announce themselves.
 		}
-		reprap.BoardsUpdated();
 	}
 	else
 	{
