@@ -210,7 +210,7 @@ public:
 private:
 	static constexpr uint32_t Mask(CanAddress addr) noexcept { return 1u << (addr & 31); }
 
-	std::atomic<uint32_t> words[NumWords] = { };
+	std::atomic<uint32_t> words[NumWords] = { 0 };
 };
 
 void AddressBitmap::ClearAll() noexcept
