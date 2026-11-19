@@ -55,6 +55,13 @@ namespace CanInterface
 	CanRequestId AllocateRequestId(CanAddress destination, CanMessageBuffer *buf) noexcept;
 	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *_ecv_null extra = nullptr, uint32_t *_ecv_null words = nullptr) noexcept;
 	GCodeResult SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *_ecv_null extra, uint32_t *_ecv_null words, CanMessageType replyType, function_ref_noexcept<void(const CanMessageBuffer*) noexcept> callback) noexcept;
+
+	constexpr size_t BusOfBoard = SIZE_MAX;								// bus argument meaning the bus the destination board was heard on
+	GCodeResult SendRequestOnBusAndGetStandardReply(size_t bus, CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply) noexcept;
+	size_t GetBusForBoardCommand(GCodeBuffer& gb, CanAddress address) THROWS(GCodeException);
+	void RemoteBoardRestarted(CanAddress address, size_t bus) noexcept;
+	void ForgetBoard(CanAddress address) noexcept;
+	int GetCanInterfaceNumberForBoard(CanAddress address) noexcept;		// CAN interface number of the bus that the expansion board is on, -1 if not known
 	void SendResponseNoFree(CanMessageBuffer *buf) noexcept;
 	void SendBroadcastNoFree(CanMessageBuffer *buf) noexcept;
 	void SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept;
@@ -70,6 +77,9 @@ namespace CanInterface
 	}
 
 #if NUM_CAN_PORTS > 1
+	void ReportConflicts() noexcept;
+	void AdditionalBusDiagnostics(const StringRef& reply) noexcept;
+
 	// These are used by Hangprinter
 	uint32_t SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout = UsualSendTimeout) noexcept;
 	bool ReceivePlainMessage(CanMessageBuffer *null buf, uint32_t timeout = UsualResponseTimeout) noexcept;

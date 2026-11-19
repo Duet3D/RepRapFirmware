@@ -47,6 +47,12 @@ constexpr ObjectModelArrayTableEntry ExpansionManager::objectModelArrayTable[] =
 
 DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(ExpansionManager)
 
+static ExpressionValue GetCanInterfaceValue(ptrdiff_t address) noexcept
+{
+	const int canInterface = CanInterface::GetCanInterfaceNumberForBoard((CanAddress)address);
+	return (canInterface < 0) ? ExpressionValue(nullptr) : ExpressionValue((int32_t)canInterface);
+}
+
 constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 {
 	// 0. boards[] members
@@ -61,7 +67,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareVersion),	ObjectModelEntryFlags::none },
 	{ "freeRam",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).neverUsedRam),						ObjectModelEntryFlags::liveNotPanelDue },
 	{ "inductiveSensor",	OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasInductiveSensor, self, 5),				ObjectModelEntryFlags::none },
-	{ "interface",			OBJECT_MODEL_FUNC((int32_t)CanInterface::GetCanInterfaceNumberFromBusNumber((self->FindIndexedBoard(context.GetLastIndex()).busPlusOne - 1))),	ObjectModelEntryFlags::none },
+	{ "interface",			OBJECT_MODEL_FUNC(GetCanInterfaceValue(&(self->FindIndexedBoard(context.GetLastIndex())) - self->boards)),		ObjectModelEntryFlags::none },
 	{ "maxMotors",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).numDrivers),							ObjectModelEntryFlags::none },
 	{ "mcuTemp",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasMcuTemp, self, 1),						ObjectModelEntryFlags::liveNotPanelDue },
 	{ "name",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::longName),			ObjectModelEntryFlags::none },
@@ -115,7 +121,7 @@ ExpansionBoardData::ExpansionBoardData() noexcept
 	  driverData(nullptr),
 	  closedLoopRuns(0),
 	  connectionTimeoutSeconds(DefaultConnectionTimeoutSeconds),
-	  busPlusOne(0), hasMcuTemp(false), hasVin(false), hasV12(false), hasAccelerometer(false),
+	  hasMcuTemp(false), hasVin(false), hasV12(false), hasAccelerometer(false),
 	  state(BoardState::unknown), numDrivers(0)
 {
 }
@@ -170,7 +176,6 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 		{
 			WriteLocker lock(boardsLock);
 
-			board.busPlusOne = buf->bus + 1;
 			board.neverUsedRam = 0;
 			board.whenLastStatusReportReceived = millis();
 			if (isNewFormat && buf->msg.announceV1.isReconnect)
@@ -447,11 +452,6 @@ const ExpansionBoardData *_ecv_null ExpansionManager::GetBoardDetails(CanAddress
 	return (address < ARRAY_SIZE(boards) && boards[address].state == BoardState::running) ? &boards[address] : nullptr;
 }
 
-size_t ExpansionManager::GetBusNumberPlusOneFor(CanAddress address) const noexcept
-{
-	return (address < ARRAY_SIZE(boards)) ? boards[address].busPlusOne : 0;
-}
-
 // Tell an expansion board to update
 GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
@@ -531,10 +531,16 @@ void ExpansionManager::AddClosedLoopRun(CanAddress address, unsigned int numData
 
 GCodeResult ExpansionManager::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	const size_t bus = CanInterface::GetBusForBoardCommand(gb, (CanAddress)boardAddress);
 	CanMessageBuffer * const buf = CanInterface::AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
 	buf->SetupRequestMessage<CanMessageReset>(rid, CanInterface::GetCanAddress(), (uint8_t)boardAddress);
-	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
+	const GCodeResult rslt = CanInterface::SendRequestOnBusAndGetStandardReply(bus, buf, rid, reply);
+	if (rslt == GCodeResult::ok || (rslt == GCodeResult::canResponseTimeout && bus != CanInterface::BusOfBoard))
+	{
+		CanInterface::RemoteBoardRestarted((CanAddress)boardAddress, bus);
+	}
+	return rslt;
 }
 
 const ExpansionBoardData& ExpansionManager::FindIndexedBoard(unsigned int index) const noexcept
@@ -602,10 +608,14 @@ void ExpansionManager::Spin() noexcept
 					WriteLocker lock(boardsLock);
 					UpdateBoardState(addr, BoardState::timedOut);
 				}
+				CanInterface::ForgetBoard(addr);
 				Event::AddEvent(EventType::expansion_timeout, 0, addr, 0, "");
 			}
 		}
 	}
+#if NUM_CAN_PORTS > 1
+	CanInterface::ReportConflicts();
+#endif
 }
 
 // Process M959

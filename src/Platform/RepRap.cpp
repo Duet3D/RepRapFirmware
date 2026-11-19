@@ -1001,6 +1001,12 @@ void RepRap::GetDiagnosticsPart(unsigned int partNumber, const StringRef& reply)
 		break;
 
 	case 3 + Platform::NumPlatformDiagnosticParts + 10:
+#if SUPPORT_CAN_EXPANSION && NUM_CAN_PORTS > 1
+		CanInterface::AdditionalBusDiagnostics(reply);
+#endif
+		break;
+
+	case 3 + Platform::NumPlatformDiagnosticParts + 11:
 
 #if HAS_SBC_INTERFACE
 		if (usingSbcInterface)
@@ -1017,8 +1023,8 @@ void RepRap::GetDiagnosticsPart(unsigned int partNumber, const StringRef& reply)
 		}
 		break;
 
-	case 3 + Platform::NumPlatformDiagnosticParts + 11:
 	case 3 + Platform::NumPlatformDiagnosticParts + 12:
+	case 3 + Platform::NumPlatformDiagnosticParts + 13:
 #if HAS_SBC_INTERFACE
 		if (!usingSbcInterface)
 #endif
@@ -1027,7 +1033,7 @@ void RepRap::GetDiagnosticsPart(unsigned int partNumber, const StringRef& reply)
 			if (!CanInterface::InExpansionMode())
 #endif
 			{
-				network->Diagnostics(partNumber - (3 + Platform::NumPlatformDiagnosticParts + 10), reply);
+				network->Diagnostics(partNumber - (3 + Platform::NumPlatformDiagnosticParts + 11), reply);
 			}
 		}
 		break;
@@ -1036,7 +1042,7 @@ void RepRap::GetDiagnosticsPart(unsigned int partNumber, const StringRef& reply)
 
 unsigned int RepRap::GetNumberOfDiagnosticParts() const noexcept
 {
-	return 3 + Platform::NumPlatformDiagnosticParts + 13;
+	return 3 + Platform::NumPlatformDiagnosticParts + 14;
 }
 
 // Turn off the heaters, disable the motors, and deactivate the Heat, Move and GCodes classes. Leave everything else working.
