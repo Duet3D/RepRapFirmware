@@ -422,12 +422,13 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				if (millis64() > 5000 || isProgrammed)				// if we've only just powered up and the main board hasn't programmed us yet, no need to start up again
 				{
 					reprap.EmergencyStop();
+					reprap.ScheduleReset();
 				}
 				else
 				{
 					CanInterface::MainBoardRequestedAnnounce();		// we've recently started up, so no need to reset; but assume that we need to announce ourselves
 				}
-				break;
+				return;							// no reply needed
 
 			case CanMessageType::updateFirmware:
 				requestId = buf->msg.updateYourFirmware.requestId;

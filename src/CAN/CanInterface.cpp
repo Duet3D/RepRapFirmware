@@ -57,6 +57,7 @@ constexpr uint32_t MaxUrgentSendWait = 20;									// milliseconds
 constexpr uint32_t MaxTimeSyncSendWait = 2;									// milliseconds
 constexpr uint32_t MaxResponseSendWait = CanInterface::UsualSendTimeout;	// milliseconds
 constexpr uint32_t MaxRequestSendWait = CanInterface::UsualSendTimeout;		// milliseconds
+constexpr uint32_t MaxAdditionalBusBroadcastSendWait = 20;					// milliseconds
 
 // Define how often we send time sync messages. This value and the time interval between sending broadcast status messages (currently 250ms) should be relatively prime.
 // The reason is that if we try to send a time sync message just after a board has started broadcasting a status message, the time sync message will get delayed
@@ -302,6 +303,12 @@ static bool IsBusActive(size_t bus) noexcept
 		;
 }
 
+// A board on an additional bus can vanish without being forgotten for several seconds, and a broadcast nobody acknowledges must not hold up the heater task for the full send timeout
+static uint32_t GetBroadcastSendWait(size_t bus, uint32_t timeout) noexcept
+{
+	return (bus == 0) ? timeout : min<uint32_t>(timeout, MaxAdditionalBusBroadcastSendWait);
+}
+
 // Transmit buffer usage. All dedicated buffer numbers must be < CanBus0Config.numTxBuffers.
 constexpr auto TxBufferIndexUrgent = CanDevice::TxBufferNumber::buffer0;
 constexpr auto TxBufferIndexTimeSync = CanDevice::TxBufferNumber::buffer1;
@@ -458,7 +465,7 @@ static void InitBus(size_t bus, CanBusMode mode, const CanTiming& timing) noexce
 		{
 			AtomicCriticalSectionLocker lock;
 			fastDataRates[bus] = timing.dataRateMultiplier;
-			dTseg1MinusOnes[bus] = timing.dTseg1;
+			dTseg1MinusOnes[bus] = (timing.dataRateMultiplier != 0) ? timing.dTseg1 : 0;	// CanTiming::SetDefaults leaves dTseg1 unset, and expansion boards restart their CAN interface when it changes
 		}
 
 		candev->Enable();
@@ -763,9 +770,10 @@ static bool SendCanMessageOnBus(size_t bus, CanDevice::TxBufferNumber whichBuffe
 {
 	if (bus < NUM_CAN_PORTS)
 	{
+		// Callers choose the bus before taking the lock, so it may have been switched to classic CAN or off since. A CAN-FD frame must never reach a classic bus
 		ReadLocker lock(busConfigLock);
 		CanDevice *_ecv_null const dev = canDevices[bus];
-		if (dev != nullptr)
+		if (dev != nullptr && canBusModes[bus] == CanBusMode::rrfCanFD)
 		{
 			const uint32_t cancelledId = dev->SendMessage(whichBuffer, timeout, buffer);
 			if (cancelledId != 0)
@@ -793,7 +801,7 @@ static bool SendCanMessage(CanDevice::TxBufferNumber whichBuffer, uint32_t timeo
 			bool ok = true;
 			for (size_t bus = 0; bus < NUM_CAN_PORTS; ++bus)
 			{
-				if (IsBusActive(bus) && !SendCanMessageOnBus(bus, whichBuffer, timeout, buffer))
+				if (IsBusActive(bus) && !SendCanMessageOnBus(bus, whichBuffer, GetBroadcastSendWait(bus, timeout), buffer))
 				{
 					ok = false;
 				}
@@ -1203,7 +1211,12 @@ static GCodeResult SendRequestOnBusAndGetCustomReply(size_t requestedBus, CanMes
 			return GCodeResult::error;
 		}
 
-		SendCanMessageOnBus(bus, TxBufferIndexRequest, MaxRequestSendWait, buf);
+		if (!SendCanMessageOnBus(bus, TxBufferIndexRequest, MaxRequestSendWait, buf))
+		{
+			CanMessageBuffer::Free(buf);
+			reply.lcatf("CAN%u is not in CAN-FD mode", CanInterface::GetCanInterfaceNumberFromBusNumber(bus));
+			return GCodeResult::error;
+		}
 		reprap.GetPlatform().OnProcessingCanMessage();
 
 		const uint32_t whenStartedWaiting = millis();
@@ -1323,7 +1336,7 @@ void CanInterface::SendBroadcastNoFree(CanMessageBuffer *buf) noexcept
 	{
 		if (IsBusActive(bus))
 		{
-			SendCanMessageOnBus(bus, TxBufferIndexBroadcast, MaxResponseSendWait, buf);
+			SendCanMessageOnBus(bus, TxBufferIndexBroadcast, GetBroadcastSendWait(bus, MaxResponseSendWait), buf);
 		}
 	}
 }
@@ -1427,6 +1440,10 @@ size_t CanInterface::GetBusForBoardCommand(GCodeBuffer& gb, CanAddress address) 
 		if (bus < 0)
 		{
 			throw GCodeException(&gb, -1, "This board has no CAN%u", interfaceNumber);
+		}
+		if (canBusModes[bus] != CanBusMode::rrfCanFD)
+		{
+			throw GCodeException(&gb, -1, "CAN%u is not in CAN-FD mode", interfaceNumber);
 		}
 #if NUM_CAN_PORTS > 1
 		if (usingMultipleRRFCanFD && !learnedAddresses[bus].IsSet(address) && !conflictingAddresses.IsSet(address))
