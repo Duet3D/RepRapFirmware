@@ -247,6 +247,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 
 		// Tell the sending board that we don't need any more announcements from it
 		buf->SetupRequestMessageNoRid<CanMessageAcknowledgeAnnounce>(CanInterface::GetCanAddress(), src);
+		buf->useBrs = false;
 		CanInterface::SendMessageNoReplyNoFree(buf);
 	}
 }

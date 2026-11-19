@@ -57,7 +57,6 @@ constexpr uint32_t MaxUrgentSendWait = 20;									// milliseconds
 constexpr uint32_t MaxTimeSyncSendWait = 2;									// milliseconds
 constexpr uint32_t MaxResponseSendWait = CanInterface::UsualSendTimeout;	// milliseconds
 constexpr uint32_t MaxRequestSendWait = CanInterface::UsualSendTimeout;		// milliseconds
-constexpr uint32_t MaxPort1BroadcastSendWait = 20;							// milliseconds
 
 // Define how often we send time sync messages. This value and the time interval between sending broadcast status messages (currently 250ms) should be relatively prime.
 // The reason is that if we try to send a time sync message just after a board has started broadcasting a status message, the time sync message will get delayed
@@ -212,7 +211,7 @@ constexpr int GetCanBusNumberFromInterfaceNumber(uint32_t interfaceNumber) noexc
 }
 
 // Return the port that messages to and from the specified board address must use
-static size_t GetBusNumberPlusOneForAddress(CanAddress address) noexcept
+static inline size_t GetBusNumberPlusOneForAddress(CanAddress address) noexcept
 {
 #if NUM_CAN_PORTS > 1
 	return reprap.GetExpansion().GetBusNumberPlusOneFor(address);
@@ -1189,14 +1188,14 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 	return GCodeResult::canResponseTimeout;
 }
 
-// Send a response to an expansion board and free the buffer
+// Send a response to an expansion board and free the buffer. Use the bus number from the buffer.
 void CanInterface::SendResponseNoFree(CanMessageBuffer *buf) noexcept
 {
 #if NUM_CAN_PORTS > 1
 	// Responses are only sent while processing a received message, so they go back on the bus the request came from
 	SendCanMessageOnBus(buf->bus, TxBufferIndexResponse, MaxResponseSendWait, buf);
 #else
-	SendCanMessage(TxBufferIndexResponse, MaxResponseSendWait, buf);
+	SendCanMessageOnBus(0, TxBufferIndexResponse, MaxResponseSendWait, buf);
 #endif
 }
 
@@ -1205,11 +1204,14 @@ void CanInterface::SendBroadcastNoFree(CanMessageBuffer *buf) noexcept
 {
 	SendCanMessageOnBus(0, TxBufferIndexBroadcast, MaxResponseSendWait, buf);
 #if NUM_CAN_PORTS > 1
-	SendCanMessageOnBus(1, TxBufferIndexBroadcast, MaxResponseSendWait, buf);
+	if (canBusModes[1] == CanBusMode::rrfCanFD)
+	{
+		SendCanMessageOnBus(1, TxBufferIndexBroadcast, MaxResponseSendWait, buf);
+	}
 #endif
 }
 
-// Send a request message with no reply expected, and don't free the buffer. Used to send emergency stop messages.
+// Send a request message with no reply expected, and don't free the buffer. Used to send emergency stop messages, announce acknowledgement messages.
 void CanInterface::SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept
 {
 	SendCanMessage(TxBufferIndexBroadcast, MaxResponseSendWait, buf);
@@ -2173,8 +2175,8 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 			// Send a startup message. Ideally we would wait a little while first
 			CanMessageBuffer buf;
 			buf.SetupBroadcastMessage<CanMessageStartup>(myAddress);
-			buf.bus = bus;
-			SendMessageNoReplyNoFree(&buf);
+			buf.useBrs = false;
+			SendCanMessageOnBus(bus, TxBufferIndexBroadcast, MaxUrgentSendWait, &buf);
 			// Here we should wait a while for boards to announce themselves.
 		}
 	}
