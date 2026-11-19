@@ -1924,6 +1924,41 @@ bool StringParser::WriteBinaryToFile(char b) noexcept
 	return true;
 }
 
+// Write a block to the file of a binary upload whose size was given, returning the number of bytes used.
+// That is less than len if the block holds the end of the upload, in which case the rest is the G-code that follows it
+size_t StringParser::WriteBinaryBlock(const char *_ecv_array buf, size_t len) noexcept
+{
+	const size_t toWrite = (size_t)min<FilePosition>(len, GetBinaryBytesRemaining());
+	if (toWrite != 0)
+	{
+		(void)fileBeingWritten->Write(buf, toWrite);
+		if (fileBeingWritten->Length() >= writingFileSize)
+		{
+			FinishWritingBinary();
+		}
+	}
+	return toWrite;
+}
+
+// Return how many bytes are still to come in a binary upload whose size was given, or 0 if there is no such upload
+FilePosition StringParser::GetBinaryBytesRemaining() const noexcept
+{
+	return (IsWritingBinary() && fileBeingWritten->Length() < writingFileSize) ? writingFileSize - fileBeingWritten->Length() : 0;
+}
+
+// Close the file of a binary upload that will not be completed. No reply is sent, because the host that sent
+// the M559/M560 command has gone and another one may already be connected to the channel
+void StringParser::AbortBinaryUpload() noexcept
+{
+	if (IsWritingBinary())
+	{
+		fileBeingWritten->Close();
+		fileBeingWritten = nullptr;
+		binaryWriting = false;
+		eofStringCounter = 0;
+	}
+}
+
 void StringParser::FinishWritingBinary() noexcept
 {
 	// If we get here then we have come to the end of the data
