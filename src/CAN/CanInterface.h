@@ -54,6 +54,13 @@ namespace CanInterface
 	CanRequestId AllocateRequestId(CanAddress destination, CanMessageBuffer *buf) noexcept;
 	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *_ecv_null extra = nullptr, uint32_t *_ecv_null words = nullptr) noexcept;
 	GCodeResult SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *_ecv_null extra, uint32_t *_ecv_null words, CanMessageType replyType, function_ref_noexcept<void(const CanMessageBuffer*) noexcept> callback) noexcept;
+
+	constexpr size_t PortOfBoard = SIZE_MAX;							// port argument meaning the port the destination board was heard on
+	GCodeResult SendRequestOnPortAndGetStandardReply(size_t port, CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply) noexcept;
+	size_t GetPortForBoardCommand(GCodeBuffer& gb, CanAddress address) THROWS(GCodeException);
+	void RemoteBoardRestarted(CanAddress address, size_t port) noexcept;
+	void ForgetBoard(CanAddress address) noexcept;
+	int GetCanBusNumber(CanAddress address) noexcept;					// CAN number printed on the board of the bus that the expansion board is on, -1 if not known
 	void SendResponseNoFree(CanMessageBuffer *buf) noexcept;
 	void SendBroadcastNoFree(CanMessageBuffer *buf) noexcept;
 	void SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept;
@@ -64,7 +71,7 @@ namespace CanInterface
 	uint32_t Convert16bitReceivedTimeStampTo32bits(uint16_t ts) noexcept;
 
 #if DUAL_CAN
-	CanAddress GetSplitAddress() noexcept;								// lowest address served by CAN0, 0 if CAN0 has no boards assigned
+	void ReportConflicts() noexcept;
 	uint32_t SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout = UsualSendTimeout) noexcept;
 	bool ReceivePlainMessage(CanMessageBuffer *null buf, uint32_t timeout = UsualResponseTimeout) noexcept;
 #endif

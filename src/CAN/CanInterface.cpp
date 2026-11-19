@@ -102,7 +102,7 @@ static unsigned int timeSyncMessagesSent = 0;
 
 #if DUAL_CAN
 // Internal port numbers are not the CAN numbers on the board: port 0 (can0dev, task CanRecv1) is the main bus on MCAN1, labelled CAN1,
-// and port 1 (can1dev, task CanRecv0) is MCAN0, labelled CAN0. M953 P and all messages to the user use the CAN numbers
+// and port 1 (can1dev, task CanRecv0) is MCAN0, labelled CAN0. Parameter I and all messages to the user use the CAN numbers
 constexpr size_t NumCanPorts = 2;
 #else
 constexpr size_t NumCanPorts = 1;
@@ -203,23 +203,87 @@ static uint32_t can1Memory[Can1Config.GetMemorySize()] __attribute__ ((section (
 
 static CanDevice *_ecv_null can1dev = nullptr;
 
-constexpr uint32_t WrongPortWarningIntervalMillis = 10000;
-constexpr CanAddress LastPort1Address = CanId::Exp3HCFirmwareUpdateAddress - 1;	// the firmware update address always stays on port 0
+constexpr uint32_t ConflictReportIntervalMillis = 10000;
+constexpr uint32_t RestartGraceMillis = 1000;								// expansion boards keep running for 200ms after accepting a reset, and an unacknowledged one keeps announcing
 
-static bool port1IsClassic = false;											// true if port 1 is used for plain CAN messages, e.g. to talk to ODrives
-static CanAddress port1FirstAddress = 0;									// lowest board address routed to port 1, 0 if no boards are on port 1
-static uint32_t whenLastWrongPortWarning = 0u - WrongPortWarningIntervalMillis;	// lets the first warning through as soon as config.g has finished
+// Bitmap with one bit per CAN address, updated by the receiver tasks and read by any task without a lock
+class AddressBitmap
+{
+public:
+	bool IsSet(CanAddress addr) const noexcept { return (words[addr >> 5].load(std::memory_order_relaxed) & Mask(addr)) != 0; }
+	void Set(CanAddress addr) noexcept { words[addr >> 5].fetch_or(Mask(addr)); }
+	void Clear(CanAddress addr) noexcept { words[addr >> 5].fetch_and(~Mask(addr)); }
+	void ClearAll() noexcept;
+	bool IsEmpty() const noexcept;
+	unsigned int Count() const noexcept;
+	uint32_t GetWord(size_t index) const noexcept { return words[index].load(std::memory_order_relaxed); }
+
+	static constexpr size_t NumWords = (CanId::MaxCanAddress >> 5) + 1;
+
+private:
+	static constexpr uint32_t Mask(CanAddress addr) noexcept { return 1u << (addr & 31); }
+
+	std::atomic<uint32_t> words[NumWords] = { };
+};
+
+void AddressBitmap::ClearAll() noexcept
+{
+	for (std::atomic<uint32_t>& w : words)
+	{
+		w.store(0);
+	}
+}
+
+bool AddressBitmap::IsEmpty() const noexcept
+{
+	for (const std::atomic<uint32_t>& w : words)
+	{
+		if (w.load(std::memory_order_relaxed) != 0)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+unsigned int AddressBitmap::Count() const noexcept
+{
+	unsigned int count = 0;
+	for (const std::atomic<uint32_t>& w : words)
+	{
+		count += __builtin_popcount(w.load(std::memory_order_relaxed));
+	}
+	return count;
+}
+
+enum class Port1Mode : uint8_t { off, expansion, classic };
+
+static volatile Port1Mode port1Mode = Port1Mode::off;						// CAN0 stays off until M953 I0 brings it up
+static AddressBitmap learnedAddresses[NumCanPorts];							// the port each board was first heard on, at most one bit set per address
+static AddressBitmap conflictingAddresses;									// addresses also heard announcing on the port they were not learned on
+static AddressBitmap restartingAddresses;									// conflicts cleared by M999 less than RestartGraceMillis ago
+static volatile uint32_t whenLastRestarted = 0;
 static unsigned int wrongPortMessages = 0;
 static size_t receivingPort = 0;											// port of the message being processed, protected by receiveMutex
+static uint32_t whenLastConflictReport = 0;
+static uint32_t reportedConflicts[AddressBitmap::NumWords] = { 0 };			// only used by ReportConflicts
 
 #endif
 
+constexpr size_t NoPort = NumCanPorts;										// returned by GetPortFor when a board has not been heard on any port
+
 #if DUAL_CAN
 
-// Port 1 only transmits when boards are assigned to it, because unacknowledged messages on an empty bus would block its transmit buffers
+static bool IsPort1Up() noexcept
+{
+	return (can1dev != nullptr) && (port1Mode == Port1Mode::expansion);
+}
+
+// Port 1 only transmits once a board has been heard on it, because unacknowledged messages on an empty bus would block its transmit buffers.
+// A conflict means that there is a board on each bus
 static bool IsPort1Active() noexcept
 {
-	return (can1dev != nullptr) && !port1IsClassic && (port1FirstAddress != 0);
+	return IsPort1Up() && (!learnedAddresses[1].IsEmpty() || !conflictingAddresses.IsEmpty());
 }
 
 #endif
@@ -227,31 +291,51 @@ static bool IsPort1Active() noexcept
 static CanDevice *_ecv_null GetPortDevice(size_t port) noexcept
 {
 #if DUAL_CAN
-	return (port == 0) ? can0dev : IsPort1Active() ? can1dev : nullptr;
+	return (port == 0) ? can0dev : (port == 1 && IsPort1Active()) ? can1dev : nullptr;
 #else
-	return can0dev;
+	return (port == 0) ? can0dev : nullptr;
 #endif
 }
 
-// Return the port that messages to and from the specified board address must use
+// Return the port that messages to the specified board address must use, or NoPort if both buses are up and the board has not been heard on either.
+// The firmware update address is never learned, so a 3HC with its address switches at zero can only be configured on port 0. On port 1 it can still update its firmware, because responses go back on the bus the request came from
 static size_t GetPortFor(CanAddress address) noexcept
 {
 #if DUAL_CAN
-	// A 3HC with its switches at zero uses the firmware update address, so keep that on port 0 like any other low address
-	return (IsPort1Active() && (address >= port1FirstAddress) && (address != CanId::BroadcastAddress) && (address != CanId::Exp3HCFirmwareUpdateAddress)) ? 1 : 0;
-#else
-	return 0;
+	if (IsPort1Up() && address != CanId::BroadcastAddress && address != CanId::Exp3HCFirmwareUpdateAddress)
+	{
+		return learnedAddresses[1].IsSet(address) ? 1
+				: learnedAddresses[0].IsSet(address) ? 0
+					: NoPort;
+	}
 #endif
+	return 0;
 }
-
-#if DUAL_CAN
 
 static unsigned int GetCanNumber(size_t port) noexcept
 {
+#if DUAL_CAN
 	return (port == 0) ? PrimaryCanParams.instanceNumber : SecondaryCanParams.instanceNumber;
+#else
+	return PrimaryCanParams.instanceNumber;
+#endif
 }
 
+// Convert the CAN number printed on the board to our port number
+static size_t GetPortFromCanNumber(const GCodeBuffer& gb, uint32_t canNumber) THROWS(GCodeException)
+{
+	if (canNumber == PrimaryCanParams.instanceNumber)
+	{
+		return 0;
+	}
+#if DUAL_CAN
+	if (canNumber == SecondaryCanParams.instanceNumber)
+	{
+		return 1;
+	}
 #endif
+	throw GCodeException(&gb, -1, "This board has no CAN%u", canNumber);
+}
 
 // Transmit buffer usage. All dedicated buffer numbers must be < Can0Config.numTxBuffers.
 constexpr auto TxBufferIndexUrgent = CanDevice::TxBufferNumber::buffer0;
@@ -274,7 +358,7 @@ constexpr size_t CanReceiverTaskStackWords = 1000;
 static Task<CanReceiverTaskStackWords> canReceiverTask;
 #if DUAL_CAN
 static Task<CanReceiverTaskStackWords> canReceiver1Task;
-static Mutex receiveMutex;													// the command processor expects to handle one received message at a time
+static Mutex receiveMutex;													// the command processor expects to handle one received message at a time; take it after transactionMutex and before port1Lock
 static ReadWriteLock port1Lock;												// write-locked together with transactionMutex while port 1 is reconfigured, read-locked by senders outside transactions
 #endif
 
@@ -382,7 +466,7 @@ static void InitReceiveFilters(CanDevice *dev) noexcept
 #if DUAL_CAN
 
 // Set up port 1 either as an expansion bus or as a classic CAN bus. Classic messages go to FIFO 1, which is not read by the CanReceiver task.
-// Once the tasks are running, the caller must hold transactionMutex and the write lock on port1Lock so that nothing is being sent on port 1
+// The caller must hold transactionMutex, receiveMutex and the write lock on port1Lock so that nothing is being sent or received on port 1
 static void InitPort1(bool classic, const CanTiming& timing) noexcept
 {
 	can1dev->Disable();														// this discards pending transmissions, see the MCAN Software Initialization section of the SAME70 datasheet
@@ -400,7 +484,7 @@ static void InitPort1(bool classic, const CanTiming& timing) noexcept
 		can1dev->DisableShortFilterElement(0);
 		InitReceiveFilters(can1dev);
 	}
-	port1IsClassic = classic;
+	port1Mode = classic ? Port1Mode::classic : Port1Mode::expansion;
 	fastDataRates[1] = dTseg1MinusOnes[1] = 0;
 	can1dev->ChangeLocalCanTiming(timing);
 }
@@ -461,8 +545,7 @@ void CanInterface::Init() noexcept
 	SetPinFunction(SecondaryCanParams.txPin, SecondaryCanParams.pinsFunction);
 	SetPinFunction(SecondaryCanParams.rxPin, SecondaryCanParams.pinsFunction);
 # endif
-	can1dev = CanDevice::Init(1, SecondaryCanParams.instanceNumber, Can1Config, can1Memory, timing, nullptr, nullptr);
-	InitPort1(false, timing);
+	can1dev = CanDevice::Init(1, SecondaryCanParams.instanceNumber, Can1Config, can1Memory, timing, nullptr, nullptr);		// left disabled until M953 I0, so that a classic CAN bus never sees our CAN-FD frames
 #endif
 
 	CanMotion::Init();
@@ -679,9 +762,8 @@ uint32_t CanInterface::Convert16bitReceivedTimeStampTo32bits(uint16_t ts) noexce
 			: now;											// time stamp negative or unreliable so ignore it
 }
 
-static void SendCanMessageOnPort(size_t port, CanDevice::TxBufferNumber whichBuffer, uint32_t timeout, CanMessageBuffer *buffer) noexcept
+static void SendCanMessageOnDevice(size_t port, CanDevice *_ecv_null dev, CanDevice::TxBufferNumber whichBuffer, uint32_t timeout, CanMessageBuffer *buffer) noexcept
 {
-	CanDevice *_ecv_null const dev = GetPortDevice(port);
 	if (dev != nullptr)
 	{
 		const uint32_t cancelledId = dev->SendMessage(whichBuffer, timeout, buffer);
@@ -691,6 +773,11 @@ static void SendCanMessageOnPort(size_t port, CanDevice::TxBufferNumber whichBuf
 			lastCancelledIds[port] = cancelledId;
 		}
 	}
+}
+
+static void SendCanMessageOnPort(size_t port, CanDevice::TxBufferNumber whichBuffer, uint32_t timeout, CanMessageBuffer *buffer) noexcept
+{
+	SendCanMessageOnDevice(port, GetPortDevice(port), whichBuffer, timeout, buffer);
 }
 
 // Send a message on the CAN FD port that serves its destination and record any errors. Broadcasts go out on every CAN FD port
@@ -1058,23 +1145,44 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 	return SendRequestAndGetCustomReply(buf, rid, reply, extra, words, CanMessageType::unusedMessageType, [](const CanMessageBuffer*) noexcept->void { });
 }
 
-// Send a request to an expansion board and append the response to 'reply'. The response may either be a standard reply or 'replyType'.
-GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *_ecv_null extra, uint32_t *_ecv_null words, CanMessageType replyType, function_ref_noexcept<void(const CanMessageBuffer*) noexcept> callback) noexcept
+// Send a request to an expansion board on the specified port, or on the port it was heard on if 'requestedPort' is PortOfBoard, and append the response to 'reply'.
+// The response may either be a standard reply or 'replyType'
+static GCodeResult SendRequestOnPortAndGetCustomReply(size_t requestedPort, CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *_ecv_null extra, uint32_t *_ecv_null words, CanMessageType replyType, function_ref_noexcept<void(const CanMessageBuffer*) noexcept> callback) noexcept
 {
 	const CanAddress dest = buf->id.Dst();
 	const CanMessageType msgType = buf->id.MsgType();								// save for possible error message
 
+#if DUAL_CAN
+	// A board can still be announcing itself, e.g. just after M953 brought CAN0 up, so give it the usual response time to be heard
+	if (requestedPort == CanInterface::PortOfBoard)
+	{
+		const uint32_t whenStartedWaiting = millis();
+		while (GetPortFor(dest) == NoPort && millis() - whenStartedWaiting < CanInterface::UsualResponseTimeout)
+		{
+			delay(2);
+		}
+	}
+#endif
+
 	{
 		// This code isn't re-entrant and it can get called from a task other than Main to shut the system down, so we need to use a mutex
-		// Port 1 is only reconfigured while holding this mutex as well, so the port serving the destination can't change during the transaction
+		// Port 1 is only reconfigured while holding this mutex as well, so its mode can't change during the transaction
 		MutexLocker lock(transactionMutex);
 
-		const size_t port = GetPortFor(dest);
+		const size_t port = (requestedPort == CanInterface::PortOfBoard) ? GetPortFor(dest) : requestedPort;
+		if (port == NoPort)
+		{
+			CanMessageBuffer::Free(buf);
+			reply.lcatf("Board %u has not been heard on CAN%u or CAN%u", dest, GetCanNumber(0), GetCanNumber(1));
+			return GCodeResult::error;
+		}
+
 		CanDevice *_ecv_null const dev = GetPortDevice(port);
 		if (dev == nullptr)
 		{
 			// Transactions sometimes get requested after we have shut down CAN, e.g. when we destroy filament monitors
 			CanMessageBuffer::Free(buf);
+			reply.lcatf("CAN%u is not available", GetCanNumber(port));
 			return GCodeResult::error;
 		}
 
@@ -1086,7 +1194,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 		unsigned int fragmentsReceived = 0;
 		for (;;)
 		{
-			const uint32_t timeout = (timeWaiting < UsualResponseTimeout) ? UsualResponseTimeout - timeWaiting : 1;
+			const uint32_t timeout = (timeWaiting < CanInterface::UsualResponseTimeout) ? CanInterface::UsualResponseTimeout - timeWaiting : 1;
 			if (!dev->ReceiveMessage(RxBufferIndexResponse, timeout, buf))
 			{
 				break;
@@ -1170,13 +1278,24 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 	return GCodeResult::canResponseTimeout;
 }
 
+GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *_ecv_null extra, uint32_t *_ecv_null words, CanMessageType replyType, function_ref_noexcept<void(const CanMessageBuffer*) noexcept> callback) noexcept
+{
+	return SendRequestOnPortAndGetCustomReply(PortOfBoard, buf, rid, reply, extra, words, replyType, callback);
+}
+
+GCodeResult CanInterface::SendRequestOnPortAndGetStandardReply(size_t port, CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply) noexcept
+{
+	return SendRequestOnPortAndGetCustomReply(port, buf, rid, reply, nullptr, nullptr, CanMessageType::unusedMessageType, [](const CanMessageBuffer*) noexcept->void { });
+}
+
 // Send a response to an expansion board and free the buffer
 void CanInterface::SendResponseNoFree(CanMessageBuffer *buf) noexcept
 {
 #if DUAL_CAN
-	// Responses are only sent while processing a received message, so they go back on the bus the request came from
+	// Responses are only sent while processing a received message, so they go back on the bus the request came from.
+	// That bus has a board on it even if we have not learned its address, e.g. a 3HC bootloader using the firmware update address
 	ReadLocker lock(port1Lock);
-	SendCanMessageOnPort(receivingPort, TxBufferIndexResponse, MaxResponseSendWait, buf);
+	SendCanMessageOnDevice(receivingPort, (receivingPort == 0) ? can0dev : IsPort1Up() ? can1dev : nullptr, TxBufferIndexResponse, MaxResponseSendWait, buf);
 #else
 	SendCanMessage(TxBufferIndexResponse, MaxResponseSendWait, buf);
 #endif
@@ -1200,22 +1319,197 @@ void CanInterface::SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept
 	}
 }
 
+// Return the CAN number printed on the board of the bus the expansion board was heard on, or -1 if it is not known or the address is in conflict
+int CanInterface::GetCanBusNumber(CanAddress address) noexcept
+{
+#if DUAL_CAN
+	if (address > CanId::MaxCanAddress || conflictingAddresses.IsSet(address))
+	{
+		return -1;
+	}
+	if (learnedAddresses[1].IsSet(address))
+	{
+		return (int)GetCanNumber(1);
+	}
+	if (!learnedAddresses[0].IsSet(address))
+	{
+		return -1;
+	}
+#endif
+	return (int)GetCanNumber(0);
+}
+
+// Get the port that an M952 or M999 for an expansion board must use from its I parameter.
+// I is mandatory while the address is in conflict. Return PortOfBoard if I is absent
+size_t CanInterface::GetPortForBoardCommand(GCodeBuffer& gb, CanAddress address) THROWS(GCodeException)
+{
+	if (gb.Seen('I'))
+	{
+		const size_t port = GetPortFromCanNumber(gb, gb.GetUIValue());
+#if DUAL_CAN
+		if (!learnedAddresses[port].IsSet(address) && !conflictingAddresses.IsSet(address))
+		{
+			throw GCodeException(&gb, -1, "Board %u has not been heard on this CAN bus", address);
+		}
+#endif
+		return port;
+	}
+#if DUAL_CAN
+	if (conflictingAddresses.IsSet(address))
+	{
+		throw GCodeException(&gb, -1, "Board address %u is used on two CAN buses, use parameter I to select the bus", address);
+	}
+#endif
+	return PortOfBoard;
+}
+
+// Called after the board at 'address' on 'port' has accepted a reset request, or when no board answered one sent on a specific port, e.g. because the board owning a conflicted address was unplugged.
+// If the address was in conflict, the board on the other port now owns it. Frames the reset board sent before it restarted are then dropped
+// because they come from the wrong port, and only an announcement from it under the same address after RestartGraceMillis restores the conflict.
+// Otherwise forget the port, because the board may come back with a new address.
+void CanInterface::RemoteBoardRestarted(CanAddress address, size_t port) noexcept
+{
+#if DUAL_CAN
+	if (can0dev == nullptr)
+	{
+		return;														// after Shutdown a receiver task may have been deleted while it held receiveMutex
+	}
+	if (address <= CanId::MaxCanAddress && port != PortOfBoard)
+	{
+		MutexLocker lock(receiveMutex);
+		if (conflictingAddresses.IsSet(address))
+		{
+			learnedAddresses[1 - port].Set(address);
+			learnedAddresses[port].Clear(address);
+			whenLastRestarted = millis();
+			restartingAddresses.Set(address);
+			conflictingAddresses.Clear(address);
+			reprap.BoardsUpdated();
+			return;
+		}
+	}
+	ForgetBoard(address);
+#endif
+}
+
+// Forget which port a board is on unless its address is in conflict, so that a board moved to the other bus is learned there
+void CanInterface::ForgetBoard(CanAddress address) noexcept
+{
+#if DUAL_CAN
+	if (address <= CanId::MaxCanAddress && can0dev != nullptr)		// after Shutdown a receiver task may have been deleted while it held receiveMutex
+	{
+		MutexLocker lock(receiveMutex);
+		if (!conflictingAddresses.IsSet(address))
+		{
+			learnedAddresses[0].Clear(address);
+			learnedAddresses[1].Clear(address);
+			reprap.BoardsUpdated();
+		}
+	}
+#endif
+}
+
 #if DUAL_CAN
 
-CanAddress CanInterface::GetSplitAddress() noexcept
+// Report the addresses in conflict as soon as a new one shows up and then every ConflictReportIntervalMillis
+void CanInterface::ReportConflicts() noexcept
 {
-	return IsPort1Active() ? port1FirstAddress : 0;
+	if (can0dev == nullptr)
+	{
+		return;														// after Shutdown a receiver task may have been deleted while it held receiveMutex
+	}
+
+	if (!restartingAddresses.IsEmpty() && millis() - whenLastRestarted >= RestartGraceMillis)
+	{
+		MutexLocker lock(receiveMutex);
+		if (millis() - whenLastRestarted >= RestartGraceMillis)
+		{
+			restartingAddresses.ClearAll();
+		}
+	}
+
+	if (conflictingAddresses.IsEmpty())
+	{
+		for (uint32_t& w : reportedConflicts)
+		{
+			w = 0;													// so that the same conflict coming back is reported at once
+		}
+		return;
+	}
+
+	bool changed = false;
+	for (size_t i = 0; i < AddressBitmap::NumWords; i++)
+	{
+		const uint32_t w = conflictingAddresses.GetWord(i);
+		if (w != reportedConflicts[i])
+		{
+			reportedConflicts[i] = w;
+			changed = true;
+		}
+	}
+
+	if (changed || millis() - whenLastConflictReport >= ConflictReportIntervalMillis)
+	{
+		whenLastConflictReport = millis();
+		String<StringLength100> addresses;
+		for (size_t i = 0; i < AddressBitmap::NumWords; i++)
+		{
+			for (uint32_t w = reportedConflicts[i]; w != 0; w &= w - 1)
+			{
+				addresses.catf("%s%u", addresses.IsEmpty() ? "" : ", ", (unsigned int)(i * 32 + __builtin_ctz(w)));
+			}
+		}
+		reprap.GetPlatform().MessageF(ErrorMessage, "CAN address %s is used on both CAN%u and CAN%u, change the address of one of the boards using M952 I B A and restart it using M999 I B\n",
+										addresses.c_str(), GetCanNumber(0), GetCanNumber(1));
+	}
 }
 
 uint32_t CanInterface::SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout) noexcept
 {
 	ReadLocker lock(port1Lock);
-	return ((can1dev != nullptr) && port1IsClassic) ? can1dev->SendMessage(CanDevice::TxBufferNumber::fifo, timeout, buf) : 0;
+	return ((can1dev != nullptr) && port1Mode == Port1Mode::classic) ? can1dev->SendMessage(CanDevice::TxBufferNumber::fifo, timeout, buf) : 0;
 }
 
 bool CanInterface::ReceivePlainMessage(CanMessageBuffer *_ecv_null buf, uint32_t timeout) noexcept
 {
-	return (can1dev != nullptr) && port1IsClassic && can1dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo1, timeout, buf);
+	return (can1dev != nullptr) && port1Mode == Port1Mode::classic && can1dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo1, timeout, buf);
+}
+
+// Learn the port that a board is on from the first message it sends. Return false if the message came from the other port and must be dropped.
+// An announcement on the other port means that a second board uses the same address. Called with receiveMutex held
+static bool AcceptReceivedMessage(size_t port, const CanMessageBuffer& buf) noexcept
+{
+	if (port == 1 && !IsPort1Up())
+	{
+		return false;												// received before M953 switched CAN0 to classic mode
+	}
+
+	const CanAddress src = buf.id.Src();
+	if (src > CanId::MaxCanAddress || src == CanId::Exp3HCFirmwareUpdateAddress || src == CanInterface::GetCanAddress())
+	{
+		return true;												// a 3HC with its address switches at zero uses the firmware update address on either bus, so never learn it
+	}
+
+	if (!learnedAddresses[1 - port].IsSet(src))
+	{
+		if (!learnedAddresses[port].IsSet(src))
+		{
+			learnedAddresses[port].Set(src);
+			reprap.BoardsUpdated();
+		}
+		return true;
+	}
+
+	const CanMessageType msgType = buf.id.MsgType();
+	if ((msgType == CanMessageType::announceV0 || msgType == CanMessageType::announceV1)
+		&& !conflictingAddresses.IsSet(src)
+		&& !(restartingAddresses.IsSet(src) && millis() - whenLastRestarted < RestartGraceMillis))
+	{
+		conflictingAddresses.Set(src);
+		reprap.BoardsUpdated();
+	}
+	wrongPortMessages++;
+	return false;
 }
 
 #endif
@@ -1241,19 +1535,8 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *param) noexcept
 
 #if DUAL_CAN
 			MutexLocker lock(receiveMutex);
-			const CanAddress src = buf.id.Src();
-			const size_t expectedPort = GetPortFor(src);
-			if ((expectedPort != port) && ((buf.id.MsgType() != CanMessageType::firmwareBlockRequest) || (GetPortDevice(port) == nullptr)))
+			if (!AcceptReceivedMessage(port, buf))
 			{
-				// Ignore boards whose address belongs to the other port, else they would appear to be present but requests to them would time out.
-				// Firmware requests are exempt if we can answer them on this port, because a bootloader may use a different address from the firmware
-				// Stay quiet until config.g has finished, because the boards on CAN0 are only assigned by M953 there
-				wrongPortMessages++;
-				if (!reprap.IsProcessingConfig() && (millis() - whenLastWrongPortWarning >= WrongPortWarningIntervalMillis))
-				{
-					whenLastWrongPortWarning = millis();
-					reprap.GetPlatform().MessageF(WarningMessage, "Ignoring CAN board %u on CAN%u because its address is assigned to CAN%u, see M953 P%u A\n", src, GetCanNumber(port), GetCanNumber(expectedPort), GetCanNumber(1));
-				}
 				continue;
 			}
 			receivingPort = port;
@@ -1953,23 +2236,32 @@ void CanInterface::Diagnostics(const StringRef& reply) noexcept
 	{
 		CanDevice::CanStats stats;
 		can1dev->GetAndClearStats(stats);
-		if (port1IsClassic)
+		switch (port1Mode)
 		{
+		case Port1Mode::off:
+			reply.lcatf("CAN%u: not enabled", GetCanNumber(1));
+			break;
+
+		case Port1Mode::classic:
 			reply.lcatf("CAN%u: classic CAN", GetCanNumber(1));
-		}
-		else
-		{
-			if (port1FirstAddress == 0)
-			{
-				reply.lcatf("CAN%u: no boards assigned", GetCanNumber(1));
-			}
-			else
-			{
-				reply.lcatf("CAN%u: boards %u-%u", GetCanNumber(1), port1FirstAddress, LastPort1Address);
-			}
-			reply.catf(", messages queued %u, received %u, lost %u, wrong port %u, errs %u, boc %u",
-						stats.messagesQueuedForSending, stats.messagesReceived, stats.messagesLost, wrongPortMessages, stats.protocolErrors, stats.busOffCount);
+			break;
+
+		case Port1Mode::expansion:
+			reply.lcatf("CAN%u: boards %u, messages queued %u, received %u, lost %u, wrong bus %u, errs %u, boc %u",
+						GetCanNumber(1), learnedAddresses[1].Count(), stats.messagesQueuedForSending, stats.messagesReceived, stats.messagesLost, wrongPortMessages, stats.protocolErrors, stats.busOffCount);
 			AppendTxTimeouts(reply, 1);
+			if (!conflictingAddresses.IsEmpty())
+			{
+				reply.lcat("Address conflicts:");
+				for (size_t i = 0; i < AddressBitmap::NumWords; i++)
+				{
+					for (uint32_t w = conflictingAddresses.GetWord(i); w != 0; w &= w - 1)
+					{
+						reply.catf(" %u", (unsigned int)(i * 32 + __builtin_ctz(w)));
+					}
+				}
+			}
+			break;
 		}
 	}
 	wrongPortMessages = 0;
@@ -2033,6 +2325,11 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 
 	if (oldAddress == GetCanAddress())
 	{
+		if (gb.Seen('I') && GetPortFromCanNumber(gb, gb.GetUIValue()) != 0)
+		{
+			reply.printf("Use M953 I%u to set the timing of CAN%u", GetCanNumber(1), GetCanNumber(1));
+			return GCodeResult::error;
+		}
 		if (changeTiming)
 		{
 			can0dev->ChangeLocalCanTiming(timing);
@@ -2044,6 +2341,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 		return GCodeResult::ok;
 	}
 
+	const size_t port = GetPortForBoardCommand(gb, (CanAddress)oldAddress);
 	CanMessageBufferHandle buf(AllocateBuffer(&gb));
 	const CanRequestId rid = CanInterface::AllocateRequestId((uint8_t)oldAddress, buf.Access());
 	auto msg = buf.Access()->SetupRequestMessage<CanMessageSetAddressAndNormalTiming>(rid, GetCanAddress(), (uint8_t)oldAddress);
@@ -2064,7 +2362,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	msg->doSetTiming = (changeTiming) ? CanMessageSetAddressAndNormalTiming::DoSetTimingYes : CanMessageSetAddressAndNormalTiming::DoSetTimingNo;
 	msg->normalTiming = timing;
 
-	return CanInterface::SendRequestAndGetStandardReply(buf.HandOver(), rid, reply, nullptr);
+	return CanInterface::SendRequestOnPortAndGetStandardReply(port, buf.HandOver(), rid, reply);
 }
 
 // Enable CAN in master board mode and set the fast data rate
@@ -2073,45 +2371,34 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 	bool seen = false;
 	GCodeResult ret = GCodeResult::ok;
 
-	// P is the CAN number on the board, see the note at NumCanPorts
-	uint32_t canNumber = PrimaryCanParams.instanceNumber;
-	bool dummySeen;
-	(void)gb.TryGetUIValue('P', canNumber, dummySeen);
-	size_t port;
-	if (canNumber == PrimaryCanParams.instanceNumber)
-	{
-		port = 0;
-	}
 #if DUAL_CAN
-	else if (canNumber == SecondaryCanParams.instanceNumber)
+	if (!gb.SeenAny("ICSTJRUK"))
 	{
-		port = 1;
+		ReportCanTiming(0, reply);
+		ReportCanTiming(1, reply);
+		return GCodeResult::ok;
 	}
 #endif
-	else
-	{
-		reply.printf("This board has no CAN%" PRIu32, canNumber);
-		return GCodeResult::error;
-	}
+
+	// I is the CAN number on the board, see the note at NumCanPorts
+	const size_t port = gb.Seen('I') ? GetPortFromCanNumber(gb, gb.GetUIValue()) : 0;
 
 	bool classic = false;
 #if DUAL_CAN
 	bool seenPortSetting = false;
-	uint32_t firstAddress = port1FirstAddress;
 	if (port == 1)
 	{
 		if (can1dev == nullptr)
 		{
-			reply.printf("CAN%" PRIu32 " is disabled", canNumber);
+			reply.printf("CAN%u is disabled", GetCanNumber(1));
 			return GCodeResult::error;
 		}
-		classic = port1IsClassic;
+		classic = (port1Mode == Port1Mode::classic);
 		gb.TryGetBValue('C', classic, seenPortSetting);
-		(void)gb.TryGetLimitedUIValue('A', firstAddress, seenPortSetting, LastPort1Address + 1);
 	}
-	else if (gb.SeenAny("AC"))
+	else if (gb.Seen('C'))
 	{
-		reply.printf("Parameters A and C are only supported for CAN%u", GetCanNumber(1));
+		reply.printf("Parameter C is only supported for CAN%u", GetCanNumber(1));
 		return GCodeResult::error;
 	}
 #endif
@@ -2173,9 +2460,17 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 		if (seen || seenPortSetting)
 		{
 			MutexLocker transactionLock(transactionMutex);
+			MutexLocker receiveLock(receiveMutex);
 			WriteLocker port1WriteLock(port1Lock);
-			if (seen || (classic != port1IsClassic))
+			const Port1Mode newMode = classic ? Port1Mode::classic : Port1Mode::expansion;
+			if (seen || newMode != port1Mode)
 			{
+				if (newMode != port1Mode)
+				{
+					// The boards heard on CAN0 are no longer reachable, and every conflict involves one of them
+					learnedAddresses[1].ClearAll();
+					conflictingAddresses.ClearAll();
+				}
 				InitPort1(classic, timing);
 # if SUPPORT_BRS
 				if (!classic)
@@ -2184,9 +2479,8 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 					dTseg1MinusOnes[1] = timing.dTseg1;
 				}
 # endif
+				reprap.BoardsUpdated();
 			}
-			port1FirstAddress = (CanAddress)firstAddress;
-			reprap.BoardsUpdated();
 		}
 		else
 		{
@@ -2228,33 +2522,22 @@ void CanInterface::ReportCanTiming(size_t port, const StringRef& reply) noexcept
 #if DUAL_CAN
 	if (port == 1)
 	{
-		if (can1dev == nullptr)
+		if (can1dev == nullptr || port1Mode == Port1Mode::off)
 		{
-			reply.printf("CAN%u is disabled", GetCanNumber(1));
+			reply.lcatf("CAN%u is not enabled", GetCanNumber(1));
 			return;
 		}
 		can1dev->GetLocalCanTiming(timing);
-		if (port1IsClassic)
-		{
-			reply.printf("CAN%u in classic mode, ", GetCanNumber(1));
-		}
-		else if (port1FirstAddress == 0)
-		{
-			reply.printf("CAN%u has no boards assigned, ", GetCanNumber(1));
-		}
-		else
-		{
-			reply.printf("CAN%u serves boards %u-%u, ", GetCanNumber(1), port1FirstAddress, LastPort1Address);
-		}
+		reply.lcatf((port1Mode == Port1Mode::classic) ? "CAN%u in classic mode, " : "CAN%u ", GetCanNumber(1));
 	}
 	else
 #endif
 	{
 		can0dev->GetLocalCanTiming(timing);
 #if DUAL_CAN
-		reply.printf("CAN%u ", GetCanNumber(0));
+		reply.lcatf("CAN%u ", GetCanNumber(0));
 #else
-		reply.copy("CAN ");
+		reply.lcat("CAN ");
 #endif
 	}
 	reply.catf("arbitration speed %.1fkbps, sample point %.2f, jump width %.2f, ",
@@ -2384,9 +2667,9 @@ CanId CanInterface::ODrive::ArbitrationId(DriverId driver, uint8_t cmd) noexcept
 CanMessageBuffer *_ecv_null CanInterface::ODrive::PrepareSimpleMessage(DriverId const driver, const StringRef& reply) noexcept
 {
 	// Detect any early return conditions. The reply may already hold results for other drivers, so append to it
-	if (!port1IsClassic)
+	if (port1Mode != Port1Mode::classic)
 	{
-		reply.lcatf("CAN%u must be in classic mode to talk to ODrives, see M953 P%u C1", GetCanNumber(1), GetCanNumber(1));
+		reply.lcatf("CAN%u must be in classic mode to talk to ODrives, see M953 I%u C1", GetCanNumber(1), GetCanNumber(1));
 		return nullptr;
 	}
 	CanMessageBuffer *_ecv_null buf = (can1dev != nullptr) ? CanMessageBuffer::Allocate() : nullptr;

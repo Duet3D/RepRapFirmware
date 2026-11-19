@@ -47,10 +47,17 @@ constexpr ObjectModelArrayTableEntry ExpansionManager::objectModelArrayTable[] =
 
 DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(ExpansionManager)
 
+static ExpressionValue GetCanBusValue(ptrdiff_t address) noexcept
+{
+	const int bus = CanInterface::GetCanBusNumber((CanAddress)address);
+	return (bus < 0) ? ExpressionValue(nullptr) : ExpressionValue((int32_t)bus);
+}
+
 constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 {
 	// 0. boards[] members
 	{ "canAddress",			OBJECT_MODEL_FUNC((int32_t)(&(self->FindIndexedBoard(context.GetLastIndex())) - self->boards)),					ObjectModelEntryFlags::none },
+	{ "canBus",				OBJECT_MODEL_FUNC(GetCanBusValue(&(self->FindIndexedBoard(context.GetLastIndex())) - self->boards)),		ObjectModelEntryFlags::none },
 	{ "closedLoop",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasClosedLoop, self, 4),					ObjectModelEntryFlags::none },
 	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY_IF(self->FindIndexedBoard(context.GetLastIndex()).HasDrivers(), 0),						ObjectModelEntryFlags::liveNotPanelDue },
 	{ "firmwareDate",		OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareDate),		ObjectModelEntryFlags::none },
@@ -97,7 +104,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 {
 	6,				// number of sections
-	17,				// section 0: boards[]
+	18,				// section 0: boards[]
 	3,				// section 1: mcuTemp
 	3,				// section 2: vIn
 	3,				// section 3: v12
@@ -536,10 +543,16 @@ void ExpansionManager::AddClosedLoopRun(CanAddress address, unsigned int numData
 
 GCodeResult ExpansionManager::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	const size_t port = CanInterface::GetPortForBoardCommand(gb, (CanAddress)boardAddress);
 	CanMessageBuffer * const buf = CanInterface::AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
 	buf->SetupRequestMessage<CanMessageReset>(rid, CanInterface::GetCanAddress(), (uint8_t)boardAddress);
-	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
+	const GCodeResult rslt = CanInterface::SendRequestOnPortAndGetStandardReply(port, buf, rid, reply);
+	if (rslt == GCodeResult::ok || (rslt == GCodeResult::canResponseTimeout && port != CanInterface::PortOfBoard))
+	{
+		CanInterface::RemoteBoardRestarted((CanAddress)boardAddress, port);
+	}
+	return rslt;
 }
 
 const ExpansionBoardData& ExpansionManager::FindIndexedBoard(unsigned int index) const noexcept
@@ -607,10 +620,14 @@ void ExpansionManager::Spin() noexcept
 					WriteLocker lock(boardsLock);
 					UpdateBoardState(addr, BoardState::timedOut);
 				}
+				CanInterface::ForgetBoard(addr);
 				Event::AddEvent(EventType::expansion_timeout, 0, addr, 0, "");
 			}
 		}
 	}
+#if DUAL_CAN
+	CanInterface::ReportConflicts();
+#endif
 }
 
 // Process M959
