@@ -2120,6 +2120,7 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 	else if (modeChanged)
 	{
 		speed = (mode == CanBusMode::classic) ? DefaultClassicBitRate : DefaultBitRate;
+		timing.SetDefaults(speed * 1000);
 	}
 #endif
 	else
