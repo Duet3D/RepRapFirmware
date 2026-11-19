@@ -368,26 +368,32 @@ static void InitBus(size_t bus, CanBusMode mode, const CanTiming& timing) noexce
 	}
 
 	canBusModes[bus] = mode;
-	fastDataRates[bus] = dTseg1MinusOnes[bus] = 0;
-	candev->ChangeLocalCanTiming(timing);
 
 	if (mode != CanBusMode::unused)
 	{
-		candev->Enable();
-	}
-
-	if (mode == CanBusMode::rrfCanFD)
-	{
-#if NUM_CAN_PORTS > 1
-		if (bus != 0)
+		canDevices[bus]->ChangeLocalCanTiming(timing);
+		if (mode == CanBusMode::rrfCanFD)
 		{
-			usingMultipleRRFCanFD = true;
+			AtomicCriticalSectionLocker lock;
+			fastDataRates[bus] = timing.dataRateMultiplier;
+			dTseg1MinusOnes[bus] = timing.dTseg1;
 		}
-#endif
-		if (canReceiverTasks[bus] == nullptr)
+
+		candev->Enable();
+
+		if (mode == CanBusMode::rrfCanFD)
 		{
-			canReceiverTasks[bus] = new Task<CanReceiverTaskStackWords>;
-			canReceiverTasks[bus]->Create(CanReceiverLoop, (bus == 0) ? "CanRcv0" : "CanRcvAux", (void *)bus, TaskPriority::CanReceiverPriority);
+#if NUM_CAN_PORTS > 1
+			if (bus != 0)
+			{
+				usingMultipleRRFCanFD = true;
+			}
+#endif
+			if (canReceiverTasks[bus] == nullptr)
+			{
+				canReceiverTasks[bus] = new Task<CanReceiverTaskStackWords>;
+				canReceiverTasks[bus]->Create(CanReceiverLoop, (bus == 0) ? "CanRcv0" : "CanRcvAux", (void *)bus, TaskPriority::CanReceiverPriority);
+			}
 		}
 	}
 }
@@ -2077,6 +2083,7 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 	const CanBusMode mode = CanBusMode::rrfCanFD;
 #else
 	CanBusMode mode = canBusModes[bus];
+	bool modeChanged = false;
 #endif
 
 	if (gb.Seen('C'))
@@ -2085,9 +2092,8 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 		if (bus >= 1)
 		{
 			seen = true;
-			uint32_t imode = (uint32_t)mode;
-			gb.GetLimitedUIValue('C', imode, 3);
-			mode = (CanBusMode)imode;
+			mode = (CanBusMode)gb.GetLimitedUIValue('C', 3);
+			modeChanged = (mode != canBusModes[bus]);
 		}
 		else
 #endif
@@ -2097,19 +2103,29 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 		}
 	}
 
-	// Get the arbitration bit rate
-	uint32_t speed = (mode == CanBusMode::classic) ? DefaultClassicBitRate : DefaultBitRate;
+	// See whether the timing is specified. If it isn't and we are changing modes, set the default speed.
+	CanTiming timing;
+	uint32_t speed;
 	if (gb.TryGetLimitedUIValue('S', speed, seen, MinBitRate, MaxBitRate + 1))
 	{
+		seen = true;
+		timing.SetDefaults(speed * 1000);
 		if (mode == CanBusMode::rrfCanFD && speed != DefaultBitRate && speed != DefaultBitRate / 2 && speed != DefaultBitRate / 4)
 		{
 			reply.copy("Expansion boards only provide automatic support for bit rates 1000, 500 and 250 kbits/sec");
 			ret = GCodeResult::warning;
 		}
 	}
-
-	CanTiming timing;
-	timing.SetDefaults(speed * 1000);
+#if NUM_CAN_PORTS > 1
+	else if (modeChanged)
+	{
+		speed = (mode == CanBusMode::classic) ? DefaultClassicBitRate : DefaultBitRate;
+	}
+#endif
+	else
+	{
+		canDevices[bus]->GetLocalCanTiming(timing);
+	}
 
 	float f;
 	if (gb.TryGetLimitedFValue('T', f, seen, MinSamplePoint, MaxSamplePoint))
@@ -2125,34 +2141,29 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 	}
 
 #if SUPPORT_BRS
-	uint32_t bitRateMultiplier = fastDataRates[bus] + 1;
 	if (mode == CanBusMode::rrfCanFD)
 	{
-		if (gb.TryGetLimitedUIValue('R', bitRateMultiplier, seen, 9))
+		uint32_t bitRateMultiplier = timing.GetActualDataRateMultiplier();
+		if (gb.TryGetLimitedUIValue('R', bitRateMultiplier, seen, 1, 9))
 		{
 			seen = true;
-			if (bitRateMultiplier == 0 || bitRateMultiplier == 5 || bitRateMultiplier == 7)
+			if (bitRateMultiplier == 5 || bitRateMultiplier == 7)
 			{
 				reply.lcatf("Bit rate multiplier must be 1, 2, 3, 4, 6 or 8");
 				return GCodeResult::error;
 			}
 			timing.EnableBrs(bitRateMultiplier);
-			if (gb.TryGetLimitedFValue('U', f, seen, MinSamplePoint, MaxSamplePoint))
+			if (bitRateMultiplier > 1)
 			{
-				timing.SetDataSamplePoint(f);
+				if (gb.TryGetLimitedFValue('U', f, seen, MinSamplePoint, MaxSamplePoint))
+				{
+					timing.SetDataSamplePoint(f);
+				}
+				if (gb.TryGetLimitedFValue('K', f, seen, MinJumpWidth, MaxJumpWidth))
+				{
+					timing.SetDataJumpWidth(f);
+				}
 			}
-			if (gb.TryGetLimitedFValue('K', f, seen, MinJumpWidth, MaxJumpWidth))
-			{
-				timing.SetDataJumpWidth(f);
-			}
-
-			AtomicCriticalSectionLocker lock;
-			fastDataRates[bus] = bitRateMultiplier - 1;
-			dTseg1MinusOnes[bus] = timing.dTseg1;
-		}
-		else
-		{
-			timing.EnableBrs(bitRateMultiplier);
 		}
 	}
 #endif
@@ -2188,55 +2199,42 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 	return ret;
 }
 
+// Report the mode and timing on a particular bus
 void CanInterface::ReportCanTiming(size_t bus, const StringRef& reply) noexcept
 {
-	CanTiming timing;
-#if NUM_CAN_PORTS > 1
-	if (bus >= 1)
+	if (canDevices[bus] == nullptr || canBusModes[bus] == CanBusMode::unused)
 	{
-		if (canDevices[bus] == nullptr || canBusModes[bus] == CanBusMode::unused)
-		{
-			reply.printf("CAN%u is disabled", GetCanInterfaceNumberFromBusNumber(bus));
-			return;
-		}
-		canDevices[bus]->GetLocalCanTiming(timing);
-		if (canBusModes[bus] == CanBusMode::classic)
-		{
-			reply.printf("CAN%u in classic mode, ", GetCanInterfaceNumberFromBusNumber(bus));
-		}
-		else
-		{
-			reply.printf("CAN%u in RepRapFirmware CAN-FD mode, ", GetCanInterfaceNumberFromBusNumber(bus));
-		}
+		reply.printf("CAN%u is disabled", GetCanInterfaceNumberFromBusNumber(bus));
+		return;
+	}
+
+	CanTiming timing;
+	canDevices[bus]->GetLocalCanTiming(timing);
+	if (canBusModes[bus] == CanBusMode::classic)
+	{
+		reply.printf("CAN%u in classic mode, ", GetCanInterfaceNumberFromBusNumber(bus));
 	}
 	else
-#endif
 	{
-		canDevices[0]->GetLocalCanTiming(timing);
-#if NUM_CAN_PORTS > 1
-		reply.printf("CAN%u ", GetCanInterfaceNumberFromBusNumber(bus));
-#else
-		reply.copy("CAN ");
-#endif
+		reply.printf("CAN%u in RepRapFirmware CAN-FD mode, ", GetCanInterfaceNumberFromBusNumber(bus));
 	}
+
 	reply.catf("arbitration speed %.1fkbps, sample point %.2f, jump width %.2f, ",
-					(double)((float)CanTiming::ClockFrequency/(float)(1000 * timing.period)),
+					(double)timing.GetArbitrationBitRate(),
 					(double)((float)(timing.nTseg1 + 1)/(float)timing.period),
 					(double)((float)timing.nJumpWidth/(float)timing.period));
-	const uint8_t fastDataRate = fastDataRates[bus];
-#if NUM_CAN_PORTS > 1
-	if (bus < 1 || canBusModes[bus] == CanBusMode::rrfCanFD)
-#endif
+	if (canBusModes[bus] == CanBusMode::rrfCanFD)
 	{
-		if (fastDataRate == 0)
+		const uint8_t dataRateMultiplier = timing.GetActualDataRateMultiplier();
+		if (dataRateMultiplier == 1)
 		{
 			reply.cat("bit rate switching disabled");
 		}
 		else
 		{
-			const uint32_t dataPeriod = timing.period/(fastDataRate + 1);
+			const uint32_t dataPeriod = timing.period/dataRateMultiplier;
 			reply.catf("data speed %.1fkbps, sample point %.2f, jump width %.2f",
-						(double)((float)CanTiming::ClockFrequency/(float)(1000 * dataPeriod)),
+						(double)timing.GetDataBitRate(),
 						(double)((float)(timing.dTseg1 + 1)/(float)dataPeriod),
 						(double)((float)timing.dJumpWidth/(float)dataPeriod));
 		}
