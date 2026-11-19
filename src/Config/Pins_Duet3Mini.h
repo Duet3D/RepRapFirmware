@@ -382,12 +382,14 @@ constexpr GpioPinFunction SbcSpiSercomPinsMode = GpioPinFunction::D;
 constexpr IRQn SbcSpiSercomIRQn = SERCOM0_1_IRQn;			// this is the transfer complete interrupt, the only one we use
 
 // CAN
-constexpr CanParameters PrimaryCanParams =
+constexpr CanParameters CanBusParams[] =
 {
-	.instanceNumber = 1,
-	.txPin = PortBPin(14),
-	.rxPin = PortBPin(15),
-	.pinsFunction = GpioPinFunction::H
+	{
+		.instanceNumber = 1,
+		.txPin = PortBPin(14),
+		.rxPin = PortBPin(15),
+		.pinsFunction = GpioPinFunction::H
+	},
 };
 
 // I2C

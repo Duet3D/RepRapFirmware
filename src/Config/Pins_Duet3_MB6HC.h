@@ -496,29 +496,26 @@ constexpr Pin SamTfrReadyPin = PortEPin(2);			// Output from the SAM to the WiFi
 constexpr Pin SamCsPin = PortCPin(25);				// SPI NPCS pin, input from WiFi module
 // Note, the DMAC peripheral IDs are hard-coded in WiFiInterface
 
-// CAN
-constexpr CanParameters PrimaryCanParams =
+// CAN, the main bus first
+constexpr CanParameters CanBusParams[] =
 {
-	.instanceNumber = 1,
-	.txPin = PortDPin(12),
-	.rxPin = PortCPin(12),
-	.txPinFunction = GpioPinFunction::B,
-	.rxPinFunction = GpioPinFunction::C
-};
-
+	{
+		.instanceNumber = 1,
+		.txPin = PortDPin(12),
+		.rxPin = PortCPin(12),
+		.txPinFunction = GpioPinFunction::B,
+		.rxPinFunction = GpioPinFunction::C
+	},
 #if defined(DUAL_CAN) && DUAL_CAN
-
-constexpr CanParameters SecondaryCanParams =
-{
-	.instanceNumber = 0,
-	.txPin = PortBPin(2),
-	.rxPin = PortBPin(3),
-	.txPinFunction = GpioPinFunction::A,
-	.rxPinFunction = GpioPinFunction::A
-
-};
-
+	{
+		.instanceNumber = 0,
+		.txPin = PortBPin(2),
+		.rxPin = PortBPin(3),
+		.txPinFunction = GpioPinFunction::A,
+		.rxPinFunction = GpioPinFunction::A
+	},
 #endif
+};
 
 // Timer allocation
 // Step timer is timer 0 aka TC0 channel 0. Also used as the CAN timestamp counter.

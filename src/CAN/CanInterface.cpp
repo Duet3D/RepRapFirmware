@@ -87,8 +87,6 @@ constexpr float MaxSamplePoint = 0.95;
 constexpr float MinJumpWidth = 0.05;
 constexpr float MaxJumpWidth = 0.5;
 
-static Mutex transactionMutex;
-
 static uint32_t longestWaitTime = 0;
 static uint16_t longestWaitMessageType = 0;
 
@@ -100,13 +98,12 @@ static unsigned int badTimeStamps = 0;
 static unsigned int timeSyncMessagesSent = 0;
 // End debug
 
-#if DUAL_CAN
-// Internal port numbers are not the CAN numbers on the board: port 0 (can0dev, task CanRecv1) is the main bus on MCAN1, labelled CAN1,
-// and port 1 (can1dev, task CanRecv0) is MCAN0, labelled CAN0. Parameter I and all messages to the user use the CAN numbers
-constexpr size_t NumCanPorts = 2;
-#else
-constexpr size_t NumCanPorts = 1;
-#endif
+// Internal port numbers are the indices into CanBusParams, not the CAN numbers on the board: on the MB6HC and MB6XD port 0 (can0dev, task CanRecv1)
+// is the main bus on MCAN1, labelled CAN1, and port 1 (can1dev, task CanRecv0) is MCAN0, labelled CAN0. Parameter I and all messages to the user use the CAN numbers
+constexpr size_t NumCanPorts = ARRAY_SIZE(CanBusParams);
+static_assert(NumCanPorts == 1 + DUAL_CAN);
+
+static Mutex transactionMutexes[NumCanPorts];								// a transaction on one port does not hold up one on the other
 
 struct TimeSyncState
 {
@@ -264,7 +261,6 @@ static AddressBitmap conflictingAddresses;									// addresses also heard annou
 static AddressBitmap restartingAddresses;									// conflicts cleared by M999 less than RestartGraceMillis ago
 static volatile uint32_t whenLastRestarted = 0;
 static unsigned int wrongPortMessages = 0;
-static size_t receivingPort = 0;											// port of the message being processed, protected by receiveMutex
 static uint32_t whenLastConflictReport = 0;
 static uint32_t reportedConflicts[AddressBitmap::NumWords] = { 0 };			// only used by ReportConflicts
 
@@ -314,26 +310,19 @@ static size_t GetPortFor(CanAddress address) noexcept
 
 static unsigned int GetCanNumber(size_t port) noexcept
 {
-#if DUAL_CAN
-	return (port == 0) ? PrimaryCanParams.instanceNumber : SecondaryCanParams.instanceNumber;
-#else
-	return PrimaryCanParams.instanceNumber;
-#endif
+	return CanBusParams[port].instanceNumber;
 }
 
 // Convert the CAN number printed on the board to our port number
 static size_t GetPortFromCanNumber(const GCodeBuffer& gb, uint32_t canNumber) THROWS(GCodeException)
 {
-	if (canNumber == PrimaryCanParams.instanceNumber)
+	for (size_t port = 0; port < NumCanPorts; port++)
 	{
-		return 0;
+		if (CanBusParams[port].instanceNumber == canNumber)
+		{
+			return port;
+		}
 	}
-#if DUAL_CAN
-	if (canNumber == SecondaryCanParams.instanceNumber)
-	{
-		return 1;
-	}
-#endif
 	throw GCodeException(&gb, -1, "This board has no CAN%u", canNumber);
 }
 
@@ -358,8 +347,8 @@ constexpr size_t CanReceiverTaskStackWords = 1000;
 static Task<CanReceiverTaskStackWords> canReceiverTask;
 #if DUAL_CAN
 static Task<CanReceiverTaskStackWords> canReceiver1Task;
-static Mutex receiveMutex;													// the command processor expects to handle one received message at a time; take it after transactionMutex and before port1Lock
-static ReadWriteLock port1Lock;												// write-locked together with transactionMutex while port 1 is reconfigured, read-locked by senders outside transactions
+static Mutex receiveMutex;													// the command processor expects to handle one received message at a time; take it after a transaction mutex and before port1Lock
+static ReadWriteLock port1Lock;												// write-locked together with port 1's transaction mutex while port 1 is reconfigured, read-locked by senders outside transactions
 #endif
 
 constexpr size_t CanClockTaskStackWords = 400;			// used to be 300 but RD had a stack overflow
@@ -466,7 +455,7 @@ static void InitReceiveFilters(CanDevice *dev) noexcept
 #if DUAL_CAN
 
 // Set up port 1 either as an expansion bus or as a classic CAN bus. Classic messages go to FIFO 1, which is not read by the CanReceiver task.
-// The caller must hold transactionMutex, receiveMutex and the write lock on port1Lock so that nothing is being sent or received on port 1
+// The caller must hold port 1's transaction mutex, receiveMutex and the write lock on port1Lock so that nothing is being sent or received on port 1
 static void InitPort1(bool classic, const CanTiming& timing) noexcept
 {
 	can1dev->Disable();														// this discards pending transmissions, see the MCAN Software Initialization section of the SAME70 datasheet
@@ -512,21 +501,26 @@ void CanInterface::Init() noexcept
 	CanMessageBuffer::Init(NumCanBuffers);
 	pendingMotionBuffers = nullptr;
 
-	transactionMutex.Create("CanTrans");
+	for (size_t port = 0; port < NumCanPorts; port++)
+	{
+		transactionMutexes[port].Create((port == 0) ? "CanTrans" : "CanTransAux");
+#if SAME70
+		SetPinFunction(CanBusParams[port].txPin, CanBusParams[port].txPinFunction);
+		SetPinFunction(CanBusParams[port].rxPin, CanBusParams[port].rxPinFunction);
+#else
+		SetPinFunction(CanBusParams[port].txPin, CanBusParams[port].pinsFunction);
+		SetPinFunction(CanBusParams[port].rxPin, CanBusParams[port].pinsFunction);
+#endif
+	}
 
 #if SAME70
-	SetPinFunction(PrimaryCanParams.txPin, PrimaryCanParams.txPinFunction);
-	SetPinFunction(PrimaryCanParams.rxPin, PrimaryCanParams.rxPinFunction);
 	pmc_enable_upll_clock();			// configure_mcan sets up PCLK5 to be the UPLL divided by something, so make sure the UPLL is running
-#else
-	SetPinFunction(PrimaryCanParams.txPin, PrimaryCanParams.pinsFunction);
-	SetPinFunction(PrimaryCanParams.rxPin, PrimaryCanParams.pinsFunction);
 #endif
 
 	// Initialise the CAN hardware
 	CanTiming timing;
 	timing.SetDefaults(CanTiming::DefaultCanBitRate);
-	can0dev = CanDevice::Init(0, PrimaryCanParams.instanceNumber, Can0Config, can0Memory, timing, nullptr,
+	can0dev = CanDevice::Init(0, CanBusParams[0].instanceNumber, Can0Config, can0Memory, timing, nullptr,
 #if EXTERNAL_CAN_TIMESTAMP_COUNTER
 								nullptr
 #else
@@ -538,14 +532,7 @@ void CanInterface::Init() noexcept
 
 #if DUAL_CAN
 	receiveMutex.Create("CanRecv");
-# if SAME70
-	SetPinFunction(SecondaryCanParams.txPin, SecondaryCanParams.txPinFunction);
-	SetPinFunction(SecondaryCanParams.rxPin, SecondaryCanParams.rxPinFunction);
-# else
-	SetPinFunction(SecondaryCanParams.txPin, SecondaryCanParams.pinsFunction);
-	SetPinFunction(SecondaryCanParams.rxPin, SecondaryCanParams.pinsFunction);
-# endif
-	can1dev = CanDevice::Init(1, SecondaryCanParams.instanceNumber, Can1Config, can1Memory, timing, nullptr, nullptr);		// left disabled until M953 I0, so that a classic CAN bus never sees our CAN-FD frames
+	can1dev = CanDevice::Init(1, CanBusParams[1].instanceNumber, Can1Config, can1Memory, timing, nullptr, nullptr);		// left disabled until M953 I0, so that a classic CAN bus never sees our CAN-FD frames
 #endif
 
 	CanMotion::Init();
@@ -1164,18 +1151,19 @@ static GCodeResult SendRequestOnPortAndGetCustomReply(size_t requestedPort, CanM
 	}
 #endif
 
+	const size_t port = (requestedPort == CanInterface::PortOfBoard) ? GetPortFor(dest) : requestedPort;
+	if (port == NoPort)
 	{
-		// This code isn't re-entrant and it can get called from a task other than Main to shut the system down, so we need to use a mutex
-		// Port 1 is only reconfigured while holding this mutex as well, so its mode can't change during the transaction
-		MutexLocker lock(transactionMutex);
+		CanMessageBuffer::Free(buf);
+		reply.lcatf("Board %u has not been heard on CAN%u or CAN%u", dest, GetCanNumber(0), GetCanNumber(1));
+		return GCodeResult::error;
+	}
 
-		const size_t port = (requestedPort == CanInterface::PortOfBoard) ? GetPortFor(dest) : requestedPort;
-		if (port == NoPort)
-		{
-			CanMessageBuffer::Free(buf);
-			reply.lcatf("Board %u has not been heard on CAN%u or CAN%u", dest, GetCanNumber(0), GetCanNumber(1));
-			return GCodeResult::error;
-		}
+	{
+		// This code isn't re-entrant and it can get called from a task other than Main to shut the system down, so we need to use a mutex.
+		// Port 1 is only reconfigured while holding its mutex as well, so its mode can't change during the transaction. If the board was forgotten
+		// or moved to the other bus while we waited for the mutex, the request times out like one sent to a board that has just been unplugged.
+		MutexLocker lock(transactionMutexes[port]);
 
 		CanDevice *_ecv_null const dev = GetPortDevice(port);
 		if (dev == nullptr)
@@ -1295,7 +1283,7 @@ void CanInterface::SendResponseNoFree(CanMessageBuffer *buf) noexcept
 	// Responses are only sent while processing a received message, so they go back on the bus the request came from.
 	// That bus has a board on it even if we have not learned its address, e.g. a 3HC bootloader using the firmware update address
 	ReadLocker lock(port1Lock);
-	SendCanMessageOnDevice(receivingPort, (receivingPort == 0) ? can0dev : IsPort1Up() ? can1dev : nullptr, TxBufferIndexResponse, MaxResponseSendWait, buf);
+	SendCanMessageOnDevice(buf->bus, (buf->bus == 0) ? can0dev : IsPort1Up() ? can1dev : nullptr, TxBufferIndexResponse, MaxResponseSendWait, buf);
 #else
 	SendCanMessage(TxBufferIndexResponse, MaxResponseSendWait, buf);
 #endif
@@ -1528,6 +1516,7 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *param) noexcept
 	{
 		if (dev->ReceiveMessage(RxBufferIndexRequest, TaskBase::TimeoutUnlimited, &buf))
 		{
+			buf.bus = port;													// responses are built in this buffer and go back on the same bus
 			if (reprap.Debug(Module::CAN))
 			{
 				buf.DebugPrint((port == 0) ? "Rx0:" : "CAN0 Rx0:");
@@ -1539,7 +1528,6 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *param) noexcept
 			{
 				continue;
 			}
-			receivingPort = port;
 #endif
 			CommandProcessor::ProcessReceivedMessage(&buf);
 		}
@@ -2459,7 +2447,7 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 	{
 		if (seen || seenPortSetting)
 		{
-			MutexLocker transactionLock(transactionMutex);
+			MutexLocker transactionLock(transactionMutexes[1]);
 			MutexLocker receiveLock(receiveMutex);
 			WriteLocker port1WriteLock(port1Lock);
 			const Port1Mode newMode = classic ? Port1Mode::classic : Port1Mode::expansion;
