@@ -104,7 +104,7 @@ class Move final INHERIT_OBJECT_MODEL
 {
 public:
 	// Enumeration to describe the status of a drive
-	enum class DriverStatus : uint8_t { disabled, idle, enabled };
+	NamedEnum(DriverStatus, uint8_t, disabled, idle, enabled);
 
 	Move() noexcept;
 	void Init() noexcept;													// Start me up
