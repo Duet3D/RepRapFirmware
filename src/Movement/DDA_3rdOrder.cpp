@@ -114,9 +114,9 @@ static MovementProfile debugProfile;
 // Plan some moves that haven't yet been committed and store the plan in plannedProfile.
 // 'firstUnpreparedMove' is the oldest uncommitted move.
 // 'stopping' is true if we want to stop in a controlled manner as quickly as possible; else we have added one or more moves so we may be able to increase the speed of already-planned moves.
-/*static*/ void DDA::PlanMoves(DDA *firstUnpreparedMove, MovementProfile& plannedProfile, bool stopping) noexcept
+// Returns the first move that the plan does not cover. When stopping, returns nullptr without touching plannedProfile if the queued moves do not give enough distance to stop in.
+/*static*/ DDA *_ecv_null DDA::PlanMoves(DDA *firstUnpreparedMove, MovementProfile& plannedProfile, bool stopping) noexcept
 {
-	// For now we ignore 'stopping'. Need to implement it when we add support for feed hold.
 	// Find a sequence of moves that have approximately the same requestedSpeed and maxEndSpeed, apart from the last one which may have a lower or zero maxPrevEndSpeed
 	DDA *lastMoveToPlan = firstUnpreparedMove;
 	DDA *nextMove;
@@ -126,7 +126,35 @@ static MovementProfile debugProfile;
 	float fminJerk = firstUnpreparedMove->jerk * firstUnpreparedMove->movementRatio;
 	float fminMaxAcc = firstUnpreparedMove->maxAcceleration * firstUnpreparedMove->movementRatio;
 	unsigned int numMoves = 1;
-	while ((nextMove = lastMoveToPlan->next)->IsProvisional() && nextMove->IsSCurveMove() && nextMove->beforePrepare.maxPrevEndSpeed != 0.0)
+	if (stopping)
+	{
+		// Cover just enough moves for the quickest stop within the limits of the moves covered, so that the stop lands on a move boundary and the moves after it survive
+		for (;;)
+		{
+			MovementProfile stopProfile;
+			stopProfile.startSpeed = (double)(firstUnpreparedMove->startSpeed * firstUnpreparedMove->movementRatio);
+			stopProfile.startAcceleration = (double)(firstUnpreparedMove->startAcceleration * firstUnpreparedMove->movementRatio);
+			stopProfile.jerk = (double)fminJerk;
+			stopProfile.peakAcceleration = (double)fminMaxAcc;
+			stopProfile.peakDeceleration = -(double)fminMaxAcc;
+			if (stopProfile.CalculateStopDistance() <= distanceToPlan)
+			{
+				break;
+			}
+			nextMove = lastMoveToPlan->next;
+			if (!nextMove->IsProvisional() || !nextMove->IsSCurveMove() || nextMove->beforePrepare.maxPrevEndSpeed == 0.0)
+			{
+				return nullptr;								// the queue ends or must be at standstill before the stop distance is covered
+			}
+			distanceToPlan += (double)(nextMove->totalDistance * nextMove->movementRatio);
+			if (nextMove->jerk * nextMove->movementRatio < fminJerk) { fminJerk = nextMove->jerk * nextMove->movementRatio; }
+			if (nextMove->maxAcceleration * nextMove->movementRatio < fminMaxAcc) { fminMaxAcc = nextMove->maxAcceleration * nextMove->movementRatio; }
+			lastMoveToPlan = nextMove;
+			numMoves++;
+		}
+		nextMove = lastMoveToPlan->next;
+	}
+	while (!stopping && (nextMove = lastMoveToPlan->next)->IsProvisional() && nextMove->IsSCurveMove() && nextMove->beforePrepare.maxPrevEndSpeed != 0.0)
 	{
 		// See whether we can reasonably include this move in the plan.
 		// First test whether its requested speed is more or less the same as the requested speed of the move(s) so far.
@@ -150,7 +178,7 @@ static MovementProfile debugProfile;
 		++numMoves;
 	}
 
-	plannedProfile.usesAllMoves = (nextMove->GetState() == DDA::empty);
+	plannedProfile.usesAllMoves = !stopping && nextMove->GetState() == DDA::empty;		// a stop plan must not be extended when more moves arrive
 	plannedProfile.startSpeed = firstUnpreparedMove->startSpeed * firstUnpreparedMove->movementRatio;
 	plannedProfile.startAcceleration = firstUnpreparedMove->startAcceleration * firstUnpreparedMove->movementRatio;
 	plannedProfile.numberOfMovesCovered = numMoves;
@@ -168,7 +196,7 @@ static MovementProfile debugProfile;
 					numMoves, distanceToPlan, planReqSpeed, planMaxAcc, minJerk, plannedProfile.startSpeed, plannedProfile.startAcceleration);
 	}
 
-	plannedProfile.topSpeed = planReqSpeed;									// speed we are aiming for, may get reduced
+	plannedProfile.topSpeed = stopping ? plannedProfile.startSpeed : planReqSpeed;	// speed we are aiming for, may get reduced; a stop only lets a positive start acceleration jerk down
 	plannedProfile.peakAcceleration = planMaxAcc;							// maximum acceleration allowed
 	plannedProfile.peakDeceleration = -planMaxAcc;							// maximum deceleration allowed, for now always the same as maximum acceleration
 
@@ -197,6 +225,7 @@ static MovementProfile debugProfile;
 #if COPY_PLAN	//DEBUG
 	debugProfile = plannedProfile;
 #endif
+	return nextMove;
 }
 
 // Given a profile covering a number of moves, allocate one move from the profile.

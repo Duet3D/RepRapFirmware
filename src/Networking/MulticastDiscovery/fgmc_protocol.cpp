@@ -86,7 +86,7 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, const uint8_t* inputBuffer
 			break;
 
 		case FGMCCommand::MCD_COMMAND_DNETINF:
-			if (strncmp(pInGenericHeader->fgmc_destination_id_, uniqueId, SIZE_FGMC_DEST_ID) == 0)
+			if (rxLength >= sizeof(FGMC_GenericHeader) + sizeof(FGMC_ReqDownloadNetInfoHeader) && strncmp(pInGenericHeader->fgmc_destination_id_, uniqueId, SIZE_FGMC_DEST_ID) == 0)
 			{
 				// fgmc command: download network information
 				FGMC_ReqDownloadNetInfoHeader* const pInCmdPointer =
@@ -104,7 +104,7 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, const uint8_t* inputBuffer
 			break;
 
 		case FGMCCommand::MCD_COMMAND_IDENTIFY:
-			if (strncmp(pInGenericHeader->fgmc_destination_id_, uniqueId, SIZE_FGMC_DEST_ID) == 0)
+			if (rxLength >= sizeof(FGMC_GenericHeader) + sizeof(FGMC_ReqIdentify) && strncmp(pInGenericHeader->fgmc_destination_id_, uniqueId, SIZE_FGMC_DEST_ID) == 0)
 			{
 				// fgmc command: identify
 				FGMC_ReqIdentify* pInCmdPointer =
@@ -278,6 +278,7 @@ void FGMCProtocol::cmdDnetinf(FGMC_ReqDownloadNetInfoHeader* pInCmdHeader, uint3
 	ifData.configuredGateway.SetV4LittleEndian(LoadLEU32(pInCmdHeader->fgmc_ip_v4_static_gateway_));
 
 	// set new device name
+	pInCmdHeader->fgmc_device_name_[SIZE_DEVICE_NAME - 1] = '\0';
 	// filter out " (X19)  / (X18)
 	for (uint32_t i = 0; i < SIZE_DEVICE_NAME; i++)
 	{

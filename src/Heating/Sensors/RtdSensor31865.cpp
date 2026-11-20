@@ -246,9 +246,9 @@ void RtdSensor31865::Poll() noexcept
 		}
 		else
 		{
-			const uint16_t ohmsx100 = (uint16_t)((((rawVal >> 1) & 0x7FFF) * rrefTimes100) >> 15);
+			const uint64_t ohmsx100 = ((uint64_t)((rawVal >> 1) & 0x7FFF) * rrefTimes100) >> 15;
 			float t;
-			sts = GetPT100Temperature(t, ohmsx100);
+			sts = GetPT100Temperature(t, (uint16_t)min<uint64_t>(ohmsx100, 0xFFFF));		// saturate so that a high resistance reads as open circuit
 			SetResult(t, sts);
 		}
 	}

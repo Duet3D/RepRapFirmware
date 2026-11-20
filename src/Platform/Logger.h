@@ -55,7 +55,7 @@ private:
 	uint32_t lastFlushTime;
 	FilePosition lastFlushFileSize;
 	bool dirty;
-	bool inLogger;
+	std::atomic<bool> inLogger;
 	LogLevel logLevel;
 };
 

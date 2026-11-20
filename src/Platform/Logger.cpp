@@ -14,15 +14,19 @@
 #include "Platform.h"
 #include "Version.h"
 
-// Simple lock class that sets a variable true when it is created and makes sure it gets set false when it falls out of scope
+// Simple lock class that claims the logger when it is created and makes sure it gets released when it falls out of scope.
+// It does not wait: a second task, or the same task re-entering the logger, does not acquire it and must skip the operation.
+// Waiting is not an option because in SBC mode the log file is written by the SBC task, which may itself log a message
 class Lock
 {
 public:
-	explicit Lock(bool& pb) : b(pb) { b = true; }
-	~Lock() { b = false; }
+	explicit Lock(std::atomic<bool>& pb) noexcept : b(pb), acquired(!pb.exchange(true)) { }
+	~Lock() { if (acquired) { b = false; } }
+	bool IsAcquired() const noexcept { return acquired; }
 
 private:
-	bool& b;
+	std::atomic<bool>& b;
+	bool acquired;
 };
 
 Logger::Logger(LogLevel logLvl) noexcept : logFile(), lastFlushTime(0), lastFlushFileSize(0), dirty(false), inLogger(false), logLevel(logLvl)
@@ -31,9 +35,9 @@ Logger::Logger(LogLevel logLvl) noexcept : logFile(), lastFlushTime(0), lastFlus
 
 GCodeResult Logger::Start(time_t currentTime, const StringRef& filename, const StringRef& reply) noexcept
 {
-	if (!inLogger && logLevel > LogLevel::off)
+	Lock loggerLock(inLogger);
+	if (loggerLock.IsAcquired() && logLevel > LogLevel::off)
 	{
-		Lock loggerLock(inLogger);
 		FileStore *_ecv_null const f = reprap.GetPlatform().OpenSysFile(filename.c_str(), OpenMode::append);
 		if (f == nullptr)
 		{
@@ -78,9 +82,9 @@ void Logger::LogFirmwareInfo(time_t currentTime) noexcept
 
 void Logger::Stop(time_t currentTime) noexcept
 {
-	if (logFile.IsLive() && !inLogger)
+	Lock loggerLock(inLogger);
+	if (loggerLock.IsAcquired() && logFile.IsLive())
 	{
-		Lock loggerLock(inLogger);
 		InternalLogMessage(currentTime, "Event logging stopped\n", MessageLogLevel::info);
 		logFile.Close();
 		reprap.StateUpdated();
@@ -107,7 +111,7 @@ bool Logger::IsLoggingEnabledFor(const MessageType mt) const noexcept
 
 void Logger::LogMessage(time_t currentTime, const char *_ecv_array message, MessageType type) noexcept
 {
-	if (logFile.IsLive() && !inLogger && !IsEmptyMessage(message))
+	if (logFile.IsLive() && !IsEmptyMessage(message))
 	{
 		const auto messageLogLevel = GetMessageLogLevel(type);
 		if (!IsLoggingEnabledFor(messageLogLevel))
@@ -115,13 +119,16 @@ void Logger::LogMessage(time_t currentTime, const char *_ecv_array message, Mess
 			return;
 		}
 		Lock loggerLock(inLogger);
-		InternalLogMessage(currentTime, message, messageLogLevel);
+		if (loggerLock.IsAcquired() && logFile.IsLive())
+		{
+			InternalLogMessage(currentTime, message, messageLogLevel);
+		}
 	}
 }
 
 void Logger::LogMessage(time_t currentTime, OutputBuffer *buf, MessageType type) noexcept
 {
-	if (logFile.IsLive() && !inLogger && !IsEmptyMessage(buf->Data()))
+	if (logFile.IsLive() && !IsEmptyMessage(buf->Data()))
 	{
 		const auto messageLogLevel = GetMessageLogLevel(type);
 		if (!IsLoggingEnabledFor(messageLogLevel))
@@ -129,6 +136,10 @@ void Logger::LogMessage(time_t currentTime, OutputBuffer *buf, MessageType type)
 			return;
 		}
 		Lock loggerLock(inLogger);
+		if (!loggerLock.IsAcquired() || !logFile.IsLive())
+		{
+			return;
+		}
 		bool ok = WriteDateTimeAndLogLevelPrefix(currentTime, messageLogLevel);
 		if (ok)
 		{
@@ -178,7 +189,8 @@ void Logger::InternalLogMessage(time_t currentTime, const char *_ecv_array messa
 // This is called regularly by Platform to give the logger an opportunity to flush the file buffer
 void Logger::Flush(bool forced) noexcept
 {
-	if (logFile.IsLive() && dirty && !inLogger)
+	Lock loggerLock(inLogger);
+	if (loggerLock.IsAcquired() && logFile.IsLive() && dirty)
 	{
 		// Log file is dirty and can be flushed.
 		// To avoid excessive disk write operations, flush it only if one of the following is true:
@@ -189,7 +201,6 @@ void Logger::Flush(bool forced) noexcept
 		const uint32_t now = millis();
 		if (forced || now - lastFlushTime >= LogFlushInterval || currentPos/512 != lastFlushFileSize/512)
 		{
-			Lock loggerLock(inLogger);
 			logFile.Flush();
 			lastFlushTime = millis();
 			lastFlushFileSize = currentPos;

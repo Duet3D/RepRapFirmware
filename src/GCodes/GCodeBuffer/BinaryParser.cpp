@@ -945,7 +945,7 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 					{
 						s.cat(':');
 					}
-					s.cat(((const uint8_t*)val != 0) ? '1' : '0');
+					s.cat((*reinterpret_cast<const uint8_t*>(val) != 0) ? '1' : '0');
 					val += sizeof(uint8_t);
 				}
 				break;
@@ -954,7 +954,8 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 			{
 				uint64_t ulVal;
 				memcpy(reinterpret_cast<char *>(&ulVal), val, sizeof(uint64_t));
-				s.catf("%" PRIu64, ulVal);
+				val += sizeof(uint64_t);
+				s.catf("%c%" PRIu64, param->letter, ulVal);
 				break;
 			}
 			case DataType::Null:

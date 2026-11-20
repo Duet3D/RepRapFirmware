@@ -313,7 +313,7 @@ TemperatureError AdcSensorADS131A02Chan0::TryInitAdc() noexcept
 	TemperatureError ret = DoTransaction(ADS131Command::reset, ADS131Register::none, 0, status, readings, false);
 	if (ret == TemperatureError::ok)
 	{
-		ret == WaitReady();
+		ret = WaitReady();
 		if (ret == TemperatureError::ok)
 		{
 			ret = DoTransaction(ADS131Command::unlock, ADS131Register::none, 0, status, readings, false);

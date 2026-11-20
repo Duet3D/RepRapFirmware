@@ -8,8 +8,10 @@
 #include "GCodeInput.h"
 
 #include <Platform/RepRap.h>
+#include <Movement/Move.h>
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
+#include <Storage/MassStorage.h>
 
 #include <Devices.h>
 
@@ -113,7 +115,7 @@ size_t RegularGCodeInput::BufferSpaceLeft() const noexcept
 	return (readingPointer - writingPointer - 1u) % GCodeInputBufferSize;
 }
 
-// Check a character for urgent commands: M112 (emergency stop), M122 (diagnostics) and M108 (cancel wait for temperature).
+// Check a character for urgent commands: M112 (emergency stop), M122 (diagnostics), M108 (cancel wait for temperature), M25.1 (feed hold) and M24 (feed hold release).
 // Return true if an urgent command was handled and the buffer was reset
 bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 {
@@ -132,14 +134,12 @@ bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 			break;
 
 		case GCodeInputState::doingCode:
-			if (c == 0 || c == '\r' || c == '\n')
-			{
-				state = GCodeInputState::idle;
-			}
 			break;
 
 		case GCodeInputState::doingMCode:
-			state = (c == '1') ? GCodeInputState::doingMCode1 : GCodeInputState::doingCode;
+			state = (c == '1') ? GCodeInputState::doingMCode1
+				  : (c == '2') ? GCodeInputState::doingMCode2
+				  : GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingMCode1:
@@ -147,6 +147,61 @@ bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 				  : (c == '1') ? GCodeInputState::doingMCode11
 				  : (c == '2') ? GCodeInputState::doingMCode12
 				  : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode2:
+			state = (c == '4') ? GCodeInputState::doingMCode24
+				  : (c == '5') ? GCodeInputState::doingMCode25
+				  : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode24:
+			// A plain M24 while a feed hold is active and no print is paused only has to release the hold. Do it here and swallow the command,
+			// because the channel it arrived on may be the one whose macro the hold has stopped, in which case the queued copy would never run
+			if ((c < ' ' || c == ';') && reprap.GetMove().IsFeedHoldActive() && reprap.GetGCodes().GetPauseState() != PauseState::paused)
+			{
+				reprap.GetMove().ReleaseFeedHold();
+				Reset();
+				return true;
+			}
+			state = GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode25:
+			state = (c == '.') ? GCodeInputState::doingMCode25dot : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode25dot:
+			state = (c == '1') ? GCodeInputState::doingMCode251 : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode251:
+			if (c <= ' ' || c == ';')
+			{
+				// Feed hold requested, with or without parameters. Stop the motion now because the GCodeBuffer may be blocked by a move,
+				// and let the command execute again from the queue, which repeats the hold harmlessly or performs the S1 stop-and-abort
+				reprap.GetMove().FeedHold();
+			}
+			state = (c == ' ') ? GCodeInputState::doingMCode251space : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode251space:
+			state = (c == 'S') ? GCodeInputState::doingMCode251S : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode251S:
+			state = (c == '1') ? GCodeInputState::doingMCode251S1 : GCodeInputState::doingCode;
+			break;
+
+		case GCodeInputState::doingMCode251S1:
+			if (c < ' ' || c == ';')
+			{
+				// Stop-and-abort requested. The channel may be the one whose macro is to be aborted, so the queued copy would never run; hand it to the main task instead
+				reprap.GetGCodes().RequestStopAndAbort();
+				Reset();
+				return true;
+			}
+			state = GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingMCode10:
@@ -200,6 +255,12 @@ bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 			state = GCodeInputState::doingCode;
 			break;
 	}
+
+	// A line end finishes the command in every state, including the ones that matched part of an urgent command, or the scanner would miss the next command
+	if (c == 0 || c == '\r' || c == '\n')
+	{
+		state = GCodeInputState::idle;
+	}
 	return false;
 }
 
@@ -215,7 +276,7 @@ size_t BufferedStreamGCodeInput::BytesCached() const noexcept
 		return cached;					// raw file data is never an urgent command, so none of it is held back
 	}
 
-	// The scanner state encodes how far a potential M112/M122/M108 has been matched, which is exactly how many
+	// The scanner state encodes how far a potential M112/M122/M108/M25.1 has been matched, which is exactly how many
 	// trailing characters must stay hidden until we know whether they form an urgent command
 	size_t held;
 	switch (state)
@@ -224,17 +285,33 @@ size_t BufferedStreamGCodeInput::BytesCached() const noexcept
 		held = 1;
 		break;
 	case GCodeInputState::doingMCode1:
+	case GCodeInputState::doingMCode2:
 		held = 2;
 		break;
 	case GCodeInputState::doingMCode10:
 	case GCodeInputState::doingMCode11:
 	case GCodeInputState::doingMCode12:
+	case GCodeInputState::doingMCode24:
+	case GCodeInputState::doingMCode25:
 		held = 3;
 		break;
 	case GCodeInputState::doingMCode108:
 	case GCodeInputState::doingMCode112:
 	case GCodeInputState::doingMCode122:
+	case GCodeInputState::doingMCode25dot:
 		held = 4;
+		break;
+	case GCodeInputState::doingMCode251:
+		held = 5;
+		break;
+	case GCodeInputState::doingMCode251space:
+		held = 6;
+		break;
+	case GCodeInputState::doingMCode251S:
+		held = 7;
+		break;
+	case GCodeInputState::doingMCode251S1:
+		held = 8;
 		break;
 	default:
 		held = 0;
@@ -248,6 +325,24 @@ size_t BufferedStreamGCodeInput::BytesCached() const noexcept
 // form one stream: dropping only our half would splice the remains of a truncated line onto the start of the next one
 void BufferedStreamGCodeInput::Spin(GCodeBuffer& gb) noexcept
 {
+#if HAS_MASS_STORAGE
+	// A binary upload cannot complete once its host has gone, and left alone it would write the next connection's commands into the file
+	if (gb.IsWritingBinary() && UploadHostDisconnected())
+	{
+		AbortBinaryUpload(gb);
+	}
+# if CORE_USES_TINYUSB
+	if (directReadAbandoned)
+	{
+		if (!device.IsConnected())
+		{
+			NoteAbandonedReadProgress();
+		}
+		ServiceAbandonedRead();
+	}
+# endif
+#endif
+
 	if (!device.IsConnected())
 	{
 		// The USB host has closed the port. Discard anything we have buffered as well as anything the USB driver has
@@ -257,6 +352,9 @@ void BufferedStreamGCodeInput::Spin(GCodeBuffer& gb) noexcept
 		{
 			(void)device.read();
 		}
+#if HAS_MASS_STORAGE && CORE_USES_TINYUSB
+		directTailLength = 0;
+#endif
 		if (RegularGCodeInput::BytesCached() != 0)
 		{
 			Reset();
@@ -265,13 +363,27 @@ void BufferedStreamGCodeInput::Spin(GCodeBuffer& gb) noexcept
 		return;
 	}
 
+#if HAS_MASS_STORAGE && CORE_USES_TINYUSB
+	// During a binary upload of known size, FillBinary takes the data straight from the device
+	if (gb.IsWritingBinary() && gb.GetBinaryBytesRemaining() != 0)
+	{
+		return;
+	}
+
+	if (directTailLength != 0 || device.available() != 0)
+#else
 	if (device.available() != 0)
+#endif
 	{
 		const size_t spaceLeft = BufferSpaceLeft();
 		if (spaceLeft >= GCodeInputUSBReadThreshold)
 		{
 			const size_t maxToTransfer = min<size_t>(spaceLeft, GCodeInputBufferSize - writingPointer);
+#if HAS_MASS_STORAGE && CORE_USES_TINYUSB
+			const size_t endPointer = writingPointer + ReadInput(buffer + writingPointer, maxToTransfer);
+#else
 			const size_t endPointer = writingPointer + device.readBytes(buffer + writingPointer, maxToTransfer);
+#endif
 			while (writingPointer != endPointer)
 			{
 				const size_t pos = writingPointer;
@@ -303,8 +415,219 @@ void BufferedStreamGCodeInput::Spin(GCodeBuffer& gb) noexcept
 
 bool BufferedStreamGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept
 {
+#if HAS_MASS_STORAGE && CORE_USES_TINYUSB
+	// An upload of unknown size ends with the end-of-file string, so it has to go through the byte-by-byte path below
+	if (gb->IsWritingBinary() && gb->GetBinaryBytesRemaining() != 0)
+	{
+		FillBinary(*gb);
+		return false;
+	}
+#endif
 	return StandardGCodeInput::FillBuffer(gb);
 }
+
+#if HAS_MASS_STORAGE
+
+void BufferedStreamGCodeInput::NoteBinaryUpload(const char *_ecv_array directory, const char *_ecv_array fileName) noexcept
+{
+	(void)MassStorage::CombineName(uploadFilePath.GetRef(), directory, fileName);
+# if CORE_USES_TINYUSB
+	uploadDisconnectCount = device.GetDisconnectCount();
+# endif
+}
+
+// The disconnect count also catches a host that went away and came back between two calls, which a slow SD card write makes possible
+bool BufferedStreamGCodeInput::UploadHostDisconnected() const noexcept
+{
+# if CORE_USES_TINYUSB
+	return !device.IsConnected() || device.GetDisconnectCount() != uploadDisconnectCount;
+# else
+	return !device.IsConnected();
+# endif
+}
+
+// Abandon a binary upload whose host has gone. The partial file is deleted, as it is for a failed HTTP upload
+void BufferedStreamGCodeInput::AbortBinaryUpload(GCodeBuffer& gb) noexcept
+{
+	gb.AbortBinaryUpload();
+	Reset();
+	gb.DiscardPartialLine();
+# if CORE_USES_TINYUSB
+	directTailLength = 0;
+	if (device.IsDirectReadPending())
+	{
+		directReadAbandoned = true;
+		NoteAbandonedReadProgress();
+	}
+	else
+	{
+		device.ReturnReceiveEndpoint();
+	}
+# endif
+	(void)MassStorage::Delete(uploadFilePath.GetRef(), ErrorMessageMode::messageUnlessMissing);
+	reprap.GetPlatform().MessageF(ErrorMessage, "USB upload of %s aborted because the host disconnected, partial file deleted\n", uploadFilePath.c_str());
+	uploadFilePath.Clear();
+}
+
+# if CORE_USES_TINYUSB
+
+// Take input for the ring buffer, from what followed the upload data in the last direct read before anything newer in the device
+size_t BufferedStreamGCodeInput::ReadInput(char *_ecv_array dest, size_t maxBytes) noexcept
+{
+	if (directTailLength == 0)
+	{
+		return device.readBytes(dest, maxBytes);
+	}
+
+	const size_t bytesToCopy = min<size_t>(maxBytes, directTailLength);
+	memcpy(dest, directTail, bytesToCopy);
+	directTail += bytesToCopy;
+	directTailLength -= bytesToCopy;
+	return bytesToCopy;
+}
+
+// Note how much of the abandoned read is upload data. Whatever arrives while the host is disconnected still belongs to the
+// upload, so this is called until the host is back. If the hardware cannot tell, the whole read counts as upload data
+void BufferedStreamGCodeInput::NoteAbandonedReadProgress() noexcept
+{
+	if (!device.GetDirectReadProgress(abandonedUploadBytes))
+	{
+		abandonedUploadBytes = DirectBufferSize;
+	}
+}
+
+// A direct read cannot be cancelled, so one that was pending when its upload was aborted is left to finish, which takes the
+// next data the host sends or a bus reset. Its buffer starts with any upload data that arrived before the host went away.
+// That part is dropped, because it could be the text of a G-code file, and the rest is the input of the next connection.
+void BufferedStreamGCodeInput::ServiceAbandonedRead() noexcept
+{
+	size_t bytesRead;
+	if (!device.IsReceiveEndpointTaken())
+	{
+		directReadAbandoned = false;
+	}
+	else if (device.IsDirectReadComplete(bytesRead))
+	{
+		if (bytesRead > abandonedUploadBytes)
+		{
+			directTail = directBuffers[directBufferInUse] + abandonedUploadBytes;
+			directTailLength = bytesRead - abandonedUploadBytes;
+		}
+		device.ReturnReceiveEndpoint();
+		directReadAbandoned = false;
+	}
+}
+
+// Start receiving into the buffer selected by directBufferInUse. The length is rounded up to whole packets, because a read
+// that ends inside a packet would overrun the buffer, so the last read of an upload can bring some of the G-code that follows it
+bool BufferedStreamGCodeInput::StartDirectRead(FilePosition bytesExpected) noexcept
+{
+	const size_t packetSize = device.GetMaxPacketSize();
+	return device.StartDirectRead(directBuffers[directBufferInUse], (bytesExpected >= DirectBufferSize) ? DirectBufferSize : (((size_t)bytesExpected + packetSize - 1) / packetSize) * packetSize);
+}
+
+// Pass the data of a binary upload of known size to the file. What is in the ring buffer and in the CDC FIFO arrived first and
+// is written first. The rest is received straight into two alternating buffers, one of which keeps receiving while the other
+// is written, so the data is neither copied through the FIFO nor held up by the time a file write takes.
+void BufferedStreamGCodeInput::FillBinary(GCodeBuffer& gb) noexcept
+{
+	while (RegularGCodeInput::BytesCached() != 0)
+	{
+		const size_t contiguous = min<size_t>(RegularGCodeInput::BytesCached(), GCodeInputBufferSize - readingPointer);
+		const size_t used = gb.WriteBinaryBlock(buffer + readingPointer, contiguous);
+		readingPointer = (readingPointer + used) % GCodeInputBufferSize;
+		if (!gb.IsWritingBinary() || used == 0)
+		{
+			return;								// upload finished, so any bytes left in the ring buffer are G-code
+		}
+	}
+
+	if (directReadAbandoned)
+	{
+		ServiceAbandonedRead();
+		if (directReadAbandoned)
+		{
+			return;
+		}
+	}
+
+	if (directTailLength != 0)
+	{
+		const size_t used = gb.WriteBinaryBlock(reinterpret_cast<const char *>(directTail), directTailLength);
+		directTail += used;
+		directTailLength -= used;
+		if (!gb.IsWritingBinary())
+		{
+			return;
+		}
+	}
+
+	if (!device.IsReceiveEndpointTaken())
+	{
+		// The endpoint can only be taken once the CDC stream has filled its FIFO and stopped, so leave the FIFO alone until
+		// then. If the FIFO already holds the rest of the upload there is nothing left to receive directly
+		if ((FilePosition)device.available() < gb.GetBinaryBytesRemaining() && !device.TakeReceiveEndpoint())
+		{
+			return;
+		}
+
+		if (directBuffers[0] == nullptr)
+		{
+			for (uint8_t *_ecv_array _ecv_null& directBuffer : directBuffers)
+			{
+				directBuffer = static_cast<uint8_t *>(Tasks::AllocPermanent(DirectBufferSize, std::align_val_t(DirectBufferAlignment)));
+			}
+		}
+
+		while (gb.IsWritingBinary())
+		{
+			const size_t bytesRead = device.readBytes(reinterpret_cast<char *>(directBuffers[0]), (size_t)min<FilePosition>(gb.GetBinaryBytesRemaining(), DirectBufferSize));
+			if (bytesRead == 0)
+			{
+				break;
+			}
+			(void)gb.WriteBinaryBlock(reinterpret_cast<const char *>(directBuffers[0]), bytesRead);
+		}
+
+		if (device.IsReceiveEndpointTaken())
+		{
+			directBufferInUse = 0;
+			(void)StartDirectRead(gb.GetBinaryBytesRemaining());
+		}
+		return;
+	}
+
+	const uint32_t startTime = millis();
+	size_t bytesRead;
+	while (device.IsDirectReadComplete(bytesRead))
+	{
+		const uint8_t *_ecv_array const data = directBuffers[directBufferInUse];
+		const FilePosition remaining = gb.GetBinaryBytesRemaining();
+		const size_t bytesToWrite = (size_t)min<FilePosition>(bytesRead, remaining);
+		if (remaining > bytesToWrite)
+		{
+			// Start the next read before writing this one, so that the endpoint keeps receiving during the file write
+			directBufferInUse ^= 1u;
+			(void)StartDirectRead(remaining - bytesToWrite);
+		}
+		else
+		{
+			directTail = data + bytesToWrite;
+			directTailLength = bytesRead - bytesToWrite;
+			device.ReturnReceiveEndpoint();
+		}
+
+		(void)gb.WriteBinaryBlock(reinterpret_cast<const char *>(data), bytesToWrite);
+		if (millis() - startTime >= MaxDirectMillisPerCall)
+		{
+			break;
+		}
+	}
+}
+
+# endif
+
+#endif
 
 #if defined(SERIAL_USB_DEVICE)
 

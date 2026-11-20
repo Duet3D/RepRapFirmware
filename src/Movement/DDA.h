@@ -173,7 +173,7 @@ public:
 	void SetSpeedRatioAndMaxJunctionSpeedForNonPrintingMoves(const Move& move) noexcept;
 	void SetStartSpeedAndAcceleration(float speed, float acceleration) noexcept { startSpeed = speed; startAcceleration = acceleration; }
 
-	static void PlanMoves(DDA *firstUnpreparedMove, MovementProfile& plannedProfile, bool stopping) noexcept;
+	static DDA *_ecv_null PlanMoves(DDA *firstUnpreparedMove, MovementProfile& plannedProfile, bool stopping) noexcept;	// Returns the first move the plan does not cover, or nullptr if a requested stop does not fit
 #endif
 
 	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcept;	// Try to push babystepping earlier in the move queue
@@ -195,6 +195,7 @@ public:
 
 	float GetAverageExtrusionSpeed() const noexcept pre(IsCommitted()) { return afterPrepare.averageExtrusionSpeed; }	// result is in mm/sec and applies to any forward extrusion, even extruder-only moves
 	bool HasForwardExtrusion() const noexcept { return flags.hasForwardExtrusion; }
+	bool HasReverseExtrusion() const noexcept { return flags.hasReverseExtrusion; }
 	bool HaveDoneIoBits() const noexcept { return flags.doneIoBits; }
 	bool HaveDoneFeedForward() const noexcept { return flags.doneFeedForward; }
 	bool HaveDoneOutputOnExtrude() const noexcept { return flags.doneOutputOnExtrude; }
@@ -205,6 +206,7 @@ public:
 	{
 		flags.controlLaserOrIoBits = false;
 		flags.hasForwardExtrusion = false;
+		flags.hasReverseExtrusion = false;
 		flags.doneOutputOnExtrude = false;
 	}
 
@@ -299,6 +301,7 @@ private:
 					 controlLaserOrIoBits : 1,		// True if this move controls the laser or iobits
 					 isolatedMove : 1,				// set if we disable input shaping for this move and wait for it to finish e.g. for a G1 H2 move
 					 hasForwardExtrusion : 1,		// set if any extruder has forward movement (used by M571)
+					 hasReverseExtrusion : 1,		// set if any extruder has reverse movement (used by M571)
 
 					 // These bits are modified during processing of the move
 					 doneIoBits : 1,				// set if we have written the IOBITS ports for this move

@@ -920,7 +920,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 			{
 				const char *endptr;
 				const int32_t index = StrToI32(filter, &endptr);
-				const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.uVal);
+				const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
 				int bitNumber;
 				if (endptr == filter || *endptr != ']' || index < 0 || (bitNumber = bm.GetSetBitNumber(index)) < 0)
 				{
@@ -1299,9 +1299,9 @@ decrease(strlen(idString))	// recursion variant
 				context.SetObsoleteFieldQueried();
 			}
 			idString = GetNextElement(idString);
+			ReadLocker lock(GetObjectLock(tableNumber));
 			const ExpressionValue val = e->func(this, context);
 			context.CheckStack(StackUsage::GetObjectValue_noTable);
-			ReadLocker lock(GetObjectLock(tableNumber));
 			return GetObjectValue(context, classDescriptor, val, idString);
 		}
 		if (tableNumber != 0)

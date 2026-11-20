@@ -47,6 +47,7 @@ void GlobalVariables::ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 	{
 		// Report a specific global variable, or part of one
 		const char *_ecv_array pos = GetNextElement(filter);				// find the end of the variable name
+		ReadLocker locker(lock);
 		const Variable *_ecv_null const var = vars.Lookup(filter, pos - filter, false);
 		if (var == nullptr)
 		{

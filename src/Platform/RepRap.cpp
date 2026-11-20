@@ -1077,17 +1077,20 @@ void RepRap::EmergencyStop() noexcept
 		}
 	}
 
-	const int32_t outputOnExtrudePort = platform->ReconfigureOutputOnExtrude(-1, 0.0);	// before move->Exit(), so the Laser task can finish a DueX write it may be blocked in
+	const Platform::OutputOnExtrudeConfig oldOutputOnExtrude = platform->ReconfigureOutputOnExtrude(Platform::OutputOnExtrudeConfig());	// before move->Exit(), so the Laser task can finish a DueX write it may be blocked in
 	heat->Exit();									// this also turns off all heaters
 	move->Exit();									// this stops the motors stepping
 #if SUPPORT_CAN_EXPANSION
-	// The CAN receiver is the only caller with a higher priority than the Laser task, so only it can have preempted that task between its decision and its write
-	if (outputOnExtrudePort >= 0)
+	// A caller with the same or a higher priority than the Laser task, such as the CAN receiver, may have preempted that task between its decision and its write
+	for (size_t i = 0; i < ARRAY_SIZE(oldOutputOnExtrude.ports); i++)
 	{
-		platform->GetGpOutPort(outputOnExtrudePort).WriteAnalog(0.0);
+		if ((oldOutputOnExtrude.ports[i] >= 0) && (oldOutputOnExtrude.pwm[i] > 0.0))
+		{
+			platform->GetGpOutPort(oldOutputOnExtrude.ports[i]).WriteAnalog(0.0);
+		}
 	}
 #else
-	(void)outputOnExtrudePort;
+	(void)oldOutputOnExtrude;
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -1962,26 +1965,28 @@ size_t RepRap::GetStatusIndex() const noexcept
 #if HAS_VOLTAGE_MONITOR
 			: (!platform->HasDriverPower() && !gCodes->IsSimulating())	? 3		// Off i.e. powered down
 #endif
-			: (gCodes->GetPauseState() == PauseState::pausing)			? 4		// Pausing
-			: (gCodes->GetPauseState() == PauseState::resuming)			? 5		// Resuming
-			: (gCodes->GetPauseState() == PauseState::paused)			? 6		// Paused
-			: (gCodes->IsCancellingPrint())								? 7		// Cancelling
+			: move->IsFeedHoldActive()									? 4		// Feed hold, which overrides the pause and print states because it stops their motion too
+			: move->IsReturningToHeldPosition()							? 6		// Resuming, on the way back to where the feed hold stopped after jogging
+			: (gCodes->GetPauseState() == PauseState::pausing)			? 5		// Pausing
+			: (gCodes->GetPauseState() == PauseState::resuming)			? 6		// Resuming
+			: (gCodes->GetPauseState() == PauseState::paused)			? 7		// Paused
+			: (gCodes->IsCancellingPrint())								? 8		// Cancelling
 			: (printMonitor->IsPrinting())
-			  	  ? ((gCodes->IsSimulating())							? 8		// Simulating
-			  		  : 												  9		// Printing
+			  	  ? ((gCodes->IsSimulating())							? 9		// Simulating
+			  		  : 												  10	// Printing
 			  	  	)
-			: (gCodes->IsDoingToolChange())								? 10	// Changing tool
+			: (gCodes->IsDoingToolChange())								? 11	// Changing tool
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement(0) ||
 			   gCodes->WaitingForAcknowledgement() ||
-			   heat->IsTuningHeater())									? 11	// Busy
-			:															  12;	// Idle
+			   heat->IsTuningHeater())									? 12	// Busy
+			:															  13;	// Idle
 
 }
 
 // Get the status character for the new-style status response
 char RepRap::GetStatusCharacter() const noexcept
 {
-	return "CFHODRSAMPTBI"[GetStatusIndex()];
+	return "CFHOLDRSAMPTBI"[GetStatusIndex()];
 }
 
 c_string RepRap::GetStatusString() const noexcept
@@ -1992,6 +1997,7 @@ c_string RepRap::GetStatusString() const noexcept
 		"updating",
 		"halted",
 		"off",
+		"held",
 		"pausing",
 		"resuming",
 		"paused",

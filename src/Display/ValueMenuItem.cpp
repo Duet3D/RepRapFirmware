@@ -333,7 +333,9 @@ bool ValueMenuItem::Adjust_AlterHelper(int clicks) noexcept
 				{
 					currentValue.fVal = 95.0 - 1.0;
 				}
-				currentValue.fVal = min<float>(currentValue.fVal + (float)clicks, reprap.GetHeat().GetHighestTemperatureLimit(Tool::GetLockedTool(itemNumber)->GetHeater(0)));
+				const ReadLockedPointer<Tool> tool = Tool::GetLockedTool(itemNumber);
+				const float limit = (tool.IsNull() || tool->HeaterCount() == 0) ? reprap.GetHeat().GetHighestTemperatureLimit() : reprap.GetHeat().GetHighestTemperatureLimit(tool->GetHeater(0));
+				currentValue.fVal = min<float>(currentValue.fVal + (float)clicks, limit);
 			}
 		}
 		else

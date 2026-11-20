@@ -1412,6 +1412,10 @@ bool GCodeBuffer::OpenFileToWrite(const char *_ecv_array directory, const char *
 	if (NOT_BINARY_AND(stringParser.OpenFileToWrite(directory, fileName, size, binaryWrite, fileCRC32)))
 	{
 		normalInput->SetWritingFile(true);
+		if (binaryWrite)
+		{
+			normalInput->NoteBinaryUpload(directory, fileName);
+		}
 		return true;
 	}
 	return false;
@@ -1438,7 +1442,37 @@ bool GCodeBuffer::IsWritingBinary() const noexcept
 
 bool GCodeBuffer::WriteBinaryToFile(char b) noexcept
 {
-	return IS_BINARY_OR(stringParser.WriteBinaryToFile(b));
+	const bool finished = IS_BINARY_OR(stringParser.WriteBinaryToFile(b));
+	if (finished)
+	{
+		normalInput->SetWritingFile(false);						// re-enable urgent command scanning on this input
+	}
+	return finished;
+}
+
+size_t GCodeBuffer::WriteBinaryBlock(const char *_ecv_array buf, size_t len) noexcept
+{
+	if (!NOT_BINARY_AND(true))
+	{
+		return len;
+	}
+	const size_t used = stringParser.WriteBinaryBlock(buf, len);
+	if (!stringParser.IsWritingBinary())
+	{
+		normalInput->SetWritingFile(false);						// re-enable urgent command scanning on this input
+	}
+	return used;
+}
+
+FilePosition GCodeBuffer::GetBinaryBytesRemaining() const noexcept
+{
+	return NOT_BINARY_AND(true) ? stringParser.GetBinaryBytesRemaining() : 0;
+}
+
+void GCodeBuffer::AbortBinaryUpload() noexcept
+{
+	IF_NOT_BINARY(stringParser.AbortBinaryUpload());
+	normalInput->SetWritingFile(false);							// re-enable urgent command scanning on this input
 }
 
 void GCodeBuffer::FinishWritingBinary() noexcept

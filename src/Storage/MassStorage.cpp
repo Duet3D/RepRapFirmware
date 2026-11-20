@@ -1461,6 +1461,7 @@ GCodeResult MassStorage::Unmount(size_t card, const StringRef& reply) noexcept
 
 # if HAS_MASS_STORAGE
 	SdCardInfo& inf = info[card];
+	MutexLocker lock(fsMutex);				// no file may be opened between the check and the unmount
 	if (AnyFileOpen(&inf.fileSystem))
 	{
 		// Don't unmount the card if any files are open on it

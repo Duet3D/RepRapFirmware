@@ -26,6 +26,7 @@ public:
 	virtual bool FillBuffer(GCodeBuffer *gb) noexcept = 0;		// Fill a GCodeBuffer with the last available G-code
 	virtual size_t BytesCached() const noexcept = 0;			// How many bytes have been cached?
 	virtual void SetWritingFile(bool wf) noexcept { (void)wf; }	// Suppress urgent command scanning while writing a file
+	virtual void NoteBinaryUpload(const char *_ecv_array directory, const char *_ecv_array fileName) noexcept { (void)directory; (void)fileName; }	// A binary upload has started on this input
 };
 
 // This class provides a standard implementation of FillBuffer that calls ReadByte() to supply individual characters
@@ -63,12 +64,20 @@ enum class GCodeInputState
 	doingCode,
 	doingMCode,
 	doingMCode1,
+	doingMCode2,
 	doingMCode10,
 	doingMCode11,
 	doingMCode12,
+	doingMCode24,
+	doingMCode25,
 	doingMCode108,
 	doingMCode112,
-	doingMCode122
+	doingMCode122,
+	doingMCode25dot,
+	doingMCode251,
+	doingMCode251space,
+	doingMCode251S,
+	doingMCode251S1
 };
 
 // This class allows caching of dynamic content (from web-based sources) and implements a simple ring buffer.
@@ -104,8 +113,38 @@ public:
 	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
 	size_t BytesCached() const noexcept override;				// How many bytes are ready for FillBuffer, hiding a trailing partly-matched urgent command
 	virtual void Spin(GCodeBuffer& gb) noexcept;				// Read from the device into the buffer and check for urgent commands
+#if HAS_MASS_STORAGE
+	void NoteBinaryUpload(const char *_ecv_array directory, const char *_ecv_array fileName) noexcept override;
+#endif
 
 private:
+#if HAS_MASS_STORAGE
+	bool UploadHostDisconnected() const noexcept;				// True if the host disconnected since the binary upload started
+	void AbortBinaryUpload(GCodeBuffer& gb) noexcept;			// Abandon the binary upload and delete the partial file
+
+	String<MaxFilenameLength> uploadFilePath;					// Path of the file being written by a binary upload on this input
+	uint32_t uploadDisconnectCount = 0;							// Value of the device disconnect count when the upload started
+
+# if CORE_USES_TINYUSB
+	void FillBinary(GCodeBuffer& gb) noexcept;					// Pass the data of a binary upload of known size to the file
+	bool StartDirectRead(FilePosition bytesExpected) noexcept;	// Start receiving upload data straight into one of the direct buffers
+	void ServiceAbandonedRead() noexcept;						// Finish a direct read that was pending when its upload was aborted
+	void NoteAbandonedReadProgress() noexcept;					// Record how much upload data the abandoned read holds
+	size_t ReadInput(char *_ecv_array dest, size_t maxBytes) noexcept;	// Get input for the ring buffer
+
+	static constexpr size_t DirectBufferSize = 4096;			// Must be a multiple of the high-speed packet size and of DirectBufferAlignment
+	static constexpr size_t DirectBufferAlignment = 32;			// SAME70 cache line size, so that a buffer being filled by DMA shares no cache line with other data
+	static constexpr uint32_t MaxDirectMillisPerCall = 5;		// Limit on time spent writing per call, so that the main loop keeps running
+
+	uint8_t *_ecv_array _ecv_null directBuffers[2] = { nullptr, nullptr };	// Created by the first upload on this input
+	const uint8_t *_ecv_array _ecv_null directTail = nullptr;	// Input that followed the upload data in the last direct read
+	size_t directTailLength = 0;
+	size_t abandonedUploadBytes = 0;							// How much of the abandoned read is upload data, to be dropped
+	uint8_t directBufferInUse = 0;								// Which buffer the latest direct read uses
+	bool directReadAbandoned = false;							// A direct read is still pending from an aborted upload
+# endif
+#endif
+
 	SerialCDC &_ecv_from device;
 };
 

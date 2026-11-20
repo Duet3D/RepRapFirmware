@@ -13,7 +13,9 @@
 #ifndef VERSION
 // Note: the complete VERSION string must be in standard version number format and must not contain spaces! This is so that DWC can parse it.
 # define MAIN_VERSION	"3.7.0+1"
-# if defined(NO_S_CURVE)
+# ifdef USE_CAN0
+#  define VERSION_SUFFIX	"(CAN0)"
+# elif defined(NO_S_CURVE)
 #  define VERSION_SUFFIX	"(no 3rd order motion)"
 # else
 #  define VERSION_SUFFIX	""

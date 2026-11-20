@@ -445,15 +445,17 @@ float ScaraKinematics::GetEndstopPosition(size_t drive, bool highEnd) noexcept
 		{
 			Move& move = reprap.GetMove();
 			return ((highEnd) ? psiLimits[1] : psiLimits[0])
-								- (MovementState::GetLastKnownEndpoints()[X_AXIS] * crosstalk[0] * move.DriveStepsPerMm(X_AXIS) / move.DriveStepsPerMm(Y_AXIS));
+								- (crosstalk[0] * (float)MovementState::GetLastKnownEndpoints()[X_AXIS] / move.DriveStepsPerMm(X_AXIS));
 		}
 
 	case Z_AXIS:	// Z axis homing switch
 		{
 			Move& move = reprap.GetMove();
+			const float theta = (float)MovementState::GetLastKnownEndpoints()[X_AXIS] / move.DriveStepsPerMm(X_AXIS);
+			const float psi = ((float)MovementState::GetLastKnownEndpoints()[Y_AXIS] / move.DriveStepsPerMm(Y_AXIS)) + (crosstalk[0] * theta);
 			return ((highEnd) ? reprap.GetMove().AxisMaximum(drive) : reprap.GetMove().AxisMinimum(drive))
-										- (MovementState::GetLastKnownEndpoints()[X_AXIS] * crosstalk[1] * move.DriveStepsPerMm(X_AXIS) / move.DriveStepsPerMm(Z_AXIS))
-										- (MovementState::GetLastKnownEndpoints()[Y_AXIS] * crosstalk[2] * move.DriveStepsPerMm(Y_AXIS) / move.DriveStepsPerMm(Z_AXIS));
+										- (crosstalk[1] * theta)
+										- (crosstalk[2] * psi);
 		}
 
 	default:		// Additional axis

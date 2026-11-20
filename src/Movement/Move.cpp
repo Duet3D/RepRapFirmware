@@ -746,7 +746,9 @@ void Move::Exit() noexcept
 													);
 						}
 
-						const MovementError err = rings[0].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType));
+						const MovementError err = (nextMove.isHoldJog != 0)
+													? rings[0].AddHoldJog(nextMove, !IsRawMotorMove(nextMove.moveType))
+														: rings[0].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType));
 						if (err == MovementError::ok)
 						{
 							const uint32_t now = millis();
@@ -810,7 +812,9 @@ void Move::Exit() noexcept
 							AxisAndBedTransform(nextMove.coords, nextMove.movementTool, true);
 						}
 
-						const MovementError err = rings[1].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType));
+						const MovementError err = (nextMove.isHoldJog != 0)
+													? rings[1].AddHoldJog(nextMove, !IsRawMotorMove(nextMove.moveType))
+														: rings[1].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType));
 						if (err == MovementError::ok)
 						{
 							const uint32_t now = millis();
@@ -855,6 +859,7 @@ void Move::Exit() noexcept
 		{
 			if (   moveState == MoveState::executing
 				&& reprap.GetGCodes().GetPauseState() == PauseState::notPaused	// for now we don't go into idle hold when we are paused (is this sensible?)
+				&& !IsFeedHoldActive()
 			   )
 			{
 				whenIdleTimerStarted = millis();				// record when we first noticed that the machine was idle
@@ -1026,6 +1031,62 @@ void Move::GetStuckDiagnostics(uint32_t *_ecv_array words) const noexcept
 bool Move::PausePrint(MovementState& ms) noexcept
 {
 	return rings[ms.GetNumber()].PauseMoves(ms);
+}
+
+// Feed hold: stop all rings as soon as their jerk limits allow and keep the queued moves. The rings are always held together, so one flag describes the whole machine.
+// A simulation has no motion to hold and would only stall, so the request is ignored then; this can be reached from the urgent command scanner, not just from M25.1
+void Move::FeedHold() noexcept
+{
+	if (simulationMode == SimulationMode::off)
+	{
+		for (DDARing& ring : rings)
+		{
+			ring.Hold();
+		}
+		reprap.StateUpdated();
+	}
+}
+
+void Move::ReleaseFeedHold() noexcept
+{
+	if (IsFeedHoldActive())
+	{
+		for (DDARing& ring : rings)
+		{
+			ring.ReleaseHold(true);
+		}
+		reprap.StateUpdated();
+		MoveAvailable();										// the Move task may be sleeping on the held ring
+	}
+}
+
+bool Move::IsReturningToHeldPosition() const noexcept
+{
+	for (const DDARing& ring : rings)
+	{
+		if (ring.IsReturningToHeldPosition())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void Move::GetHeldPosition(const MovementState& ms, float coords[MaxAxes]) const noexcept
+{
+	rings[ms.GetNumber()].GetHeldCoordinates(coords);
+}
+
+// Stop one motion system as soon as its jerk limits allow and discard its queued moves, ending any feed hold.
+// The caller holds a task critical section, so no RTOS call is allowed here; the Move task wakes up by itself when the next move arrives
+void Move::StopMoves(MovementState& ms, float stopCoords[MaxAxes]) noexcept
+{
+	const bool wasHeld = IsFeedHoldActive();
+	rings[ms.GetNumber()].StopMoves(ms, stopCoords);
+	if (wasHeld)
+	{
+		reprap.StateUpdated();
+	}
 }
 
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
@@ -2701,6 +2762,19 @@ bool Move::PhaseStepControlLoop() noexcept
 
 		if (dm->state != DMState::phaseStepping)
 		{
+			// Shut out the step interrupt and the tasks that insert DMs while we move this DM between the lists.
+			// A DM may have been inserted ahead of this one since we followed the link to it, so find the link again
+			BasePriorityBooster booster(NvicPriorityStep);
+			dmp = &phaseStepDMs;
+			while (*dmp != dm && *dmp != nullptr)
+			{
+				dmp = &(not_null(*dmp)->nextDM);
+			}
+			if (*dmp == nullptr)
+			{
+				break;
+			}
+
 			*dmp = dm->nextDM;
 			if (dm->drive >= MaxAxesPlusExtruders)
 			{

@@ -280,6 +280,9 @@ public:
 
 	bool IsWritingBinary() const noexcept;						// Returns true if writing binary
 	bool WriteBinaryToFile(char b) noexcept;					// Write a byte to the file, returning true if the upload is now complete
+	size_t WriteBinaryBlock(const char *_ecv_array buf, size_t len) noexcept;	// Write a block of a binary upload of known size, return how many bytes were used
+	FilePosition GetBinaryBytesRemaining() const noexcept;		// Bytes still to come in a binary upload of known size, else 0
+	void AbortBinaryUpload() noexcept;							// Close the file of a binary upload that will not be completed
 	void FinishWritingBinary() noexcept;
 #endif
 

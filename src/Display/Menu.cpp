@@ -200,7 +200,10 @@ void Menu::ClearMessageBox() noexcept
 
 void Menu::Pop() noexcept
 {
-	--numNestedMenus;
+	if (numNestedMenus > 1)
+	{
+		numNestedMenus--;
+	}
 	Reload();
 }
 
@@ -268,7 +271,7 @@ const char *_ecv_array _ecv_null Menu::ParseMenuLine(char *_ecv_array const comm
 	const char *_ecv_array text = "*";
 	const char *_ecv_array fname = "main";
 	const char *_ecv_array dirpath = "";
-	const char *_ecv_array _ecv_null action = nullptr;
+	const char *_ecv_array action = "";
 
 	while (*args != 0 && *args != ';')
 	{
@@ -480,6 +483,12 @@ void Menu::ResetCache() noexcept
 
 void Menu::Reload() noexcept
 {
+	if (numNestedMenus == 0)
+	{
+		LoadFixedMenu();
+		return;
+	}
+
 	displayingFixedMenu = false;
 
 #if 0	// if all menus use the whole screen (no visual nesting)
@@ -567,7 +576,7 @@ const char *_ecv_array Menu::AppendString(const char *_ecv_array s) noexcept
 		SafeStrncpy(commandBuffer + commandBufferIndex, s, ARRAY_SIZE(commandBuffer) - commandBufferIndex);
 		commandBufferIndex += strlen(commandBuffer + commandBufferIndex) + 1;
 	}
-	return commandBuffer + oldIndex;
+	return (oldIndex < sizeof(commandBuffer)) ? commandBuffer + oldIndex : "";
 }
 
 // TODO: there is no error handling if a command within a sequence cannot be accepted...

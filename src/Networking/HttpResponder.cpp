@@ -791,7 +791,7 @@ bool HttpResponder::Authenticate(bool withSessionKey, HttpSessionKey &sessionKey
 				keyUnique = true;
 				for (size_t i = 0; i < numSessions; i++)
 				{
-					if (sessions[numSessions].key == sessionKey)
+					if (sessions[i].key == sessionKey)
 					{
 						keyUnique = false;
 						break;
