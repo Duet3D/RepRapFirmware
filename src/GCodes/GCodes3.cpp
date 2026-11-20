@@ -413,7 +413,7 @@ GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 // Handle M581
 GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	if (gb.GetCommandFraction() > 1) { return GCodeResult::errorNotSupported; }
+	if (gb.GetCommandFraction() > 1) { return GCodeResult::warningNotSupported; }
 	const unsigned int triggerNumber = gb.GetLimitedUIValue('T', MaxTriggers);
 	return triggers[triggerNumber].Configure(triggerNumber, gb, reply);
 }
