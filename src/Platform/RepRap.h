@@ -25,6 +25,7 @@ Licence: GPL
 #include <ObjectModel/ObjectModel.h>
 #include <RTOSIface/RTOSIface.h>
 #include <General/function_ref.h>
+#include <GCodes/GCodeFileInfo.h>
 #include <ObjectModel/GlobalVariables.h>
 #include "MessageBox.h"
 
@@ -246,6 +247,14 @@ private:
 	uint16_t networkSeq, scannerSeq, sensorsSeq, spindlesSeq, stateSeq, toolsSeq, volumesSeq;
 
 	GlobalVariables globalVariables;
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	String<MaxFilenameLength> fileInfoResponsePath;
+	GCodeFileInfo fileInfoResponseInfo;
+	GlobalVariables fileInfoResponseCustomInfo;
+	bool fileInfoResponseInUse;
+	bool fileInfoResponseParsed;
+#endif
 
 	uint32_t lastWarningMillis;					// when we last sent a warning message for things that can happen very often
 
