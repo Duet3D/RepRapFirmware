@@ -42,6 +42,7 @@ static const EmbeddedFilesHeader& fileSystem = *reinterpret_cast<const EmbeddedF
 
 static const char *fileSearchDirectory;
 static uint32_t fileSearchNextNumber;
+static const char *_ecv_null dirSearchNext;			// where we are in the directory list, or null when done with directories
 
 // Skip any leading "0:" in a path. We don't worry about "1:", "2:" etc. because ":" is not a valid filename character, so the path won't match anything.
 static const char *SkipDriveNumber(const char *path) noexcept
@@ -94,9 +95,52 @@ bool EmbeddedFiles::DirectoryExists(const StringRef& dirPath) noexcept
 	return false;
 }
 
+// Find the next immediate subdirectory of fileSearchDirectory.
+// Without this, listing a directory reports only its files, so the root of an embedded filesystem
+// appears empty in DWC and similar clients even when /sys, /macros and /gcodes all exist.
+static bool FindNextDirectory(FileInfo& info) noexcept
+{
+	const size_t dirLen = strlen(fileSearchDirectory);
+	while (dirSearchNext != nullptr && dirSearchNext[0] != 0)
+	{
+		const char *cd = dirSearchNext;
+		dirSearchNext = cd + strlen(cd) + 1;
+		if (StringStartsWithIgnoreCase(cd, fileSearchDirectory))
+		{
+			// Right prefix, but it may be a deeper descendant rather than an immediate child
+			const char *p = cd + dirLen;
+			if (*p == '/')
+			{
+				++p;
+				const char *q = p;
+				while (*q != 0 && *q != '/')
+				{
+					++q;
+				}
+				if (*q == 0)
+				{
+					info.fileName.copy(p);
+					info.isDirectory = true;
+					info.lastModified = 0;
+					info.size = 0;
+					return true;
+				}
+			}
+		}
+	}
+	dirSearchNext = nullptr;
+	return false;
+}
+
 // Find the next file starting from fileSearchNextNumber that is in directory fileSearchDirectory
 static bool FindNextFile(FileInfo& info) noexcept
 {
+	// Subdirectories first, then the files, so that a client sees a complete listing
+	if (dirSearchNext != nullptr && FindNextDirectory(info))
+	{
+		return true;
+	}
+
 	while (fileSearchNextNumber < fileSystem.numFiles)
 	{
 		const EmbeddedFileDescriptor& fd = fileSystem.files[fileSearchNextNumber];
@@ -136,6 +180,18 @@ bool EmbeddedFiles::FindFirst(const char *directory, FileInfo &info) noexcept
 	{
 		directory = SkipDriveNumber(directory);
 
+		// Normalise a trailing separator. MassStorage::DirectoryExists strips one before it gets here,
+		// but MassStorage::FindFirst passes the path through untouched - so the root arrives as "/"
+		// from one caller and "" from the other, and listing the root silently returned nothing.
+		String<MaxFilenameLength> dirBuf;
+		dirBuf.copy(directory);
+		const size_t dirBufLen = dirBuf.strlen();
+		if (dirBufLen != 0 && (dirBuf[dirBufLen - 1] == '/' || dirBuf[dirBufLen - 1] == '\\'))
+		{
+			dirBuf.Truncate(dirBufLen - 1);
+		}
+		directory = dirBuf.c_str();
+
 		// Check that we have the directory, and store a pointer to it
 		if (directory[0] == 0)
 		{
@@ -161,6 +217,7 @@ bool EmbeddedFiles::FindFirst(const char *directory, FileInfo &info) noexcept
 
 		// fileSearchDirectory now points to the directory string - we need to save it for the FindNext call
 		fileSearchNextNumber = 0;
+		dirSearchNext = fileSystem.GetDirectories();
 		return FindNextFile(info);
 	}
 	return false;
