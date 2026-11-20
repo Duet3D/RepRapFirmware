@@ -44,7 +44,8 @@ struct ExpansionBoardData
 			 hasClosedLoop : 1,
 			 hasInductiveSensor : 1,
 			 usesUf2Binary : 1,
-			 spare : 9;
+			 supportsMovementPaSnapshot : 1,
+			 spare : 8;
 	BoardState state;
 	uint8_t numDrivers;
 	uint8_t accelerometerOrientation = DefaultAccelerometerOrientation;
