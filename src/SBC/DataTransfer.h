@@ -208,7 +208,9 @@ inline uint8_t DataTransfer::GetRxNumPackets() const noexcept
 
 inline size_t DataTransfer::FreeTxSpace() const noexcept
 {
-	return SbcTransferBufferSize - AddPadding(txPointer) - GetRxNumPackets() * sizeof(PacketHeader);
+	// ResendPacket may write into the space kept for resend requests, in which case there is no space left for other packets
+	const size_t usedSpace = AddPadding(txPointer) + GetRxNumPackets() * sizeof(PacketHeader);
+	return (usedSpace < SbcTransferBufferSize) ? SbcTransferBufferSize - usedSpace : 0;
 }
 
 inline size_t DataTransfer::PacketsToRead() const noexcept
