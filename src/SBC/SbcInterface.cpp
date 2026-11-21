@@ -1678,6 +1678,10 @@ void SbcInterface::InvalidateResources() noexcept
 		}
 		else
 		{
+			// Resolve the request as failed, as FinishAsyncWrite does for a background write. Otherwise the waiting task reads the result of the operation before
+			fileSuccess = false;
+			fileHandle = noFileHandle;
+			fileOffset = 0;
 			fileOperation = FileOperation::none;
 			fileSemaphore.Give();
 		}
