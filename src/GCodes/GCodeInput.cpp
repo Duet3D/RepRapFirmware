@@ -326,10 +326,10 @@ size_t BufferedStreamGCodeInput::BytesCached() const noexcept
 void BufferedStreamGCodeInput::Spin(GCodeBuffer& gb) noexcept
 {
 #if HAS_MASS_STORAGE
-	// A binary upload cannot complete once its host has gone, and left alone it would write the next connection's commands into the file
-	if (gb.IsWritingBinary() && UploadHostDisconnected())
+	// An upload cannot complete once its host has gone, and left alone it would write the next connection's commands into the file
+	if (gb.IsWritingFile() && UploadHostDisconnected())
 	{
-		AbortBinaryUpload(gb);
+		AbortFileUpload(gb);
 	}
 # if CORE_USES_TINYUSB
 	if (directReadAbandoned)
@@ -428,7 +428,7 @@ bool BufferedStreamGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept
 
 #if HAS_MASS_STORAGE
 
-void BufferedStreamGCodeInput::NoteBinaryUpload(const char *_ecv_array directory, const char *_ecv_array fileName) noexcept
+void BufferedStreamGCodeInput::NoteFileUpload(const char *_ecv_array directory, const char *_ecv_array fileName) noexcept
 {
 	(void)MassStorage::CombineName(uploadFilePath.GetRef(), directory, fileName);
 # if CORE_USES_TINYUSB
@@ -446,10 +446,10 @@ bool BufferedStreamGCodeInput::UploadHostDisconnected() const noexcept
 # endif
 }
 
-// Abandon a binary upload whose host has gone. The partial file is deleted, as it is for a failed HTTP upload
-void BufferedStreamGCodeInput::AbortBinaryUpload(GCodeBuffer& gb) noexcept
+// Abandon a file upload whose host has gone. The partial file is deleted, as it is for a failed HTTP upload
+void BufferedStreamGCodeInput::AbortFileUpload(GCodeBuffer& gb) noexcept
 {
-	gb.AbortBinaryUpload();
+	gb.AbortFileWrite();
 	Reset();
 	gb.DiscardPartialLine();
 # if CORE_USES_TINYUSB

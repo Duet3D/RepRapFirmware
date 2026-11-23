@@ -26,7 +26,7 @@ public:
 	virtual bool FillBuffer(GCodeBuffer *gb) noexcept = 0;		// Fill a GCodeBuffer with the last available G-code
 	virtual size_t BytesCached() const noexcept = 0;			// How many bytes have been cached?
 	virtual void SetWritingFile(bool wf) noexcept { (void)wf; }	// Suppress urgent command scanning while writing a file
-	virtual void NoteBinaryUpload(const char *_ecv_array directory, const char *_ecv_array fileName) noexcept { (void)directory; (void)fileName; }	// A binary upload has started on this input
+	virtual void NoteFileUpload(const char *_ecv_array directory, const char *_ecv_array fileName) noexcept { (void)directory; (void)fileName; }	// A file upload has started on this input
 };
 
 // This class provides a standard implementation of FillBuffer that calls ReadByte() to supply individual characters
@@ -114,15 +114,15 @@ public:
 	size_t BytesCached() const noexcept override;				// How many bytes are ready for FillBuffer, hiding a trailing partly-matched urgent command
 	virtual void Spin(GCodeBuffer& gb) noexcept;				// Read from the device into the buffer and check for urgent commands
 #if HAS_MASS_STORAGE
-	void NoteBinaryUpload(const char *_ecv_array directory, const char *_ecv_array fileName) noexcept override;
+	void NoteFileUpload(const char *_ecv_array directory, const char *_ecv_array fileName) noexcept override;
 #endif
 
 private:
 #if HAS_MASS_STORAGE
-	bool UploadHostDisconnected() const noexcept;				// True if the host disconnected since the binary upload started
-	void AbortBinaryUpload(GCodeBuffer& gb) noexcept;			// Abandon the binary upload and delete the partial file
+	bool UploadHostDisconnected() const noexcept;				// True if the host disconnected since the file upload started
+	void AbortFileUpload(GCodeBuffer& gb) noexcept;				// Abandon the file upload and delete the partial file
 
-	String<MaxFilenameLength> uploadFilePath;					// Path of the file being written by a binary upload on this input
+	String<MaxFilenameLength> uploadFilePath;					// Path of the file being written by an upload on this input
 	uint32_t uploadDisconnectCount = 0;							// Value of the device disconnect count when the upload started
 
 # if CORE_USES_TINYUSB

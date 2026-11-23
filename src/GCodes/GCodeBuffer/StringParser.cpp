@@ -1946,11 +1946,11 @@ FilePosition StringParser::GetBinaryBytesRemaining() const noexcept
 	return (IsWritingBinary() && fileBeingWritten->Length() < writingFileSize) ? writingFileSize - fileBeingWritten->Length() : 0;
 }
 
-// Close the file of a binary upload that will not be completed. No reply is sent, because the host that sent
-// the M559/M560 command has gone and another one may already be connected to the channel
-void StringParser::AbortBinaryUpload() noexcept
+// Close the file of an upload that will not be completed. No reply is sent, because the host that started
+// the upload has gone and another one may already be connected to the channel
+void StringParser::AbortFileWrite() noexcept
 {
-	if (IsWritingBinary())
+	if (fileBeingWritten != nullptr)
 	{
 		fileBeingWritten->Close();
 		fileBeingWritten = nullptr;

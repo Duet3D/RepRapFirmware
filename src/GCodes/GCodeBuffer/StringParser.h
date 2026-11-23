@@ -79,8 +79,8 @@ public:
 	bool WriteBinaryToFile(char b) noexcept;								// Write a byte to the file
 	size_t WriteBinaryBlock(const char *_ecv_array buf, size_t len) noexcept;	// Write a block of a binary upload of known size, return how many bytes were used
 	FilePosition GetBinaryBytesRemaining() const noexcept;				// Bytes still to come in a binary upload of known size, else 0
-	void AbortBinaryUpload() noexcept;									// Close the file of a binary upload that will not be completed, without a reply
 	void FinishWritingBinary() noexcept;
+	void AbortFileWrite() noexcept;											// Close the file being written without completing it or sending a reply
 #endif
 
 	FilePosition GetFilePosition() const noexcept;							// Get the file position at the start of the current command
