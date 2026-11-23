@@ -1171,8 +1171,8 @@ GCodeResult HangprinterKinematics::ReadODrive3AxisForce(DriverId const driver, c
 	if (motorCurrent.valid)
 	{
 		size_t const boardIndex = driver.boardAddress - 40;
-		if (boardIndex < 0 or boardIndex > 9) {
-			reply.catf("Board address not between 40 and 49: %d", driver.boardAddress);
+		if (boardIndex >= numAnchors) {
+			reply.catf("Board address not between 40 and %u: %d", (unsigned int)(39 + numAnchors), driver.boardAddress);
 			return GCodeResult::error;
 		}
 		// This force calculation if very rough, assuming perfect data from ODrive,
@@ -1185,7 +1185,7 @@ GCodeResult HangprinterKinematics::ReadODrive3AxisForce(DriverId const driver, c
 		{
 			motorTorque_Nm = -motorTorque_Nm;
 		}
-		float const lineTension = 1000.0 * (motorTorque_Nm * (spoolGearTeeth_[boardIndex]/motorGearTeeth_[boardIndex])) / spoolRadii_[boardIndex];
+		float const lineTension = 1000.0 * (motorTorque_Nm * ((float)spoolGearTeeth_[boardIndex] / motorGearTeeth_[boardIndex])) / spoolRadii_[boardIndex];
 		float const force = lineTension * mechanicalAdvantage_[boardIndex];
 		reply.catf("%.2f, ", (double)(force));
 		return GCodeResult::ok;
@@ -1215,7 +1215,7 @@ GCodeResult HangprinterKinematics::ReadODrive3Encoder(DriverId const driver, GCo
 
 namespace {
 GCodeResult ComputeODrive3TorqueFromForceInternal(
-	DriverId const driver, float const force_Newton,
+	DriverId const driver, float const force_Newton, size_t const numAnchors,
 	uint32_t const mechanicalAdvantage[], uint32_t const spoolGearTeeth[], uint32_t const motorGearTeeth[],
 	float const spoolRadii[], float& motorTorque_Nm, bool& positionMode, const StringRef& reply) noexcept
 {
@@ -1229,9 +1229,9 @@ GCodeResult ComputeODrive3TorqueFromForceInternal(
 	}
 
 	const int boardIndex = (int)driver.boardAddress - 40;
-	if (boardIndex < 0 || boardIndex > 9)
+	if (boardIndex < 0 || boardIndex >= (int)numAnchors)
 	{
-		reply.catf("Board address not between 40 and 49: %d", driver.boardAddress);
+		reply.catf("Board address not between 40 and %u: %d", (unsigned int)(39 + numAnchors), driver.boardAddress);
 		return GCodeResult::error;
 	}
 
@@ -1254,7 +1254,7 @@ GCodeResult HangprinterKinematics::ComputeODrive3TorqueFromForce(DriverId const 
 																																	const StringRef& reply) const noexcept
 {
 	return ComputeODrive3TorqueFromForceInternal(
-		driver, force_Newton,
+		driver, force_Newton, numAnchors,
 		mechanicalAdvantage, spoolGearTeeth, motorGearTeeth, spoolRadii,
 		motorTorque_Nm, positionMode, reply);
 }
@@ -1346,7 +1346,7 @@ GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, f
 	float motorTorque_Nm = 0.0F;
 	bool positionMode = false;
 	GCodeResult res = ComputeODrive3TorqueFromForceInternal(
-		driver, force_Newton,
+		driver, force_Newton, numAnchors,
 		mechanicalAdvantage_, spoolGearTeeth_, motorGearTeeth_, spoolRadii_,
 		motorTorque_Nm, positionMode, reply);
 	if (res != GCodeResult::ok)
