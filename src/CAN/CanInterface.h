@@ -35,7 +35,7 @@ namespace CanInterface
 	void Shutdown() noexcept;
 	inline CanAddress GetCurrentMasterAddress() noexcept { return CanId::MasterAddress; }		// currently fixed, but might change in future
 
-	void ReportCanTiming(const StringRef& reply) noexcept;
+	void ReportCanTiming(size_t bus, const StringRef& reply) noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
 	bool InExpansionMode() noexcept;
@@ -45,6 +45,7 @@ namespace CanInterface
 	void SendAnnounce(CanMessageBuffer *buf) noexcept;
 	void RaiseEvent(EventType type, uint16_t param, uint8_t device, const char *_ecv_array format, va_list vargs) noexcept;
 	void MainBoardAcknowledgedAnnounce() noexcept;
+	void MainBoardRequestedAnnounce() noexcept;
 	void LogIgnoredMovementMessage() noexcept;
 	void CheckBrs(const CanMessageTimeSync& msg) noexcept;
 	void UpdateSyncLockState(bool synced) noexcept;
@@ -60,16 +61,22 @@ namespace CanInterface
 	void Diagnostics(const StringRef& reply) noexcept;
 	CanMessageBuffer *AllocateBuffer(const GCodeBuffer *_ecv_null gb) THROWS(GCodeException);
 
-	uint16_t GetTimeStampCounter() noexcept;
+	uint16_t GetTimeStampCounter(size_t bus) noexcept;
 	uint32_t Convert16bitReceivedTimeStampTo32bits(uint16_t ts) noexcept;
 
-#if DUAL_CAN
+	inline unsigned int GetCanInterfaceNumberFromBusNumber(size_t bus) noexcept
+	{
+		return CanBusParams[bus].instanceNumber;
+	}
+
+#if NUM_CAN_PORTS > 1
+	// These are used by Hangprinter
 	uint32_t SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout = UsualSendTimeout) noexcept;
 	bool ReceivePlainMessage(CanMessageBuffer *null buf, uint32_t timeout = UsualResponseTimeout) noexcept;
 #endif
 
 #if !EXTERNAL_CAN_TIMESTAMP_COUNTER
-	uint16_t GetTimeStampPeriod() noexcept;					// return the period of the time stamp counter in units of 48MHz CAN clocks
+	uint16_t GetTimeStampPeriod(size_t bus) noexcept;				// return the period of the time stamp counter in units of 48MHz CAN clocks
 #endif
 
 	// Info functions
@@ -138,7 +145,7 @@ namespace CanInterface
 	void SetStatusLedNormal() noexcept;
 #endif
 
-#if DUAL_CAN
+#if NUM_CAN_PORTS > 1
 namespace ODrive {
 	CanId ArbitrationId(DriverId driver, uint8_t cmd) noexcept;
 	CanMessageBuffer *_ecv_null PrepareSimpleMessage(DriverId const driver, const StringRef& reply) noexcept;

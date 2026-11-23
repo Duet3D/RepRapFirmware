@@ -563,8 +563,6 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 		{
 #if SUPPORT_CAN_EXPANSION || SUPPORT_PHASE_STEPPING
 			const size_t drive = ExtruderToLogicalDrive(i);
-#endif
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION
 			if (move.GetStepMode(drive) == StepMode::phase)
 			{
 				// Revert to step/dir while the old driver is still mapped, else the new driver gets the reset and the old one stays in phase stepping

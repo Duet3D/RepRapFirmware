@@ -39,14 +39,15 @@ struct ExpansionBoardData
 	DriverData *_ecv_array _ecv_null driverData;				// an array numDrivers long of objects, or nullptr if numDrivers is zero
 	uint16_t closedLoopRuns;
 	uint16_t connectionTimeoutSeconds;
-	uint16_t hasMcuTemp : 1,
+	uint16_t busPlusOne : 2,									// which CAN bus this board has been heard on plus one, or 0 if the board has not been heard
+			 hasMcuTemp : 1,
 			 hasVin : 1,
 			 hasV12 : 1,
 			 hasAccelerometer : 1,
 			 hasClosedLoop : 1,
 			 hasInductiveSensor : 1,
 			 usesUf2Binary : 1,
-			 spare : 9;
+			 spare : 7;
 	BoardState state;
 	uint8_t numDrivers;
 };
@@ -57,7 +58,8 @@ public:
 	ExpansionManager() noexcept;
 
 	unsigned int GetNumExpansionBoards() const noexcept { return numExpansionBoards; }
-	const ExpansionBoardData *_ecv_null GetBoardDetails(uint8_t address) const noexcept;
+	const ExpansionBoardData *_ecv_null GetBoardDetails(CanAddress address) const noexcept;
+	size_t GetBusNumberPlusOneFor(CanAddress address) const noexcept;
 
 	void ProcessAnnouncement(CanMessageBuffer *buf, bool isNewFormat) noexcept;
 	void ProcessBoardStatusReport(const CanMessageBuffer *buf) noexcept;

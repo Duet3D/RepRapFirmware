@@ -34,6 +34,7 @@
 # include <Hardware/NonVolatileMemory.h>
 
 static uint8_t expectedSeq = 0xFF;
+static bool isProgrammed = false;					// this is set to true after we have received a configuration command
 #endif
 
 static unsigned int duplicateMotionMessages = 0;
@@ -419,6 +420,18 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				CanInterface::MainBoardAcknowledgedAnnounce();
 				return;
 
+			case CanMessageType::startup:
+				if (millis64() > 5000 || isProgrammed)				// if we've only just powered up and the main board hasn't programmed us yet, no need to start up again
+				{
+					reprap.EmergencyStop();
+					reprap.ScheduleReset();
+				}
+				else
+				{
+					CanInterface::MainBoardRequestedAnnounce();		// we've recently started up, so no need to reset; but assume that we need to announce ourselves
+				}
+				return;							// no reply needed
+
 			case CanMessageType::updateFirmware:
 				requestId = buf->msg.updateYourFirmware.requestId;
 				rslt = InitiateFirmwareUpdate(buf->msg.updateYourFirmware, replyRef);
@@ -441,16 +454,19 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::m950Heater:
 				requestId = buf->msg.generic.requestId;
 				rslt = reprap.GetHeat().ConfigureHeater(buf->msg.generic, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::heaterFeedForwardV1:
 				requestId = CanRequestIdNoReplyNeeded;
 				rslt = reprap.GetHeat().ApplyFeedForward(buf->msg.heaterFeedForwardV1, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::heaterModelV3:
 				requestId = buf->msg.heaterModelV3.requestId;
 				rslt = reprap.GetHeat().ProcessM307(buf->msg.heaterModelV3, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::setHeaterTemperatureV1:
@@ -487,6 +503,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::m950Fan:
 				requestId = buf->msg.generic.requestId;
 				rslt = reprap.GetFansManager().ConfigureFanPort(buf->msg.generic, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::fanParameters:
@@ -503,6 +520,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::m950Gpio:
 				requestId = buf->msg.generic.requestId;
 				rslt = reprap.GetPlatform().EutHandleM950Gpio(buf->msg.generic, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::writeGpio:
@@ -514,6 +532,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::m950Led:
 				requestId = buf->msg.generic.requestId;
 				rslt = reprap.GetPlatform().GetLedStripManager().HandleM950Led(buf->msg.generic, replyRef, extra);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::writeLedStrip:
@@ -525,11 +544,13 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::setMotorCurrents:
 				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
 				rslt = reprap.GetMove().EutSetMotorCurrents(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::setStepsPerMmAndMicrostepping:
 				requestId = buf->msg.multipleDrivesStepsPerUnitAndMicrostepping.requestId;
 				rslt = reprap.GetMove().EutSetStepsPerMmAndMicrostepping(buf->msg.multipleDrivesStepsPerUnitAndMicrostepping, buf->dataLength, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::setDriverStates:
@@ -540,47 +561,50 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::m915:
 				requestId = buf->msg.generic.requestId;
 				rslt = reprap.GetMove().EutProcessM915(buf->msg.generic, replyRef);
-				break;
-
-			case CanMessageType::setPressureAdvanceV1:
-				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
-				rslt = reprap.GetMove().EutSetRemotePressureAdvanceV1(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::setPressureAdvanceV2:
 				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
 				rslt = reprap.GetMove().EutSetRemotePressureAdvanceV2(buf->msg.multipleDrivesRequestPressureAdvance, buf->dataLength, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::setInputShapingV1:
 				requestId = buf->msg.setInputShapingV1.requestId;
 				rslt = reprap.GetMove().EutSetInputShaping(buf->msg.setInputShapingV1, buf->dataLength, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::m569:
 				requestId = buf->msg.generic.requestId;
 				rslt = reprap.GetMove().EutProcessM569(buf->msg.generic, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::m569p2:
 				requestId = buf->msg.generic.requestId;
 				rslt = reprap.GetMove().EutProcessM569Point2(buf->msg.generic, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::m569p7:
 				requestId = buf->msg.generic.requestId;
 				rslt = reprap.GetMove().EutProcessM569Point7(buf->msg.generic, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::setStandstillCurrentFactor:
 				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
 				rslt = reprap.GetMove().EutSetStandstillCurrentFactor(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::m970:
 				requestId = buf->msg.generic.requestId;
 # if SUPPORT_PHASE_STEPPING
 				rslt = reprap.GetMove().EutProcessM970(buf->msg.generic, replyRef);
+				isProgrammed = true;
 # else
 				rslt = GCodeResult::errorNotSupported;
 # endif
@@ -590,6 +614,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				requestId = buf->msg.generic.requestId;
 # if SUPPORT_PHASE_STEPPING
 				rslt = reprap.GetMove().EutProcessM970Point3(buf->msg.generic, replyRef);
+				isProgrammed = true;
 # else
 				rslt = GCodeResult::errorNotSupported;
 # endif
@@ -598,16 +623,19 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::createInputMonitorV1:
 				requestId = buf->msg.createInputMonitorV1.requestId;
 				rslt = InputMonitor::Create(buf->msg.createInputMonitorV1, buf->dataLength, replyRef, extra);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::changeInputMonitorV1:
 				requestId = buf->msg.changeInputMonitorV1.requestId;
 				rslt = InputMonitor::Change(buf->msg.changeInputMonitorV1, replyRef, extra);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::enableStallEndstop:
 				requestId = buf->msg.enableStallEndstop.requestId;
 				rslt = reprap.GetMove().SetStallEndstopReporting(buf->msg.enableStallEndstop, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::readInputsRequest:
@@ -620,6 +648,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::createFilamentMonitor:
 				requestId = buf->msg.createFilamentMonitor.requestId;
 				rslt = FilamentMonitor::Create(buf->msg.createFilamentMonitor, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::deleteFilamentMonitor:
@@ -645,13 +674,15 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::m111:
-				requestId = buf->msg.diagnosticTest.requestId;
+				requestId = buf->msg.generic.requestId;
 				rslt = reprap.ProcessRemoteM111(buf->msg.generic, replyRef);
+				isProgrammed = true;
 				break;
 
 			case CanMessageType::setConnectionTimeout:
 				requestId = buf->msg.generic.requestId;
 				rslt = CanInterface::ProcessM959(buf->msg.generic, replyRef);
+				isProgrammed = true;
 				break;
 
 			default:

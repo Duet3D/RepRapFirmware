@@ -306,7 +306,7 @@ void StepTimer::DisableTimerInterrupt() noexcept
 	const uint32_t timeStampDelay = (uint32_t)((localTimeNow - timeStamp) & 0xFFFF);
 #else
 	if (timeStamp != lastTimeSyncMessageStamp) { return; }
-	const uint32_t timeStampDelay = (((uint32_t)(lastCurrentTimeStamp - timeStamp) & 0x0000FFFF) * (uint32_t)CanInterface::GetTimeStampPeriod()) >> 6;	// timestamp counter is 16 bits
+	const uint32_t timeStampDelay = (((uint32_t)(lastCurrentTimeStamp - timeStamp) & 0x0000FFFF) * (uint32_t)CanInterface::GetTimeStampPeriod(0)) >> 6;	// timestamp counter is 16 bits
 	const uint32_t localTimeNow = lastStepTime;
 #endif
 
