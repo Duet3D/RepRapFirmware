@@ -102,6 +102,7 @@ private:
 	bool IsTimeToPrepareMove(uint32_t prepareAdvanceTime, uint32_t moveTimeLeft) const noexcept;
 	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, SimulationMode simulationMode) noexcept;
 	DDA *MakeDeceleratingChain(DDA *startDda, const DDA *stopBeforeDda) noexcept pre(startDda != stopBeforeDda);
+	DDA *_ecv_null GetCurrentDDAAlreadyLocked() const noexcept;
 	DDA *FindStopPoint() noexcept;
 	DDA *_ecv_null CancelHomingMoveInFlight(bool& wakeAsyncSender) noexcept;
 	void CutHomingMove(DDA *cdda) noexcept;
