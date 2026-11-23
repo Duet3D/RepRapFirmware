@@ -2365,7 +2365,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 		   )
 		{
 			gbp->Enable(val);						// enable I/O and set the CRC and checksum requirements
-			if (auxModes[chan] == AuxMode::panelDue)
+			if (newMode == AuxMode::panelDue)
 			{
 				gbp->LatestMachineState().compatibility.Assign(Compatibility::RepRapFirmware);
 			}
