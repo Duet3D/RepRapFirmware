@@ -83,6 +83,7 @@ protected:
 
 private:
 	bool IsTimeToPrepareMove(uint32_t prepareAdvanceTime, uint32_t moveTimeLeft) const noexcept;
+	DDA *_ecv_null GetCurrentDDAAlreadyLocked() const noexcept;
 	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvanceTime, uint32_t moveTimeLeft, SimulationMode simulationMode) noexcept;
 
 	DDA* addPointer;															// Pointer to the next DDA that we can use to add a new move, if this DDA is free
