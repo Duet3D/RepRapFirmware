@@ -278,6 +278,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "printingJerk",		OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetPrintingInstantDv(context.GetLastIndex())), 1),		ObjectModelEntryFlags::none },
 	{ "reducedAcceleration", OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(context.GetLastIndex(), true)), 1),			ObjectModelEntryFlags::none },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
+	{ "state",				OBJECT_MODEL_FUNC(const_cast<const DriverStatus&>(self->driverState[context.GetLastIndex()]).ToString()),		ObjectModelEntryFlags::liveNotPanelDue },
 	{ "stepPos",			OBJECT_MODEL_FUNC(self->GetLiveMotorPosition(context.GetLastIndex())),											ObjectModelEntryFlags::liveNotPanelDue },
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->DriveStepsPerMm(context.GetLastIndex()), 2),											ObjectModelEntryFlags::none },
 	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(reprap.GetGCodes().GetCurrentMovementState(context), context.GetLastIndex()), 3), ObjectModelEntryFlags::live },
@@ -307,6 +308,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "printingJerk",		OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetPrintingInstantDv(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),	ObjectModelEntryFlags::none },
 	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1), 								ObjectModelEntryFlags::liveNotPanelDue },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
+	{ "state",				OBJECT_MODEL_FUNC(const_cast<const DriverStatus&>(self->driverState[ExtruderToLogicalDrive(context.GetLastIndex())]).ToString()),	ObjectModelEntryFlags::liveNotPanelDue },
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->DriveStepsPerMm(ExtruderToLogicalDrive(context.GetLastIndex())), 2),										ObjectModelEntryFlags::none },
 
 	// 11. move.extruders[].nonlinear members
@@ -354,11 +356,11 @@ constexpr uint8_t Move::objectModelTableDescriptor[] =
 	2,																		// section 7
 	4,																		// section 8
 #ifdef DUET_NG	// Duet WiFi/Ethernet doesn't have settable standstill current and doesn't support phase stepping
-	23,																		// section 9: move.axes[]
-	17,																		// section 10: move.extruders[]
+	24,																		// section 9: move.axes[]
+	18,																		// section 10: move.extruders[]
 #else
-	24 + (SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION),											// section 9: move.axes[]
-	18 + (SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION),											// section 10: move.extruders[]
+	25 + (SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION),					// section 9: move.axes[]
+	19 + (SUPPORT_PHASE_STEPPING || SUPPORT_CAN_EXPANSION),					// section 10: move.extruders[]
 #endif
 #if SUPPORT_NONLINEAR_EXTRUSION
 	3,																		// section 11: move.extruders[].nonlinear

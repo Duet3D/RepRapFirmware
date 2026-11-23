@@ -441,8 +441,8 @@ void CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
 		msg->noSmartDrivers = !HAS_SMART_DRIVERS;
 		memcpy(msg->uniqueId, reprap.GetPlatform().GetUniqueId().GetRaw(), sizeof(msg->uniqueId));
 		// Note, board type name, firmware version, firmware date and firmware time are limited to 43 characters in the new
-		// We use vertical-bar to separate the three fields: board type, firmware version, date/time
-		SafeSnprintf(msg->boardTypeAndFirmwareVersion, ARRAY_SIZE(msg->boardTypeAndFirmwareVersion), "%s|%s|%s", BOARD_SHORT_NAME, VERSION, DateTimeText);
+		// We use vertical-bar to separate the four fields: board type, firmware version, date/time, empty bootloader version.
+		SafeSnprintf(msg->boardTypeAndFirmwareVersion, ARRAY_SIZE(msg->boardTypeAndFirmwareVersion), "%s|%s|%s|", BOARD_SHORT_NAME, VERSION, DateTimeText);
 		buf->dataLength = msg->GetActualDataLength();
 		SendMessageNoReplyNoFree(buf);
 	}
