@@ -24,7 +24,7 @@
 
 enum class ExpansionDetail : uint32_t
 {
-	shortName, firmwareVersion, firmwareFileNameBin, firmwareFileNameUf2, firmwareDate, longName
+	shortName, firmwareVersion, firmwareFileNameBin, firmwareFileNameUf2, firmwareDate, bootloaderVersion, longName
 };
 
 #endif

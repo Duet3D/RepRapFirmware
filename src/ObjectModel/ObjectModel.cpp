@@ -418,6 +418,11 @@ void ExpressionValue::ExtractRequestedPart(const StringRef& rslt, bool quoteStri
 			p = strchr(p + 1, '|');
 		}
 		const size_t indexOfDivider2 = (p == nullptr) ? strlen(sVal) : p - sVal;
+		if (p != nullptr)
+		{
+			p = strchr(p + 1, '|');
+		}
+		const size_t indexOfDivider3 = (p == nullptr) ? strlen(sVal) : p - sVal;
 
 		switch((ExpansionDetail)param)
 		{
@@ -456,7 +461,16 @@ void ExpressionValue::ExtractRequestedPart(const StringRef& rslt, bool quoteStri
 			if (strlen(sVal) > indexOfDivider2)
 			{
 				if (quoteStrings) { rslt.cat('"'); }
-				rslt.cat(sVal + indexOfDivider2 + 1);
+				rslt.catn(sVal + indexOfDivider2 + 1, indexOfDivider3 - indexOfDivider2 - 1);
+				if (quoteStrings) { rslt.cat('"'); }
+			}
+			break;
+
+		case ExpansionDetail::bootloaderVersion:
+			if (strlen(sVal) > indexOfDivider3)
+			{
+				if (quoteStrings) { rslt.cat('"'); }
+				rslt.cat(sVal + indexOfDivider3 + 1);
 				if (quoteStrings) { rslt.cat('"'); }
 			}
 			break;
