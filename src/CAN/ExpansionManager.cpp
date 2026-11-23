@@ -105,7 +105,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 {
 	6,				// number of sections
-	18,				// section 0: boards[]
+	19,				// section 0: boards[]
 	3,				// section 1: mcuTemp
 	3,				// section 2: vIn
 	3,				// section 3: v12
