@@ -1108,8 +1108,8 @@ GCodeResult HangprinterKinematics::ReadODrive3AxisForce(DriverId const driver, c
 	if (motorCurrent.valid)
 	{
 		size_t const boardIndex = driver.boardAddress - 40;
-		if (boardIndex < 0 or boardIndex > 3) {
-			reply.catf("Board address not between 40 and 43: %d", driver.boardAddress);
+		if (boardIndex > 3 or boardIndex >= numAnchors) {
+			reply.catf("Board address not between 40 and %u: %d", (unsigned int)(39 + min<size_t>(numAnchors, 4)), driver.boardAddress);
 			return GCodeResult::error;
 		}
 		// This force calculation if very rough, assuming perfect data from ODrive,
@@ -1121,7 +1121,7 @@ GCodeResult HangprinterKinematics::ReadODrive3AxisForce(DriverId const driver, c
 		{
 			motorTorque_Nm = -motorTorque_Nm;
 		}
-		float const lineTension = 1000.0 * (motorTorque_Nm * (spoolGearTeeth_[boardIndex]/motorGearTeeth_[boardIndex])) / spoolRadii_[boardIndex];
+		float const lineTension = 1000.0 * (motorTorque_Nm * ((float)spoolGearTeeth_[boardIndex] / motorGearTeeth_[boardIndex])) / spoolRadii_[boardIndex];
 		float const force = lineTension * mechanicalAdvantage_[boardIndex];
 		reply.catf("%.2f, ", (double)(force));
 		return GCodeResult::ok;
@@ -1245,8 +1245,8 @@ GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, f
 	else
 	{
 		size_t const boardIndex = driver.boardAddress - 40;
-		if (boardIndex < 0 or boardIndex > 3) {
-			reply.catf("Board address not between 40 and 43: %d", driver.boardAddress);
+		if (boardIndex > 3 or boardIndex >= numAnchors) {
+			reply.catf("Board address not between 40 and %u: %d", (unsigned int)(39 + min<size_t>(numAnchors, 4)), driver.boardAddress);
 			return GCodeResult::error;
 		}
 
