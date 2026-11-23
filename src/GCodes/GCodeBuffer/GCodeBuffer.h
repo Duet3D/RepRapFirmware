@@ -275,6 +275,7 @@ public:
 	bool IsWritingBinary() const noexcept;						// Returns true if writing binary
 	bool WriteBinaryToFile(char b) noexcept;					// Write a byte to the file, returning true if the upload is now complete
 	void FinishWritingBinary() noexcept;
+	void AbortFileWrite() noexcept;								// Close the file being written without completing it or sending a reply
 #endif
 
 	const char *_ecv_array DataStart() const noexcept;			// Get the start of the current command

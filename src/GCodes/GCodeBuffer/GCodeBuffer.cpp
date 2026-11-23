@@ -1330,6 +1330,7 @@ bool GCodeBuffer::OpenFileToWrite(const char *_ecv_array directory, const char *
 	if (NOT_BINARY_AND(stringParser.OpenFileToWrite(directory, fileName, size, binaryWrite, fileCRC32)))
 	{
 		normalInput->SetWritingFile(true);
+		normalInput->NoteFileUpload(directory, fileName);
 		return true;
 	}
 	return false;
@@ -1367,6 +1368,12 @@ bool GCodeBuffer::WriteBinaryToFile(char b) noexcept
 void GCodeBuffer::FinishWritingBinary() noexcept
 {
 	IF_NOT_BINARY(stringParser.FinishWritingBinary());
+	normalInput->SetWritingFile(false);
+}
+
+void GCodeBuffer::AbortFileWrite() noexcept
+{
+	IF_NOT_BINARY(stringParser.AbortFileWrite());
 	normalInput->SetWritingFile(false);
 }
 

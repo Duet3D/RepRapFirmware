@@ -26,6 +26,7 @@ public:
 	virtual bool FillBuffer(GCodeBuffer *gb) noexcept = 0;		// Fill a GCodeBuffer with the last available G-code
 	virtual size_t BytesCached() const noexcept = 0;			// How many bytes have been cached?
 	virtual void SetWritingFile(bool wf) noexcept { (void)wf; }	// Suppress urgent command scanning while writing a file
+	virtual void NoteFileUpload(const char *_ecv_array directory, const char *_ecv_array fileName) noexcept { (void)directory; (void)fileName; }	// A file upload has started on this input
 };
 
 // This class provides a standard implementation of FillBuffer that calls ReadByte() to supply individual characters
@@ -104,8 +105,17 @@ public:
 	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
 	size_t BytesCached() const noexcept override;				// How many bytes are ready for FillBuffer, hiding a trailing partly-matched urgent command
 	void Spin(GCodeBuffer& gb) noexcept;						// Read from the device into the buffer and check for urgent commands
+#if HAS_MASS_STORAGE
+	void NoteFileUpload(const char *_ecv_array directory, const char *_ecv_array fileName) noexcept override;
+#endif
 
 private:
+#if HAS_MASS_STORAGE
+	void AbortFileUpload(GCodeBuffer& gb) noexcept;				// Abandon the file upload and delete the partial file
+
+	String<MaxFilenameLength> uploadFilePath;					// Path of the file being written by an upload on this input
+#endif
+
 	SerialCDC &_ecv_from device;
 };
 

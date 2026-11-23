@@ -240,6 +240,14 @@ void BufferedStreamGCodeInput::Spin(GCodeBuffer& gb) noexcept
 {
 	if (!device.IsConnected())
 	{
+#if HAS_MASS_STORAGE
+		// An upload cannot complete once its host has gone, and left alone it would write the next connection's commands into the file
+		if (gb.IsWritingFile())
+		{
+			AbortFileUpload(gb);
+		}
+#endif
+
 		// The USB host has closed the port. Discard anything we have buffered as well as anything the USB driver has
 		// received since, because it keeps filling its receive FIFO regardless of the DTR state. This way the first
 		// command after the host reconnects starts cleanly instead of being appended to a leftover fragment
@@ -295,6 +303,24 @@ bool BufferedStreamGCodeInput::FillBuffer(GCodeBuffer *gb) noexcept
 {
 	return StandardGCodeInput::FillBuffer(gb);
 }
+
+#if HAS_MASS_STORAGE
+
+void BufferedStreamGCodeInput::NoteFileUpload(const char *_ecv_array directory, const char *_ecv_array fileName) noexcept
+{
+	(void)MassStorage::CombineName(uploadFilePath.GetRef(), directory, fileName);
+}
+
+// Abandon a file upload whose host has gone. The partial file is deleted, as it is for a failed HTTP upload
+void BufferedStreamGCodeInput::AbortFileUpload(GCodeBuffer& gb) noexcept
+{
+	gb.AbortFileWrite();
+	(void)MassStorage::Delete(uploadFilePath.GetRef(), ErrorMessageMode::messageUnlessMissing);
+	reprap.GetPlatform().MessageF(ErrorMessage, "USB upload of %s aborted because the host disconnected, partial file deleted\n", uploadFilePath.c_str());
+	uploadFilePath.Clear();
+}
+
+#endif
 
 // NetworkGCodeInput methods
 void NetworkGCodeInput::Put(char c) noexcept

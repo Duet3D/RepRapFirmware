@@ -76,6 +76,7 @@ public:
 	bool IsWritingBinary() const noexcept { return IsWritingFile() && binaryWriting; }	// Returns true if writing binary
 	bool WriteBinaryToFile(char b) noexcept;								// Write a byte to the file
 	void FinishWritingBinary() noexcept;
+	void AbortFileWrite() noexcept;											// Close the file being written without completing it or sending a reply
 #endif
 
 	FilePosition GetFilePosition() const noexcept;							// Get the file position at the start of the current command

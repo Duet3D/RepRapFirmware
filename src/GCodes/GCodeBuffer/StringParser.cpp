@@ -1857,6 +1857,19 @@ bool StringParser::WriteBinaryToFile(char b) noexcept
 	return true;
 }
 
+// Close the file of an upload that will not be completed. No reply is sent, because the host that started
+// the upload has gone and another one may already be connected to the channel
+void StringParser::AbortFileWrite() noexcept
+{
+	if (fileBeingWritten != nullptr)
+	{
+		fileBeingWritten->Close();
+		fileBeingWritten = nullptr;
+		binaryWriting = false;
+		eofStringCounter = 0;
+	}
+}
+
 void StringParser::FinishWritingBinary() noexcept
 {
 	// If we get here then we have come to the end of the data
