@@ -220,6 +220,12 @@ constexpr int GetCanBusNumberFromInterfaceNumber(uint32_t interfaceNumber) noexc
 static inline size_t GetBusNumberPlusOneForAddress(CanAddress address) noexcept
 {
 #if NUM_CAN_PORTS > 1
+# if SUPPORT_REMOTE_COMMANDS
+	if (inExpansionMode)
+	{
+		return 1;		// expansion mode uses bus 0 only
+	}
+# endif
 	if (usingMultipleRRFCanFD)
 	{
 		return reprap.GetExpansion().GetBusNumberPlusOneFor(address);
@@ -1446,7 +1452,7 @@ GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb
 	case 4:			// set driver torque mode
 		// M569.4 is supported both by Hangprinter with ODrives and experimentally by the EXP1HCL and M23CL boards.
 		// First check whether we have a suitable EXP1HCL or M23 driver at the specified CAN address.
-		// ODrive CAN addresses in this command are between 40 and 43 inclusive so the EXP1HCL or M23CL addresses should avoid that range when using Hangprinter kinematics.
+		// ODrive CAN addresses in this command are 40 upwards, one per anchor, so the EXP1HCL or M23CL addresses should avoid that range when using Hangprinter kinematics.
 		{
 			const ExpansionBoardData *_ecv_null const boardData = reprap.GetExpansion().GetBoardDetails(driver.boardAddress);
 			if (boardData != nullptr && boardData->hasClosedLoop)
@@ -2231,6 +2237,14 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 	}
 #endif
 
+#if NUM_CAN_PORTS > 1
+	if (mode == CanBusMode::unused && gb.SeenAny("STJRUK"))
+	{
+		reply.printf("CAN%" PRIu32 " is disabled, enable it with parameter C first", canInterfaceNumber);
+		return GCodeResult::error;
+	}
+#endif
+
 	if (seen)
 	{
 		MutexLocker transactionLock(busStates[bus].transactionMutex);
@@ -2421,7 +2435,7 @@ CanMessageBuffer *_ecv_null CanInterface::ODrive::PrepareSimpleMessage(DriverId 
 	// Detect any early return conditions. The reply may already hold results for other drivers, so append to it
 	if (canDevices[1] == nullptr || canBusModes[1] != CanBusMode::classic)
 	{
-		reply.lcatf("CAN%u must be in classic mode to communicate with ODrives, see M953 I%u C1", GetCanInterfaceNumberFromBusNumber(1), GetCanInterfaceNumberFromBusNumber(1));
+		reply.lcatf("CAN%u must be in classic mode to communicate with ODrives, see M953 I%u C2", GetCanInterfaceNumberFromBusNumber(1), GetCanInterfaceNumberFromBusNumber(1));
 		return nullptr;
 	}
 

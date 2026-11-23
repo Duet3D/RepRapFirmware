@@ -884,7 +884,7 @@ bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const noexc
 	ok = f->Write(scratchString.c_str());
 	if (!ok) return false;
 
-	scratchString.printf("N%zu", numAnchors);
+	scratchString.printf("N%u", (unsigned int)numAnchors);
 	for (size_t i = 0; i < numAnchors; ++i)
 	{
 		scratchString.catf("%c%.3f:%.3f:%.3f ", ANCHOR_CHARS[i], (double)anchors[i][X_AXIS], (double)anchors[i][Y_AXIS], (double)anchors[i][Z_AXIS]);
@@ -1034,7 +1034,7 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3MotorCurren
 		}
 		else
 		{
-			reply.printf("Unexpected response length: %zu", buf->dataLength);
+			reply.printf("Unexpected response length: %u", (unsigned int)buf->dataLength);
 		}
 	}
 	CanMessageBuffer::Free(buf);
@@ -1069,7 +1069,7 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 		}
 		else // we don't have space for a new one
 		{
-			reply.printf("Max CAN addresses we can reference is %zu. Can't reference board %d.", numAnchors, driver.boardAddress);
+			reply.printf("Max CAN addresses we can reference is %u. Can't reference board %d.", (unsigned int)numAnchors, driver.boardAddress);
 			numSeenDrives = numAnchors;
 			return {};
 		}
@@ -1113,7 +1113,7 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 		}
 		else
 		{
-			reply.printf("Unexpected response length: %zu", buf->dataLength);
+			reply.printf("Unexpected response length: %u", (unsigned int)buf->dataLength);
 		}
 	}
 	CanMessageBuffer::Free(buf);
