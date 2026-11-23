@@ -1151,7 +1151,7 @@ bool DDARing::LowPowerOrStallPause(MovementState& ms) noexcept
 	bool wakeAsyncSender = false;
 
 	IrqDisable();
-	DDA *_ecv_null dda = GetCurrentDDA();
+	DDA *_ecv_null dda = GetCurrentDDAAlreadyLocked();
 	if (dda != nullptr && dda->GetFilePosition() != noFilePosition)
 	{
 		// We are executing a move that has a file address, so we can interrupt it
