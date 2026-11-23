@@ -1356,7 +1356,12 @@ bool GCodeBuffer::IsWritingBinary() const noexcept
 
 bool GCodeBuffer::WriteBinaryToFile(char b) noexcept
 {
-	return IS_BINARY_OR(stringParser.WriteBinaryToFile(b));
+	const bool finished = IS_BINARY_OR(stringParser.WriteBinaryToFile(b));
+	if (finished)
+	{
+		normalInput->SetWritingFile(false);						// re-enable urgent command scanning on this input
+	}
+	return finished;
 }
 
 void GCodeBuffer::FinishWritingBinary() noexcept
