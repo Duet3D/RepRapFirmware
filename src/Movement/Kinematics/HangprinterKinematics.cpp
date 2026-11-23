@@ -197,7 +197,7 @@ void HangprinterKinematics::Recalc() noexcept
 		move.SetDriveStepsPerMm(i, stepsPerMmThisAxis, 0);
 	}
 
-#if DUAL_CAN
+#if HANGPRINTER_DUAL_CAN
 	// Setting and reading of forces.
 	ReadODrive3AxisForce({}, StringRef(nullptr, 0), torqueConstants, mechanicalAdvantage, spoolGearTeeth, motorGearTeeth, spoolRadii);
 	SetODrive3TorqueMode({}, 0.0F, StringRef(nullptr, 0), mechanicalAdvantage, spoolGearTeeth, motorGearTeeth, spoolRadii);
@@ -1009,7 +1009,7 @@ void HangprinterKinematics::PrintParameters(const StringRef& reply) const noexce
 	reply.cat("\n");
 }
 
-#if DUAL_CAN
+#if HANGPRINTER_DUAL_CAN
 HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3MotorCurrent(DriverId driver, const StringRef& reply) THROWS(GCodeException)
 {
 	const uint8_t cmd = CANSimple::MSG_GET_IQ;
@@ -1044,9 +1044,9 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3MotorCurren
 	}
 	return {};
 }
-#endif // DUAL_CAN
+#endif // HANGPRINTER_DUAL_CAN
 
-#if DUAL_CAN
+#if HANGPRINTER_DUAL_CAN
 HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEstimate(DriverId const driver, bool const makeReference, const StringRef& reply, bool const subtractReference) THROWS(GCodeException)
 {
 	const uint8_t cmd = CANSimple::MSG_GET_ENCODER_ESTIMATES;
@@ -1131,7 +1131,7 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 
 	return {};
 }
-#endif // DUAL_CAN
+#endif // HANGPRINTER_DUAL_CAN
 
 namespace
 {
@@ -1147,7 +1147,7 @@ bool TryGetDriverDirectionForwards(DriverId driver, bool& forwards) noexcept
 }
 }
 
-#if DUAL_CAN
+#if HANGPRINTER_DUAL_CAN
 GCodeResult HangprinterKinematics::ReadODrive3AxisForce(DriverId const driver, const StringRef& reply, float setTorqueConstants[], uint32_t setMechanicalAdvantage[], uint32_t setSpoolGearTeeth[], uint32_t setMotorGearTeeth[], float setSpoolRadii[]) THROWS(GCodeException)
 {
 	static float torqueConstants_[HANGPRINTER_MAX_ANCHORS] = { 0.0 };
@@ -1192,9 +1192,9 @@ GCodeResult HangprinterKinematics::ReadODrive3AxisForce(DriverId const driver, c
 	}
 	return GCodeResult::error;
 }
-#endif // DUAL_CAN
+#endif // HANGPRINTER_DUAL_CAN
 
-#if DUAL_CAN
+#if HANGPRINTER_DUAL_CAN
 GCodeResult HangprinterKinematics::ReadODrive3Encoder(DriverId const driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	HangprinterKinematics::ODriveAnswer const estimate = GetODrive3EncoderEstimate(driver, gb.Seen('S'), reply, true);
@@ -1211,7 +1211,7 @@ GCodeResult HangprinterKinematics::ReadODrive3Encoder(DriverId const driver, GCo
 	}
 	return GCodeResult::error;
 }
-#endif // DUAL_CAN
+#endif // HANGPRINTER_DUAL_CAN
 
 namespace {
 GCodeResult ComputeODrive3TorqueFromForceInternal(
@@ -1259,7 +1259,7 @@ GCodeResult HangprinterKinematics::ComputeODrive3TorqueFromForce(DriverId const 
 		motorTorque_Nm, positionMode, reply);
 }
 
-#if DUAL_CAN
+#if HANGPRINTER_DUAL_CAN
 GCodeResult HangprinterKinematics::SetODrive3TorqueModeInner(DriverId const driver, float const torque_Nm, const StringRef& reply) noexcept
 {
 	// Get a buffer
@@ -1287,9 +1287,9 @@ GCodeResult HangprinterKinematics::SetODrive3TorqueModeInner(DriverId const driv
 	CanMessageBuffer::Free(buf);
 	return GCodeResult::ok;
 }
-#endif // DUAL_CAN
+#endif // HANGPRINTER_DUAL_CAN
 
-#if DUAL_CAN
+#if HANGPRINTER_DUAL_CAN
 GCodeResult HangprinterKinematics::SetODrive3PosMode(DriverId const driver, const StringRef& reply) noexcept
 {
 	HangprinterKinematics::ODriveAnswer const estimate = GetODrive3EncoderEstimate(driver, false, reply, false);
@@ -1321,9 +1321,9 @@ GCodeResult HangprinterKinematics::SetODrive3PosMode(DriverId const driver, cons
 	}
 	return GCodeResult::error;
 }
-#endif // DUAL_CAN
+#endif // HANGPRINTER_DUAL_CAN
 
-#if DUAL_CAN
+#if HANGPRINTER_DUAL_CAN
 GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, float force_Newton, const StringRef& reply,
 																												uint32_t setMechanicalAdvantage[], uint32_t setSpoolGearTeeth[],
 																												uint32_t setMotorGearTeeth[], float setSpoolRadii[]) noexcept
@@ -1371,7 +1371,7 @@ GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, f
 	}
 	return res;
 }
-#endif // DUAL_CAN
+#endif // HANGPRINTER_DUAL_CAN
 
 
 float HangprinterKinematics::SpringK(float const springLength) const noexcept {

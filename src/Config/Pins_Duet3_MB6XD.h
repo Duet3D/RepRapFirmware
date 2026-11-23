@@ -41,7 +41,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 
 #define SUPPORT_CAN_EXPANSION	1
 #define SUPPORT_BRS				1
-#define DUAL_CAN				1					// support CAN0 as a second CAN-FD expansion bus or as classic CAN
+#define NUM_CAN_PORTS			2					// support CAN0 as a second CAN-FD expansion bus or as classic CAN
 #define SUPPORT_LED_STRIPS		1
 #define SUPPORT_DMA_DOTSTAR		1
 #define SUPPORT_DMA_NEOPIXEL	1
@@ -408,28 +408,23 @@ constexpr Pin APIN_SBC_SPI_SS0 = PortCPin(25);
 constexpr GpioPinFunction SBCPinPeriphMode = GpioPinFunction::C;
 
 // CAN
-constexpr CanParameters PrimaryCanParams =
+constexpr CanParameters CanBusParams[NUM_CAN_PORTS] =
 {
-	.instanceNumber = 1,
-	.txPin = PortDPin(12),
-	.rxPin = PortCPin(12),
-	.txPinFunction = GpioPinFunction::B,
-	.rxPinFunction = GpioPinFunction::C
+	{
+		.instanceNumber = 1,
+		.txPin = PortDPin(12),
+		.rxPin = PortCPin(12),
+		.txPinFunction = GpioPinFunction::B,
+		.rxPinFunction = GpioPinFunction::C
+	},
+	{
+		.instanceNumber = 0,
+		.txPin = PortBPin(2),
+		.rxPin = PortBPin(3),
+		.txPinFunction = GpioPinFunction::A,
+		.rxPinFunction = GpioPinFunction::A
+	}
 };
-
-#if defined(DUAL_CAN) && DUAL_CAN
-
-constexpr CanParameters SecondaryCanParams =
-{
-	.instanceNumber = 0,
-	.txPin = PortBPin(2),
-	.rxPin = PortBPin(3),
-	.txPinFunction = GpioPinFunction::A,
-	.rxPinFunction = GpioPinFunction::A
-
-};
-
-#endif
 
 constexpr Pin SbcTfrReadyPin = PortEPin(2);
 // Note, the DMAC peripheral IDs are hard-coded in DataTransfer

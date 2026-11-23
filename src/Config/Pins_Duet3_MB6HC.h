@@ -59,7 +59,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM on a SAME7
 
 #define SUPPORT_CAN_EXPANSION	1
 #define SUPPORT_BRS				1
-#define DUAL_CAN				1					// support CAN0 as a second CAN-FD expansion bus or as classic CAN
+#define NUM_CAN_PORTS			2					// support CAN0 as a second CAN-FD expansion bus or as classic CAN
 #define SUPPORT_LED_STRIPS		1
 #define SUPPORT_DMA_DOTSTAR		1
 #define SUPPORT_DMA_NEOPIXEL	1
@@ -71,13 +71,13 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM on a SAME7
 #define SUPPORT_ADS131A02		1
 
 #ifdef USE_EMBEDDED_FILES
-#define SUPPORT_ACCELEROMETERS	0
+# define SUPPORT_ACCELEROMETERS	0
 # define SUPPORT_FTP			0
 # define SUPPORT_MULTICAST_DISCOVERY	0
 # define SUPPORT_REMOTE_COMMANDS		0
 # define SUPPORT_PROBE_POINTS_FILE		0
 #else
-#define SUPPORT_ACCELEROMETERS	1
+# define SUPPORT_ACCELEROMETERS	1
 # define SUPPORT_FTP			1
 # define SUPPORT_MULTICAST_DISCOVERY	1
 # define SUPPORT_PROBE_POINTS_FILE		1
@@ -497,28 +497,28 @@ constexpr Pin SamCsPin = PortCPin(25);				// SPI NPCS pin, input from WiFi modul
 // Note, the DMAC peripheral IDs are hard-coded in WiFiInterface
 
 // CAN
-constexpr CanParameters PrimaryCanParams =
+constexpr CanParameters CanBusParams[NUM_CAN_PORTS] =
 {
-	.instanceNumber = 1,
-	.txPin = PortDPin(12),
-	.rxPin = PortCPin(12),
-	.txPinFunction = GpioPinFunction::B,
-	.rxPinFunction = GpioPinFunction::C
+	{
+		.instanceNumber = 1,
+		.txPin = PortDPin(12),
+		.rxPin = PortCPin(12),
+		.txPinFunction = GpioPinFunction::B,
+		.rxPinFunction = GpioPinFunction::C
+	},
+	{
+		.instanceNumber = 0,
+		.txPin = PortBPin(2),
+		.rxPin = PortBPin(3),
+		.txPinFunction = GpioPinFunction::A,
+		.rxPinFunction = GpioPinFunction::A
+	}
 };
 
-#if defined(DUAL_CAN) && DUAL_CAN
-
-constexpr CanParameters SecondaryCanParams =
-{
-	.instanceNumber = 0,
-	.txPin = PortBPin(2),
-	.rxPin = PortBPin(3),
-	.txPinFunction = GpioPinFunction::A,
-	.rxPinFunction = GpioPinFunction::A
-
-};
-
-#endif
+// Internal bus numbers are not the CAN interface numbers on 6HC and 6XD boards:
+// bus 0 (can0dev, task CanRecv1) is the main bus on interface MCAN1, labelled CAN1,
+// and bus 1 (can1dev, task CanRecv0) is interface MCAN0, labelled CAN0 or AUX_CAN.
+// M953 I, messages to the user and the object model use the CAN interface numbers.
 
 // Timer allocation
 // Step timer is timer 0 aka TC0 channel 0. Also used as the CAN timestamp counter.

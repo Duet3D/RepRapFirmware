@@ -85,6 +85,7 @@ constexpr size_t NumDirectDrivers = 7;				// The maximum number of drives suppor
 constexpr size_t MaxSmartDrivers = NumDirectDrivers;	// The maximum number of smart drivers
 
 #if SUPPORT_CAN_EXPANSION
+# define NUM_CAN_PORTS			1
 constexpr size_t MaxCanDrivers = 8;					// enough to support another Mini5+ as an expansion board plus a tool board, or eight closed-loop motors
 constexpr size_t MaxCanBoards = 8;					// enough to support eight closed loop motors
 #endif
@@ -382,12 +383,14 @@ constexpr GpioPinFunction SbcSpiSercomPinsMode = GpioPinFunction::D;
 constexpr IRQn SbcSpiSercomIRQn = SERCOM0_1_IRQn;			// this is the transfer complete interrupt, the only one we use
 
 // CAN
-constexpr CanParameters PrimaryCanParams =
+constexpr CanParameters CanBusParams[NUM_CAN_PORTS] =
 {
-	.instanceNumber = 1,
-	.txPin = PortBPin(14),
-	.rxPin = PortBPin(15),
-	.pinsFunction = GpioPinFunction::H
+	{
+		.instanceNumber = 1,
+		.txPin = PortBPin(14),
+		.rxPin = PortBPin(15),
+		.pinsFunction = GpioPinFunction::H
+	}
 };
 
 // I2C
