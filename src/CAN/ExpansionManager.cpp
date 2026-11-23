@@ -47,6 +47,12 @@ constexpr ObjectModelArrayTableEntry ExpansionManager::objectModelArrayTable[] =
 
 DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(ExpansionManager)
 
+// A board can be listed from its status reports before its announcement has set its bus
+static ExpressionValue GetCanInterfaceValue(size_t busPlusOne) noexcept
+{
+	return (busPlusOne == 0) ? ExpressionValue(nullptr) : ExpressionValue((int32_t)CanInterface::GetCanInterfaceNumberFromBusNumber(busPlusOne - 1));
+}
+
 constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 {
 	// 0. boards[] members
@@ -61,7 +67,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareVersion),	ObjectModelEntryFlags::none },
 	{ "freeRam",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).neverUsedRam),						ObjectModelEntryFlags::liveNotPanelDue },
 	{ "inductiveSensor",	OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasInductiveSensor, self, 5),				ObjectModelEntryFlags::none },
-	{ "interface",			OBJECT_MODEL_FUNC((int32_t)CanInterface::GetCanInterfaceNumberFromBusNumber((self->FindIndexedBoard(context.GetLastIndex()).busPlusOne - 1))),	ObjectModelEntryFlags::none },
+	{ "interface",			OBJECT_MODEL_FUNC(GetCanInterfaceValue(self->FindIndexedBoard(context.GetLastIndex()).busPlusOne)),				ObjectModelEntryFlags::none },
 	{ "maxMotors",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).numDrivers),							ObjectModelEntryFlags::none },
 	{ "mcuTemp",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasMcuTemp, self, 1),						ObjectModelEntryFlags::liveNotPanelDue },
 	{ "name",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::longName),			ObjectModelEntryFlags::none },
