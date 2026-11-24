@@ -37,6 +37,7 @@ void MovementState::SetDefaults(size_t firstDriveToZero) noexcept
 #endif
 	filePos = noFilePosition;
 	movementTool = nullptr;
+	pressureAdvance = 0.0;
 	moveFractionToSkip = 0.0;
 #if 0	// we don't use this yet
 	cosXyAngle = 1.0;

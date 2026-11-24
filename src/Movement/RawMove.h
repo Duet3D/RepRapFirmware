@@ -27,6 +27,7 @@ struct RawMove
 	float maxTravelAcceleration;
 
 	const Tool *_ecv_null movementTool;								// which tool (if any) is being used by this move
+	float16_t pressureAdvance;										// pressure advance to use for this move, in seconds (per-tool snapshot)
 
 	static constexpr LogicalDrivesBitmap allLogicalDrives = LogicalDrivesBitmap::MakeLowestNBits(MaxAxesPlusExtruders);
 
