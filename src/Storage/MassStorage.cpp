@@ -1605,7 +1605,7 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, SdCardReturnedInfo
 	const FRESULT fr = f_getfree(path.c_str(), &freeClusters, &fs);
 	if (fr == FR_OK)
 	{
-		returnedInfo.clSize = fs->csize * 512;
+		returnedInfo.clSize = fs->csize * FF_MAX_SS;
 		returnedInfo.partitionSize = (uint64_t)(fs->n_fatent - 2) * returnedInfo.clSize;
 		returnedInfo.freeSpace = (uint64_t)freeClusters * returnedInfo.clSize;
 	}

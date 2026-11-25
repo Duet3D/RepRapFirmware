@@ -198,11 +198,12 @@ void Logger::Flush(bool forced) noexcept
 			// Log file is dirty and can be flushed.
 			// To avoid excessive disk write operations, flush it only if one of the following is true:
 			// 1. We have possibly allocated a new cluster since the last flush. To avoid lost clusters if we power down before flushing,
-			//    we should flush early in this case. Rather than determine the cluster size, we flush if we have started a new 512-byte sector.
+			//    we should flush early in this case.
 			// 2. If it hasn't been flushed for LogFlushInterval milliseconds.
 			const FilePosition currentPos = logFile.GetPosition();
 			const uint32_t now = millis();
-			if (forced || now - lastFlushTime >= LogFlushInterval || currentPos / 512 != lastFlushFileSize / 512)
+			const uint32_t clusterSize = logFile.ClusterSize();
+			if (forced || now - lastFlushTime >= LogFlushInterval || currentPos / clusterSize != lastFlushFileSize / clusterSize)
 			{
 				logFile.Flush();
 				lastFlushTime = millis();

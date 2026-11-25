@@ -794,7 +794,13 @@ bool FileStore::IsSameFile(const FIL& otherFile) const noexcept
 
 uint32_t FileStore::ClusterSize() const noexcept
 {
-	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.obj.fs->csize * 512u : 1;	// we divide by the cluster size so return 1 not 0 if there is an error
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		return FF_MAX_SS;				// the SBC does not report the cluster size of its file system
+	}
+#endif
+	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.obj.fs->csize * FF_MAX_SS : 1;	// we divide by the cluster size so return 1 not 0 if there is an error
 }
 
 
