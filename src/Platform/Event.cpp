@@ -38,6 +38,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 {
 	// Search for similar events already pending or being processed.
 	// An event is 'similar' if it has the same type, device number, CAN address and parameter even if the text is different.
+	Event * const ev = new Event(nullptr, et, p_param, p_ba, devNum, format, vargs);	// this may call malloc, which must not happen with the scheduler suspended
 	TaskCriticalSectionLocker lock;
 
 	Event*_ecv_null * pe = &eventsPending;
@@ -49,13 +50,15 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 #endif
 		   )
 		{
+			delete ev;
 			return false;						// there is a similar event already in the queue
 		}
 		pe = &((*pe)->next);
 	}
 
 	// We didn't find a similar event, so add the new one
-	*pe = new Event(*pe, et, p_param, p_ba, devNum, format, vargs);
+	ev->next = *pe;
+	*pe = ev;
 	++eventsQueued;
 	return true;
 }

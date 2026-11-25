@@ -1677,10 +1677,11 @@ extern "C" [[noreturn]] void LaserTaskStart(void * pvParameters) noexcept
 // This is called when laser mode is selected, or IOBits is enabled, or a scanning Z probe is configured, or extruder heater feedforward is configured, or M571 is used
 void Move::CreateLaserTask() noexcept
 {
-	TaskCriticalSectionLocker lock;
 	if (laserTask == nullptr)
 	{
-		laserTask = new Task<LaserTaskStackWords>;
+		Task<LaserTaskStackWords> * const newTask = new Task<LaserTaskStackWords>;	// this calls malloc, which must not happen with the scheduler suspended
+		TaskCriticalSectionLocker lock;
+		laserTask = newTask;
 		laserTask->Create(LaserTaskStart, "LASER", nullptr, TaskPriority::LaserPriority);
 	}
 }

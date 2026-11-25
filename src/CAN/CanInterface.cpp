@@ -27,6 +27,7 @@
 #include <GCodes/GCodeException.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <ClosedLoop/ClosedLoop.h>
+#include <FilamentMonitors/FilamentMonitor.h>
 #include <AppNotifyIndices.h>
 
 #if HAS_SBC_INTERFACE
@@ -551,6 +552,7 @@ static void ReInitBus0() noexcept
 
 void CanInterface::SwitchToExpansionMode(CanAddress addr, bool useTestMode) noexcept
 {
+	FilamentMonitor::DeleteAll();						// this takes a lock and releases memory, so it must be done before the scheduler is suspended
 	TaskCriticalSectionLocker lock;
 
 	myAddress = addr;
