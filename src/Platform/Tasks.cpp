@@ -112,7 +112,7 @@ static Mutex mallocMutex;
 // We need to make malloc/free thread safe. We must use a recursive mutex for it.
 extern "C" void GetMallocMutex() noexcept
 {
-	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)		// don't take mutex if scheduler not started or suspended
+	if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)	// don't take mutex if scheduler not started. Taking it with the scheduler suspended fails an assertion in FreeRTOS, which is intended
 	{
 		configASSERT(__get_BASEPRI() == 0 && __get_PRIMASK() == 0);	// taking the mutex re-enables masked interrupts, so catch callers that allocate while interrupts are masked
 		mallocMutex.Take();
@@ -121,7 +121,7 @@ extern "C" void GetMallocMutex() noexcept
 
 extern "C" void ReleaseMallocMutex() noexcept
 {
-	if (xTaskGetSchedulerState() == taskSCHEDULER_RUNNING)		// don't release mutex if scheduler not started or suspended
+	if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)	// don't release mutex if scheduler not started
 	{
 		mallocMutex.Release();
 	}
@@ -322,10 +322,7 @@ const char *_ecv_array Tasks::GetHeapTop() noexcept
 // It doesn't try to allocate from the free list maintained by malloc, only from virgin memory.
 void *Tasks::AllocPermanent(size_t sz, std::align_val_t align) noexcept
 {
-	GetMallocMutex();
-	void * const ret = CoreAllocPermanent(sz, align);
-	ReleaseMallocMutex();
-	return ret;
+	return CoreAllocPermanent(sz, align);
 }
 
 // Function called by FreeRTOS to get the total number of timer ticks since last reset
