@@ -133,6 +133,7 @@ void GridDefinition::CheckValidity(bool setNum0Num1) noexcept
 		isValid = NumPoints() != 0 && NumPoints() <= MaxGridProbePoints
 				&& (radius < 0.0 || radius >= 1.0)
 				&& nums[0] <= MaxAxis0GridPoints
+				&& nums[1] <= MaxGridProbePoints
 				&& letters[0] != letters[1]
 				&& axis0NumForLetter < numVisibleAxes
 				&& axis1NumForLetter < numVisibleAxes;

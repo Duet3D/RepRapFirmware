@@ -879,7 +879,7 @@ void ExpressionParser::ParseArray(size_t& length, function_ref<void(ExpressionVa
 			if (CurrentCharacter() != EXPRESSION_LIST_SEPARATOR) break;
 			AdvancePointer();
 			if (SkipWhiteSpace() == '}') break;		// we allow a trailing command in an array
-			if (numElements == length)
+			if (numElements >= length)
 			{
 				ThrowParseException("Array too long");
 			}

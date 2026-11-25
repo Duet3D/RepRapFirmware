@@ -17,6 +17,8 @@
 
 namespace Heap
 {
+	constexpr size_t HeapBlockSize = 2048;				// the size of each heap block, which is also the largest space that can be allocated
+
 	// Struct used to represent an area of storage on the heap.
 	// If this is changed, check whether struct ArrayStorageSpace in ArrayHandle.cpp needs to be changed too.
 	struct StorageSpace
