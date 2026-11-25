@@ -2057,6 +2057,7 @@ void GCodes::AbortStateMachine(GCodeBuffer& gb) noexcept
 		case GCodeState::m109ToolChangeComplete:
 		case GCodeState::m109WaitForTemperature:
 			doingToolChange = false;
+			ms->SetState(GCodeState::toolChangeComplete);		// end the tool change instead of running the remaining macros
 			break;
 
 		case GCodeState::flashing1:

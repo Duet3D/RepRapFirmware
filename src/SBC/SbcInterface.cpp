@@ -875,6 +875,7 @@ void SbcInterface::ExchangeData() noexcept
 				{
 					// Note that we do not call StopPrint here or set any other variables; DSF already does that
 					reprap.GetGCodes().PauseSequenceAborted(*gb);	// don't get stuck in "pausing" if this abort tears down the pause sequence
+					reprap.GetGCodes().AbortStateMachine(*gb);
 					gb->AbortFile(true);
 					gb->FileAbortSent();	// don't notify the SBC
 					gb->MacroFileClosedSent();	// DSF has dropped all its macro files, so a closal that has not gone out yet is void as well, as in GCodeBuffer::Reset

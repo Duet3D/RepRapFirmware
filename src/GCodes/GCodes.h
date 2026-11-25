@@ -114,6 +114,7 @@ public:
 #endif
 	void AbortPrint(GCodeBuffer& gb) noexcept;									// Cancel any print in progress
 	void PauseSequenceAborted(GCodeBuffer& gb) noexcept;						// Settle pauseState to paused if a pause sequence is aborted before it commits
+	void AbortStateMachine(GCodeBuffer& gb) noexcept;							// Clean up state machine side effects before aborting
 	void HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept;		// Write where we are into a string
 	bool DoingFileMacro() const noexcept;										// Is a macro file being processed by any input channel?
 	bool GetMacroRestarted() const noexcept;									// Return true if the macro being executed by fileGCode was restarted
@@ -386,7 +387,6 @@ private:
 	void DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps) noexcept;
 
 	void StartPrinting(bool fromStart) noexcept;								// Start printing the file already selected
-	void AbortStateMachine(GCodeBuffer& gb) noexcept;								// Clean up state machine side effects before aborting
 	void StopPrint(GCodeBuffer *_ecv_null gbp, StopPrintReason reason) noexcept;	// Stop the current print
 
 	bool DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;					// Get G Codes from a file and print them
