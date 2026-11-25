@@ -1112,11 +1112,7 @@ void ExpressionParser::EvaluateTake(ExpressionValue& rslt, uint32_t arg, bool ev
 
 	case TypeCode::HeapString:
 		{
-			ExpressionValue copy(rslt);
-			WriteLocker lock(Heap::heapLock);
-			const ReadLockedPointer<const char> p = copy.shVal.Get();
-			const size_t len = min<size_t>(strlen(p.Ptr()), arg);
-			const StringHandle sh(p.Ptr(), len);
+			const StringHandle sh(rslt.shVal, 0, min<size_t>(rslt.shVal.GetLength(), arg));
 			rslt.SetStringHandle(sh);
 		}
 		break;
@@ -1192,12 +1188,9 @@ void ExpressionParser::EvaluateDrop(ExpressionValue& rslt, uint32_t arg, bool ev
 
 	case TypeCode::HeapString:
 		{
-			ExpressionValue copy(rslt);
-			WriteLocker lock(Heap::heapLock);
-			const ReadLockedPointer<const char> p = copy.shVal.Get();
-			const size_t slen = strlen(p.Ptr());
+			const size_t slen = rslt.shVal.GetLength();
 			const size_t offset = min<size_t>(slen, arg);
-			StringHandle sh(p.Ptr() + offset, slen - offset);
+			const StringHandle sh(rslt.shVal, offset, slen - offset);
 			rslt.SetStringHandle(sh);
 		}
 		break;

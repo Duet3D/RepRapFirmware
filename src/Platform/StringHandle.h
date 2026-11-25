@@ -20,6 +20,7 @@ public:
 	StringHandle() noexcept { slotPtr = nullptr; }
 	explicit StringHandle(const char *_ecv_array s) noexcept;
 	StringHandle(const char *_ecv_array s, size_t len) noexcept;
+	StringHandle(const StringHandle& source, size_t offset, size_t len) noexcept;
 
 #if 0	// unused
 	StringHandle(const char *_ecv_array s1, const char *_ecv_array s2) noexcept;
