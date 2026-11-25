@@ -174,8 +174,7 @@ static void HandleInputStateChangedV1(const CanMessageInputChangedV1& msg, CanAd
 {
 	bool endstopStatesChanged = false;
 	Platform& p = reprap.GetPlatform();
-	const unsigned int numHandles = min<unsigned int>(msg.numHandles, ARRAY_SIZE(msg.results));
-	for (unsigned int i = 0; i < numHandles; i++)
+	for (unsigned int i = 0; i < msg.numHandles; i++)
 	{
 		const RemoteInputHandle handle(msg.GetEntryHandle(i));
 		const bool state = (msg.states & (1u << i)) != 0;
@@ -217,8 +216,7 @@ static void HandleInputStateChangedV2(const CanMessageInputChangedV2& msg, CanAd
 {
 	bool endstopStatesChanged = false;
 	Platform& p = reprap.GetPlatform();
-	const unsigned int numHandles = min<unsigned int>(msg.numHandles, ARRAY_SIZE(msg.results));
-	for (unsigned int i = 0; i < numHandles; i++)
+	for (unsigned int i = 0; i < msg.numHandles; i++)
 	{
 		const RemoteInputHandle handle(msg.GetEntryHandle(i));
 		const bool state = (msg.states & (1u << i)) != 0;
@@ -322,6 +320,15 @@ static GCodeResult InitiateFirmwareUpdate(const CanMessageUpdateYourFirmware& ms
 
 #endif	// SUPPORT_REMOTE_COMMANDS
 
+// Declare 'msg' as the given variant of the received message, and reject the message if it is too short to be a valid one
+#define GET_VALID_MESSAGE(_variant) \
+	const auto& msg = buf->msg._variant; \
+	if (!msg.ValidMessageLength(buf->dataLength)) \
+	{ \
+		badMessage = true; \
+		break; \
+	}
+
 // Process a received broadcast or request message. Don't free the message buffer
 void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 {
@@ -349,12 +356,16 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			CanRequestId requestId;
 			uint8_t extra = 0;
 			const bool requestUsedBrs = buf->useBrs;
+			bool badMessage = false;
 
 			switch (id)
 			{
 			case CanMessageType::timeSync:
-				StepTimer::ProcessTimeSyncMessage(buf->msg.sync, buf->dataLength, buf->timeStamp);
-				CanInterface::CheckBrs(buf->msg.sync);
+				{
+					GET_VALID_MESSAGE(sync);
+					StepTimer::ProcessTimeSyncMessage(msg, buf->dataLength, buf->timeStamp);
+					CanInterface::CheckBrs(msg);
+				}
 				return;							// no reply needed
 
 			case CanMessageType::emergencyStop:
@@ -409,7 +420,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				return;							// no reply needed
 
 			case CanMessageType::stopMovement:
-				reprap.GetMove().StopDriversFromRemote(buf->msg.stopMovement.whichDrives);
+				{
+					GET_VALID_MESSAGE(stopMovement);
+					reprap.GetMove().StopDriversFromRemote(msg.whichDrives);
+				}
 				return;							// no reply needed
 
 			case CanMessageType::revertPosition:
@@ -433,21 +447,30 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				return;							// no reply needed
 
 			case CanMessageType::updateFirmware:
-				requestId = buf->msg.updateYourFirmware.requestId;
-				rslt = InitiateFirmwareUpdate(buf->msg.updateYourFirmware, replyRef);
+				{
+					GET_VALID_MESSAGE(updateYourFirmware);
+					requestId = msg.requestId;
+					rslt = InitiateFirmwareUpdate(msg, replyRef);
+				}
 				break;
 
 			case CanMessageType::reset:
-				requestId = buf->msg.reset.requestId;
-				reply.printf("Board %u resetting", CanInterface::GetCanAddress());
-				reprap.EmergencyStop();
-				reprap.ScheduleReset();
-				rslt = GCodeResult::ok;
+				{
+					GET_VALID_MESSAGE(reset);
+					requestId = msg.requestId;
+					reply.printf("Board %u resetting", CanInterface::GetCanAddress());
+					reprap.EmergencyStop();
+					reprap.ScheduleReset();
+					rslt = GCodeResult::ok;
+				}
 				break;
 
 			case CanMessageType::returnInfo:
-				requestId = buf->msg.getInfo.requestId;
-				rslt = EutGetInfo(buf->msg.getInfo, replyRef, extra);
+				{
+					GET_VALID_MESSAGE(getInfo);
+					requestId = msg.requestId;
+					rslt = EutGetInfo(msg, replyRef, extra);
+				}
 				break;
 
 			// Heater commands
@@ -458,25 +481,37 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::heaterFeedForwardV1:
-				requestId = CanRequestIdNoReplyNeeded;
-				rslt = reprap.GetHeat().ApplyFeedForward(buf->msg.heaterFeedForwardV1, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(heaterFeedForwardV1);
+					requestId = CanRequestIdNoReplyNeeded;
+					rslt = reprap.GetHeat().ApplyFeedForward(msg, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::heaterModelV3:
-				requestId = buf->msg.heaterModelV3.requestId;
-				rslt = reprap.GetHeat().ProcessM307(buf->msg.heaterModelV3, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(heaterModelV3);
+					requestId = msg.requestId;
+					rslt = reprap.GetHeat().ProcessM307(msg, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::setHeaterTemperatureV1:
-				requestId = buf->msg.setTemp.requestId;
-				rslt = reprap.GetHeat().SetTemperature(buf->msg.setTemp, replyRef);
+				{
+					GET_VALID_MESSAGE(setTemp);
+					requestId = msg.requestId;
+					rslt = reprap.GetHeat().SetTemperature(msg, replyRef);
+				}
 				break;
 
 			case CanMessageType::heaterTuningCommand:
-				requestId = buf->msg.heaterTuningCommand.requestId;
-				rslt = reprap.GetHeat().TuningCommand(buf->msg.heaterTuningCommand, replyRef);
+				{
+					GET_VALID_MESSAGE(heaterTuningCommand);
+					requestId = msg.requestId;
+					rslt = reprap.GetHeat().TuningCommand(msg, replyRef);
+				}
 				break;
 
 			case CanMessageType::setHeaterFaultDetection:
@@ -485,13 +520,19 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::setHeaterMonitors:
-				requestId = buf->msg.setHeaterMonitors.requestId;
-				rslt = reprap.GetHeat().SetHeaterMonitors(buf->msg.setHeaterMonitors, replyRef);
+				{
+					GET_VALID_MESSAGE(setHeaterMonitors);
+					requestId = msg.requestId;
+					rslt = reprap.GetHeat().SetHeaterMonitors(msg, replyRef);
+				}
 				break;
 
 			case CanMessageType::setDefaultHeaterModel:
-				reprap.GetHeat().SetDefaultHeaterModel(*buf);
-				CanInterface::SendResponseNoFree(buf);
+				{
+					GET_VALID_MESSAGE(setDefaultHeaterModel);
+					reprap.GetHeat().SetDefaultHeaterModel(*buf);
+					CanInterface::SendResponseNoFree(buf);
+				}
 				return;
 
 			case CanMessageType::m308V1:
@@ -507,13 +548,19 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::fanParameters:
-				requestId = buf->msg.fanParameters.requestId;
-				rslt = reprap.GetFansManager().ConfigureFan(buf->msg.fanParameters, replyRef);
+				{
+					GET_VALID_MESSAGE(fanParameters);
+					requestId = msg.requestId;
+					rslt = reprap.GetFansManager().ConfigureFan(msg, replyRef);
+				}
 				break;
 
 			case CanMessageType::setFanSpeed:
-				requestId = buf->msg.setFanSpeed.requestId;
-				rslt = reprap.GetFansManager().SetFanSpeed(buf->msg.setFanSpeed, replyRef);
+				{
+					GET_VALID_MESSAGE(setFanSpeed);
+					requestId = msg.requestId;
+					rslt = reprap.GetFansManager().SetFanSpeed(msg, replyRef);
+				}
 				break;
 
 			// GPIO commands
@@ -524,8 +571,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::writeGpio:
-				requestId = buf->msg.writeGpio.requestId;
-				rslt = reprap.GetPlatform().EutHandleGpioWrite(buf->msg.writeGpio, replyRef);
+				{
+					GET_VALID_MESSAGE(writeGpio);
+					requestId = msg.requestId;
+					rslt = reprap.GetPlatform().EutHandleGpioWrite(msg, replyRef);
+				}
 				break;
 
 			// LED strip commands
@@ -542,20 +592,29 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 			// Driver commands
 			case CanMessageType::setMotorCurrents:
-				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
-				rslt = reprap.GetMove().EutSetMotorCurrents(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(multipleDrivesRequestFloat);
+					requestId = msg.requestId;
+					rslt = reprap.GetMove().EutSetMotorCurrents(msg, buf->dataLength, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::setStepsPerMmAndMicrostepping:
-				requestId = buf->msg.multipleDrivesStepsPerUnitAndMicrostepping.requestId;
-				rslt = reprap.GetMove().EutSetStepsPerMmAndMicrostepping(buf->msg.multipleDrivesStepsPerUnitAndMicrostepping, buf->dataLength, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(multipleDrivesStepsPerUnitAndMicrostepping);
+					requestId = msg.requestId;
+					rslt = reprap.GetMove().EutSetStepsPerMmAndMicrostepping(msg, buf->dataLength, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::setDriverStates:
-				requestId = buf->msg.multipleDrivesRequestUint16.requestId;
-				rslt = reprap.GetMove().EutHandleSetDriverStates(buf->msg.multipleDrivesRequestDriverState, buf->dataLength, replyRef);
+				{
+					GET_VALID_MESSAGE(multipleDrivesRequestDriverState);
+					requestId = msg.requestId;
+					rslt = reprap.GetMove().EutHandleSetDriverStates(msg, buf->dataLength, replyRef);
+				}
 				break;
 
 			case CanMessageType::m915:
@@ -565,9 +624,12 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::setPressureAdvanceV2:
-				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
-				rslt = reprap.GetMove().EutSetRemotePressureAdvanceV2(buf->msg.multipleDrivesRequestPressureAdvance, buf->dataLength, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(multipleDrivesRequestPressureAdvance);
+					requestId = msg.requestId;
+					rslt = reprap.GetMove().EutSetRemotePressureAdvanceV2(msg, buf->dataLength, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::setInputShapingV1:
@@ -595,9 +657,12 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::setStandstillCurrentFactor:
-				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
-				rslt = reprap.GetMove().EutSetStandstillCurrentFactor(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(multipleDrivesRequestFloat);
+					requestId = msg.requestId;
+					rslt = reprap.GetMove().EutSetStandstillCurrentFactor(msg, buf->dataLength, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::m970:
@@ -621,39 +686,57 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::createInputMonitorV1:
-				requestId = buf->msg.createInputMonitorV1.requestId;
-				rslt = InputMonitor::Create(buf->msg.createInputMonitorV1, buf->dataLength, replyRef, extra);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(createInputMonitorV1);
+					requestId = msg.requestId;
+					rslt = InputMonitor::Create(msg, buf->dataLength, replyRef, extra);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::changeInputMonitorV1:
-				requestId = buf->msg.changeInputMonitorV1.requestId;
-				rslt = InputMonitor::Change(buf->msg.changeInputMonitorV1, replyRef, extra);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(changeInputMonitorV1);
+					requestId = msg.requestId;
+					rslt = InputMonitor::Change(msg, replyRef, extra);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::enableStallEndstop:
-				requestId = buf->msg.enableStallEndstop.requestId;
-				rslt = reprap.GetMove().SetStallEndstopReporting(buf->msg.enableStallEndstop, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(enableStallEndstop);
+					requestId = msg.requestId;
+					rslt = reprap.GetMove().SetStallEndstopReporting(msg, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::readInputsRequest:
 				// This one has its own reply message type
-				InputMonitor::ReadInputs(buf);
-				CanInterface::SendResponseNoFree(buf);
+				{
+					GET_VALID_MESSAGE(readInputsRequest);
+					InputMonitor::ReadInputs(buf);
+					CanInterface::SendResponseNoFree(buf);
+				}
 				return;
 
 			// Filament monitor commands
 			case CanMessageType::createFilamentMonitor:
-				requestId = buf->msg.createFilamentMonitor.requestId;
-				rslt = FilamentMonitor::Create(buf->msg.createFilamentMonitor, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(createFilamentMonitor);
+					requestId = msg.requestId;
+					rslt = FilamentMonitor::Create(msg, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::deleteFilamentMonitor:
-				requestId = buf->msg.deleteFilamentMonitor.requestId;
-				rslt = FilamentMonitor::Delete(buf->msg.deleteFilamentMonitor, replyRef);
+				{
+					GET_VALID_MESSAGE(deleteFilamentMonitor);
+					requestId = msg.requestId;
+					rslt = FilamentMonitor::Delete(msg, replyRef);
+				}
 				break;
 
 			case CanMessageType::configureFilamentMonitor:
@@ -697,6 +780,17 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 			}
 
+			if (badMessage)
+			{
+				if (buf->id.Dst() != CanInterface::GetCanAddress())
+				{
+					return;
+				}
+				requestId = CanRequestIdAcceptAlways;
+				reply.printf("Board %u received msg type %u with bad length %u", CanInterface::GetCanAddress(), (unsigned int)buf->id.MsgType(), (unsigned int)buf->dataLength);
+				rslt = GCodeResult::error;
+			}
+
 			if (requestId != CanRequestIdNoReplyNeeded)				// if a reply is needed
 			{
 				// Re-use the message buffer to send a standard reply
@@ -732,62 +826,105 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 #endif
 		{
 			// Handle messages received in normal operation mode
+			bool badMessage = false;
 			switch (id)
 			{
 			case CanMessageType::inputStateChangedV1:
 				//TODO we should preferably handle this one using a separate high-priority queue or buffer
-				HandleInputStateChangedV1(buf->msg.inputChangedV1, buf->id.Src());
+				{
+					GET_VALID_MESSAGE(inputChangedV1);
+					HandleInputStateChangedV1(msg, buf->id.Src());
+				}
 				break;
 
 			case CanMessageType::inputStateChangedV2:
 				//TODO we should preferably handle this one using a separate high-priority queue or buffer
-				HandleInputStateChangedV2(buf->msg.inputChangedV2, buf->id.Src());
+				{
+					GET_VALID_MESSAGE(inputChangedV2);
+					HandleInputStateChangedV2(msg, buf->id.Src());
+				}
 				break;
 
 			case CanMessageType::firmwareBlockRequest:
-				HandleFirmwareBlockRequest(buf);
+				{
+					GET_VALID_MESSAGE(firmwareUpdateRequest);
+					HandleFirmwareBlockRequest(buf);
+				}
 				break;
 
 			case CanMessageType::sensorTemperaturesReport:
-				reprap.GetHeat().ProcessRemoteSensorsReport(buf->id.Src(), buf->msg.sensorTemperaturesBroadcast);
+				{
+					GET_VALID_MESSAGE(sensorTemperaturesBroadcast);
+					reprap.GetHeat().ProcessRemoteSensorsReport(buf->id.Src(), msg);
+				}
 				break;
 
 			case CanMessageType::heatersStatusReport:
-				reprap.GetHeat().ProcessRemoteHeatersReport(buf->id.Src(), buf->msg.heatersStatusBroadcast);
+				{
+					GET_VALID_MESSAGE(heatersStatusBroadcast);
+					reprap.GetHeat().ProcessRemoteHeatersReport(buf->id.Src(), msg);
+				}
 				break;
 
 			case CanMessageType::driversStatusReport:
-				reprap.GetExpansion().ProcessDriveStatusReport(buf);
+				{
+					GET_VALID_MESSAGE(driversStatus);
+					reprap.GetExpansion().ProcessDriveStatusReport(buf);
+				}
 				break;
 
 			case CanMessageType::boardStatusReportV0:
-			case CanMessageType::boardStatusReportV1:
 				reprap.GetExpansion().ProcessBoardStatusReport(buf);
 				break;
 
+			case CanMessageType::boardStatusReportV1:
+				{
+					GET_VALID_MESSAGE(boardStatusV1);
+					reprap.GetExpansion().ProcessBoardStatusReport(buf);
+				}
+				break;
+
 			case CanMessageType::heaterTuningReport:
-				reprap.GetHeat().ProcessRemoteHeaterTuningReport(buf->id.Src(), buf->msg.heaterTuningReport);
+				{
+					GET_VALID_MESSAGE(heaterTuningReport);
+					reprap.GetHeat().ProcessRemoteHeaterTuningReport(buf->id.Src(), msg);
+				}
 				break;
 
 			case CanMessageType::fansReport:
-				reprap.GetFansManager().ProcessRemoteFanRpms(buf->id.Src(), buf->msg.fansReport);
+				{
+					GET_VALID_MESSAGE(fansReport);
+					reprap.GetFansManager().ProcessRemoteFanRpms(buf->id.Src(), msg);
+				}
 				break;
 
 			case CanMessageType::announceV0:
-				reprap.GetExpansion().ProcessAnnouncement(buf, false);
+				{
+					GET_VALID_MESSAGE(announceV0);
+					reprap.GetExpansion().ProcessAnnouncement(buf, false);
+				}
 				break;
 
 			case CanMessageType::announceV1:
-				reprap.GetExpansion().ProcessAnnouncement(buf, true);
+				{
+					GET_VALID_MESSAGE(announceV1);
+					reprap.GetExpansion().ProcessAnnouncement(buf, true);
+				}
 				break;
 
 			case CanMessageType::filamentMonitorsStatusReportV2:
-				FilamentMonitor::UpdateRemoteFilamentStatus(buf->id.Src(), buf->msg.filamentMonitorsStatusV2);
+				{
+					GET_VALID_MESSAGE(filamentMonitorsStatusV2);
+					FilamentMonitor::UpdateRemoteFilamentStatus(buf->id.Src(), msg);
+				}
 				break;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 			case CanMessageType::closedLoopData:
-				ClosedLoop::ProcessReceivedData(buf->id.Src(), buf->msg.closedLoopData, buf->dataLength);
+				{
+					GET_VALID_MESSAGE(closedLoopData);
+					ClosedLoop::ProcessReceivedData(buf->id.Src(), msg, buf->dataLength);
+				}
 				break;
 #endif
 
@@ -796,37 +933,46 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::debugText:
-				reprap.GetPlatform().MessageF(GenericMessage, "Debug from %u: %.*s\n", buf->id.Src(), buf->msg.debugText.GetMaxTextLength(buf->dataLength), buf->msg.debugText.text);
+				{
+					GET_VALID_MESSAGE(debugText);
+					reprap.GetPlatform().MessageF(GenericMessage, "Debug from %u: %.*s\n", buf->id.Src(), msg.GetMaxTextLength(buf->dataLength), msg.text);
+				}
 				break;
 
 #if SUPPORT_ACCELEROMETERS
 			case CanMessageType::accelerometerData:
-				Accelerometers::ProcessReceivedData(buf->id.Src(), buf->msg.accelerometerData, buf->dataLength);
+				{
+					GET_VALID_MESSAGE(accelerometerData);
+					Accelerometers::ProcessReceivedData(buf->id.Src(), msg, buf->dataLength);
+				}
 				break;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
 			case CanMessageType::enterTestMode:
-				if (buf->msg.enterTestMode.passwd == CanMessageEnterTestMode::Passwd)
 				{
-					const CanAddress newAddress = buf->msg.enterTestMode.address;
+					GET_VALID_MESSAGE(enterTestMode);
+					if (msg.passwd == CanMessageEnterTestMode::Passwd)
+					{
+						const CanAddress newAddress = msg.address;
 
-					// Send a standard response before we switch
-					const CanAddress srcAddress = buf->id.Src();
-					const CanRequestId requestId = buf->msg.enterTestMode.requestId;
-					const bool requestUsedBrs = buf->useBrs;
+						// Send a standard response before we switch
+						const CanAddress srcAddress = buf->id.Src();
+						const CanRequestId requestId = msg.requestId;
+						const bool requestUsedBrs = buf->useBrs;
 
-					CanMessageStandardReply * const msg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
-					buf->useBrs = requestUsedBrs;
-					msg->resultCode = (uint16_t)GCodeResult::ok;
-					msg->text[0] = 0;
-					buf->dataLength = msg->GetActualDataLength(0);
-					msg->fragmentNumber = 0;
-					msg->moreFollows = false;
-					CanInterface::SendResponseNoFree(buf);
+						CanMessageStandardReply * const replyMsg = buf->SetupResponseMessage<CanMessageStandardReply>(requestId, CanInterface::GetCanAddress(), srcAddress);
+						buf->useBrs = requestUsedBrs;
+						replyMsg->resultCode = (uint16_t)GCodeResult::ok;
+						replyMsg->text[0] = 0;
+						buf->dataLength = replyMsg->GetActualDataLength(0);
+						replyMsg->fragmentNumber = 0;
+						replyMsg->moreFollows = false;
+						CanInterface::SendResponseNoFree(buf);
 
-					delay(25);							// allow time for the response to be sent before we re-initialise CAN
-					CanInterface::SwitchToExpansionMode(newAddress, true);
+						delay(25);							// allow time for the response to be sent before we re-initialise CAN
+						CanInterface::SwitchToExpansionMode(newAddress, true);
+					}
 				}
 				break;
 #endif
@@ -837,6 +983,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 					buf->DebugPrint("Rec: ");
 				}
 				break;
+			}
+
+			if (badMessage && reprap.Debug(Module::CAN))
+			{
+				buf->DebugPrint("Bad length: ");
 			}
 		}
 	}

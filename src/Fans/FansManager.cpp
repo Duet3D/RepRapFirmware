@@ -275,7 +275,7 @@ void FansManager::ProcessRemoteFanRpms(CanAddress src, const CanMessageFansRepor
 {
 	size_t numFansProcessed = 0;
 	uint64_t whichFans = msg.whichFans;
-	while (whichFans != 0 && numFansProcessed < ARRAY_SIZE(msg.fanReports))
+	while (whichFans != 0)
 	{
 		const unsigned int fanNum = LowestSetBit(whichFans);
 		auto fan = FindFan(fanNum);

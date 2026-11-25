@@ -338,7 +338,7 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 		board.hasInductiveSensor = msg.hasInductiveSensor;
 
 		size_t offset = msg.GetAnalogHandlesOffset();
-		for (unsigned int i = 0; i < msg.numAnalogHandles && offset + sizeof(AnalogHandleDataV1) <= buf->dataLength; i++)
+		for (unsigned int i = 0; i < msg.numAnalogHandles; i++)
 		{
 			AnalogHandleDataV1 data;
 			memcpy(&data, (const uint8_t *_ecv_array)&msg + offset, sizeof(AnalogHandleDataV1));
@@ -412,8 +412,7 @@ void ExpansionManager::ProcessDriveStatusReport(const CanMessageBuffer *buf) noe
 	if (board.HasDrivers())
 	{
 		const CanMessageDriversStatus& msg = buf->msg.driversStatus;
-		const size_t maxDrivers = msg.hasClosedLoopData ? ARRAY_SIZE(msg.closedLoopData) : ARRAY_SIZE(msg.openLoopData);
-		for (size_t driver = 0; driver < min<size_t>(min<size_t>(board.numDrivers, msg.numDriversReported), maxDrivers); driver++)
+		for (size_t driver = 0; driver < min<size_t>(board.numDrivers, msg.numDriversReported); driver++)
 		{
 			DriverData& dd = board.driverData[driver];
 			if (msg.hasClosedLoopData)
