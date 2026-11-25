@@ -952,8 +952,7 @@ bool Move::SetKinematics(const char *_ecv_array _ecv_null name, int legacyType) 
 	{
 		return false;
 	}
-	delete kinematics;
-	kinematics = _ecv_not_null(nk);
+	ReplaceObject(kinematics, nk);						// switch the pointer before deleting, another task may be reporting the kinematics
 	reprap.MoveUpdated();
 	return true;
 }
