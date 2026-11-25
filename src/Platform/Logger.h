@@ -12,6 +12,7 @@
 
 #if HAS_MASS_STORAGE
 
+#include <atomic>
 #include <ctime>
 #include <Storage/FileData.h>
 
@@ -55,7 +56,7 @@ private:
 	uint32_t lastFlushTime;
 	FilePosition lastFlushFileSize;
 	bool dirty;
-	bool inLogger;
+	std::atomic<bool> inLogger;
 	LogLevel logLevel;
 };
 

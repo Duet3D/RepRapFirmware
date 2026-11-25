@@ -1088,8 +1088,8 @@ void GCodeBuffer::AbortFile(bool abortAll) noexcept
 		// Notify the SBC about the file(s) being closed
 		if (reprap.UsingSbcInterface())
 		{
+			abortAllFiles = abortAll;		// set this one first, because the SBC task acts on abortFile as soon as it is set
 			abortFile = true;
-			abortAllFiles = abortAll;
 		}
 #endif
 	}

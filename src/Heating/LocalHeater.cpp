@@ -548,9 +548,12 @@ GCodeResult LocalHeater::StartAutoTune(const StringRef& reply, bool seenA, float
 		tuningStartTemp.Add(ambientTemp);
 		ClearCounters();
 		timeSetHeating = millis();
-		lastPwm = tuningPwm;										// turn on heater at specified power
-		tuningPhase = 1;
-		mode = HeaterMode::tuning1;
+		{
+			TaskCriticalSectionLocker lock;							// the Heat task clears lastPwm for as long as the heater is off
+			lastPwm = tuningPwm;									// turn on heater at specified power
+			tuningPhase = 1;
+			mode = HeaterMode::tuning1;
+		}
 		ReportTuningUpdate();
 	}
 	else

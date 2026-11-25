@@ -31,7 +31,7 @@ bool GCodes::WaitForEndstopOrProbingMoveToFinish(GCodeBuffer& gb) noexcept
 {
 	return LockCurrentMovementSystemAndWaitForStandstill(gb)
 #if SUPPORT_CAN_EXPANSION
-			&& CanMotion::RevertStoppedDrivers()
+			&& CanMotion::RevertStoppedDrivers(gb.GetActiveQueueNumber())
 #endif
 		;
 }

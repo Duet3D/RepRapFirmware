@@ -1284,9 +1284,9 @@ decrease(strlen(idString))	// recursion variant
 				context.SetObsoleteFieldQueried();
 			}
 			idString = GetNextElement(idString);
+			ReadLocker lock(GetObjectLock(tableNumber));
 			const ExpressionValue val = e->func(this, context);
 			context.CheckStack(StackUsage::GetObjectValue_noTable);
-			ReadLocker lock(GetObjectLock(tableNumber));
 			return GetObjectValue(context, classDescriptor, val, idString);
 		}
 		if (tableNumber != 0)

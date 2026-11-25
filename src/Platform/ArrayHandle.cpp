@@ -174,16 +174,24 @@ void ArrayHandle::Delete() noexcept
 	if (slotPtr != nullptr)
 	{
 		ReadLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
-		if (slotPtr->refCount == 1)
+
+		// Other tasks may release their references at the same time under their own read locks, so give up ours atomically unless it is the last one.
+		// We can't take a write lock instead, because this is also called while the task holds a read lock
+		unsigned int count = slotPtr->refCount.load();
+		while (count != 1 && !slotPtr->refCount.compare_exchange_weak(count, count - 1))
 		{
-			// The call to Heap:::DeleteSlot will deallocate the slot, so release the contents first
+		}
+
+		if (count == 1)
+		{
+			// We hold the only reference, so nobody else can gain one. The call to Heap:::DeleteSlot will deallocate the slot, so release the contents first
 			ArrayStorageSpace *const aSpace = reinterpret_cast<ArrayStorageSpace*>(_ecv_not_null(slotPtr->storage));
 			for (size_t i = 0; i < aSpace->count; ++i)
 			{
 				aSpace->elements[i].Release();					// release the element
 			}
+			Heap::DeleteSlot(slotPtr);
 		}
-		Heap::DeleteSlot(slotPtr);
 		slotPtr = nullptr;										// clear the pointer to the handle entry
 	}
 }

@@ -1128,7 +1128,7 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 	if (simMode < SimulationMode::normal)
 	{
 #if SUPPORT_CAN_EXPANSION
-		CanMotion::StartMovement();
+		CanMotion::StartMovement(move.GetMsNumber(ring));
 #endif
 		// Handle all drivers
 		if (flags.isLeadscrewAdjustmentMove)
@@ -1297,7 +1297,7 @@ void DDA::Prepare(DDARing& ring, uint32_t prepareAdvanceTime, SimulationMode sim
 		}
 
 #if SUPPORT_CAN_EXPANSION
-		const uint32_t canClocksNeeded = CanMotion::FinishMovement(*this, afterPrepare.moveStartTime, simMode != SimulationMode::off);
+		const uint32_t canClocksNeeded = CanMotion::FinishMovement(*this, move.GetMsNumber(ring), afterPrepare.moveStartTime, simMode != SimulationMode::off);
 		if (canClocksNeeded > clocksNeeded)
 		{
 			// Due to rounding error in the calculations, we quite often calculate the CAN move as being longer than our previously-calculated value, normally by just one clock.

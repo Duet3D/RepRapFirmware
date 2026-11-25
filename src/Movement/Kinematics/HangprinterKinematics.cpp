@@ -222,7 +222,7 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		const bool seenNonGeometry = TryConfigureSegmentation(gb);
 		if (gb.Seen('N'))
 		{
-			numAnchors = gb.GetUIValue();
+			numAnchors = gb.GetLimitedUIValue('N', 3, HANGPRINTER_MAX_ANCHORS + 1);
 			seen = true;
 		}
 		for (size_t i = 0; i < numAnchors; ++i)
@@ -385,7 +385,7 @@ MovementError HangprinterKinematics::CartesianToMotorSteps(const float machinePo
 		RoundToInt32(rslt, k0[i] * (fastSqrtf(spoolRadiiSq[i] + linePos[i] * k2[i]) - spoolRadii[i]), motorPos[i]);
 	}
 
-	return MovementError::ok;
+	return rslt;
 }
 
 

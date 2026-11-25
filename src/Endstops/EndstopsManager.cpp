@@ -629,6 +629,12 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 		return GCodeResult::error;
 	}
 
+	// A probe that gets replaced may be in use by a probing move, including in the step interrupt, so wait for all movement to stop first
+	if ((seenType || gb.Seen('C')) && !reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
+	{
+		return GCodeResult::notFinished;
+	}
+
 	WriteLocker lock(zProbesLock);
 
 	ZProbe *_ecv_from _ecv_null const existingProbe = zProbes[probeNumber];
