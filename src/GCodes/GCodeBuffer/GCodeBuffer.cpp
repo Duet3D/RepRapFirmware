@@ -19,6 +19,7 @@
 #include <GCodes/GCodeException.h>
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
+#include <Platform/Tasks.h>
 #include <Movement/StepTimer.h>
 
 // Macros to reduce the amount of explicit conditional compilation in this file
@@ -142,7 +143,7 @@ void GCodeBuffer::Reset() noexcept
 	macroFileClosed = false;
 	isWaitingForMacro = false;
 	macroFileError = macroFileEmpty = false;
-	macroJustStarted = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
+	macroJustStarted = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = failedMacroPending = false;
 	machineState->lastCodeFromSbc = machineState->macroStartedByCode = false;
 #endif
 	cancelWait = false;
@@ -321,6 +322,12 @@ void GCodeBuffer::PutBinary(const uint32_t *data, size_t len) noexcept
 	isBinaryBuffer = true;
 	macroJustStarted = false;
 	binaryParser.Put(data, len);
+}
+
+void GCodeBuffer::AllocateBinaryBuffer() noexcept
+{
+	buffer = static_cast<char *>(Tasks::AllocPermanent(MaxGCodeBinaryLength, std::align_val_t(4)));
+	bufferLength = MaxGCodeBinaryLength;
 }
 
 #endif

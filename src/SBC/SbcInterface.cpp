@@ -561,9 +561,7 @@ void SbcInterface::ExchangeData() noexcept
 					{
 						if (error)
 						{
-							gb->CurrentFileMachineState().CloseFile();
-							gb->PopState(false);
-							gb->Init();
+							gb->SetFailedMacroPending(true);	// only the main task may pop the stack
 						}
 						else
 						{
@@ -772,7 +770,16 @@ void SbcInterface::ExchangeData() noexcept
 								GCodeBuffer *const gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel(channel));
 								if (gb != nullptr && gb->IsExecutingOnSbc())
 								{
-									gb->SetFinished(true);
+									MutexLocker locker(gb->mutex, SbcYieldTimeout);
+									if (!locker.IsAcquired())
+									{
+										OutputBuffer::ReleaseAll(buf);
+										packetAcknowledged = false;
+									}
+									else if (gb->IsExecutingOnSbc())		// may have changed while waiting for the lock
+									{
+										gb->SetFinished(true);
+									}
 								}
 								break;
 							}
@@ -780,7 +787,10 @@ void SbcInterface::ExchangeData() noexcept
 					}
 
 					// Output message to the target
-					reprap.GetPlatform().Message(type, buf);
+					if (packetAcknowledged)
+					{
+						reprap.GetPlatform().Message(type, buf);
+					}
 				}
 				else
 				{
@@ -868,6 +878,7 @@ void SbcInterface::ExchangeData() noexcept
 					gb->AbortFile(true);
 					gb->FileAbortSent();	// don't notify the SBC
 					gb->MacroFileClosedSent();	// DSF has dropped all its macro files, so a closal that has not gone out yet is void as well, as in GCodeBuffer::Reset
+					gb->SetFailedMacroPending(false);
 					InvalidateBufferedCodes(channel);
 				}
 				else
@@ -1276,12 +1287,13 @@ void SbcInterface::ExchangeData() noexcept
 		// Called when keys provided exclusively by DSF in SBC mode have changed
 		case SbcRequest::ObjectModelKeyChanged:
 		{
-			const char *key = transfer.ReadData(packet->length);
-			if (StringEqualsIgnoreCase(key, "network"))
+			String<StringLength20> key;
+			transfer.ReadObjectModelKeyChanged(packet->length, key.GetRef());
+			if (StringEqualsIgnoreCase(key.c_str(), "network"))
 			{
 				reprap.NetworkUpdated();
 			}
-			else if (StringEqualsIgnoreCase(key, "volumes"))
+			else if (StringEqualsIgnoreCase(key.c_str(), "volumes"))
 			{
 				reprap.VolumesUpdated();
 			}
@@ -1726,7 +1738,13 @@ void SbcInterface::InvalidateResources() noexcept
 		gb->AbortFile(true);
 		gb->FileAbortSent();	// don't notify the SBC
 		gb->MessageAcknowledged(true, true, 0, ExpressionValue());
+		gb->MacroFileClosedSent();
+		gb->MessagePromptSent();
+		gb->MessageAcknowledgementSent();
+		gb->Invalidate(false);
+		gb->SetFailedMacroPending(false);
 	}
+	reportPause = false;
 
 	// Abort the print (if applicable)
 	printAborted = true;
@@ -1845,7 +1863,7 @@ void SbcInterface::Suspend() noexcept
 
 bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 {
-	if (gb.IsInvalidated() || gb.IsMacroFileClosed() || gb.IsMessageAcknowledged() ||
+	if (gb.IsInvalidated() || gb.IsMacroFileClosed() || gb.IsMessageAcknowledged() || gb.IsFailedMacroPending() ||
 		gb.IsAbortRequested() || (reportPause && gb.IsFileChannel()) ||
 		(gb.LatestMachineState().waitingForAcknowledgement && gb.IsMessagePromptPending()))
 	{
@@ -1853,7 +1871,7 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 		return false;
 	}
 
-	bool gotCommand = false;
+	bool gotCommand = false, needBuffer = false;
 	{
 		// The whole walk must be atomic: readPointer is a cursor into variable-length records, so a concurrent defragment would invalidate it
 		TaskCriticalSectionLocker locker;
@@ -1875,6 +1893,12 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 				{
 					if (gb.GetChannel().RawValue() == codeHeader->channel)
 					{
+						if (!gb.HasBuffer())
+						{
+							needBuffer = true;			// cannot allocate with the scheduler suspended
+							break;
+						}
+
 #ifdef TRACK_FILE_CODES
 						if (gb.IsFileChannel() && gb.GetCommandLetter() != 'Q')
 						{
@@ -1945,6 +1969,11 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 				}
 			} while (readPointer != txPointer);
 		}
+	}
+
+	if (needBuffer)
+	{
+		gb.AllocateBinaryBuffer();			// the code stays pending for the next call
 	}
 
 	if (gotCommand)

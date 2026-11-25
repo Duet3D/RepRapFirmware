@@ -553,6 +553,15 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 	bool result;
 
 	MutexLocker gbLock(gb.mutex);
+#if HAS_SBC_INTERFACE
+	if (gb.IsFailedMacroPending())
+	{
+		gb.CurrentFileMachineState().CloseFile();
+		gb.PopState(false);
+		gb.Init();
+		gb.SetFailedMacroPending(false);
+	}
+#endif
 	if (gb.GetState() == GCodeState::normal)
 	{
 		if (gb.LatestMachineState().messageAcknowledged)

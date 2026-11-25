@@ -812,6 +812,16 @@ GCodeChannel DataTransfer::ReadSetLastCodeResult(GCodeResult& result) noexcept
 	return GCodeChannel(header->channel);
 }
 
+void DataTransfer::ReadObjectModelKeyChanged(size_t packetLength, const StringRef& key) noexcept
+{
+	// Read header
+	const StringHeader *header = ReadDataHeader<StringHeader>();
+
+	// Read key
+	const size_t keyLength = (packetLength > sizeof(StringHeader)) ? packetLength - sizeof(StringHeader) : 0;
+	key.copy(ReadData(keyLength), min<size_t>(header->length, keyLength));
+}
+
 void DataTransfer::ExchangeHeader() noexcept
 {
 	Cache::FlushBeforeDMASend(&txHeader, sizeof(txHeader));

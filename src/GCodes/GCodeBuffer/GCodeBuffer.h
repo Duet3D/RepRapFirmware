@@ -245,11 +245,15 @@ public:
 
 	bool IsInvalidated() const noexcept { return invalidated; }				// Indicates if the channel is invalidated
 	void Invalidate(bool i = true) noexcept { invalidated = i; }			// Invalidate this channel (or not)
+	bool IsFailedMacroPending() const noexcept { return failedMacroPending; }	// Does the main task have to pop a macro that failed on the SBC?
+	void SetFailedMacroPending(bool p) noexcept { failedMacroPending = p; }	// Request or clear that pop
 
 	bool IsSendRequested() const noexcept { return sendToSbc; }				// Is this code supposed to be sent to the SBC
 	void SendToSbc() noexcept { sendToSbc = true; }							// Send this code to the attached SBC
 	void SentToSbc() noexcept;												// Code has been sent to the SBC, wait for it to finish
 	bool IsExecutingOnSbc() const noexcept { return bufferState == GCodeBufferState::executingOnSbc; }
+	bool HasBuffer() const noexcept { return buffer != nullptr; }			// Has the code buffer been allocated?
+	void AllocateBinaryBuffer() noexcept;									// Allocate the code buffer for binary codes
 #endif
 
 	GCodeState GetState() const noexcept;
@@ -416,6 +420,7 @@ private:
 	bool sendToSbc;					// Indicates if the GB string content is supposed to be sent to the SBC
 	bool messagePromptPending;		// Has the SBC been notified about a message waiting for acknowledgement?
 	bool messageAcknowledged;		// Last message has been acknowledged
+	bool failedMacroPending;		// Set by the SBC task, the main task pops the failed macro
 
 	// Accessed only by the SBC task
 	bool invalidated;				// Set to true if the GB content is not valid and about to be cleared

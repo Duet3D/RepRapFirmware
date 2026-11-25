@@ -32,15 +32,10 @@ void BinaryParser::Init() noexcept
 // CAUTION! This may be called with the task scheduler suspended, so don't do anything that might block or take more than a few microseconds to execute
 void BinaryParser::Put(const uint32_t *data, size_t len) noexcept
 {
-	// Buffer allocation happens dynamically when the GB is used for the first time.
+	// Buffer allocation happens dynamically when the GB is used for the first time, see SbcInterface::FillBuffer.
 	// Hence, in theory, it is possible for different GBs to have different buffer sizes
 	if (header == nullptr)
 	{
-		if (gb.buffer == nullptr)
-		{
-			gb.buffer = static_cast<char *>(Tasks::AllocPermanent(MaxGCodeBinaryLength, std::align_val_t(4)));
-			gb.bufferLength = MaxGCodeBinaryLength;
-		}
 		header = reinterpret_cast<CodeHeader *>(gb.buffer);
 	}
 

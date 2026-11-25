@@ -71,6 +71,7 @@ public:
 	int ReadFileData(char *buffer, size_t length) noexcept;									// Read file data from the SBC
 	size_t ReadFileList(char *buffer, size_t length, bool& endOfList) noexcept;				// Read a chunk of a directory listing from the SBC
 	GCodeChannel ReadSetLastCodeResult(GCodeResult& result) noexcept;						// Read the result of the last executed code
+	void ReadObjectModelKeyChanged(size_t packetLength, const StringRef& key) noexcept;		// Read the key of a changed object model key notification
 
 	void ResendPacket(const PacketHeader *packet) noexcept;
 	bool WriteObjectModel(OutputBuffer *data) noexcept;
