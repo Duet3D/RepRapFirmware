@@ -377,7 +377,8 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				// Check for duplicate and out-of-sequence message
 				// We can get out-of-sequence messages because of a bug in the CAN hardware; so use only the sequence number to detect duplicates
 				{
-					const uint8_t seq = buf->msg.moveLinearShaped.seq;
+					GET_VALID_MESSAGE(moveLinearShaped);
+					const uint8_t seq = msg.seq;
 					if (((seq + 1) & CanMessageMovementLinearShaped::SeqMask) == expectedSeq)
 					{
 						++duplicateMotionMessages;
@@ -427,7 +428,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				return;							// no reply needed
 
 			case CanMessageType::revertPosition:
-				reprap.GetMove().RevertPosition(buf->msg.revertPosition);
+				{
+					GET_VALID_MESSAGE(revertPosition);
+					reprap.GetMove().RevertPosition(msg);
+				}
 				return;							// no reply needed
 
 			case CanMessageType::acknowledgeAnnounce:
@@ -475,9 +479,12 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 			// Heater commands
 			case CanMessageType::m950Heater:
-				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetHeat().ConfigureHeater(buf->msg.generic, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
+					rslt = reprap.GetHeat().ConfigureHeater(msg, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::heaterFeedForwardV1:
@@ -536,15 +543,21 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				return;
 
 			case CanMessageType::m308V1:
-				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetHeat().ProcessM308(buf->msg.generic, replyRef);
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
+					rslt = reprap.GetHeat().ProcessM308(msg, replyRef);
+				}
 				break;
 
 			// Fan commands
 			case CanMessageType::m950Fan:
-				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetFansManager().ConfigureFanPort(buf->msg.generic, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
+					rslt = reprap.GetFansManager().ConfigureFanPort(msg, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::fanParameters:
@@ -565,9 +578,12 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 			// GPIO commands
 			case CanMessageType::m950Gpio:
-				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetPlatform().EutHandleM950Gpio(buf->msg.generic, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
+					rslt = reprap.GetPlatform().EutHandleM950Gpio(msg, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::writeGpio:
@@ -580,14 +596,20 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 			// LED strip commands
 			case CanMessageType::m950Led:
-				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetPlatform().GetLedStripManager().HandleM950Led(buf->msg.generic, replyRef, extra);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
+					rslt = reprap.GetPlatform().GetLedStripManager().HandleM950Led(msg, replyRef, extra);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::writeLedStrip:
-				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetPlatform().GetLedStripManager().HandleLedSetColours(buf->msg.generic, replyRef);
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
+					rslt = reprap.GetPlatform().GetLedStripManager().HandleLedSetColours(msg, replyRef);
+				}
 				break;
 
 			// Driver commands
@@ -618,9 +640,12 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::m915:
-				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetMove().EutProcessM915(buf->msg.generic, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
+					rslt = reprap.GetMove().EutProcessM915(msg, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::setPressureAdvanceV2:
@@ -633,27 +658,39 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::setInputShapingV1:
-				requestId = buf->msg.setInputShapingV1.requestId;
-				rslt = reprap.GetMove().EutSetInputShaping(buf->msg.setInputShapingV1, buf->dataLength, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(setInputShapingV1);
+					requestId = msg.requestId;
+					rslt = reprap.GetMove().EutSetInputShaping(msg, buf->dataLength, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::m569:
-				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetMove().EutProcessM569(buf->msg.generic, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
+					rslt = reprap.GetMove().EutProcessM569(msg, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::m569p2:
-				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetMove().EutProcessM569Point2(buf->msg.generic, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
+					rslt = reprap.GetMove().EutProcessM569Point2(msg, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::m569p7:
-				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetMove().EutProcessM569Point7(buf->msg.generic, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
+					rslt = reprap.GetMove().EutProcessM569Point7(msg, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::setStandstillCurrentFactor:
@@ -666,23 +703,29 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::m970:
-				requestId = buf->msg.generic.requestId;
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
 # if SUPPORT_PHASE_STEPPING
-				rslt = reprap.GetMove().EutProcessM970(buf->msg.generic, replyRef);
-				isProgrammed = true;
+					rslt = reprap.GetMove().EutProcessM970(msg, replyRef);
+					isProgrammed = true;
 # else
-				rslt = GCodeResult::errorNotSupported;
+					rslt = GCodeResult::errorNotSupported;
 # endif
+				}
 				break;
 
 			case CanMessageType::m970p3:
-				requestId = buf->msg.generic.requestId;
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
 # if SUPPORT_PHASE_STEPPING
-				rslt = reprap.GetMove().EutProcessM970Point3(buf->msg.generic, replyRef);
-				isProgrammed = true;
+					rslt = reprap.GetMove().EutProcessM970Point3(msg, replyRef);
+					isProgrammed = true;
 # else
-				rslt = GCodeResult::errorNotSupported;
+					rslt = GCodeResult::errorNotSupported;
 # endif
+				}
 				break;
 
 			case CanMessageType::createInputMonitorV1:
@@ -740,14 +783,20 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::configureFilamentMonitor:
-				requestId = buf->msg.generic.requestId;
-				rslt = FilamentMonitor::Configure(buf->msg.generic, replyRef);
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
+					rslt = FilamentMonitor::Configure(msg, replyRef);
+				}
 				break;
 
 			case CanMessageType::m655:
-				requestId = buf->msg.generic.requestId;
-				reply.copy("not supported by this board");
-				rslt = GCodeResult::error;
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
+					reply.copy("not supported by this board");
+					rslt = GCodeResult::error;
+				}
 				break;
 
 			case CanMessageType::diagnosticTest:
@@ -757,15 +806,21 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::m111:
-				requestId = buf->msg.generic.requestId;
-				rslt = reprap.ProcessRemoteM111(buf->msg.generic, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
+					rslt = reprap.ProcessRemoteM111(msg, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			case CanMessageType::setConnectionTimeout:
-				requestId = buf->msg.generic.requestId;
-				rslt = CanInterface::ProcessM959(buf->msg.generic, replyRef);
-				isProgrammed = true;
+				{
+					GET_VALID_MESSAGE(generic);
+					requestId = msg.requestId;
+					rslt = CanInterface::ProcessM959(msg, replyRef);
+					isProgrammed = true;
+				}
 				break;
 
 			default:
@@ -929,7 +984,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 #endif
 
 			case CanMessageType::event:
-				Event::Add(buf->msg.event, buf->id.Src(), buf->dataLength);
+				{
+					GET_VALID_MESSAGE(event);
+					Event::Add(msg, buf->id.Src(), buf->dataLength);
+				}
 				break;
 
 			case CanMessageType::debugText:
