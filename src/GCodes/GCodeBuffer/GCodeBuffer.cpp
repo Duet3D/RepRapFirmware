@@ -141,8 +141,8 @@ void GCodeBuffer::Reset() noexcept
 	requestedMacroFile.Clear();
 	macroFileClosed = false;
 	isWaitingForMacro = false;
-	macroJustStarted = macroFileError = macroFileEmpty = false;
-	abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
+	macroFileError = macroFileEmpty = false;
+	macroJustStarted = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
 	machineState->lastCodeFromSbc = machineState->macroStartedByCode = false;
 #endif
 	cancelWait = false;
@@ -1266,7 +1266,8 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 
 	// Request the macro file from the SBC
 	MutexLocker lock(mutex);								// the SBC task reads the request while holding this mutex
-	macroJustStarted = macroFileError = macroFileEmpty = false;
+	macroJustStarted = false;
+	macroFileError = macroFileEmpty = false;
 	machineState->macroStartedByCode = fromCode;
 	requestedMacroFile.copy(filename);
 

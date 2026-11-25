@@ -1414,6 +1414,7 @@ void GCodes::DiscardJobReadAhead() noexcept
 	for (MovementState& ms : moveStates)
 	{
 		GCodeBuffer& fgb = *GetFileGCode(ms.GetNumber());
+		MutexLocker fileLock(fgb.mutex);			// the SBC task pops this channel's macros too
 		while (fgb.LatestMachineState().doingFileMacro)
 		{
 			fgb.PopState(false);

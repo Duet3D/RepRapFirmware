@@ -405,12 +405,12 @@ private:
 	bool isBinaryBuffer;
 
 	uint8_t
-		macroJustStarted : 1,		// Whether the GB has just started a macro file
 		macroFileError : 1,			// Whether the macro file could be opened or if an error occurred
 		macroFileEmpty : 1;			// Whether the macro file is actually empty
 
 	// Cleared by the SBC task under the GB mutex but set by the main task without it (MessageBoxClosed, AbortFile from other channels),
 	// so each has a byte of its own: a stale read-modify-write of a shared bitfield byte would undo the SBC task's change
+	bool macroJustStarted;			// Whether the GB has just started a macro file
 	bool abortFile;					// Whether to abort the last file on the stack
 	bool abortAllFiles;				// Whether to abort all opened files
 	bool sendToSbc;					// Indicates if the GB string content is supposed to be sent to the SBC
