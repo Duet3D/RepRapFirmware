@@ -143,7 +143,7 @@ void GCodeBuffer::Reset() noexcept
 	macroFileClosed = false;
 	isWaitingForMacro = false;
 	macroFileError = macroFileEmpty = false;
-	macroJustStarted = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = failedMacroPending = false;
+	macroJustStarted = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = failedMacroPending = replyVoid = false;
 	machineState->lastCodeFromSbc = machineState->macroStartedByCode = false;
 #endif
 	cancelWait = false;
@@ -320,7 +320,7 @@ void GCodeBuffer::PutBinary(const uint32_t *data, size_t len) noexcept
 	restoredCommandValid = false;
 	machineState->lastCodeFromSbc = true;
 	isBinaryBuffer = true;
-	macroJustStarted = false;
+	macroJustStarted = replyVoid = false;
 	binaryParser.Put(data, len);
 }
 

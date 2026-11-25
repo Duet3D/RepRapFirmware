@@ -879,6 +879,7 @@ void SbcInterface::ExchangeData() noexcept
 					gb->FileAbortSent();	// don't notify the SBC
 					gb->MacroFileClosedSent();	// DSF has dropped all its macro files, so a closal that has not gone out yet is void as well, as in GCodeBuffer::Reset
 					gb->SetFailedMacroPending(false);
+					gb->SetReplyVoid(gb->LatestMachineState().lastCodeFromSbc && !gb->IsCompletelyIdle());
 					InvalidateBufferedCodes(channel);
 				}
 				else
@@ -1743,6 +1744,7 @@ void SbcInterface::InvalidateResources() noexcept
 		gb->MessageAcknowledgementSent();
 		gb->Invalidate(false);
 		gb->SetFailedMacroPending(false);
+		gb->SetReplyVoid(gb->LatestMachineState().lastCodeFromSbc && !gb->IsCompletelyIdle());
 	}
 	reportPause = false;
 

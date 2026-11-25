@@ -4375,6 +4375,15 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	// Deal with replies to the SBC
 	if (gb.LatestMachineState().lastCodeFromSbc)
 	{
+		if (gb.IsReplyVoid())
+		{
+			if (rslt != GCodeResult::notFinished)
+			{
+				gb.SetReplyVoid(false);
+			}
+			return;
+		}
+
 		if (reply[0] == 0 && gb.IsAbortRequested() && !gb.IsAbortAllRequested())
 		{
 			// The SBC resolves the code that requested a single file abort itself, so this reply is surplus. It may also overtake
@@ -4500,6 +4509,13 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *_ecv_null reply) noexcep
 	// Deal with replies to the SBC
 	if (gb.LatestMachineState().lastCodeFromSbc)
 	{
+		if (gb.IsReplyVoid())
+		{
+			gb.SetReplyVoid(false);
+			OutputBuffer::ReleaseAll(reply);
+			return;
+		}
+
 		platform.Message(gb.GetResponseMessageType(), reply);
 		return;
 	}

@@ -247,6 +247,8 @@ public:
 	void Invalidate(bool i = true) noexcept { invalidated = i; }			// Invalidate this channel (or not)
 	bool IsFailedMacroPending() const noexcept { return failedMacroPending; }	// Does the main task have to pop a macro that failed on the SBC?
 	void SetFailedMacroPending(bool p) noexcept { failedMacroPending = p; }	// Request or clear that pop
+	bool IsReplyVoid() const noexcept { return replyVoid; }					// Has the SBC dropped the code that is still being executed?
+	void SetReplyVoid(bool v) noexcept { replyVoid = v; }					// Set whether the reply to the current code must be discarded
 
 	bool IsSendRequested() const noexcept { return sendToSbc; }				// Is this code supposed to be sent to the SBC
 	void SendToSbc() noexcept { sendToSbc = true; }							// Send this code to the attached SBC
@@ -421,6 +423,7 @@ private:
 	bool messagePromptPending;		// Has the SBC been notified about a message waiting for acknowledgement?
 	bool messageAcknowledged;		// Last message has been acknowledged
 	bool failedMacroPending;		// Set by the SBC task, the main task pops the failed macro
+	bool replyVoid;					// The SBC no longer expects a reply to the code being executed
 
 	// Accessed only by the SBC task
 	bool invalidated;				// Set to true if the GB content is not valid and about to be cleared
