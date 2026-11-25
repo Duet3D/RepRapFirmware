@@ -626,10 +626,7 @@ const char *_ecv_array EndstopsManager::TranslateEndStopResult(bool hit, bool at
 
 void EndstopsManager::SetZProbeDefaults() noexcept
 {
-	if (zProbes[0] != nullptr)
-	{
-		zProbes[0]->SetDefaults();
-	}
+	WriteLocker lock(zProbesLock);
 	for (size_t i = 0; i < MaxZProbes; ++i)
 	{
 		DeleteObject(zProbes[i]);
