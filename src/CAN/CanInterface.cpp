@@ -2150,10 +2150,11 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 
 	bool seen = false;
 
+	const CanBusMode oldMode = canBusModes[bus];
 #if NUM_CAN_PORTS == 1
 	const CanBusMode mode = CanBusMode::rrfCanFD;
 #else
-	CanBusMode mode = canBusModes[bus];
+	CanBusMode mode = oldMode;
 	bool modeChanged = false;
 #endif
 
@@ -2267,7 +2268,7 @@ GCodeResult CanInterface::EnableCan(GCodeBuffer& gb, const StringRef& reply) THR
 		}
 		reprap.BoardsUpdated();
 
-		if (mode == CanBusMode::rrfCanFD)
+		if (mode == CanBusMode::rrfCanFD && mode != oldMode)
 		{
 			// Send a startup message. Ideally we would wait a little while first
 			CanMessageBuffer buf;
