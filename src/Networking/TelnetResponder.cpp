@@ -53,7 +53,8 @@ void TelnetResponder::TryTerminate(NetworkProtocol protocol, const NetworkInterf
 
 void TelnetResponder::ConnectionLost() noexcept
 {
-	if ((responderState == ResponderState::reading) || (responderState == ResponderState::sending))
+	// Sessions that are still authenticating or have already said goodbye are not counted
+	if ((responderState == ResponderState::reading) || (responderState == ResponderState::sending && stateAfterSending == ResponderState::reading))
 	{
 		MutexLocker lock(gcodeReplyMutex);
 

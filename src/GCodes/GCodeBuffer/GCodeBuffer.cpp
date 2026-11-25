@@ -1156,8 +1156,8 @@ void GCodeBuffer::AbortFile(bool abortAll) noexcept
 		// Notify the SBC about the file(s) being closed
 		if (reprap.UsingSbcInterface())
 		{
+			abortAllFiles = abortAll;		// set this one first, because the SBC task acts on abortFile as soon as it is set
 			abortFile = true;
-			abortAllFiles = abortAll;
 		}
 #endif
 	}
@@ -1412,6 +1412,7 @@ bool GCodeBuffer::OpenFileToWrite(const char *_ecv_array directory, const char *
 	if (NOT_BINARY_AND(stringParser.OpenFileToWrite(directory, fileName, size, binaryWrite, fileCRC32)))
 	{
 		normalInput->SetWritingFile(true);
+		normalInput->NoteFileUpload(directory, fileName);
 		return true;
 	}
 	return false;
@@ -1438,12 +1439,42 @@ bool GCodeBuffer::IsWritingBinary() const noexcept
 
 bool GCodeBuffer::WriteBinaryToFile(char b) noexcept
 {
-	return IS_BINARY_OR(stringParser.WriteBinaryToFile(b));
+	const bool finished = IS_BINARY_OR(stringParser.WriteBinaryToFile(b));
+	if (finished)
+	{
+		normalInput->SetWritingFile(false);						// re-enable urgent command scanning on this input
+	}
+	return finished;
+}
+
+size_t GCodeBuffer::WriteBinaryBlock(const char *_ecv_array buf, size_t len) noexcept
+{
+	if (!NOT_BINARY_AND(true))
+	{
+		return len;
+	}
+	const size_t used = stringParser.WriteBinaryBlock(buf, len);
+	if (!stringParser.IsWritingBinary())
+	{
+		normalInput->SetWritingFile(false);						// re-enable urgent command scanning on this input
+	}
+	return used;
+}
+
+FilePosition GCodeBuffer::GetBinaryBytesRemaining() const noexcept
+{
+	return NOT_BINARY_AND(true) ? stringParser.GetBinaryBytesRemaining() : 0;
 }
 
 void GCodeBuffer::FinishWritingBinary() noexcept
 {
 	IF_NOT_BINARY(stringParser.FinishWritingBinary());
+	normalInput->SetWritingFile(false);
+}
+
+void GCodeBuffer::AbortFileWrite() noexcept
+{
+	IF_NOT_BINARY(stringParser.AbortFileWrite());
 	normalInput->SetWritingFile(false);
 }
 

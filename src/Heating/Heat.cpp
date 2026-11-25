@@ -283,7 +283,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 	{
 		ReadLocker lock(heatersLock);
 
-		for (size_t heater = 0; heater < MaxHeaters; ++heater)
+		for (size_t heater = 0; heater < MaxHeaters && heatersFound < ARRAY_SIZE(msg->reports); heater++)
 		{
 			Heater * const h = heaters[heater];
 			if (h != nullptr)

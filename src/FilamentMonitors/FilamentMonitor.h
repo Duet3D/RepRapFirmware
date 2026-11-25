@@ -74,7 +74,7 @@ public:
 	bool IsMotionDetected() const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
-	static void UpdateRemoteFilamentStatus(CanAddress src, CanMessageFilamentMonitorsStatusV2& msg) noexcept;
+	static void UpdateRemoteFilamentStatus(CanAddress src, const CanMessageFilamentMonitorsStatusV2& msg) noexcept;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS

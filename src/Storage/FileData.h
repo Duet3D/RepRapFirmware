@@ -128,6 +128,14 @@ public:
 		return not_null(f)->Position();
 	}
 
+# if HAS_MASS_STORAGE
+	uint32_t ClusterSize() const noexcept
+	pre(IsLive())
+	{
+		return not_null(f)->ClusterSize();
+	}
+# endif
+
 	bool Seek(FilePosition position) noexcept
 	pre(IsLive())
 	{

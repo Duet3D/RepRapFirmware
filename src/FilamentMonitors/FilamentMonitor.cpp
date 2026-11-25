@@ -526,7 +526,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 
 #if SUPPORT_CAN_EXPANSION
 
-/*static*/ void FilamentMonitor::UpdateRemoteFilamentStatus(CanAddress src, CanMessageFilamentMonitorsStatusV2& msg) noexcept
+/*static*/ void FilamentMonitor::UpdateRemoteFilamentStatus(CanAddress src, const CanMessageFilamentMonitorsStatusV2& msg) noexcept
 {
 	Bitmap<uint32_t> drivers(msg.driversReported);
 	size_t slotIndex = 0;

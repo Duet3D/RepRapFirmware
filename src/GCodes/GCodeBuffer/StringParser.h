@@ -77,7 +77,10 @@ public:
 
 	bool IsWritingBinary() const noexcept { return IsWritingFile() && binaryWriting; }	// Returns true if writing binary
 	bool WriteBinaryToFile(char b) noexcept;								// Write a byte to the file
+	size_t WriteBinaryBlock(const char *_ecv_array buf, size_t len) noexcept;	// Write a block of a binary upload of known size, return how many bytes were used
+	FilePosition GetBinaryBytesRemaining() const noexcept;				// Bytes still to come in a binary upload of known size, else 0
 	void FinishWritingBinary() noexcept;
+	void AbortFileWrite() noexcept;											// Close the file being written without completing it or sending a reply
 #endif
 
 	FilePosition GetFilePosition() const noexcept;							// Get the file position at the start of the current command
@@ -163,7 +166,8 @@ private:
 	bool hasCommandNumber;
 	char commandLetter;
 	char characterSeen;									// The character we looked for in the last successful call to function Seen
-	uint8_t commandIndent;								// Number of whitespace characters before the line number or the first command starts
+	uint8_t commandIndent;								// Number of whitespace characters before the line number or the first command starts, or MaxIndent if there are too many
+	static constexpr uint8_t MaxIndent = 0xFF;			// a line indented this far or further is rejected
 	bool seenLeadingSpace;
 	bool seenLeadingTab;
 	bool seenMetaCommand;

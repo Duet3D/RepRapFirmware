@@ -56,6 +56,10 @@ unsigned int MessageBox::numAutoCancelledMessages = 0;
 		if (!mb->IsBlocking() && numMessages >= MaxMessageBoxes)
 		{
 			// Time out this nonblocking message now to make room in the queue
+			if (mbp == &mboxList)
+			{
+				startTime = millis();
+			}
 			*mbp = mb->next;
 			mb->TimeOut();
 			++numAutoCancelledMessages;
@@ -66,6 +70,10 @@ unsigned int MessageBox::numAutoCancelledMessages = 0;
 			{
 				// Time out this non-blocking message after 1 second
 				mb->timeout = 1000;
+				if (mbp == &mboxList)
+				{
+					startTime = millis();
+				}
 			}
 			mbp = &((*mbp)->next);
 		}
@@ -78,13 +86,13 @@ unsigned int MessageBox::numAutoCancelledMessages = 0;
 		mboxList = mb->next;
 		mb->TimeOut();
 		++numAutoCancelledMessages;
+		startTime = millis();
 	}
 
 	MessageBox *const mbox = new MessageBox(nullptr);
 	mbox->message.copy(msg);
 	mbox->title.copy(p_title);
 	mbox->mode = p_mode;
-	mbox->startTime = millis();
 	mbox->controls = p_controls;
 	if (p_limits != nullptr)
 	{

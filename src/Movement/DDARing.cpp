@@ -95,6 +95,8 @@ void DDARing::Exit() noexcept
 		gp->Free();
 		getPointer = gp = gp->GetNext();
 	}
+	holdBarrier = nullptr;
+	returnMoveDda = nullptr;
 }
 
 GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
@@ -156,6 +158,11 @@ bool DDARing::CanAddMove() const noexcept
 		&& addPointer->GetNext()->GetState() == DDA::empty
 	   )
 	 {
+			if (holdBarrier != nullptr)
+			{
+				return true;									// nothing behind the barrier runs while held, so the lookahead time is no reason to keep the pending move or a jog waiting
+			}
+
 			// In order to react faster to speed and extrusion rate changes, only add more moves if the total duration of
 			// all un-frozen moves is less than 2 seconds, or the total duration of all but the first un-frozen move is less than 0.5 seconds.
 		 	 // When using S-curve acceleration we use late planning, so GetClocksNeeded() for provisional moves is the minimum clocks that it will need.
@@ -184,6 +191,16 @@ MovementError DDARing::AddStandardMove(const RawMove &nextMove, bool doMotorMapp
 	const MovementError err = addPointer->InitStandardMove(*this, nextMove, doMotorMapping);
 	if (err == MovementError::ok)
 	{
+		if (nextMove.moveType == 1 && nextMove.checkEndstops)
+		{
+			lastHomingMove = nextMove;
+			lastHomingMoveDda = addPointer;
+			lastHomingMoveMotorMapping = doMotorMapping;
+		}
+		else
+		{
+			lastHomingMoveDda = nullptr;
+		}
 		addPointer->SetState(DDA::planned);
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
@@ -196,6 +213,7 @@ bool DDARing::AddSpecialMove(float feedRate, const float coords[MaxDriversPerAxi
 {
 	if (addPointer->InitLeadscrewMove(*this, feedRate, coords))
 	{
+		lastHomingMoveDda = nullptr;
 		addPointer->SetState(DDA::planned);
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
@@ -211,6 +229,7 @@ bool DDARing::AddAsyncMove(const AsyncMove& nextMove) noexcept
 {
 	if (addPointer->InitAsyncMove(*this, nextMove))
 	{
+		lastHomingMoveDda = nullptr;
 		addPointer->SetState(DDA::planned);
 		addPointer = addPointer->GetNext();
 		scheduledMoves++;
@@ -237,6 +256,11 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 			{
 				simulationTime += (float)cdda->GetClocksNeeded() * (1.0 / StepClockRate);
 				++completedMoves;
+				if (cdda == returnMoveDda)
+				{
+					returnMoveDda = nullptr;
+					reprap.StateUpdated();
+				}
 				if (cdda->Free())
 				{
 					++numLookaheadUnderruns;
@@ -260,6 +284,11 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 			if (cdda->IsCheckingEndstops())
 			{
 				retiredEndstopMove = true;
+			}
+			if (cdda == returnMoveDda)
+			{
+				returnMoveDda = nullptr;
+				reprap.StateUpdated();
 			}
 			if (cdda->Free())
 			{
@@ -359,9 +388,9 @@ uint32_t DDARing::Spin(uint32_t prepareAdvanceTime, SimulationMode simulationMod
 		return ret;
 	}
 
-	return (cdda->IsProvisional())
+	return (cdda->IsProvisional() && cdda != holdBarrier)
 			? MoveStartPollInterval									// there are moves in the queue but it is not time to prepare them yet
-				: MoveTiming::StandardMoveWakeupInterval;			// the queue is empty, nothing to do until new moves arrive
+				: MoveTiming::StandardMoveWakeupInterval;			// the queue is empty or held, nothing to do until new moves arrive or the hold is released
 }
 
 #if SUPPORT_3RD_ORDER
@@ -410,6 +439,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 	// If the already-prepared moves will execute in less than the minimum time, prepare another move.
 	// Try to avoid preparing deceleration-only moves too early
 	while (	  firstUnpreparedMove->IsProvisional()
+		   && firstUnpreparedMove != holdBarrier
 		   && IsTimeToPrepareMove(prepareAdvanceTime, moveTimeLeft)
 #if SUPPORT_CAN_EXPANSION
 		   && CanMotion::CanPrepareMove()
@@ -423,7 +453,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 		{
 			if (NeedNewPlan(firstUnpreparedMove))
 			{
-				DDA::PlanMoves(firstUnpreparedMove, plannedProfile, false);
+				(void)DDA::PlanMoves(firstUnpreparedMove, plannedProfile, false);
 				plannedProfile.scheduledMovesWhenCreated = scheduledMoves;
 			}
 			else
@@ -445,7 +475,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 	}
 
 	// Decide how soon we want to be called again to prepare further moves
-	if (firstUnpreparedMove->IsProvisional())
+	if (firstUnpreparedMove->IsProvisional() && firstUnpreparedMove != holdBarrier)
 	{
 		// There are more moves waiting to be prepared, so ask to be woken up early
 		if (simulationMode != SimulationMode::off)
@@ -457,7 +487,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t prepareAdvance
 		return (clocksTillWakeup <= 0) ? 2 : max<uint32_t>((uint32_t)clocksTillWakeup/(StepClockRate/1000), 2);		// wake up at that time, but delay for at least 2 ticks
 	}
 
-	// There are no moves waiting to be prepared
+	// There are no moves waiting to be prepared, or a feed hold keeps them back
 	return MoveTiming::StandardMoveWakeupInterval;
 }
 
@@ -649,52 +679,22 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 	// We can pause before a move if it is the first segment in that move.
 	// The caller should set up rp.feedrate to the default feed rate for the file gcode source before calling this.
 
+	const bool joggedWhileHeld = jogged;						// the pause point is the held position then, pause.g runs from the jog position and the resume moves back
+	ReleaseHold(false);											// a pause ends any feed hold, and the moves at the barrier must be replanned before we look at them
+	returnMoveDda = nullptr;									// it may be among the moves we skip
+
 	TaskCriticalSectionLocker lock;								// prevent the Move task changing data while we look at it
 
 	const DDA * const savedDdaRingAddPointer = addPointer;		// capture volatile variable to avoid reloading it every time we read it
 	DDA *dda;
 	{
 		BasePriorityBooster booster(NvicPriorityStep);			// lock out step interrupts
-		dda = getPointer;
-		bool canPauseHere = true;								// if no moves have been committed, we haven't started moving yet
-		while (dda->IsCommitted())
+		dda = FindStopPoint();									// 'dda' is now the first move we are not going to execute
+		addPointer = dda;
+		while (dda != savedDdaRingAddPointer)					// while there are queued moves
 		{
-			canPauseHere = dda->CanPauseAfter();				// see if the jerk limits allow us to stop after this move
-			dda = dda->GetNext();								// we can't adjust or cancel moves that are already committed
-		}
-
-		if (dda != addPointer)
-		{
-#if SUPPORT_3RD_ORDER
-			if (dda != getPointer && dda->IsSCurveMove())
-			{
-				// S-curve moves don't maintain canPauseAfter or a usable start speed until they are planned, so run out the queued moves
-				dda = addPointer;
-			}
-			else
-#endif
-			if (canPauseHere)
-			{
-				// Nothing needed here, we can pause before this move
-			}
-			else if (dda->CanPauseAfter())						// if we can pause after the following move, we don't need to change it
-			{
-				dda = dda->GetNext();							// pause after this move
-			}
-			else
-			{
-				// We can't pause after the last uncommitted move because that would violate instantaneous speed change limits.
-				// We can't pause after the next move without modifying it because that would also violate instantaneous speed change limits.
-				dda = MakeDeceleratingChain(dda, savedDdaRingAddPointer);	// turn the next move or the next few moves into decelerating moves.
-			}
-
-			// 'dda' is now the first move we are not going to execute.
-			addPointer = dda;
-			while (dda != savedDdaRingAddPointer)				// while there are queued moves
-			{
-				dda->Free();									// set the move status to empty so that when we re-enable interrupts the ISR doesn't start executing it
-				dda = dda->GetNext();
-			}
+			dda->Free();										// set the move status to empty so that when we re-enable interrupts the ISR doesn't start executing it
+			dda = dda->GetNext();
 		}
 	}
 
@@ -703,7 +703,7 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 	ms.UpdateOwnedDriveLastEndpoints(prevDda->DriveCoordinates());
 	prevDda->GetEndCoordinates(startCoordinates);
 	RestorePoint& rp = ms.GetPauseRestorePoint();
-	memcpyf(rp.moveCoords, startCoordinates, ARRAY_SIZE(rp.moveCoords));
+	memcpyf(rp.moveCoords, joggedWhileHeld ? heldCoords : startCoordinates, ARRAY_SIZE(rp.moveCoords));
 	reprap.GetMove().InverseAxisAndBedTransform(rp.moveCoords, prevDda->GetTool());
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
@@ -781,11 +781,362 @@ DDA *DDARing::MakeDeceleratingChain(DDA *startDda, const DDA *stopBeforeDda) noe
 	return stopAfterDda->GetNext();
 }
 
+// Find the first uncommitted move we can stop before, turning the moves ahead of it into a decelerating chain if the jerk limits require it.
+// Returns addPointer if all queued moves must be executed. Must be called with the step interrupt locked out and the Move task suspended
+DDA *DDARing::FindStopPoint() noexcept
+{
+	DDA *dda = getPointer;
+	bool canStopHere = true;									// if no moves have been committed, we haven't started moving yet
+	while (dda->IsCommitted())
+	{
+		canStopHere = dda->CanPauseAfter();						// see if the jerk limits allow us to stop after this move
+		dda = dda->GetNext();									// we can't adjust or cancel moves that are already committed
+	}
+
+	if (dda == addPointer)
+	{
+		return dda;
+	}
+#if SUPPORT_3RD_ORDER
+	if (dda != getPointer && dda->IsSCurveMove())
+	{
+		// S-curve moves carry no speeds of their own, the planned profile holds the state at the first uncommitted move and always ends at standstill
+		if (plannedProfile.numberOfMovesCovered == 0 || (plannedProfile.startSpeed == (double)0.0 && plannedProfile.startAcceleration == (double)0.0))
+		{
+			plannedProfile.Invalidate();							// the machine is at standstill here, so whatever survives behind this point is planned afresh
+			return dda;
+		}
+		DDA *planEnd = dda;
+		for (unsigned int i = 0; i < plannedProfile.numberOfMovesCovered; i++)
+		{
+			planEnd = planEnd->GetNext();
+		}
+		if (plannedProfile.startAcceleration >= (double)0.0)
+		{
+			dda->SetStartSpeedAndAcceleration((float)plannedProfile.startSpeed/dda->GetMovementRatio(), (float)plannedProfile.startAcceleration/dda->GetMovementRatio());
+			DDA *_ecv_null const stopPoint = DDA::PlanMoves(dda, plannedProfile, true);
+			if (stopPoint != nullptr)
+			{
+				plannedProfile.scheduledMovesWhenCreated = scheduledMoves;
+				return stopPoint;
+			}
+		}
+		plannedProfile.usesAllMoves = false;						// already decelerating, or the quickest stop does not fit: the current plan stops at its end, so stop it being extended
+		return planEnd;
+	}
+#endif
+	if (canStopHere)
+	{
+		return dda;
+	}
+	if (dda->CanPauseAfter())
+	{
+		return dda->GetNext();									// we can stop after the next move without changing it
+	}
+
+	// We can't stop after the last committed move or after the next move without violating instantaneous speed change limits
+	return MakeDeceleratingChain(dda, addPointer);
+}
+
+// Feed hold: stop at the first point the jerk limits allow and keep all later moves in the ring, so that ReleaseHold can carry on from the stop.
+// Nothing is freed, so the file position and the lookahead queue survive. The Move task stops adding moves to a held ring, so addPointer stays put
+void DDARing::Hold() noexcept
+{
+	TaskCriticalSectionLocker lock;								// prevent the Move task changing data while we look at it
+
+	if (holdBarrier != nullptr)
+	{
+		return;
+	}
+
+	bool wakeAsyncSender = false;
+	{
+		BasePriorityBooster booster(NvicPriorityStep);			// lock out step interrupts
+		DDA *_ecv_null const homingMove = (lastHomingMoveDda != nullptr && lastHomingMoveDda->GetNext() == addPointer)	// the remainder must directly follow it, so nothing may be queued behind it
+											? CancelHomingMoveInFlight(wakeAsyncSender)
+												: nullptr;
+		if (homingMove != nullptr)
+		{
+			CutHomingMove(homingMove);
+		}
+		else
+		{
+			holdBarrier = FindStopPoint();
+		}
+		holdBarrier->GetPrevious()->GetEndCoordinates(heldCoords);	// the machine stops here, jogs start from here and the release returns here
+		memcpyf(jogCoords, heldCoords, MaxAxes);
+		jogged = false;
+	}
+
+#if SUPPORT_CAN_EXPANSION
+	if (wakeAsyncSender)
+	{
+		CanInterface::WakeAsyncSender();						// the stop commands for remote drivers sit in the queue until the sender wakes
+	}
+#else
+	(void)wakeAsyncSender;
+#endif
+}
+
+// If the move executing now is an axis homing move, stop it at once the way an endstop would and return it, else return nullptr.
+// A homing move is one committed DDA for the whole homing travel, so a barrier alone would let it run to the switch. Only axis homing moves qualify:
+// a few steps lost on a remote driver do not matter when the switch redefines the position, but they would falsify a probing result.
+// Must be called with the step interrupt locked out and the Move task suspended. Sets wakeAsyncSender if a remote driver was told to stop
+DDA *_ecv_null DDARing::CancelHomingMoveInFlight(bool& wakeAsyncSender) noexcept
+{
+	DDA *_ecv_null const cdda = GetCurrentDDA();
+	if (cdda == nullptr || cdda != lastHomingMoveDda || !cdda->IsCheckingEndstops())
+	{
+		return nullptr;
+	}
+
+	// An axis that has already stopped on its switch has left the active endstop list, so the remainder must not move it again or it would run past the switch unchecked
+	Move& move = reprap.GetMove();
+	homingAxesStopped.Clear();
+	for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); axis++)
+	{
+		if (move.AreDrivesStopped(LogicalDrivesBitmap::MakeFromBits(axis)))
+		{
+			homingAxesStopped.SetBit(axis);
+		}
+	}
+
+	wakeAsyncSender = move.CancelStepping(cdda);					// this also moves the endpoints of the move to where the motors stopped
+	cdda->CancelOutputs();
+	lastHomingMoveDda = nullptr;
+	return cdda;
+}
+
+// Re-issue what is left of a homing move that CancelHomingMoveInFlight has just stopped as a provisional move behind the hold barrier,
+// so that GCodes keeps waiting for the move and the switch still sets the position when the hold is released
+void DDARing::CutHomingMove(DDA *cdda) noexcept
+{
+	// The cut move expires as soon as its drives have stopped, so without a remainder the ring would run empty and GCodes would take the move as complete
+	cdda->GetEndCoordinates(startCoordinates);
+	// Raw motor moves (kinematics that home individual drives) carry motor positions in mm rather than axis coordinates, so freeze those from the motor endpoints
+	homingAxesStopped.Iterate([this, cdda](unsigned int axis, unsigned int) noexcept
+								{
+									lastHomingMove.coords[axis] = lastHomingMoveMotorMapping ? startCoordinates[axis] : reprap.GetMove().MotorStepsToMovement(axis, cdda->DriveCoordinates()[axis]);
+								});
+	if (addPointer->InitStandardMove(*this, lastHomingMove, lastHomingMoveMotorMapping) == MovementError::ok)
+	{
+		addPointer->SetState(DDA::planned);
+		holdBarrier = addPointer;
+		lastHomingMoveDda = addPointer;							// so that a further hold after the release can cut the remainder as well
+		addPointer = addPointer->GetNext();
+		scheduledMoves++;
+	}
+	else
+	{
+		holdBarrier = addPointer;								// the motors stopped on the target already, so there is nothing left to re-issue
+	}
+}
+
+// Release a feed hold. The move at the barrier was planned to start at the junction speed of the moves we turned into a decelerating chain,
+// so restart it from standstill and lower the following junctions until the planned speeds are reachable again.
+// If jogs ran during the hold, a move back to the held position goes in front of the barrier first, unless the caller is about to discard the held moves anyway
+void DDARing::ReleaseHold(bool returnToHeldPosition) noexcept
+{
+	TaskCriticalSectionLocker lock;								// prevent the Move task preparing moves while we change them
+
+	DDA *dda = holdBarrier;
+	if (dda == nullptr)
+	{
+		return;
+	}
+
+	if (jogged && returnToHeldPosition)
+	{
+		RawMove back = lastJog;									// same tool, feed rate and ownership as the jog, so the return looks like the jog that caused it
+		memcpyf(back.coords, heldCoords, MaxAxes);
+		if (InsertBeforeBarrier(back, lastJogMotorMapping) == MovementError::ok)
+		{
+			returnMoveDda = holdBarrier->GetPrevious();			// the new move sits directly in front of the barrier whichever way InsertBeforeBarrier linked it
+		}
+	}
+	jogged = false;
+
+#if SUPPORT_3RD_ORDER
+	if (dda != addPointer && dda->IsSCurveMove())
+	{
+		// The plan in progress ends at standstill at the barrier and must run to its end, the next plan starts from these fields once it is used up
+		dda->SetStartSpeedAndAcceleration(0.0, 0.0);
+	}
+	else
+#endif
+	if (dda != addPointer)
+	{
+		float newStartSpeed = 0.0;
+		for (;;)
+		{
+			const float oldEndSpeed = dda->GetEndSpeed();
+			const float newEndSpeed = min<float>(oldEndSpeed, fastSqrtf(fsquare(newStartSpeed) + 2 * dda->GetMaxAcceleration() * dda->GetTotalDistance()));
+			dda->SetPauseSpeeds(*this, newStartSpeed, newEndSpeed);
+			DDA * const nextDda = dda->GetNext();
+			if (newEndSpeed >= oldEndSpeed || nextDda == addPointer)
+			{
+				break;											// the rest of the queue can keep its planned speeds
+			}
+			newStartSpeed = nextDda->GetStartSpeed() * newEndSpeed / oldEndSpeed;	// scale both sides of the junction alike to keep the extrusion ratio
+			dda = nextDda;
+		}
+	}
+
+	holdBarrier = nullptr;
+}
+
+// Return true if a jog can be accepted while held: the pending move GCodes may still hold needs a slot, the jog needs one, and the last free slot is never used
+bool DDARing::CanAddHoldJog() const noexcept
+{
+	return holdBarrier != nullptr
+		&& addPointer->GetState() == DDA::empty
+		&& addPointer->GetNext()->GetState() == DDA::empty
+		&& addPointer->GetNext()->GetNext()->GetState() == DDA::empty;
+}
+
+// Add a jog commanded while a feed hold is active. It runs ahead of the held moves, and ReleaseHold moves back to the held position before they continue
+MovementError DDARing::AddHoldJog(const RawMove& nextMove, bool doMotorMapping) noexcept
+{
+	TaskCriticalSectionLocker lock;								// the Main task may be releasing the hold at the same time
+
+	if (holdBarrier == nullptr)
+	{
+		return MovementError::noMovement;						// the hold ended before the Move task got to this jog, and running it behind the released moves would be worse than losing it
+	}
+
+	const MovementError err = InsertBeforeBarrier(nextMove, doMotorMapping);
+	if (err == MovementError::ok)
+	{
+		lastJog = nextMove;
+		lastJogMotorMapping = doMotorMapping;
+		jogged = true;
+	}
+	return err;
+}
+
+// Add a move in front of the hold barrier so that it runs before the held moves. Must be called with the Move task locked out.
+// The caller guarantees a free slot, as the Move task only reads a move when CanAddMove says so
+MovementError DDARing::InsertBeforeBarrier(const RawMove& nextMove, bool doMotorMapping) noexcept
+{
+	DDA * const barrier = holdBarrier;
+	if (barrier == addPointer)
+	{
+		// Nothing is held behind the barrier yet, so the move simply goes at the end and the barrier moves behind it
+		const MovementError err = AddStandardMove(nextMove, doMotorMapping);
+		holdBarrier = addPointer;
+		memcpyf(jogCoords, startCoordinates, MaxAxes);
+		return err;
+	}
+
+	// Take the free slot at addPointer out of the ring and link it in front of the barrier
+	DDA * const dda = addPointer;
+	DDA * const origPrev = dda->GetPrevious();
+	DDA * const origNext = dda->GetNext();
+	addPointer = origNext;
+	origPrev->SetNext(origNext);
+	origNext->SetPrevious(origPrev);
+	DDA * const before = barrier->GetPrevious();
+	dda->SetPrevious(before);
+	dda->SetNext(barrier);
+	before->SetNext(dda);
+	barrier->SetPrevious(dda);
+
+	// The move starts where the previous jog ended, not where the held moves end, so swap the start coordinates around the initialisation
+	float heldStartCoordinates[MaxAxes];
+	memcpyf(heldStartCoordinates, startCoordinates, MaxAxes);
+	memcpyf(startCoordinates, jogCoords, MaxAxes);
+	const MovementError err = dda->InitStandardMove(*this, nextMove, doMotorMapping);
+	memcpyf(jogCoords, startCoordinates, MaxAxes);
+	memcpyf(startCoordinates, heldStartCoordinates, MaxAxes);
+
+	if (err == MovementError::ok)
+	{
+		dda->SetState(DDA::planned);
+		if (getPointer == barrier)
+		{
+			getPointer = dda;									// the held chain has run out, so the new move is now the oldest one
+		}
+		scheduledMoves++;
+	}
+	else
+	{
+		// Put the slot back where it came from
+		before->SetNext(barrier);
+		barrier->SetPrevious(before);
+		dda->SetPrevious(origPrev);
+		dda->SetNext(origNext);
+		origPrev->SetNext(dda);
+		origNext->SetPrevious(dda);
+		addPointer = dda;
+	}
+	return err;
+}
+
+// Stop as soon as the jerk limits allow and discard all later moves, ending any feed hold. Used by M25.1 S1.
+// Returns the machine coordinates we will stop at, because the user position in GCodes still holds the target of the last move it read
+void DDARing::StopMoves(MovementState& ms, float stopCoords[MaxAxes]) noexcept
+{
+	TaskCriticalSectionLocker lock;								// prevent the Move task changing data while we look at it
+
+	// A hold has already found the stop point. The moves from its barrier on are discarded unprepared, so they need no replanning and no return to the held position
+	DDA *_ecv_null const barrier = holdBarrier;
+	holdBarrier = nullptr;
+	jogged = false;
+	returnMoveDda = nullptr;
+
+	bool wakeAsyncSender = false;
+	const DDA * const savedDdaRingAddPointer = addPointer;
+	{
+		BasePriorityBooster booster(NvicPriorityStep);			// lock out step interrupts
+		(void)CancelHomingMoveInFlight(wakeAsyncSender);		// a homing move in flight stops now rather than at the switch, the queue behind it goes anyway
+		lastHomingMoveDda = nullptr;							// if the hold had cut it, this pointed at the remainder that is about to be freed
+		DDA *dda = FindStopPoint();
+		if (barrier != nullptr)
+		{
+			// The search knows nothing of a homing move that the hold cut short, and while that move has not been retired it can place the stop behind the remainder at the barrier
+			for (DDA *p = getPointer; p != dda; p = p->GetNext())
+			{
+				if (p == barrier)
+				{
+					dda = p;
+					break;
+				}
+			}
+		}
+		addPointer = dda;
+		while (dda != savedDdaRingAddPointer)
+		{
+			(void)dda->Free();
+			scheduledMoves--;
+			dda = dda->GetNext();
+		}
+	}
+
+#if SUPPORT_CAN_EXPANSION
+	if (wakeAsyncSender)
+	{
+		CanInterface::WakeAsyncSender();
+	}
+#else
+	(void)wakeAsyncSender;
+#endif
+
+	// Make the end of the last move we execute the start of the next one
+	DDA * const prevDda = addPointer->GetPrevious();
+	ms.UpdateOwnedDriveLastEndpoints(prevDda->DriveCoordinates());
+	prevDda->GetEndCoordinates(startCoordinates);
+	memcpyf(stopCoords, startCoordinates, MaxAxes);
+	reprap.GetMove().InverseAxisAndBedTransform(stopCoords, prevDda->GetTool());
+}
+
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 
 // Pause the print immediately, returning true if we were able to
 bool DDARing::LowPowerOrStallPause(MovementState& ms) noexcept
 {
+	ReleaseHold(false);									// an emergency pause ends any feed hold, and the moves at the barrier must be replanned before we look at them
+	returnMoveDda = nullptr;
+
 	TaskCriticalSectionLocker lock;						// prevent the Move task changing data while we look at it
 
 	const DDA * const savedDdaRingAddPointer = addPointer;
@@ -886,8 +1237,8 @@ bool DDARing::LowPowerOrStallPause(MovementState& ms) noexcept
 
 void DDARing::Diagnostics(const StringRef& reply, unsigned int ringNumber) noexcept
 {
-	reply.lcatf("=== DDARing %u ===\nScheduled moves %" PRIu32 ", completed %" PRIu32 ", LaErrors %u, Underruns [%u, %u]\n",
-				ringNumber, scheduledMoves, completedMoves, numLookaheadErrors, numLookaheadUnderruns, numNoMoveUnderruns
+	reply.lcatf("=== DDARing %u ===\nScheduled moves %" PRIu32 ", completed %" PRIu32 ", LaErrors %u, Underruns [%u, %u]%s\n",
+				ringNumber, scheduledMoves, completedMoves, numLookaheadErrors, numLookaheadUnderruns, numNoMoveUnderruns, (holdBarrier != nullptr) ? ", feed hold active" : ""
 			   );
 	numLookaheadUnderruns = numNoMoveUnderruns = numLookaheadErrors = 0;
 	reprap.GetGCodes().GetMovementState(ringNumber).Diagnostics(reply);
@@ -948,7 +1299,7 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 
 	bool setFeedForward = false;
 	bool ffNonPrintingMove = false;
-	bool setOutputOnExtrude = false, outputOnExtrudeOn = false;
+	bool setOutputOnExtrude = false, outputOnExtrudeForward = false, outputOnExtrudeReverse = false;
 	uint32_t nextWakeupDelay = StepClockRate;
 	const Tool *_ecv_null feedForwardTool = nullptr;
 	float feedForwardAverageExtrusionSpeed = 0.0;
@@ -1028,7 +1379,8 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 					{
 						cdda->SetDoneOutputOnExtrude();
 						setOutputOnExtrude = true;
-						outputOnExtrudeOn = cdda->HasForwardExtrusion();
+						outputOnExtrudeForward = cdda->HasForwardExtrusion();
+						outputOnExtrudeReverse = cdda->HasReverseExtrusion();
 					}
 					nextWakeupDelay = min<uint32_t>(nextWakeupDelay, (uint32_t)timeToMoveEnd);		// wake up when the move ends, in case no move follows it
 					bitsLeftToDo &= ~OutputOnExtrudeBit;
@@ -1054,14 +1406,7 @@ uint32_t DDARing::ManageIOBitsAndFeedForward(Platform& platform) noexcept
 	// DueX ports are written over I2C, which cannot be done with the base priority boosted
 	if (setOutputOnExtrude)
 	{
-		if (outputOnExtrudeOn)
-		{
-			platform.ExtrudeOn();
-		}
-		else
-		{
-			platform.ExtrudeOff();
-		}
+		platform.SetOutputsOnExtrude(outputOnExtrudeForward, outputOnExtrudeReverse);
 	}
 
 	// Check if we need to cancel previous feedforward because of a tool change or running out of moves

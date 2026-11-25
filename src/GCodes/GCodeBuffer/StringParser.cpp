@@ -49,10 +49,11 @@ void StringParser::Init() noexcept
 }
 
 // Throw away any line that we have only partly received. This is called when the input source drops its buffered data,
-// because otherwise the remains of the truncated line would be spliced onto the start of the next one
+// because otherwise the remains of the truncated line would be spliced onto the start of the next one.
+// A complete line is left alone, in particular one that is being executed, so every state from 'ready' onwards is excluded.
 void StringParser::DiscardPartialLine() noexcept
 {
-	if (gb.bufferState != GCodeBufferState::parseNotStarted && gb.bufferState != GCodeBufferState::ready)
+	if (gb.bufferState != GCodeBufferState::parseNotStarted && gb.bufferState < GCodeBufferState::ready)
 	{
 		Init();
 	}
@@ -143,13 +144,16 @@ bool StringParser::Put(char c) noexcept
 
 			case ' ':
 				AddToChecksum(c);
-				++commandIndent;
+				if (commandIndent != MaxIndent)
+				{
+					commandIndent++;
+				}
 				seenLeadingSpace = true;
 				break;
 
 			case '\t':
 				AddToChecksum(c);
-				commandIndent = (commandIndent + 4) & ~3;	// move on at least 1 to next multiple of 4
+				commandIndent = min<unsigned int>((commandIndent + 4) & ~3, MaxIndent);	// move on at least 1 to next multiple of 4
 				seenLeadingTab = true;
 				break;
 
@@ -385,6 +389,11 @@ bool StringParser::CheckMetaCommand(const StringRef& reply) THROWS(GCodeExceptio
 	if (gb.overflowed)
 	{
 		throw GCodeException(&gb, gb.bufferLength + commandIndent - 1, "GCode command too long");
+	}
+
+	if (commandIndent == MaxIndent)
+	{
+		throw GCodeException(&gb, commandIndent, "Indentation too big");
 	}
 
 	const bool doingFile = gb.IsDoingFile();
@@ -1913,6 +1922,41 @@ bool StringParser::WriteBinaryToFile(char b) noexcept
 
 	FinishWritingBinary();
 	return true;
+}
+
+// Write a block to the file of a binary upload whose size was given, returning the number of bytes used.
+// That is less than len if the block holds the end of the upload, in which case the rest is the G-code that follows it
+size_t StringParser::WriteBinaryBlock(const char *_ecv_array buf, size_t len) noexcept
+{
+	const size_t toWrite = (size_t)min<FilePosition>(len, GetBinaryBytesRemaining());
+	if (toWrite != 0)
+	{
+		(void)fileBeingWritten->Write(buf, toWrite);
+		if (fileBeingWritten->Length() >= writingFileSize)
+		{
+			FinishWritingBinary();
+		}
+	}
+	return toWrite;
+}
+
+// Return how many bytes are still to come in a binary upload whose size was given, or 0 if there is no such upload
+FilePosition StringParser::GetBinaryBytesRemaining() const noexcept
+{
+	return (IsWritingBinary() && fileBeingWritten->Length() < writingFileSize) ? writingFileSize - fileBeingWritten->Length() : 0;
+}
+
+// Close the file of an upload that will not be completed. No reply is sent, because the host that started
+// the upload has gone and another one may already be connected to the channel
+void StringParser::AbortFileWrite() noexcept
+{
+	if (fileBeingWritten != nullptr)
+	{
+		fileBeingWritten->Close();
+		fileBeingWritten = nullptr;
+		binaryWriting = false;
+		eofStringCounter = 0;
+	}
 }
 
 void StringParser::FinishWritingBinary() noexcept

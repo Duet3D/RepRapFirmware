@@ -55,6 +55,7 @@ void AuxDevice::Disable() noexcept
 {
 	if (mode != AuxMode::disabled)
 	{
+		MutexLocker lock(mutex);				// other tasks queue and flush replies under this mutex
 		uart->end();
 		outStack.ReleaseAll();
 		mode = AuxMode::disabled;

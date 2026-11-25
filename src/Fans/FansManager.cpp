@@ -379,6 +379,10 @@ unsigned int FansManager::PopulateFansReport(CanMessageFansReport& msg) noexcept
 	{
 		if (f != nullptr && f->IsLocal())
 		{
+			if (numReported == ARRAY_SIZE(msg.fanReports))
+			{
+				break;
+			}
 			msg.fanReports[numReported].actualPwm = (uint16_t)(f->GetPwm() * 65535);
 			msg.fanReports[numReported].rpm = f->GetRPM();
 			msg.whichFans |= (uint64_t)1 << f->GetNumber();

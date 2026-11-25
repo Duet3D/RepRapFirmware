@@ -1461,6 +1461,7 @@ GCodeResult MassStorage::Unmount(size_t card, const StringRef& reply) noexcept
 
 # if HAS_MASS_STORAGE
 	SdCardInfo& inf = info[card];
+	MutexLocker lock(fsMutex);				// no file may be opened between the check and the unmount
 	if (AnyFileOpen(&inf.fileSystem))
 	{
 		// Don't unmount the card if any files are open on it
@@ -1604,7 +1605,7 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, SdCardReturnedInfo
 	const FRESULT fr = f_getfree(path.c_str(), &freeClusters, &fs);
 	if (fr == FR_OK)
 	{
-		returnedInfo.clSize = fs->csize * 512;
+		returnedInfo.clSize = fs->csize * FF_MAX_SS;
 		returnedInfo.partitionSize = (uint64_t)(fs->n_fatent - 2) * returnedInfo.clSize;
 		returnedInfo.freeSpace = (uint64_t)freeClusters * returnedInfo.clSize;
 	}

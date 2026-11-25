@@ -298,7 +298,7 @@ unsigned int LISAccelerometer::CollectData(const uint16_t *_ecv_array *collected
 		break;
 
 	case AccelerometerType::LIS2DW:
-		numToRead = fifoStatus & 0x3F;
+		numToRead = min<unsigned int>(fifoStatus & 0x3F, ARRAY_SIZE(transferBuffer.data) / 6);		// a corrupted 6-bit count would overrun the buffer
 		break;
 	}
 

@@ -1369,6 +1369,199 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 	return true;
 }
 
+// Decide what to do with a movement command while a feed hold is active. The job stream and macros wait, so that a macro caught by the hold
+// (homing, a tool change) carries on behind the held moves on release instead of losing them. An interactive move gets an error instead,
+// because a waiting one would block its channel, and in DWC that is the channel the resume command comes from
+bool GCodes::CheckMovementNotHeld(const GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) const noexcept
+{
+	if (!gb.IsFileChannel() && reprap.GetMove().IsFeedHoldActive())
+	{
+		if (gb.IsDoingFileMacro())
+		{
+			result = GCodeResult::notFinished;
+		}
+		else
+		{
+			reply.copy("Movement is not allowed while a feed hold is active");
+			result = GCodeResult::error;
+		}
+		return false;
+	}
+	return true;
+}
+
+// Stop every motion system as soon as the jerk limits allow and drop the moves queued behind the stop, ending any feed hold.
+// The move in flight still runs out unless it is a homing move, which the ring cancels at once
+void GCodes::DiscardQueuedMotion() noexcept
+{
+	for (MovementState& ms : moveStates)
+	{
+		TaskCriticalSectionLocker lock;				// keep the Move task out until the waiting move has been discarded, else it can add that move to the ring after StopMoves emptied it
+		float stopCoords[MaxAxes];
+		reprap.GetMove().StopMoves(ms, stopCoords);
+		ToolOffsetInverseTransform(ms, stopCoords, ms.currentUserPosition);	// the user position holds the target of the last move we read, which may be one we have just discarded
+		ms.jogReadAheadSaved = false;
+		ms.ClearMove();
+		ms.positionMayBeInaccurate = true;			// the move in flight may still stop short of its planned end, so re-read the position at the next standstill as well
+	}
+}
+
+// Drop what the job channels have read beyond the moves DiscardQueuedMotion has just thrown away: the macro frames they are in, the command being parsed
+// and, in SBC mode, the codes DSF has already transferred for them. A pause does all of this before a cancel can follow it, a feed hold does not,
+// so a job cancelled out of a feed hold would otherwise carry on with those codes as soon as cancel.g has finished
+void GCodes::DiscardJobReadAhead() noexcept
+{
+	for (MovementState& ms : moveStates)
+	{
+		GCodeBuffer& fgb = *GetFileGCode(ms.GetNumber());
+		while (fgb.LatestMachineState().doingFileMacro)
+		{
+			fgb.PopState(false);
+		}
+#if HAS_SBC_INTERFACE
+		if (reprap.UsingSbcInterface())
+		{
+			fgb.Invalidate();						// the SBC task drops the codes it holds for this channel and clears the flag again
+		}
+#endif
+		fgb.Init();
+		UnlockAll(fgb);
+	}
+}
+
+// Decide what to do with a G0/G1 while a feed hold is active. The job stream is suspended and macros wait. An interactive move becomes a jog that runs
+// ahead of the held moves, so the user position switches from where the held stream had got to in its read-ahead to where the machine actually stands;
+// GCodes::Spin restores the read-ahead position when the hold is released, by which time the machine is on its way back to the held position
+bool GCodes::AllowJogWhileHeld(GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) noexcept
+{
+	if (gb.IsFileChannel() || !reprap.GetMove().IsFeedHoldActive())
+	{
+		return true;
+	}
+	if (gb.IsDoingFileMacro())
+	{
+		result = GCodeResult::notFinished;
+		return false;
+	}
+#if SUPPORT_3RD_ORDER
+	if (reprap.GetMove().IsUsingSCurve())
+	{
+		reply.copy("Jogging while a feed hold is active is not supported with S-curve acceleration");
+		result = GCodeResult::error;
+		return false;
+	}
+#endif
+	if (gb.Seen(extrudeLetter))
+	{
+		reply.copy("Extrusion is not allowed while a feed hold is active");
+		result = GCodeResult::error;
+		return false;
+	}
+
+	MovementState& ms = GetMovementState(gb);
+	if (!reprap.GetMove().CanJogWhileHeld(ms))
+	{
+		reply.copy("Cannot jog while the feed hold queue is full");
+		result = GCodeResult::error;
+		return false;
+	}
+	if (!ms.jogReadAheadSaved)
+	{
+		memcpyf(ms.readAheadPosition, ms.currentUserPosition, MaxAxes);
+		GetHeldUserPosition(ms, ms.currentUserPosition);
+		ms.jogReadAheadSaved = true;
+	}
+	return true;
+}
+
+void GCodes::GetHeldUserPosition(const MovementState& ms, float coords[MaxAxes]) const noexcept
+{
+	float machineCoords[MaxAxes];
+	reprap.GetMove().GetHeldPosition(ms, machineCoords);
+	reprap.GetMove().InverseAxisAndBedTransform(machineCoords, ms.currentTool);
+	ToolOffsetInverseTransform(ms, machineCoords, coords);
+}
+
+// The pause restore point doubles as the feed hold position, so that G1 R1 and the object model show where the hold stopped.
+// A pause in progress or a paused job keeps its own restore point, because M24 must still return to where the job paused
+void GCodes::SaveHoldRestorePoints() noexcept
+{
+	if (!holdRestorePointSaved)
+	{
+		if (pauseState == PauseState::notPaused)
+		{
+			for (MovementState& ms : moveStates)
+			{
+				RestorePoint& rp = ms.GetPauseRestorePoint();
+				ms.SavePosition(PauseRestorePointNumber, numVisibleAxes, rp.originalFeedRate, noFilePosition);		// no single channel owns a hold, so the feed rate stays as it was
+				GetHeldUserPosition(ms, rp.moveCoords);
+			}
+			reprap.MoveUpdated();
+		}
+		holdRestorePointSaved = true;
+	}
+}
+
+// After a feed hold during which jogs ran, the machine is on its way back to the held position, so the held streams carry on from where their read-ahead had got to.
+// Must run before the job channel executes again, which is why the M24 handler calls it directly rather than leaving it to the next Spin
+void GCodes::RestoreReadAheadPositions() noexcept
+{
+	for (MovementState& ms : moveStates)
+	{
+		if (ms.jogReadAheadSaved)
+		{
+			memcpyf(ms.currentUserPosition, ms.readAheadPosition, MaxAxes);
+			ms.jogReadAheadSaved = false;
+		}
+	}
+}
+
+// Handle M25.1. Without parameters this is a feed hold: all motion decelerates to a stop as soon as the jerk limits allow and M24 carries on from there.
+// With S1 the motion stops the same way and then everything is aborted: the queued moves are discarded, the print is stopped like the abort command does it,
+// and the macros on all other channels are aborted. Not an emergency stop, so the drivers stay powered and the position is kept
+GCodeResult GCodes::DoFeedHold(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	if (gb.IsFileChannel())
+	{
+		reply.copy("M25.1 is not allowed in the file being printed, use M226 or M0 instead");
+		return GCodeResult::error;
+	}
+	if (IsSimulating())
+	{
+		reply.copy("M25.1 is not allowed while simulating");
+		return GCodeResult::error;
+	}
+
+	if (!gb.Seen('S') || gb.GetUIValue() != 1)
+	{
+		reprap.GetMove().FeedHold();
+		return GCodeResult::ok;
+	}
+
+	StopAndAbortMotion(gb);
+	return GCodeResult::ok;
+}
+
+// The M25.1 S1 stop-and-abort: stop as soon as the jerk limits allow, drop everything queued, abort a running or paused print and the macros on every
+// channel but the requester's. Also reached from GCodes::Spin for an urgent M25.1 S1 that an input task swallowed, with the Autopause buffer as requester
+void GCodes::StopAndAbortMotion(const GCodeBuffer& requester) noexcept
+{
+	DiscardQueuedMotion();
+
+	if (reprap.GetPrintMonitor().IsPrinting())
+	{
+		AbortPrint(*FileGCode());					// this takes the forked File2 stream with it and tells the SBC to abort the job
+	}
+	for (GCodeBuffer *_ecv_null gbp : gcodeSources)
+	{
+		if (gbp != nullptr && gbp != &requester && !gbp->IsFileChannel() && gbp->IsDoingFileMacro())
+		{
+			AbortPrint(*gbp);
+			gbp->Init();							// drop the macro command it was executing, which may be the move we have just discarded
+		}
+	}
+}
+
 // Handle M957
 GCodeResult GCodes::RaiseEvent(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {

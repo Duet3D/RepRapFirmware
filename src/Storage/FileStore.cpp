@@ -237,6 +237,11 @@ bool FileStore::Close() noexcept
 					MassStorage::ReleaseWriteBuffer(wb);
 				}
 #endif
+#if HAS_MASS_STORAGE
+				file.obj.fs = nullptr;					// else a later InvalidateFiles would claim this free slot
+#endif
+				closeRequested = false;
+				openCount = 0;
 				usageMode = FileUseMode::free;
 			}
 			return true;
@@ -491,6 +496,8 @@ bool FileStore::ForceClose() noexcept
 		handle = noFileHandle;
 		offset = length = 0;
 		usageMode = FileUseMode::free;
+		closeRequested = false;
+		openCount = 0;
 		return ok;
 	}
 #endif
@@ -553,10 +560,13 @@ bool FileStore::Store(const char *_ecv_array s, size_t len, size_t *bytesWritten
 	{
 		const bool ok = (len > 0) ? reprap.GetSbcInterface().WriteFile(handle, s, len) : true;
 		*bytesWritten = ok ? len : 0;
-		offset += len;
-		if (offset > length)
+		if (ok)
 		{
-			length = offset;
+			offset += len;
+			if (offset > length)
+			{
+				length = offset;
+			}
 		}
 		return ok;
 	}
@@ -784,7 +794,13 @@ bool FileStore::IsSameFile(const FIL& otherFile) const noexcept
 
 uint32_t FileStore::ClusterSize() const noexcept
 {
-	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.obj.fs->csize * 512u : 1;	// we divide by the cluster size so return 1 not 0 if there is an error
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		return FF_MAX_SS;				// the SBC does not report the cluster size of its file system
+	}
+#endif
+	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.obj.fs->csize * FF_MAX_SS : 1;	// we divide by the cluster size so return 1 not 0 if there is an error
 }
 
 

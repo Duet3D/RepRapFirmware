@@ -310,7 +310,14 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 		}
 		const int indexCol = GetColumn();
 		AdvancePointer();
-		const uint32_t indexValue = ParseUnsigned();
+		uint32_t indexValue;
+		{
+			ExpressionValue index;
+			CheckStack(StackUsage::ParseInternal);
+			ParseInternal(index, evaluate, 0);
+			ConvertToUnsigned(index, evaluate);
+			indexValue = index.uVal;
+		}
 		if (CurrentCharacter() != ']')
 		{
 			ThrowParseException("expected ']'");
@@ -348,22 +355,36 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 		case TypeCode::CString:
 			{
 				const size_t len = strlen(val.sVal);
-				if (indexValue >= len)
+				if (indexValue < len)
+				{
+					val.SetChar(val.sVal[indexValue]);
+				}
+				else if (evaluate)
 				{
 					throw GCodeException(gb, indexCol, ArrayIndexOutOfRangeText);
 				}
-				val.SetChar(val.sVal[indexValue]);
+				else
+				{
+					val.SetNull(nullptr);
+				}
 			}
 			break;
 
 		case TypeCode::HeapString:
 			{
 				ReadLockedPointer<const char> p = val.shVal.Get();
-				if (p.IsNull() || indexValue >= strlen(p.Ptr()))
+				if (!p.IsNull() && indexValue < strlen(p.Ptr()))
+				{
+					val.SetChar(p.Ptr()[indexValue]);
+				}
+				else if (evaluate)
 				{
 					throw GCodeException(gb, indexCol, ArrayIndexOutOfRangeText);
 				}
-				val.SetChar(p.Ptr()[indexValue]);
+				else
+				{
+					val.SetNull(nullptr);
+				}
 			}
 			break;
 
@@ -2048,14 +2069,23 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					// Only one operand, so it's min or max on an array
 					if (rslt.GetType() != TypeCode::HeapArray)
 					{
-						ThrowParseException("operand is not an array");
+						if (evaluate)
+						{
+							ThrowParseException("operand is not an array");
+						}
+						rslt.SetInt(0);
+						break;
 					}
 
 					ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
 					ExpressionValue rVal;
 					if (!rslt.ahVal.GetElement(0, rVal))
 					{
-						ThrowParseException("array has no elements");
+						if (evaluate)
+						{
+							ThrowParseException("array has no elements");
+						}
+						rVal.SetInt(0);
 					}
 
 					for (size_t i = 1; ; ++i)
@@ -2085,7 +2115,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 			case Function::random:
 				{
-					uint32_t limit;
+					uint32_t limit = 0;
 					if (rslt.GetType() == TypeCode::Uint32)
 					{
 						limit = rslt.uVal;
@@ -2094,11 +2124,11 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					{
 						limit = rslt.iVal;
 					}
-					else
+					else if (evaluate)
 					{
 						ThrowParseException("expected positive integer");
 					}
-					rslt.SetInt((int32_t)random(limit));
+					rslt.SetInt(evaluate ? (int32_t)random(limit) : 0);
 				}
 				break;
 
@@ -2121,15 +2151,20 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 						break;
 
 					case TypeCode::CString:
-						val = ParseDateTime(rslt.sVal);
+						val = evaluate ? ParseDateTime(rslt.sVal) : 0;
 						break;
 
 					case TypeCode::HeapString:
-						val = ParseDateTime(rslt.shVal.Get().Ptr());
+						val = evaluate ? ParseDateTime(rslt.shVal.Get().Ptr()) : 0;
 						break;
 
 					default:
-						ThrowParseException("can't convert value to DateTime");
+						if (evaluate)
+						{
+							ThrowParseException("can't convert value to DateTime");
+						}
+						val = 0;
+						break;
 					}
 					rslt.SetDateTime(val);
 				}
@@ -2189,8 +2224,15 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 						ThrowParseException("expected character operand");
 					}
 
-					CheckStack(StackUsage::ReadArrayFromFile);
-					ReadArrayFromFile(rslt, offset, (unsigned int)integerOperand.iVal, delimiterOperand.cVal);
+					if (evaluate)
+					{
+						CheckStack(StackUsage::ReadArrayFromFile);
+						ReadArrayFromFile(rslt, offset, (unsigned int)integerOperand.iVal, delimiterOperand.cVal);
+					}
+					else
+					{
+						rslt.SetNull(nullptr);
+					}
 				}
 				break;
 
@@ -2393,7 +2435,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 // Parse a string to a DateTime
 time_t ExpressionParser::ParseDateTime(const char *_ecv_array s) const THROWS(GCodeException)
 {
-	tm timeInfo;
+	tm timeInfo = {};										// SafeStrptime does not set tm_isdst, which mktime reads
 	if (SafeStrptime(s, "%Y-%m-%dT%H:%M:%S", &timeInfo) == nullptr)
 	{
 		ThrowParseException("string is not a valid date and time");

@@ -583,6 +583,7 @@ private:
 	uint8_t regIndexJustRequested;							// the register index we requested in the previous transaction, or 0xFF
 	uint8_t previousRegIndexRequested;						// the register we asked to read in the previous transaction, or 0xFF
 	volatile uint8_t specialReadRegisterNumber;
+	uint8_t specialReadRequestedNumber;			// the special register number that was last requested
 	volatile uint8_t specialWriteRegisterNumber;
 	bool enabled;											// true if driver is enabled
 
@@ -874,13 +875,18 @@ GCodeResult TmcDriverState::GetAnyRegister(const StringRef& reply, uint8_t regNu
 {
 	if (specialReadRegisterNumber == 0xFE)		// this value indicates that the register has been read and the value stored
 	{
-		reply.printf("Register 0x%02x value 0x%08" PRIx32, regNum, readRegisters[ReadSpecial]);
 		specialReadRegisterNumber = 0xFF;
-		return GCodeResult::ok;
+		if (specialReadRequestedNumber == regNum)
+		{
+			reply.printf("Register 0x%02x value 0x%08" PRIx32, regNum, readRegisters[ReadSpecial]);
+			return GCodeResult::ok;
+		}
+		// else the value belongs to an earlier request that the caller gave up waiting for, so discard it
 	}
 
 	if (specialReadRegisterNumber == 0xFF)		// this value indicates that we are read to accept a read register request
 	{
+		specialReadRequestedNumber = regNum;
 		specialReadRegisterNumber = regNum;
 	}
 	return GCodeResult::notFinished;			// else a read is already in progress
