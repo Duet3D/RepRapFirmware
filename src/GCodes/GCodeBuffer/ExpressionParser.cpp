@@ -917,6 +917,7 @@ void ExpressionParser::ParseArray(size_t& length, function_ref<void(ExpressionVa
 			{
 				const ObjectModelArrayTableEntry *const entry = _ecv_not_null(ev.omVal->FindObjectModelArrayEntry(ev.param & 0xFF));
 				ObjectExplorationContext context;
+				context.AddIndex(ev.param >> 8);								// in case it is a 2D array
 				ReadLocker locker(entry->lockPointer);
 				const size_t len = entry->GetNumElements(ev.omVal, context);
 				if (len == 0)
@@ -1068,6 +1069,7 @@ void ExpressionParser::EvaluateTake(ExpressionValue& rslt, uint32_t arg, bool ev
 		{
 			const ObjectModelArrayTableEntry *const entry = _ecv_not_null(rslt.omVal->FindObjectModelArrayEntry(rslt.param & 0xFF));
 			ObjectExplorationContext localContext;
+			localContext.AddIndex(rslt.param >> 8);							// in case it is a 2D array
 			ReadLocker locker(entry->lockPointer);
 			const size_t len = min<size_t>(entry->GetNumElements(rslt.omVal, localContext), arg);
 			ArrayHandle ah;
@@ -1134,6 +1136,7 @@ void ExpressionParser::EvaluateDrop(ExpressionValue& rslt, uint32_t arg, bool ev
 		{
 			const ObjectModelArrayTableEntry *const entry = _ecv_not_null(rslt.omVal->FindObjectModelArrayEntry(rslt.param & 0xFF));
 			ObjectExplorationContext context1;
+			context1.AddIndex(rslt.param >> 8);								// in case it is a 2D array
 			ReadLocker locker(entry->lockPointer);
 			const size_t numOriginalElements = entry->GetNumElements(rslt.omVal, context1);
 			const size_t offset = min<size_t>(numOriginalElements, arg);
@@ -1144,6 +1147,7 @@ void ExpressionParser::EvaluateDrop(ExpressionValue& rslt, uint32_t arg, bool ev
 				WriteLocker lock(Heap::heapLock);
 				ah.Allocate(len);
 				ObjectExplorationContext context2;
+				context2.AddIndex(rslt.param >> 8);							// in case it is a 2D array
 				for (size_t i = 0; i < len; ++i)
 				{
 					context2.AddIndex(i + offset);
