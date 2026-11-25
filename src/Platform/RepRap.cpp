@@ -20,6 +20,7 @@
 #include <Endstops/ZProbe.h>
 #include "Tasks.h"
 #include <Cache.h>
+#include <Flash.h>
 #include <Fans/FansManager.h>
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
@@ -2062,7 +2063,7 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 	// UF2 files consist of 512 byte blocks with (for the SAME5x) 256 bytes of data per block
 	if ((firmwareFile->Length() / 512) * 256 > FLASH_SIZE)
 #else
-	if (firmwareFile->Length() > IFLASH_SIZE)
+	if (firmwareFile->Length() > Flash::GetFlashSize())
 #endif
 	{
 		firmwareFile->Close();
