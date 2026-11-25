@@ -1666,10 +1666,13 @@ void ExpressionParser::CheckForExtraCharacters() THROWS(GCodeException)
 }
 
 // Parse a number. The initial character of the string is a decimal digit.
-void ExpressionParser::ParseNumber(ExpressionValue& rslt) noexcept
+void ExpressionParser::ParseNumber(ExpressionValue& rslt) THROWS(GCodeException)
 {
 	NumericConverter conv;
-	conv.Accumulate(CurrentCharacter(), NumericConverter::AcceptSignedFloat | NumericConverter::AcceptHex, [this]()->char { AdvancePointer(); return CurrentCharacter(); });	// must succeed because CurrentCharacter is a decimal digit
+	if (!conv.Accumulate(CurrentCharacter(), NumericConverter::AcceptSignedFloat | NumericConverter::AcceptHex, [this]()->char { AdvancePointer(); return CurrentCharacter(); }))
+	{
+		ThrowParseException("expected exponent digits");			// the first character is a decimal digit, so this is the only way it can fail
+	}
 
 	if (conv.FitsInInt32())
 	{
