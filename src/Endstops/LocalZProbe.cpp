@@ -67,6 +67,19 @@ GCodeResult LocalZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool
 		(void)modulationPort.SetMode(access[1]);
 	}
 
+	if (type == ZProbeType::top3dBedTouch)
+	{
+		if (gb.Seen('S'))
+		{
+			seen = true;
+			top3dSensitivity = (uint8_t)constrain<uint32_t>(gb.GetUIValue(), 10, 100);
+		}
+		if (seen && modulationPort.IsValid())
+		{
+			SendTop3dSensitivity(top3dSensitivity);
+		}
+	}
+
 	if (seen)
 	{
 		reprap.GetPlatform().InitZProbeFilters();
@@ -100,6 +113,7 @@ int32_t LocalZProbe::GetRawReading() const noexcept
 	case ZProbeType::digital:
 	case ZProbeType::unfilteredDigital:
 	case ZProbeType::blTouch:
+	case ZProbeType::top3dBedTouch:
 		return (inputPort.ReadDigital()) ? MaxReading : 0;
 
 	default:
@@ -109,6 +123,22 @@ int32_t LocalZProbe::GetRawReading() const noexcept
 
 bool LocalZProbe::SetProbing(bool isProbing) noexcept
 {
+	if (type == ZProbeType::top3dBedTouch)
+	{
+		if (isProbing)
+		{
+			modulationPort.WriteDigital(false);
+			delay(300);
+			modulationPort.WriteDigital(true);
+			delay(100);
+		}
+		else
+		{
+			modulationPort.WriteDigital(false);
+		}
+		return true;
+	}
+
 	// For Z probe types other than 1/2/3 and bltouch we set the modulation pin high at the start of a probing move and low at the end
 	// Don't do this for bltouch because on the Maestro, the MOD pin is normally used as the servo control output
 	if (type > ZProbeType::alternateAnalog_obsolete && type != ZProbeType::blTouch)
@@ -227,6 +257,29 @@ void LocalZProbe::Interrupt() noexcept
 		}
 
 		bytesSent = numBytes = 0;
+	}
+}
+
+void LocalZProbe::SendTop3dSensitivity(uint8_t sensitivity) noexcept
+{
+	const uint8_t sensVal = 55 - (sensitivity / 2);
+	const uint8_t crc = 0x01 + 0x00 + sensVal;
+	const uint8_t frame[6] = { 0x55, 0xAA, 0x01, 0x00, sensVal, crc };
+	
+	modulationPort.WriteDigital(true);
+	delay(20);
+	modulationPort.WriteDigital(false);
+	
+	for (size_t i = 0; i < 6; ++i)
+	{
+		for (uint8_t bit = 0; bit < 8; ++bit)
+		{
+			delay(1);
+			modulationPort.WriteDigital(true);
+			const bool bitSet = (frame[i] & (0x80 >> bit)) != 0;
+			delay(bitSet ? 2 : 6);
+			modulationPort.WriteDigital(false);
+		}
 	}
 }
 

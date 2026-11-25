@@ -46,9 +46,11 @@ private:
 	// Variables for programming Smart Effector and other programmable Z probes
 	static void TimerInterrupt(CallbackParameter param) noexcept;
 	void Interrupt() noexcept;
+	void SendTop3dSensitivity(uint8_t sensitivity) noexcept;
 
 	StepTimer timer;
 	uint8_t progBytes[MaxZProbeProgramBytes];
+	uint8_t top3dSensitivity = 30;
 	size_t numBytes;
 	size_t bytesSent;
 	unsigned int bitsSent;
