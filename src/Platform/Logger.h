@@ -12,6 +12,7 @@
 
 #if HAS_MASS_STORAGE
 
+#include <atomic>
 #include <ctime>
 #include <Storage/FileData.h>
 

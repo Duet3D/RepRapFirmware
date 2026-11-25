@@ -189,22 +189,26 @@ void Logger::InternalLogMessage(time_t currentTime, const char *_ecv_array messa
 // This is called regularly by Platform to give the logger an opportunity to flush the file buffer
 void Logger::Flush(bool forced) noexcept
 {
-	Lock loggerLock(inLogger);
-	if (loggerLock.IsAcquired() && logFile.IsLive() && dirty)
+	// This runs on every spin of the main loop, so claim the logger only when there is something to flush, otherwise other tasks would lose messages for no reason
+	if (logFile.IsLive() && dirty)
 	{
-		// Log file is dirty and can be flushed.
-		// To avoid excessive disk write operations, flush it only if one of the following is true:
-		// 1. We have possibly allocated a new cluster since the last flush. To avoid lost clusters if we power down before flushing,
-		//    we should flush early in this case. Rather than determine the cluster size, we flush if we have started a new 512-byte sector.
-		// 2. If it hasn't been flushed for LogFlushInterval milliseconds.
-		const FilePosition currentPos = logFile.GetPosition();
-		const uint32_t now = millis();
-		if (forced || now - lastFlushTime >= LogFlushInterval || currentPos/512 != lastFlushFileSize/512)
+		Lock loggerLock(inLogger);
+		if (loggerLock.IsAcquired() && logFile.IsLive() && dirty)
 		{
-			logFile.Flush();
-			lastFlushTime = millis();
-			lastFlushFileSize = currentPos;
-			dirty = false;
+			// Log file is dirty and can be flushed.
+			// To avoid excessive disk write operations, flush it only if one of the following is true:
+			// 1. We have possibly allocated a new cluster since the last flush. To avoid lost clusters if we power down before flushing,
+			//    we should flush early in this case. Rather than determine the cluster size, we flush if we have started a new 512-byte sector.
+			// 2. If it hasn't been flushed for LogFlushInterval milliseconds.
+			const FilePosition currentPos = logFile.GetPosition();
+			const uint32_t now = millis();
+			if (forced || now - lastFlushTime >= LogFlushInterval || currentPos / 512 != lastFlushFileSize / 512)
+			{
+				logFile.Flush();
+				lastFlushTime = millis();
+				lastFlushFileSize = currentPos;
+				dirty = false;
+			}
 		}
 	}
 }

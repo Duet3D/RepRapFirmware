@@ -371,6 +371,10 @@ bool CanMotion::StopDriverWhenExecuting(DriverId driver, int32_t netStepsTaken) 
 	// A driver is moved by one movement system at a time, so search the stop lists of all of them
 	for (const StopListState& state : stopListStates)
 	{
+		if (state.revertAll)
+		{
+			continue;																	// this list is left over from a move that has finished, and its stop requests are no longer sent
+		}
 		DriversStopList *_ecv_null sl = state.stopList;
 		while (sl != nullptr)
 		{
