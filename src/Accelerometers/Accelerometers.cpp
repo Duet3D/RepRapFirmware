@@ -433,28 +433,8 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 		}
 #endif
 
-		// Creating a new local accelerometer. First delete any existing accelerometer.
-		DeleteObject(accelerometer);
-		spiCsPort.Release();
-		irqPort.Release();
-
-		IoPort * const ports[2] = { &spiCsPort, &irqPort };
-		const PinAccess access[2] = { PinAccess::write1, PinAccess::read };
-		if (IoPort::AssignPorts(pinNames.c_str(), reply, PinUsedBy::sensor, 2, ports, access) != 2)
-		{
-			spiCsPort.Release();				// in case it was allocated
-			return GCodeResult::error;
-		}
-
+		// Read the parameters that can throw before the ports are assigned
 		const uint32_t spiFrequency = (gb.Seen('Q')) ? gb.GetLimitedUIValue('Q', 500000, 10000001) : DefaultAccelerometerSpiFrequency;
-		auto temp = new LISAccelerometer(Platform::GetSharedSpiDevice(), spiFrequency, spiCsPort.GetPin(), irqPort.GetPin());
-		if (!temp->CheckPresent())
-		{
-			delete temp;
-			reply.copy("Accelerometer not found on specified port");
-			return GCodeResult::error;
-		}
-
 		uint8_t resolution = DefaultAccelerometerResolution;
 		uint16_t samplingRate = 0;							// 0 means use the default
 
@@ -470,9 +450,34 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 			samplingRate = temp32;
 		}
 
+		// Creating a new local accelerometer. First delete any existing accelerometer.
+		DeleteObject(accelerometer);
+		spiCsPort.Release();
+		irqPort.Release();
+
+		IoPort * const ports[2] = { &spiCsPort, &irqPort };
+		const PinAccess access[2] = { PinAccess::write1, PinAccess::read };
+		if (IoPort::AssignPorts(pinNames.c_str(), reply, PinUsedBy::sensor, 2, ports, access) != 2)
+		{
+			spiCsPort.Release();				// in case it was allocated
+			return GCodeResult::error;
+		}
+
+		auto temp = new LISAccelerometer(Platform::GetSharedSpiDevice(), spiFrequency, spiCsPort.GetPin(), irqPort.GetPin());
+		if (!temp->CheckPresent())
+		{
+			delete temp;
+			spiCsPort.Release();
+			irqPort.Release();
+			reply.copy("Accelerometer not found on specified port");
+			return GCodeResult::error;
+		}
+
 		if (!not_null(temp)->Configure(samplingRate, resolution))
 		{
 			delete temp;
+			spiCsPort.Release();
+			irqPort.Release();
 			reply.copy("Failed to configure accelerometer");
 			return GCodeResult::error;
 		}
@@ -488,6 +493,8 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 			else
 			{
 				delete temp;
+				spiCsPort.Release();
+				irqPort.Release();
 				reply.copy("Bad orientation parameter");
 				return GCodeResult::error;
 			}
