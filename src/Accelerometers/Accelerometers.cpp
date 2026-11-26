@@ -301,6 +301,10 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 	{
 		seen = true;
 
+		// Read the parameter that can throw before the existing accelerometer is deleted and the ports are assigned
+		const uint32_t spiFrequency = gb.Seen('Q') ? gb.GetLimitedUIValue('Q', 500000, 10000001) : DefaultAccelerometerSpiFrequency;
+		(void)gb.Seen('C');						// point the parser back at the port names
+
 		// Creating a new accelerometer. First delete any existing accelerometer.
 		DeleteObject(accelerometer);
 		spiCsPort.Release();
@@ -314,7 +318,6 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 			return GCodeResult::error;
 		}
 
-		const uint32_t spiFrequency = (gb.Seen('Q')) ? gb.GetLimitedUIValue('Q', 500000, 10000001) : DefaultAccelerometerSpiFrequency;
 		auto temp = new LISAccelerometer(SharedSpiDevice::GetMainSharedSpiDevice(), spiFrequency, spiCsPort.GetPin(), irqPort.GetPin());
 		if (temp->CheckPresent())
 		{

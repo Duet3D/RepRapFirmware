@@ -32,6 +32,7 @@ private:
 	static constexpr uint32_t DefaultSampleInterval = 200;
 
 	Task<HeightControllerTaskStackWords> *heightControllerTask;
+	ReadWriteLock taskLock;							// held while the task is created
 	int sensorNumber;								// which sensor, normally a virtual heater, or -1 if not configured
 	uint32_t sampleInterval;						// in milliseconds
 	uint32_t lastWakeTime;

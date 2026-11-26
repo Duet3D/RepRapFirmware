@@ -1355,8 +1355,16 @@ GCodeResult Move::EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest
 {
 	//TODO check message is long enough for the number of drivers specified
 	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
-	drivers.Iterate([this, &msg](unsigned int driver, unsigned int count) noexcept
+	GCodeResult rslt = GCodeResult::ok;
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) noexcept
 		{
+			if (driver >= NumDirectDrivers)
+			{
+				reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
+				rslt = GCodeResult::error;
+				return;
+			}
+
 			switch (msg.values[count].mode)
 			{
 			case DriverStateControl::driverActive:
@@ -1376,7 +1384,7 @@ GCodeResult Move::EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest
 				break;
 			}
 		});
-	return GCodeResult::ok;
+	return rslt;
 }
 
 GCodeResult Move::EutProcessM569(const CanMessageGeneric& msg, const StringRef& reply) noexcept

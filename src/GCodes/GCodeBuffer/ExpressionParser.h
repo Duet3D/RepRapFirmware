@@ -71,7 +71,7 @@ private:
 
 	void __attribute__((noinline)) ParseInternal(ExpressionValue& val, bool evaluate, uint8_t priority) THROWS(GCodeException);
 	void __attribute__((noinline)) ParseExpectKet(ExpressionValue& rslt, bool evaluate, char expectedKet) THROWS(GCodeException);
-	void __attribute__((noinline)) ParseNumber(ExpressionValue& rslt) noexcept
+	void __attribute__((noinline)) ParseNumber(ExpressionValue& rslt) THROWS(GCodeException)
 		pre((bool)isdigit(*currentp));
 	void __attribute__((noinline)) ParseIdentifierExpression(ExpressionValue& rslt, bool evaluate, bool applyLengthOperator, bool applyExists) THROWS(GCodeException)
 		pre((bool)isalpha(*currentp));

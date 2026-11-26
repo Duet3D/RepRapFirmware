@@ -1432,7 +1432,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						break;
 #endif
 					default:
-						result = GCodeResult::errorNotSupported;
+						result = GCodeResult::warningNotSupported;
 						break;
 					}
 				}
@@ -2451,7 +2451,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					const int frac = gb.GetCommandFraction();
 					if (frac > 1)
 					{
-						result = GCodeResult::errorNotSupported;
+						result = GCodeResult::warningNotSupported;
 						break;
 					}
 
@@ -3381,7 +3381,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 505:	// set sys folder (M505), set web folder (M505.1)
 				if (gb.GetCommandFraction() > 1)
 				{
-					result = GCodeResult::errorNotSupported;
+					result = GCodeResult::warningNotSupported;
 				}
 				else if (gb.Seen('P'))
 				{

@@ -599,6 +599,7 @@ private:
 
 	static constexpr size_t LaserTaskStackWords = 300;				// stack size in dwords for the laser and IOBits task (increased to support scanning Z probes)
 	static Task<LaserTaskStackWords> *_ecv_null laserTask;			// the task used to manage laser power or IOBits
+	static ReadWriteLock laserTaskLock;								// held while the laser task is created
 
 	// Member data
 	DDARing rings[NumMovementSystems];

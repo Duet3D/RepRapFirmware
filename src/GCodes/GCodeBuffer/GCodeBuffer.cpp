@@ -143,7 +143,9 @@ void GCodeBuffer::Reset() noexcept
 	requestedMacroFile.Clear();
 	isWaitingForMacro = macroFileClosed = false;
 	macroFileError = macroFileEmpty = false;
-	macroJustStarted = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = failedMacroPending = replyVoid = false;
+	macroJustStarted = sendToSbc = messagePromptPending = messageAcknowledged = failedMacroPending = replyVoid = false;
+	abortFile = false;
+	abortAllFiles = false;
 	machineState->lastCodeFromSbc = machineState->macroStartedByCode = false;
 #endif
 	cancelWait = false;

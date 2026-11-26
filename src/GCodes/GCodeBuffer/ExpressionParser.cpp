@@ -789,6 +789,7 @@ void ExpressionParser::ParseArray(size_t& length, function_ref<void(ExpressionVa
 			{
 				const ObjectModelArrayTableEntry *const entry = _ecv_not_null(ev.omVal->FindObjectModelArrayEntry(ev.param & 0xFF));
 				ObjectExplorationContext context;
+				context.AddIndex(ev.param >> 8);								// in case it is a 2D array
 				ReadLocker locker(entry->lockPointer);
 				const size_t len = entry->GetNumElements(ev.omVal, context);
 				if (len == 0)
@@ -1396,10 +1397,13 @@ void ExpressionParser::CheckForExtraCharacters() THROWS(GCodeException)
 }
 
 // Parse a number. The initial character of the string is a decimal digit.
-void ExpressionParser::ParseNumber(ExpressionValue& rslt) noexcept
+void ExpressionParser::ParseNumber(ExpressionValue& rslt) THROWS(GCodeException)
 {
 	NumericConverter conv;
-	conv.Accumulate(CurrentCharacter(), NumericConverter::AcceptSignedFloat | NumericConverter::AcceptHex, [this]()->char { AdvancePointer(); return CurrentCharacter(); });	// must succeed because CurrentCharacter is a decimal digit
+	if (!conv.Accumulate(CurrentCharacter(), NumericConverter::AcceptSignedFloat | NumericConverter::AcceptHex, [this]()->char { AdvancePointer(); return CurrentCharacter(); }))
+	{
+		ThrowParseException("expected exponent digits");			// the first character is a decimal digit, so this is the only way it can fail
+	}
 
 	if (conv.FitsInInt32())
 	{
@@ -1756,7 +1760,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				{
 					ConvertToFloat(rslt, evaluate);
 					const float f = ((func.RawValue() == Function::floor) ? floorf : (func.RawValue() == Function::ceil) ? ceilf : rintf)(rslt.fVal);
-					if (f <= (float)std::numeric_limits<int32_t>::max() && f >= (float)std::numeric_limits<int32_t>::min())
+					if (f < (float)std::numeric_limits<int32_t>::max() && f >= (float)std::numeric_limits<int32_t>::min())		// the maximum converts to 2^31, which does not fit
 					{
 						rslt.SetInt((int32_t)f);
 					}
@@ -2015,7 +2019,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					ConvertToFloat(rslt, evaluate);
 					ConvertToFloat(nextOperand, evaluate);
 					const float fres = powf(rslt.fVal, nextOperand.fVal);
-					if (integerResult && fabsf(fres) <= (float)std::numeric_limits<int32_t>::max())
+					if (integerResult && fres < (float)std::numeric_limits<int32_t>::max() && fres >= (float)std::numeric_limits<int32_t>::min())
 					{
 						rslt.SetInt(lrintf(fres));
 					}
@@ -2038,6 +2042,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 						{
 							const ObjectModelArrayTableEntry *const entry = _ecv_not_null(rslt.omVal->FindObjectModelArrayEntry(rslt.param & 0xFF));
 							ObjectExplorationContext context;
+							context.AddIndex(rslt.param >> 8);						// in case it is a 2D array
 							ReadLocker locker(entry->lockPointer);
 							const size_t len = min<size_t>(entry->GetNumElements(rslt.omVal, context), nextOperand.uVal);
 							ArrayHandle ah;
@@ -2080,11 +2085,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 					case TypeCode::HeapString:
 						{
-							ExpressionValue copy(rslt);
-							WriteLocker lock(Heap::heapLock);
-							const ReadLockedPointer<const char> p = copy.shVal.Get();
-							const size_t len = min<size_t>(strlen(p.Ptr()), nextOperand.uVal);
-							const StringHandle sh(p.Ptr(), len);
+							const StringHandle sh(rslt.shVal, 0, min<size_t>(rslt.shVal.GetLength(), nextOperand.uVal));
 							rslt.SetStringHandle(sh);
 						}
 						break;
@@ -2108,6 +2109,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 						{
 							const ObjectModelArrayTableEntry *const entry = _ecv_not_null(rslt.omVal->FindObjectModelArrayEntry(rslt.param & 0xFF));
 							ObjectExplorationContext context;
+							context.AddIndex(rslt.param >> 8);						// in case it is a 2D array
 							ReadLocker locker(entry->lockPointer);
 							const size_t numOriginalElements = entry->GetNumElements(rslt.omVal, context);
 							const size_t offset = min<size_t>(numOriginalElements, nextOperand.uVal);
@@ -2118,6 +2120,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 								WriteLocker lock(Heap::heapLock);
 								ah.Allocate(len);
 								ObjectExplorationContext context;
+								context.AddIndex(rslt.param >> 8);					// in case it is a 2D array
 								for (size_t i = 0; i < len; ++i)
 								{
 									context.AddIndex(i + offset);
@@ -2162,12 +2165,9 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 					case TypeCode::HeapString:
 						{
-							ExpressionValue copy(rslt);
-							WriteLocker lock(Heap::heapLock);
-							const ReadLockedPointer<const char> p = copy.shVal.Get();
-							const size_t slen = strlen(p.Ptr());
+							const size_t slen = rslt.shVal.GetLength();
 							const size_t offset = min<size_t>(slen, nextOperand.uVal);
-							StringHandle sh(p.Ptr() + offset, slen - offset);
+							const StringHandle sh(rslt.shVal, offset, slen - offset);
 							rslt.SetStringHandle(sh);
 						}
 						break;
