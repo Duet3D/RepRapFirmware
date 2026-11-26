@@ -236,7 +236,7 @@ public:
 
 	bool IsAbortRequested() const noexcept { return abortFile; }			// Is the cancellation of the current file requested?
 	bool IsAbortAllRequested() const noexcept { return abortAllFiles; }		// Is the cancellation of all files being executed on this channel requested?
-	void FileAbortSent() noexcept { abortFile = abortAllFiles = false; }	// Called when the SBC has been notified about a file (or all files) being closed
+	void FileAbortSent() noexcept { abortFile = false; abortAllFiles = false; }	// Called when the SBC has been notified about a file (or all files) being closed
 
 	bool IsMessagePromptPending() const noexcept { return messagePromptPending; }	// Is the SBC supposed to be notified about a message waiting for acknowledgement?
 	void MessagePromptSent() noexcept { messagePromptPending = false; }				// Called when the SBC has been notified about a message waiting for acknowledgement
@@ -417,8 +417,8 @@ private:
 	// Cleared by the SBC task under the GB mutex but set by the main task without it (MessageBoxClosed, AbortFile from other channels),
 	// so each has a byte of its own: a stale read-modify-write of a shared bitfield byte would undo the SBC task's change
 	bool macroJustStarted;			// Whether the GB has just started a macro file
-	bool abortFile;					// Whether to abort the last file on the stack
-	bool abortAllFiles;				// Whether to abort all opened files
+	volatile bool abortFile;		// Whether to abort the last file on the stack. Volatile because AbortFile relies on the order of its writes to this and abortAllFiles
+	volatile bool abortAllFiles;	// Whether to abort all opened files
 	bool sendToSbc;					// Indicates if the GB string content is supposed to be sent to the SBC
 	bool messagePromptPending;		// Has the SBC been notified about a message waiting for acknowledgement?
 	bool messageAcknowledged;		// Last message has been acknowledged
