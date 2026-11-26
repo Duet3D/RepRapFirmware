@@ -640,7 +640,7 @@ void Heater::SetTemperature(float t, bool activeNotStandby) THROWS(GCodeExceptio
 			isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(heaterNumber);
 			if (!Succeeded(SwitchOn(reply.GetRef())))
 			{
-				throw GCodeException(-1, 1, reply.c_str());
+				throw GCodeException(-1, 1, "%s", reply.c_str());		// the exception must not point at our local buffer
 			}
 			model.CalcPidConstants(activeTemperature);
 		}

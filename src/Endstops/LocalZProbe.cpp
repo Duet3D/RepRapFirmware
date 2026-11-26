@@ -22,6 +22,7 @@ constexpr unsigned int AdcBits = LegacyAnalogIn::AdcBits;
 // Members of class LocalZProbe
 LocalZProbe::~LocalZProbe() noexcept
 {
+	timer.CancelCallback();									// SendProgram may still be sending
 	inputPort.Release();
 	modulationPort.Release();
 }

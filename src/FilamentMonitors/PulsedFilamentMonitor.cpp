@@ -232,12 +232,13 @@ FilamentSensorStatus PulsedFilamentMonitor::Check(bool isPrinting, bool fromIsr,
 
 	// 4. Decide whether it is time to do a comparison, and return the status
 	FilamentSensorStatus ret = FilamentSensorStatus::ok;
+	const uint32_t lmt = lastMeasurementTime;					// read this before calling millis() in case the interrupt updates it
 	if (extrusionCommandedThisSegment >= minimumExtrusionCheckLength)
 	{
 		ret = CheckFilament(extrusionCommandedThisSegment, movementMeasuredThisSegment, false);
 		extrusionCommandedThisSegment = movementMeasuredThisSegment = 0.0;
 	}
-	else if (extrusionCommandedThisSegment + extrusionCommandedSinceLastSync >= minimumExtrusionCheckLength * 2 && millis() - lastMeasurementTime > 220)
+	else if (extrusionCommandedThisSegment + extrusionCommandedSinceLastSync >= minimumExtrusionCheckLength * 2 && millis() - lmt > 220)
 	{
 		// A sync is overdue
 		ret = CheckFilament(extrusionCommandedThisSegment + extrusionCommandedSinceLastSync, movementMeasuredThisSegment + movementMeasuredSinceLastSync, true);

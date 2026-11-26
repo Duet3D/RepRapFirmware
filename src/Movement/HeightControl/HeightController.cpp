@@ -67,12 +67,12 @@ GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply)
 	{
 		CalcDerivedValues();
 
-		TaskCriticalSectionLocker lock;			// make sure we don't create the task more than once
-
 		if (heightControllerTask == nullptr && sensorNumber >= 0)
 		{
+			Task<HeightControllerTaskStackWords> * const newTask = new Task<HeightControllerTaskStackWords>;	// this calls malloc, which must not happen with the scheduler suspended
+			TaskCriticalSectionLocker lock;
 			state = PidState::stopped;
-			heightControllerTask = new Task<HeightControllerTaskStackWords>;
+			heightControllerTask = newTask;
 			heightControllerTask->Create(HeightControllerTaskStart, "HEIGHT", (void*)this, TaskPriority::HeightFollowingPriority);
 		}
 	}

@@ -142,8 +142,8 @@ void GCodeBuffer::Reset() noexcept
 	isBinaryBuffer = false;
 	requestedMacroFile.Clear();
 	isWaitingForMacro = macroFileClosed = false;
-	macroJustStarted = macroFileError = macroFileEmpty = false;
-	abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
+	macroFileError = macroFileEmpty = false;
+	macroJustStarted = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = failedMacroPending = replyVoid = false;
 	machineState->lastCodeFromSbc = machineState->macroStartedByCode = false;
 #endif
 	cancelWait = false;
@@ -316,7 +316,7 @@ void GCodeBuffer::PutBinary(const uint32_t *data, size_t len) noexcept
 {
 	machineState->lastCodeFromSbc = true;
 	isBinaryBuffer = true;
-	macroJustStarted = false;
+	macroJustStarted = replyVoid = false;
 	binaryParser.Put(data, len);
 }
 
@@ -1190,7 +1190,8 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 
 	// Request the macro file from the SBC
 	MutexLocker lock(mutex);								// the SBC task reads the request while holding this mutex
-	macroJustStarted = macroFileError = macroFileEmpty = false;
+	macroJustStarted = false;
+	macroFileError = macroFileEmpty = false;
 	machineState->macroStartedByCode = fromCode;
 	requestedMacroFile.copy(filename);
 

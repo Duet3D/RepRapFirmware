@@ -143,7 +143,7 @@ private:
 	template<typename T> const T *ReadDataHeader() noexcept;
 
 	// Always keep enough tx space to allow resend requests in case RRF runs out of resources and cannot process an incoming request right away
-	size_t FreeTxSpace() const noexcept { return SbcTransferBufferSize - AddPadding(txPointer) - rxHeader.numPackets * sizeof(PacketHeader); }
+	size_t FreeTxSpace() const noexcept;
 
 	bool CanWritePacket(size_t dataLength = 0) const noexcept;
 	PacketHeader *WritePacketHeader(FirmwareRequest request, size_t dataLength = 0, uint16_t resendPacktId = 0) noexcept;
@@ -162,6 +162,13 @@ inline bool DataTransfer::IsConnectionReset() const noexcept
 inline size_t DataTransfer::PacketsToRead() const noexcept
 {
 	return rxHeader.numPackets;
+}
+
+inline size_t DataTransfer::FreeTxSpace() const noexcept
+{
+	// ResendPacket may write into the space kept for resend requests, in which case there is no space left for other packets
+	const size_t usedSpace = AddPadding(txPointer) + rxHeader.numPackets * sizeof(PacketHeader);
+	return (usedSpace < SbcTransferBufferSize) ? SbcTransferBufferSize - usedSpace : 0;
 }
 
 inline void DataTransfer::ResendPacket(const PacketHeader *packet) noexcept

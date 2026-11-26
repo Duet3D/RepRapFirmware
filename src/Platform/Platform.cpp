@@ -2452,7 +2452,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 			gb.TryGetUIValue('R', numToReceive, seenR);
 			Variable *_ecv_null const resultVar = GetResultVariable(gb);
 
-			if (numToSend + numToReceive > MaxI2cOrModbusValues)
+			if (numToReceive > MaxI2cOrModbusValues - numToSend)
 			{
 				numToReceive = MaxI2cOrModbusValues - numToSend;
 			}

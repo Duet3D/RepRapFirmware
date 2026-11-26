@@ -25,14 +25,14 @@ void ArrayHandle::Allocate(size_t numElements) THROWS(GCodeException)
 #if CHECK_HEAP_LOCKED
 	Heap::heapLock.CheckHasWriteLock();
 #endif
+	if (numElements > (Heap::HeapBlockSize - sizeof(ArrayStorageSpace)) / sizeof(ExpressionValue))
+	{
+		throw GCodeException("Array too large");
+	}
+
 	Heap::IndexSlot * const slot = Heap::AllocateHandle();
 	Heap::StorageSpace * const space = Heap::AllocateSpace(sizeof(ArrayStorageSpace) + numElements * sizeof(ExpressionValue));
 	slot->storage = space;
-	if (space->length < sizeof(ArrayStorageSpace) + numElements * sizeof(ExpressionValue))
-	{
-		Heap::DeleteSlot(slot);
-		throw GCodeException("Array too large");
-	}
 
 	ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(space);
 	aSpace->count = numElements;

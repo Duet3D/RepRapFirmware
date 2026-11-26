@@ -1694,7 +1694,7 @@ bool DataTransfer::WriteFileData(FileHandle handle, const char *data, size_t& le
 {
 	// Check if anything can be written
 	size_t freeSpace = FreeTxSpace();
-	if (freeSpace <= sizeof(FileHandleHeader))
+	if (freeSpace <= sizeof(PacketHeader) + sizeof(FileHandleHeader))
 	{
 		return false;
 	}

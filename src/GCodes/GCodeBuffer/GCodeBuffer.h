@@ -239,6 +239,10 @@ public:
 
 	bool IsInvalidated() const noexcept { return invalidated; }				// Indicates if the channel is invalidated
 	void Invalidate(bool i = true) noexcept { invalidated = i; }			// Invalidate this channel (or not)
+	bool IsFailedMacroPending() const noexcept { return failedMacroPending; }	// Does the main task have to pop a macro that failed on the SBC?
+	void SetFailedMacroPending(bool p) noexcept { failedMacroPending = p; }	// Request or clear that pop
+	bool IsReplyVoid() const noexcept { return replyVoid; }					// Has the SBC dropped the code that is still being executed?
+	void SetReplyVoid(bool v) noexcept { replyVoid = v; }					// Set whether the reply to the current code must be discarded
 
 	bool IsSendRequested() const noexcept { return sendToSbc; }				// Is this code supposed to be sent to the SBC
 	void SendToSbc() noexcept { sendToSbc = true; }							// Send this code to the attached SBC
@@ -387,17 +391,19 @@ private:
 	bool isBinaryBuffer;
 
 	uint8_t
-		macroJustStarted : 1,		// Whether the GB has just started a macro file
 		macroFileError : 1,			// Whether the macro file could be opened or if an error occurred
 		macroFileEmpty : 1;			// Whether the macro file is actually empty
 
 	// Cleared by the SBC task under the GB mutex but set by the main task without it (MessageBoxClosed, AbortFile from other channels),
 	// so each has a byte of its own: a stale read-modify-write of a shared bitfield byte would undo the SBC task's change
+	bool macroJustStarted;			// Whether the GB has just started a macro file
 	bool abortFile;					// Whether to abort the last file on the stack
 	bool abortAllFiles;				// Whether to abort all opened files
 	bool sendToSbc;					// Indicates if the GB string content is supposed to be sent to the SBC
 	bool messagePromptPending;		// Has the SBC been notified about a message waiting for acknowledgement?
 	bool messageAcknowledged;		// Last message has been acknowledged
+	bool failedMacroPending;		// Set by the SBC task, the main task pops the failed macro
+	bool replyVoid;					// The SBC no longer expects a reply to the code being executed
 
 	// Accessed only by the SBC task
 	bool invalidated;				// Set to true if the GB content is not valid and about to be cleared

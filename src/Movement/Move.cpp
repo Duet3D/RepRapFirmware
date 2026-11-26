@@ -1521,10 +1521,11 @@ extern "C" [[noreturn]] void LaserTaskStart(void * pvParameters) noexcept
 // This is called when laser mode is selected, or IOBits is enabled, or a scanning Z probe is configured, or extruder heater feedforward is configured, or M571 is used
 void Move::CreateLaserTask() noexcept
 {
-	TaskCriticalSectionLocker lock;
 	if (laserTask == nullptr)
 	{
-		laserTask = new Task<LaserTaskStackWords>;
+		Task<LaserTaskStackWords> * const newTask = new Task<LaserTaskStackWords>;	// this calls malloc, which must not happen with the scheduler suspended
+		TaskCriticalSectionLocker lock;
+		laserTask = newTask;
 		laserTask->Create(LaserTaskStart, "LASER", nullptr, TaskPriority::LaserPriority);
 	}
 }
@@ -3635,10 +3636,34 @@ void Move::TurnSmartDriversOff() noexcept
 // In time we may use it to help implement interrupt-driven local endstops too, but for now those are checked in the step ISR by a direct call to CheckEndstops().
 void Move::OnEndstopOrZProbeStatesChanged() noexcept
 {
-	bool wakeAsyncSender;
+	bool wakeAsyncSender = false;
 	{
 		BasePriorityBooster booster(NvicPriorityStep);		// shut out the step interrupt
-		wakeAsyncSender = CheckEndstops(true);
+
+		// The active endstop list may be left over from an earlier move, so only check it while a segment that checks endstops is executing
+		MovementFlags flags;
+		flags.Clear();
+		for (const DriveMovement *_ecv_null dm = activeDMs; dm != nullptr; dm = dm->nextDM)
+		{
+			if (dm->state > DMState::starting)
+			{
+				flags |= dm->segmentFlags;
+			}
+		}
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		for (const DriveMovement *_ecv_null dm = phaseStepDMs; dm != nullptr; dm = dm->nextDM)
+		{
+			if (dm->state > DMState::starting)
+			{
+				flags |= dm->segmentFlags;
+			}
+		}
+#endif
+
+		if (flags.checkEndstops)
+		{
+			wakeAsyncSender = CheckEndstops(true);
+		}
 	}
 	if (wakeAsyncSender) { CanInterface::WakeAsyncSender(); }
 }

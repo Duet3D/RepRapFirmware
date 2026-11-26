@@ -182,7 +182,7 @@ const char *_ecv_array _ecv_null SafeStrptime(const char *_ecv_array buf, const 
 				{
 					const char *_ecv_array s;
 					const int ret = strtol_l (buf, &s, 10, locale);
-					if (s == buf) { return nullptr; }
+					if (s == buf || ret > tm_year_base + 10000) { return nullptr; }		// mktime accepts no later year, and first_day loops once per year
 					timeptr->tm_year = ret - tm_year_base;
 					buf = s;
 					ymd |= SET_YEAR;
@@ -232,7 +232,7 @@ const char *_ecv_array _ecv_null SafeStrptime(const char *_ecv_array buf, const 
     if ((ymd & SET_YMD) == SET_YMD)
     {
 		/* all of tm_year, tm_mon and tm_mday, but... */
-		if ((ymd & SET_YDAY) == 0)
+		if ((ymd & SET_YDAY) == 0 && timeptr->tm_mon >= 0 && timeptr->tm_mon < 12)		// mktime normalises other months, but they must not index the table
 		{
 			/* ...not tm_yday, so fill it in */
 			timeptr->tm_yday = _DAYS_BEFORE_MONTH[timeptr->tm_mon] + timeptr->tm_mday;

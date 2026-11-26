@@ -177,6 +177,9 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 	if (src <= CanId::MaxCanAddress)
 	{
 		ExpansionBoardData& board = boards[src];
+#if SUPPORT_ACCELEROMETERS
+		bool boardRestarted = false;
+#endif
 		{
 			WriteLocker lock(boardsLock);
 
@@ -187,7 +190,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 				Event::AddEvent(EventType::expansion_reconnect, 0, src, 0, "");
 			}
 #if SUPPORT_ACCELEROMETERS
-			Accelerometers::RemoteBoardRestarted(src);
+			boardRestarted = true;
 #endif
 			board.hasVin = board.hasV12 = board.hasMcuTemp = false;
 			String<StringLength100> boardTypeAndFirmwareVersion;
@@ -238,6 +241,13 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 			}
 			UpdateBoardState(src, BoardState::running);
 		}
+
+#if SUPPORT_ACCELEROMETERS
+		if (boardRestarted)
+		{
+			Accelerometers::RemoteBoardRestarted(src);		// file I/O must not hold boardsLock
+		}
+#endif
 
 		// Tell the sending board that we don't need any more announcements from it
 		buf->SetupRequestMessageNoRid<CanMessageAcknowledgeAnnounce>(CanInterface::GetCanAddress(), src);

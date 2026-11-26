@@ -328,6 +328,8 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 		else
 		{
 			delete temp;
+			spiCsPort.Release();
+			irqPort.Release();
 			reply.copy("Accelerometer not found on specified port");
 			return GCodeResult::error;
 		}

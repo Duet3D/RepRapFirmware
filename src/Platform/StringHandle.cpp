@@ -71,11 +71,12 @@ void StringHandle::InternalAssign(const char *_ecv_array s, size_t len) noexcept
 
 void StringHandle::Delete() noexcept
 {
-	if (slotPtr != nullptr)
+	Heap::IndexSlot *_ecv_null const slot = slotPtr;
+	if (slot != nullptr)
 	{
 		ReadLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
-		Heap::DeleteSlot(slotPtr);
-		slotPtr = nullptr;										// clear the pointer to the handle entry
+		slotPtr = nullptr;										// clear the pointer first, another task may be copying this handle
+		Heap::DeleteSlot(slot);
 	}
 }
 
@@ -123,8 +124,9 @@ size_t StringHandle::GetLength() const noexcept
 // AutoStringHandle members
 
 AutoStringHandle::AutoStringHandle(const AutoStringHandle& other) noexcept
-	: StringHandle(other)
 {
+	AtomicCriticalSectionLocker lock;							// the owner may be deleting the handle from another task
+	slotPtr = other.slotPtr;
 	IncreaseRefCount();
 }
 

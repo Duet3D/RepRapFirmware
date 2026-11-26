@@ -424,9 +424,7 @@ void SbcInterface::ExchangeData() noexcept
 					{
 						if (error)
 						{
-							gb->CurrentFileMachineState().CloseFile();
-							gb->PopState(false);
-							gb->Init();
+							gb->SetFailedMacroPending(true);	// only the main task may pop the stack
 						}
 						else
 						{
@@ -634,7 +632,16 @@ void SbcInterface::ExchangeData() noexcept
 								GCodeBuffer *const gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel(channel));
 								if (gb != nullptr && gb->IsExecutingOnSbc())
 								{
-									gb->SetFinished(true);
+									MutexLocker locker(gb->mutex, SbcYieldTimeout);
+									if (!locker.IsAcquired())
+									{
+										OutputBuffer::ReleaseAll(buf);
+										packetAcknowledged = false;
+									}
+									else if (gb->IsExecutingOnSbc())		// may have changed while waiting for the lock
+									{
+										gb->SetFinished(true);
+									}
 								}
 								break;
 							}
@@ -642,7 +649,10 @@ void SbcInterface::ExchangeData() noexcept
 					}
 
 					// Output message to the target
-					reprap.GetPlatform().Message(type, buf);
+					if (packetAcknowledged)
+					{
+						reprap.GetPlatform().Message(type, buf);
+					}
 				}
 				else
 				{
@@ -730,6 +740,8 @@ void SbcInterface::ExchangeData() noexcept
 					gb->AbortFile(true);
 					gb->FileAbortSent();	// don't notify the SBC
 					gb->MacroFileClosedSent();	// DSF has dropped all its macro files, so a closal that has not gone out yet is void as well, as in GCodeBuffer::Reset
+					gb->SetFailedMacroPending(false);
+					gb->SetReplyVoid(gb->LatestMachineState().lastCodeFromSbc && !gb->IsCompletelyIdle());
 					InvalidateBufferedCodes(channel);
 				}
 				else
@@ -1413,6 +1425,10 @@ void SbcInterface::InvalidateResources() noexcept
 
 	if (fileOperation != FileOperation::none)
 	{
+		// Resolve the request as failed. Otherwise the waiting task reads the result of the operation before
+		fileSuccess = false;
+		fileHandle = noFileHandle;
+		fileOffset = 0;
 		fileOperationPending = false;
 		fileOperation = FileOperation::none;
 		fileSemaphore.Give();
@@ -1453,7 +1469,14 @@ void SbcInterface::InvalidateResources() noexcept
 		gb->AbortFile(true);
 		gb->FileAbortSent();	// don't notify the SBC
 		gb->MessageAcknowledged(true, true, 0, ExpressionValue());
+		gb->MacroFileClosedSent();
+		gb->MessagePromptSent();
+		gb->MessageAcknowledgementSent();
+		gb->Invalidate(false);
+		gb->SetFailedMacroPending(false);
+		gb->SetReplyVoid(gb->LatestMachineState().lastCodeFromSbc && !gb->IsCompletelyIdle());
 	}
+	reportPause = false;
 
 	// Abort the print (if applicable)
 	printAborted = true;
@@ -1516,7 +1539,7 @@ GCodeResult SbcInterface::HandleM576(GCodeBuffer& gb, const StringRef& reply) no
 
 bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 {
-	if (gb.IsInvalidated() || gb.IsMacroFileClosed() || gb.IsMessageAcknowledged() ||
+	if (gb.IsInvalidated() || gb.IsMacroFileClosed() || gb.IsMessageAcknowledged() || gb.IsFailedMacroPending() ||
 		gb.IsAbortRequested() || (reportPause && gb.IsFileChannel()) ||
 		(gb.LatestMachineState().waitingForAcknowledgement && gb.IsMessagePromptPending()))
 	{
