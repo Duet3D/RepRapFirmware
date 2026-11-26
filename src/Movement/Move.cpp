@@ -1667,6 +1667,7 @@ inline void Move::WakeMoveTask() noexcept
 // Laser, IOBits and scanning Z probe support
 
 Task<Move::LaserTaskStackWords> *_ecv_null Move::laserTask = nullptr;		// the task used to manage laser power or IOBits
+ReadWriteLock Move::laserTaskLock;
 
 extern "C" [[noreturn]] void LaserTaskStart(void * pvParameters) noexcept
 {
@@ -1676,12 +1677,12 @@ extern "C" [[noreturn]] void LaserTaskStart(void * pvParameters) noexcept
 // This is called when laser mode is selected, or IOBits is enabled, or a scanning Z probe is configured, or extruder heater feedforward is configured, or M571 is used
 void Move::CreateLaserTask() noexcept
 {
+	WriteLocker lock(laserTaskLock);			// make sure we don't create the task more than once
 	if (laserTask == nullptr)
 	{
-		Task<LaserTaskStackWords> * const newTask = new Task<LaserTaskStackWords>;	// this calls malloc, which must not happen with the scheduler suspended
-		TaskCriticalSectionLocker lock;
-		laserTask = newTask;
-		laserTask->Create(LaserTaskStart, "LASER", nullptr, TaskPriority::LaserPriority);
+		Task<LaserTaskStackWords> * const newTask = new Task<LaserTaskStackWords>;
+		newTask->Create(LaserTaskStart, "LASER", nullptr, TaskPriority::LaserPriority);
+		laserTask = newTask;					// publish the task only when it can be notified
 	}
 }
 
