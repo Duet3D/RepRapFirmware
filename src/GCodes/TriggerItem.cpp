@@ -12,7 +12,7 @@
 #include "GCodeBuffer/GCodeBuffer.h"
 #include "GCodeBuffer/ExpressionParser.h"
 
-TriggerItem::TriggerItem() noexcept : condition(0)
+TriggerItem::TriggerItem() noexcept : condition(0), action(-1), exprResult(false)
 {
 }
 
@@ -25,12 +25,36 @@ void TriggerItem::Init() noexcept
 	lowLevelInputs.Clear();
 	expr.Delete();
 	condition = -1;
+	action = -1;
 }
 
 // Return true if this trigger is unused, i.e. it doesn't watch any pins
 bool TriggerItem::IsUnused() const noexcept
 {
 	return (highLevelEndstops | lowLevelEndstops).IsEmpty() && (highLevelInputs | lowLevelInputs).IsEmpty() && expr.IsNull();
+}
+
+TriggerAction TriggerItem::GetAction(unsigned int number) const noexcept
+{
+	return (action >= 0) ? (TriggerAction)action
+			: (number == 0) ? TriggerAction::emergencyStop
+				: (number == 1) ? TriggerAction::pause
+					: TriggerAction::runMacro;
+}
+
+// This relies on the states that Check has recorded, so it does not read the inputs itself and can be called between polls
+bool TriggerItem::IsLevelActive() const noexcept
+{
+	if (condition < 0)
+	{
+		return false;
+	}
+	if (!expr.IsNull())
+	{
+		return exprResult;
+	}
+	return (endstopStates & highLevelEndstops).IsNonEmpty() || (lowLevelEndstops & ~endstopStates).IsNonEmpty()
+		|| (inputStates & highLevelInputs).IsNonEmpty() || (lowLevelInputs & ~inputStates).IsNonEmpty();
 }
 
 // Check whether this trigger is active and update the input states. This is called in a polling loop, so it needs to be fast.
@@ -151,6 +175,12 @@ GCodeResult TriggerItem::Configure(unsigned int number, GCodeBuffer &gb, const S
 
 	const bool wasUnused = IsUnused();		// save for later
 
+	const bool seenAction = gb.Seen('K');
+	if (seenAction)
+	{
+		action = (int8_t)gb.GetLimitedUIValue('K', NumTriggerActions);
+	}
+
 	switch (gb.GetCommandFraction())
 	{
 	case 1:									// trigger on an expression
@@ -253,9 +283,11 @@ GCodeResult TriggerItem::Configure(unsigned int number, GCodeBuffer &gb, const S
 			}
 		}
 	}
-	else
+	else if (!seenAction)
 	{
-		reply.printf("Trigger %u ", number);
+		static const char *_ecv_array const actionNames[NumTriggerActions] = { "emergency stop", "pause", "run macro", "feed hold", "feed hold and abort" };
+		const unsigned int actionNumber = (unsigned int)GetAction(number);
+		reply.printf("Trigger %u (K%u, %s) ", number, actionNumber, actionNames[actionNumber]);
 		if (IsUnused())
 		{
 			reply.cat("is not configured");

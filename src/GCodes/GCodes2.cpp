@@ -1199,6 +1199,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 24: // Print/resume-printing the selected file
 				if (reprap.GetMove().IsFeedHoldActive())
 				{
+					if (feedHoldTriggerActive)
+					{
+						reply.copy("Cannot release the feed hold while a feed hold trigger is still active");
+						result = GCodeResult::error;
+						break;
+					}
+
 					// This must come before any wait for standstill, because the held ring never reaches it.
 					// If the print is paused as well, carry on and resume it too, else releasing the hold is all there is to do
 					reprap.GetMove().ReleaseFeedHold();
@@ -1332,6 +1339,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (gb.GetCommandFraction() == 1)
 				{
 					result = DoFeedHold(gb, reply);
+				}
+				else if (reprap.GetMove().IsFeedHoldActive())
+				{
+					reply.copy("Cannot pause while a feed hold is active");
+					result = GCodeResult::error;
 				}
 				else if (pauseState != PauseState::notPaused)
 				{

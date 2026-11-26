@@ -153,6 +153,7 @@ public:
 	PauseState GetPauseState() const noexcept { return pauseState; }
 	bool IsFlashing() const noexcept { return isFlashing; }						// Is a new firmware binary going to be flashed?
 	void RequestStopAndAbort() noexcept { stopAndAbortRequested = true; }		// Ask the Main task to perform the M25.1 S1 stop-and-abort, called from input tasks
+	bool IsFeedHoldTriggerActive() const noexcept { return feedHoldTriggerActive; }	// Is the input of a feed hold trigger still active? May be called from input tasks
 
 	bool IsFlashingPanelDue() const noexcept
 #if SUPPORT_PANELDUE_FLASH
@@ -760,6 +761,7 @@ private:
 	Bitmap<uint8_t> firmwareUpdateModuleMap;	// Bitmap of firmware modules to be updated
 	bool isFlashing;							// Is a new firmware binary going to be flashed?
 	std::atomic<bool> stopAndAbortRequested = false;	// Set by an input task when it swallowed an urgent M25.1 S1 that the Main task must carry out
+	std::atomic<bool> feedHoldTriggerActive = false;	// Set by CheckTriggers while the level of a feed hold trigger is active, read by input tasks
 	bool holdRestorePointSaved = false;			// True once the current feed hold has been offered to the pause restore point
 #if SUPPORT_PANELDUE_FLASH
 	bool isFlashingPanelDue;					// Are we in the process of flashing PanelDue?
