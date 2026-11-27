@@ -1207,13 +1207,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 
 					// This must come before any wait for standstill, because the held ring never reaches it.
-					// If the print is paused as well, carry on and resume it too, else releasing the hold is all there is to do
+					// A paused print stays paused, because the hold stopped a jog or a macro and not the print
 					reprap.GetMove().ReleaseFeedHold();
 					RestoreReadAheadPositions();
-					if (pauseState != PauseState::paused)
-					{
-						break;
-					}
+					break;
 				}
 				if (pauseState == PauseState::pausing || pauseState == PauseState::resuming)
 				{

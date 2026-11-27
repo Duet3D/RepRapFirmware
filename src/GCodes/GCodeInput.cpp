@@ -156,9 +156,9 @@ bool RegularGCodeInput::CheckForUrgentCommand(char c) noexcept
 			break;
 
 		case GCodeInputState::doingMCode24:
-			// A plain M24 while a feed hold is active and no print is paused only has to release the hold. Do it here and swallow the command,
+			// A plain M24 while a feed hold is active only has to release the hold. Do it here and swallow the command,
 			// because the channel it arrived on may be the one whose macro the hold has stopped, in which case the queued copy would never run
-			if ((c < ' ' || c == ';') && reprap.GetMove().IsFeedHoldActive() && reprap.GetGCodes().GetPauseState() != PauseState::paused && !reprap.GetGCodes().IsFeedHoldTriggerActive())
+			if ((c < ' ' || c == ';') && reprap.GetMove().IsFeedHoldActive() && !reprap.GetGCodes().IsFeedHoldTriggerActive())
 			{
 				reprap.GetMove().ReleaseFeedHold();
 				Reset();
