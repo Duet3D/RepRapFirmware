@@ -257,6 +257,12 @@ void QueuedCode::AssignTo(GCodeBuffer *gb) noexcept
 #if HAS_SBC_INTERFACE
 	if (isBinary)
 	{
+		// The queue buffers never pass through SbcInterface::FillBuffer, which allocates the buffers of all other channels
+		if (!gb->HasBuffer())
+		{
+			gb->AllocateBinaryBuffer();
+		}
+
 		// Note that the data has to remain on a 4-byte boundary for this to work
 		gb->PutBinary(reinterpret_cast<const uint32_t *>(data), dataLength / sizeof(uint32_t));
 	}
